@@ -45,7 +45,7 @@ it('uses a new request when the diagram revision instruction changes', async () 
 it('releases the diagram request identity only after its receipt is acknowledged', async () => {
 	const fixture = noteSubmissionFixture(sessionStorage);
 	fixture.remote.failure = null;
-	await fixture.controller.diagram('diagram-test-a', revision);
+	await fixture.submitDiagram('diagram-test-a', revision);
 	const first = fixture.remote.diagrams[0];
 	const next = await noteSubmissionFixture(sessionStorage).uncertainDiagram(
 		'diagram-test-a',
@@ -78,7 +78,11 @@ it('preserves the uncertain draw.io conversion request', async () => {
 });
 it('reports corrupt saved requests instead of treating them as a new submission', async () => {
 	sessionStorage.setItem('followthrough.notes.diagram-submissions.diagram-test-a', 'broken');
-	await expect(
-		noteSubmissionFixture(sessionStorage).controller.diagram('diagram-test-a', revision)
-	).rejects.toThrow();
+	const fixture = noteSubmissionFixture(sessionStorage);
+	const receipt = await fixture.submitDiagram('diagram-test-a', revision);
+	expect({ receipt, error: fixture.actions.lastError, sent: fixture.remote.diagrams }).toEqual({
+		receipt: undefined,
+		error: expect.any(String),
+		sent: []
+	});
 });

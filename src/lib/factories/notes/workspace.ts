@@ -1,3 +1,8 @@
+import { NoteActionEventReader } from '$lib/client/notes/action-event-reader';
+import { BrowserNoteActionRunTransport } from '$lib/client/notes/action-run-transport';
+import { SessionRunStorage } from '$lib/client/notes/action-run-storage';
+import { RemoteNoteActionReview } from '$lib/client/notes/review-transport';
+import { NoteActionRunStore } from '$lib/stores/notes/note-action-runs.svelte';
 import { TiptapDocumentCopy } from '$lib/client/notes/editor-document';
 import { BrowserNoteWorkspaceFeedback } from '$lib/client/notes/workspace-feedback';
 import { RemoteNoteWorkspaceRevisions } from '$lib/client/notes/workspace-revisions';
@@ -34,6 +39,10 @@ export function createNoteWorkspace(
 	const current = workspaceSessionState.required;
 	return new NoteWorkspace({
 		state: new NoteWorkspaceStore(),
+		actionState: new NoteActionRunStore(),
+		actionTransport: new BrowserNoteActionRunTransport(new NoteActionEventReader()),
+		actionStorage: new SessionRunStorage(sessionStorage, current.bootstrap.accountId),
+		actionReview: new RemoteNoteActionReview(),
 		noteId,
 		draftState: workspaceDraftStates.get(draft),
 		account: workspaceAccounts.get(current.resources),

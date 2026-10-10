@@ -1176,6 +1176,8 @@ export interface NoteActionContext {
 }
 
 export interface StoredNoteActionRun {
+	/** The inserted editor document was persisted before acknowledgment. */
+	readonly delivery?: 'inserted';
 	readonly runId: AgentRunId;
 	readonly action: NoteActionKind;
 	readonly noteId: NoteId;
@@ -1195,6 +1197,7 @@ export const storedNoteActionRunSchema = z
 			.min(1)
 			.transform((value) => value as NoteId),
 		cursor: agentRunCursorSchema,
+		delivery: z.literal('inserted').optional(),
 		context: z
 			.object({ source: z.string().optional(), insertAt: z.number().int().optional() })
 			.strict()

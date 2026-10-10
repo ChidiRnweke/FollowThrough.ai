@@ -1,3 +1,9 @@
+import { NoteActionRunStore } from '$lib/stores/notes/note-action-runs.svelte';
+import {
+	InMemoryNoteActionRunTransport,
+	InMemoryNoteActionRunStorage,
+	InMemoryNoteActionReview
+} from '$lib/testing/notes/fakes/in-memory-note-action-runs';
 import { CatalogWidgetCandidateReader } from '$lib/adapters/widgets/candidate-reader';
 import { TiptapDocumentCopy } from '$lib/client/notes/editor-document';
 import { BrowserWorkspaceEditingEnvironment } from '$lib/client/workspace/editing-environment.svelte';
@@ -55,7 +61,33 @@ import {
 } from '$lib/testing/sync/fakes/in-memory-outbox';
 import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-export const noteWorkspaceFixture = async (overrides: Partial<Note> = {}) => {
+export const noteWorkspaceFixture = async (
+	overrides: Partial<Note> = {},
+	options: {
+		actionTransport?: InMemoryNoteActionRunTransport;
+		actionStorage?: InMemoryNoteActionRunStorage;
+	} = {}
+) => {
+	const actionTransport = options.actionTransport ?? new InMemoryNoteActionRunTransport();
+	const actionStorage = options.actionStorage ?? new InMemoryNoteActionRunStorage();
+	const actionState = new NoteActionRunStore();
+	const actionReview = new InMemoryNoteActionReview();
+	const actionEditor: {
+		held: { runId: string; at: number }[];
+		revisions: { previous: string; source: string }[];
+		insertions: { at: number; source: string }[];
+		revisionFailure: Error | null;
+		insertionPoint: number | 'lost' | undefined;
+		acceptsInsertion: boolean;
+	} = {
+		held: [],
+		revisions: [],
+		insertions: [],
+		revisionFailure: null,
+		insertionPoint: undefined,
+		acceptsInsertion: true
+	};
+
 	const note = noteBuilder({
 		title: 'Original',
 		plainText: 'Original',
@@ -162,7 +194,28 @@ export const noteWorkspaceFixture = async (overrides: Partial<Note> = {}) => {
 			getPlainText: () => editor.getPlainText(),
 			setDocument: (doc) => editor.replaceContent(doc),
 			paste: (content) => editor.type(content.text),
-			active: true
+			active: true,
+			replaceMermaid: (previous, source) => {
+				if (actionEditor.revisionFailure) throw actionEditor.revisionFailure;
+				actionEditor.revisions.push({ previous, source });
+				return true;
+			},
+			holdInsertionPoint: (runId, at) => {
+				actionEditor.held.push({ runId, at });
+			},
+			consumeInsertionPoint: () => actionEditor.insertionPoint,
+			insertMermaid: (at, source) => {
+				if (!actionEditor.acceptsInsertion) return false;
+				actionEditor.insertions.push({ at, source });
+				editor.document = {
+					type: 'doc',
+					content: [
+						...(editor.document.content ?? []),
+						{ type: 'mermaid', content: [{ type: 'text', text: source }] }
+					]
+				};
+				return true;
+			}
 		}),
 		state: editorState,
 		events: {
@@ -172,6 +225,10 @@ export const noteWorkspaceFixture = async (overrides: Partial<Note> = {}) => {
 	const controller = new NoteWorkspace(
 		capabilityDependencies<NoteWorkspaceDependencies>({
 			state,
+			actionState,
+			actionTransport,
+			actionStorage,
+			actionReview,
 			noteId: note.id,
 			account,
 			binding: {
@@ -201,6 +258,11 @@ export const noteWorkspaceFixture = async (overrides: Partial<Note> = {}) => {
 	);
 	controller.open();
 	return {
+		actionState,
+		actionTransport,
+		actionStorage,
+		actionReview,
+		actionEditor,
 		note,
 		key,
 		account,

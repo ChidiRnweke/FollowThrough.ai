@@ -1,6 +1,6 @@
 import { storedNoteActionRunSchema, type StoredNoteActionRun } from '$lib/models/agent';
 
-import type { NoteActionRunStorage } from '$lib/controllers/notes/action-runs';
+import type { NoteActionRunStorage } from '$lib/models/browser-workspace';
 
 /** Browser storage boundary for the note actions a tab can reconnect to. */
 export class SessionRunStorage implements NoteActionRunStorage {

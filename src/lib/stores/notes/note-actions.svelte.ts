@@ -1,33 +1,47 @@
-import type { NoteActionSession } from '$lib/controllers/notes/actions';
-export class NoteActionStore {
-	private account = $state.raw<NoteActionSession | null>(null);
-	private pendingReviews = $state(0);
+import type { NoteActionBinding, NoteActionToken } from '$lib/models/browser-workspace';
+export interface NoteActionState {
+	readonly binding: NoteActionBinding | undefined;
+	readonly running: boolean;
+	readonly lastError: string | undefined;
+	reset(binding: NoteActionBinding): void;
+	begin(review: boolean): NoteActionToken;
+	fail(token: NoteActionToken, message: string): void;
+	finish(token: NoteActionToken): void;
+}
+export class NoteActionStore implements NoteActionState {
+	private account = $state.raw<NoteActionBinding | undefined>(undefined);
+	private reviews = $state<readonly number[]>([]);
 	private error = $state<string | undefined>(undefined);
 	private generation = 0;
-	get binding(): NoteActionSession | null {
+	private nextId = 0;
+	private latest = 0;
+	get binding(): NoteActionBinding | undefined {
 		return this.account;
 	}
 	get running(): boolean {
-		return this.pendingReviews > 0;
+		return this.reviews.length > 0;
 	}
 	get lastError(): string | undefined {
 		return this.error;
 	}
-	reset(binding: NoteActionSession | null): void {
+	reset(binding: NoteActionBinding): void {
 		this.generation += 1;
 		this.account = binding;
-		this.pendingReviews = 0;
+		this.reviews = [];
 		this.error = undefined;
 	}
-	begin(review: boolean): { generation: number; review: boolean } {
+	begin(review: boolean): NoteActionToken {
+		const id = ++this.nextId;
+		this.latest = id;
 		this.error = undefined;
-		if (review) this.pendingReviews += 1;
-		return { generation: this.generation, review };
+		if (review) this.reviews = [...this.reviews, id];
+		return { id, generation: this.generation, review };
 	}
-	fail(generation: number, message: string): void {
-		if (generation === this.generation) this.error = message;
+	fail(token: NoteActionToken, message: string): void {
+		if (token.generation === this.generation && token.id === this.latest) this.error = message;
 	}
-	finish(token: { generation: number; review: boolean }): void {
-		if (token.generation === this.generation && token.review) this.pendingReviews -= 1;
+	finish(token: NoteActionToken): void {
+		if (token.generation === this.generation && token.review)
+			this.reviews = this.reviews.filter((id) => id !== token.id);
 	}
 }

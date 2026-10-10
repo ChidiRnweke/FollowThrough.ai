@@ -1,8 +1,16 @@
-import type { AgentRunId } from '$lib/models/agent';
+import type { NoteActionResult, NoteActionEventRecord } from '$lib/models/note-actions';
+import type {
+	AgentRunId,
+	AgentRunReceipt,
+	StoredNoteActionRun,
+	NoteActionContext
+} from '$lib/models/agent';
 import type { ClipboardPaste, ClipboardSource } from '$lib/models/clipboard';
-import type { DiagramId } from '$lib/models/diagrams';
+import type { DiagramId, DiagramActionInput, DiagramActionSubmission } from '$lib/models/diagrams';
 import type {
 	NoteId,
+	SelectionAction,
+	SelectionSubmission,
 	NoteRevision,
 	NoteRevisionId,
 	NoteRevisionSummary,
@@ -17,7 +25,12 @@ import type {
 	WriteReceipt,
 	WriteRecovery
 } from '$lib/models/outbox';
-import type { SuggestionId } from '$lib/models/suggestions';
+import type {
+	SuggestionId,
+	Suggestion,
+	SuggestionArtifact,
+	AcceptSuggestionOutput
+} from '$lib/models/suggestions';
 import type {
 	CachedRecord,
 	ResourceState,
@@ -215,4 +228,82 @@ export interface CacheCommitDecision<T> {
 /** Opaque mounted-editor identity; split panes receive distinct values. */
 export interface NoteEditorIdentity {
 	readonly key: symbol;
+}
+
+export interface SelectionSubmissionStorage {
+	read(accountId: string, action: SelectionAction): readonly SelectionSubmission[];
+	write(accountId: string, action: SelectionAction, requests: readonly SelectionSubmission[]): void;
+}
+export interface DiagramSubmissionStorage {
+	read(accountId: string): readonly DiagramActionSubmission[];
+	write(accountId: string, requests: readonly DiagramActionSubmission[]): void;
+	candidate(input: DiagramActionInput, requestId: string): DiagramActionSubmission;
+}
+export interface NoteSubmissionRemote {
+	selection(action: SelectionAction, request: SelectionSubmission): Promise<AgentRunReceipt>;
+	diagram(request: DiagramActionSubmission): Promise<AgentRunReceipt>;
+}
+export interface NoteSubmissionIdentity {
+	create(): string;
+}
+
+/** Captured account lifetime; never a session controller or mutable session owner. */
+export interface NoteActionBinding {
+	readonly accountId: string | null;
+	readonly generation: number;
+}
+export interface NoteActionToken {
+	readonly id: number;
+	readonly generation: number;
+	readonly review: boolean;
+}
+export interface NoteReviewRemote {
+	accept(input: {
+		suggestionId: SuggestionId;
+		drawioReview: { noteId: NoteId; source: string; renderedSvg: string };
+	}): Promise<AcceptSuggestionOutput<SuggestionArtifact>>;
+	reject(input: { suggestionId: SuggestionId }): Promise<Suggestion>;
+}
+
+export interface NoteActionRun extends StoredNoteActionRun {
+	readonly cancelling: boolean;
+}
+export type NoteActionOutcome =
+	| { readonly status: 'completed'; readonly result: NoteActionResult }
+	| { readonly status: 'cancelled' }
+	| { readonly status: 'failed'; readonly message: string };
+export interface NoteActionEventStream {
+	close(): void;
+}
+export interface NoteActionRunTransport {
+	open(
+		runId: AgentRunId,
+		after: string,
+		onEvent: (record: NoteActionEventRecord) => void | Promise<void>
+	): NoteActionEventStream;
+	cancel(runId: AgentRunId): Promise<void>;
+}
+export interface NoteActionRunStorage {
+	load(): readonly StoredNoteActionRun[];
+	save(runs: readonly StoredNoteActionRun[]): void;
+}
+
+export interface NoteActionReviewTransport {
+	accept(suggestionId: SuggestionId): Promise<void>;
+}
+export interface NoteActionRunState {
+	readonly running: readonly NoteActionRun[];
+	readonly detached: boolean;
+	replace(entries: readonly NoteActionRun[]): void;
+	setCancelling(runId: AgentRunId, cancelling: boolean): void;
+	setContext(runId: AgentRunId, context: NoteActionContext): void;
+	setCursor(runId: AgentRunId, cursor: string): void;
+	setDelivery(runId: AgentRunId, delivery: 'inserted'): void;
+	hasInserted(runId: AgentRunId): boolean;
+	markInserted(runId: AgentRunId): void;
+	setWaiter(runId: AgentRunId, waiter: (outcome: NoteActionOutcome) => void): void;
+	takeWaiters(runId: AgentRunId): readonly ((outcome: NoteActionOutcome) => void)[];
+	setStream(runId: AgentRunId, stream: NoteActionEventStream): void;
+	takeStream(runId: AgentRunId): NoteActionEventStream | undefined;
+	close(): readonly NoteActionEventStream[];
 }

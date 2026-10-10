@@ -1,3 +1,13 @@
+import type { AgentRunId, NoteActionKind, NoteActionContext } from '$lib/models/agent';
+import type { NoteActionResult, NoteActionEventRecord } from '$lib/models/note-actions';
+import type {
+	NoteActionRun,
+	NoteActionOutcome,
+	NoteActionRunState,
+	NoteActionRunTransport,
+	NoteActionRunStorage,
+	NoteActionReviewTransport
+} from '$lib/models/browser-workspace';
 import { OutboxAccountChangedError } from '$lib/errors';
 import type {
 	AccountWriterLock,
@@ -119,6 +129,10 @@ export interface NoteWorkspaceRules {
 	noteHasUnpublishedChanges(note: Note, commands: readonly WorkspaceCommand[]): boolean;
 }
 export interface NoteWorkspaceDependencies {
+	readonly actionState: NoteActionRunState;
+	readonly actionTransport: NoteActionRunTransport;
+	readonly actionStorage: NoteActionRunStorage;
+	readonly actionReview: NoteActionReviewTransport;
 	readonly state: NoteWorkspaceState;
 	readonly draftRules: IWorkspaceDraftService;
 	readonly noteId: NoteId;
@@ -146,6 +160,16 @@ export interface NoteWorkspaceDependencies {
 	readonly conflictChanged: (open: boolean) => void;
 }
 export interface NoteWorkspaceController {
+	readonly runningActions: readonly NoteActionRun[];
+	readonly activeSelectionAction: NoteActionRun | undefined;
+	findAction(action: NoteActionKind): NoteActionRun | undefined;
+	trackAction(
+		receipt: { readonly runId: AgentRunId; readonly latestCursor: string },
+		run: { readonly action: NoteActionKind; readonly context?: NoteActionContext }
+	): Promise<NoteActionOutcome>;
+	hydrateActions(): void;
+	cancelAction(runId: AgentRunId): Promise<void>;
+	updateActionContext(runId: AgentRunId, patch: NoteActionContext): void;
 	readonly note: Note;
 	readonly dirty: boolean;
 	readonly saveFailed: boolean;
@@ -250,6 +274,7 @@ export class NoteWorkspace implements NoteWorkspaceController {
 		this.reportConflict();
 	}
 	close(): void {
+		this.detachActions();
 		this.cancelAutosave();
 		this.dependencies.state.setPublishing(false);
 		this.sessionClose();
@@ -1690,7 +1715,8 @@ export class NoteWorkspace implements NoteWorkspaceController {
 					this.sessionDirty &&
 					!this.sessionFailure &&
 					!this.dependencies.sessionState.read().closed &&
-					this.active
+					this.active &&
+					this.bindingCurrent()
 				)
 					return this.sessionSave(persist, apply);
 			});
@@ -1711,6 +1737,7 @@ export class NoteWorkspace implements NoteWorkspaceController {
 			this.sessionDirty &&
 			!this.dependencies.sessionState.read().closed &&
 			this.active &&
+			this.bindingCurrent() &&
 			epoch === this.dependencies.sessionState.read().epoch
 		) {
 			const generation = this.dependencies.sessionState.read().edited;
@@ -1722,7 +1749,7 @@ export class NoteWorkspace implements NoteWorkspaceController {
 			});
 			if (
 				this.dependencies.sessionState.read().closed ||
-				!this.active ||
+				!(this.active && this.bindingCurrent()) ||
 				epoch !== this.dependencies.sessionState.read().epoch
 			)
 				return;
@@ -1871,6 +1898,304 @@ export class NoteWorkspace implements NoteWorkspaceController {
 		}
 		if (previous)
 			editor.events.shimmer(this.dependencies.presentation.changedBlocks(previous, document));
+	}
+	private get actionsActive(): boolean {
+		const { binding, account, actionState } = this.dependencies;
+		return (
+			this.active &&
+			!actionState.detached &&
+			binding.state.generation === binding.generation &&
+			binding.state.accountId === account.accountId &&
+			!account.resourceState.stopped
+		);
+	}
+	get runningActions(): readonly NoteActionRun[] {
+		return this.actionsActive ? this.dependencies.actionState.running : [];
+	}
+	get activeSelectionAction(): NoteActionRun | undefined {
+		return this.runningActions.find(
+			(entry) => entry.action !== 'revise' && entry.action !== 'convert'
+		);
+	}
+	findAction(action: NoteActionKind): NoteActionRun | undefined {
+		return this.runningActions.find((entry) => entry.action === action);
+	}
+	trackAction(
+		receipt: { readonly runId: AgentRunId; readonly latestCursor: string },
+		run: { readonly action: NoteActionKind; readonly context?: NoteActionContext }
+	): Promise<NoteActionOutcome> {
+		this.requireActionsActive();
+		const entry: NoteActionRun = {
+			runId: receipt.runId,
+			action: run.action,
+			noteId: this.dependencies.noteId,
+			cursor: receipt.latestCursor,
+			context: run.context ?? {},
+			cancelling: false
+		};
+		if (this.dependencies.actionState.running.some((run) => run.runId === entry.runId))
+			return new Promise((resolve) =>
+				this.dependencies.actionState.setWaiter(entry.runId, resolve)
+			);
+		this.persistAction(entry);
+		if (entry.action === 'diagram' && entry.context.insertAt !== undefined)
+			this.mountedEditor()?.port.holdInsertionPoint(entry.runId, entry.context.insertAt);
+		this.dependencies.actionState.replace([...this.dependencies.actionState.running, entry]);
+		const settled = new Promise<NoteActionOutcome>((resolve) =>
+			this.dependencies.actionState.setWaiter(entry.runId, resolve)
+		);
+		this.attachAction(entry);
+		return settled;
+	}
+	hydrateActions(): void {
+		this.requireActionsActive();
+		this.dependencies.actionState.replace(
+			this.dependencies.actionStorage
+				.load()
+				.filter((run) => run.noteId === this.dependencies.noteId)
+				.map((run) => ({ ...run, cancelling: false }))
+		);
+		for (const entry of this.dependencies.actionState.running) this.attachAction(entry);
+	}
+	async cancelAction(runId: AgentRunId): Promise<void> {
+		this.requireActionsActive();
+		this.dependencies.actionState.setCancelling(runId, true);
+		try {
+			await this.dependencies.actionTransport.cancel(runId);
+		} catch (error) {
+			if (this.actionsActive) this.dependencies.actionState.setCancelling(runId, false);
+			throw error;
+		}
+	}
+	private detachActions(): void {
+		for (const stream of this.dependencies.actionState.close()) stream.close();
+	}
+	updateActionContext(runId: AgentRunId, patch: NoteActionContext): void {
+		this.requireActionsActive();
+		const entry = this.dependencies.actionState.running.find((entry) => entry.runId === runId);
+		if (!entry) return;
+		this.dependencies.actionState.setContext(runId, { ...entry.context, ...patch });
+		this.persistActions(runId);
+	}
+	private requireActionsActive(): void {
+		if (!this.actionsActive) throw new Error('The note action editor is no longer active');
+	}
+	private attachAction(entry: NoteActionRun): void {
+		this.dependencies.actionState.takeStream(entry.runId)?.close();
+		const stream = this.dependencies.actionTransport.open(entry.runId, entry.cursor, (record) =>
+			this.consumeAction(entry.runId, record)
+		);
+		// A boundary may deliver a terminal event synchronously while opening.
+		if (
+			this.actionsActive &&
+			this.dependencies.actionState.running.some((run) => run.runId === entry.runId)
+		)
+			this.dependencies.actionState.setStream(entry.runId, stream);
+		else stream.close();
+	}
+	private async consumeAction(runId: AgentRunId, record: NoteActionEventRecord): Promise<void> {
+		const editor = this.mountedEditor();
+		const generation = editor?.state.documentGeneration;
+		try {
+			if (
+				!this.actionsActive ||
+				!this.dependencies.actionState.running.some((entry) => entry.runId === runId)
+			)
+				return;
+			if (
+				record.kind === 'unreadable' ||
+				record.event.type === 'workflow_result' ||
+				record.event.type === 'resources_stale'
+			) {
+				const synchronized = await this.synchronizeAccount();
+				if (
+					!this.actionsActive ||
+					this.mountedEditor() !== editor ||
+					editor?.state.documentGeneration !== generation ||
+					(editor !== undefined && (!editor.state.active || !editor.port.active))
+				)
+					return;
+				this.requireActionSynchronization(synchronized);
+			}
+			if (record.kind === 'unreadable') {
+				this.settleAction(runId, {
+					status: 'failed',
+					message:
+						'Saved note action activity could not be restored. Reload the note to check its saved result.'
+				});
+				return;
+			}
+			const event = record.event;
+			if (event.type === 'workflow_result') {
+				const entry = this.dependencies.actionState.running.find(
+					(candidate) => candidate.runId === runId
+				);
+				if (!entry) return;
+				if (entry.action !== event.result.action) throw new Error('Unexpected note action result');
+				if (!(await this.deliverAction(entry, event.result))) return;
+				if (!this.actionsActive) return;
+				this.settleAction(runId, { status: 'completed', result: event.result });
+				return;
+			}
+			if (event.type === 'cancelled') this.settleAction(runId, { status: 'cancelled' });
+			else if (event.type === 'failed')
+				this.settleAction(runId, { status: 'failed', message: event.message });
+			else this.advanceAction(runId, record.cursor);
+		} catch (error) {
+			if (
+				this.actionsActive &&
+				this.dependencies.actionState.running.some((run) => run.runId === runId) &&
+				this.mountedEditor() === editor &&
+				editor?.state.documentGeneration === generation &&
+				(editor === undefined || (editor.state.active && editor.port.active))
+			)
+				this.dependencies.feedback.error(
+					error instanceof Error ? error.message : 'The note action result could not be delivered.'
+				);
+			throw error;
+		}
+	}
+
+	private advanceAction(runId: AgentRunId, cursor: string): void {
+		this.dependencies.actionState.setCursor(runId, cursor);
+		this.persistActions(runId);
+	}
+	private settleAction(runId: AgentRunId, outcome: NoteActionOutcome): void {
+		this.dependencies.actionStorage.save(
+			this.dependencies.actionStorage.load().filter((entry) => entry.runId !== runId)
+		);
+		this.dependencies.actionState.takeStream(runId)?.close();
+		this.dependencies.actionState.replace(
+			this.dependencies.actionState.running.filter((entry) => entry.runId !== runId)
+		);
+		for (const resolve of this.dependencies.actionState.takeWaiters(runId)) resolve(outcome);
+	}
+	private persistActions(runId: AgentRunId): void {
+		const entry = this.dependencies.actionState.running.find((run) => run.runId === runId);
+		if (!entry) throw new Error('The note action is no longer tracked');
+		this.persistAction(entry);
+	}
+	private persistAction(entry: NoteActionRun): void {
+		const retained = this.dependencies.actionStorage
+			.load()
+			.filter((run) => run.runId !== entry.runId);
+		const { cancelling: _cancelling, ...run } = entry;
+		this.dependencies.actionStorage.save([...retained, run]);
+	}
+
+	private requireActionSynchronization(result: void | { kind: 'failure' }): void {
+		if (this.dependencies.binding.state.startupError)
+			throw new Error(this.dependencies.binding.state.startupError);
+		if (result?.kind === 'failure') throw new Error('Workspace synchronization failed');
+		for (const lane of ['pull', 'writes'] as const) {
+			const outcome = this.dependencies.account.executionState.lane(lane).result;
+			if (outcome.kind === 'failure') throw new Error(outcome.message);
+			if (outcome.kind !== 'complete' && outcome.kind !== 'idle')
+				throw new Error(`Workspace synchronization is ${outcome.kind}`);
+		}
+	}
+	private async deliverAction(entry: NoteActionRun, result: NoteActionResult): Promise<boolean> {
+		const { feedback, actionReview, actionState } = this.dependencies;
+		const editor = this.mountedEditor();
+		const generation = editor?.state.documentGeneration;
+		const current = () =>
+			this.actionsActive &&
+			this.bindingCurrent() &&
+			this.mountedEditor() === editor &&
+			editor?.state.documentGeneration === generation &&
+			(editor === undefined || (editor.state.active && editor.port.active)) &&
+			actionState.running.some((run) => run.runId === entry.runId);
+		switch (result.action) {
+			case 'promises':
+				if (result.output.createdTodos.length)
+					feedback.success(
+						`${result.output.createdTodos.length} todo(s) created from explicit promises`
+					);
+				this.reportActionSuggestions(
+					result.output.suggestions.filter((suggestion) => suggestion.status === 'proposed').length
+				);
+				break;
+			case 'relate':
+				this.reportActionSuggestions(
+					result.output.suggestions.filter((suggestion) => suggestion.status === 'proposed').length
+				);
+				break;
+			case 'reference':
+				if (result.output.outcome === 'nothing_relevant')
+					feedback.info('Nothing sufficiently relevant found.');
+				else
+					this.reportActionSuggestions(
+						result.output.suggestions.filter((suggestion) => suggestion.status === 'proposed')
+							.length
+					);
+				break;
+			case 'diagram': {
+				const suggestion = result.output.suggestion;
+				if (suggestion.kind !== 'diagram') break;
+				if (entry.delivery !== 'inserted' && !actionState.hasInserted(entry.runId)) {
+					const live = editor?.port.consumeInsertionPoint(entry.runId);
+					editor?.state.releaseInsertion(entry.runId);
+					const at = live === 'lost' ? undefined : (live ?? entry.context.insertAt);
+					if (at === undefined || !editor?.port.insertMermaid(at, suggestion.payload.source)) {
+						feedback.error(
+							'The diagram is ready, but its place in the note was lost. Copy it from the suggestion tray.'
+						);
+						break;
+					}
+					actionState.markInserted(entry.runId);
+					this.changed();
+				}
+				if (entry.delivery !== 'inserted') {
+					await this.save({ auto: true });
+					if (!current()) return false;
+					if (this.dirty || this.saveFailed)
+						throw new Error('Save the inserted diagram before accepting its suggestion.');
+					actionState.setDelivery(entry.runId, 'inserted');
+					this.persistActions(entry.runId);
+				}
+				const observed = await this.dependencies.account.readTransport.read(
+					workspaceResourceKey({ type: 'suggestions', id: [suggestion.id] }),
+					null
+				);
+				if (!current()) return false;
+				if (observed.kind !== 'found' || observed.snapshot.value.type !== 'suggestions')
+					throw new Error('The diagram suggestion could not be loaded before acceptance.');
+				const saved = observed.snapshot.value.value;
+				if (saved.id !== suggestion.id)
+					throw new Error('The saved diagram suggestion has a different identity.');
+				if (saved.status === 'proposed') await actionReview.accept(suggestion.id);
+				else if (saved.status !== 'accepted')
+					throw new Error('The diagram suggestion is no longer available for acceptance.');
+				if (!current()) return false;
+				const synchronized = await this.synchronizeAccount();
+				if (!current()) return false;
+				this.requireActionSynchronization(synchronized);
+				feedback.success('Diagram inserted — undo with Ctrl+Z');
+				break;
+			}
+			case 'convert':
+				if (
+					result.output.suggestion.kind === 'diagram' &&
+					result.output.suggestion.payload.kind === 'drawio'
+				)
+					feedback.success('draw.io conversion ready to review');
+				break;
+			case 'revise':
+				if (
+					entry.context.source &&
+					editor?.port.replaceMermaid(entry.context.source, result.output.source)
+				)
+					feedback.success('Diagram revised — undo with Ctrl+Z');
+				break;
+		}
+		return current();
+	}
+	private reportActionSuggestions(added: number): void {
+		if (added > 0)
+			this.dependencies.feedback.success(
+				`${added} suggestion${added === 1 ? '' : 's'} added — accept or dismiss ${added === 1 ? 'it' : 'them'} in the note`
+			);
+		else this.dependencies.feedback.info('No suggestions found.');
 	}
 	private bindingCurrent(): boolean {
 		const { binding, account } = this.dependencies;

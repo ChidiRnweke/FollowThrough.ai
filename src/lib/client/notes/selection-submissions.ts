@@ -3,7 +3,7 @@ import {
 	type SelectionAction,
 	type SelectionSubmission
 } from '$lib/models/notes';
-import type { SelectionSubmissionStorage } from '$lib/controllers/notes/submissions';
+import type { SelectionSubmissionStorage } from '$lib/models/browser-workspace';
 /** Browser persistence and reading only. No selection matching or submission workflow. */
 export class BrowserSelectionSubmissionStorage implements SelectionSubmissionStorage {
 	constructor(

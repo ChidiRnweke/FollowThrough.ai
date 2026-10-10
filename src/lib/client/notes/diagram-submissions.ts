@@ -3,7 +3,7 @@ import {
 	type DiagramActionSubmission,
 	type DiagramActionInput
 } from '$lib/models/diagrams';
-import type { DiagramSubmissionStorage } from '$lib/controllers/notes/submissions';
+import type { DiagramSubmissionStorage } from '$lib/models/browser-workspace';
 /** Parse and normalize the write candidate and persisted rows at the browser boundary. */
 export class BrowserDiagramSubmissionStorage implements DiagramSubmissionStorage {
 	constructor(
