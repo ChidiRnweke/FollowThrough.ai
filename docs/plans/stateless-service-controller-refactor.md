@@ -1358,3 +1358,30 @@ remaining finding. Server public helpers, factory workflows, store coordination 
 construction still need migration. The private indexing chunker finding also needs review.
 The chat store's new controller-factory imports remain prohibited and explicitly unresolved.
 Unrelated workflows stay outside this slice. The overall plan and final acceptance remain incomplete.
+
+## Agent tool orchestration — 2026-10-10
+
+This continuation is based on #348 in `refactor/pr336-agent-tool-orchestration`, with application
+revision `e646e3257f011bfb3357f04b1a6044cebefb13c5`. Capability-specific tool controllers own
+operation callbacks, project choice, result sequencing and preference before-images. Authority,
+review/executor coordination and MCP startup are controller operations. Factories retain
+construction and interface wiring; adapters retain parsing and protocol registration.
+
+The extraction preserves #348's read filtering, note-file metadata, saved review restoration,
+authorization, cancellation, errors and results. MCP's internal factory output is a startup
+controller; its route opens that controller before connecting the transport. No external tool
+schema or persisted format changes. Tool coverage remains total over the existing controller
+interfaces. No unrelated browser workflows or enforcement rules changed.
+
+Focused agent tests pass (60 files, 572 tests), as do the full unit suite (563 files, 4,465 tests,
+one existing skip), selected isolated PostgreSQL contracts (12 files, 72 tests), lint and type
+checking. Topology, source, test-quality and UI audits pass. The complete semantic inventory drops
+from 340 to 100: all 237 findings in the main tool factory, two in MCP wiring and one in SDK wiring
+are resolved. Chisel still reports 12 prohibited imports. The
+[full inventory and enforcement report](stateless-service-controller-enforcement.md) retain every
+remaining finding and reproducibility details.
+
+The remaining browser workflows, other factory operations, server public helpers and concrete
+exposures still need migration. All overall completion boxes remain unchanged. Keep this PR draft
+while migration gates fail; do not mark the application refactor complete. No guidance changed,
+and all three SvelteKit, QA and PR skill copies remain aligned.

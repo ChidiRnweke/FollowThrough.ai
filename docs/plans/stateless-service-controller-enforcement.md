@@ -112,3 +112,57 @@ Verification of this application slice:
 - E2E, PWA and production builds were not run. CI status is separate from these local results.
 
 The PR remains a draft while the migration gates fail. The JSON is evidence only, never a baseline.
+
+## Agent tool orchestration — 2026-10-10
+
+This application slice is stacked on #348 (`92860a95`). Application revision
+`e646e3257f011bfb3357f04b1a6044cebefb13c5` moves tool operations into capability-specific
+controllers. Separate controllers coordinate authority, reviewed execution and MCP startup.
+Factories construct dependencies and expose interfaces. Adapters bind schemas and register
+protocol handlers. Tool input schemas and result values now have model owners.
+
+The main agent tool factory has **zero findings**, down from 237. The MCP and SDK tool
+factories also have zero findings, down from two and one respectively. No new semantic
+findings remain in the extracted code. All remaining diagnostics are retained in the JSON.
+
+| Check                     | Before | Remaining |
+| ------------------------- | -----: | --------: |
+| `factory-workflow`        |    274 |        34 |
+| `indirect-dependency`     |      9 |         9 |
+| `public-service-helper`   |     21 |        21 |
+| `concrete-dependency`     |      2 |         2 |
+| `store-workflow`          |     34 |        34 |
+| Semantic total            |    340 |       100 |
+| Chisel prohibited imports |     12 |        12 |
+
+The tool boundary still uses #348's read-result filtering. Note reads retain Markdown file
+metadata and token counts. Session startup restores saved preparations before tools can execute.
+Authorization, locked tools, MCP scope, promotion, provenance, cancellation and failure envelopes
+retain their existing contracts. MCP construction now returns a startup controller; the route
+calls `open()` before connecting its transport. This changes an internal interface, not the MCP
+wire protocol.
+
+Verification at the application revision:
+
+- Focused agent tests: **60 files, 572 passed**.
+- Full unit suite: **563 files, 4,465 passed, one existing skip**. Browser output retains the
+  existing Svelte `derived_inert` warning.
+- Isolated agent execution, reviewed-note and synchronized tool-policy contracts:
+  **12 files, 72 passed** against PostgreSQL.
+- A temporary comparison against #348 passed for app and MCP tool names, descriptions,
+  classifications and SDK schemas. The comparison file was removed after the run.
+- Regression tests check preference before-images and saved values, failed updates without
+  changes, and missing-project error precedence over malformed widget JSON. Existing tests cover
+  saved review replay, execution failures, authority and result projections.
+- `pnpm lint` and `pnpm check`: passed; no type errors or warnings.
+- `pnpm docs:check`: passed with zero errors/warnings and one existing hint.
+- Topology, source, test-quality and standalone UI audits: passed.
+- `pnpm test:architecture`: fails on **100** semantic findings. Standalone Chisel fails on the
+  **12** existing import violations. Both checks remain unchanged and blocking.
+
+Browser store workflows, remaining server helpers, other factory workflows and two concrete
+exposures remain pending. The JSON is migration evidence only, never a checker baseline. No
+checks or suppression allowances changed. SvelteKit, QA and PR skill files remain aligned across
+all three copies. E2E, PWA and production builds were not run. The overall refactor is incomplete;
+this stacked PR remains a draft while migration gates fail. CI results are separate from these
+local results.
