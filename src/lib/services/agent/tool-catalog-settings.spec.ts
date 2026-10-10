@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { describeAgentTools } from './agent-tool-catalog-factory';
+import { AgentToolCatalogService } from './tool-catalog';
 import { LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 
 describe('Agent tool catalog', () => {
 	it('marks the locked tools as locked', () => {
 		expect(
-			describeAgentTools()
+			new AgentToolCatalogService()
+				.entries()
 				.filter((entry) => entry.locked)
 				.map((entry) => entry.name)
 				.sort()

@@ -1,3 +1,5 @@
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
+const toolCatalogRules = new AgentToolCatalogService();
 import { Cl100kTokenizer } from '$lib/server/adapters/tokenization/cl100k';
 import { InMemoryAttachmentClaims } from '$lib/testing/attachments/fakes/claims';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +25,6 @@ import { createPGliteDatabase } from './pglite-database';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import { ToolDiscovery } from '$lib/server/controllers/tool-discovery/controller';
 import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
-import { TOOL_CATALOG } from '$lib/services/agent/tool-catalog';
 
 const CACHE_PATH = fileURLToPath(new URL('../fixtures/auxiliary-cache.json', import.meta.url));
 
@@ -78,7 +79,10 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 
 	const cache = new DiskCache(CACHE_PATH);
 	const toolIndex = new ToolCatalogIndex(new ToolEmbeddingRecords(database));
-	const toolPlan = await toolIndex.prepare(TOOL_CATALOG, DEFAULT_EMBEDDING_MODEL);
+	const toolPlan = await toolIndex.prepare(
+		toolCatalogRules.discoverable(),
+		DEFAULT_EMBEDDING_MODEL
+	);
 	const deterministicToolTexts = new Set(toolPlan.pending.map((entry) => entry.input));
 	const clientOptions = { baseURL, appURL };
 	const embeddingClient = new CachedEmbeddingClient(
@@ -113,7 +117,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	// explicitly rather than making every long-tail tool appear unavailable.
 	// Deploys run this seed next to migrations; the lab has to do the same or it
 	// evaluates a configuration that never ships.
-	await new ToolDiscovery(toolIndex, embeddingClient, transactionRunner).seed();
+	await new ToolDiscovery(toolIndex, embeddingClient, transactionRunner, toolCatalogRules).seed();
 
 	return {
 		...application,

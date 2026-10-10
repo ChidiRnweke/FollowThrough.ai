@@ -1,3 +1,5 @@
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
+const toolCatalogRules = new AgentToolCatalogService();
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
 import type { TokenCounter } from '$lib/models/tokenization';
@@ -13,7 +15,6 @@ import type { PreparedAction, ToolPreparation } from '$lib/server/controllers/ag
 import { z } from 'zod';
 import { memoryChangePayloadSchema } from '$lib/models/memory';
 import { PROPOSAL_AUTO_ACCEPT_PIPELINES } from '$lib/models/agent';
-import { LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { AgentSettingsController } from '$lib/server/controllers/agent/settings/controller';
 import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
 import type { ToolPreferencesController } from '$lib/server/controllers/agent/tool-preferences/controller';
@@ -89,12 +90,7 @@ import {
 const toolPresentation = new AgentToolPresentationService();
 import type { ToolFailure } from '$lib/models/agent/tool-failure';
 import { FIRST_CLASS_TOOL_NAMES, type ToolName } from '$lib/models/agent/tool-catalog';
-import { toolDescription } from '$lib/services/agent/tool-catalog';
-import { TOOL_CATALOG } from '$lib/services/agent/tool-catalog';
-import { FIRST_CLASS_TOOL_SET } from '$lib/services/agent/tool-catalog';
 import { agentFileOf } from '$lib/server/services/agent-files/virtual-files';
-
-export { FIRST_CLASS_TOOL_NAMES, FIRST_CLASS_TOOL_SET };
 
 /**
  * Tools the user cannot deselect. Without `get_workspace_context` and
@@ -105,9 +101,6 @@ export { FIRST_CLASS_TOOL_NAMES, FIRST_CLASS_TOOL_SET };
  * `search_tools` needs no entry: the agent and MCP surfaces assemble it
  * outside the capability definitions, so no preference can disable discovery.
  */
-
-/** Membership for callers holding a {@link ToolName}; see {@link FIRST_CLASS_TOOL_SET}. */
-const LOCKED_TOOL_SET: ReadonlySet<ToolName> = new Set<ToolName>(LOCKED_TOOL_NAMES);
 
 /**
  * The user's resolved tool selection, already collapsed from the stored user
@@ -1174,7 +1167,7 @@ export class AgentTools {
 		].filter(
 			(definition) =>
 				(!allowed || allowed.has(definition.classification)) &&
-				(LOCKED_TOOL_SET.has(definition.name) || this.toolAccess.isEnabled(definition.name))
+				(toolCatalogRules.isLocked(definition.name) || this.toolAccess.isEnabled(definition.name))
 		);
 	}
 
@@ -1216,7 +1209,7 @@ export class AgentTools {
 		// several model families answered with an empty object forever.
 		const promoted = new Set<string>(alreadyPromoted);
 		const discoverable = definitions
-			.filter((definition) => !FIRST_CLASS_TOOL_SET.has(definition.name))
+			.filter((definition) => !toolCatalogRules.isFirstClass(definition.name))
 			.map((definition) =>
 				this.buildTool(definition, { isEnabled: () => promoted.has(definition.name) })
 			);
@@ -1282,16 +1275,19 @@ export class AgentTools {
 		const promoted = new Set(alreadyPromoted);
 		return this.definitions()
 			.filter(
-				(definition) => FIRST_CLASS_TOOL_SET.has(definition.name) || promoted.has(definition.name)
+				(definition) =>
+					toolCatalogRules.isFirstClass(definition.name) || promoted.has(definition.name)
 			)
 			.map((definition) => definition.name);
 	}
 
 	/** Static name + description catalog, used by the tool retriever. */
 	catalog(): ToolDescriptor[] {
-		return TOOL_CATALOG.filter(
-			(entry) => LOCKED_TOOL_SET.has(entry.name) || this.toolAccess.isEnabled(entry.name)
-		);
+		return toolCatalogRules
+			.discoverable()
+			.filter(
+				(entry) => toolCatalogRules.isLocked(entry.name) || this.toolAccess.isEnabled(entry.name)
+			);
 	}
 
 	private buildTool(
@@ -1348,14 +1344,14 @@ const sharedToolDefinitions = (
 	const retrieval = () => ({
 		ls: define(
 			'ls',
-			toolDescription('ls'),
+			toolCatalogRules.description('ls'),
 			'read',
 			z.object({ path: z.string().min(1).optional() }),
 			async (input) => projectFileResult(await factory.agentFiles().ls(actor, input.path))
 		),
 		grep: define(
 			'grep',
-			toolDescription('grep'),
+			toolCatalogRules.description('grep'),
 			'read',
 			z.object({
 				pattern: z.string(),
@@ -1375,7 +1371,7 @@ const sharedToolDefinitions = (
 		),
 		sed: define(
 			'sed',
-			toolDescription('sed'),
+			toolCatalogRules.description('sed'),
 			'read',
 			z.object({
 				path: z.string().min(1),
@@ -1396,7 +1392,7 @@ const sharedToolDefinitions = (
 		),
 		search: define(
 			'search',
-			toolDescription('search'),
+			toolCatalogRules.description('search'),
 			'read',
 			temporal({
 				query: z.string().min(1),
@@ -1414,7 +1410,7 @@ const sharedToolDefinitions = (
 		),
 		search_note: define(
 			'search_note',
-			toolDescription('search_note'),
+			toolCatalogRules.description('search_note'),
 			'read',
 			temporal({ noteId: noteId, query: z.string().min(1) }),
 			(input) =>
@@ -1427,7 +1423,7 @@ const sharedToolDefinitions = (
 		),
 		get_workspace_context: define(
 			'get_workspace_context',
-			toolDescription('get_workspace_context'),
+			toolCatalogRules.description('get_workspace_context'),
 			'read',
 			none,
 			async () => {
@@ -1444,7 +1440,7 @@ const sharedToolDefinitions = (
 		),
 		get_today_view: define(
 			'get_today_view',
-			toolDescription('get_today_view'),
+			toolCatalogRules.description('get_today_view'),
 			'read',
 			z.object({ today: localDate }),
 			(input) => factory.workspace().getTodayView(actor, input)
@@ -1453,7 +1449,7 @@ const sharedToolDefinitions = (
 	const projects = () => ({
 		list_projects: define(
 			'list_projects',
-			toolDescription('list_projects'),
+			toolCatalogRules.description('list_projects'),
 			'read',
 			temporal({}),
 			async () => ({
@@ -1464,14 +1460,14 @@ const sharedToolDefinitions = (
 		),
 		get_project: define(
 			'get_project',
-			toolDescription('get_project'),
+			toolCatalogRules.description('get_project'),
 			'read',
 			z.object({ projectId: projectId }),
 			(input) => factory.projects().get(actor, input)
 		),
 		create_project: define(
 			'create_project',
-			toolDescription('create_project'),
+			toolCatalogRules.description('create_project'),
 			'mutation',
 			z.object({ name: z.string().min(1), description: z.string().optional() }),
 			async (input) =>
@@ -1479,7 +1475,7 @@ const sharedToolDefinitions = (
 		),
 		rename_project: define(
 			'rename_project',
-			toolDescription('rename_project'),
+			toolCatalogRules.description('rename_project'),
 			'mutation',
 			z.object({ projectId: projectId, name: z.string().min(1) }),
 			async (input) =>
@@ -1487,7 +1483,7 @@ const sharedToolDefinitions = (
 		),
 		archive_project: define(
 			'archive_project',
-			toolDescription('archive_project'),
+			toolCatalogRules.description('archive_project'),
 			'mutation',
 			z.object({ projectId: projectId }),
 			async (input) =>
@@ -1495,7 +1491,7 @@ const sharedToolDefinitions = (
 		),
 		create_folder: define(
 			'create_folder',
-			toolDescription('create_folder'),
+			toolCatalogRules.description('create_folder'),
 			'mutation',
 			z.object({ projectId: projectId, name: z.string().min(1), parentId: noteId.optional() }),
 			// A folder is a note, so it takes the note write projection rather than shipping a
@@ -1507,7 +1503,7 @@ const sharedToolDefinitions = (
 		),
 		move_project_entry: define(
 			'move_project_entry',
-			toolDescription('move_project_entry'),
+			toolCatalogRules.description('move_project_entry'),
 			'mutation',
 			z.object({
 				projectId: projectId,
@@ -1521,7 +1517,7 @@ const sharedToolDefinitions = (
 	const notes = () => ({
 		get_note: define(
 			'get_note',
-			toolDescription('get_note'),
+			toolCatalogRules.description('get_note'),
 			'read',
 			z.object({ noteId: noteId }),
 			async (input) => {
@@ -1536,7 +1532,7 @@ const sharedToolDefinitions = (
 		),
 		create_note: define(
 			'create_note',
-			toolDescription('create_note'),
+			toolCatalogRules.description('create_note'),
 			'mutation',
 			// Optional here and required in `CreateNoteInput` on purpose. The service
 			// will not invent a project, and a bare schema rejection would tell the
@@ -1567,7 +1563,7 @@ const sharedToolDefinitions = (
 		),
 		save_note: define(
 			'save_note',
-			toolDescription('save_note'),
+			toolCatalogRules.description('save_note'),
 			'mutation',
 			z.object({
 				noteId: noteId,
@@ -1585,7 +1581,7 @@ const sharedToolDefinitions = (
 		),
 		edit_note: define(
 			'edit_note',
-			toolDescription('edit_note'),
+			toolCatalogRules.description('edit_note'),
 			'mutation',
 			noteEdits,
 			async (input) =>
@@ -1600,7 +1596,7 @@ const sharedToolDefinitions = (
 		),
 		rename_note: define(
 			'rename_note',
-			toolDescription('rename_note'),
+			toolCatalogRules.description('rename_note'),
 			'mutation',
 			z.object({ noteId: noteId, title: z.string().min(1) }),
 			async (input) =>
@@ -1608,7 +1604,7 @@ const sharedToolDefinitions = (
 		),
 		archive_note: define(
 			'archive_note',
-			toolDescription('archive_note'),
+			toolCatalogRules.description('archive_note'),
 			'mutation',
 			z.object({ noteId: noteId }),
 			async (input) =>
@@ -1616,7 +1612,7 @@ const sharedToolDefinitions = (
 		),
 		restore_note: define(
 			'restore_note',
-			toolDescription('restore_note'),
+			toolCatalogRules.description('restore_note'),
 			'mutation',
 			z.object({ noteId: noteId }),
 			async (input) =>
@@ -1624,35 +1620,35 @@ const sharedToolDefinitions = (
 		),
 		list_trashed_notes: define(
 			'list_trashed_notes',
-			toolDescription('list_trashed_notes'),
+			toolCatalogRules.description('list_trashed_notes'),
 			'read',
 			z.object({ projectId: projectId.optional() }),
 			(input) => factory.notes().listTrash(actor, input)
 		),
 		delete_note_forever: define(
 			'delete_note_forever',
-			toolDescription('delete_note_forever'),
+			toolCatalogRules.description('delete_note_forever'),
 			'mutation',
 			z.object({ noteId: noteId }),
 			(input) => factory.notes().deleteForever(actor, input)
 		),
 		empty_note_trash: define(
 			'empty_note_trash',
-			toolDescription('empty_note_trash'),
+			toolCatalogRules.description('empty_note_trash'),
 			'mutation',
 			z.object({ projectId: projectId.optional() }),
 			(input) => factory.notes().emptyTrash(actor, input)
 		),
 		list_note_versions: define(
 			'list_note_versions',
-			toolDescription('list_note_versions'),
+			toolCatalogRules.description('list_note_versions'),
 			'read',
 			z.object({ noteId: noteId }),
 			(input) => factory.notes().listRevisions(actor, input)
 		),
 		diff_note_versions: define(
 			'diff_note_versions',
-			toolDescription('diff_note_versions'),
+			toolCatalogRules.description('diff_note_versions'),
 			'read',
 			z.object({
 				noteId: noteId,
@@ -1663,7 +1659,7 @@ const sharedToolDefinitions = (
 		),
 		restore_note_version: define(
 			'restore_note_version',
-			toolDescription('restore_note_version'),
+			toolCatalogRules.description('restore_note_version'),
 			'mutation',
 			z.object({ noteId: noteId, revisionId: noteRevisionId }),
 			async (input) => {
@@ -1675,7 +1671,7 @@ const sharedToolDefinitions = (
 		),
 		publish_note: define(
 			'publish_note',
-			toolDescription('publish_note'),
+			toolCatalogRules.description('publish_note'),
 			'mutation',
 			z.object({ noteId: noteId, baseEtag: noteEtag }),
 			async (input) => {
@@ -1685,7 +1681,7 @@ const sharedToolDefinitions = (
 		),
 		discard_note_draft: define(
 			'discard_note_draft',
-			toolDescription('discard_note_draft'),
+			toolCatalogRules.description('discard_note_draft'),
 			'mutation',
 			z.object({ noteId: noteId }),
 			(input) => factory.notes().discardDraft(actor, input)
@@ -1694,7 +1690,7 @@ const sharedToolDefinitions = (
 	const todos = () => ({
 		list_todos: define(
 			'list_todos',
-			toolDescription('list_todos'),
+			toolCatalogRules.description('list_todos'),
 			'read',
 			temporal({
 				projectId: optionalModelField(projectId),
@@ -1711,7 +1707,7 @@ const sharedToolDefinitions = (
 		),
 		create_todo: define(
 			'create_todo',
-			toolDescription('create_todo'),
+			toolCatalogRules.description('create_todo'),
 			'mutation',
 			z.object({
 				projectId: projectId,
@@ -1726,7 +1722,7 @@ const sharedToolDefinitions = (
 		),
 		create_todos: define(
 			'create_todos',
-			toolDescription('create_todos'),
+			toolCatalogRules.description('create_todos'),
 			'mutation',
 			createTodoBatchSchema,
 			async (input) => ({
@@ -1737,7 +1733,7 @@ const sharedToolDefinitions = (
 		),
 		update_todo: define(
 			'update_todo',
-			toolDescription('update_todo'),
+			toolCatalogRules.description('update_todo'),
 			'mutation',
 			z.object({
 				todoId: todoId,
@@ -1757,21 +1753,21 @@ const sharedToolDefinitions = (
 	const diagrams = () => ({
 		revise_mermaid_diagram: define(
 			'revise_mermaid_diagram',
-			toolDescription('revise_mermaid_diagram'),
+			toolCatalogRules.description('revise_mermaid_diagram'),
 			'mutation',
 			z.object({ diagramId: diagramId, instruction: z.string().min(1) }),
 			(input) => factory.diagrams().reviseMermaid(actor, input)
 		),
 		search_icons: define(
 			'search_icons',
-			toolDescription('search_icons'),
+			toolCatalogRules.description('search_icons'),
 			'read',
 			z.object({ query: z.string().min(1), limit: z.number().int().min(1).max(12).optional() }),
 			(input) => factory.diagramStudio().searchDiagramIcons(actor, input)
 		),
 		read_project_diagram: define(
 			'read_project_diagram',
-			toolDescription('read_project_diagram'),
+			toolCatalogRules.description('read_project_diagram'),
 			'read',
 			z.object({ diagramId: diagramId }),
 			async (input) => {
@@ -1787,7 +1783,7 @@ const sharedToolDefinitions = (
 		),
 		promote_diagram: define(
 			'promote_diagram',
-			toolDescription('promote_diagram'),
+			toolCatalogRules.description('promote_diagram'),
 			'proposal',
 			z.object({ diagramId: diagramId }),
 			(input) => factory.diagrams().promote(actor, input)
@@ -1796,7 +1792,7 @@ const sharedToolDefinitions = (
 	const suggestions = () => ({
 		list_suggestions: define(
 			'list_suggestions',
-			toolDescription('list_suggestions'),
+			toolCatalogRules.description('list_suggestions'),
 			'read',
 			temporal({ status: z.enum(['proposed', 'accepted', 'rejected', 'expired', 'reverted']) }),
 			async (input) => ({
@@ -1807,7 +1803,7 @@ const sharedToolDefinitions = (
 		),
 		accept_suggestion: define(
 			'accept_suggestion',
-			toolDescription('accept_suggestion'),
+			toolCatalogRules.description('accept_suggestion'),
 			'mutation',
 			z.object({ suggestionId: suggestionId }),
 			// `acceptReviewed`, not `accept`: a draw.io diagram accepted without its
@@ -1819,26 +1815,30 @@ const sharedToolDefinitions = (
 		),
 		reject_suggestion: define(
 			'reject_suggestion',
-			toolDescription('reject_suggestion'),
+			toolCatalogRules.description('reject_suggestion'),
 			'mutation',
 			z.object({ suggestionId: suggestionId }),
 			(input) => factory.suggestions().reject(actor, input)
 		),
 		revert_suggestion: define(
 			'revert_suggestion',
-			toolDescription('revert_suggestion'),
+			toolCatalogRules.description('revert_suggestion'),
 			'mutation',
 			z.object({ suggestionId: suggestionId }),
 			(input) => factory.suggestions().revert(actor, input)
 		)
 	});
 	const skills = () => ({
-		list_skills: define('list_skills', toolDescription('list_skills'), 'read', temporal({}), () =>
-			factory.skills().list(actor)
+		list_skills: define(
+			'list_skills',
+			toolCatalogRules.description('list_skills'),
+			'read',
+			temporal({}),
+			() => factory.skills().list(actor)
 		),
 		save_skill: define(
 			'save_skill',
-			toolDescription('save_skill'),
+			toolCatalogRules.description('save_skill'),
 			'mutation',
 			z.object({ noteId, markdown: z.string() }),
 			async (input) =>
@@ -1853,7 +1853,7 @@ const sharedToolDefinitions = (
 		),
 		edit_skill: define(
 			'edit_skill',
-			toolDescription('edit_skill'),
+			toolCatalogRules.description('edit_skill'),
 			'mutation',
 			noteEdits,
 			async (input) =>
@@ -1868,7 +1868,7 @@ const sharedToolDefinitions = (
 		),
 		create_skill: define(
 			'create_skill',
-			toolDescription('create_skill'),
+			toolCatalogRules.description('create_skill'),
 			'mutation',
 			z.object({
 				name: z.string().min(1),
@@ -1889,7 +1889,7 @@ const sharedToolDefinitions = (
 		),
 		list_skill_versions: define(
 			'list_skill_versions',
-			toolDescription('list_skill_versions'),
+			toolCatalogRules.description('list_skill_versions'),
 			'read',
 			temporal({ noteId: noteId }),
 			async (input) => {
@@ -1899,14 +1899,14 @@ const sharedToolDefinitions = (
 		),
 		restore_skill_version: define(
 			'restore_skill_version',
-			toolDescription('restore_skill_version'),
+			toolCatalogRules.description('restore_skill_version'),
 			'mutation',
 			z.object({ noteId: noteId, revision: z.number().int().positive() }),
 			(input) => factory.skills().restoreVersion(actor, input)
 		),
 		update_skill: define(
 			'update_skill',
-			toolDescription('update_skill'),
+			toolCatalogRules.description('update_skill'),
 			'mutation',
 			z.object({
 				noteId: noteId,
@@ -1919,7 +1919,7 @@ const sharedToolDefinitions = (
 		),
 		set_skill_pinned: define(
 			'set_skill_pinned',
-			toolDescription('set_skill_pinned'),
+			toolCatalogRules.description('set_skill_pinned'),
 			'mutation',
 			z.object({ noteId: noteId, projectId: projectId, pinned: z.boolean() }),
 			async (input) => {
@@ -1931,14 +1931,14 @@ const sharedToolDefinitions = (
 	const account = () => ({
 		list_api_tokens: define(
 			'list_api_tokens',
-			toolDescription('list_api_tokens'),
+			toolCatalogRules.description('list_api_tokens'),
 			'read',
 			temporal({}),
 			() => factory.apiTokens().list(actor)
 		),
 		revoke_api_token: define(
 			'revoke_api_token',
-			toolDescription('revoke_api_token'),
+			toolCatalogRules.description('revoke_api_token'),
 			'mutation',
 			z.object({ tokenId: apiTokenId }),
 			async (input) => {
@@ -1948,7 +1948,7 @@ const sharedToolDefinitions = (
 		),
 		list_attachments: define(
 			'list_attachments',
-			toolDescription('list_attachments'),
+			toolCatalogRules.description('list_attachments'),
 			'read',
 			temporal({ noteId: noteId }),
 			(input) => factory.attachments().list(actor, input.noteId as NoteId)
@@ -1957,7 +1957,7 @@ const sharedToolDefinitions = (
 	const memoryAndPreferences = () => ({
 		list_project_memory: define(
 			'list_project_memory',
-			toolDescription('list_project_memory'),
+			toolCatalogRules.description('list_project_memory'),
 			'read',
 			temporal({ projectId: projectId }),
 			async (input) => ({
@@ -1971,7 +1971,7 @@ const sharedToolDefinitions = (
 		),
 		list_user_memory: define(
 			'list_user_memory',
-			toolDescription('list_user_memory'),
+			toolCatalogRules.description('list_user_memory'),
 			'read',
 			temporal({}),
 			async () => {
@@ -1983,7 +1983,7 @@ const sharedToolDefinitions = (
 		),
 		propose_memory_change: define(
 			'propose_memory_change',
-			toolDescription('propose_memory_change'),
+			toolCatalogRules.description('propose_memory_change'),
 			'proposal',
 			z.object({
 				scope: z.enum(['project', 'user']),
@@ -2014,14 +2014,14 @@ const sharedToolDefinitions = (
 		),
 		list_trust_policies: define(
 			'list_trust_policies',
-			toolDescription('list_trust_policies'),
+			toolCatalogRules.description('list_trust_policies'),
 			'read',
 			temporal({}),
 			() => factory.trustPolicies().list(actor)
 		),
 		update_trust_policy: define(
 			'update_trust_policy',
-			toolDescription('update_trust_policy'),
+			toolCatalogRules.description('update_trust_policy'),
 			'mutation',
 			z.object({
 				pipeline: z.enum(PROPOSAL_AUTO_ACCEPT_PIPELINES),
@@ -2034,7 +2034,7 @@ const sharedToolDefinitions = (
 		),
 		list_tool_preferences: define(
 			'list_tool_preferences',
-			toolDescription('list_tool_preferences'),
+			toolCatalogRules.description('list_tool_preferences'),
 			'read',
 			z.object({ projectId: projectId.optional() }),
 			(input) =>
@@ -2044,7 +2044,7 @@ const sharedToolDefinitions = (
 		),
 		set_tool_enabled: define(
 			'set_tool_enabled',
-			toolDescription('set_tool_enabled'),
+			toolCatalogRules.description('set_tool_enabled'),
 			'mutation',
 			z.object({
 				toolName: z.string().min(1),
@@ -2060,14 +2060,14 @@ const sharedToolDefinitions = (
 		),
 		get_agent_preferences: define(
 			'get_agent_preferences',
-			toolDescription('get_agent_preferences'),
+			toolCatalogRules.description('get_agent_preferences'),
 			'read',
 			none,
 			() => factory.agentSettings().getPreferences(actor)
 		),
 		update_agent_preferences: define(
 			'update_agent_preferences',
-			toolDescription('update_agent_preferences'),
+			toolCatalogRules.description('update_agent_preferences'),
 			'mutation',
 			z.object({
 				defaultModel: z.string().nullable().optional(),
@@ -2099,7 +2099,7 @@ const sharedToolDefinitions = (
 		),
 		list_agent_models: define(
 			'list_agent_models',
-			toolDescription('list_agent_models'),
+			toolCatalogRules.description('list_agent_models'),
 			'read',
 			none,
 			() => factory.agentSettings().listModels(actor)
@@ -2108,7 +2108,7 @@ const sharedToolDefinitions = (
 	const deliverables = () => ({
 		export_document: define(
 			'export_document',
-			toolDescription('export_document'),
+			toolCatalogRules.description('export_document'),
 			'mutation',
 			z.object({
 				projectId: projectId,
@@ -2128,28 +2128,28 @@ const sharedToolDefinitions = (
 		),
 		list_artifacts: define(
 			'list_artifacts',
-			toolDescription('list_artifacts'),
+			toolCatalogRules.description('list_artifacts'),
 			'read',
 			temporal({ projectId: projectId }),
 			(input) => factory.deliverables().listArtifacts(actor, input.projectId)
 		),
 		list_templates: define(
 			'list_templates',
-			toolDescription('list_templates'),
+			toolCatalogRules.description('list_templates'),
 			'read',
 			temporal({ projectId: projectId }),
 			(input) => factory.deliverables().listTemplates(actor, input.projectId)
 		),
 		get_export_settings: define(
 			'get_export_settings',
-			toolDescription('get_export_settings'),
+			toolCatalogRules.description('get_export_settings'),
 			'read',
 			z.object({ projectId: projectId }),
 			(input) => factory.deliverables().getExportSettings(actor, input.projectId)
 		),
 		update_export_settings: define(
 			'update_export_settings',
-			toolDescription('update_export_settings'),
+			toolCatalogRules.description('update_export_settings'),
 			'mutation',
 			exportSettingsSchema.extend({ projectId }),
 			({ projectId, ...settings }) =>
@@ -2157,7 +2157,7 @@ const sharedToolDefinitions = (
 		),
 		get_artifact: define(
 			'get_artifact',
-			toolDescription('get_artifact'),
+			toolCatalogRules.description('get_artifact'),
 			'read',
 			z.object({ artifactId: artifactId }),
 			async (input) => {
@@ -2168,14 +2168,14 @@ const sharedToolDefinitions = (
 		),
 		download_artifact: define(
 			'download_artifact',
-			toolDescription('download_artifact'),
+			toolCatalogRules.description('download_artifact'),
 			'read',
 			z.object({ artifactId: artifactId }),
 			(input) => factory.deliverables().downloadArtifact(actor, input.artifactId)
 		),
 		delete_artifact: define(
 			'delete_artifact',
-			toolDescription('delete_artifact'),
+			toolCatalogRules.description('delete_artifact'),
 			'mutation',
 			z.object({ artifactId: artifactId }),
 			async (input) => {
@@ -2185,7 +2185,7 @@ const sharedToolDefinitions = (
 		),
 		regenerate_artifact: define(
 			'regenerate_artifact',
-			toolDescription('regenerate_artifact'),
+			toolCatalogRules.description('regenerate_artifact'),
 			'mutation',
 			z.object({ artifactId: artifactId }),
 			(input) => factory.deliverables().regenerateArtifact(actor, input.artifactId)
@@ -2194,14 +2194,14 @@ const sharedToolDefinitions = (
 	const widgets = () => ({
 		read_widget_catalog: define(
 			'read_widget_catalog',
-			toolDescription('read_widget_catalog'),
+			toolCatalogRules.description('read_widget_catalog'),
 			'read',
 			z.object({}),
 			() => factory.widgets().catalog(actor)
 		),
 		create_widget: define(
 			'create_widget',
-			toolDescription('create_widget'),
+			toolCatalogRules.description('create_widget'),
 			'mutation',
 			z.object({
 				title: z.string().min(1),
@@ -2264,7 +2264,7 @@ const sharedToolDefinitions = (
 		),
 		list_widgets: define(
 			'list_widgets',
-			toolDescription('list_widgets'),
+			toolCatalogRules.description('list_widgets'),
 			'read',
 			z.object({ projectId: projectId.optional() }),
 			async (input) => {
@@ -2286,14 +2286,14 @@ const sharedToolDefinitions = (
 		),
 		read_widget: define(
 			'read_widget',
-			toolDescription('read_widget'),
+			toolCatalogRules.description('read_widget'),
 			'read',
 			z.object({ widgetId }),
 			(input) => factory.widgets().get(actor, input)
 		),
 		edit_widget_data: define(
 			'edit_widget_data',
-			toolDescription('edit_widget_data'),
+			toolCatalogRules.description('edit_widget_data'),
 			'mutation',
 			z.object({
 				widgetId,
@@ -2312,7 +2312,7 @@ const sharedToolDefinitions = (
 		),
 		edit_widget_layout: define(
 			'edit_widget_layout',
-			toolDescription('edit_widget_layout'),
+			toolCatalogRules.description('edit_widget_layout'),
 			'mutation',
 			z.object({
 				widgetId,
@@ -2363,7 +2363,7 @@ const selectionToolDefinitions = (
 ) => ({
 	extract_promises: defineTool(
 		'extract_promises',
-		toolDescription('extract_promises'),
+		toolCatalogRules.description('extract_promises'),
 		'proposal',
 		z.object({
 			responsibility: z
@@ -2383,7 +2383,7 @@ const selectionToolDefinitions = (
 	),
 	relate_selection: defineTool(
 		'relate_selection',
-		toolDescription('relate_selection'),
+		toolCatalogRules.description('relate_selection'),
 		'proposal',
 		z.object({}),
 		async () => ({
@@ -2393,7 +2393,7 @@ const selectionToolDefinitions = (
 	),
 	find_references: defineTool(
 		'find_references',
-		toolDescription('find_references'),
+		toolCatalogRules.description('find_references'),
 		'proposal',
 		z.object({}),
 		async () => ({
@@ -2403,7 +2403,7 @@ const selectionToolDefinitions = (
 	),
 	create_skill_from_selection: defineTool(
 		'create_skill_from_selection',
-		toolDescription('create_skill_from_selection'),
+		toolCatalogRules.description('create_skill_from_selection'),
 		'mutation',
 		z.object({
 			name: z.string().min(1),
@@ -2432,7 +2432,7 @@ const appToolDefinitions = (
 	return {
 		load_skill: defineTool(
 			'load_skill',
-			toolDescription('load_skill'),
+			toolCatalogRules.description('load_skill'),
 			'read',
 			z.object({ noteId: noteId }),
 			async (fields) => {
@@ -2449,7 +2449,7 @@ const appToolDefinitions = (
 		),
 		create_diagram: defineTool(
 			'create_diagram',
-			toolDescription('create_diagram'),
+			toolCatalogRules.description('create_diagram'),
 			'mutation',
 			// `projectId` is optional here and required on `CreateDiagramInput`, for the
 			// reason `create_note` is: a bare schema rejection would tell the model only
@@ -2476,7 +2476,7 @@ const appToolDefinitions = (
 		),
 		edit_diagram: defineTool(
 			'edit_diagram',
-			toolDescription('edit_diagram'),
+			toolCatalogRules.description('edit_diagram'),
 			'mutation',
 			z.object({
 				source: z.string().min(1),
@@ -2487,7 +2487,7 @@ const appToolDefinitions = (
 		),
 		read_canvas_diagram: defineTool(
 			'read_canvas_diagram',
-			toolDescription('read_canvas_diagram'),
+			toolCatalogRules.description('read_canvas_diagram'),
 			'read',
 			z.object({}),
 			() =>
@@ -2511,7 +2511,7 @@ const mcpOnlyDefinitions = (
 ) => ({
 	load_skill: defineTool(
 		'load_skill',
-		toolDescription('load_skill'),
+		toolCatalogRules.description('load_skill'),
 		'read',
 		z.object({ noteId: noteId }),
 		async (fields) => {
@@ -2566,7 +2566,7 @@ export class McpTools {
 		].filter(
 			(definition) =>
 				(!allowed || allowed.has(definition.classification)) &&
-				(LOCKED_TOOL_SET.has(definition.name) || this.toolAccess.isEnabled(definition.name))
+				(toolCatalogRules.isLocked(definition.name) || this.toolAccess.isEnabled(definition.name))
 		);
 	}
 }

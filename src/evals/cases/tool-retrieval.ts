@@ -1,9 +1,10 @@
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
+const toolCatalogRules = new AgentToolCatalogService();
 import { randomUUID } from 'node:crypto';
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import { type ToolName } from '$lib/models/agent/tool-catalog';
-import { FIRST_CLASS_TOOL_SET } from '$lib/services/agent/tool-catalog';
 import { rankToolsForGoal } from '../lab/tool-catalog';
 import { ARCHETYPES, type EvalCase } from './types';
 
@@ -485,7 +486,7 @@ export const TOOL_SET_GOALS: readonly RetrievalToolSet[] = [
 ];
 
 export const toolRetrievalCases: readonly EvalCase[] = TOOL_RETRIEVAL_GOALS.filter(
-	(entry) => !FIRST_CLASS_TOOL_SET.has(entry.expected)
+	(entry) => !toolCatalogRules.isFirstClass(entry.expected)
 ).map((entry) => ({
 	id: `tool-retrieval-${entry.id}`,
 	name: `catalog surfaces ${entry.expected} for: ${entry.goal}`,

@@ -1,3 +1,4 @@
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 import { Cl100kTokenizer } from '$lib/server/adapters/tokenization/cl100k';
 /**
  * Deploy-time seeder for the `tool_embeddings` table.
@@ -33,7 +34,8 @@ const main = async (): Promise<void> => {
 	const summary = await new ToolDiscovery(
 		new ToolCatalogIndex(new ToolEmbeddingRecords(transaction.database)),
 		embeddings,
-		transaction.transactionRunner
+		transaction.transactionRunner,
+		new AgentToolCatalogService()
 	).seed();
 	console.log(
 		`[seed-tool-embeddings] embedded ${summary.embedded}, unchanged ${summary.unchanged}, removed ${summary.removed}`

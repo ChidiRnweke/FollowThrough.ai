@@ -1,3 +1,4 @@
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 import type { TokenCounter } from '$lib/models/tokenization';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
@@ -45,7 +46,8 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): Server => 
 			new AgentToolDiscoveryStore(),
 			options.toolRetriever,
 			new AgentToolCalls(new ToolCallBoundary()),
-			protocol
+			protocol,
+			new AgentToolCatalogService()
 		)
 	);
 };

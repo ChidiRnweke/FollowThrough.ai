@@ -1,3 +1,4 @@
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 import { ToolDiscovery } from '$lib/server/controllers/tool-discovery/controller';
 import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 import type { ToolDescriptor, ToolEmbeddingWrite } from '$lib/models/agent/tool-index';
@@ -35,7 +36,8 @@ export const toolDiscoveryFixture = async (
 	const controller = new ToolDiscovery(
 		new ToolCatalogIndex(repository),
 		embeddings,
-		new InMemoryTransactionRunner([repository])
+		new InMemoryTransactionRunner([repository]),
+		new AgentToolCatalogService()
 	);
 	return { repository, embeddings, controller };
 };

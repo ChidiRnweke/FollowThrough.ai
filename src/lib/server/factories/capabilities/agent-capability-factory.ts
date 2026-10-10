@@ -84,10 +84,13 @@ import {
 } from '$lib/server/services/agent/runs/preferences';
 import { AgentExecution } from '$lib/server/controllers/agent/execution';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
-import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
+import {
+	ToolAccess,
+	type ToolPreferenceCapability
+} from '$lib/server/services/agent/tools/preferences';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 import { traceAgentTurn } from '$lib/server/services/telemetry';
-import { agentToolCatalog } from '$lib/server/factories/agent/agent-tool-catalog-factory';
+import { AgentToolCatalogService, type AgentToolCatalog } from '$lib/services/agent/tool-catalog';
 import { agentToolRegistry } from '$lib/server/factories/agent/agent-tool-factory';
 import type { ProductionControllerFactory } from '$lib/server/factories/production-controller-factory';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
@@ -123,7 +126,8 @@ export interface AgentCapability {
 	readonly models: AgentModelCatalog;
 	readonly modelSelection: IAgentModelSelectionService;
 	readonly modelChoices: IAgentModelChoiceService;
-	readonly toolPreferences: ToolAccess;
+	readonly toolPreferences: ToolPreferenceCapability;
+	readonly toolCatalog: AgentToolCatalog;
 	readonly trust: ToolTrust;
 	readonly runs: AgentRunRecords;
 	readonly cancellations: RunCancellationDecisions;
@@ -215,7 +219,8 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		preferenceEditing: new AgentPreferenceEditingService(),
 		modelSelection: new AgentModelSelectionService(),
 		modelChoices: new AgentModelChoiceService(),
-		toolPreferences: new ToolAccess(new ToolPreferenceRecords(input.db), agentToolCatalog),
+		toolPreferences: new ToolAccess(new ToolPreferenceRecords(input.db)),
+		toolCatalog: new AgentToolCatalogService(),
 		trust: new ToolTrust(new TrustPolicyRecords(input.db)),
 		runs,
 		cancellations: new RunCancellation(runs),

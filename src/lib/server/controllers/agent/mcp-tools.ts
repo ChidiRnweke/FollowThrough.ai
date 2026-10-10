@@ -1,5 +1,5 @@
 import type { AgentPayload } from '$lib/models/agent/payload';
-import { FIRST_CLASS_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
+import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
 import { toolFailure } from '$lib/models/agent/tool-failure';
 import type { ToolDescriptor } from '$lib/models/agent/tool-index';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
@@ -27,18 +27,19 @@ export class McpToolSession implements McpToolSessionControl {
 		private readonly state: AgentToolDiscoveryStore,
 		private readonly retriever: ToolRetriever,
 		private readonly calls: AgentToolCallControl,
-		private readonly reader: McpToolResultReader
+		private readonly reader: McpToolResultReader,
+		private readonly catalogRules: Pick<AgentToolCatalog, 'isFirstClass'>
 	) {}
 
 	list(): readonly string[] {
 		return this.catalog
-			.filter(({ name }) => this.isFirstClass(name) || this.state.has(name))
+			.filter(({ name }) => this.catalogRules.isFirstClass(name) || this.state.has(name))
 			.map(({ name }) => name);
 	}
 
 	async search(query: string, limit: number): Promise<AgentPayload> {
 		const catalog = this.catalog
-			.filter(({ name }) => !this.isFirstClass(name))
+			.filter(({ name }) => !this.catalogRules.isFirstClass(name))
 			.map(({ name, description }) => ({ name, description }));
 		const ranked = await this.retriever.retrieve(catalog, query, limit);
 		const permitted = new Set(this.catalog.map(({ name }) => name));
@@ -68,9 +69,5 @@ export class McpToolSession implements McpToolSessionControl {
 		if (prepared.kind === 'failure') return { value: prepared.failure, listChanged: false };
 		const value = await this.calls.execute(prepared.action, signal);
 		return { value, listChanged: name === 'search_tools' && !this.reader.failed(value) };
-	}
-
-	private isFirstClass(name: string): boolean {
-		return FIRST_CLASS_TOOL_NAMES.some((first) => first === name);
 	}
 }

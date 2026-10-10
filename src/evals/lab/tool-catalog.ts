@@ -1,6 +1,7 @@
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
+const toolCatalogRules = new AgentToolCatalogService();
 import type { ActorContext } from '$lib/models/identity';
 import type { ToolDescriptor } from '$lib/models/agent/tool-index';
-import { TOOL_CATALOG } from '$lib/services/agent/tool-catalog';
 import type { Lab } from './application';
 
 /**
@@ -13,7 +14,7 @@ import type { Lab } from './application';
  * in the catalog costs a cached embedding lookup each.
  */
 /** The long-tail catalog: everything reachable only via `search_tools`. */
-export const toolCatalog = (): ToolDescriptor[] => [...TOOL_CATALOG];
+export const toolCatalog = (): ToolDescriptor[] => [...toolCatalogRules.discoverable()];
 
 /**
  * Ranks the catalog for a goal, returning tool names best-first — the same call

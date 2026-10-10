@@ -2,10 +2,11 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import OpenAI from 'openai';
 import { config as loadDotenv } from 'dotenv';
-import { TOOL_CATALOG } from '../src/lib/services/agent/tool-catalog.ts';
+import { AgentToolCatalogService } from '../src/lib/services/agent/tool-catalog.ts';
+const toolCatalog = new AgentToolCatalogService().discoverable();
 
 const embeddingModel = process.env.EVAL_EMBEDDING_MODEL ?? 'openai/text-embedding-3-large';
-const toolEmbeddingText = (entry: (typeof TOOL_CATALOG)[number]): string =>
+const toolEmbeddingText = (entry: (typeof toolCatalog)[number]): string =>
 	`${entry.name}: ${entry.retrievalText ?? entry.description}`;
 
 const cachePath = new URL('../src/evals/fixtures/auxiliary-cache.json', import.meta.url);
@@ -15,7 +16,8 @@ const keyFor = (content: string): string => {
 	const hash = createHash('sha256').update(payload).digest('hex');
 	return `embed:${hash.slice(0, 32)}`;
 };
-const missing = TOOL_CATALOG.map(toolEmbeddingText)
+const missing = toolCatalog
+	.map(toolEmbeddingText)
 	.map((content) => ({ content, key: keyFor(content) }))
 	.filter(({ key }) => !(key in entries));
 
@@ -47,6 +49,6 @@ if (missing.length > 0 && process.argv.includes('--record-missing')) {
 	process.exitCode = 1;
 } else {
 	process.stdout.write(
-		`Eval cache contains all ${TOOL_CATALOG.length} deterministic tool embeddings.\n`
+		`Eval cache contains all ${toolCatalog.length} deterministic tool embeddings.\n`
 	);
 }

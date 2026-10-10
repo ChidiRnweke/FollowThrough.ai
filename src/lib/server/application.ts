@@ -496,6 +496,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		apiTokens: { tokens: identity.apiTokens },
 		toolPreferences: {
 			preferences: toolPreferences,
+			catalog: agentCapability.toolCatalog,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner

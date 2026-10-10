@@ -1,27 +1,28 @@
+import { InMemoryToolCatalog } from '$lib/testing/agent/fakes/in-memory-tool-catalog';
+import type { ResolvedToolCatalogEntry } from '$lib/models/agent/tool-catalog';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '$lib/errors';
-import { ToolAccess, type ToolCatalog } from '$lib/server/services/agent/tools/preferences';
+import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
 import { InMemoryToolPreferenceRepository } from '$lib/testing/agent/fakes/in-memory-tool-preferences';
 import { testActor, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ToolPreferences, type ToolPreferencesDependencies } from './controller';
 
-const catalog: ToolCatalog = {
-	entries: () => [
-		{
-			name: 'archive_project',
-			description: 'Archive a project.',
-			classification: 'mutation',
-			locked: false
-		},
-		{ name: 'load_skill', description: 'Load a skill.', classification: 'read', locked: true }
-	]
-};
+const catalog: readonly ResolvedToolCatalogEntry[] = [
+	{
+		name: 'archive_project',
+		description: 'Archive a project.',
+		classification: 'mutation',
+		locked: false
+	},
+	{ name: 'load_skill', description: 'Load a skill.', classification: 'read', locked: true }
+];
 
 const controller = () =>
 	new ToolPreferences(
 		capabilityDependencies<ToolPreferencesDependencies>({
-			preferences: new ToolAccess(new InMemoryToolPreferenceRepository(), catalog)
+			preferences: new ToolAccess(new InMemoryToolPreferenceRepository()),
+			catalog: new InMemoryToolCatalog(catalog)
 		})
 	);
 

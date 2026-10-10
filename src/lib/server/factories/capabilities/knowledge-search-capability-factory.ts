@@ -1,3 +1,4 @@
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 import type { TokenCodec } from '$lib/models/tokenization';
 import {
 	InlineContextService,
@@ -135,7 +136,8 @@ export const createKnowledgeSearchCapability = (
 		toolRetriever: new ToolDiscovery(
 			new ToolCatalogIndex(new ToolEmbeddingRecords(input.db)),
 			embeddingClient,
-			input.transactionRunner
+			input.transactionRunner,
+			new AgentToolCatalogService()
 		),
 		finalize: ({ preferences }) => ({
 			inlineContext: new InlineContextService(tokenizer),

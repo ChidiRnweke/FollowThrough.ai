@@ -2,7 +2,7 @@
  * Static name + description catalog for every agent tool definition, kept
  * dependency-free so startup scripts (seeds, migrations, audits) can read the
  * catalog without instantiating `AgentTools` or its controller factory. The
- * factory resolves its descriptions through `toolDescription`, so this module
+ * factory resolves its descriptions through the tool catalog capability, so this module
  * is the single source of truth and any drift fails fast at module load.
  */
 
@@ -37,7 +37,7 @@ export const FIRST_CLASS_TOOL_NAMES = [
 	'save_note',
 	// Direct rather than long-tail: it is the only way the agent can put a diagram
 	// in front of the user, and every turn of a studio conversation is about to
-	// need it. Nothing here is seeded into `tool_embeddings` — see `TOOL_CATALOG` —
+	// need it. Nothing here is seeded into `tool_embeddings` — see AgentToolCatalog.discoverable —
 	// because a first-class tool is offered outright and never retrieved.
 	'create_diagram',
 	'edit_diagram'
@@ -602,3 +602,9 @@ export const LOCKED_TOOL_NAMES = [
 	'list_tool_preferences',
 	'set_tool_enabled'
 ] as const satisfies readonly ToolName[];
+
+/** Resolved settings metadata; locked tools cannot be disabled. */
+export type ResolvedToolCatalogEntry = ToolCatalogEntry & {
+	readonly name: ToolName;
+	readonly locked: boolean;
+};
