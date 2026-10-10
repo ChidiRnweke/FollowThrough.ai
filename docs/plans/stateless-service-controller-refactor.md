@@ -181,9 +181,9 @@ persistence. It does not complete the parent architecture refactor or change ser
 - [x] Record local verification below. Publish the stacked PR and record its required checks;
       inherited architecture failures keep delivery in draft.
 
-The older workbench/shell and chat/context checklist rows below remain application-wide audit
-items. These checked contribution tasks establish only this slice, not every adjacent shell or
-browser boundary. Do not reopen #338's completed chat work from the historical inventory.
+The workbench/shell and chat/context operation rows below now reflect these completed
+contributions. Other browser and application-wide audit rows remain pending. These checked
+tasks do not establish every adjacent shell boundary or reopen #338's completed chat work.
 
 Observed validation and reproduction:
 
@@ -212,8 +212,10 @@ Observed validation and reproduction:
   UI in this base; transition and navigation-history tests verify those boundaries.
 - The full PWA suite and multiple-passage selection scenario remain parent-level verification
   gaps. This contribution ran the isolated account-switch PWA test, not the full PWA suite.
-- Required stacked PR checks are pending publication. This slice does not resolve inherited
-  architecture failures or make #336/#338 merge-ready.
+- Stacked draft PR [#347](https://github.com/ChidiRnweke/FollowThrough.ai/pull/347) targets #338.
+  Required CI results are tracked on that PR. Commitlint, title validation and contracts passed
+  on implementation commit `582ace91`. The inherited architecture failures still block quality;
+  this contribution does not make #336/#338 merge-ready.
 
 ## A. Inventory and regression evidence
 
@@ -269,8 +271,8 @@ stay pending; mechanical checks do not establish capability cohesion.
 - [ ] Remove component-facing WorkspaceResources, raw drafts, mutable ChatStore, queues, transports and broad registries.
 - [ ] Workspace/session: start/stop/sync/recover/reset/local export.
 - [ ] Sync/review: pull/submit/proof recovery/retry/keep/discard.
-- [ ] Workbench/shell: open/focus/close/move/split/restore/context handoff.
-- [ ] Chat/context: open/release/send/retry/cancel/approve/capture context.
+- [x] Workbench/shell: open/focus/close/move/split/restore/context handoff (#338 and #347).
+- [x] Chat/context: open/release/send/retry/cancel/approve/capture context (#338).
 - [ ] Notes: edit/save/lifecycle/history/proofreading/search/comparison/clipboard.
 - [ ] Projects/todos/skills/memory/suggestions: editing/lifecycle/review/export.
 - [ ] Widgets/diagrams: editing/preview/evaluation/source resolution/canvas/export rendering.
