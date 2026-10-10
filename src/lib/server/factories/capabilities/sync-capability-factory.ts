@@ -1,11 +1,17 @@
-import { syncEtag } from '$lib/models/sync';
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-const identity = new WorkspaceCommandRulesService();
-import type { Database } from '$lib/server/db';
 import {
-	WorkspaceSyncChanges,
-	type SyncChangesRepository
-} from '$lib/server/repositories/workspace/sync-changes';
+	WorkspaceJournal,
+	type WorkspaceJournalReader
+} from '$lib/server/services/workspace/journal';
+import {
+	WorkspaceResourceVersions,
+	type WorkspaceResourceVersionReader
+} from '$lib/server/services/workspace/resource-versions';
+import {
+	WorkspaceCommandRulesService,
+	type WorkspaceCommandRules
+} from '$lib/services/workspace/commands';
+import type { Database } from '$lib/server/db';
+import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
 import {
 	WorkspaceSyncObjects,
 	type SyncObjectRepository
@@ -18,7 +24,9 @@ import {
 } from '$lib/server/services/workspace/mutation-receipts';
 
 export interface SyncCapability {
-	readonly changes: SyncChangesRepository;
+	readonly changes: WorkspaceJournalReader;
+	readonly resourceVersions: WorkspaceResourceVersionReader;
+	readonly resourceKeys: WorkspaceCommandRules;
 	readonly objects: SyncObjectRepository;
 	readonly mutationRetry: 'database-only' | 'never';
 	readonly mutations: WorkspaceMutationGuard & WorkspaceWriteRecoveryService;
@@ -32,7 +40,9 @@ export const createSyncCapability = ({
 }): SyncCapability => {
 	const objects = new WorkspaceSyncObjects(db);
 	return {
-		changes: new WorkspaceSyncChanges(db, identity.workspaceResourceKey, syncEtag),
+		changes: new WorkspaceJournal(new WorkspaceSyncChanges(db)),
+		resourceVersions: new WorkspaceResourceVersions(objects),
+		resourceKeys: new WorkspaceCommandRulesService(),
 		objects,
 		mutationRetry: deferEmbedding ? ('database-only' as const) : ('never' as const),
 		mutations: new WorkspaceMutationReceipts({

@@ -1,19 +1,16 @@
-import { syncEtag } from '$lib/models/sync';
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { WorkspaceSyncReceipts } from '$lib/server/repositories/workspace/sync-receipts';
 import { expect, it } from 'vitest';
 import { initialSyncCursor } from '$lib/models/sync';
-import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
+import { workspacePullFixture } from '$lib/testing/workspace/fixtures/sync-pull';
 import { installWorkspaceSync } from '../../../scripts/setup-workspace-sync';
 import { context, seedNote } from '../database-harness';
 it('can reinstall development sync SQL without advancing existing account checkpoints', async () => {
 	const { owner } = await seedNote('8822');
-	const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
-	const before = await journal.pullPage(owner, initialSyncCursor);
+	const workspace = workspacePullFixture(context.db);
+	const before = await workspace.pullChangePage(owner, initialSyncCursor);
 	await installWorkspaceSync(context.client);
 	await installWorkspaceSync(context.client);
-	expect(await journal.pullPage(owner, before.cursor)).toEqual({
+	expect(await workspace.pullChangePage(owner, before.cursor)).toEqual({
 		cursor: before.cursor,
 		records: [],
 		hasMore: false
@@ -25,10 +22,7 @@ it('seeds an existing source record that has no sync metadata', async () => {
 	await context.client`delete from workspace_sync_versions where resource_type = 'notes' and resource_id = jsonb_build_array(${note.id}::text)`;
 	await context.client`delete from workspace_sync_changes where account_id = ${owner.userId} and resource_type = 'notes' and resource_id = jsonb_build_array(${note.id}::text)`;
 	await installWorkspaceSync(context.client);
-	const page = await new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag).pullPage(
-		owner,
-		initialSyncCursor
-	);
+	const page = await workspacePullFixture(context.db).pullChangePage(owner, initialSyncCursor);
 	expect(
 		page.records.some(
 			(record) =>
@@ -45,11 +39,11 @@ it('preserves tombstones and cancellation proofs during reinstallation', async (
 	const receipts = new WorkspaceSyncReceipts(context.db);
 	await receipts.cancel(owner, operationId, '{}');
 	await context.client`delete from notes where id = ${note.id}`;
-	const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
-	const before = await journal.pullPage(owner, initialSyncCursor);
+	const workspace = workspacePullFixture(context.db);
+	const before = await workspace.pullChangePage(owner, initialSyncCursor);
 	await installWorkspaceSync(context.client);
 	expect({
-		page: await journal.pullPage(owner, initialSyncCursor),
+		page: await workspace.pullChangePage(owner, initialSyncCursor),
 		proof: await receipts.find(owner, operationId, '{}')
 	}).toEqual({ page: before, proof: { kind: 'cancelled' } });
 });

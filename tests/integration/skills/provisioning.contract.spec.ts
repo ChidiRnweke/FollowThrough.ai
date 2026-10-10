@@ -1,5 +1,5 @@
 import type { NoteId } from '$lib/models/notes';
-import { syncCursorSchema, syncEtag } from '$lib/models/sync';
+import { syncCursorSchema } from '$lib/models/sync';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import {
 	Workspace,
@@ -11,7 +11,7 @@ import { createSkillsCapability } from '$lib/server/factories/capabilities/skill
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
+import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -23,8 +23,6 @@ import postgres from 'postgres';
 import { afterAll, expect, it } from 'vitest';
 import { context, now, seedUser } from '../database-harness';
 
-const { workspaceResourceKey } = new WorkspaceCommandRulesService();
-
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
 	await Promise.all(clients.map((client) => client.end()));
@@ -34,6 +32,7 @@ const setup = () => {
 	const client = postgres(context.url, { max: 3 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
+	const synchronization = createSyncCapability({ db: database });
 	const projects = new ProjectRecords(database);
 	const notes = new NoteRecords(database);
 	const capability = createSkillsCapability({
@@ -61,7 +60,9 @@ const setup = () => {
 				todoPresentation: new TodoPresentationService(),
 				memoryPresentation: new MemoryPresentationService(),
 				...dependencies,
-				syncChanges: new WorkspaceSyncChanges(database, workspaceResourceKey, syncEtag)
+				syncChanges: synchronization.changes,
+				resourceVersions: synchronization.resourceVersions,
+				resourceKeys: synchronization.resourceKeys
 			})
 		)
 	};
