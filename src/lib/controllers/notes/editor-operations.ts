@@ -3,13 +3,13 @@ import type {
 	NoteEditorEvents,
 	NoteEditorIdentity,
 	NoteEditorPort,
-	NoteEditorState
+	NoteEditorState,
+	EditorDocumentCopy
 } from '$lib/models/browser-workspace';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import type { SuggestionId } from '$lib/models/suggestions';
-import type { ClipboardFeedback, NoteClipboardOperations } from './clipboard-operations';
-import type { NoteDocumentsController } from './document-presentation';
+import type { NoteDocumentPresentation } from '$lib/services/notes/document-presentation';
 export type {
 	EditorRange,
 	NoteEditorEvents,
@@ -40,8 +40,6 @@ export interface NoteEditorLifecycle {
 	initialize(document: ProseMirrorDocument): void;
 	release(): void;
 	rememberContextRange(): void;
-	copy(format: 'markdown' | 'formatted'): Promise<void | { readonly kind: 'failure' }>;
-	paste(format: 'raw' | 'formatted'): Promise<void | { readonly kind: 'failure' }>;
 	changed(): void;
 	blur(actionRunning: boolean): void;
 	reportInsertions(points: Readonly<Record<string, number | 'lost'>>): void;
@@ -51,14 +49,13 @@ export class NoteEditor implements NoteEditorOperations, NoteEditorLifecycle {
 	constructor(
 		private readonly state: NoteEditorState,
 		private readonly editor: NoteEditorPort,
-		private readonly documents: NoteDocumentsController,
-		private readonly clipboard: NoteClipboardOperations,
+		private readonly documents: EditorDocumentCopy,
+		private readonly presentation: NoteDocumentPresentation,
 		private readonly events: NoteEditorEvents,
-		private readonly feedback: Pick<ClipboardFeedback, 'error'>,
 		readonly identity: NoteEditorIdentity = { key: Symbol('note-editor') }
 	) {}
 	initialize(document: ProseMirrorDocument): void {
-		this.editor.initializeDocument(this.documents.editorContent(document));
+		this.editor.initializeDocument(this.documents.copy(this.presentation.prepare(document)));
 		this.state.initialize();
 	}
 	release(): void {
@@ -69,33 +66,6 @@ export class NoteEditor implements NoteEditorOperations, NoteEditorLifecycle {
 	}
 	rememberContextRange(): void {
 		this.state.rememberRange(this.editor.selection());
-	}
-	async copy(format: 'markdown' | 'formatted'): Promise<void | { readonly kind: 'failure' }> {
-		if (!this.active) return;
-		try {
-			if (format === 'markdown') {
-				const text = this.editor.markdown(this.state.contextRange);
-				if (text !== undefined) await this.clipboard.copyMarkdown(text);
-			} else {
-				const source = this.editor.copySource(this.state.contextRange);
-				if (source) await this.clipboard.copy(source);
-			}
-		} catch {
-			this.feedback.error('The clipboard could not be written');
-			return { kind: 'failure' };
-		}
-	}
-	async paste(format: 'raw' | 'formatted'): Promise<void | { readonly kind: 'failure' }> {
-		if (!this.active) return;
-		const range = this.state.contextRange;
-		const content = await this.clipboard.read(format);
-		if (!this.active || content.kind === 'failure' || !content.text) return;
-		try {
-			this.editor.paste(content, range);
-		} catch {
-			this.feedback.error('The clipboard could not be read');
-			return { kind: 'failure' };
-		}
 	}
 
 	blur(actionRunning: boolean): void {
@@ -127,7 +97,7 @@ export class NoteEditor implements NoteEditorOperations, NoteEditorLifecycle {
 		this.requireActive();
 		this.state.setInitialized(false);
 		try {
-			this.editor.setDocument(this.documents.editorContent(document));
+			this.editor.setDocument(this.documents.copy(this.presentation.prepare(document)));
 		} finally {
 			this.state.setInitialized(true);
 		}

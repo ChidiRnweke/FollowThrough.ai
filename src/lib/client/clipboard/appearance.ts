@@ -1,4 +1,4 @@
-import type { ClipboardAppearance } from '$lib/controllers/notes/clipboard-operations';
+import type { ClipboardAppearance } from '$lib/models/clipboard';
 import type { MermaidTheme } from '$lib/models/diagrams/mermaid-theme';
 export class BrowserClipboardAppearance implements ClipboardAppearance {
 	theme(): MermaidTheme {

@@ -1,6 +1,6 @@
 import type { JSONContent } from '@tiptap/core';
 import type { ProseMirrorDocument } from '$lib/models/notes';
-import type { EditorDocumentCopy } from '$lib/controllers/notes/document-presentation';
+import type { EditorDocumentCopy } from '$lib/models/browser-workspace';
 
 /** Tiptap mutates its input. A JSON copy also reads Svelte proxies, unlike structuredClone. */
 export class TiptapDocumentCopy implements EditorDocumentCopy {

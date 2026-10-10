@@ -3,8 +3,8 @@ import { config } from 'dotenv';
 import postgres from 'postgres';
 import { expect, test as base } from '@playwright/test';
 
-const test = base.extend<{ editorNotes: { first: string; second: string } }>({
-	editorNotes: async ({ context }, use) => {
+const test = base.extend<{ editorNotes: { first: string; second: string; media: string } }>({
+	editorNotes: async ({ context, page }, use) => {
 		config({ quiet: true });
 		const databaseUrl = process.env.DATABASE_URL;
 		if (
@@ -17,6 +17,17 @@ const test = base.extend<{ editorNotes: { first: string; second: string } }>({
 		const project = randomUUID();
 		const first = randomUUID();
 		const second = randomUUID();
+		const media = randomUUID();
+		const image = await page.evaluate(() => {
+			const canvas = document.createElement('canvas');
+			canvas.width = 32;
+			canvas.height = 32;
+			const context = canvas.getContext('2d');
+			if (!context) throw new Error('Canvas is required');
+			context.fillStyle = 'green';
+			context.fillRect(0, 0, 32, 32);
+			return canvas.toDataURL();
+		});
 		const token = randomBytes(32).toString('hex');
 		try {
 			await sql`insert into users (id, email, display_name, role) values (${user}, ${`${user}@local.invalid`}, 'Editor scenario', 'USER')`;
@@ -32,6 +43,16 @@ const test = base.extend<{ editorNotes: { first: string; second: string } }>({
 				};
 				await sql`insert into notes (id, user_id, project_id, kind, title, document, plain_text) values (${id}, ${user}, ${project}, 'note', ${title}, ${sql.json(document)}, ${text})`;
 			}
+			const mediaDocument = {
+				type: 'doc',
+				content: [
+					{ type: 'paragraph', content: [{ type: 'text', text: 'Clipboard media' }] },
+					{ type: 'image', attrs: { src: image, alt: 'Green square' } },
+					{ type: 'mermaid', content: [{ type: 'text', text: 'graph TD; A[Start]-->B[Finish]' }] }
+				]
+			};
+			await sql`insert into notes (id, user_id, project_id, kind, title, document, plain_text) values (${media}, ${user}, ${project}, 'note', 'Media note', ${sql.json(mediaDocument)}, 'Clipboard media')`;
+			await sql`insert into agent_preferences (user_id, inline_suggestions_enabled) values (${user}, false)`;
 			await context.clearCookies();
 			await context.addCookies([
 				{
@@ -43,7 +64,7 @@ const test = base.extend<{ editorNotes: { first: string; second: string } }>({
 					sameSite: 'Lax'
 				}
 			]);
-			await use({ first, second });
+			await use({ first, second, media });
 		} finally {
 			await sql`delete from users where id = ${user} and email = ${`${user}@local.invalid`}`;
 			await sql.end();
@@ -107,4 +128,38 @@ test('menu paste preserves selection, undo and autosave across sibling tabs', as
 	await page.getByRole('button', { name: 'Ask about this note', exact: true }).click();
 	await expect(page.locator('#chat-composer')).toHaveValue(/\S/);
 	await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0);
+});
+
+test('native media copy embeds portable images and cut remains undoable', async ({
+	page,
+	context,
+	editorNotes
+}) => {
+	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+	await page.goto(`/notes/${editorNotes.media}`);
+	const body = page.getByRole('textbox', { name: 'Note body', exact: true });
+	await expect(body).toContainText('Clipboard media');
+	await body.locator('p').first().click();
+	await page.keyboard.press('ControlOrMeta+a');
+	await page.keyboard.press('ControlOrMeta+c');
+	await expect
+		.poll(async () =>
+			page.evaluate(async () => {
+				const items = await navigator.clipboard.read();
+				const item = items.find((value) => value.types.includes('text/html'));
+				if (!item) return 0;
+				const html = await (await item.getType('text/html')).text();
+				const document = new DOMParser().parseFromString(html, 'text/html');
+				return document.querySelectorAll('img[src^="data:image/png"]').length;
+			})
+		)
+		.toBe(2);
+	await body.focus();
+	await page.keyboard.press('ControlOrMeta+a');
+	await page.keyboard.press('ControlOrMeta+x');
+	await expect(body.locator('img')).toHaveCount(0);
+	await expect(body).not.toContainText('Clipboard media');
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect(body).toContainText('Clipboard media');
+	await expect(body.locator('img[alt="Green square"]')).toHaveCount(1);
 });

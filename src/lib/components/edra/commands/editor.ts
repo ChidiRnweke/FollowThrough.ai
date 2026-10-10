@@ -49,7 +49,6 @@ import { createNoteLinkRenderer } from './note-link-renderer.svelte.js';
 import { createSlashCommandRenderer } from './slash-command-renderer.svelte.js';
 import { createHeadingLinkRenderer } from './heading-link-renderer.svelte.js';
 import { hasMedia, selectionMedia } from './diagram-copy.js';
-import { clipboardSource, type SerializedSelection } from './clipboard-payload.js';
 
 const lowlight = createLowlight(all);
 
@@ -57,10 +56,9 @@ export interface EdraEditorProps {
 	/** The host supplies its themed diagram UI; headless editors retain the source node. */
 	mermaidView?: Component<NodeViewProps>;
 	/** The host owns media preparation, clipboard access, and failure reporting. */
-	onCopy?: (selection: SerializedSelection) => void;
+	onCopy?: () => void;
 	/** Delete a cut selection only after its complete clipboard write is confirmed. */
-	onCut?: (selection: SerializedSelection) => Promise<boolean>;
-	onCutChanged?: () => void;
+	onCut?: () => void;
 	onUpdate?: () => void;
 	/** Read-only instances render the document with every node view but accept no edits. */
 	editable?: boolean;
@@ -262,17 +260,7 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 				cut: (view, event) => {
 					if (!props?.onCut || !hasMedia(selectionMedia(view.state))) return false;
 					event.preventDefault();
-					const captured = view.state;
-					void props.onCut(clipboardSource(captured)).then((complete) => {
-						if (!complete || view.isDestroyed) return;
-						if (!view.state.doc.eq(captured.doc)) {
-							props.onCutChanged?.();
-							return;
-						}
-						view.dispatch(
-							view.state.tr.delete(captured.selection.from, captured.selection.to).scrollIntoView()
-						);
-					});
+					props.onCut();
 					return true;
 				},
 				copy: (view, event) => {
@@ -281,7 +269,7 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 					if (!hasMedia(media)) return false;
 					event.preventDefault();
 
-					props.onCopy(clipboardSource(view.state));
+					props.onCopy();
 					return true;
 				}
 			}

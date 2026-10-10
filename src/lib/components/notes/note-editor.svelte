@@ -344,10 +344,11 @@
 		{
 			ariaLabel: 'Note body',
 			mermaidView: MermaidNodeView,
-			onCut: (selection) => noteClipboard.cut(selection),
-			onCutChanged: () => noteClipboard.cutChanged(),
-			onCopy: (selection) => {
-				void noteClipboard.copy(selection);
+			onCut: () => {
+				if (binding) void noteClipboard.cut(binding.operations.identity);
+			},
+			onCopy: () => {
+				if (binding) void noteClipboard.copySelection(binding.operations.identity);
 			},
 			onTocUpdate: (headings) => {
 				onoutline?.(noteDocuments.outline(headings));
@@ -1128,21 +1129,31 @@
 			     itself instead of offering an item that would do nothing. -->
 			<ContextMenu.Item
 				disabled={!binding?.view.canCopy}
-				onclick={() => void binding?.lifecycle.copy('markdown')}
+				onclick={() => {
+					if (binding) void noteClipboard.copy(binding.operations.identity, 'markdown');
+				}}
 			>
 				Copy as markdown
 			</ContextMenu.Item>
 			<ContextMenu.Item
 				disabled={!binding?.view.canCopy}
-				onclick={() => void binding?.lifecycle.copy('formatted')}
+				onclick={() => {
+					if (binding) void noteClipboard.copy(binding.operations.identity, 'formatted');
+				}}
 			>
 				Copy with formatting
 			</ContextMenu.Item>
 			<ContextMenu.Separator />
-			<ContextMenu.Item onclick={() => void binding?.lifecycle.paste('raw')}
-				>Paste raw</ContextMenu.Item
+			<ContextMenu.Item
+				onclick={() => {
+					if (binding) void noteClipboard.paste(binding.operations.identity, 'raw');
+				}}>Paste raw</ContextMenu.Item
 			>
-			<ContextMenu.Item onclick={() => void binding?.lifecycle.paste('formatted')}>
+			<ContextMenu.Item
+				onclick={() => {
+					if (binding) void noteClipboard.paste(binding.operations.identity, 'formatted');
+				}}
+			>
 				Paste with formatting
 			</ContextMenu.Item>
 		</ContextMenu.Content>

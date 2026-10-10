@@ -1,3 +1,4 @@
+import type { EditorDocumentCopy } from '$lib/models/browser-workspace';
 import type { NoteReferences } from '$lib/services/notes/references';
 import type { SectionNumberingSetting, SectionNumberingLevel } from '$lib/models/notes';
 import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering';
@@ -11,9 +12,6 @@ import type {
 } from '$lib/models/notes';
 import type { NoteDocumentPresentation } from '$lib/services/notes/document-presentation';
 
-export interface EditorDocumentCopy {
-	copy(document: ProseMirrorDocument): JSONContent;
-}
 export interface NoteDocumentsController {
 	widgetReferences(documents: readonly { document: ProseMirrorDocument }[]): string[];
 	diagramReferences(documents: readonly { document: ProseMirrorDocument }[]): string[];

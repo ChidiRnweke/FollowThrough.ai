@@ -3,6 +3,10 @@ import type { EditorRange, NoteEditorState } from '$lib/models/browser-workspace
 export class NoteEditorOperationStore implements NoteEditorState {
 	private live = true;
 	private ready = false;
+	private generation = 0;
+	get documentGeneration(): number {
+		return this.generation;
+	}
 	private holding = false;
 	private range = $state<EditorRange | undefined>();
 	private positions: Record<string, number> = {};
@@ -31,9 +35,11 @@ export class NoteEditorOperationStore implements NoteEditorState {
 		return this.positions;
 	}
 	initialize(): void {
+		this.generation++;
 		this.ready = true;
 	}
 	setInitialized(value: boolean): void {
+		if (!value) this.generation++;
 		this.ready = value;
 	}
 	setHoldingSelection(value: boolean): void {

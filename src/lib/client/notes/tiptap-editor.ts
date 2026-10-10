@@ -1,4 +1,9 @@
-import type { ClipboardPaste, EditorRange, NoteEditorPort } from '$lib/models/browser-workspace';
+import type { ClipboardPaste } from '$lib/models/clipboard';
+import type {
+	EditorClipboardSelection,
+	EditorRange,
+	NoteEditorPort
+} from '$lib/models/browser-workspace';
 import type { DiagramId } from '$lib/models/diagrams';
 import { proseMirrorDocumentSchema, type ProseMirrorDocument } from '$lib/models/notes';
 import type { SuggestionId } from '$lib/models/suggestions';
@@ -67,6 +72,17 @@ export class TiptapNoteEditor implements NoteEditorPort {
 		}
 		if (content.kind === 'html') this.editor.view.pasteHTML(content.text);
 		else this.editor.view.pasteText(content.text);
+	}
+	captureSelection(): EditorClipboardSelection | undefined {
+		const range = this.selection();
+		if (!range) return undefined;
+		return { document: this.getDocument(), range, source: clipboardSource(this.editor.state) };
+	}
+	documentMatches(document: ProseMirrorDocument): boolean {
+		return this.editor.state.doc.eq(this.editor.schema.nodeFromJSON(document));
+	}
+	deleteRange(range: EditorRange): void {
+		this.editor.view.dispatch(this.editor.state.tr.delete(range.from, range.to).scrollIntoView());
 	}
 	collapseSelection(): void {
 		const { doc, selection } = this.editor.state;

@@ -1,5 +1,4 @@
-import type { ClipboardReader } from '$lib/controllers/notes/clipboard-operations';
-import type { ClipboardPaste } from '$lib/models/browser-workspace';
+import type { ClipboardReader, ClipboardPaste } from '$lib/models/clipboard';
 export class BrowserClipboardReader implements ClipboardReader {
 	async read(format: 'raw' | 'formatted'): Promise<ClipboardPaste> {
 		if (format === 'formatted') {
