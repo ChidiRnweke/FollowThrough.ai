@@ -1,4 +1,5 @@
-import type { WebResearchOptions } from '$lib/models/agent';
+import type { WebResearchOptions, ToolActivityProjection } from '$lib/models/agent';
+import { createToolActivityProjection } from '$lib/server/factories/agent/tool-activity-factory';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import type { TokenCounter } from '$lib/models/tokenization';
 import type { DateTime } from '$lib/models/workspace';
@@ -128,6 +129,7 @@ export interface AgentCapabilityInput {
 }
 
 export interface AgentCapability {
+	readonly toolActivityProjection: ToolActivityProjection;
 	readonly runStatus: AgentRunStatusRules;
 	readonly streamPresentation: Pick<AgentStreamPresentation, 'segments'>;
 	readonly conversationHistory: Pick<ConversationHistory, 'rewind'>;
@@ -232,6 +234,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		now: () => new Date().toISOString() as DateTime,
 		conversations,
 		conversationMessages: conversations,
+		toolActivityProjection: createToolActivityProjection(),
 		conversationHistory: new ConversationHistoryService(sessions),
 		preferences,
 		models,

@@ -36,7 +36,7 @@ import type {
 	ConversationMessages,
 	ConversationSessions
 } from '$lib/server/services/agent/conversations/archive';
-import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
+import type { ToolActivityProjection } from '$lib/models/agent';
 import type { WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';
 
 import type { DiagramSubmission } from '$lib/models/diagrams/generation';
@@ -194,6 +194,7 @@ type DiagramWorkflowObserver = <T>(
 ) => Promise<T>;
 
 export interface DiagramAgentDependencies {
+	readonly toolActivityProjection: ToolActivityProjection;
 	readonly contextFormatter: IAgentContext;
 	readonly contextNotes: NoteReader;
 	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
@@ -831,7 +832,8 @@ export class Diagrams implements DiagramsController {
 						}
 						const event = item.event;
 						const toolEvent = this.mapToolEvent(stream, event);
-						const activity = toolEvent && toolActivityFromEvent(toolEvent);
+						const activity =
+							toolEvent && this.dependencies.generation.toolActivityProjection.activity(toolEvent);
 						if (activity)
 							await this.dependencies.generation.conversationMessages.recordToolActivity(
 								actor,

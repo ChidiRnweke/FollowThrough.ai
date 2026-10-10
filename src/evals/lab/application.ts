@@ -1,3 +1,5 @@
+import type { ToolActivityProjection } from '$lib/models/agent';
+import { createToolActivityProjection } from '$lib/server/factories/agent/tool-activity-factory';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 const toolCatalogRules = new AgentToolCatalogService();
 import { Cl100kTokenizer } from '$lib/server/adapters/tokenization/cl100k';
@@ -30,6 +32,7 @@ import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 const CACHE_PATH = fileURLToPath(new URL('../fixtures/auxiliary-cache.json', import.meta.url));
 
 export interface Lab extends ProductionApplication {
+	readonly toolActivityProjection: ToolActivityProjection;
 	readonly model: string;
 	/**
 	 * Exposed so tool-retrieval can be evaluated on its own, without paying for a
@@ -129,6 +132,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 
 	return {
 		...application,
+		toolActivityProjection: createToolActivityProjection(),
 		model,
 		embeddingClient,
 		db: database,

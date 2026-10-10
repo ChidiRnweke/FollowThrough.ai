@@ -1169,6 +1169,12 @@ export type ToolOutcomeEvent = Extract<
 	{ readonly type: 'tool_succeeded' | 'tool_reported_failure' | 'tool_failed' }
 >;
 
+/** Projects resolved tool events without reading or changing journal state. */
+export interface ToolActivityProjection {
+	outcome(event: AgentEvent): ToolOutcomeEvent | undefined;
+	activity(event: AgentEvent): ToolActivity | undefined;
+}
+
 export const agentRunCursorSchema = z.string().regex(/^\d+$/);
 
 export interface NoteActionContext {
