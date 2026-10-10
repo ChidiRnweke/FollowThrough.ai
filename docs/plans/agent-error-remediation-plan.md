@@ -105,7 +105,7 @@ journal failures remain outside ordinary tool recovery.
       succeed. Unmatched text returns actionable details and never applies a partial edit as
       though the entire requested change succeeded.
 
-- [ ] **6. Determine the provider rejection cause (E1).**
+- [x] **6. Determine the provider rejection cause (E1).**
       Retrieve the original provider response details or correlated deployment/provider records
       for the six trace IDs. If retention prevents this, state that limit and add safe diagnostic
       capture at the provider HTTP boundary for future failures. Retain status, provider code,
@@ -117,7 +117,7 @@ journal failures remain outside ordinary tool recovery.
       Any proposed request fix must have a fixture based on the demonstrated rejection. An
       unrecoverable historical cause remains explicitly unresolved in the RCA.
 
-- [ ] **7. Restore or explain web-log coverage (O1).**
+- [x] **7. Restore or explain web-log coverage (O1).**
       Obtain read-only access to the running web and collector configuration. Compare the web
       entrypoint/preload, service name, log level, and OTLP endpoint with the worker. Follow the
       record from console emission to collector receipt, Loki exporter, and ingestion. The

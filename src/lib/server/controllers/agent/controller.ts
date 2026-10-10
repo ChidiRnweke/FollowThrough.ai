@@ -606,6 +606,9 @@ export class Agent implements AgentController {
 		void this.execute(runId, controller.signal)
 			.then(cleanup, async (error) => {
 				cleanup();
+				// A detached run calls `execute` directly, outside the instrumented boundary, so
+				// nothing else logs its failure; the run's own record carries it for the user.
+				console.error(`[agent-run] Run ${runId} failed:`, error);
 				// Without this the run stays `running` forever, holding the
 				// conversation's single active-run slot and its open event stream.
 				await this.failRun(runId, error instanceof Error ? error : new Error(String(error)));

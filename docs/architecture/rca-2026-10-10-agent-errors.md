@@ -1,6 +1,6 @@
 # RCA: agent and observability errors, 2026-10-10
 
-Status: investigation recorded; plan tasks 1–5 dispositioned (see Resolution log).
+Status: investigation recorded; plan tasks 1–7 dispositioned (see Resolution log).
 
 This record covers **2026-10-08 06:43:09 UTC through 2026-10-10 06:43:09 UTC**.
 It preserves the evidence for the [remediation plan](../plans/agent-error-remediation-plan.md).
@@ -257,10 +257,14 @@ other schema with an error. Tool schemas are now converted with `anyOf`, which a
 values because each branch has a distinct literal discriminator. Whether `oneOf` caused the
 stringified range is not established.
 
-E1 hypothesis, unverified: `sed` is a first-class tool, so its `oneOf` schema went out with every
-request. All six rejections used `openai/gpt-5.6-luna` and failed before any tool ran, which fits a
-schema error from a provider that enforces the documented subset. This requires the provider's
-response body or a controlled request to confirm (plan task 6).
+E1 confirmed on 2026-10-10 by a controlled request to `openai/gpt-5.6-luna` with the old tool
+schemas: OpenRouter returned HTTP 400, with OpenAI and then Azure answering "Invalid schema for
+function 'sed': In context=('properties', 'range'), 'oneOf' is not permitted." The `anyOf` schema
+is accepted. Because `sed` is sent on every generation, every request to a model that enforces the
+strict subset failed before any tool ran, which matches all six rejections. The same probe found a
+second rejected schema: `update_export_settings` keyed colours by any string (`'propertyNames' is
+not permitted`), so any request after `search_tools` surfaced it would fail the same way. It now
+names the palette keys, and the provider accepts all 81 agent tools.
 
 Evidence: a test of every tool schema the agent sends found `sed: oneOf` before the change and none
 after. Tests through the tool's public invocation show a blank memory id treated as omitted and a
@@ -284,3 +288,60 @@ Evidence: a runner test approves a review, changes the note, and resumes. The st
 the model submits a fresh call, and the approved fresh review applies. With the revision check
 disabled, this test and the existing stale-review test both fail. Existing tests in `patches.spec.ts`
 and `agent-tool-factory.spec.ts` cover unmatched anchors and approval for absent text.
+
+### Plan tasks 6–7 (E1, O1), code-side only
+
+E1: a provider rejection now keeps who rejected which request. The failure message gains the
+upstream provider OpenRouter routed to and the request id, for example `400 Provider returned
+error (provider OpenAI, request req-1)`. The upstream body in `error.metadata.raw` is not read,
+because it may echo the prompt. The classification survives the outer wrapping (tasks 1–3). A
+failed background run is now logged once, because it runs outside the instrumented controller
+boundary and nothing else logged it. The cause of the six rejections is the `oneOf` schema,
+confirmed under task 4.
+
+O1: unresolved. Source shows the web and worker processes start with the same preload, endpoint
+default, log level default and console bridge, and the record builders do not throw on the
+arguments the web boundary logs. Source alone therefore does not explain the missing web records.
+Confirming emission, collector receipt, export and ingestion needs read access to the running web
+process and the deployed collector, which this work did not have.
+
+Evidence: a run against the real provider client with a scripted HTTP 400 transport settles as
+failed with `400 Provider returned error (provider OpenAI, request req-e1)`, and the scripted raw
+body does not appear. Before the change the message was `400 Provider returned error`.
+
+### E7–E8 trace findings
+
+Read-only Phoenix queries of project `followthrough`, 2026-10-09 10:25–10:45 UTC (124 spans, nine
+traces), and of the four traces named under E7–E8. Only tool names, call order, note ids, anchor
+lengths, revisions and failure codes were read; no note content is recorded here.
+
+E7: every agent write to note `2eba27da…` in the window is accounted for. They produced revisions
+99, 100, 101, 102, 107, 112 and 116. Revisions 103–106, 108–111 and 113–115 have no agent trace, so
+three to four other writes landed between consecutive agent edits, and both stale reviews fall in
+those gaps. The saved review base was correct; the note had changed underneath it. Phoenix cannot
+tell whether the other writes were the user typing in the open note or the editor writing back
+after receiving the agent's edit. Unresolved: the author of those revisions.
+
+E8: `get_note` returns the body as a file reference (ADR 0035), so the anchors were not quoted from
+what the model had just read. In `559b11c0…` each failed anchor differed from the applied anchor by
+one missing space after a semicolon; after reading the exact text with `sed`, the model's corrected
+call applied. `6f49595f…` shows the same recovery. The matcher does not treat a missing space as a
+match, by design. Disposition: model quoting error; the safeguard worked and nothing applied
+partially.
+
+### O1 follow-up: Loki on 2026-10-10 at 13:40 UTC
+
+Read-only Loki queries through Grafana. The collector configuration has one unfiltered logs
+pipeline for every service, and every web span in Phoenix passed the collector's OpenInference
+filter, so the web process reaches the collector.
+
+- The web service `followthrough` now delivers logs: 24 to 44 records an hour, mostly `[workspace]`
+  controller logs with trace ids. Its process started as PID 1 at 10:19:55 UTC.
+- Loki holds no record before about 10:00 UTC for any service, including unrelated applications. At
+  06:43 UTC the RCA counted 18,688 worker records over the preceding 48 hours, so that history
+  existed and has since been lost.
+
+Disposition: not reproducible. The web process started at 10:19 logs normally. The process that
+ran during the RCA window, and its records, are gone, so the original gap cannot be explained.
+New finding for the operator: Loki loses its history across a restart or keeps it only briefly,
+which makes any future gap disappear before it can be investigated.
