@@ -71,6 +71,25 @@ Before concluding any implementation task, copy this checklist into your respons
 
 `chisel-js` is the deterministic counterpart of this skill. Current checkers may have migration gaps against ADR 0007. No listed permission overrides the ADR. Each rule below is owned by this skill — `chisel-js explain <rule-id>` prints fix guidance, and `chisel-js check .` flags violations. The paired UI skill (`designing-svelte-ui`) owns the colour/component/responsiveness rules listed in its own SKILL.md.
 
+### Project semantic architecture audit
+
+`pnpm test:architecture:semantic` runs the project TypeScript symbol analyzer alongside Chisel.
+It reports `indirect-dependency`, `public-service-helper`, `service-interface`,
+`concrete-dependency`, `controller-collaborator`, `retained-service-state`, `store-workflow`,
+`factory-workflow` and `unresolved-source`. These IDs belong to the project audit, not
+`chisel-js explain`. See `docs/architecture/semantic-enforcement.md` for supported patterns and
+limits. The companion Chisel check also rejects concrete controller imports disguised as types.
+
+Follow aliases and actual capability ownership when reviewing code. A readonly Map can still be
+cross-call state; an operation-local evaluator is valid. An interface extending a concrete class
+or `Pick<ConcreteClass, ...>` still leaks that class. Factories expose annotated interface results;
+`satisfies` does not narrow an inferred concrete return type. Stores update state; controllers
+execute operations. Do not hide operations in callbacks or transport wrappers.
+
+Keep rejecting and accepted fixtures when changing enforcement. Missing module resolution must
+fail. Record remaining application violations without baselines, ignores or grandfathering.
+Passing these checks does not prove capability cohesion or all dynamic behavior is correct.
+
 ### Structural (SvelteKit runtime invariants)
 
 - `structural:console-log-banned` — `console.*` banned in `.svelte`/`.ts` outside `scripts/`.

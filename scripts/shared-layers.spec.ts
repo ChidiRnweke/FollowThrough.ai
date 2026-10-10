@@ -77,10 +77,11 @@ describe('Shared service and controller placement', () => {
 		expect(
 			inspect({
 				'src/lib/server/controllers/notes/controller.ts':
-					"import { title } from '$lib/services/notes/title'; export const prepare = (value: string) => title(value);",
-				'src/lib/services/notes/title.ts': 'export const title = (value: string) => value.trim();',
+					"import type { Titles } from '$lib/services/notes/title'; export class Editor { constructor(private readonly titles: Titles) {} prepare(value: string): string { return this.titles.title(value); } }",
+				'src/lib/services/notes/title.ts':
+					'export interface Titles { title(value: string): string } export class TitleRules implements Titles { title(value: string): string { return value.trim(); } }',
 				'src/lib/services/notes/title.spec.ts':
-					"import { expect, it } from 'vitest'; import { title } from './title'; it('trims a title', () => { expect(title(' note ')).toBe('note'); });"
+					"import { expect, it } from 'vitest'; import { TitleRules } from './title'; it('trims a title', () => { expect(new TitleRules().title(' note ')).toBe('note'); });"
 			})
 		).toEqual([]);
 	});
@@ -348,6 +349,41 @@ it('rejects an adapter re-exporting a concrete repository as a type', () => {
 				'export class SyntaxReader { async parse(_source: string): Promise<void> {} }',
 			'src/lib/server/adapters/diagrams/syntax.ts':
 				"export type { SyntaxReader } from '$lib/server/repositories/diagrams/syntax';"
+		})
+	).toContain('import-boundary:banned-layer-import');
+});
+
+it('rejects type-only concrete controller dependencies', () => {
+	expect(
+		inspect({
+			'src/lib/controllers/notes/title.ts':
+				'export class Titles { present(value: string): string { return value; } }',
+			'src/lib/controllers/notes/editor.ts':
+				"import type { Titles } from './title'; export class Editor { constructor(private readonly titles: Titles) {} }"
+		})
+	).toContain('import-boundary:banned-layer-import');
+});
+it('allows renamed controller contracts through an index barrel', () => {
+	expect(
+		inspect({
+			'src/lib/controllers/notes/title.ts':
+				'export interface Titles { present(value: string): string; }',
+			'src/lib/controllers/notes/index.ts':
+				"export type { Titles as TitleContract } from './title';",
+			'src/lib/controllers/editor/editor.ts':
+				"import type { TitleContract } from '../notes'; export class Editor { constructor(private readonly titles: TitleContract) {} }"
+		})
+	).not.toContain('import-boundary:banned-layer-import');
+});
+it('rejects controller class aliases through an index barrel', () => {
+	expect(
+		inspect({
+			'src/lib/controllers/notes/title.ts':
+				'export class Titles { present(value: string): string { return value; } }',
+			'src/lib/controllers/notes/index.ts':
+				"export type { Titles as TitleContract } from './title';",
+			'src/lib/controllers/editor/editor.ts':
+				"import type { TitleContract } from '../notes'; export class Editor { constructor(private readonly titles: TitleContract) {} }"
 		})
 	).toContain('import-boundary:banned-layer-import');
 });
