@@ -3,7 +3,7 @@ import { projectBuilder, todoBuilder } from '$lib/testing/workspace/fixtures/dom
 import type { WriteDraft } from '$lib/models/outbox';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { assertWorkspaceWriteIdentity } from '$lib/services/workspace/commands';
 import { type WorkspaceCommand } from '$lib/models/workspace-mutations';
 

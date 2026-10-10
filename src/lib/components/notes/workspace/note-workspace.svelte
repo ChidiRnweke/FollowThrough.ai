@@ -2,13 +2,13 @@
 	import { NoteHistory } from '$lib/stores/notes/history.svelte';
 	import type { DiagramSuggestion, Suggestion } from '$lib/models/suggestions';
 
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
-	import type { NoteView } from '$lib/client/notes/view';
+	import type { NoteView } from '$lib/models/workspace-views';
 
-	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
+	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { noteCommand, noteHasUnpublishedChanges } from '$lib/services/workspace/commands';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import type {
@@ -42,7 +42,7 @@
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import type { PerNoteEditorSlot } from '../editor-context';
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';
@@ -68,7 +68,7 @@
 	}: {
 		view: NoteView;
 		shell: ShellContext;
-		draft: WorkspaceDraft<'notes'>;
+		draft: WorkspaceDraftController<'notes'>;
 		editorSelection: EditorSelectionStore;
 		inlineSuggestionsEnabled?: boolean;
 		onCloseSplit?: () => void;
@@ -104,7 +104,7 @@
 	let outline = $state<readonly OutlineHeading[]>([]);
 	let activeHeading = $state<string | undefined>(undefined);
 	let utilityHeaderHeight = $state(0);
-	const editorSession = untrack(() => new EditorSession(() => draft.active));
+	const editorSession = untrack(() => createEditorSession(() => draft.active));
 	const dirty = $derived(editorSession.dirty);
 	const saveFailed = $derived(editorSession.failure !== null);
 	// Keyed by note id rather than shared: in a split, the sibling pane's work must

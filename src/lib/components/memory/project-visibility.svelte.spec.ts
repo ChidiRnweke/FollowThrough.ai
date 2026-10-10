@@ -6,7 +6,7 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import MemoryEntryList from './memory-entry-list.svelte';
 
 const cleanup: (() => void)[] = [];

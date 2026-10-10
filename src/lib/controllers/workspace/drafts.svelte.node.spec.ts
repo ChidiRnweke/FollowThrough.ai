@@ -6,7 +6,7 @@ import { noteCommand } from '$lib/services/workspace/commands';
 import { type WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import {
 	noteBuilder,
 	projectBuilder,
@@ -20,7 +20,7 @@ import {
 import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
-import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 const setup = async () => {
 	const note = noteBuilder({ plainText: 'Original' });
 	const key = workspaceResourceKey({ type: 'notes', id: [note.id] });
@@ -40,15 +40,15 @@ const setup = async () => {
 		writerLock: new InMemoryAccountWriterLock(),
 		pull: () => cache.refresh()
 	});
-	const resources = new WorkspaceResources(note.userId, {
+	const resources = assembleWorkspaceResources(note.userId, {
 		repository: outbox,
 		cache,
 		writes,
 		execution
 	});
-	outbox.observe(note.userId, (state) => resources.applyLocal(state));
 	resources.setOnline(false);
 	await cache.accept(key, snapshot);
+	await resources.initialize();
 	const store = resources.draft({ type: 'notes', id: [note.id] });
 	return { note, key, cache, repository, outbox, transport, resources, store };
 };
@@ -437,5 +437,21 @@ describe('an open editor and versions made elsewhere', () => {
 		await cache.refresh();
 		store.adopt();
 		expect(store.newer).toBeNull();
+	});
+});
+
+it('does not publish a delayed local save into a stopped account', async () => {
+	const { note, store, outbox, resources } = await setup();
+	await store.read();
+	const gate = outbox.pauseAppend();
+	const saving = store.stage(noteCommand({ ...note, plainText: 'Saved during teardown' }));
+	await gate.started;
+	resources.stop();
+	gate.release();
+	const result = await saving;
+	expect({ result, value: store.value, records: [...resources.records.values()] }).toEqual({
+		result: { kind: 'failure', message: 'This workspace account has stopped' },
+		value: null,
+		records: []
 	});
 });

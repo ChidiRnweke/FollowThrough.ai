@@ -1,231 +1,48 @@
-import {
-	configuredAgentModels,
-	resolveDefaultAgentModel,
-	resolveDefaultVisionModel
-} from '$lib/services/agent/model-selection';
-import type { ShellContext } from '$lib/client/shell/views';
-import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
-
-import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
+import type { WorkspaceSession } from '$lib/controllers/workspace/session';
 import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
-import {
-	readStoredBootstrap,
-	storeBootstrap,
-	clearBootstrap,
-	workspaceBootstrapKey,
-	workspaceAccountHint
-} from '$lib/client/sync/bootstrap-storage';
-import { fetchWorkspaceBootstrap } from '$lib/client/sync/workspace-transport';
-import { createWorkspaceResources, type WorkspaceResources } from './resources.svelte';
-
-export interface WorkspaceSession {
-	resources: WorkspaceResources;
+interface SessionRecord extends WorkspaceSession {
 	bootstrap: WorkspaceBootstrap;
 	startupError: string | null;
-	readonly shell: ShellContext;
-	readonly preferences: AgentPreferenceValues;
-	readonly agentDefaults: WorkspaceBootstrap['agentDefaults'];
-	readonly agentModels: readonly AgentModel[];
-	readonly sessions: readonly Conversation[];
 }
-let current = $state<WorkspaceSession | null>(null);
-let starting: Promise<WorkspaceSession> | null = null;
-let generation = 0;
-let detach: (() => void) | null = null;
-
-const stop = (): void => {
-	generation++;
-	current?.resources.stop();
-	current = null;
-	starting = null;
-	detach?.();
-	detach = null;
-};
-const stillBound = (): boolean =>
-	current !== null && workspaceAccountHint(document.cookie) === current.bootstrap.accountId;
-type SessionSynchronization =
-	{ kind: 'complete' | 'stopped' } | { kind: 'failure'; message: string };
-const synchronize = async (force = false): Promise<SessionSynchronization> => {
-	const session = current;
-	if (!session) return { kind: 'stopped' };
-	if (!stillBound()) {
-		stop();
-		window.location.reload();
-		return { kind: 'stopped' };
-	}
-	session.resources.setOnline(navigator.onLine);
-	try {
-		if (session.startupError && navigator.onLine) await refreshBootstrap();
-		await Promise.all([
-			session.resources.open({ type: 'users', id: [session.bootstrap.accountId] }),
-			session.resources.synchronize(force)
-		]);
-		if (current === session && !stillBound()) {
-			stop();
-			window.location.reload();
-			return { kind: 'stopped' };
-		}
-		return { kind: 'complete' };
-	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Workspace synchronization failed';
-		if (current === session) session.startupError = message;
-		return { kind: 'failure', message };
-	}
-};
-
-const refreshBootstrap = async (): Promise<
-	{ kind: 'complete' } | { kind: 'failure'; message: string }
-> => {
-	const session = current;
-	if (!session || !navigator.onLine) return { kind: 'complete' };
-	try {
-		const bootstrap = await fetchWorkspaceBootstrap();
-		if (current !== session) return { kind: 'complete' };
-		if (bootstrap.accountId !== session.bootstrap.accountId || !stillBound()) {
-			stop();
-			window.location.reload();
-			return { kind: 'complete' };
-		}
-		storeBootstrap(localStorage, bootstrap);
-		session.bootstrap = bootstrap;
-		session.startupError = null;
-		return { kind: 'complete' };
-	} catch (error) {
-		const message =
-			error instanceof Error ? error.message : 'Deployment settings could not be refreshed';
-		if (current === session) session.startupError = message;
-		return { kind: 'failure', message };
-	}
-};
-
-const begin = async (): Promise<WorkspaceSession> => {
-	const openingGeneration = generation;
-	const stored = readStoredBootstrap(
-		localStorage.getItem(workspaceBootstrapKey),
-		workspaceAccountHint(document.cookie)
-	);
-	if (stored.kind === 'corrupt' && !navigator.onLine)
-		throw new Error(
-			'Saved startup settings could not be read. Reconnect to restore them; saved edits remain on this device.'
-		);
-	const bootstrap = stored.kind === 'stored' ? stored.value : await fetchWorkspaceBootstrap();
-	if (
-		generation !== openingGeneration ||
-		workspaceAccountHint(document.cookie) !== bootstrap.accountId
-	)
-		throw new Error('The workspace account changed while opening');
-	storeBootstrap(localStorage, bootstrap);
-	const resources = createWorkspaceResources(bootstrap.accountId);
-	resources.setOnline(navigator.onLine);
-	current = {
-		resources,
-		bootstrap,
-		startupError: null,
-		get shell() {
-			const shell = resources.views.shell(bootstrap.accountId);
-			if (!shell)
-				throw new Error('This account’s workspace has not been downloaded to this device');
-			return shell;
-		},
-		get preferences() {
-			const preferences = resources.views.get('agent_preferences', bootstrap.accountId);
-			if (preferences) return preferences;
-			const state = resources.state({ type: 'agent_preferences', id: [bootstrap.accountId] });
-			if ((state && state.kind !== 'deleted') || resources.availability === 'unknown')
-				throw new Error('Agent preferences have not been downloaded to this device');
-			return resources.views.agentPreferences(bootstrap.accountId);
-		},
-		get agentDefaults() {
-			return {
-				chatModelId: resolveDefaultAgentModel(
-					this.preferences,
-					this.bootstrap.agentDefaults.chatModelId
-				),
-				visionModelId: resolveDefaultVisionModel(
-					this.preferences,
-					this.bootstrap.agentDefaults.visionModelId
-				)
-			};
-		},
-		get agentModels() {
-			return configuredAgentModels(this.bootstrap.agentModels, this.agentDefaults);
-		},
-		get sessions() {
-			return resources.views
-				.all('conversations')
-				.filter((conversation) => conversation.kind === 'chat')
-				.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-		}
-	};
-	const session = current;
-	await resources.initialize();
-	// Publish the account before the initial inventory finishes. Targeted identity
-	// reads do not move the journal checkpoint and cannot delay the background pull.
-	if (generation !== openingGeneration || current !== session)
-		throw new Error('The workspace account changed while opening');
-	void synchronize();
-	const refresh = (): void => {
-		void synchronize();
-	};
-	const offline = (): void => resources.setOnline(false);
-	const visibility = (): void => {
-		if (document.visibilityState === 'visible') refresh();
-	};
-	const storage = (event: StorageEvent): void => {
-		if (event.key !== workspaceBootstrapKey) return;
-		if (!stillBound() || event.newValue === null) {
-			stop();
-			window.location.reload();
-		}
-	};
-	window.addEventListener('online', refresh);
-	window.addEventListener('offline', offline);
-	window.addEventListener('focus', refresh);
-	window.addEventListener('storage', storage);
-	document.addEventListener('visibilitychange', visibility);
-	detach = () => {
-		window.removeEventListener('online', refresh);
-		window.removeEventListener('offline', offline);
-		window.removeEventListener('focus', refresh);
-		window.removeEventListener('storage', storage);
-		document.removeEventListener('visibilitychange', visibility);
-	};
-	if (stored.kind === 'stored') void refreshBootstrap();
-	return session;
-};
-
-/** One active account; routes retain this session while navigation only starts background sync. */
-export const workspaceSession = {
+/** Browser account lifetime. Updates never fetch, subscribe, recover storage or run workflows. */
+export class WorkspaceSessionStore {
+	private value = $state<SessionRecord | null>(null);
+	private pending: Promise<WorkspaceSession> | null = null;
+	private version = 0;
+	private unsubscribe: (() => void) | null = null;
 	get current(): WorkspaceSession | null {
-		return current;
-	},
-	start(): Promise<WorkspaceSession> {
-		if (!starting) {
-			const pending = begin().catch((error) => {
-				if (starting === pending) stop();
-				throw error;
-			});
-			starting = pending;
-		}
-		return starting;
-	},
-	async downloadLocalWrites(): Promise<Blob> {
-		const accountId = workspaceAccountHint(document.cookie);
-		if (!accountId)
-			throw new Error('Sign in to identify the account whose saved edits you want to download');
-		const recovery = new IndexedDbStorageRecovery();
-		return recovery.downloadAccount(accountId);
-	},
-	async resetLocalWorkspace(): Promise<void> {
-		const accountId = workspaceAccountHint(document.cookie);
-		if (!accountId) throw new Error('Sign in to identify the account to reset');
-		stop();
-		await new IndexedDbStorageRecovery().resetAccount(accountId);
-	},
-	synchronize,
-	stop,
-	signOut(): void {
-		stop();
-		clearBootstrap(localStorage);
+		return this.value;
 	}
-};
+	get starting(): Promise<WorkspaceSession> | null {
+		return this.pending;
+	}
+	get generation(): number {
+		return this.version;
+	}
+	get detach(): (() => void) | null {
+		return this.unsubscribe;
+	}
+	publish(session: WorkspaceSession): void {
+		this.value = session;
+	}
+	start(pending: Promise<WorkspaceSession>): void {
+		this.pending = pending;
+	}
+	attach(detach: () => void): void {
+		this.unsubscribe = detach;
+	}
+	refresh(session: WorkspaceSession, bootstrap: WorkspaceBootstrap): void {
+		if (this.value !== session) return;
+		this.value.bootstrap = bootstrap;
+		this.value.startupError = null;
+	}
+	fail(session: WorkspaceSession, message: string): void {
+		if (this.value === session) this.value.startupError = message;
+	}
+	clear(): void {
+		this.version++;
+		this.value = null;
+		this.pending = null;
+		this.unsubscribe = null;
+	}
+}

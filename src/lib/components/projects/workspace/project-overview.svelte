@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
 	import type { GetProjectOutput, ProjectExportEntry, ProjectTreeNode } from '$lib/models/projects';
 	import { projectExportEntries } from '$lib/services/projects/export-entries';
 	import type { NoteId, NoteSummary, TrashedNote } from '$lib/models/notes';
@@ -90,7 +90,9 @@
 	const now = $derived(Date.parse(renderedAt));
 
 	const project = $derived(view.project);
-	let renameEntry = $state<{ draft: WorkspaceDraft<'notes'>; title: string } | null>(null);
+	let renameEntry = $state<{ draft: WorkspaceDraftController<'notes'>; title: string } | null>(
+		null
+	);
 
 	function countEntries(nodes: readonly ProjectTreeNode[]): number {
 		return nodes.reduce((total, node) => total + 1 + countEntries(node.children), 0);

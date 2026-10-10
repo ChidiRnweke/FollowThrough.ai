@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { TodayView } from '$lib/client/shell/views';
+	import type { TodayView } from '$lib/models/workspace-views';
 
 	import type { NoteSummary } from '$lib/models/notes';
 	import type { Project } from '$lib/models/projects';

@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { describe, expect, it, vi } from 'vitest';
 import { agentContextFixture } from '$lib/testing/agent/fixtures/context';
 import type { AgentRunId, ConversationId, WorkflowAgentRun } from '$lib/models/agent';
@@ -28,6 +29,7 @@ const recover = async (status: 'running' | 'cancelling') => {
 	const settlements = new RunSettlements(runs, runs);
 	await new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentModelRulesFixture(),
 			runs,
 			settlements,
 			eventBus: { notify: () => {} },

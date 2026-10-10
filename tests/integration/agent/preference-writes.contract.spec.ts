@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
@@ -32,6 +33,7 @@ it.each([false, true])(
 			const { database, transactionRunner } = createTransactionContext(connection.db);
 			return new AgentSettings(
 				capabilityDependencies<AgentSettingsDependencies>({
+					...agentModelRulesFixture(),
 					preferences: new AgentPreferenceCatalog(
 						new AgentPreferenceRecords(database, workspaceResourceKey)
 					),

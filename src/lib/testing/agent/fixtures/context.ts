@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
@@ -65,7 +66,9 @@ export const agentContextFixture = () => {
 		runner: new InMemoryAgentRunner(),
 		eventBus: new AgentEventStore()
 	};
-	const controller = new Agent(capabilityDependencies<AgentDependencies>(dependencies));
+	const controller = new Agent(
+		capabilityDependencies<AgentDependencies>({ ...dependencies, ...agentModelRulesFixture() })
+	);
 	const builder = {
 		async build(actor: ActorContext, input: RunAgentInput, origin: { provenanceId: ProvenanceId }) {
 			if (!(await conversations.findById(actor, input.conversationId))) {

@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
@@ -344,7 +345,13 @@ describe('Postgres durable agent run repository invariants', () => {
 			conversationId: run.conversationId,
 			model: run.model
 		});
-		const controller = new Agent(capabilityDependencies<AgentDependencies>({ events, runs }));
+		const controller = new Agent(
+			capabilityDependencies<AgentDependencies>({
+				...agentModelRulesFixture(),
+				events,
+				runs
+			})
+		);
 		const replay = await controller.listRunEvents(owner, run.id, '0');
 		const tail = replay.at(-1);
 		if (!tail) throw new Error('Replay dropped its terminal cursor');
@@ -402,6 +409,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		const run = await seedQueuedRun('17803');
 		const controller = new Agent(
 			capabilityDependencies<AgentDependencies>({
+				...agentModelRulesFixture(),
 				runs: new AgentRunRecords(context.db),
 				events: new AgentRunEventRecords(context.db)
 			})

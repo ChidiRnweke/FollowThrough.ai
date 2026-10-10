@@ -1,3 +1,4 @@
+import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
 import {
 	savedTruncatedContent,
 	pendingAttachmentProcessing,
@@ -6,7 +7,7 @@ import {
 import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentVersion, AttachmentView } from '$lib/models/attachments';
 import type { AgentPreferences } from '$lib/models/agent';
-import { resolveAttachmentVisionModel } from '$lib/services/agent/model-selection';
+
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
 import type {
 	DocumentImageDescription,
@@ -27,6 +28,7 @@ import type {
 } from '$lib/server/services/attachments/contracts';
 
 interface AttachmentProcessingDependencies {
+	readonly modelSelection: IAgentModelSelectionService;
 	records: Pick<
 		AttachmentRepository,
 		'listPendingVersions' | 'findVersionForUpdate' | 'updateVersion'
@@ -106,7 +108,7 @@ export class AttachmentProcessing {
 		| { kind: 'failure'; message: string }
 	> {
 		try {
-			const model = resolveAttachmentVisionModel(
+			const model = this.dependencies.modelSelection.resolveAttachmentVisionModel(
 				await this.dependencies.preferences.get(actor),
 				this.dependencies.visionModel
 			);

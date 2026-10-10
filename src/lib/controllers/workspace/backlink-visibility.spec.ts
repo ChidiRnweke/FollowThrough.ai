@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import {
 	noteRecordSchema,
 	projectRecordSchema,
@@ -50,7 +50,7 @@ const records = (archived: boolean) =>
 		[JSON.stringify(['note_relationships', edge.id]), { type: 'note_relationships', value: edge }]
 	]);
 it('hides a retained backlink into an archived project after built-in relocation', () => {
-	const views = new WorkspaceViews(records(true));
+	const views = createWorkspaceViews(records(true));
 	expect({
 		backlinks: views.note(note.id)?.view.backlinks,
 		storedRelationship: views.get('note_relationships', edge.id)
@@ -58,7 +58,7 @@ it('hides a retained backlink into an archived project after built-in relocation
 });
 it('keeps the backlink when both projects are active', () => {
 	expect(
-		new WorkspaceViews(records(false))
+		createWorkspaceViews(records(false))
 			.note(note.id)
 			?.view.backlinks.map((item) => item.targetNote.id)
 	).toEqual([target.id]);

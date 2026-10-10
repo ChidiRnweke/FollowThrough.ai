@@ -1,3 +1,4 @@
+import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { prepareMermaidRevision } from '$lib/server/services/diagrams/mermaid-revision';
@@ -16,7 +17,6 @@ import type {
 	DiagramActionInput,
 	RunSettlementOutcome,
 	NoteActionRequest,
-	Conversation,
 	ProviderStreamEvent,
 	RunAgentInput,
 	WorkflowRunContext
@@ -157,12 +157,6 @@ export interface DiagramsController {
 	recoverQueuedDiagramRuns(): Promise<number>;
 }
 
-type DiagramModelResolver = (
-	conversation: Pick<Conversation, 'modelOverride'>,
-	preferences: Pick<AgentPreferences, 'defaultModel'>,
-	environmentDefault: string
-) => string;
-
 interface ToolEventMapper {
 	map(event: ProviderStreamEvent): AgentEvent | undefined;
 }
@@ -210,7 +204,7 @@ export interface DiagramAgentDependencies {
 	};
 	readonly defaultModel: string;
 	readonly defaultVisionModel: string;
-	readonly resolveModel: DiagramModelResolver;
+	readonly modelSelection: IAgentModelSelectionService;
 	readonly createToolEventMapper: () => ToolEventMapper;
 	readonly observeWorkflow: DiagramWorkflowObserver;
 	readonly generator: DiagramGenerator;
@@ -337,7 +331,7 @@ export class Diagrams implements DiagramsController {
 		const renderedPngDataUrl = input.operation === 'revise' ? input.renderedPngDataUrl : undefined;
 		assertRenderedPng(renderedPngDataUrl);
 		const preferences = await this.dependencies.generation.preferences.get(actor);
-		const configuredModel = this.dependencies.generation.resolveModel(
+		const configuredModel = this.dependencies.generation.modelSelection.resolveAgentModel(
 			{},
 			preferences,
 			this.dependencies.generation.defaultModel
@@ -646,7 +640,7 @@ export class Diagrams implements DiagramsController {
 		this.validateDiagramTask(task);
 
 		const preferences = await this.dependencies.generation.preferences.get(actor);
-		const configuredModel = this.dependencies.generation.resolveModel(
+		const configuredModel = this.dependencies.generation.modelSelection.resolveAgentModel(
 			{},
 			preferences,
 			this.dependencies.generation.defaultModel

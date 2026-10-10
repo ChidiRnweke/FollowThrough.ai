@@ -1,3 +1,4 @@
+import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/indexing';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import { UploadRetentionStore } from '$lib/server/stores/attachments/upload-retention';
@@ -94,6 +95,7 @@ export const createAttachmentsCapability = (
 		storage,
 		library: new AttachmentLibrary(repository, input.notes, storage),
 		processing: new AttachmentProcessing({
+			modelSelection: new AgentModelSelectionService(),
 			records: repository,
 			claims: input.claims,
 			storage,

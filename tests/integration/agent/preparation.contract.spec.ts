@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { expect, it } from 'vitest';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
@@ -57,6 +58,7 @@ const setup = async (suffix: string, memory = new InMemoryMemoryEntryRepository(
 	const fixture = agentContextFixture();
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentModelRulesFixture(),
 			...fixture.dependencies,
 			runs,
 			events,

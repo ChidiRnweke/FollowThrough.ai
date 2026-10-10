@@ -6,7 +6,7 @@ import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
@@ -15,7 +15,7 @@ import {
 } from '$lib/testing/sync/fakes/in-memory-outbox';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
-import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 import WorkspaceWriteReview from './workspace-write-review.svelte';
 
 const setup = async (
@@ -42,15 +42,15 @@ const setup = async (
 		},
 		pull: () => cache.refresh()
 	});
-	const resources = new WorkspaceResources(project.userId, {
+	const resources = assembleWorkspaceResources(project.userId, {
 		repository: repository,
 		cache,
 		writes,
 		execution
 	});
-	repository.observe(project.userId, (state) => resources.applyLocal(state));
+	await resources.initialize();
 	resources.setOnline(false);
-	const operationId = await resources.append({
+	const operationId = await repository.append(project.userId, {
 		operationId: crypto.randomUUID(),
 		key,
 		command:
@@ -93,6 +93,7 @@ const setup = async (
 		);
 		await writes.reload();
 	}
+	await repository.read(project.userId);
 	return { resources, project, identity, key, operationId };
 };
 
@@ -128,20 +129,12 @@ it('compares the authoritative conflict value before keeping a change', async ()
 });
 
 it('refuses to discard dependent input added after review started', async () => {
-	const { resources, project, key, identity, operationId } = await setup();
+	const { resources, project, identity } = await setup();
 	const screen = render(WorkspaceWriteReview, { resources, open: true });
 	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
-	const observed = resources.editBase(identity);
-	await resources.append({
-		operationId: crypto.randomUUID(),
-		key,
-		command: { kind: 'renameProject', projectId: project.id, name: 'Later edit' },
-		base: observed.base,
-		basedOn: operationId,
-		local: { type: 'projects', value: { ...project, name: 'Later edit' } },
-		coalesce: null,
-		references: []
-	});
+	const draft = resources.draft(identity);
+	await draft.read();
+	await draft.stage({ kind: 'renameProject', projectId: project.id, name: 'Later edit' });
 	await screen.getByRole('button', { name: 'Discard…', exact: true }).click();
 	await screen.getByRole('button', { name: 'Discard change', exact: true }).click();
 	await expect

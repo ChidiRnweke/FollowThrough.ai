@@ -1,7 +1,7 @@
 import { OutboxEditingService } from '$lib/services/sync/state';
 import { createWriteAncestry } from '$lib/factories/sync/ancestry';
 import { describe, expect, it } from 'vitest';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import type { OutboxEntry, WriteDraft, WriteRebase } from '$lib/models/outbox';
 
 import { rebaseFields } from '$lib/services/sync/rebase';

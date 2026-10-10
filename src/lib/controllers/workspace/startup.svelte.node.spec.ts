@@ -6,7 +6,7 @@ import {
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 
 const fixtures: ReturnType<typeof workspaceResourcesFixture>[] = [];

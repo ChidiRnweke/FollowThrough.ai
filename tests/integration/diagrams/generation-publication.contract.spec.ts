@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
@@ -232,6 +233,7 @@ it('does not publish a direct result after cancellation settles its run', async 
 		const events = new AgentRunEventRecords(database);
 		const agent = new Agent(
 			capabilityDependencies<AgentDependencies>({
+				...agentModelRulesFixture(),
 				runs,
 				events,
 				transactionRunner,

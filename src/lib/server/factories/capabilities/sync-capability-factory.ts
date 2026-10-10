@@ -1,4 +1,4 @@
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import type { Database } from '$lib/server/db';
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';

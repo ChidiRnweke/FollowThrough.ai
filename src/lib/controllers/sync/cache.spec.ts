@@ -1,7 +1,7 @@
 import { CacheSynchronization } from './cache';
 import { ResourceCacheStore } from '$lib/stores/sync/cache';
 import { describe, expect, it } from 'vitest';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import { createResourceCache } from '$lib/factories/sync/cache';
 

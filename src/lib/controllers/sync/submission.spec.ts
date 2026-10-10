@@ -1,7 +1,7 @@
 import { wholeValueRebase } from '$lib/services/sync/rebase';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import type { WriteDraft } from '$lib/models/outbox';
 import {
 	InMemoryOutbox,

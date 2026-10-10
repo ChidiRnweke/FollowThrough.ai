@@ -2,7 +2,7 @@
 	import type { TrustPolicy, UpdateTrustPolicyInput } from '$lib/models/agent';
 	import { PROPOSAL_AUTO_ACCEPT_PIPELINES } from '$lib/models/agent';
 	import { toast } from 'svelte-sonner';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { DateTime } from '$lib/models/workspace';
 	import type { WorkspaceRecord } from '$lib/models/workspace-records';
 	import TrustPolicyControl from '../trust-policy-control.svelte';

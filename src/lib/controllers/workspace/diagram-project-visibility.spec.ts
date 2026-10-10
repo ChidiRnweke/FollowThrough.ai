@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import { type WorkspaceRecord } from '$lib/models/workspace-records';
 import { workspaceRecordIdentity } from '$lib/services/workspace/commands';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
@@ -14,7 +14,7 @@ const setup = (archived: boolean) => {
 		{ type: 'projects', value: projectBuilder(archived ? { archivedAt: testNow } : {}) },
 		{ type: 'diagrams', value: diagram }
 	];
-	return new WorkspaceViews(
+	return createWorkspaceViews(
 		new Map(records.map((r) => [workspaceResourceKey(workspaceRecordIdentity(r)), r]))
 	);
 };

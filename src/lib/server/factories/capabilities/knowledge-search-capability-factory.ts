@@ -16,7 +16,7 @@ import { createContentIndex } from '$lib/server/factories/content-index';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import type { InlineSuggestionThrottle } from '$lib/models/agent';
-import { normalizeLanguageModelId } from '$lib/services/agent/model-selection';
+import { normalizeLanguageModelId } from '$lib/models/agent';
 import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import type { Database } from '$lib/server/db';

@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
@@ -56,6 +57,7 @@ const cancellationController = (db: typeof context.db) => {
 	const events = new AgentRunEventRecords(database);
 	return new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentModelRulesFixture(),
 			runs,
 			conversationJournal: new ConversationArchive(new ConversationRecords(database)),
 			events,

@@ -18,7 +18,7 @@
 	import { mermaidSourcesIn, renderDiagrams } from './render-diagrams';
 	import ExportSettingsFields from './export-settings-fields.svelte';
 	import { generateBundle, generateDocument } from '$lib/remote/deliverables/deliverables.remote';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 
 	let {
 		open = $bindable(false),

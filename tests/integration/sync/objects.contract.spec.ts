@@ -1,4 +1,4 @@
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';

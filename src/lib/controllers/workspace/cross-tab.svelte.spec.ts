@@ -4,11 +4,11 @@ import { WorkspaceDatabase } from '$lib/client/sync/database';
 import { expect, it } from 'vitest';
 import { workspaceRecordSchema, resourceDataSchemas } from '$lib/models/workspace-records';
 import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { createWorkspaceResources } from './resources.svelte';
+import { createWorkspaceResources } from '$lib/factories/workspace/resources';
 import { IndexedDbSyncCache } from '$lib/client/sync/indexeddb-cache';
 import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 
 // SYNC-TABS: separate clients use real IndexedDB, Web Locks and BroadcastChannel.
 it('observes an offline edit from another client without a refresh', async () => {

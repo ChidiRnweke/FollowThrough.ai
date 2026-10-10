@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { onMount, tick, untrack } from 'svelte';
 	import { z } from 'zod';
@@ -35,7 +35,7 @@
 		MAX_CONCURRENT_STREAMS
 	} from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { canvasFor, latestDiagramWrite } from '$lib/stores/diagrams/canvas.svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { slide } from 'svelte/transition';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
 	import { takeCanvasRender } from '$lib/stores/diagrams/canvas-render.svelte';

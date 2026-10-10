@@ -7,7 +7,7 @@ import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
 import { noteCommand } from '$lib/services/workspace/commands';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryAccountWriterLock } from '$lib/testing/sync/fakes/in-memory-outbox';
 import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
@@ -15,7 +15,7 @@ import { DexieWorkspaceRepository } from '$lib/client/sync/workspace-local-repos
 import { requestValue } from '$lib/client/sync/database';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
-import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 const cleanups: (() => Promise<void>)[] = [];
 const setup = async () => {
 	const newName = `editor-new-${crypto.randomUUID()}`;
@@ -56,23 +56,16 @@ const setup = async () => {
 		writerLock: new InMemoryAccountWriterLock(),
 		pull: () => cache.refresh()
 	});
-	const resources = new WorkspaceResources(note.userId, {
+	const resources = assembleWorkspaceResources(note.userId, {
 		repository: outbox,
 		cache,
 		writes,
 		execution
 	});
-	const unsubscribe = outbox.observe(
-		note.userId,
-		(state) => resources.applyLocal(state),
-		(error) => {
-			throw error;
-		}
-	);
+
 	resources.setOnline(false);
 	const store = resources.draft({ type: 'notes', id: [note.id] });
 	cleanups.push(async () => {
-		unsubscribe();
 		resources.stop();
 		await outbox.close();
 		await requestValue(indexedDB.deleteDatabase(outbox.database.name));

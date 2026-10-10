@@ -1,7 +1,7 @@
 import { OutboxEditingService } from '$lib/services/sync/state';
 import { describe, expect, it } from 'vitest';
 import { type ResourceState } from '$lib/models/sync';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { type WriteDraft } from '$lib/models/outbox';
 import { localResource, visibleResources } from '$lib/services/sync/state';
 const editing = new OutboxEditingService();

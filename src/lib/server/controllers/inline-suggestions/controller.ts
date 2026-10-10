@@ -1,5 +1,5 @@
 import type { InlineSuggestionThrottle } from '$lib/models/agent';
-import { normalizeLanguageModelId } from '$lib/services/agent/model-selection';
+import { normalizeLanguageModelId } from '$lib/models/agent';
 import { type ActorContext } from '$lib/models/identity';
 import {
 	type InlineSuggestion,

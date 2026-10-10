@@ -1,5 +1,5 @@
 import { RunEventSubscription } from '$lib/client/agent/runs/subscription';
-import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+import { workspaceSession } from '$lib/factories/workspace/session';
 import {
 	type StoredNoteActionRun as StoredRun,
 	type NoteActionContext,

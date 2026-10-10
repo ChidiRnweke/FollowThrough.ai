@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
-import { EditorSession } from './editor-session.svelte';
+import { createEditorSession } from '$lib/factories/workspace/editor-session';
 
 it('persists later typing before reporting a clean buffer', async () => {
-	const session = new EditorSession(() => true);
+	const session = createEditorSession(() => true);
 	const gate = Promise.withResolvers<void>();
 	let buffer = 'first';
 	const saved: string[] = [];
@@ -23,7 +23,7 @@ it('persists later typing before reporting a clean buffer', async () => {
 	expect({ saved, dirty: session.dirty }).toEqual({ saved: ['first', 'later'], dirty: false });
 });
 it('retains dirty state after persistence fails', async () => {
-	const session = new EditorSession(() => true);
+	const session = createEditorSession(() => true);
 	session.changed();
 	await session.save(
 		async () => ({ kind: 'failure', message: 'Storage unavailable' }),
@@ -35,14 +35,14 @@ it('retains dirty state after persistence fails', async () => {
 	});
 });
 it('invalidates a read guard when typing starts', () => {
-	const session = new EditorSession(() => true);
+	const session = createEditorSession(() => true);
 	const current = session.checkpoint();
 	session.changed();
 	expect(current()).toBe(false);
 });
 it('does not adopt a save after its account lifetime ends', async () => {
 	let active = true;
-	const session = new EditorSession(() => active);
+	const session = createEditorSession(() => active);
 	const gate = Promise.withResolvers<void>();
 	let visible = 'buffer';
 	session.changed();
@@ -62,7 +62,7 @@ it('does not adopt a save after its account lifetime ends', async () => {
 });
 
 it('saves new edits after an explicit replacement invalidates an older save', async () => {
-	const session = new EditorSession(() => true);
+	const session = createEditorSession(() => true);
 	const gate = Promise.withResolvers<void>();
 	let visible = 'replacement';
 	const writes: string[] = [];

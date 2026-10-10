@@ -3,7 +3,7 @@ import { createDurableOutbox } from '$lib/factories/sync/durable-outbox';
 import { wholeValueRebase } from '$lib/services/sync/rebase';
 import { afterEach, expect, it } from 'vitest';
 import { z } from 'zod';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { cachedSnapshot } from '$lib/services/sync/state';
 import { requestValue } from './database';
 import {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
+	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { untrack } from 'svelte';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { TodoId } from '$lib/models/todos';
@@ -25,7 +25,7 @@
 		return editor;
 	});
 
-	const editorSession = new EditorSession(() => resourceDraft.active);
+	const editorSession = createEditorSession(() => resourceDraft.active);
 	$effect(() => () => editorSession.close());
 	const initialValue = (): string => value;
 	let saved = $state(initialValue());

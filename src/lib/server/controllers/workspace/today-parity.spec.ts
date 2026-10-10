@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Workspace, type WorkspaceDependencies } from './controller';
-import { WorkspaceViews } from '$lib/controllers/workspace/views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import type { LocalDate } from '$lib/models/workspace';
 import {
 	noteRecordSchema,
@@ -58,7 +58,7 @@ describe('Today projection parity', () => {
 				value: resourceDataSchemas.suggestions.parse(suggestion)
 			}))
 		] satisfies WorkspaceRecord[];
-		const browser = new WorkspaceViews(
+		const browser = createWorkspaceViews(
 			new Map(records.map((record) => [JSON.stringify([record.type, record.value.id]), record]))
 		);
 		const server = new Workspace(

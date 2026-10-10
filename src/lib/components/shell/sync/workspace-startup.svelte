@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources.svelte';
 	import type { WorkspaceReadiness } from '$lib/models/workspace-startup';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { Button } from '$lib/components/ui/button';
 	import CloudDownload from '@lucide/svelte/icons/cloud-download';
 	import WorkspaceRecoveryDownload from '$lib/components/shared/workspace-recovery-download.svelte';
@@ -10,7 +10,7 @@
 		readiness,
 		startupFailure
 	}: {
-		resources: WorkspaceResources;
+		resources: WorkspaceResourcesController;
 		readiness: WorkspaceReadiness;
 		startupFailure: string | null;
 	} = $props();

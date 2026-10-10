@@ -4,7 +4,7 @@ import { WorkspaceDatabase } from './database';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { initialSyncCursor, syncCursorSchema, type ResourceState } from '$lib/models/sync';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { IndexedDbSyncCache } from './indexeddb-cache';
 
 const databases: string[] = [];

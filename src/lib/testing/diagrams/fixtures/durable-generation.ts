@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
@@ -48,6 +49,7 @@ export const durableDiagramFixture = () => {
 	});
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentModelRulesFixture(),
 			runs: state.persistence,
 			cancellations: new RunCancellation(state.persistence),
 			events: state.persistence,

@@ -11,7 +11,7 @@ import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import { outboxRepositoryContract } from '$lib/testing/sync/contracts/outbox-contract';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import type { WriteDraft } from '$lib/models/outbox';
 import { IndexedDbOutbox } from './indexeddb-outbox';
 import { IndexedDbSyncCache } from './indexeddb-cache';

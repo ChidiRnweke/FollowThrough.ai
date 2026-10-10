@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import type { NoteId } from '$lib/models/notes';
 
@@ -32,7 +32,7 @@
 	import ProjectTree from '../../projects/project-tree.svelte';
 	import MemoryNotificationMenu from '../../memory/memory-notification-menu.svelte';
 	import SyncStatusMenu from '../sync/sync-status-menu.svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import FeedbackDialog from '../../feedback/feedback-dialog.svelte';
 	import { initialsOf } from '$lib/services/workspace/initials';
 	import type { Component } from 'svelte';

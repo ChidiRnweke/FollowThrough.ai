@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
 	import type { NoteId, NoteSummary } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import { dndzone, dragHandle, dragHandleZone, type DndEvent } from 'svelte-dnd-action';
@@ -30,7 +30,12 @@
 
 	type InlineEdit =
 		| { mode: 'create'; kind: 'note' | 'folder' | 'skill'; projectId: ProjectId; parentId?: NoteId }
-		| { mode: 'rename'; entryId: NoteId; current: string; draft: WorkspaceDraft<'notes'> };
+		| {
+				mode: 'rename';
+				entryId: NoteId;
+				current: string;
+				draft: WorkspaceDraftController<'notes'>;
+		  };
 
 	let {
 		inventoryReady = true,

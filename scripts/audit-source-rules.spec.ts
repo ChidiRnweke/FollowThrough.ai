@@ -397,6 +397,34 @@ describe('data-only models', () => {
 	])('rejects model procedure: %s', (source) => {
 		expect(model(source).map((item) => item.rule)).toEqual(['model-procedure']);
 	});
+	it('allows a scalar constructor with a local validity guard', () => {
+		expect(
+			model(
+				"type Version = string & { readonly __brand: 'Version' }; export const version = (value: bigint): Version => { if (value <= 0n) throw new Error('positive required'); return `v-${value}` as Version; }"
+			)
+		).toEqual([]);
+	});
+	it('rejects a branded constructor that consults mutable external state', () => {
+		expect(
+			model(
+				"type Id = string & { readonly __brand: 'Id' }; const create = (value: string): Id => registry.get(value) as Id"
+			).map((item) => item.rule)
+		).toEqual(['model-procedure']);
+	});
+	it.each([
+		'const id = (value: string = registry.next()): Id => value as Id',
+		'const id = (value: string): Id => (value += "suffix") as Id',
+		'const id = (value: string): Id => { let saved = value; return saved as Id; }'
+	])('rejects side effects or mutable state in a scalar constructor: %s', (source) => {
+		expect(
+			model("type Id = string & { readonly __brand: 'Id' }; " + source).map((item) => item.rule)
+		).toEqual(['model-procedure']);
+	});
+	it('rejects an unbranded calculation', () => {
+		expect(
+			model('const total = (value: number): number => value * 2').map((item) => item.rule)
+		).toEqual(['model-procedure']);
+	});
 	it.each(['let encoder: Encoder;', 'export class Workflow {}'])(
 		'rejects model runtime state: %s',
 		(source) => {

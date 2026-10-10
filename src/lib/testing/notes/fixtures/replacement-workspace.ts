@@ -7,11 +7,11 @@ import {
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
-import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import {
 	noteBuilder,
 	projectBuilder,
@@ -40,14 +40,13 @@ export async function replacementWorkspace() {
 		},
 		pull: () => cache.refresh()
 	});
-	const resources = new WorkspaceResources(account, {
+	const resources = assembleWorkspaceResources(account, {
 		repository: outbox,
 		cache,
 		writes,
 		execution
 	});
 	resources.setOnline(false);
-	const stopObserving = outbox.observe(account, (state) => resources.applyLocal(state));
 	const project = projectBuilder();
 	await repository.commit(account, {
 		put: [
@@ -95,7 +94,6 @@ export async function replacementWorkspace() {
 		outbox,
 		account,
 		stop: () => {
-			stopObserving();
 			resources.stop();
 		}
 	};

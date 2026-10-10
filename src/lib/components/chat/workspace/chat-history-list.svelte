@@ -1,8 +1,8 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { goto } from '$app/navigation';
 	import type { Conversation } from '$lib/models/agent';
 
@@ -45,7 +45,7 @@
 	} = $props();
 
 	let selected = $state<Conversation | undefined>();
-	let renameDraft = $state<WorkspaceDraft<'conversations'> | null>(null);
+	let renameDraft = $state<WorkspaceDraftController<'conversations'> | null>(null);
 	let renameOpen = $state(false);
 	let deleteOpen = $state(false);
 	let busy = $state(false);

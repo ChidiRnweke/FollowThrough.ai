@@ -1,4 +1,4 @@
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, expect, it } from 'vitest';

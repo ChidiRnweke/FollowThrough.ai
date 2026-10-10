@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
-import { WorkspaceViews } from '$lib/controllers/workspace/views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import {
 	noteRecordSchema,
 	projectRecordSchema,
@@ -136,7 +136,7 @@ describe('note view assembly', () => {
 				value: resourceDataSchemas.references.parse({ ...reference, projectId: note.projectId })
 			}
 		] satisfies WorkspaceRecord[];
-		const downloaded = new WorkspaceViews(
+		const downloaded = createWorkspaceViews(
 			new Map(records.map((record) => [JSON.stringify([record.type, record.value.id]), record]))
 		);
 		expect(downloaded.note(note.id)?.view).toEqual(

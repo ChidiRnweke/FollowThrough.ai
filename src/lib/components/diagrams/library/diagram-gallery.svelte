@@ -23,7 +23,7 @@
 	} from '$lib/components/icons';
 	import { formatDateTime } from '$lib/components/shared/labels';
 	import { drawioReferencesIn } from '$lib/services/notes/references';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab, diagramTab } from '$lib/stores/workbench/tab-ref';

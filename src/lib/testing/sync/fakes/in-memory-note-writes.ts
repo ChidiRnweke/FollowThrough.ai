@@ -2,7 +2,7 @@ import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { type SyncEtag } from '$lib/models/sync';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import type { WriteOutcome } from '$lib/models/outbox';
 import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';
 import { InMemorySyncTransport } from './in-memory-sync';

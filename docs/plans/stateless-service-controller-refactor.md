@@ -456,3 +456,50 @@ Every service module below has a planned disposition. This is routing, not compl
 - Regenerated inventory: 65 shared-service modules, 173 exported values (11 classes); 104 server
   service modules, 170 exported values (81 classes); 11,352 rows and 12,435 resolved import edges.
   The full task remains incomplete. No whole phase is checked off and no PR has been opened.
+
+## Account, editor and model capability continuation (2026-10-10)
+
+- Moved browser account startup, synchronization, sign-out, damaged-storage recovery and optional
+  preference opening into `WorkspaceSessions`. Browser cookies, storage and event listeners stay
+  in the session environment adapter. `WorkspaceSessionStore` owns the account generation,
+  startup promise, current session and listener disposer. Seven account lifetime regressions cover
+  shared startup, account replacement, teardown, corruption and account-specific reset.
+- Moved editor save sequencing and generation checks into `EditorSessions`, with mutable editor
+  state in `EditorSessionStore`. The five existing editor race tests remain intact.
+- Added explicit model selection and model-choice service interfaces. Agent execution/settings,
+  attachment processing, diagram generation and browser session controllers receive these
+  capabilities through composition. Canonical model identifiers and synchronization versions are
+  branded value constructors in models. The source checker accepts local scalar construction and
+  rejects external lookups, side effects and mutable procedure state; it does not prove domain
+  cohesion or permit business rules in models.
+- Moved workspace reads, durable editing, conflict recovery and account observation into workspace
+  controllers. Components receive `WorkspaceResourcesController`, `WorkspaceDraftController` and
+  `ResourceViewController`, not concrete mutable classes. Internal projection callbacks are
+  private. Factories construct the graph; initialization starts observation. Account, editor,
+  observation and record-index state now have explicit stores. Shared projection data and view
+  aliases live in models. The broad cross-feature presentation contract and remaining command
+  preparation helpers still require semantic migration.
+- Preserved independent reactive lifetime signals. An initial combined state snapshot made a
+  cache update invalidate the account-lifetime effect and close the review dialog. Browser tests
+  caught the regression; separate state signals corrected it. The seven review tests pass.
+  Added a delayed-save teardown regression so a completed old-account write cannot repopulate an
+  editor. Tests use repository observation and saved intents instead of private capture callbacks.
+- Moved workspace behavior specs beside their controllers and updated the browser suite inventory.
+  Construction no longer starts subscriptions; fixtures now explicitly initialize their account.
+- Verification before the workspace extraction: unit 527 files / 4,220 passed / one skip;
+  browser 85 files / 565 passed; isolated contracts 108 files / 522 passed. After extraction,
+  type checking passes. Focused node workspace tests pass (45 tests before the additional teardown
+  case); resource browser tests pass (38 tests), and review browser tests pass (7 tests). Fresh full verification now passes: unit 527 files / 4,227 passed / one skip; browser 85 files /
+  565 passed; isolated contracts 108 files / 522 passed. Docs check, production web/worker build
+  and build-output audit pass. Two replacement-workspace fixture failures found in the first full
+  run were corrected by initializing after seeding, then both full suites were rerun. E2E/PWA
+  have not been rerun in this continuation and retain the previously recorded unresolved status.
+- Latest architecture run: topology, strict source and test-quality audits pass. Chisel reports
+  91 remaining prohibited edges and no warnings. No migration baseline or suppression was added.
+  Full AST enforcement, remaining shared/server capabilities, browser feature workflows,
+  authenticated E2E/PWA investigation and final PR checks remain outstanding.
+- Regenerated inventory: 64 shared-service modules, 165 exported values (13 classes); 104 server
+  service modules, 170 exported values (81 classes); 11,030 rows and 12,503 resolved import edges.
+  The scanner now distinguishes actual `.svelte.ts` modules from virtual Svelte script files,
+  correcting the earlier classification of rune stores as components.
+  Export totals include constants. These counts do not establish that every capability is resolved.

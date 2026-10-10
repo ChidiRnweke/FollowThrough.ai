@@ -420,6 +420,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionReverter: suggestions
 		},
 		agent: {
+			modelSelection: agentCapability.modelSelection,
+			modelChoices: agentCapability.modelChoices,
 			webSearchDefaults: agentCapability.webSearchDefaults,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
@@ -453,6 +455,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			provenance
 		},
 		agentSettings: {
+			modelSelection: agentCapability.modelSelection,
+			modelChoices: agentCapability.modelChoices,
 			webSearchDefaults: agentCapability.webSearchDefaults,
 			agentAvailable: agentCapability.agentAvailable,
 			now: agentCapability.now,

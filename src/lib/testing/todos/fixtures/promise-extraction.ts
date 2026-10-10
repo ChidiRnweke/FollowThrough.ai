@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
@@ -67,6 +68,7 @@ export const promiseExtractionFixture = () => {
 	});
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentModelRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events: runs,

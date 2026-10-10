@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
 import {

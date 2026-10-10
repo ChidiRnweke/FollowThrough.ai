@@ -20,7 +20,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { FtWidget as WidgetIcon } from '$lib/components/icons';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import WidgetView from './widget-view.svelte';
 	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
 

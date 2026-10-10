@@ -1,11 +1,11 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { accessMessage } from '$lib/services/sync/state';
 	import type { NoteId } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
 	import NoteWorkspace from '../../notes/workspace/note-workspace.svelte';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';

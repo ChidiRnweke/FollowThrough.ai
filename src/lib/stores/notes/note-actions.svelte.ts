@@ -1,7 +1,7 @@
 import type { AgentRunReceipt } from '$lib/models/agent';
 import { SelectionSubmissions } from '$lib/client/notes/selection-submissions';
 import { DiagramSubmissions } from '$lib/client/notes/diagram-submissions';
-import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+import { workspaceSession } from '$lib/factories/workspace/session';
 import type { DrawioDiagram } from '$lib/models/diagrams';
 import type { Suggestion, SuggestionId } from '$lib/models/suggestions';
 import type { Note, TextSelection } from '$lib/models/notes';

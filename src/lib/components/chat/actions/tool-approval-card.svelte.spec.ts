@@ -1,6 +1,6 @@
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import ToolApprovalGroup from './tool-approval-group.svelte';
-import type { ShellContext } from '$lib/client/shell/views';
+import type { ShellContext } from '$lib/models/workspace-views';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { describe, expect, it } from 'vitest';

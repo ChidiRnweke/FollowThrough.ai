@@ -6,8 +6,8 @@ import {
 	type WidgetId,
 	type WidgetTemplateName
 } from '$lib/models/widgets';
-import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+import { workspaceSession } from '$lib/factories/workspace/session';
 import { toast } from 'svelte-sonner';
 
 /** What became of an edit handed to the workspace: staged in the outbox, or refused. */
@@ -20,14 +20,14 @@ export type WidgetEditOutcome =
  * the same command the same way.
  */
 class WidgetEdits {
-	editor(widgetId: WidgetId): WorkspaceDraft<'widgets'> {
+	editor(widgetId: WidgetId): WorkspaceDraftController<'widgets'> {
 		const session = workspaceSession.current;
 		if (!session) throw new Error('Open the workspace before opening a widget');
 		return session.resources.draft({ type: 'widgets', id: [widgetId] });
 	}
 
 	async stage(
-		editor: WorkspaceDraft<'widgets'>,
+		editor: WorkspaceDraftController<'widgets'>,
 		widgetId: WidgetId,
 		change: WidgetChange
 	): Promise<WidgetEditOutcome> {

@@ -20,7 +20,7 @@ import type {
 } from '$lib/client/agent/runs/contracts';
 import { RemoteAgentRunTransport } from '$lib/client/agent/runs/remote-transport';
 import { SessionAgentRunStorage } from '$lib/client/agent/runs/session-storage';
-import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources.svelte';
 import type { WorkspaceValues } from '$lib/models/workspace-records';
 import { accessMessage } from '$lib/services/sync/state';
 import {
@@ -436,7 +436,7 @@ export class ChatStore {
 	connection = $state<'detached' | 'connected' | 'reconnecting' | 'offline'>('detached');
 	persistenceError = $state<string | undefined>(undefined);
 	private hydratedConversationId?: ConversationId;
-	private resources: WorkspaceResources | null = null;
+	private resources: WorkspaceResourcesController | null = null;
 	private generation = 0;
 	private connectionGeneration = 0;
 	private liveConfirmed = $state(true);
@@ -497,7 +497,7 @@ export class ChatStore {
 		this.staged = request;
 	}
 
-	hydrate(resources: WorkspaceResources): Promise<void> {
+	hydrate(resources: WorkspaceResourcesController): Promise<void> {
 		if (this.hydrating?.generation === this.generation) return this.hydrating.promise;
 		const operation = { generation: this.generation, promise: this.hydrateHistory(resources) };
 		this.hydrating = operation;
@@ -506,7 +506,7 @@ export class ChatStore {
 		});
 	}
 
-	private async hydrateHistory(resources: WorkspaceResources): Promise<void> {
+	private async hydrateHistory(resources: WorkspaceResourcesController): Promise<void> {
 		this.resources = resources;
 		if (!browser || !this.conversationId) return;
 		if (this.isStreaming && this.eventConnection) return;
@@ -954,7 +954,10 @@ export class ChatStore {
 		if (browser) sessionStorage.removeItem(this.storageKey);
 	}
 
-	async switchToConversation(id: ConversationId, resources: WorkspaceResources): Promise<void> {
+	async switchToConversation(
+		id: ConversationId,
+		resources: WorkspaceResourcesController
+	): Promise<void> {
 		if (this.conversationId === id) return this.hydrate(resources);
 		this.generation++;
 		this.refreshing = null;

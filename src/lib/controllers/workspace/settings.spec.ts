@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
 import { testActor, testProjectId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
@@ -20,7 +20,7 @@ describe('synchronized settings', () => {
 				{ type: 'agent_preferences', value: preference }
 			]
 		]);
-		const views = new WorkspaceViews(records);
+		const views = createWorkspaceViews(records);
 		records.delete(JSON.stringify(['agent_preferences', userId]));
 		expect(views.agentPreferences(userId)).toEqual({
 			userId,
@@ -53,9 +53,9 @@ describe('synchronized settings', () => {
 				}
 			]
 		]);
-		const projectTools = new WorkspaceViews(records).toolPreferences(userId, testProjectId());
+		const projectTools = createWorkspaceViews(records).toolPreferences(userId, testProjectId());
 		records.delete('project');
-		const accountTools = new WorkspaceViews(records).toolPreferences(userId, testProjectId());
+		const accountTools = createWorkspaceViews(records).toolPreferences(userId, testProjectId());
 		expect({
 			project: projectTools.find((tool) => tool.name === toolName),
 			account: accountTools.find((tool) => tool.name === toolName)
@@ -66,7 +66,7 @@ describe('synchronized settings', () => {
 	});
 	it('keeps tools required for account recovery enabled without a stored preference', () => {
 		expect(
-			new WorkspaceViews(new Map())
+			createWorkspaceViews(new Map())
 				.toolPreferences(userId)
 				.find((tool) => tool.name === 'set_tool_enabled')
 		).toMatchObject({ enabled: true, locked: true, source: 'default' });

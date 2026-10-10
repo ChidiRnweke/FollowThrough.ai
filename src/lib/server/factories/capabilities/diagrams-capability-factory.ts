@@ -18,7 +18,7 @@ import type {
 	AgentModelCatalog,
 	AgentPreferenceEditor
 } from '$lib/server/services/agent/runs/preferences';
-import { resolveAgentModel } from '$lib/services/agent/model-selection';
+import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
 import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
 import { DiagramGeneration } from '$lib/server/services/diagrams/generation';
@@ -110,7 +110,7 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 			builtInSkills: input.builtInSkills,
 			defaultModel: input.defaultModel,
 			defaultVisionModel: input.defaultVisionModel,
-			resolveModel: resolveAgentModel,
+			modelSelection: new AgentModelSelectionService(),
 			createToolEventMapper: () => new AgentToolEventMapper(),
 			observeWorkflow: traceWorkflow,
 			generator: new DiagramGeneration(input)

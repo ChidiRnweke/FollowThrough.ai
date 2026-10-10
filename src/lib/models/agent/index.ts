@@ -2043,3 +2043,12 @@ export interface InlineSuggestionThrottle {
 	consume(userId: string): InlineSuggestionAdmission;
 	release(userId: string): void;
 }
+
+export type LanguageModelId = string & { readonly __brand: 'LanguageModelId' };
+
+/** Construct the canonical identifier spelling without selecting a model or consulting a catalog. */
+export const normalizeLanguageModelId = (modelId: string): LanguageModelId => {
+	const separator = modelId.indexOf(':');
+	if (separator <= 0 || modelId.includes('/')) return modelId as LanguageModelId;
+	return `${modelId.slice(0, separator)}/${modelId.slice(separator + 1)}` as LanguageModelId;
+};

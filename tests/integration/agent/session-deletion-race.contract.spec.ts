@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -27,6 +28,7 @@ const setup = async (suffix: string) => {
 	});
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentModelRulesFixture(),
 			conversationJournal: journal,
 			runs,
 			transactionRunner: tx.transactionRunner

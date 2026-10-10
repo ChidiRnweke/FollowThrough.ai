@@ -1,4 +1,4 @@
-import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+import { workspaceSession } from '$lib/factories/workspace/session';
 import type { SuggestionId } from '$lib/models/suggestions';
 import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 

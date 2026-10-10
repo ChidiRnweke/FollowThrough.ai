@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { expect, it } from 'vitest';
 import { InMemoryModelCatalog } from '$lib/testing/agent/fakes/in-memory-model-catalog';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -8,6 +9,7 @@ const setup = () => {
 	const models = new InMemoryModelCatalog();
 	const controller = new AgentSettings(
 		capabilityDependencies<AgentSettingsDependencies>({
+			...agentModelRulesFixture(),
 			models,
 			defaultModel: 'test/chat',
 			defaultVisionModel: 'test/vision',

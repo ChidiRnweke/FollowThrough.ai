@@ -1,15 +1,14 @@
-import { describe, expect, it } from 'vitest';
 import {
-	resolveAgentModel,
-	resolveVisionModel,
-	configuredAgentModels,
-	configuredChatModels,
-	resolveAttachmentVisionModel
-} from './model-selection';
+	AgentModelSelectionService,
+	AgentModelChoiceService
+} from '$lib/services/agent/model-selection';
+import { describe, expect, it } from 'vitest';
+const modelSelection = new AgentModelSelectionService();
+const modelChoices = new AgentModelChoiceService();
 
 describe('Agent model selection invariants', () => {
 	it('prefers a conversation model over user and environment defaults', () => {
-		const model = resolveAgentModel(
+		const model = modelSelection.resolveAgentModel(
 			{ modelOverride: 'conversation/model' },
 			{ defaultModel: 'user/model' },
 			'environment/model'
@@ -18,23 +17,27 @@ describe('Agent model selection invariants', () => {
 	});
 
 	it('uses the user model when there is no conversation override', () => {
-		const model = resolveAgentModel({}, { defaultModel: 'user/model' }, 'environment/model');
+		const model = modelSelection.resolveAgentModel(
+			{},
+			{ defaultModel: 'user/model' },
+			'environment/model'
+		);
 		expect(model).toBe('user/model');
 	});
 
 	it('uses the environment model when there is no persisted selection', () => {
-		const model = resolveAgentModel({}, {}, 'environment/model');
+		const model = modelSelection.resolveAgentModel({}, {}, 'environment/model');
 		expect(model).toBe('environment/model');
 	});
 
 	it('normalizes legacy colon-form OpenRouter model identifiers', () => {
-		const model = resolveAgentModel({}, {}, 'deepseek:deepseek-v4-flash');
+		const model = modelSelection.resolveAgentModel({}, {}, 'deepseek:deepseek-v4-flash');
 		expect(model).toBe('deepseek/deepseek-v4-flash');
 	});
 
 	it('prefers a conversation vision model over the user default', () => {
 		expect(
-			resolveVisionModel(
+			modelSelection.resolveVisionModel(
 				{ visionModelOverride: 'vision/conversation' },
 				{ defaultVisionModel: 'vision/user' },
 				'vision/environment'
@@ -45,22 +48,25 @@ describe('Agent model selection invariants', () => {
 
 it('keeps configured chat and vision models selectable outside the catalog', () => {
 	expect(
-		configuredAgentModels([], { chatModelId: 'custom/chat', visionModelId: 'custom/vision' }).map(
-			(model) => model.id
-		)
+		modelChoices
+			.configuredAgentModels([], { chatModelId: 'custom/chat', visionModelId: 'custom/vision' })
+			.map((model) => model.id)
 	).toEqual(['custom/chat', 'custom/vision']);
 });
 it('does not duplicate a model configured for both roles', () => {
 	expect(
-		configuredAgentModels([], { chatModelId: 'custom/shared', visionModelId: 'custom/shared' }).map(
-			(model) => model.id
-		)
+		modelChoices
+			.configuredAgentModels([], { chatModelId: 'custom/shared', visionModelId: 'custom/shared' })
+			.map((model) => model.id)
 	).toEqual(['custom/shared']);
 });
 
 it('retains declared vision support when bootstrap adds a model configured for both roles', () => {
 	expect(
-		configuredChatModels([], { chatModelId: 'custom/shared', visionModelId: 'custom/shared' })
+		modelChoices.configuredChatModels([], {
+			chatModelId: 'custom/shared',
+			visionModelId: 'custom/shared'
+		})
 	).toEqual([
 		{
 			id: 'custom/shared',
@@ -76,14 +82,16 @@ it('retains declared vision support when bootstrap adds a model configured for b
 
 it('uses the attachment override independently of chat and conversation models', () => {
 	expect(
-		resolveAttachmentVisionModel(
+		modelSelection.resolveAttachmentVisionModel(
 			{ attachmentVisionModel: 'vision:attachment' },
 			'vision/environment'
 		)
 	).toBe('vision/attachment');
 });
 it('uses the deployment attachment model when no attachment override exists', () => {
-	expect(resolveAttachmentVisionModel({}, 'vision/environment')).toBe('vision/environment');
+	expect(modelSelection.resolveAttachmentVisionModel({}, 'vision/environment')).toBe(
+		'vision/environment'
+	);
 });
 it('preserves provider metadata when a configured model is already in the catalog', () => {
 	const model = {
@@ -96,6 +104,6 @@ it('preserves provider metadata when a configured model is already in the catalo
 		capabilities: ['tools', 'vision']
 	};
 	expect(
-		configuredAgentModels([model], { chatModelId: model.id, visionModelId: model.id })
+		modelChoices.configuredAgentModels([model], { chatModelId: model.id, visionModelId: model.id })
 	).toEqual([model]);
 });

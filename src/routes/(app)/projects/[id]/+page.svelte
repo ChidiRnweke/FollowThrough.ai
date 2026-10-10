@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { NameDialog, ProjectOverview } from '$lib/components/projects';
 	import { Button } from '$lib/components/ui/button';
@@ -47,7 +47,7 @@
 	);
 	let newNoteOpen = $state(false);
 	let newFolderOpen = $state(false);
-	let renameDraft = $state<WorkspaceDraft<'projects'> | null>(null);
+	let renameDraft = $state<WorkspaceDraftController<'projects'> | null>(null);
 	let exportDefaultsOpen = $state(false);
 	let importOpen = $state(false);
 	let exportOpen = $state(false);

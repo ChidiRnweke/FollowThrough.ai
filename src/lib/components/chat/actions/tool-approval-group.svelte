@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { isNoteBodyTool } from './tool-approval-preview';
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import type { AgentPreferenceValues } from '$lib/models/agent';
 

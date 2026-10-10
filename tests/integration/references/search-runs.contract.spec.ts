@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
@@ -87,6 +88,7 @@ const setup = async (suffix: string) => {
 	};
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentModelRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,

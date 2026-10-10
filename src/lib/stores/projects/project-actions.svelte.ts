@@ -1,4 +1,4 @@
-import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+import { workspaceSession } from '$lib/factories/workspace/session';
 import { isHttpError } from '@sveltejs/kit';
 import type {
 	ArchiveNoteOutput,
@@ -29,7 +29,7 @@ import type { PreparedWorkspaceCommand } from '$lib/models/workspace-mutations';
 
 import type { WorkspaceValues } from '$lib/models/workspace-records';
 
-import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
 
 class ProjectActionsStore {
 	busy = $state(false);
@@ -109,14 +109,14 @@ class ProjectActionsStore {
 			return { project: record.value };
 		});
 
-	editor<K extends 'notes' | 'projects'>(type: K, id: string): WorkspaceDraft<K> {
+	editor<K extends 'notes' | 'projects'>(type: K, id: string): WorkspaceDraftController<K> {
 		const session = workspaceSession.current;
 		if (!session) throw new Error('Open the workspace before editing');
 		const draft = session.resources.draft({ type, id: [id] });
 		draft.capture();
 		return draft;
 	}
-	renameProject = (draft: WorkspaceDraft<'projects'>, name: string) =>
+	renameProject = (draft: WorkspaceDraftController<'projects'>, name: string) =>
 		this.run<RenameProjectOutput>(async () => {
 			const project = draft.value;
 			if (!project) throw new Error('The project is unavailable');
@@ -159,7 +159,7 @@ class ProjectActionsStore {
 		}));
 	createSkill = (name: string, projectId: ProjectId, parentId?: NoteId) =>
 		this.serverAction<CreateSkillOutput<Note>>(() => createSkill({ name, projectId, parentId }));
-	renameNote = (draft: WorkspaceDraft<'notes'>, title: string) =>
+	renameNote = (draft: WorkspaceDraftController<'notes'>, title: string) =>
 		this.run<RenameNoteOutput>(async () => {
 			const note = draft.value;
 			if (!note) throw new Error('The note is unavailable');

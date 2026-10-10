@@ -68,6 +68,119 @@ const dataExpression = (expression: ts.Expression): boolean => {
 				dataExpression(property.initializer))
 	);
 };
+/** Scalar constructors may validate and spell a branded value, but cannot consult collaborators. */
+const valueConstructor = (
+	callable: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression
+): boolean => {
+	if (!callable.type || !ts.isTypeReferenceNode(callable.type) || !callable.body) return false;
+	const name = callable.type.typeName.getText();
+	const declaration = callable
+		.getSourceFile()
+		.statements.find(
+			(statement): statement is ts.TypeAliasDeclaration =>
+				ts.isTypeAliasDeclaration(statement) && statement.name.text === name
+		);
+	if (!declaration || !ts.isIntersectionTypeNode(declaration.type)) return false;
+	const scalar = declaration.type.types.find((type) =>
+		[
+			ts.SyntaxKind.StringKeyword,
+			ts.SyntaxKind.NumberKeyword,
+			ts.SyntaxKind.BigIntKeyword
+		].includes(type.kind)
+	);
+	const brand = declaration.type.types.find(
+		(type) =>
+			ts.isTypeLiteralNode(type) &&
+			type.members.length === 1 &&
+			type.members.every(
+				(member) =>
+					ts.isPropertySignature(member) &&
+					member.name.getText() === '__brand' &&
+					member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword) &&
+					member.type &&
+					ts.isLiteralTypeNode(member.type) &&
+					ts.isStringLiteral(member.type.literal)
+			)
+	);
+	if (!scalar || !brand || declaration.type.types.length !== 2) return false;
+	const locals = new Set<string>();
+	for (const parameter of callable.parameters) {
+		if (
+			!ts.isIdentifier(parameter.name) ||
+			!parameter.type ||
+			![
+				ts.SyntaxKind.StringKeyword,
+				ts.SyntaxKind.NumberKeyword,
+				ts.SyntaxKind.BigIntKeyword
+			].includes(parameter.type.kind)
+		)
+			return false;
+		locals.add(parameter.name.text);
+	}
+	const expression = (input: ts.Expression): boolean => {
+		const value = unwrap(input);
+		if (ts.isIdentifier(value)) return locals.has(value.text);
+		if (ts.isLiteralExpression(value)) return true;
+		if (ts.isAsExpression(value))
+			return value.type.getText() === name && expression(value.expression);
+		if (ts.isTemplateExpression(value))
+			return value.templateSpans.every((span) => expression(span.expression));
+		if (ts.isBinaryExpression(value))
+			return (
+				!(
+					value.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+					value.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+				) &&
+				expression(value.left) &&
+				expression(value.right)
+			);
+		if (ts.isCallExpression(value) && ts.isPropertyAccessExpression(value.expression)) {
+			const receiver = value.expression.expression;
+			return (
+				ts.isIdentifier(receiver) &&
+				locals.has(receiver.text) &&
+				['indexOf', 'includes', 'slice', 'trim', 'toLowerCase', 'toUpperCase', 'toString'].includes(
+					value.expression.name.text
+				) &&
+				value.arguments.every(expression)
+			);
+		}
+		return false;
+	};
+	if (
+		callable.parameters.some(
+			(parameter) => parameter.initializer && !expression(parameter.initializer)
+		)
+	)
+		return false;
+	const statement = (node: ts.Statement): boolean => {
+		if (ts.isBlock(node)) return node.statements.every(statement);
+		if (ts.isReturnStatement(node)) return !!node.expression && expression(node.expression);
+		if (ts.isIfStatement(node))
+			return (
+				expression(node.expression) &&
+				statement(node.thenStatement) &&
+				(!node.elseStatement || statement(node.elseStatement))
+			);
+		if (ts.isThrowStatement(node))
+			return (
+				ts.isNewExpression(node.expression) &&
+				ts.isIdentifier(node.expression.expression) &&
+				node.expression.expression.text === 'Error' &&
+				!!node.expression.arguments?.every(expression)
+			);
+		if (ts.isVariableStatement(node) && (node.declarationList.flags & ts.NodeFlags.Const) !== 0) {
+			return node.declarationList.declarations.every((local) => {
+				if (!ts.isIdentifier(local.name) || !local.initializer || !expression(local.initializer))
+					return false;
+				locals.add(local.name.text);
+				return true;
+			});
+		}
+		return false;
+	};
+	return ts.isBlock(callable.body) ? statement(callable.body) : expression(callable.body);
+};
 const modelProcedure = (node: ts.Node): boolean => {
 	let callable: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression;
 	if (ts.isFunctionDeclaration(node) && ts.isSourceFile(node.parent)) callable = node;
@@ -81,6 +194,7 @@ const modelProcedure = (node: ts.Node): boolean => {
 	)
 		callable = node.initializer;
 	else return false;
+	if (valueConstructor(callable)) return false;
 	const body = callable.body;
 	if (!body) return false;
 	let expression: ts.Expression | undefined;

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { prepareWorkspaceCommand } from './commands';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import {
 	noteBuilder,
@@ -41,7 +41,7 @@ it.each([
 				}
 			]
 		]);
-		expect(new WorkspaceViews(records).note(note.id)?.view.sectionNumbering.effective).toBe(
+		expect(createWorkspaceViews(records).note(note.id)?.view.sectionNumbering.effective).toBe(
 			expected
 		);
 	}

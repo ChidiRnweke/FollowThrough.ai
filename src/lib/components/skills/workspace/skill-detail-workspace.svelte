@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
+	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { noteCommand } from '$lib/services/workspace/commands';
 	import { Input } from '$lib/components/ui/input';
 	import { onMount, untrack } from 'svelte';
@@ -9,7 +9,7 @@
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import SkillEditor from '../skill-editor.svelte';
 	import { NoteConflictDialog, NoteSyncStatus, NoteTitleInlineInput } from '$lib/components/notes';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import {
 		FtDownload as Download,
 		FtEdit as Pencil,
@@ -46,7 +46,7 @@
 	let describeRef: SkillEditor | undefined = $state();
 	let bodyRef: SkillEditor | undefined = $state();
 	let editorEpoch = $state(0);
-	const editorSession = untrack(() => new EditorSession(() => draft.active));
+	const editorSession = untrack(() => createEditorSession(() => draft.active));
 	const dirty = $derived(editorSession.dirty);
 	const saveFailed = $derived(editorSession.failure !== null);
 	let conflictOpen = $state(draft.status === 'conflict');

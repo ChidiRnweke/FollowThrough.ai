@@ -32,7 +32,7 @@
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import { goto } from '$app/navigation';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	export interface ArtifactLibraryData {

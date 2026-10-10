@@ -1,6 +1,6 @@
 import { OutboxEditingService } from '$lib/services/sync/state';
 import { describe, expect, it } from 'vitest';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { type OutboxEntry } from '$lib/models/outbox';
 const editing = new OutboxEditingService();
 

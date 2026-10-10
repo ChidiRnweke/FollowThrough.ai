@@ -3,7 +3,7 @@ import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import type { UpdateTodoInput } from '$lib/models/todos';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { testNow, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
@@ -15,7 +15,7 @@ import { InMemoryTodoWrites } from '$lib/testing/sync/fakes/in-memory-todo-write
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
 import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
-import { WorkspaceResources } from './resources.svelte';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 
 const setup = async () => {
 	const todo = todoBuilder();
@@ -38,14 +38,14 @@ const setup = async () => {
 		writerLock: new InMemoryAccountWriterLock(),
 		pull: () => cache.refresh()
 	});
-	const resources = new WorkspaceResources(todo.userId, {
+	const resources = assembleWorkspaceResources(todo.userId, {
 		repository: outbox,
 		cache,
 		writes,
 		execution
 	});
-	outbox.observe(todo.userId, (state) => resources.applyLocal(state));
 	await cache.accept(key, snapshot);
+	await resources.initialize();
 	/** Each quick action opens its own editor, as the todo list and menus do. */
 	const edit = async (patch: Omit<UpdateTodoInput, 'todoId'>) => {
 		const draft = resources.draft({ type: 'todos', id: [todo.id] });

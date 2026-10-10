@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
+	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { onMount, untrack } from 'svelte';
 	import { diagramEtag } from '$lib/services/diagrams/editing';
 	import { accessMessage } from '$lib/services/sync/state';
@@ -12,8 +12,8 @@
 	import type { DiagramMutationRequest } from '$lib/models/workspace-mutations';
 	import { workspaceResourceKey } from '$lib/services/workspace/commands';
 
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { FtClose as X } from '$lib/components/icons';
@@ -38,11 +38,11 @@
 	const resources = session.resources;
 	const draft = untrack(() => resources.draft({ type: 'diagrams', id: [diagramId] }));
 	void draft.open();
-	const editorSession = new EditorSession(() => resources.active);
+	const editorSession = createEditorSession(() => resources.active);
 	let control = $state<DrawioControl>();
 	let editor = $state<DrawioStatus>({ phase: 'loading', modified: false });
 	let renaming = $state(false);
-	let renameDraft = $state<WorkspaceDraft<'diagrams'> | null>(null);
+	let renameDraft = $state<WorkspaceDraftController<'diagrams'> | null>(null);
 	let restoring = $state(false);
 	let historyOpen = $state(false);
 	let conflictOpen = $state(false);

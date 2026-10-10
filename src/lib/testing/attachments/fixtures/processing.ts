@@ -1,3 +1,4 @@
+import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { AttachmentLibrary } from '$lib/server/services/attachments/library';
 import { AttachmentContent } from '$lib/server/services/attachments/content';
@@ -30,6 +31,7 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 	const storage = new InMemoryStorage();
 	const service = new AttachmentLibrary(repository, notes, storage);
 	const worker = new AttachmentProcessing({
+		modelSelection: new AgentModelSelectionService(),
 		records: repository,
 		claims,
 		storage,

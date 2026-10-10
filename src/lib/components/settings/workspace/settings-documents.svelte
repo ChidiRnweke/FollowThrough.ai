@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
+	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { onMount } from 'svelte';
-	import { openPreferenceDraft } from '$lib/stores/workspace/account-preferences';
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
 	import { Form } from '$lib/components/ui/form';
 	import { Button } from '$lib/components/ui/button';
 	import * as Field from '$lib/components/ui/field';
@@ -14,14 +14,15 @@
 	// The switch already shows what was chosen, so without a toast a save reads as dead.
 	let form = $state<
 		| { kind: 'loading' }
-		| { kind: 'ready'; draft: WorkspaceDraft<'user_preferences'> }
+		| { kind: 'ready'; draft: WorkspaceDraftController<'user_preferences'> }
 		| { kind: 'failure'; message: string }
 	>({ kind: 'loading' });
-	const editorSession = new EditorSession(() => form.kind === 'ready' && form.draft.active);
+	const editorSession = createEditorSession(() => form.kind === 'ready' && form.draft.active);
 	const busy = $derived(editorSession.saving);
 	onMount(() => {
 		let cancelled = false;
-		void openPreferenceDraft('user_preferences')
+		void workspaceSession
+			.openPreferences('user_preferences')
 			.then(({ draft, value }) => {
 				if (cancelled) return;
 				sectionNumberingDefault = value.sectionNumberingDefault ?? false;

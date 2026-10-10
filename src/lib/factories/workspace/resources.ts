@@ -1,0 +1,81 @@
+import type { WorkspaceResourceType, WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import type { WorkspaceEditorCoordinator } from '$lib/controllers/workspace/resources.svelte';
+import {
+	WorkspaceResources,
+	WorkspaceDraft,
+	ResourceView,
+	type WorkspaceResourcesController,
+	type WorkspaceResourcesDependencies
+} from '$lib/controllers/workspace/resources.svelte';
+import { WorkspaceResourceStore } from '$lib/stores/workspace/resources.svelte';
+import { WorkspaceDraftStore, ResourceObservationStore } from '$lib/stores/workspace/draft.svelte';
+import { WorkspaceProjectionStore } from '$lib/stores/workspace/projection.svelte';
+import { WorkspaceViews } from '$lib/controllers/workspace/views';
+import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
+import { createDurableOutbox } from '$lib/factories/sync/durable-outbox';
+import { DexieWorkspaceRepository } from '$lib/client/sync/workspace-local-repository';
+import { browserSyncScheduler } from '$lib/client/sync/scheduler';
+import { workspaceRecordSchema } from '$lib/models/workspace-records';
+import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
+import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
+import { browserWriterLock } from '$lib/client/sync/browser-writer-lock';
+import {
+	workspaceReadTransport,
+	workspaceWriteTransport
+} from '$lib/client/sync/workspace-transport';
+export const assembleWorkspaceResources = (
+	accountId: string,
+	dependencies: WorkspaceResourcesDependencies
+): WorkspaceResourcesController => {
+	const projection = new WorkspaceProjectionStore(new Map());
+	return new WorkspaceResources(
+		accountId,
+		dependencies,
+		new WorkspaceResourceStore(),
+		projection,
+		new WorkspaceViews(projection),
+		{
+			view: <K extends WorkspaceResourceType>(
+				resources: WorkspaceResourcesController,
+				identity: WorkspaceResourceIdentity & { type: K }
+			) => new ResourceView<K>(resources, identity, new ResourceObservationStore()),
+			draft: <K extends WorkspaceResourceType>(
+				resources: WorkspaceEditorCoordinator,
+				identity: WorkspaceResourceIdentity & { type: K }
+			) => new WorkspaceDraft<K>(resources, identity, new WorkspaceDraftStore())
+		}
+	);
+};
+export const createWorkspaceResources = (accountId: string): WorkspaceResourcesController => {
+	const repository = new DexieWorkspaceRepository(
+		accountId,
+		workspaceCommandSchema,
+		workspaceRecordSchema
+	);
+	const repositoryWrites = createDurableOutbox(repository, rebaseWorkspaceRecord);
+	const cachePersistence = createCachePersistence(repository.cache);
+	const cache = createResourceCache(accountId, {
+		repository: {
+			load: async (account) => (await repository.read(account)).cache,
+			commit: (account, changes) => cachePersistence.commit(account, changes)
+		},
+		transport: workspaceReadTransport(accountId)
+	});
+	const { writes, execution } = createMutationQueue(accountId, {
+		repository: repositoryWrites,
+		transport: workspaceWriteTransport(accountId),
+		scheduler: browserSyncScheduler,
+		writerLock: browserWriterLock,
+		pull: () => cache.refresh()
+	});
+	return assembleWorkspaceResources(accountId, {
+		repository,
+		cache,
+		writes,
+		execution,
+
+		dispose: () => repository.database.stop()
+	});
+};

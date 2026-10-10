@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import { Workspace, type WorkspaceDependencies } from './controller';
-import { WorkspaceViews } from '$lib/controllers/workspace/views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import { SkillLibrary } from '$lib/server/services/skills/library';
@@ -63,7 +63,7 @@ it('shows the same profile and visible-project memory attention from server and 
 			value: resourceDataSchemas.suggestions.parse(suggestion)
 		}))
 	] satisfies WorkspaceRecord[];
-	const browser = new WorkspaceViews(
+	const browser = createWorkspaceViews(
 		new Map(records.map((record) => [JSON.stringify([record.type, record.value.id]), record]))
 	);
 	// The SQL suggestion read excludes the archived project; the cache retains its raw row.

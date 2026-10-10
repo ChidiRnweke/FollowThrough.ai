@@ -6,7 +6,7 @@
 	} from '$lib/models/projects';
 	import { readArchiveImportResponse } from '$lib/client/notes/import-response';
 	import type { NoteId } from '$lib/models/notes';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import FileDropzone from '../attachments/file-dropzone.svelte';

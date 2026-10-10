@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { ExportSettings } from '$lib/models/deliverables';
 	import { defaultExportSettings } from '$lib/models/deliverables';
 	import { toast } from 'svelte-sonner';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import ExportSettingsFields from './export-settings-fields.svelte';
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
 	import type { DateTime } from '$lib/models/workspace';
 	import type { ProjectId } from '$lib/models/projects';
 
@@ -20,7 +20,7 @@
 
 	let settings = $state<ExportSettings>({ ...defaultExportSettings });
 	let busy = $state(false);
-	let loaded = $state<WorkspaceDraft<'export_settings'> | null>(null);
+	let loaded = $state<WorkspaceDraftController<'export_settings'> | null>(null);
 
 	$effect(() => {
 		loaded = null;
@@ -46,7 +46,7 @@
 		};
 	});
 
-	async function load(id: string): Promise<WorkspaceDraft<'export_settings'>> {
+	async function load(id: string): Promise<WorkspaceDraftController<'export_settings'>> {
 		const session = await workspaceSession.start();
 		const draft = session.resources.draft({
 			type: 'export_settings',

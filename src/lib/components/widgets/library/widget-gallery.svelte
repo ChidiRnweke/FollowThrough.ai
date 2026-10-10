@@ -22,7 +22,7 @@
 	} from '$lib/components/icons';
 	import { formatDateTime } from '$lib/components/shared/labels';
 	import { widgetReferencesIn } from '$lib/services/notes/references';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { widgetTab } from '$lib/stores/workbench/tab-ref';
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';

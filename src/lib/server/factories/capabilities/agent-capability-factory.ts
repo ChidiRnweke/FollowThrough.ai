@@ -1,4 +1,10 @@
 import {
+	AgentModelSelectionService,
+	AgentModelChoiceService,
+	type IAgentModelSelectionService,
+	type IAgentModelChoiceService
+} from '$lib/services/agent/model-selection';
+import {
 	createMcpToolSurface,
 	type McpSurfaceFactory
 } from '$lib/server/factories/agent/mcp-tool-factory';
@@ -17,7 +23,7 @@ import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { OpenRouter } from '@openrouter/sdk';
 import { CHAT_WEB_SEARCH_DEFAULTS, type WebResearchSettings } from '$lib/models/agent';
-import { normalizeLanguageModelId } from '$lib/services/agent/model-selection';
+import { normalizeLanguageModelId } from '$lib/models/agent';
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
 import { resolveWebResearch } from '$lib/services/agent/web-research';
 import type { Database } from '$lib/server/db';
@@ -77,6 +83,8 @@ export interface AgentCapability {
 	readonly conversations: ConversationArchive;
 	readonly preferences: AgentPreferenceEditor;
 	readonly models: AgentModelCatalog;
+	readonly modelSelection: IAgentModelSelectionService;
+	readonly modelChoices: IAgentModelChoiceService;
 	readonly toolPreferences: ToolAccess;
 	readonly trust: ToolTrust;
 	readonly runs: AgentRunRecords;
@@ -157,6 +165,8 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		conversations,
 		preferences,
 		models,
+		modelSelection: new AgentModelSelectionService(),
+		modelChoices: new AgentModelChoiceService(),
 		toolPreferences: new ToolAccess(new ToolPreferenceRecords(input.db), agentToolCatalog),
 		trust: new ToolTrust(new TrustPolicyRecords(input.db)),
 		runs,

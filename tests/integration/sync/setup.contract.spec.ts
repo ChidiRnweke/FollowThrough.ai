@@ -1,4 +1,4 @@
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { WorkspaceSyncReceipts } from '$lib/server/repositories/workspace/sync-receipts';
 import { expect, it } from 'vitest';

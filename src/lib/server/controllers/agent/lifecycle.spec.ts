@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
@@ -117,6 +118,7 @@ const setup = <T extends AgentRunner>(
 	const transactions = new InMemoryTransactionRunner([runs, sessions]);
 	const lifecycle = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentModelRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),

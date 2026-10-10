@@ -1,3 +1,7 @@
+import type {
+	IAgentModelSelectionService,
+	IAgentModelChoiceService
+} from '$lib/services/agent/model-selection';
 import { resolveWebResearch } from '$lib/services/agent/web-research';
 import {
 	prepareRunImages,
@@ -50,14 +54,7 @@ import type {
 } from '$lib/server/services/agent/runs/preferences';
 import type { ConversationJournal } from '$lib/server/services/agent/runs/contracts';
 import { resolveAgentExecutionMode } from '$lib/server/services/agent/runs/preferences';
-import {
-	configuredAgentModels,
-	modelChoiceIssue,
-	resolveAgentModel,
-	resolveVisionModel,
-	resolveDefaultAgentModel,
-	resolveDefaultVisionModel
-} from '$lib/services/agent/model-selection';
+
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 import { rewindToUserItem } from '$lib/server/services/agent/conversations/rewind';
 import { activeTraceparent } from '$lib/server/services/telemetry';
@@ -220,6 +217,8 @@ export interface AgentController {
  * controller can be built and tested with repository and provider fakes.
  */
 export interface AgentDependencies {
+	readonly modelSelection: IAgentModelSelectionService;
+	readonly modelChoices: IAgentModelChoiceService;
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
 	syncRetry: 'database-only' | 'never';
 	/** Persists conversations and their message history. */
@@ -340,11 +339,20 @@ export class Agent implements AgentController {
 		const existing = await this.dependencies.runs.findByRequestId(actor, input.requestId);
 		if (existing) return this.receipt(actor, existing);
 		if (input.model) {
-			const models = configuredAgentModels(await this.dependencies.models.list(), {
-				chatModelId: resolveDefaultAgentModel({}, this.dependencies.defaultModel),
-				visionModelId: resolveDefaultVisionModel({}, this.dependencies.defaultVisionModel)
-			});
-			const issue = modelChoiceIssue(models, input.model, 'chat');
+			const models = this.dependencies.modelChoices.configuredAgentModels(
+				await this.dependencies.models.list(),
+				{
+					chatModelId: this.dependencies.modelSelection.resolveDefaultAgentModel(
+						{},
+						this.dependencies.defaultModel
+					),
+					visionModelId: this.dependencies.modelSelection.resolveDefaultVisionModel(
+						{},
+						this.dependencies.defaultVisionModel
+					)
+				}
+			);
+			const issue = this.dependencies.modelChoices.modelChoiceIssue(models, input.model, 'chat');
 			if (issue) throw new ValidationError(issue);
 		}
 		try {
@@ -361,7 +369,11 @@ export class Agent implements AgentController {
 				);
 				if (input.retryUserOrdinal !== undefined)
 					await this.rewind(actor, conversation.id, input.retryUserOrdinal);
-				const model = resolveAgentModel(conversation, preferences, this.dependencies.defaultModel);
+				const model = this.dependencies.modelSelection.resolveAgentModel(
+					conversation,
+					preferences,
+					this.dependencies.defaultModel
+				);
 				// Settled only now, because it depends on the chat model, which is not
 				// known until the conversation has been resolved.
 				const finalInput = await this.withImageReader(
@@ -741,15 +753,28 @@ export class Agent implements AgentController {
 		// Context images need a model that can see just as much as attachments do;
 		// ignoring them here would silently drop the render on a text-only model.
 		if (prepareRunImages(runInput).kind === 'none') return runInput;
-		const models = configuredAgentModels(await this.dependencies.models.list(), {
-			chatModelId: resolveDefaultAgentModel({}, this.dependencies.defaultModel),
-			visionModelId: resolveDefaultVisionModel({}, this.dependencies.defaultVisionModel)
-		});
+		const models = this.dependencies.modelChoices.configuredAgentModels(
+			await this.dependencies.models.list(),
+			{
+				chatModelId: this.dependencies.modelSelection.resolveDefaultAgentModel(
+					{},
+					this.dependencies.defaultModel
+				),
+				visionModelId: this.dependencies.modelSelection.resolveDefaultVisionModel(
+					{},
+					this.dependencies.defaultVisionModel
+				)
+			}
+		);
 		return freezeImageReader(
 			runInput,
 			models,
 			chatModel,
-			resolveVisionModel(conversation, preferences, this.dependencies.defaultVisionModel)
+			this.dependencies.modelSelection.resolveVisionModel(
+				conversation,
+				preferences,
+				this.dependencies.defaultVisionModel
+			)
 		);
 	}
 

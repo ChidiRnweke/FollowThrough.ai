@@ -1,3 +1,7 @@
+import type { ShellContext, TodayView, NoteView } from '$lib/models/workspace-views';
+import type { Project } from '$lib/models/projects';
+import type { Note } from '$lib/models/notes';
+import type { WorkspaceViewState } from '$lib/models/workspace-views';
 import {
 	pendingMemorySuggestions,
 	newestMemoryViews
@@ -43,15 +47,64 @@ import { assembleToday } from '$lib/services/workspace/today';
 import { pendingMemoryNotifications } from '$lib/services/memory/attention';
 
 /** Coordinates feature views from the normalized records, including local write overlays. */
-export class WorkspaceViews {
-	private readonly byType = new Map<WorkspaceRecord['type'], WorkspaceRecord[]>();
-	constructor(private readonly records: ReadonlyMap<string, WorkspaceRecord>) {
-		for (const record of records.values()) {
-			const bucket = this.byType.get(record.type);
-			if (bucket) bucket.push(record);
-			else this.byType.set(record.type, [record]);
-		}
+export interface WorkspaceViewsController {
+	all<K extends WorkspaceRecord['type']>(type: K): WorkspaceValues[K][];
+	get<K extends WorkspaceRecord['type']>(
+		type: K,
+		...id: [string, ...string[]]
+	): WorkspaceValues[K] | undefined;
+	readonly projects: readonly Project[];
+	readonly notes: readonly Note[];
+	conversations(query?: string): readonly Conversation[];
+	conversation(id: ConversationId): Conversation | null;
+	messages(id: ConversationId): readonly StoredMessage[];
+	latestRun(id: ConversationId): WorkspaceValues['agent_runs'] | null;
+	skill(noteId: NoteId): WorkspaceSkill | null;
+	skills(projectId?: ProjectId): readonly SkillSummary[];
+	shell(userId: string): ShellContext | null;
+	memories(projectId?: ProjectId): readonly MemoryEntry[];
+	memorySuggestions(projectId?: ProjectId): readonly MemorySuggestionView[];
+	attachments(owner: { kind: 'project' | 'note'; id: string }): readonly AttachmentView[];
+	mentionableResources(
+		query: string,
+		projectId?: ProjectId
+	): {
+		readonly widgets: readonly Widget[];
+		readonly diagrams: readonly Diagram[];
+		readonly attachments: readonly AttachmentView[];
+	};
+	trashedNotes(projectId?: ProjectId): readonly TrashedNote[];
+	trashedDiagrams(projectId?: ProjectId): readonly Diagram[];
+	widget(widgetId: string): Widget | null;
+	widgets(projectId: ProjectId, query?: string): readonly Widget[];
+	trashedWidgets(projectId?: ProjectId): readonly Widget[];
+	diagram(diagramId: string): Diagram | null;
+	diagrams(projectId: ProjectId, query?: string): readonly Diagram[];
+	artifacts(projectId: ProjectId, query?: string): readonly ArtifactView[];
+	capabilityCounts(
+		projectId?: ProjectId
+	): Record<'memory' | 'notes' | 'todos' | 'attachments', number>;
+	agentPreferences(userId: UserId): AgentPreferenceValues;
+	toolPreferences(userId: string, projectId?: ProjectId): readonly ToolPreference[];
+	project(projectId: ProjectId): ProjectView | null;
+	note(
+		noteId: NoteId
+	): { readonly view: NoteView; readonly missing: readonly WorkspaceResourceIdentity[] } | null;
+	todo(todo: Todo): TodoView | null;
+	todos(filter?: TodoListFilter): readonly TodoView[];
+	readonly categories: readonly string[];
+	today(today: LocalDate): TodayView;
+}
+
+export class WorkspaceViews implements WorkspaceViewsController {
+	constructor(private readonly state: WorkspaceViewState) {}
+	private get records() {
+		return this.state.records;
 	}
+	private get byType() {
+		return this.state.byType;
+	}
+
 	all<K extends WorkspaceRecord['type']>(type: K): WorkspaceValues[K][] {
 		return (this.byType.get(type) ?? [])
 			.filter((record): record is WorkspaceRecordOf<K> => record.type === type)
@@ -65,12 +118,12 @@ export class WorkspaceViews {
 		if (!record || !isWorkspaceRecord(record, type)) return undefined;
 		return record.value;
 	}
-	get projects() {
+	get projects(): readonly Project[] {
 		return this.all('projects')
 			.filter((project) => !project.archivedAt)
 			.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 	}
-	get notes() {
+	get notes(): readonly Note[] {
 		const projects = new Set(this.projects.map((project) => project.id));
 		return this.all('notes')
 			.filter((note) => !note.archivedAt && projects.has(note.projectId))
@@ -136,7 +189,7 @@ export class WorkspaceViews {
 			];
 		});
 	}
-	shell(userId: string) {
+	shell(userId: string): ShellContext | null {
 		const user = this.get('users', userId);
 		if (!user) return null;
 		const projects = this.projects;
@@ -423,7 +476,9 @@ export class WorkspaceViews {
 			.sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt));
 		return { project, tree: assembleProjectTree(entries) };
 	}
-	note(noteId: NoteId) {
+	note(
+		noteId: NoteId
+	): { readonly view: NoteView; readonly missing: readonly WorkspaceResourceIdentity[] } | null {
 		const note = this.get('notes', noteId);
 		if (!note) return null;
 		const missing: WorkspaceResourceIdentity[] = [];
@@ -548,7 +603,7 @@ export class WorkspaceViews {
 			...new Set(this.todos().flatMap(({ todo }) => (todo.category ? [todo.category] : [])))
 		].sort();
 	}
-	today(today: LocalDate) {
+	today(today: LocalDate): TodayView {
 		const due = this.todos({ dueBefore: today, responsibility: 'mine' });
 		const notes = this.notes.filter((note) => note.kind !== 'skill');
 		return assembleToday({

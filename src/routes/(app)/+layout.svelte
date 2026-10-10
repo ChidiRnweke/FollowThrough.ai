@@ -2,7 +2,7 @@
 	import { WorkspaceStartup, WorkspaceRouteOutlet } from '$lib/components/shell';
 	import type { RouteReadiness } from '$lib/client/sync/route-access';
 	import type { NoteId } from '$lib/models/notes';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { afterNavigate } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { onMount, untrack } from 'svelte';

@@ -1,3 +1,4 @@
+import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
 import type { DateTime } from '$lib/models/workspace';
@@ -43,6 +44,7 @@ const setup = () => {
 		models,
 		controller: new AgentSettings(
 			capabilityDependencies<AgentSettingsDependencies>({
+				...agentModelRulesFixture(),
 				preferences,
 				webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
 				agentAvailable: true,

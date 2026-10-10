@@ -8,16 +8,16 @@ import {
 } from '$lib/models/notes';
 import { buildNoteSearchPattern, searchNoteTargets } from '$lib/services/notes/text-search';
 import type { ProjectId } from '$lib/models/projects';
-import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+import { workspaceSession } from '$lib/factories/workspace/session';
 import { replaceNoteDrafts } from '$lib/controllers/notes/replace';
-import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources.svelte';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
 /** Search UI state shared by the panel and canvas. Results project the shared device records. */
 export class GlobalSearchStore {
 	constructor(
-		private readonly currentWorkspace: () => WorkspaceResources | undefined = () =>
+		private readonly currentWorkspace: () => WorkspaceResourcesController | undefined = () =>
 			workspaceSession.current?.resources
 	) {}
 	query = $state('');

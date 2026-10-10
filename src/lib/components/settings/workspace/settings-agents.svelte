@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
+	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { onMount } from 'svelte';
-	import { openPreferenceDraft } from '$lib/stores/workspace/account-preferences';
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
 
 	import { Form } from '$lib/components/ui/form';
 	import type { AgentExecutionMode, WebSearchEngine } from '$lib/models/agent';
@@ -29,14 +29,15 @@
 
 	let form = $state<
 		| { kind: 'loading' }
-		| { kind: 'ready'; draft: WorkspaceDraft<'agent_preferences'> }
+		| { kind: 'ready'; draft: WorkspaceDraftController<'agent_preferences'> }
 		| { kind: 'failure'; message: string }
 	>({ kind: 'loading' });
-	const editorSession = new EditorSession(() => form.kind === 'ready' && form.draft.active);
+	const editorSession = createEditorSession(() => form.kind === 'ready' && form.draft.active);
 	const busy = $derived(editorSession.saving);
 	onMount(() => {
 		let cancelled = false;
-		void openPreferenceDraft('agent_preferences')
+		void workspaceSession
+			.openPreferences('agent_preferences')
 			.then(({ draft, value }) => {
 				if (cancelled) return;
 				searchEngine = value.webSearchEngine ?? '';

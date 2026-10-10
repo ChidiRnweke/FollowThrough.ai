@@ -1,23 +1,12 @@
+import type { WorkspaceLocalRepository } from '$lib/controllers/workspace/resources.svelte';
+export type { WorkspaceLocalRepository } from '$lib/controllers/workspace/resources.svelte';
 import { liveQuery } from 'dexie';
 import type { z } from 'zod';
-import type { StoredCache } from './contracts';
-import type { OutboxProjection } from './outbox-contracts';
+import type { WorkspaceLocalProjection } from '$lib/models/workspace-local';
+export type { WorkspaceLocalProjection } from '$lib/models/workspace-local';
 import { WorkspaceDatabase } from './database';
 import { IndexedDbSyncCache } from './indexeddb-cache';
 import { IndexedDbOutbox } from './indexeddb-outbox';
-
-export interface WorkspaceLocalProjection<C, T> {
-	readonly cache: StoredCache<T>;
-	readonly writes: OutboxProjection<C, T>;
-}
-export interface WorkspaceLocalRepository<C, T> {
-	read(accountId: string): Promise<WorkspaceLocalProjection<C, T>>;
-	observe(
-		accountId: string,
-		changed: (projection: WorkspaceLocalProjection<C, T>) => void,
-		failed: (error: Error) => void
-	): () => void;
-}
 
 /** Dexie observes the actual readonly projection, including changes made by another tab. */
 export class DexieWorkspaceRepository<C, T>

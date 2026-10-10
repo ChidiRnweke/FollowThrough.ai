@@ -11,7 +11,7 @@ import {
 } from '$lib/models/workspace-sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { initialSyncCursor } from '$lib/models/sync';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import {
 	InMemorySyncCache,
 	InMemorySyncTransport,
@@ -23,7 +23,11 @@ import {
 } from '$lib/testing/sync/fakes/in-memory-outbox';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
-import { WorkspaceResources, type ResourceView } from './resources.svelte';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
+import type {
+	WorkspaceResourcesController,
+	ResourceViewController
+} from '$lib/controllers/workspace/resources.svelte';
 
 const project = workspaceRecordSchema.parse({
 	type: 'projects',
@@ -41,11 +45,11 @@ const identity: WorkspaceResourceIdentity = {
 	id: ['a0000000-0000-4000-8000-000000000001']
 };
 const key = workspaceResourceKey(identity);
-const activeResources: WorkspaceResources[] = [];
+const activeResources: WorkspaceResourcesController[] = [];
 afterEach(() => {
 	for (const resources of activeResources.splice(0)) resources.stop();
 });
-const setup = (
+const setup = async (
 	writeTransport: OutboxTransport<WorkspaceCommand, typeof project> = {
 		send: async () => {
 			throw new Error('This test only reads local resources');
@@ -66,19 +70,17 @@ const setup = (
 		transport: writeTransport,
 		pull: () => cache.refresh()
 	});
-	const resources = new WorkspaceResources('alice', {
+	const resources = assembleWorkspaceResources('alice', {
 		repository: outbox,
 		cache,
 		writes,
 		execution
 	});
-	const stopObserving = outbox.observe('alice', (state) => resources.applyLocal(state));
 	activeResources.push(resources);
 	return {
 		outbox,
 		writes,
 		execution,
-		stopObserving,
 		repository,
 		transport,
 		cache,
@@ -88,10 +90,10 @@ const setup = (
 
 describe('shared workspace reads', () => {
 	it('opens a locally created resource without a server round trip', async () => {
-		const { resources } = setup();
+		const { resources, outbox } = await setup();
 		if (project.type !== 'projects') throw new Error('Expected the project fixture');
 		resources.setOnline(false);
-		await resources.append({
+		await outbox.append('alice', {
 			operationId: 'a0000000-0000-4000-8000-000000000003',
 			key,
 			command: { kind: 'createProject', id: project.value.id, name: project.value.name },
@@ -101,10 +103,12 @@ describe('shared workspace reads', () => {
 			coalesce: null,
 			references: []
 		});
+		await resources.initialize();
+		await outbox.read('alice');
 		expect(await resources.open(identity)).toEqual({ kind: 'ready', value: project });
 	});
 	it('opens a retained resource while its newer page is downloading', async () => {
-		const { resources, repository, transport, cache } = setup();
+		const { resources, repository, transport, cache } = await setup();
 		await repository.commit('alice', {
 			put: [
 				{
@@ -128,7 +132,7 @@ describe('shared workspace reads', () => {
 		expect(opened).toEqual({ kind: 'ready', value: project });
 	});
 	it('does not wait for a retained collection body that is already refreshing', async () => {
-		const { resources, repository, transport, cache } = setup();
+		const { resources, repository, transport, cache } = await setup();
 		await repository.commit('alice', {
 			put: [
 				{
@@ -153,7 +157,7 @@ describe('shared workspace reads', () => {
 		expect(listed).toEqual(project);
 	});
 	it('downloads all records included in a complete page', async () => {
-		const { resources, transport, cache } = setup();
+		const { resources, transport, cache } = await setup();
 		const user = workspaceRecordSchema.parse({
 			type: 'users',
 			value: {
@@ -179,7 +183,7 @@ describe('shared workspace reads', () => {
 	});
 
 	it('clears exposed records when the account stops', async () => {
-		const { resources, repository } = setup();
+		const { resources, repository } = await setup();
 		await repository.commit('alice', {
 			put: [
 				{
@@ -198,9 +202,9 @@ describe('shared workspace reads', () => {
 	});
 });
 
-describe('a surface observing one record', () => {
+describe('a surface observing one record', async () => {
 	const cached = async () => {
-		const context = setup();
+		const context = await setup();
 		await context.repository.commit('alice', {
 			put: [{ key, entry: { kind: 'present', snapshot: { etag: syncEtag(1n), value: project } } }],
 			remove: []
@@ -208,7 +212,7 @@ describe('a surface observing one record', () => {
 		await context.resources.initialize();
 		return context;
 	};
-	const observed = (view: ResourceView<WorkspaceResourceType>) =>
+	const observed = (view: ResourceViewController<WorkspaceResourceType>) =>
 		$effect.root(() => {
 			$effect(() => {
 				void view.state;
@@ -224,7 +228,7 @@ describe('a surface observing one record', () => {
 		expect(resources.view(identity).state).toEqual({ kind: 'ready', value: project.value });
 	});
 	it('downloads an uncached record once a surface observes it', async () => {
-		const { resources, transport } = setup();
+		const { resources, transport } = await setup();
 		transport.records.set(key, { etag: syncEtag(1n), value: project });
 		await resources.initialize();
 		const view = resources.view(identity);
@@ -234,13 +238,13 @@ describe('a surface observing one record', () => {
 		stop();
 	});
 	it('reports an uncached record as unavailable offline', async () => {
-		const { resources } = setup();
+		const { resources } = await setup();
 		await resources.initialize();
 		resources.setOnline(false);
 		expect(resources.view(identity).state).toEqual({ kind: 'unavailable' });
 	});
 	it('reports a record the server does not have as unavailable', async () => {
-		const { resources } = setup();
+		const { resources } = await setup();
 		await resources.initialize();
 		const view = resources.view(identity);
 		const stop = observed(view);
@@ -249,7 +253,7 @@ describe('a surface observing one record', () => {
 		stop();
 	});
 	it('reports a failed download', async () => {
-		const { resources, transport } = setup();
+		const { resources, transport } = await setup();
 		transport.readFailure = 'Server down';
 		await resources.initialize();
 		const view = resources.view(identity);
@@ -259,7 +263,7 @@ describe('a surface observing one record', () => {
 		stop();
 	});
 	it('recovers a failed download on retry', async () => {
-		const { resources, transport } = setup();
+		const { resources, transport } = await setup();
 		transport.readFailure = 'Server down';
 		transport.records.set(key, { etag: syncEtag(1n), value: project });
 		await resources.initialize();
@@ -270,7 +274,7 @@ describe('a surface observing one record', () => {
 		expect(view.state).toEqual({ kind: 'ready', value: project.value });
 	});
 	it('reports a server deletion', async () => {
-		const { resources, repository } = setup();
+		const { resources, repository } = await setup();
 		await repository.commit('alice', {
 			put: [{ key, entry: { kind: 'deleted', etag: syncEtag(2n) } }],
 			remove: []
@@ -282,18 +286,22 @@ describe('a surface observing one record', () => {
 
 describe('shared editor context', () => {
 	it('captures the original version before background refresh changes the cache', async () => {
-		const { resources, cache } = setup();
+		const { resources, cache } = await setup();
 		const original = { etag: syncEtag(1n), value: project };
 		await cache.accept(key, original);
-		const context = resources.editBase(identity);
+		const draft = resources.draft(identity);
+		await draft.read();
+		resources.setOnline(false);
 		await cache.accept(key, { etag: syncEtag(2n), value: project });
-		expect(context).toEqual({ base: original, basedOn: null, local: project });
+		if (project.type !== 'projects') throw new Error('Expected project');
+		await draft.stage({ kind: 'renameProject', projectId: project.value.id, name: 'Changed' });
+		expect(resources.pending[0].intent.base).toEqual(original);
 	});
 	it('captures pending local ancestry separately from the server base', async () => {
-		const { resources } = setup();
+		const { resources, outbox } = await setup();
 		resources.setOnline(false);
 		if (project.type !== 'projects') throw new Error('Expected project');
-		const id = await resources.append({
+		const id = await outbox.append('alice', {
 			operationId: crypto.randomUUID(),
 			key,
 			command: { kind: 'createProject', id: project.value.id, name: project.value.name },
@@ -303,12 +311,19 @@ describe('shared editor context', () => {
 			coalesce: null,
 			references: []
 		});
-		expect(resources.editBase(identity)).toEqual({ base: null, basedOn: id, local: project });
+		await resources.initialize();
+		await outbox.read('alice');
+		await resources.initialize();
+		await outbox.read('alice');
+		const draft = resources.draft(identity);
+		await draft.read();
+		await draft.stage({ kind: 'renameProject', projectId: project.value.id, name: 'Changed' });
+		expect(resources.pending.at(-1)?.intent).toMatchObject({ base: null, basedOn: id });
 	});
 	it('submits edits appended after the write phase while a background page is still downloading', async () => {
 		if (project.type !== 'projects') throw new Error('Expected project');
 		const saved = { ...project, value: { ...project.value, name: 'Edited' } };
-		const { resources, cache, transport } = setup({
+		const { resources, cache, transport } = await setup({
 			send: async (input) => {
 				const snapshot = { etag: syncEtag(3n), value: saved };
 				transport.records.set(key, snapshot);
@@ -319,20 +334,14 @@ describe('shared editor context', () => {
 			}
 		});
 		await cache.accept(key, { etag: syncEtag(1n), value: project });
+		await resources.initialize();
 		transport.records.set(key, { etag: syncEtag(2n), value: project });
 		const paused = transport.pause('changes');
 		const syncing = resources.synchronize();
 		await paused.started;
-		await resources.append({
-			operationId: crypto.randomUUID(),
-			key,
-			command: { kind: 'renameProject', projectId: project.value.id, name: 'Edited' },
-			base: { etag: syncEtag(1n), value: project },
-			basedOn: null,
-			local: saved,
-			coalesce: null,
-			references: []
-		});
+		const draft = resources.draft(identity);
+		await draft.read();
+		await draft.stage({ kind: 'renameProject', projectId: project.value.id, name: 'Edited' });
 		paused.release();
 		await syncing;
 		expect({ pending: resources.pending, value: resources.records.get(key) }).toEqual({
@@ -344,16 +353,16 @@ describe('shared editor context', () => {
 
 describe('optional workspace records', () => {
 	it('reports absence after an initial successful journal pull', async () => {
-		const { resources } = setup();
+		const { resources } = await setup();
 		expect(await resources.lookup(identity)).toEqual({ kind: 'absent' });
 	});
 	it('does not invent absence before this device has a journal', async () => {
-		const { resources } = setup();
+		const { resources } = await setup();
 		resources.setOnline(false);
 		expect(await resources.lookup(identity)).toEqual({ kind: 'unavailable' });
 	});
 	it('retains a journal failure instead of supplying defaults', async () => {
-		const { resources, transport } = setup();
+		const { resources, transport } = await setup();
 		transport.pullFailure = 'Connection interrupted';
 		expect(await resources.lookup(identity)).toEqual({
 			kind: 'failure',
@@ -361,13 +370,13 @@ describe('optional workspace records', () => {
 		});
 	});
 	it('uses known absence offline', async () => {
-		const { resources, repository } = setup();
+		const { resources, repository } = await setup();
 		await repository.commit('alice', { put: [], remove: [], cursor: initialSyncCursor });
 		resources.setOnline(false);
 		expect(await resources.lookup(identity)).toEqual({ kind: 'absent' });
 	});
 	it('keeps an unfinished inventory distinct from known absence', async () => {
-		const { resources, repository } = setup();
+		const { resources, repository } = await setup();
 		await repository.commit('alice', {
 			put: [],
 			inventoryComplete: false,
@@ -378,7 +387,7 @@ describe('optional workspace records', () => {
 		expect(await resources.lookup(identity)).toEqual({ kind: 'unavailable' });
 	});
 	it('keeps server deletion distinct from absence', async () => {
-		const { resources, repository } = setup();
+		const { resources, repository } = await setup();
 		await repository.commit('alice', {
 			put: [{ key, entry: { kind: 'deleted', etag: syncEtag(1n) } }],
 			remove: [],
@@ -389,22 +398,22 @@ describe('optional workspace records', () => {
 	});
 });
 
-describe('drafting optional resources', () => {
+describe('drafting optional resources', async () => {
 	it('uses initial values only after a completed journal proves absence', async () => {
-		const { resources, repository } = setup();
+		const { resources, repository } = await setup();
 		await repository.commit('alice', { put: [], remove: [], cursor: initialSyncCursor });
 		resources.setOnline(false);
 		const draft = resources.draft({ type: 'projects', id: identity.id });
 		expect(await draft.readOrCreate(project)).toEqual({ kind: 'ready', value: project.value });
 	});
 	it('does not turn an unknown offline inventory into a writable default', async () => {
-		const { resources } = setup();
+		const { resources } = await setup();
 		resources.setOnline(false);
 		const draft = resources.draft({ type: 'projects', id: identity.id });
 		expect(await draft.readOrCreate(project)).toEqual({ kind: 'unavailable' });
 	});
 	it('retains the existing body instead of replacing it with initial values', async () => {
-		const { resources, repository } = setup();
+		const { resources, repository } = await setup();
 		await repository.commit('alice', {
 			put: [
 				{
@@ -428,7 +437,7 @@ describe('drafting optional resources', () => {
 });
 
 it('can explicitly draft a new override after its server tombstone', async () => {
-	const { resources, repository } = setup();
+	const { resources, repository } = await setup();
 	await repository.commit('alice', {
 		put: [{ key, entry: { kind: 'deleted', etag: syncEtag(1n) } }],
 		remove: [],
@@ -441,7 +450,7 @@ it('can explicitly draft a new override after its server tombstone', async () =>
 });
 
 it('does not replace a failed known resource read with writable initial values', async () => {
-	const { resources, transport } = setup();
+	const { resources, transport } = await setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
 	transport.pullFailure = 'Download failed';
 	const draft = resources.draft({ type: 'projects', id: identity.id });
@@ -451,14 +460,14 @@ it('does not replace a failed known resource read with writable initial values',
 	});
 });
 
-it('refuses to capture an optional default before the inventory is known', () => {
-	const { resources } = setup();
+it('refuses to capture an optional default before the inventory is known', async () => {
+	const { resources } = await setup();
 	const draft = resources.draft({ type: 'projects', id: identity.id });
 	expect(() => draft.captureOrCreate(project)).toThrow('not available');
 });
 
 it('captures a known absent optional resource without starting a server read', async () => {
-	const { resources, repository } = setup();
+	const { resources, repository } = await setup();
 	await repository.commit('alice', { put: [], remove: [], cursor: initialSyncCursor });
 	await resources.initialize();
 	const draft = resources.draft({ type: 'projects', id: identity.id });
@@ -467,7 +476,7 @@ it('captures a known absent optional resource without starting a server read', a
 });
 
 it('keeps the displayed base when capturing an optional resource already refreshing', async () => {
-	const { resources, repository } = setup();
+	const { resources, repository } = await setup();
 	await repository.commit('alice', {
 		put: [
 			{
@@ -492,7 +501,7 @@ it('keeps the displayed base when capturing an optional resource already refresh
 });
 
 it('refuses an optional default before inventory proves absence', async () => {
-	const { resources, repository } = setup();
+	const { resources, repository } = await setup();
 	await repository.commit('alice', {
 		put: [],
 		inventoryComplete: false,
@@ -505,7 +514,7 @@ it('refuses an optional default before inventory proves absence', async () => {
 });
 
 it('does not adopt a new conflict base when an editor read has been superseded', async () => {
-	const { resources, repository, transport } = setup();
+	const { resources, repository, transport } = await setup();
 	await repository.commit('alice', {
 		put: [
 			{
@@ -539,7 +548,7 @@ it('does not adopt a new conflict base when an editor read has been superseded',
 it('prepares a complete collection within the batch transport capacity', async () => {
 	const transport = new InMemoryBatchSyncTransport<typeof project>();
 	transport.maxConcurrentReads = 32;
-	const { resources } = setup(undefined, transport);
+	const { resources } = await setup(undefined, transport);
 	const expected: [string, typeof project][] = [];
 	for (let index = 0; index < 70; index++) {
 		const id = crypto.randomUUID();
@@ -562,7 +571,7 @@ it('prepares a complete collection within the batch transport capacity', async (
 
 // SYNC-READINESS: unrelated missing bodies cannot disable an available collection.
 it('marks an empty collection ready after its full inventory arrives', async () => {
-	const { resources, transport } = setup();
+	const { resources, transport } = await setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
 	await resources.requireCollections();
 	expect(resources.collectionReadiness()).toBe('ready');
@@ -571,7 +580,7 @@ it('marks an empty collection ready after its full inventory arrives', async () 
 it('downloads authoritative records while an unrelated submission is stalled', async () => {
 	const entered = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
-	const { resources, transport } = setup({
+	const { resources, outbox, transport } = await setup({
 		send: async (input) => {
 			entered.resolve();
 			await release.promise;
@@ -586,7 +595,7 @@ it('downloads authoritative records while an unrelated submission is stalled', a
 	});
 	if (project.type !== 'projects') throw new Error('Expected project');
 	resources.setOnline(false);
-	await resources.append({
+	await outbox.append('alice', {
 		operationId: crypto.randomUUID(),
 		key,
 		command: { kind: 'createProject', id: project.value.id, name: project.value.name },
@@ -596,6 +605,8 @@ it('downloads authoritative records while an unrelated submission is stalled', a
 		coalesce: null,
 		references: []
 	});
+	await resources.initialize();
+	await outbox.read('alice');
 	await resources.synchronize();
 	const otherId = crypto.randomUUID();
 	const otherKey = workspaceResourceKey({ type: 'projects', id: [otherId] });
@@ -619,14 +630,14 @@ it('downloads authoritative records while an unrelated submission is stalled', a
 });
 
 it('reports the transport failure when required inventory cannot load', async () => {
-	const { resources, transport } = setup();
+	const { resources, transport } = await setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
 	transport.pullFailure = 'Disconnected';
 	await expect(resources.requireCollections()).rejects.toThrow('Disconnected');
 });
 
 it('does not create a default while an unknown resource is being downloaded', async () => {
-	const { resources, cache, transport } = setup();
+	const { resources, cache, transport } = await setup();
 	await cache.initialize();
 	const paused = transport.pause(key);
 	const opening = cache.open(key);
@@ -641,10 +652,10 @@ it('does not create a default while an unknown resource is being downloaded', as
 });
 
 it('keeps a created resource visible until its complete settled projection arrives', async () => {
-	const { resources, outbox, writes, stopObserving } = setup();
+	const { resources, outbox, writes } = await setup();
 	if (project.type !== 'projects') throw new Error('Expected project fixture');
 	resources.setOnline(false);
-	await resources.append({
+	await outbox.append('alice', {
 		operationId: crypto.randomUUID(),
 		key,
 		command: { kind: 'createProject', id: project.value.id, name: project.value.name },
@@ -654,7 +665,9 @@ it('keeps a created resource visible until its complete settled projection arriv
 		coalesce: null,
 		references: []
 	});
-	stopObserving();
+	await resources.initialize();
+	await outbox.read('alice');
+	outbox.pauseObservations();
 	const sent = await outbox.take('alice');
 	if (!sent) throw new Error('The created project was not queued');
 	await outbox.settle('alice', sent, {
@@ -666,6 +679,8 @@ it('keeps a created resource visible until its complete settled projection arriv
 	});
 	await writes.reload();
 	const beforePublication = resources.records.get(key);
-	resources.applyLocal(await outbox.read('alice'));
+	outbox.resumeObservations();
+	await resources.initialize();
+	await outbox.read('alice');
 	expect([beforePublication, resources.records.get(key)]).toEqual([project, project]);
 });

@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { WorkspaceDatabase } from './database';
 import { DexieWorkspaceRepository } from './workspace-local-repository';
 import { IndexedDbStorageRecovery } from './storage-recovery';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { receiveResource } from '$lib/services/sync/state';
 
 const databases: WorkspaceDatabase[] = [];

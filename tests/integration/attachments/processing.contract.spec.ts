@@ -1,3 +1,4 @@
+import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -74,6 +75,7 @@ const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapToke
 	const parser = new InMemoryTextParser();
 	parser.text = 'Extracted document';
 	const worker = new AttachmentProcessing({
+		modelSelection: new AgentModelSelectionService(),
 		records,
 		claims: new PostgresAttachmentClaims(
 			{ open: () => postgres(context.url, { max: 1, idle_timeout: 0, max_lifetime: 0 }) },

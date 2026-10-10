@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { AgentPreferenceValues } from '$lib/models/agent';
 
 	import { legacyNoteReview, type ChatToolActivity } from '$lib/stores/agent/chat-tools';

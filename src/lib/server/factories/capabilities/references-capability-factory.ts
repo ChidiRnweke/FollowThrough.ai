@@ -15,7 +15,7 @@ import { ReferenceResearch } from '$lib/server/repositories/references/web-resea
 import { ReferenceRanking } from '$lib/server/services/references/ranking';
 import type { ReferenceFinder } from '$lib/server/services/references/contracts';
 import { operationObserver } from '$lib/server/services/telemetry';
-import { normalizeLanguageModelId } from '$lib/services/agent/model-selection';
+import { normalizeLanguageModelId } from '$lib/models/agent';
 
 export interface ReferencesCapabilityInput {
 	readonly db: Database;

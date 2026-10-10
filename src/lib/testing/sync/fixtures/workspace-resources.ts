@@ -1,7 +1,7 @@
 import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
-import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { InMemorySyncCache, InMemorySyncTransport } from '../fakes/in-memory-sync';
@@ -27,13 +27,12 @@ export const workspaceResourcesFixture = (accountId: string) => {
 		},
 		pull: () => cache.refresh()
 	});
-	const resources = new WorkspaceResources(accountId, {
+	const resources = assembleWorkspaceResources(accountId, {
 		repository: outbox,
 		cache,
 		writes,
 		execution
 	});
-	outbox.observe(accountId, (state) => resources.applyLocal(state));
 	return {
 		transport,
 		cache,

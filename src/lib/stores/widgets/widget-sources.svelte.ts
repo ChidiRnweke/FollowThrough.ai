@@ -3,7 +3,7 @@ const widgetSourcesRule = new WidgetSourceService();
 import type { Widget, WidgetSources } from '$lib/models/widgets';
 
 import { todayLocalDate } from '$lib/client/todos/local-date';
-import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+import { workspaceSession } from '$lib/factories/workspace/session';
 
 /**
  * The rows a widget's sources show on this device, from the synced workspace. Read inside a

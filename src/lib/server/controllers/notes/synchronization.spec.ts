@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import type { NoteMutationRequest } from '$lib/models/workspace-mutations';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {

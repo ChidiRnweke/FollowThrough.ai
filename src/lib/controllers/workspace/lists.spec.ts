@@ -16,7 +16,7 @@ import {
 	testTodoId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 
 const row = (record: WorkspaceRecord & { value: { id: string } }): [string, WorkspaceRecord] => [
 	JSON.stringify([record.type, record.value.id]),
@@ -26,7 +26,7 @@ const project = row({ type: 'projects', value: projectRecordSchema.parse(project
 
 describe('normalized workspace lists', () => {
 	it('hides notes and tasks when their project is archived', () => {
-		const views = new WorkspaceViews(
+		const views = createWorkspaceViews(
 			new Map([
 				row({
 					type: 'projects',
@@ -41,7 +41,7 @@ describe('normalized workspace lists', () => {
 	it('preserves an extracted task’s origin when it is linked to a different note', () => {
 		const anchor = anchorBuilder();
 		const todo = todoBuilder({ sourceAnchorId: anchor.id, linkedNoteId: testNoteId(2) });
-		const views = new WorkspaceViews(
+		const views = createWorkspaceViews(
 			new Map([
 				project,
 				row({ type: 'notes', value: noteRecordSchema.parse(noteBuilder({ title: 'Origin' })) }),
@@ -61,7 +61,7 @@ describe('normalized workspace lists', () => {
 		});
 	});
 	it('filters task categories and excludes deleted tasks', () => {
-		const views = new WorkspaceViews(
+		const views = createWorkspaceViews(
 			new Map([
 				project,
 				row({
@@ -82,7 +82,7 @@ describe('normalized workspace lists', () => {
 		}).toEqual({ categories: ['Planning'], filtered: [testTodoId()] });
 	});
 	it('builds project trees from the same current note records used by lists', () => {
-		const views = new WorkspaceViews(
+		const views = createWorkspaceViews(
 			new Map([
 				project,
 				row({
@@ -111,7 +111,7 @@ describe('normalized workspace lists', () => {
 		).toEqual([{ title: 'Folder', children: ['Child'] }]);
 	});
 	it('reports an unavailable shell when this device has no user record', () => {
-		expect(new WorkspaceViews(new Map()).shell('absent')).toBeNull();
+		expect(createWorkspaceViews(new Map()).shell('absent')).toBeNull();
 	});
 });
 
@@ -123,7 +123,7 @@ it('keeps the five most recently edited notes in Today', () => {
 			updatedAt: `2026-09-0${index + 1}T10:00:00Z` as typeof testNow
 		})
 	);
-	const views = new WorkspaceViews(
+	const views = createWorkspaceViews(
 		new Map([
 			project,
 			...notes.map((value) => row({ type: 'notes', value: noteRecordSchema.parse(value) }))

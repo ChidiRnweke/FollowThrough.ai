@@ -23,6 +23,13 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 	private readonly editing = new OutboxEditingService();
 	private readonly accounts = new Map<string, readonly OutboxEntry<C, T>[]>();
 	private sequence = 0;
+	private observationsPaused = false;
+	pauseObservations(): void {
+		this.observationsPaused = true;
+	}
+	resumeObservations(): void {
+		this.observationsPaused = false;
+	}
 	private readonly receipts = new Map<string, Map<string, WriteReceipt<T>>>();
 	private readonly observers = new Map<
 		string,
@@ -39,6 +46,13 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 			load: async (accountId) => (await this.read(accountId)).cache,
 			commit: (accountId, changes) => this.cache.commit(accountId, changes)
 		};
+	}
+	private appendGate: { readonly entered: () => void; readonly wait: Promise<void> } | null = null;
+	pauseAppend(): { readonly started: Promise<void>; readonly release: () => void } {
+		const started = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		this.appendGate = { entered: () => started.resolve(), wait: released.promise };
+		return { started: started.promise, release: () => released.resolve() };
 	}
 	snapshotFailure: string | null = null;
 	appendFailure: string | null = null;
@@ -58,7 +72,8 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 				receipts: new Map(this.receipts.get(accountId))
 			}
 		};
-		for (const observer of this.observers.get(accountId) ?? []) observer(state);
+		if (!this.observationsPaused)
+			for (const observer of this.observers.get(accountId) ?? []) observer(state);
 		return state;
 	}
 	observe(accountId: string, changed: (state: WorkspaceLocalProjection<C, T>) => void): () => void {
@@ -78,6 +93,12 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		return this.accounts.get(accountId) ?? [];
 	}
 	async append(accountId: string, draft: WriteDraft<C, T>): Promise<string> {
+		const gate = this.appendGate;
+		if (gate) {
+			this.appendGate = null;
+			gate.entered();
+			await gate.wait;
+		}
 		if (this.appendFailure) throw new Error(this.appendFailure);
 		const failure = this.appendFailures.get(draft.key);
 		if (failure) throw new Error(failure);

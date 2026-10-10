@@ -2,7 +2,7 @@ import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { afterEach, expect, it } from 'vitest';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { createResourceCache } from '$lib/factories/sync/cache';
@@ -19,7 +19,7 @@ import {
 	testNoteId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { WorkspaceResources } from './resources.svelte';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 
 const cleanup: (() => void)[] = [];
 afterEach(() => {
@@ -52,14 +52,13 @@ it('retains the observed note when offline restoration needs unavailable parent 
 		},
 		pull: () => cache.refresh()
 	});
-	const resources = new WorkspaceResources(accountId, {
+	const resources = assembleWorkspaceResources(accountId, {
 		repository: outbox,
 		cache,
 		writes,
 		execution
 	});
 	cleanup.push(() => resources.stop());
-	cleanup.push(outbox.observe(accountId, (state) => resources.applyLocal(state)));
 	await repository.commit(accountId, {
 		put: [
 			{
