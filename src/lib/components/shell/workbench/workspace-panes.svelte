@@ -22,7 +22,7 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
-	import { FtClose as X } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import WorkspacePane from './workspace-pane.svelte';
 	import WorkspaceSplitResizer from './workspace-split-resizer.svelte';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
@@ -188,7 +188,7 @@
 						aria-label="Close split view"
 						onclick={closeSplit}
 					>
-						<X />
+						<Icon.Close />
 					</Button>
 				{/snippet}
 			</Tip>

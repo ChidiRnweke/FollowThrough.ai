@@ -7,18 +7,7 @@ import type { NoteId } from '$lib/models/notes';
 import type { EntityKind, EntityRef } from '$lib/components/agent';
 import { workbench } from '$lib/stores/workbench/workbench.svelte';
 import { diagramTab } from '$lib/stores/workbench/tab-ref';
-import {
-	FtDocument,
-	FtFolder,
-	FtMemory,
-	FtSettings,
-	FtSkills,
-	FtSuggestion,
-	FtTodos,
-	FtArtifacts,
-	FtReading,
-	FtWorkflow
-} from '$lib/components/icons';
+import * as Icon from '$lib/components/icons';
 
 /**
  * Where each kind of thing lives, and what it looks like in a row. Shared so the turn's
@@ -27,20 +16,20 @@ import {
  * clicked in testing.
  */
 
-export const entityIcon: Readonly<Record<EntityKind, typeof FtDocument>> = {
-	note: FtDocument,
-	folder: FtFolder,
-	attachment: FtArtifacts,
-	todo: FtTodos,
-	project: FtFolder,
-	skill: FtSkills,
+export const entityIcon: Readonly<Record<EntityKind, typeof Icon.Document>> = {
+	note: Icon.Document,
+	folder: Icon.Folder,
+	attachment: Icon.Artifact,
+	todo: Icon.Todos,
+	project: Icon.Folder,
+	skill: Icon.Skill,
 	// The same mark the project overview and the sidebar give Diagrams.
-	diagram: FtWorkflow,
-	artifact: FtArtifacts,
-	memory: FtMemory,
-	suggestion: FtSuggestion,
-	setting: FtSettings,
-	plain: FtReading
+	diagram: Icon.Diagram,
+	artifact: Icon.Artifact,
+	memory: Icon.Memory,
+	suggestion: Icon.Suggestion,
+	setting: Icon.Preferences,
+	plain: Icon.Reading
 };
 
 /** Kinds that have somewhere to be opened. The rest are named but not offered as links. */

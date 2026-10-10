@@ -12,7 +12,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
-	import KeyRound from '@lucide/svelte/icons/key-round';
+	import * as Icon from '$lib/components/icons';
 
 	let { endpoint }: { endpoint: string } = $props();
 
@@ -154,7 +154,7 @@
 			{@const tokens = await listApiTokens()}
 			{#if tokens.length === 0}
 				<EmptyState
-					icon={KeyRound}
+					icon={Icon.Key}
 					title="No tokens yet."
 					hint="Create one above to connect a client."
 					size="large"

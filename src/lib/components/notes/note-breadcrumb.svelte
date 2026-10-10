@@ -6,11 +6,7 @@
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import {
-		FtFolder as Folder,
-		FtEdit as Pencil,
-		FtEllipsis as Ellipsis
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import InlineTitleInput from '$lib/components/shared/inline-title-input.svelte';
 
 	let {
@@ -93,8 +89,8 @@
 							aria-label={nested ? fullPath : project.name}
 						>
 							{#if nested}
-								<Folder class="size-3 shrink-0" />
-								<Ellipsis class="size-4 shrink-0" />
+								<Icon.Folder class="size-3 shrink-0" />
+								<Icon.Ellipsis class="size-4 shrink-0" />
 							{:else}
 								{project.name}
 							{/if}
@@ -135,7 +131,7 @@
 							aria-label="Rename note"
 							onclick={() => (editingNoteId = note.id)}
 						>
-							<Pencil />
+							<Icon.Edit />
 						</Button>
 					{/snippet}
 				</Tip>

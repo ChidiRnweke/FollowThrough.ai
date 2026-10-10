@@ -5,7 +5,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Button } from '$lib/components/ui/button';
-	import { FtPlus as AddIcon, FtTrash as RemoveIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import type { JsonValue, WidgetDataTableColumn } from '$lib/models/widgets';
 	import {
 		emptyRow,
@@ -112,7 +112,7 @@
 								aria-label={`Remove row ${index + 1}`}
 								onclick={() => write(withoutRow(rows, index))}
 							>
-								<RemoveIcon />
+								<Icon.Trash />
 							</Button>
 						</Table.Cell>
 					{/if}
@@ -149,7 +149,7 @@
 			class="self-start"
 			onclick={() => write([...rows, emptyRow(props.columns)])}
 		>
-			<AddIcon />
+			<Icon.Plus />
 			{props.addLabel}
 		</Button>
 	{/if}

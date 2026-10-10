@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Command as CommandPrimitive } from 'bits-ui';
 	import { cn } from '$lib/utils.js';
-	import { FtCheck as CheckIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		ref = $bindable(null),
@@ -21,7 +21,7 @@
 	{...restProps}
 >
 	{@render children?.()}
-	<CheckIcon
+	<Icon.Check
 		class="cn-command-item-indicator ml-auto opacity-0 group-has-[[data-slot=command-shortcut]]/command-item:hidden group-data-[checked=true]/command-item:opacity-100"
 	/>
 </CommandPrimitive.Item>

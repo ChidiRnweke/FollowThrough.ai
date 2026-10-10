@@ -19,21 +19,7 @@
 	import type { Widget } from '$lib/models/widgets';
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import { toast } from 'svelte-sonner';
-	import {
-		FtMemory as Brain,
-		FtChevronRight as ChevronRight,
-		FtEllipsis as Ellipsis,
-		FtDocument as FileText,
-		FtDocumentPlus as FilePlus,
-		FtFolder as Folder,
-		FtFolderOpen as FolderOpen,
-		FtArtifacts as PackageOpen,
-		FtWorkflow as Workflow,
-		FtWidget,
-		FtAttachments as Paperclip,
-		FtSkills as Wrench
-	} from '$lib/components/icons';
-	import ListTodo from '@lucide/svelte/icons/list-todo';
+	import * as Icon from '$lib/components/icons';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import EmptyState from '../../shared/empty-state.svelte';
@@ -235,28 +221,28 @@
 			<ResourceRow
 				href="/projects/{project.id}/todos"
 				label="Todos"
-				icon={ListTodo}
+				icon={Icon.Todos}
 				state={todoState}
 				tip={todoState ? undefined : pickTip('todos', tipSeed)}
 			/>
 			<ResourceRow
 				href="/artifacts?projectId={project.id}"
 				label="Artifacts"
-				icon={PackageOpen}
+				icon={Icon.Artifact}
 				state={artifactState}
 				tip={artifactState ? undefined : pickTip('artifacts', tipSeed)}
 			/>
 			<ResourceRow
 				href="/diagrams?projectId={project.id}"
 				label="Diagrams"
-				icon={Workflow}
+				icon={Icon.Diagram}
 				state={diagramState}
 				tip={diagramState ? undefined : pickTip('diagrams', tipSeed)}
 			/>
 			<ResourceRow
 				href="/widgets?projectId={project.id}"
 				label="Widgets"
-				icon={FtWidget}
+				icon={Icon.Widget}
 				state={widgetState}
 				tip={widgetState ? undefined : pickTip('widgets', tipSeed)}
 			/>
@@ -268,14 +254,14 @@
 			<ResourceRow
 				href="/projects/{project.id}/memory"
 				label="Memory"
-				icon={Brain}
+				icon={Icon.Memory}
 				state={memoryState}
 				tip={memoryState ? undefined : pickTip('memory', tipSeed)}
 			/>
 			<ResourceRow
 				href="/projects/{project.id}/attachments"
 				label="Attachments"
-				icon={Paperclip}
+				icon={Icon.Attachment}
 				state={attachmentState}
 				tip={attachmentState ? undefined : pickTip('attachments', tipSeed)}
 			/>
@@ -301,15 +287,15 @@
 				aria-expanded={isOpen}
 				onclick={() => toggleFolder(node.entry.id)}
 			>
-				<ChevronRight
+				<Icon.ChevronRight
 					class="size-3.5 shrink-0 text-muted-foreground transition-transform duration-(--duration-micro) {isOpen
 						? 'rotate-90'
 						: ''}"
 				/>
 				{#if isOpen}
-					<FolderOpen class="size-4 shrink-0 text-muted-foreground" />
+					<Icon.FolderOpen class="size-4 shrink-0 text-muted-foreground" />
 				{:else}
-					<Folder class="size-4 shrink-0 text-muted-foreground" />
+					<Icon.Folder class="size-4 shrink-0 text-muted-foreground" />
 				{/if}
 				<span class="min-w-0 flex-1 truncate font-medium">{node.entry.title}</span>
 				<span class="provenance-caption shrink-0">
@@ -323,9 +309,9 @@
 				href="/notes/{node.entry.id}"
 			>
 				{#if node.entry.kind === 'skill'}
-					<Wrench class="size-4 shrink-0 text-muted-foreground" />
+					<Icon.Skill class="size-4 shrink-0 text-muted-foreground" />
 				{:else}
-					<FileText class="size-4 shrink-0 text-muted-foreground" />
+					<Icon.Document class="size-4 shrink-0 text-muted-foreground" />
 				{/if}
 				<span class="min-w-0 flex-1 truncate">{node.entry.title}</span>
 				<span class="provenance-caption shrink-0">
@@ -346,7 +332,7 @@
 							class="size-7"
 							aria-label="Actions for {node.entry.title}"
 						>
-							<Ellipsis class="size-4" />
+							<Icon.Ellipsis class="size-4" />
 						</Button>
 					{/snippet}
 				</DropdownMenu.Trigger>
@@ -384,7 +370,7 @@
 		divider rather than competing side by side: start fresh, or bring what you have.
 	-->
 	<EmptyState
-		icon={FileText}
+		icon={Icon.Document}
 		title="Nothing here yet."
 		hint="Notes you write in this project show up here."
 		size="large"
@@ -393,7 +379,7 @@
 		{#snippet action()}
 			<div class="flex w-full max-w-xs flex-col items-stretch gap-3">
 				<Button size="sm" class="w-full" onclick={oncreatenote}>
-					<FilePlus class="size-4" />
+					<Icon.DocumentPlus class="size-4" />
 					Create the first note
 				</Button>
 				<div class="flex items-center gap-3">
@@ -457,7 +443,7 @@
 					size="sm"
 					class="eyebrow h-auto gap-1.5 px-0 hover:bg-transparent hover:text-foreground"
 				>
-					<ChevronRight
+					<Icon.ChevronRight
 						class="size-3.5 transition-transform data-[state=open]:rotate-90"
 						data-state={props['data-state']}
 					/>

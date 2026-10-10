@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import { FtCheck as Check, FtCopy as Copy } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 
 	/**
@@ -48,9 +48,9 @@
 		<div class="flex items-center gap-1">
 			<Button variant="ghost" size="icon-xs" aria-label="Copy diff" onclick={copyToClipboard}>
 				{#if copied}
-					<Check class="size-3.5" />
+					<Icon.Check class="size-3.5" />
 				{:else}
-					<Copy class="size-3.5" />
+					<Icon.Copy class="size-3.5" />
 				{/if}
 			</Button>
 		</div>

@@ -5,7 +5,7 @@
 	import type { ProseMirrorDocument } from '$lib/models/notes';
 	import { drawioReferencesIn } from '$lib/services/notes/references';
 	import { defaultExportSettings } from '$lib/models/deliverables';
-	import { FtChevronRight as ChevronRight } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
@@ -220,7 +220,9 @@
 				<Collapsible.Trigger
 					class="group flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
 				>
-					<ChevronRight class="size-3.5 transition-transform group-data-[state=open]:rotate-90" />
+					<Icon.ChevronRight
+						class="size-3.5 transition-transform group-data-[state=open]:rotate-90"
+					/>
 					Advanced layout
 				</Collapsible.Trigger>
 				<Collapsible.Content class="pt-3">

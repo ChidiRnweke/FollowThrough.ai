@@ -10,12 +10,7 @@
 	import SkillEditor from '../skill-editor.svelte';
 	import { NoteConflictDialog, NoteSyncStatus, NoteTitleInlineInput } from '$lib/components/notes';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
-	import {
-		FtDownload as Download,
-		FtEdit as Pencil,
-		FtExport as FileOutput,
-		FtLoader as LoaderCircle
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { importSkillMarkdown } from '$lib/remote/skills/skills.remote';
 	import WorkspaceWriteReview from '$lib/components/shared/workspace-write-review.svelte';
@@ -302,7 +297,7 @@
 									aria-label="Rename skill"
 									onclick={() => (editingTitle = true)}
 								>
-									<Pencil />
+									<Icon.Edit />
 								</Button>
 							{/snippet}
 						</Tip>
@@ -349,9 +344,9 @@
 							onclick={() => fileInput?.click()}
 						>
 							{#if importing}
-								<LoaderCircle class="size-4 animate-spin" />
+								<Icon.Loader class="size-4 animate-spin" />
 							{:else}
-								<Download class="size-4" />
+								<Icon.Download class="size-4" />
 							{/if}
 						</Button>
 					{/snippet}
@@ -367,9 +362,9 @@
 							onclick={() => void exportSkill()}
 						>
 							{#if exporting}
-								<LoaderCircle class="size-4 animate-spin" />
+								<Icon.Loader class="size-4 animate-spin" />
 							{:else}
-								<FileOutput class="size-4" />
+								<Icon.Export class="size-4" />
 							{/if}
 						</Button>
 					{/snippet}

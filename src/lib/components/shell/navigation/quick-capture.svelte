@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import type { ProjectId } from '$lib/models/projects';
-	import { FtArrowRight as ArrowRight } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		projectId,
@@ -53,7 +53,7 @@
 		/>
 		<InputGroup.Addon align="inline-end">
 			<InputGroup.Button type="submit" disabled={busy} aria-label="Create note" size="icon-xs">
-				<ArrowRight class="size-4" />
+				<Icon.ArrowRight class="size-4" />
 			</InputGroup.Button>
 		</InputGroup.Addon>
 	</InputGroup.Root>

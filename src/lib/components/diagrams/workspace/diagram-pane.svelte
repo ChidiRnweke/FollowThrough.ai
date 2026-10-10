@@ -16,7 +16,7 @@
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import { FtClose as X } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { userFacingMessage } from '$lib/errors';
 	import {
@@ -314,7 +314,7 @@
 							aria-label="Close split view"
 							onclick={onCloseSplit}
 						>
-							<X />
+							<Icon.Close />
 						</Button>
 					{/snippet}
 				</Tip>

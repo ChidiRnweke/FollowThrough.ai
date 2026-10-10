@@ -2,9 +2,7 @@
 	import { buttonVariants, Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import * as Popover from '$lib/components/ui/popover/index.js';
-	import Check from '@lucide/svelte/icons/check';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import Link from '@lucide/svelte/icons/link-2';
+	import * as Icon from '$lib/components/icons';
 	import Tooltip from './Tooltip.svelte';
 	import { getEditor, useEditorTransaction } from './commands/index.js';
 
@@ -37,8 +35,8 @@
 				})}
 				class:bg-muted={isActive()}
 			>
-				<Link />
-				<ChevronDown class="text-muted-foreground size-2!" />
+				<Icon.Link />
+				<Icon.ChevronDown class="text-muted-foreground size-2!" />
 			</div>
 		</Tooltip>
 	</Popover.Trigger>
@@ -50,7 +48,7 @@
 			<Input placeholder="Type or paste a link..." bind:value required type="url" />
 			<Tooltip tooltip="Insert link">
 				<Button type="submit" size="icon">
-					<Check />
+					<Icon.Check />
 				</Button>
 			</Tooltip>
 		</form>

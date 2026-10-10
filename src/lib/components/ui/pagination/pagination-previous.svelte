@@ -2,7 +2,7 @@
 	import { Pagination as PaginationPrimitive } from 'bits-ui';
 	import { cn } from '$lib/utils.js';
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
-	import { FtChevronLeft as ChevronLeftIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		ref = $bindable(null),
@@ -17,6 +17,6 @@
 	class={cn(buttonVariants({ variant: 'ghost', size: 'default' }), 'pl-2!', className)}
 	{...restProps}
 >
-	<ChevronLeftIcon data-icon="inline-start" />
+	<Icon.ChevronLeft data-icon="inline-start" />
 	<span class="cn-pagination-previous-text hidden sm:block">Previous</span>
 </PaginationPrimitive.PrevButton>

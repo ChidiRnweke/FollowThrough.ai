@@ -97,6 +97,8 @@
 	--duration-disclosure: 200ms;
 	--duration-panel: 300ms;
 	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	/* The icon dot landing: a short overshoot, so arriving reads as a placement. */
+	--ease-land: cubic-bezier(0.3, 1.55, 0.5, 1);
 	--note-content-width: 90ch;
 	/* Authored document type is deliberately independent from app chrome. The
 	   editor, skill content, and full-size diffs share this ladder; compact diff
@@ -188,6 +190,123 @@
 	/* Drop the reveal, keep the wash: it is state, not decoration. */
 	.selection-action-range {
 		animation: none;
+	}
+}
+
+/* Icons (see docs/design/design-system.md "Icons and motion"). Every glyph marks its strokes
+   `ft-stroke` (normalised by `pathLength="1"`) and its terminal dot `ft-accent`. The dot is ink at
+   rest; when an ancestor becomes live the line retraces once and the dot lands in the brand teal.
+   Leaving is quieter than arriving: the dot fades back, nothing retraces. No component animates
+   its own icon — the live attributes below are the whole contract. */
+.ft-stroke {
+	stroke-dasharray: 1 1;
+	stroke-dashoffset: 0;
+}
+
+/* A stroke with a gap in it: the offline cloud. */
+.ft-broken {
+	stroke-dasharray: 0.62 0.08 0.3 0;
+}
+
+.ft-accent {
+	fill: var(--ft-accent, currentColor);
+	transform-box: fill-box;
+	transform-origin: center;
+	transition: fill var(--duration-micro) var(--ease-standard);
+}
+
+.ft-knob {
+	transition:
+		transform 240ms var(--ease-land),
+		fill var(--duration-micro) var(--ease-standard);
+}
+
+:is(
+	[aria-current='page'],
+	[aria-current='true'],
+	[aria-pressed='true'],
+	[data-state='on'],
+	[data-state='active'],
+	[data-active]:not([data-active='false'])
+) {
+	--ft-accent: var(--color-brand);
+
+	/* A live row may paint its label teal; a mark keeps its ink so the dot is the one teal point. */
+	& svg:has(.ft-accent) {
+		color: var(--color-foreground);
+	}
+
+	& .ft-stroke {
+		animation: ft-trace 280ms var(--ease-standard) both;
+	}
+
+	& .ft-accent {
+		animation: ft-land 300ms 170ms var(--ease-land) both;
+	}
+
+	& .ft-knob {
+		transform: translateX(9px);
+		animation: none;
+	}
+}
+
+[data-ft-motion='rise'] .ft-accent {
+	animation: ft-rise 1.3s var(--ease-standard) infinite;
+}
+
+[data-ft-motion='fall'] .ft-accent {
+	animation: ft-fall 1.3s var(--ease-standard) infinite;
+}
+
+@keyframes ft-trace {
+	from {
+		stroke-dashoffset: 1;
+	}
+}
+
+@keyframes ft-land {
+	from {
+		transform: scale(0);
+	}
+}
+
+@keyframes ft-rise {
+	0% {
+		transform: translateY(3px);
+		opacity: 0;
+	}
+	35%,
+	65% {
+		opacity: 1;
+	}
+	100% {
+		transform: translateY(-3px);
+		opacity: 0;
+	}
+}
+
+@keyframes ft-fall {
+	0% {
+		transform: translateY(-3px);
+		opacity: 0;
+	}
+	35%,
+	65% {
+		opacity: 1;
+	}
+	100% {
+		transform: translateY(3px);
+		opacity: 0;
+	}
+}
+
+/* Every state still reads without motion: the dot's colour and position carry it. */
+@media (prefers-reduced-motion: reduce) {
+	.ft-stroke,
+	.ft-accent,
+	.ft-knob {
+		animation: none !important;
+		transition: none;
 	}
 }
 

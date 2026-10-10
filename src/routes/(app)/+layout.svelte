@@ -26,7 +26,7 @@
 	import { toast } from 'svelte-sonner';
 	import { palette } from '$lib/stores/shell/palette.svelte';
 	import { openChatSurface } from '$lib/client/shell/responsive-surfaces';
-	import { FtSearch as Search, FtChat as MessageSquare } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { SyncStatusMenu } from '$lib/components/shell';
 	import { MemoryNotificationMenu } from '$lib/components/memory';
 
@@ -252,7 +252,7 @@
 				disabled={!contentReady || inventoryLoading}
 				onclick={() => palette.open()}
 			>
-				<Search />
+				<Icon.Search />
 			</Button>
 			{#if shell && !inventoryLoading}<MemoryNotificationMenu
 					notifications={shell.pendingMemoryNotifications}
@@ -269,7 +269,7 @@
 				disabled={!prerequisitesReady || inventoryLoading}
 				onclick={(event) => openChatSurface(event.currentTarget)}
 			>
-				<MessageSquare />
+				<Icon.Chat />
 			</Button>
 		</header>
 

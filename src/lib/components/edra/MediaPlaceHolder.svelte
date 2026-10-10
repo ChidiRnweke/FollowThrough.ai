@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { NodeViewWrapper } from './index.js';
-	import { AudioLines, Video, Image, CodeXml } from '@lucide/svelte';
+	import * as Icon from '$lib/components/icons';
 	import { type NodeViewProps } from '@tiptap/core';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import * as Tabs from '$lib/components/ui/tabs/index.js';
@@ -26,22 +26,22 @@
 		switch (mediaType) {
 			case 'audio':
 				return {
-					icon: AudioLines,
+					icon: Icon.Audio,
 					text: 'Insert An Audio File'
 				};
 			case 'video':
 				return {
-					icon: Video,
+					icon: Icon.Video,
 					text: 'Insert An Video File'
 				};
 			case 'image':
 				return {
-					icon: Image,
+					icon: Icon.Image,
 					text: 'Insert An Image File'
 				};
 			case 'iframe':
 				return {
-					icon: CodeXml,
+					icon: Icon.CodeBlock,
 					text: 'Insert An IFrame'
 				};
 		}
@@ -61,7 +61,7 @@
 </script>
 
 <NodeViewWrapper class="my-2 w-full!">
-	{@const Icon = mediaTypeData?.icon}
+	{@const Glyph = mediaTypeData?.icon}
 	{@const text = mediaTypeData?.text}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div
@@ -70,7 +70,7 @@
 		class="flex w-full items-center gap-2 rounded-lg border border-dashed bg-muted/30 p-4 transition-colors hover:bg-muted/50 min-h-14"
 		onclick={() => (open = true)}
 	>
-		<Icon class="size-4 text-muted-foreground" />
+		<Glyph class="size-4 text-muted-foreground" />
 		<span class="text-muted-foreground text-sm" contenteditable={false}>{text}</span>
 
 		<Popover.Root bind:open>

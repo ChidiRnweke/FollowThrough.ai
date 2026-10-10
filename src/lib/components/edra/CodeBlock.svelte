@@ -6,12 +6,10 @@
 	const { editor, node, updateAttributes, extension, getPos }: NodeViewProps = $props();
 
 	import * as Popover from '$lib/components/ui/popover/index.js';
-	import Check from '@lucide/svelte/icons/check';
-	import Copy from '@lucide/svelte/icons/copy';
+	import * as Icon from '$lib/components/icons';
 	import * as Command from '$lib/components/ui/command/index.js';
 	import { cn } from '$lib/utils.js';
 	import strings from './commands/strings.js';
-	import { Sparkle } from '@lucide/svelte';
 	import Tooltip from './Tooltip.svelte';
 
 	let preRef = $state<HTMLPreElement>();
@@ -72,7 +70,7 @@
 		{#if defaultLanguage.toLowerCase() === 'mermaid' && editor.isEditable}
 			<Tooltip tooltip="Convert to Mermaid Diagram">
 				<Button variant="ghost" size="icon-xs" class="print:hidden" onclick={convertToMermaid}>
-					<Sparkle />
+					<Icon.Suggestion />
 				</Button>
 			</Tooltip>
 		{/if}
@@ -114,7 +112,7 @@
 									onclick={() => changeLanguage(language)}
 									class="text-primary capitalize"
 								>
-									<Check class={cn(language !== defaultLanguage && 'invisible')} />
+									<Icon.Check class={cn(language !== defaultLanguage && 'invisible')} />
 									{language}
 								</Command.Item>
 							{/each}
@@ -130,9 +128,9 @@
 			onclick={copyCode}
 		>
 			{#if isCopying}
-				<Check class=" text-green-500" />
+				<Icon.Check class=" text-green-500" />
 			{:else}
-				<Copy />
+				<Icon.Copy />
 			{/if}
 		</Button>
 	</div>

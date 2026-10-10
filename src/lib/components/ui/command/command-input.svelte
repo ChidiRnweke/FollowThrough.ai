@@ -2,7 +2,7 @@
 	import { Command as CommandPrimitive } from 'bits-ui';
 	import { cn } from '$lib/utils.js';
 	import * as InputGroup from '$lib/components/ui/input-group/index.js';
-	import { FtSearch as SearchIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		ref = $bindable(null),
@@ -34,7 +34,7 @@
 		</CommandPrimitive.Input>
 		<InputGroup.Addon>
 			<!-- No `opacity-50`: it dulls the addon's teal focus colour back to grey. -->
-			<SearchIcon class="size-4 shrink-0" />
+			<Icon.Search class="size-4 shrink-0" />
 		</InputGroup.Addon>
 	</InputGroup.Root>
 </div>

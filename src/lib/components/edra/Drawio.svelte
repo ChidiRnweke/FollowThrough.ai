@@ -3,8 +3,7 @@
 	import type { Component } from 'svelte';
 	import type { DrawioPreviewProps, DrawioReferenceView } from './commands/nodes.js';
 	import { Button } from '$lib/components/ui/button';
-	import ExternalLink from '@lucide/svelte/icons/external-link';
-	import Workflow from '@lucide/svelte/icons/workflow';
+	import * as Icon from '$lib/components/icons';
 	import { NodeViewWrapper } from './index.js';
 
 	const { node, extension }: NodeViewProps = $props();
@@ -27,7 +26,7 @@
 	contenteditable={false}
 >
 	<div class="flex min-h-11 items-center gap-2 border-b border-border px-3 py-2">
-		<Workflow class="size-4 text-primary" />
+		<Icon.Diagram class="size-4 text-primary" />
 		<p class="min-w-0 flex-1 truncate text-sm font-medium">
 			{diagram?.title ?? 'draw.io diagram'}
 		</p>
@@ -38,7 +37,7 @@
 		</span>
 		{#if href}
 			<Button {href} variant="ghost" size="sm">
-				<ExternalLink />
+				<Icon.External />
 				Open in draw.io
 			</Button>
 		{/if}

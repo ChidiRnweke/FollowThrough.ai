@@ -12,6 +12,7 @@
 - brand token: --brand (=primary light, lifted teal dark) for identity accents/washes. mark=brand-mark.svelte, always at top of sidebar icon rail.
 - project identity=brand teal, NEVER per-project hues. sidebar project icon, Badge variant="brand", breadcrumb links, chat origin line, artifact format badges, project-overview resource icon chips. canonical wash recipe=badge brand variant (text-brand + bg-brand/10, dark:bg-brand/15) — no separate wash tokens.
 - voice: calm/dry/second-person, one sentence w/ period, no exclamations, celebrates absence of work. empty states=empty-state.svelte (icon+voice line+≤1 action), never blank space. two sizes: default slot (bare muted icon, inline gaps/panels) vs size="large" hero (brand-wash icon tile size-16 bg-brand/10 text-brand, foreground statement, pages/whole sections).
+- icons: ONLY `import * as Icon from '$lib/components/icons'` → `<Icon.Search />`. no lucide/any icon lib (audit `no-icon-library`; swap shadcn CLI imports on add). Through-line: 24 grid, 1.75 stroke, round. marks (places/things) end in a dot `ft-accent`; utility (verbs/arrows/editor) no dot. dot=only accent, brand only under live ancestor (aria-current/aria-pressed/data-state on|active/data-active). motion is CSS-only in layout.css (retrace+land on live, fade on leave, loop for sync); never animate icons per component. Preferences=switch, Settings=gear, Skill=workflow mark, Diagram=two-box mark.
 
 ## tokens.color (semantic only — never raw oklch/hex/tailwind palette)
 

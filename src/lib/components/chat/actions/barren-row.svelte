@@ -2,7 +2,7 @@
 	import type { BarrenPass } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
-	import { FtChevronRight } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import {
 		CHAT_ROW_DETAIL,
 		CHAT_ROW_ICON,
@@ -47,7 +47,7 @@
 				size="sm"
 				class="{CHAT_ROW_STATEMENT} min-w-0 flex-1 shrink [&[data-state=open]>svg:first-child]:rotate-90"
 			>
-				<FtChevronRight
+				<Icon.ChevronRight
 					class="{CHAT_ROW_ICON} shrink-0 text-muted-foreground transition-transform duration-(--duration-micro)"
 				/>
 				<!-- The label is what the agent did, so it takes the teal; the query beside it is

@@ -11,7 +11,7 @@
 	import { toast } from 'svelte-sonner';
 	import { buttonVariants } from '$lib/components/ui/button/button.svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { FtDownload as Download } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		todos,
@@ -80,7 +80,7 @@
 		disabled={generatingPdf}
 		aria-label="Export board"
 	>
-		<Download class="size-3.5" />
+		<Icon.Download class="size-3.5" />
 		{generatingPdf ? 'Exporting…' : 'Export'}
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Portal>

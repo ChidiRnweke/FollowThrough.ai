@@ -2,7 +2,7 @@
 	import { toggleMode } from 'mode-watcher';
 	import BrandMark from '$lib/components/shared/brand-mark.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { FtTheme as Theme } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let { children } = $props();
 
@@ -29,7 +29,7 @@
 			</a>
 			<div class="flex-1"></div>
 			<Button variant="ghost" size="icon-sm" onclick={toggleMode} aria-label="Toggle theme">
-				<Theme class="size-4" />
+				<Icon.Theme class="size-4" />
 			</Button>
 			<Button href={repository} variant="ghost" size="sm" target="_blank" rel="noreferrer">
 				GitHub

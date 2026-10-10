@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { cn, type WithElementRef, type WithoutChildren } from '$lib/utils.js';
-	import { FtEllipsis as MoreHorizontalIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		ref = $bindable(),
@@ -20,6 +20,6 @@
 	)}
 	{...restProps}
 >
-	<MoreHorizontalIcon />
+	<Icon.Ellipsis />
 	<span class="sr-only">More pages</span>
 </span>

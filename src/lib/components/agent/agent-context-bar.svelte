@@ -9,12 +9,7 @@
 	import { starterSurface } from '../chat/chat-starters';
 	import * as HoverCard from '$lib/components/ui/hover-card';
 	import { Button } from '$lib/components/ui/button';
-	import {
-		FtAttachments as Attachments,
-		FtDocument as Document,
-		FtMemory as Memory,
-		FtTodos as Todos
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { agentCapabilityCopy, type AgentCapability } from '$lib/components/shared/labels';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
@@ -60,7 +55,7 @@
 		readonly key: AgentCapability;
 		readonly count: number | null;
 		readonly href: string;
-		readonly icon: typeof Memory;
+		readonly icon: typeof Icon.Memory;
 	}
 
 	const capabilities = $derived.by((): Capability[] => {
@@ -70,25 +65,25 @@
 				key: 'memory',
 				count: counts?.memory ?? null,
 				href: scope ? `/projects/${scope}/memory` : '/profile',
-				icon: Memory
+				icon: Icon.Memory
 			},
 			{
 				key: 'notes',
 				count: counts?.notes ?? null,
 				href: scope ? `/projects/${scope}` : '/today',
-				icon: Document
+				icon: Icon.Document
 			},
 			{
 				key: 'todos',
 				count: counts?.todos ?? null,
 				href: scope ? `/projects/${scope}/todos` : '/todos',
-				icon: Todos
+				icon: Icon.Todos
 			},
 			{
 				key: 'attachments',
 				count: counts?.attachments ?? null,
 				href: scope ? `/projects/${scope}/attachments` : '/today',
-				icon: Attachments
+				icon: Icon.Attachment
 			}
 		];
 	});
@@ -179,7 +174,7 @@
 		>
 			{#each capabilities as capability, index (capability.key)}
 				{@const copy = agentCapabilityCopy[capability.key]}
-				{@const Icon = capability.icon}
+				{@const Glyph = capability.icon}
 				<div in:fly={settle(index)} class="min-w-0">
 					<HoverCard.Root openDelay={120}>
 						<HoverCard.Trigger>
@@ -204,7 +199,7 @@
 											? 'text-foreground'
 											: 'text-muted-foreground'} group-hover/stat:text-brand"
 									>
-										<Icon class="shrink-0 {compact ? 'size-3' : 'size-3.5'}" />
+										<Glyph class="shrink-0 {compact ? 'size-3' : 'size-3.5'}" />
 										{capability.count ?? '—'}
 									</span>
 									<!-- The label collapses by width rather than unmounting, so the row

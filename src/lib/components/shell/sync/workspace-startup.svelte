@@ -3,7 +3,7 @@
 	import type { WorkspaceReadiness } from '$lib/models/workspace-startup';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import CloudDownload from '@lucide/svelte/icons/cloud-download';
+	import * as Icon from '$lib/components/icons';
 	import WorkspaceRecoveryDownload from '$lib/components/shared/workspace-recovery-download.svelte';
 	let {
 		resources,
@@ -26,7 +26,7 @@
 	class="flex flex-1 flex-col items-center justify-center gap-4 p-6 md:p-8 text-center"
 	data-workspace-startup
 >
-	<CloudDownload class="size-6 text-muted-foreground" />
+	<Icon.Sync state="downloading" class="size-6 text-muted-foreground" />
 	<div class="space-y-2" role="status">
 		<p class="text-sm font-medium">
 			{failure

@@ -5,7 +5,7 @@
 	import * as Popover from '$lib/components/ui/popover';
 	import * as Command from '$lib/components/ui/command';
 	import { Button } from '$lib/components/ui/button';
-	import { FtChevronsUd as ChevronsUpDown } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
 
@@ -45,9 +45,8 @@
 				aria-label={sourceTitle ? `Source: ${sourceTitle}` : 'No source'}
 				class={['max-w-48 justify-between', quiet && 'field-quiet']}
 				data-empty={sourceTitle ? undefined : 'true'}
-				><span class="truncate">{sourceTitle ?? (quiet ? '—' : 'No source')}</span><ChevronsUpDown
-					data-icon="inline-end"
-				/></Button
+				><span class="truncate">{sourceTitle ?? (quiet ? '—' : 'No source')}</span
+				><Icon.ChevronsUpDown data-icon="inline-end" /></Button
 			>{/snippet}</Popover.Trigger
 	>
 	<Popover.Content class="w-72 p-0" align="start">

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { EntityRef } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
-	import { FtExternal } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { CHAT_ROW, CHAT_ROW_ICON } from '../chat-row';
 	import { canOpenEntity, entityIcon, openEntity, entityActionLabel } from '../open-entity';
 
@@ -35,7 +35,7 @@
 {:else if entities.length > 0}
 	<ul class="flex flex-col">
 		{#each visible as entity, index (`${entity.kind}-${entity.id ?? entity.title}-${index}`)}
-			{@const Icon = entityIcon[entity.kind]}
+			{@const Glyph = entityIcon[entity.kind]}
 			<li>
 				{#if canOpenEntity(entity)}
 					<Button
@@ -45,14 +45,14 @@
 						aria-label={entityActionLabel(entity)}
 						onclick={() => openEntity(entity)}
 					>
-						<Icon class="{CHAT_ROW_ICON} text-muted-foreground" />
+						<Glyph class="{CHAT_ROW_ICON} text-muted-foreground" />
 						<span class="min-w-0 truncate" title={entity.title}>{entity.title}</span>
-						<FtExternal class="size-3 shrink-0 text-muted-foreground " />
+						<Icon.External class="size-3 shrink-0 text-muted-foreground " />
 					</Button>
 				{:else}
 					<!-- Nothing to open, so nothing that looks like it opens. -->
 					<div class="{CHAT_ROW} text-muted-foreground">
-						<Icon class={CHAT_ROW_ICON} />
+						<Glyph class={CHAT_ROW_ICON} />
 						<span class="min-w-0 truncate" title={entity.title}>{entity.title}</span>
 					</div>
 				{/if}

@@ -97,7 +97,7 @@ describe('semantic text inventory', () => {
 	it('includes imported visible icon components', () => {
 		expect(
 			scan(
-				'<script>import { FtArtifacts as Archive } from "$lib/components/icons";</script><div class="bg-brand/10"><Archive class="text-muted-foreground/60" /></div>'
+				'<script>import * as Icon from "$lib/components/icons";</script><div class="bg-brand/10"><Icon.Artifact class="text-muted-foreground/60" /></div>'
 			)
 		).toHaveLength(1);
 	});

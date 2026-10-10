@@ -9,7 +9,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import { FtExternal as Expand } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import NoteVersionDiff from '../../notes/note-version-diff.svelte';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import ChatMarkdown from '../chat-markdown.svelte';
@@ -353,7 +353,7 @@
 						aria-label="Review in full"
 						onclick={() => (expanded = true)}
 					>
-						<Expand class="size-3.5" />
+						<Icon.External class="size-3.5" />
 					</Button>
 				{/snippet}
 			</Tip>

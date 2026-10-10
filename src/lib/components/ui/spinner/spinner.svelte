@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { cn } from '$lib/utils.js';
-	import { FtLoader as Loader2Icon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import type { SVGAttributes } from 'svelte/elements';
 
 	let {
@@ -15,7 +15,7 @@
 	}: SVGAttributes<SVGSVGElement> = $props();
 </script>
 
-<Loader2Icon
+<Icon.Loader
 	{role}
 	name={name === null ? undefined : name}
 	color={color === null ? undefined : color}

@@ -4,7 +4,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
-	import { FtWorkflow as Workflow } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { untrack } from 'svelte';
 	import DiagramPreview from './diagram-preview.svelte';
@@ -60,7 +60,7 @@
 				Loading diagrams.
 			</p>{:else if diagrams.length === 0}
 			<EmptyState
-				icon={Workflow}
+				icon={Icon.Diagram}
 				title="No diagrams to insert yet."
 				hint="A diagram starts in conversation, and appears here once you keep it."
 			/>

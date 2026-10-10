@@ -1,10 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import {
-		FtDocument as Document,
-		FtMemory as Memory,
-		FtTodos as Todos
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import AgentAction from '../agent/agent-action.svelte';
 	import { chatStarters, starterSurface, type StarterTarget } from './chat-starters';
 
@@ -23,10 +19,10 @@
 
 	// Deliberately the same three icons the capability row above counts, so a row
 	// and a stat that mean the same thing look the same.
-	const icons: Record<StarterTarget, typeof Memory> = {
-		notes: Document,
-		todos: Todos,
-		memory: Memory
+	const icons: Record<StarterTarget, typeof Icon.Memory> = {
+		notes: Icon.Document,
+		todos: Icon.Todos,
+		memory: Icon.Memory
 	};
 </script>
 
