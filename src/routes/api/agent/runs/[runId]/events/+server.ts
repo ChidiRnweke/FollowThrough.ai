@@ -16,12 +16,14 @@ const cursorAfter = (request: Request, url: URL): string => {
 export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 	const actor = AppFactory.actor(locals);
 	const agent = AppFactory.controllers().agent();
-	const eventBus = AppFactory.eventBus();
 	const runId = params.runId as AgentRunId;
-	await agent.getRun(actor, runId);
+	// Subscribe before the stream starts, so a notification between the ownership check and the
+	// first replay still triggers a flush.
+	let changed = () => {};
+	const unsubscribe = await agent.observeRun(actor, runId, () => changed());
 	let cursor = cursorAfter(request, url);
 
-	let teardown = () => {};
+	let teardown = unsubscribe;
 
 	const body = new ReadableStream<Uint8Array>({
 		start(controller) {
@@ -98,8 +100,8 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 			// Initial replay from cursor
 			void flush();
 
-			// Push notifications from the event bus
-			const unsubscribe = eventBus.subscribe(runId, () => void flush());
+			// Push notifications from the run's event stream
+			changed = () => void flush();
 
 			// Defensive fallback poll every 5s in case a notification is missed
 			const fallbackTimer = setInterval(() => void flush(), 5_000);

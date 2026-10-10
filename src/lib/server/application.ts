@@ -491,6 +491,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			runner: agentRunner,
 			settlements: runSettlements,
 			eventBus,
+			runObservers: eventBus,
 			contextFormatter: agentContext,
 			contextNotes: notes.reader,
 			contextSkills: skills.finder,

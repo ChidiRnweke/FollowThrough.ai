@@ -69,8 +69,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// If auth is enabled, validate sessions
 	if (AppFactory.isAuthEnabled()) {
 		if (sessionId) {
-			const authService = AppFactory.sessions();
-			const result = await authService.validateSession(sessionId);
+			const result = await AppFactory.access().resumeSession(sessionId);
 			if (result) {
 				// Session validation may extend the stored deadline. Keep the browser in sync.
 				setSessionCookie(

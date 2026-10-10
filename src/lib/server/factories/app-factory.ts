@@ -1,15 +1,14 @@
 import { LocalIdentity, type LocalIdentityController } from '../controllers/identity/local';
 import { instrumentedController } from './controller-instrumentation';
-import { localIdentitySurface } from './controller-surfaces';
+import { accessSurface, localIdentitySurface } from './controller-surfaces';
+import { Access, type AccessController } from '../controllers/identity/access';
 import type { McpSurfaceFactory } from './agent/mcp-tool-factory';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import type { ActorContext } from '$lib/models/identity';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import type { AgentEventBus } from '../stores/agent/events';
 import { createProductionFactory, type ProductionApplication } from './production-factory';
-import { SessionRegistry, type ISessionRegistry } from '$lib/server/services/identity/sessions';
-import { AccessTokens, type IAccessTokens } from '$lib/server/services/identity/api-tokens';
-import type { ProvenanceRecorder } from '../services/notes/provenance';
+import { SessionRegistry } from '$lib/server/services/identity/sessions';
+import { AccessTokens } from '$lib/server/services/identity/api-tokens';
 import { ApiTokenRecords } from '../repositories/identity/postgres/api-tokens';
 import { SignIn, type ISignIn } from '$lib/server/controllers/identity/controller';
 import { OAuthAuthorization } from '$lib/server/services/identity/oauth-authorization';
@@ -40,7 +39,20 @@ const localIdentity = new DeferredValue(() => {
 	);
 });
 const sessions = new DeferredValue(() => new SessionRegistry(new SessionRecords(db)));
-const accessTokens = new DeferredValue(() => new AccessTokens(new ApiTokenRecords(db)));
+const access = new DeferredValue(() => {
+	const users = new UserDirectory(new UserRecords(db));
+	return instrumentedController(
+		'access',
+		new Access({
+			sessions: sessions.get(),
+			tokens: new AccessTokens(new ApiTokenRecords(db)),
+			provisioner: users,
+			users,
+			provenance: application.get().provenance
+		}),
+		accessSurface
+	);
+});
 const signIn = new DeferredValue(() => {
 	const config = authentikConfiguration();
 	return new SignIn({
@@ -59,14 +71,6 @@ export class AppFactory {
 		return this.application().controllers;
 	}
 
-	static eventBus(): AgentEventBus {
-		return this.application().eventBus;
-	}
-
-	static provenance(): ProvenanceRecorder {
-		return this.application().provenance;
-	}
-
 	static mcpSurface(...args: Parameters<McpSurfaceFactory>): ReturnType<McpSurfaceFactory> {
 		return this.application().mcpSurface(...args);
 	}
@@ -79,12 +83,8 @@ export class AppFactory {
 		return localIdentity.get();
 	}
 
-	static sessions(): ISessionRegistry {
-		return sessions.get();
-	}
-
-	static accessTokens(): IAccessTokens {
-		return accessTokens.get();
+	static access(): AccessController {
+		return access.get();
 	}
 
 	static signIn(): ISignIn {

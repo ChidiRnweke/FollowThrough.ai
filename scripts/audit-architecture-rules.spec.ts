@@ -701,3 +701,62 @@ it('rejects a controller implementation supplied through a model-owned operation
 		})
 	).toContain('controller-orchestration');
 });
+
+describe('entry points and composition root', () => {
+	const notesPath = 'src/lib/server/controllers/notes/controller.ts';
+	const notes = `export interface NotesController { save(): Promise<void>; index(): Promise<void> }
+export class Notes implements NotesController { async save(): Promise<void> {} async index(): Promise<void> {} }`;
+	const application = 'src/lib/server/application.ts';
+	it('rejects a composition root that executes a controller operation', () => {
+		expect(
+			rules({
+				[notesPath]: notes,
+				[application]:
+					"import { Notes } from '$lib/server/controllers/notes/controller'; export async function createApplication() { const notes = new Notes(); await notes.index(); return notes; }"
+			})
+		).toContain('factory-workflow');
+	});
+	it('allows a composition root that only constructs', () => {
+		expect(
+			inspect({
+				[notesPath]: notes,
+				[application]:
+					"import { Notes, type NotesController } from '$lib/server/controllers/notes/controller'; export function createApplication(): NotesController { return new Notes(); }"
+			})
+		).toEqual([]);
+	});
+	it.each(['src/hooks.server.ts', 'src/worker.ts', 'src/routes/api/+server.ts'])(
+		'rejects %s calling a service',
+		(entry) => {
+			expect(
+				rules({
+					[servicePath]: service,
+					[entry]:
+						"import type { Titles } from '$lib/services/notes/titles'; export function handle(titles: Titles): string { return titles.title('note'); }"
+				})
+			).toEqual(['indirect-dependency']);
+		}
+	);
+	it.each(['src/hooks.server.ts', 'src/worker.ts', 'src/routes/api/+server.ts'])(
+		'allows %s to sequence controller operations as the outermost caller',
+		(entry) => {
+			expect(
+				inspect({
+					[notesPath]: notes,
+					[entry]:
+						"import type { NotesController } from '$lib/server/controllers/notes/controller'; export async function handle(notes: NotesController): Promise<void> { await notes.save(); await notes.index(); }"
+				})
+			).toEqual([]);
+		}
+	);
+	it('rejects a remote function reading a store', () => {
+		expect(
+			rules({
+				'src/lib/server/stores/notes.ts':
+					'export interface Drafts { read(): string } export class DraftStore implements Drafts { read(): string { return ""; } }',
+				'src/lib/remote/notes.remote.ts':
+					"import type { Drafts } from '$lib/server/stores/notes'; export const read = (drafts: Drafts): string => drafts.read();"
+			})
+		).toEqual(['indirect-dependency']);
+	});
+});
