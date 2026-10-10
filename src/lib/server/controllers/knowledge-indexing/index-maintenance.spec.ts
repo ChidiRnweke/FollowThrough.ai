@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
@@ -19,6 +21,7 @@ const backfill = (repository: InMemorySearchRepository, client: InMemoryEmbeddin
 	new EmbeddingMaintenance(
 		new IndexBacklog(repository),
 		client,
+		new EmbeddingBatching(testTokenizer),
 		immediateTransactions,
 		new EmbeddingProgressStore(),
 		{

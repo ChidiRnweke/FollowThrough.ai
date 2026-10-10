@@ -1,8 +1,9 @@
+import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { InvalidGeneratedContentError } from '$lib/errors';
 import type { ToolDescriptor, ToolEmbeddingSeedSummary } from '$lib/models/agent/tool-index';
 import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
 import type { IToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 
 export interface ToolRetriever {
 	retrieve(catalog: readonly ToolDescriptor[], query: string, topN: number): Promise<string[]>;
@@ -19,7 +20,8 @@ interface TransactionRunner {
 export class ToolDiscovery implements ToolDiscoveryController {
 	constructor(
 		private readonly index: IToolCatalogIndex,
-		private readonly embeddings: IEmbeddings,
+		private readonly embeddings: EmbeddingClient,
+		private readonly batching: IEmbeddingBatching,
 		private readonly transactions: TransactionRunner,
 		private readonly catalog: Pick<AgentToolCatalog, 'discoverable'>
 	) {}
@@ -46,9 +48,11 @@ export class ToolDiscovery implements ToolDiscoveryController {
 		catalog: readonly ToolDescriptor[] = this.catalog.discoverable()
 	): Promise<ToolEmbeddingSeedSummary> {
 		const plan = await this.index.prepare(catalog, this.embeddings.model);
-		const batch = plan.pending.length
-			? await this.embeddings.embed(plan.pending.map((entry) => entry.input))
-			: { model: plan.model, vectors: [] };
+		const batches: EmbeddingBatch[] = [];
+		for (const contents of this.batching.batches(plan.pending.map((entry) => entry.input))) {
+			batches.push(await this.embeddings.embed(contents));
+		}
+		const batch = this.batching.combine(plan.model, batches);
 		return this.transactions.run(() => this.index.complete(plan, batch));
 	}
 }

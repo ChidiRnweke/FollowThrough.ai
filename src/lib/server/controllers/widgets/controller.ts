@@ -1,3 +1,4 @@
+import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { StaleRevisionError, ValidationError } from '$lib/errors';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type {
@@ -49,7 +50,7 @@ import type {
 	WidgetMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type {
 	WidgetLister,
 	WidgetReader,
@@ -124,7 +125,8 @@ export interface WidgetsDependencies {
 	widgetWriter: WidgetWriter;
 	/** Keeps the knowledge index in step with what each widget shows (ADR 0019). */
 	widgetIndexer: WidgetIndexing;
-	indexEmbeddings: IEmbeddings;
+	indexEmbeddings: EmbeddingClient;
+	embeddingBatching: IEmbeddingBatching;
 	indexWriter: IndexCompletion;
 	transactionRunner: TransactionRunner;
 }
@@ -310,8 +312,15 @@ export class Widgets implements WidgetsController {
 			this.dependencies.search.text(widget)
 		);
 		if (result.kind === 'stored') return;
-		const batch = await this.dependencies.indexEmbeddings.embed(
+		const batches: EmbeddingBatch[] = [];
+		for (const contents of this.dependencies.embeddingBatching.batches(
 			result.missing.map((chunk) => chunk.input)
+		)) {
+			batches.push(await this.dependencies.indexEmbeddings.embed(contents));
+		}
+		const batch = this.dependencies.embeddingBatching.combine(
+			this.dependencies.indexEmbeddings.model,
+			batches
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}

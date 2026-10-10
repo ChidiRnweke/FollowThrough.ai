@@ -1,3 +1,4 @@
+import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { ToolLifecycleError } from '$lib/errors';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
@@ -114,7 +115,7 @@ import type {
 } from '$lib/models/workspace-mutations';
 import type { DiagramLister } from '$lib/server/services/diagrams/library';
 import type { UserPreferencesReader } from '$lib/server/services/identity/user-preferences';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type { NoteArchiveImportPreparation } from '$lib/server/services/notes/import';
 import type { NotePatchPreparation } from '$lib/server/services/notes/patches';
 import type { NoteRevisionComparison } from '$lib/server/services/notes/revision-diff';
@@ -450,7 +451,8 @@ export interface NotesDependencies {
 	revisionReader: NoteRevisionReader;
 	attachmentRestorer: NoteAttachmentRestorer;
 	anchorRepairer: SourceAnchorRepairer;
-	indexEmbeddings: IEmbeddings;
+	indexEmbeddings: EmbeddingClient;
+	embeddingBatching: IEmbeddingBatching;
 	indexWriter: IndexCompletion;
 	noteIndexer: NoteIndexer;
 	transactionRunner: TransactionRunner;
@@ -1206,8 +1208,15 @@ export class Notes implements NotesController {
 	}
 	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
 		if (result.kind === 'stored') return;
-		const batch = await this.dependencies.indexEmbeddings.embed(
+		const batches: EmbeddingBatch[] = [];
+		for (const contents of this.dependencies.embeddingBatching.batches(
 			result.missing.map((chunk) => chunk.input)
+		)) {
+			batches.push(await this.dependencies.indexEmbeddings.embed(contents));
+		}
+		const batch = this.dependencies.embeddingBatching.combine(
+			this.dependencies.indexEmbeddings.model,
+			batches
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}

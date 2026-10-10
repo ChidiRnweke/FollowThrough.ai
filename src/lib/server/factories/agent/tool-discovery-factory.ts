@@ -1,6 +1,6 @@
 import type { IToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 export interface AgentToolDiscoveryServices {
 	readonly index: Pick<IToolCatalogIndex, 'rank'>;
-	readonly embeddings: Pick<IEmbeddings, 'embed'>;
+	readonly embeddings: Pick<EmbeddingClient, 'embed'>;
 }

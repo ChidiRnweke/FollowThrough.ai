@@ -1,8 +1,9 @@
+import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import type { ActorContext } from '$lib/models/identity';
 import type { EmbeddedChunk, IndexSource, PendingIndexSource } from '$lib/models/knowledge-search';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type { IIndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { InvalidGeneratedContentError } from '$lib/errors';
 
@@ -34,7 +35,8 @@ export class EmbeddingMaintenance implements ScheduledTask {
 
 	constructor(
 		private readonly backlog: IIndexBacklog,
-		private readonly embeddingClient: IEmbeddings,
+		private readonly embeddingClient: EmbeddingClient,
+		private readonly batching: IEmbeddingBatching,
 		private readonly transactions: TransactionRunner,
 		private readonly progress: EmbeddingProgressStore,
 		options: EmbeddingBackfillOptions = {}
@@ -83,7 +85,11 @@ export class EmbeddingMaintenance implements ScheduledTask {
 		// Embedding happens outside the transaction: it is a network call to a third
 		// party, and holding row locks across it is the very thing this worker exists
 		// to stop the request path from doing.
-		const batch = await this.embeddingClient.embed(documents.map((document) => document.input));
+		const batches: EmbeddingBatch[] = [];
+		for (const contents of this.batching.batches(documents.map((document) => document.input))) {
+			batches.push(await this.embeddingClient.embed(contents));
+		}
+		const batch = this.batching.combine(this.embeddingClient.model, batches);
 		if (batch.vectors.length !== documents.length)
 			throw new InvalidGeneratedContentError('Embedding result count did not match chunk count');
 		const embedded: EmbeddedChunk[] = documents.map((document, index) => ({

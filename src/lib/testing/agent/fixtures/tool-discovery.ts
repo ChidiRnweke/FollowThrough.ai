@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 import { ToolDiscovery } from '$lib/server/controllers/tool-discovery/controller';
 import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
@@ -36,6 +38,7 @@ export const toolDiscoveryFixture = async (
 	const controller = new ToolDiscovery(
 		new ToolCatalogIndex(repository),
 		embeddings,
+		new EmbeddingBatching(testTokenizer),
 		new InMemoryTransactionRunner([repository]),
 		new AgentToolCatalogService()
 	);

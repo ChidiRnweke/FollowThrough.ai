@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { MemoryEditingService } from '$lib/services/memory/edits';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
@@ -39,6 +41,7 @@ const setup = () => {
 			memoryDeleter: memory.deleter,
 			memoryIndexer: indexWriter,
 			indexEmbeddings,
+			embeddingBatching: new EmbeddingBatching(testTokenizer),
 			indexWriter,
 			transactionRunner: new InMemoryTransactionRunner([entries, search])
 		})

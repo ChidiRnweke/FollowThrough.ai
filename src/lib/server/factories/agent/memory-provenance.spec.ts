@@ -1,3 +1,4 @@
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { AgentRunId } from '$lib/models/agent';
 import type { Provenance } from '$lib/models/provenance';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
@@ -76,6 +77,7 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 			memoryIndexer: index,
 			indexWriter: index,
 			indexEmbeddings: embeddings,
+			embeddingBatching: new EmbeddingBatching(testTokenizer),
 			trustPolicyEvaluator: trust,
 			transactionRunner: new InMemoryTransactionRunner([entries, suggestions, effects, search])
 		})

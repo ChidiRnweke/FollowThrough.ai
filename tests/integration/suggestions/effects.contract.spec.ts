@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { MemoryEntryId } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';
 import type { RelationshipId } from '$lib/models/relationships';
@@ -68,6 +70,7 @@ const application = (
 			memoryIndexer: index,
 			indexWriter: index,
 			indexEmbeddings: embeddings,
+			embeddingBatching: new EmbeddingBatching(testTokenizer),
 			transactionRunner,
 			now: () => now
 		})

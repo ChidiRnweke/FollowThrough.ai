@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { describe, expect, it, onTestFinished } from 'vitest';
@@ -54,6 +56,7 @@ const setup = async (suffix: string) => {
 		new EmbeddingMaintenance(
 			new IndexBacklog(repository),
 			{ model, embed },
+			new EmbeddingBatching(testTokenizer),
 			transactionRunner,
 			new EmbeddingProgressStore(),
 			{
