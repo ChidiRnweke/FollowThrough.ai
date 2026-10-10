@@ -1,21 +1,21 @@
 {
 	"recordedAt": "2026-10-10",
-	"applicationRevision": "5a22f8289a7afb19f557f384c663dd1f94da9f55",
+	"applicationRevision": "11757be5b7e7a37241eec6d0ee43d2dfb5c1116c",
 	"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors. The overall refactor is incomplete.",
 	"comparison": {
-		"applicationBase": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
+		"applicationBase": "af8cfce7c514a47b6f4b2aeadd8726d29adb9c90",
 		"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
-		"method": "The unchanged analyzers were run against draft #353 at 85f5cc7b before implementation. Semantic diagnostics matched exactly; expanding Chisel message references reproduced its complete recorded inventory. Counts compare that branch with this server composition repair.",
+		"method": "The unchanged analyzers were run against draft #354 at af8cfce7 before implementation. All 375 semantic diagnostics and their provenance matched exactly. Expanding Chisel message references reproduced all 47 recorded diagnostics. Both complete current inventories remain equal to that base; the separately reviewed WorkspaceSyncChanges composition dependency was not an analyzer finding.",
 		"semanticCounts": {
 			"concrete-dependency": 2,
 			"controller-orchestration": 277,
-			"factory-workflow": 13,
-			"indirect-dependency": 11,
-			"public-service-helper": 21,
+			"factory-workflow": 12,
+			"indirect-dependency": 9,
+			"public-service-helper": 20,
 			"store-workflow": 55
 		},
-		"semanticTotal": 379,
+		"semanticTotal": 375,
 		"chiselCounts": {
 			"import-boundary:banned-layer-import": 47
 		},
@@ -4727,5 +4727,21 @@
 				"message": "stores must not import factory (src/lib/factories/workspace/session.ts). Keep dependency construction in capability factories and application composition. Do not construct application capabilities inside stores, services or controllers."
 			}
 		]
-	}
+	},
+	"reviewedDependencies": [
+		{
+			"subject": "WorkspaceSyncChanges synchronization read composition",
+			"status": "corrected",
+			"previousDependency": "The factory injected WorkspaceCommandRules.workspaceResourceKey and syncEtag callbacks into the repository. pullPage reconstructed the journal and object repositories inside a transaction, serialized and reparsed identities, and assembled the complete page.",
+			"currentOwner": "Workspace.pullChangePage directly coordinates WorkspaceJournal, WorkspaceCommandRules and WorkspaceResourceVersions inside one controller-owned readonly repeatable-read transaction.",
+			"evidence": [
+				"src/lib/server/repositories/workspace/sync-changes.ts",
+				"src/lib/server/factories/capabilities/sync-capability-factory.ts",
+				"src/lib/server/controllers/workspace/controller.ts",
+				"src/lib/server/db/transaction-context.ts",
+				"tests/integration/sync/pull-snapshot.contract.spec.ts"
+			],
+			"inventoryNote": "Manual dependency review, separate from analyzer findings. Overall application migration remains incomplete."
+		}
+	]
 }
