@@ -11,8 +11,8 @@ import {
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
 import { testActor, testConversationId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { ConversationBuffer } from '../conversations/buffer';
-import { AgentReplayVirtualizer } from '../conversations/replay-virtualizer';
+import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
+import { createReplayVirtualizer } from '$lib/server/factories/agent/conversation-factory';
 import { AgentReasoning } from './reasoning';
 
 const context: AgentRunContext = { contextNotes: [], contextResources: [], skills: { items: [] } };
@@ -76,11 +76,11 @@ const setup = (fetch: typeof globalThis.fetch, prepare = async () => {}) => {
 		'https://app.test',
 		fetch,
 		(repository, actor, id) =>
-			new ConversationBuffer(
+			createConversationSession(
 				repository,
 				actor,
 				id,
-				new AgentReplayVirtualizer(new InMemoryAgentFiles(), tokens)
+				createReplayVirtualizer(new InMemoryAgentFiles(), tokens)
 			),
 		undefined,
 		() => provider

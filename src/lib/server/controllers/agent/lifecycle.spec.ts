@@ -3,7 +3,7 @@ import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
 import { AgentTools } from '$lib/server/factories/agent/agent-tool-factory';
-import { ConversationBuffer } from '$lib/server/services/agent/conversations/buffer';
+import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
 import { InMemoryToolCallingModel } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
@@ -623,7 +623,7 @@ it('journals a failed tool call and its correction through the production runner
 		'https://unused.test',
 		undefined,
 		(repository, actor, conversationId) =>
-			new ConversationBuffer(repository, actor, conversationId, {
+			createConversationSession(repository, actor, conversationId, {
 				virtualize: async (_actor, _id, item) => item
 			}),
 		undefined,

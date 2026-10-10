@@ -40,7 +40,7 @@ import {
 import { ToolPreferenceRecords } from '$lib/server/repositories/agent/postgres/tool-preferences';
 import { TrustPolicyRecords } from '$lib/server/repositories/agent/postgres/trust-policies';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { ConversationBuffer } from '$lib/server/services/agent/conversations/buffer';
+import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
 import { AgentEventStore, type AgentEventBus } from '$lib/server/stores/agent/events';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import {
@@ -58,7 +58,7 @@ import { agentToolCatalog } from '$lib/server/factories/agent/agent-tool-catalog
 import { agentToolRegistry } from '$lib/server/factories/agent/agent-tool-factory';
 import type { ProductionControllerFactory } from '$lib/server/factories/production-controller-factory';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
-import { AgentReplayVirtualizer } from '$lib/server/services/agent/conversations/replay-virtualizer';
+import { createReplayVirtualizer } from '$lib/server/factories/agent/conversation-factory';
 
 export interface AgentCapabilityInput {
 	readonly tokens: TokenCounter;
@@ -139,11 +139,11 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		input.appURL,
 		undefined,
 		(repository, actor, conversationId) =>
-			new ConversationBuffer(
+			createConversationSession(
 				repository,
 				actor,
 				conversationId,
-				new AgentReplayVirtualizer(input.files, tokens)
+				createReplayVirtualizer(input.files, tokens)
 			),
 		traceAgentTurn
 	);

@@ -1,9 +1,12 @@
+import type { AgentInputItem } from '@openai/agents';
+import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
+import type { BufferedConversationSession } from '$lib/server/adapters/agent/conversation';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, expect, it } from 'vitest';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
-import { ConversationBuffer, toAgentInputItem } from './buffer';
-import { AgentReplayVirtualizer } from './replay-virtualizer';
+import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
+import { createReplayVirtualizer } from '$lib/server/factories/agent/conversation-factory';
 import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import {
@@ -16,7 +19,7 @@ import {
 const conversationId = 'conversation-1' as ConversationId;
 const actor: ActorContext = { userId: 'user-1' as ActorContext['userId'] };
 
-const bufferOver = (stored: readonly PersistedSessionItem[]): ConversationBuffer => {
+const bufferOver = (stored: readonly PersistedSessionItem[]): BufferedConversationSession => {
 	const repository = new InMemoryAgentSessionRepository();
 	repository.items = stored.map((item, position) => ({
 		id: `item-${position}` as (typeof repository.items)[number]['id'],
@@ -25,17 +28,19 @@ const bufferOver = (stored: readonly PersistedSessionItem[]): ConversationBuffer
 		item,
 		createdAt: new Date().toISOString() as (typeof repository.items)[number]['createdAt']
 	}));
-	return new ConversationBuffer(
+	return createConversationSession(
 		repository,
 		actor,
 		conversationId,
-		new AgentReplayVirtualizer(new InMemoryAgentFiles(), tokens)
+		createReplayVirtualizer(new InMemoryAgentFiles(), tokens)
 	);
 };
 
-const bufferWith = async (items: readonly PersistedSessionItem[]): Promise<ConversationBuffer> => {
+const bufferWith = async (
+	items: readonly PersistedSessionItem[]
+): Promise<BufferedConversationSession> => {
 	const buffer = bufferOver([]);
-	await buffer.addItems(items.map(toAgentInputItem));
+	await buffer.addItems(items.map((item) => toStoredSessionItem(item) as AgentInputItem));
 	return buffer;
 };
 

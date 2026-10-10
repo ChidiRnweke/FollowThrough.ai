@@ -48,7 +48,7 @@ export interface SessionJsonObject {
 	readonly [key: string]: SessionJson;
 }
 
-const sessionJsonSchema: z.ZodType<SessionJson> = z.lazy(() =>
+export const sessionJsonSchema: z.ZodType<SessionJson> = z.lazy(() =>
 	z.union([
 		z.string(),
 		z.number().finite(),
