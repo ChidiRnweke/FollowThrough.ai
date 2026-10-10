@@ -7,7 +7,7 @@ import type { ArtifactId } from '$lib/models/deliverables';
 import type {
 	ArtifactActionsRemote,
 	ArtifactDownloadNavigation
-} from '$lib/controllers/deliverables/artifacts';
+} from '$lib/models/browser-deliverables';
 export class RemoteArtifactActions implements ArtifactActionsRemote {
 	download(id: ArtifactId) {
 		return downloadArtifact({ artifactId: id });

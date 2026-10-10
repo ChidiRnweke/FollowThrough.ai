@@ -3,10 +3,7 @@ import {
 	generateBundle,
 	previewDocument
 } from '$lib/remote/deliverables/deliverables.remote';
-import type {
-	DocumentExportRemote,
-	DocumentPreviewUrls
-} from '$lib/controllers/deliverables/export';
+import type { DocumentExportRemote, DocumentPreviewUrls } from '$lib/models/browser-deliverables';
 import type {
 	GenerateDocumentInput,
 	GenerateBundleInput,

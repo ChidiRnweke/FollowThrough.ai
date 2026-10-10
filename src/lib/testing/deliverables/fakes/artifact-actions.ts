@@ -1,7 +1,7 @@
 import type {
 	ArtifactActionsRemote,
 	ArtifactDownloadNavigation
-} from '$lib/controllers/deliverables/artifacts';
+} from '$lib/models/browser-deliverables';
 import type { ArtifactId } from '$lib/models/deliverables';
 export class InMemoryArtifactDownloads implements ArtifactDownloadNavigation {
 	readonly urls: string[] = [];

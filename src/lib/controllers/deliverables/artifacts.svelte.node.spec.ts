@@ -13,7 +13,11 @@ const setup = async () => {
 	const remote = new InMemoryArtifactActions();
 	remote.available.add(id);
 	const downloads = new InMemoryArtifactDownloads();
-	const controller = new ArtifactActions(new ArtifactActionStore(), f.workspace, remote, downloads);
+	const controller = new ArtifactActions(new ArtifactActionStore(), {
+		...f.dependencies,
+		remote,
+		navigation: downloads
+	});
 	return {
 		...f,
 		remote,
@@ -70,7 +74,10 @@ it('reports a failed regeneration without downloading or retaining busy state', 
 		f.remote.failure = new Error('Provider unavailable');
 		const result = await f.controller.regenerate(id);
 		expect({ result, urls: f.downloads.urls, busy: f.controller.busy(id) }).toEqual({
-			result: { kind: 'failure', message: 'Could not regenerate the document.' },
+			result: {
+				kind: 'failure',
+				message: 'Could not regenerate the document. Provider unavailable'
+			},
 			urls: [],
 			busy: false
 		});
@@ -111,7 +118,7 @@ it('does not download a regenerated artifact after account teardown', async () =
 		f.close();
 	}
 });
-it('keeps a pending action busy when another action on the same artifact finishes', async () => {
+it('rejects a conflicting action while the selected artifact is busy', async () => {
 	const f = await setup();
 	try {
 		const gate = f.remote.pause();
@@ -124,7 +131,7 @@ it('keeps a pending action busy when another action on the same artifact finishe
 		expect({ stillBusy, finishedBusy: f.controller.busy(id), urls: f.downloads.urls }).toEqual({
 			stillBusy: true,
 			finishedBusy: false,
-			urls: [`https://storage.test/regenerated-${id}.pdf`, `https://storage.test/${id}.pdf`]
+			urls: [`https://storage.test/${id}.pdf`]
 		});
 	} finally {
 		f.close();

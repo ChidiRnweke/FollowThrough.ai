@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { ArchiveImports } from './archive-import';
 import { ArchiveImportStore } from '$lib/stores/notes/archive-import.svelte';
 import { InMemoryArchiveImportUpload } from '$lib/testing/notes/fakes/archive-import';
-import { browserExportFixture } from '$lib/testing/deliverables/fixtures/browser-export';
+import { archiveWorkspaceFixture } from '$lib/testing/notes/fixtures/archive-workspace';
 import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { syncEtag } from '$lib/models/sync';
@@ -19,7 +19,7 @@ const setup = async (
 	result: ArchiveImportResponse = { kind: 'report', report: partialReport },
 	accepted = true
 ) => {
-	const f = await browserExportFixture();
+	const f = await archiveWorkspaceFixture();
 	const imported = noteBuilder({ id: testNoteId(2), title: 'Imported' });
 	const upload = new InMemoryArchiveImportUpload({ accepted, result }, () =>
 		f.transport.records.set(workspaceResourceKey({ type: 'notes', id: [imported.id] }), {

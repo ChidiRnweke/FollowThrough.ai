@@ -1,8 +1,31 @@
+import type { DeliverableBinding } from '$lib/models/browser-deliverables';
+import type { NoteDocument } from '$lib/models/notes';
 import type { ExportDownload } from '$lib/models/deliverables';
 
 /** A mounted export dialog owns its generation, progress and preview URL. */
 export class DocumentExportStore {
 	private revision = 0;
+	private bound = $state.raw<DeliverableBinding | null>(null);
+	private loadedDocuments = $state.raw<readonly NoteDocument[]>([]);
+	private previewRevision = 0;
+	get binding() {
+		return this.bound;
+	}
+	get documents() {
+		return this.loadedDocuments;
+	}
+	get previewGeneration() {
+		return this.previewRevision;
+	}
+	advancePreview(): void {
+		this.previewRevision++;
+	}
+	bind(binding: DeliverableBinding): void {
+		this.bound = binding;
+	}
+	setDocuments(documents: readonly NoteDocument[]): void {
+		this.loadedDocuments = documents;
+	}
 	private status = $state<'closed' | 'loading' | 'ready'>('closed');
 	private working = $state(false);
 	private failure = $state('');
@@ -56,6 +79,10 @@ export class DocumentExportStore {
 	close(): void {
 		this.revision += 1;
 		this.status = 'closed';
+		this.bound = null;
+		this.loadedDocuments = [];
+		this.download = null;
+		this.failure = '';
 		this.working = false;
 		this.preview = '';
 	}

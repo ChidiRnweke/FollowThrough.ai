@@ -5,10 +5,10 @@ import { defaultExportSettings } from '$lib/models/deliverables';
 import { browserExportFixture } from '$lib/testing/deliverables/fixtures/browser-export';
 it('opens absent project defaults without creating a pending edit', async () => {
 	const f = await browserExportFixture();
-	const controller = new ProjectExportSettings(new ExportSettingsStore(), f.workspace);
+	const controller = new ProjectExportSettings(new ExportSettingsStore(), f.settingsDependencies);
 	try {
 		const result = await controller.open(f.note.projectId);
-		expect({ result, ready: controller.ready, pending: f.resources.pending }).toEqual({
+		expect({ result, ready: controller.ready, pending: await f.pending() }).toEqual({
 			result: { kind: 'ready', settings: defaultExportSettings },
 			ready: true,
 			pending: []
@@ -20,16 +20,16 @@ it('opens absent project defaults without creating a pending edit', async () => 
 });
 it('saves project defaults durably while offline', async () => {
 	const f = await browserExportFixture();
-	const controller = new ProjectExportSettings(new ExportSettingsStore(), f.workspace);
+	const controller = new ProjectExportSettings(new ExportSettingsStore(), f.settingsDependencies);
 	try {
 		await controller.open(f.note.projectId);
-		f.resources.setOnline(false);
+		f.workspace.environment.online = false;
 		const settings = { ...defaultExportSettings, fontSize: 14, includeTitle: true };
 		const result = await controller.save(settings);
 		expect({
 			result,
 			busy: controller.busy,
-			commands: f.resources.pending.map((entry) => entry.intent.command)
+			commands: (await f.pending()).map((entry) => entry.intent.command)
 		}).toEqual({
 			result: { kind: 'saved' },
 			busy: false,
@@ -49,12 +49,12 @@ it('saves project defaults durably while offline', async () => {
 });
 it('refuses invalid export defaults without creating a pending edit', async () => {
 	const f = await browserExportFixture();
-	const controller = new ProjectExportSettings(new ExportSettingsStore(), f.workspace);
+	const controller = new ProjectExportSettings(new ExportSettingsStore(), f.settingsDependencies);
 	try {
 		await controller.open(f.note.projectId);
 		const result = await controller.save({ ...defaultExportSettings, fontSize: 100 });
-		expect({ result, busy: controller.busy, pending: f.resources.pending }).toEqual({
-			result: { kind: 'failure', message: 'Could not save the export defaults.' },
+		expect({ result, busy: controller.busy, pending: await f.pending() }).toEqual({
+			result: { kind: 'failure', message: 'Export font size must be between 8 and 18 points' },
 			busy: false,
 			pending: []
 		});
@@ -65,12 +65,12 @@ it('refuses invalid export defaults without creating a pending edit', async () =
 });
 it('does not write defaults after the dialog closes', async () => {
 	const f = await browserExportFixture();
-	const controller = new ProjectExportSettings(new ExportSettingsStore(), f.workspace);
+	const controller = new ProjectExportSettings(new ExportSettingsStore(), f.settingsDependencies);
 	try {
 		await controller.open(f.note.projectId);
 		controller.close();
 		const result = await controller.save({ ...defaultExportSettings, fontSize: 14 });
-		expect({ result, pending: f.resources.pending }).toEqual({
+		expect({ result, pending: await f.pending() }).toEqual({
 			result: { kind: 'superseded' },
 			pending: []
 		});
@@ -81,7 +81,7 @@ it('does not write defaults after the dialog closes', async () => {
 });
 it('does not write defaults through a stopped account', async () => {
 	const f = await browserExportFixture();
-	const controller = new ProjectExportSettings(new ExportSettingsStore(), f.workspace);
+	const controller = new ProjectExportSettings(new ExportSettingsStore(), f.settingsDependencies);
 	try {
 		await controller.open(f.note.projectId);
 		f.workspace.stop();

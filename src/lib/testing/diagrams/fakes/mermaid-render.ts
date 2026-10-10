@@ -5,14 +5,18 @@ export class InMemoryMermaidRenderer implements MermaidSvgRenderer {
 		{ resolve: (svg: string) => void; reject: (error: Error) => void }
 	>();
 	readonly renderedIds: string[] = [];
+	readonly requests: {
+		source: string;
+		config: MermaidRenderConfig;
+		mode: 'screen' | 'document';
+	}[] = [];
 	render(
 		id: string,
 		source: string,
 		_config: MermaidRenderConfig,
 		_mode: 'screen' | 'document'
 	): Promise<string> {
-		void _config;
-		void _mode;
+		this.requests.push({ source, config: _config, mode: _mode });
 		this.renderedIds.push(id);
 		return new Promise((resolve, reject) => {
 			this.pending.set(source, { resolve, reject });

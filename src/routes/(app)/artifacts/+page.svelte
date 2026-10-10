@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceSessionState } from '$lib/factories/workspace/session';
 	import { ArtifactLibrary } from '$lib/components/artifacts';
 	let { data } = $props();
 	const entries = $derived(
@@ -20,4 +21,6 @@
 	});
 </script>
 
-<ArtifactLibrary data={gallery} />
+{#key `${data.selectedProjectId}:${workspaceSessionState.generation}`}
+	<ArtifactLibrary data={gallery} />
+{/key}
