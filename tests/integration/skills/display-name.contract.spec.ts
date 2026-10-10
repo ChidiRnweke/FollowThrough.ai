@@ -1,4 +1,4 @@
-import { initialSyncCursor, syncEtag } from '$lib/models/sync';
+import { initialSyncCursor } from '$lib/models/sync';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -7,7 +7,7 @@ import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
-import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
+import { workspacePullFixture } from '$lib/testing/workspace/fixtures/sync-pull';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NoteReferenceService } from '$lib/services/notes/references';
@@ -78,7 +78,7 @@ const setup = async (suffix: string) => {
 		records,
 		controller,
 		transactionRunner,
-		journal: new WorkspaceSyncChanges(database, workspaceResourceKey, syncEtag)
+		workspace: workspacePullFixture(database)
 	};
 };
 
@@ -89,13 +89,13 @@ describe('Skill display name authority', () => {
 		expect((await records.findByNoteId(owner, note.id))?.note.title).toBe('Ship checklist');
 	});
 	it('publishes the renamed skill and note resources with the derived database name', async () => {
-		const { owner, note, catalog, journal, transactionRunner } = await setup('12202');
-		const initial = await journal.pullPage(owner, initialSyncCursor);
+		const { owner, note, catalog, workspace, transactionRunner } = await setup('12202');
+		const initial = await workspace.pullChangePage(owner, initialSyncCursor);
 		await saveNoteDraft(catalog.editor, transactionRunner, owner, {
 			...note,
 			title: 'Ship checklist'
 		});
-		const batch = await journal.pullPage(owner, initial.cursor);
+		const batch = await workspace.pullChangePage(owner, initial.cursor);
 		expect({
 			resources: batch.records,
 			storedName: await context.client`select name from skills where note_id = ${note.id}`
@@ -121,8 +121,8 @@ describe('Skill display name authority', () => {
 		]);
 	});
 	it('rolls back both sync resources with a rejected rename', async () => {
-		const { owner, note, catalog, transactionRunner, journal } = await setup('12206');
-		const initial = await journal.pullPage(owner, initialSyncCursor);
+		const { owner, note, catalog, transactionRunner, workspace } = await setup('12206');
+		const initial = await workspace.pullChangePage(owner, initialSyncCursor);
 		await transactionRunner
 			.run(async () => {
 				await saveNoteDraft(catalog.editor, transactionRunner, owner, {
@@ -133,7 +133,7 @@ describe('Skill display name authority', () => {
 			})
 			.catch(() => ({ kind: 'failure' }));
 		expect({
-			batch: await journal.pullPage(owner, initial.cursor),
+			batch: await workspace.pullChangePage(owner, initial.cursor),
 			projection:
 				await context.client`select notes.title, skills.name from notes join skills on skills.note_id = notes.id where notes.id = ${note.id}`
 		}).toEqual({

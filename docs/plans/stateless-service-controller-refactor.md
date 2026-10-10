@@ -1447,3 +1447,32 @@ Chisel retains 47 prohibited imports. The [enforcement report](stateless-service
 records commands, corrected provenance, remaining dependencies and limitations. The separate
 WorkspaceSyncChanges rule callback remains pending along with browser migrations and other
 inventory work. The overall refactor remains incomplete; the stacked PR stays draft.
+
+## Workspace synchronization pull continuation — 2026-10-10
+
+Application revision `11757be5b7e7a37241eec6d0ee43d2dfb5c1116c`, based on draft #354 at `af8cfce7`.
+Both complete analyzer inventories matched the base before implementation. Constructor, callback
+and transaction-local construction review confirmed the separately recorded read dependency.
+
+- [x] Remove WorkspaceSyncChanges rule callbacks and transaction-local composition. Return narrow
+      identities, versions and journal selection facts; keep SQL and parsing in persistence.
+- [x] Make Workspace own provisioning, the readonly repeatable-read snapshot, journal selection,
+      canonical key resolution, exact-version resource reads, tombstones and page assembly.
+- [x] Wire independent stateless services in factories and shared contracts in models. Preserve
+      public operations, instrumentation registrations, account isolation, errors and pagination.
+- [x] Verify complete pulls with InMemory units and PostgreSQL contracts, including a writer that
+      commits between journal selection and body reading, and incompatible transaction nesting.
+- [x] Run full units, isolated synchronization/skill contracts, lint, type and docs checks and every
+      architecture stage. Refresh the complete inventory without changing enforcement.
+- [ ] Complete the wider application migration and satisfy the semantic and Chisel gates.
+
+Full units passed: 573 files, 4,503 tests and one existing skip. Isolated contracts passed:
+21 files, 111 tests. Lint, type, docs, topology, source, test-quality and UI checks passed.
+Semantic retains 375 findings; Chisel retains 47 prohibited imports. The corrected repository
+dependency was separately recorded, so its removal does not reduce analyzer counts.
+
+The prior section's pending WorkspaceSyncChanges item is resolved by this slice. Browser migrations,
+remaining factory/store workflows, public helpers, indirect dependencies and concrete exposures
+remain. Mutation/preference writes, telemetry and the diagram SDK mismatch were not changed.
+The [enforcement report](stateless-service-controller-enforcement.md) records full evidence and
+limitations. The overall refactor is incomplete; keep the stacked PR draft.

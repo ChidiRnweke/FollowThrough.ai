@@ -327,3 +327,70 @@ migration. The separate WorkspaceSyncChanges repository callback to workspace re
 also remains; removing the receipt dependency does not establish compliance for that read path.
 Telemetry restructuring and the existing diagram SDK submission-tool mismatch remain outside
 this slice. The overall refactor is incomplete. Keep the stacked PR draft while migration gates fail.
+
+## Workspace synchronization pull ownership — 2026-10-10
+
+This slice stacks on draft PR #354 at `af8cfce7c514a47b6f4b2aeadd8726d29adb9c90`.
+Application revision: `11757be5b7e7a37241eec6d0ee43d2dfb5c1116c`. The checkers are unchanged.
+Before implementation, both complete inventories matched #354 exactly: 375 semantic findings
+including provenance, and 47 Chisel findings after expanding JSON message references.
+
+### Corrected dependency and operation ownership
+
+The separately recorded WorkspaceSyncChanges dependency is now corrected. This supersedes the
+pending read-path item in the preceding section; it does not complete the application refactor.
+The factory no longer injects resource-key or ETag callbacks into the repository. The repository
+no longer constructs transaction-local repositories, reads bodies, assembles pages, or serializes
+and reparses identities. It returns parsed identities, positive bigint versions and journal facts.
+
+Workspace owns the complete pull. It provisions built-in skills before opening its readonly
+repeatable-read transaction, selects changes through WorkspaceJournal, resolves canonical keys
+through the existing WorkspaceCommandRules, reads exact bodies through WorkspaceResourceVersions,
+and assembles the page. Services do not call one another. Both repositories use the same
+transaction context. Incompatible nested transaction modes fail rather than weakening isolation.
+SQL and boundary parsing remain in repositories; shared read contracts and schemas live in models.
+
+Authorization, account isolation, cursor precision, the measured 128-record page size, checkpoints,
+exact-version bodies, tombstones and failures are preserved. The public pull signature is unchanged.
+The existing controller surface and agent-tool coverage registration remain total and still
+instrument the complete operation. No checker, suppression or guidance changed.
+
+### Complete remaining inventory
+
+| Rule                       | #354 | Remaining |
+| -------------------------- | ---: | --------: |
+| `controller-orchestration` |  277 |       277 |
+| `factory-workflow`         |   12 |        12 |
+| `store-workflow`           |   55 |        55 |
+| `public-service-helper`    |   20 |        20 |
+| `indirect-dependency`      |    9 |         9 |
+| `concrete-dependency`      |    2 |         2 |
+| Semantic total             |  375 |       375 |
+| Chisel prohibited imports  |   47 |        47 |
+
+The complete JSON inventories still match the base diagnostics exactly. The corrected repository
+composition was a separately reviewed dependency, not a diagnostic. The JSON records that review
+separately from analyzer output. Browser controller/store migrations, remaining factory workflows,
+public helpers, indirect dependencies and concrete exposures remain work. Mutation/preference
+writes, telemetry and the diagram SDK submission-tool mismatch were outside this slice.
+
+### Observed verification
+
+- Focused units: **10 files, 27 passed** across Workspace, synchronization services and transaction
+  context tests. Full units: **573 files, 4,503 passed, one existing skip**.
+- `pnpm test:contracts:isolated tests/integration/sync tests/integration/skills/display-name.contract.spec.ts tests/integration/skills/provisioning.contract.spec.ts`:
+  **21 files, 111 passed**. A separate rerun of the snapshot file passed all three tests.
+- The concurrent-write contract holds an exclusive notes-table lock, starts a pull and observes
+  its body read waiting after journal selection. The writer commits a new body/version. The active
+  pull returns the original matching page; the following pull returns the committed update.
+  Additional contracts verify readonly repeatable-read settings and rejection of writes without
+  changing saved data. Existing contracts now exercise complete pages through Workspace.
+- Lint and type checking passed. Docs checking passed with zero errors/warnings and one existing
+  hint; TypeDoc entry-point warnings remain.
+- The architecture chain stopped at the semantic gate. Topology, source, test quality, semantic,
+  Chisel and UI were also run independently. Topology, source, test quality and UI passed;
+  semantic failed with **375** findings and Chisel with **47** prohibited imports.
+- SvelteKit, QA and PR skill trees remain aligned in all three locations. Passing unit output
+  retains the existing Svelte `derived_inert` warnings and chart rendering error.
+- No live-provider, E2E, PWA or production-build validation was run. CI results are separate from
+  this local evidence. Keep the stacked PR draft while migration gates fail.

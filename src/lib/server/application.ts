@@ -603,6 +603,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoPresentation: todoCapability.presentation,
 			memoryPresentation: memory.presentation,
 			syncChanges: synchronization.changes,
+			resourceVersions: synchronization.resourceVersions,
+			resourceKeys: synchronization.resourceKeys,
 			writeRecovery: synchronization.mutations,
 			syncObjects: synchronization.objects,
 			userReader: identity.userReader,
