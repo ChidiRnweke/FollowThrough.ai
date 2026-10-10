@@ -1,6 +1,6 @@
 import { toast } from 'svelte-sonner';
 import type { ClipboardTransferReport } from '$lib/models/clipboard';
-import type { ClipboardFeedback } from '$lib/controllers/notes/clipboard-operations';
+import type { ClipboardFeedback } from '$lib/models/clipboard';
 export class BrowserClipboardFeedback implements ClipboardFeedback {
 	report(report: ClipboardTransferReport): void {
 		if (report.kind === 'failure')

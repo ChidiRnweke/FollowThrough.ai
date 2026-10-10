@@ -1,4 +1,4 @@
-import type { NoteWorkspaceEditor } from '$lib/controllers/notes/workspace';
+import type { NoteWorkspaceEditor } from '$lib/models/browser-workspace';
 import {
 	WorkspaceCapabilityStore,
 	type WorkspaceCapabilityRegistry

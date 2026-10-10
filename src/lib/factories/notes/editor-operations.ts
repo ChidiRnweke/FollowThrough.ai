@@ -1,16 +1,14 @@
-import { BrowserClipboardFeedback } from '$lib/client/clipboard/feedback';
+import { TiptapDocumentCopy } from '$lib/client/notes/editor-document';
+import { NoteDocumentPresentationService } from '$lib/services/notes/document-presentation';
 import { TiptapNoteEditor } from '$lib/client/notes/tiptap-editor';
 import {
 	NoteEditor,
 	type NoteEditorLifecycle,
-	type NoteEditorOperations,
-	type NoteEditorView
+	type NoteEditorOperations
 } from '$lib/controllers/notes/editor-operations';
-import type { NoteEditorEvents } from '$lib/models/browser-workspace';
+import type { NoteEditorEvents, NoteEditorView } from '$lib/models/browser-workspace';
 import { NoteEditorOperationStore } from '$lib/stores/notes/editor-operations.svelte';
 import type { Editor } from '@tiptap/core';
-import { noteClipboard } from './clipboard';
-import { noteDocuments } from './document-presentation';
 import { noteEditorCapabilities } from './editor-capabilities';
 export interface NoteEditorBinding {
 	readonly operations: NoteEditorOperations;
@@ -28,10 +26,9 @@ export function createNoteEditorOperations(
 	const controller = new NoteEditor(
 		state,
 		port,
-		noteDocuments,
-		noteClipboard,
+		new TiptapDocumentCopy(),
+		new NoteDocumentPresentationService(),
 		events,
-		new BrowserClipboardFeedback(),
 		identity
 	);
 	noteEditorCapabilities.set(identity, { port, state, events });

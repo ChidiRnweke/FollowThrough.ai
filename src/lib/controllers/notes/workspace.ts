@@ -2,10 +2,9 @@ import { OutboxAccountChangedError } from '$lib/errors';
 import type {
 	AccountWriterLock,
 	CacheStorage,
-	NoteEditorEvents,
 	NoteEditorIdentity,
-	NoteEditorPort,
-	NoteEditorState,
+	EditorDocumentCopy,
+	NoteWorkspaceEditor,
 	NoteHistoryReader,
 	OutboxStorage,
 	OutboxTable,
@@ -97,7 +96,6 @@ import type { WorkspaceDraftStateAccess } from '$lib/stores/workspace/draft.svel
 import type { EditorSessionStore } from '$lib/stores/workspace/editor-session.svelte';
 import type { WorkspaceProjectionStateAccess } from '$lib/stores/workspace/projection.svelte';
 import type { WorkspaceResourceStateAccess } from '$lib/stores/workspace/resources.svelte';
-import type { JSONContent } from '@tiptap/core';
 
 export interface NoteWorkspaceState {
 	readonly active: boolean;
@@ -176,15 +174,6 @@ export interface NoteWorkspaceController {
 	retrySync(): Promise<void>;
 	useRemoteVersion(): Promise<void>;
 	keepLocalVersion(): Promise<void>;
-}
-/** Raw document copying boundary shared with the mounted editor. */
-export interface EditorDocumentCopy {
-	copy(document: ProseMirrorDocument): JSONContent;
-}
-export interface NoteWorkspaceEditor {
-	readonly port: NoteEditorPort;
-	readonly state: NoteEditorState;
-	readonly events: NoteEditorEvents;
 }
 /** Account capabilities contain mechanisms and state, never controller instances. */
 export interface NoteWorkspaceAccount {
@@ -1880,7 +1869,8 @@ export class NoteWorkspace implements NoteWorkspaceController {
 		} finally {
 			editor.state.setInitialized(true);
 		}
-		if (previous) editor.events.shimmer(previous, document);
+		if (previous)
+			editor.events.shimmer(this.dependencies.presentation.changedBlocks(previous, document));
 	}
 	private bindingCurrent(): boolean {
 		const { binding, account } = this.dependencies;

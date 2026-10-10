@@ -1,5 +1,5 @@
 import type { AgentRunId } from '$lib/models/agent';
-import type { ClipboardSource } from '$lib/models/clipboard';
+import type { ClipboardPaste, ClipboardSource } from '$lib/models/clipboard';
 import type { DiagramId } from '$lib/models/diagrams';
 import type {
 	NoteId,
@@ -136,9 +136,26 @@ export interface NoteEditorPort {
 	copySource(range: EditorRange | undefined): ClipboardSource | undefined;
 	markdown(range: EditorRange | undefined): string | undefined;
 	paste(content: ClipboardPaste, range: EditorRange | undefined): void;
+	captureSelection(): EditorClipboardSelection | undefined;
+	documentMatches(document: ProseMirrorDocument): boolean;
+	deleteRange(range: EditorRange): void;
 	collapseSelection(): void;
 }
+export interface EditorClipboardSelection {
+	readonly document: ProseMirrorDocument;
+	readonly range: EditorRange;
+	readonly source: ClipboardSource;
+}
+export interface EditorDocumentCopy {
+	copy(document: ProseMirrorDocument): JSONContent;
+}
+export interface NoteWorkspaceEditor {
+	readonly port: NoteEditorPort;
+	readonly state: NoteEditorState;
+	readonly events: NoteEditorEvents;
+}
 export interface NoteEditorState {
+	readonly documentGeneration: number;
 	readonly active: boolean;
 	readonly initialized: boolean;
 	readonly holdingSelection: boolean;
@@ -152,12 +169,18 @@ export interface NoteEditorState {
 	releaseInsertion(runId: string): void;
 	release(): void;
 }
+/** Rendering only; application notifications return to the UI event owner. */
 export interface NoteEditorEvents {
-	changed(): void;
-	shimmer(previous: ProseMirrorDocument, next: ProseMirrorDocument): void;
-	insertionMoved(runId: AgentRunId, position: number): void;
+	shimmer(indices: readonly number[]): void;
 }
-export type ClipboardPaste = { readonly kind: 'html' | 'text'; readonly text: string };
+export interface NoteEditorView {
+	readonly canCopy: boolean;
+	readonly acceptsChanges: boolean;
+}
+export interface EditorInsertion {
+	readonly runId: AgentRunId;
+	readonly position: number;
+}
 
 /** Readonly binding facts and guarded state updates; no session operations. */
 export interface WorkspaceBindingState {

@@ -1,3 +1,4 @@
+import type { EditorDocumentCopy } from '$lib/models/browser-workspace';
 import type { NoteReferences } from '$lib/services/notes/references';
 import type { SectionNumberingSetting, SectionNumberingLevel } from '$lib/models/notes';
 import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering';
@@ -11,9 +12,6 @@ import type {
 } from '$lib/models/notes';
 import type { NoteDocumentPresentation } from '$lib/services/notes/document-presentation';
 
-export interface EditorDocumentCopy {
-	copy(document: ProseMirrorDocument): JSONContent;
-}
 export interface NoteDocumentsController {
 	widgetReferences(documents: readonly { document: ProseMirrorDocument }[]): string[];
 	diagramReferences(documents: readonly { document: ProseMirrorDocument }[]): string[];
@@ -22,7 +20,6 @@ export interface NoteDocumentsController {
 	sectionNumbers(levels: readonly number[]): readonly string[];
 	readingMinutes(words: number): number;
 	editorContent(document: ProseMirrorDocument): JSONContent;
-	changedBlocks(previous: ProseMirrorDocument, next: ProseMirrorDocument): readonly number[];
 	outline(items: readonly OutlineSource[]): readonly OutlineHeading[];
 	activeHeading(offsets: readonly OutlineOffset[], line: number): string | undefined;
 }
@@ -53,9 +50,6 @@ export class NoteDocuments implements NoteDocumentsController {
 	}
 	editorContent(document: ProseMirrorDocument): JSONContent {
 		return this.documents.copy(this.presentation.prepare(document));
-	}
-	changedBlocks(previous: ProseMirrorDocument, next: ProseMirrorDocument): readonly number[] {
-		return this.presentation.changedBlocks(previous, next);
 	}
 	outline(items: readonly OutlineSource[]): readonly OutlineHeading[] {
 		return this.presentation.outline(items);

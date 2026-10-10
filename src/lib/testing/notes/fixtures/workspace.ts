@@ -1,7 +1,7 @@
 import { CatalogWidgetCandidateReader } from '$lib/adapters/widgets/candidate-reader';
 import { TiptapDocumentCopy } from '$lib/client/notes/editor-document';
 import { BrowserWorkspaceEditingEnvironment } from '$lib/client/workspace/editing-environment.svelte';
-import type { NoteWorkspaceEditor } from '$lib/controllers/notes/workspace';
+import type { NoteWorkspaceEditor } from '$lib/models/browser-workspace';
 import { NoteWorkspace, type NoteWorkspaceDependencies } from '$lib/controllers/notes/workspace';
 import { BrowserWorkspaceSynchronization } from '$lib/controllers/sync/browser-workspace';
 import { MutationSubmission } from '$lib/controllers/sync/submission';
@@ -161,13 +161,12 @@ export const noteWorkspaceFixture = async (overrides: Partial<Note> = {}) => {
 			getDocument: () => editor.getDocument(),
 			getPlainText: () => editor.getPlainText(),
 			setDocument: (doc) => editor.replaceContent(doc),
+			paste: (content) => editor.type(content.text),
 			active: true
 		}),
 		state: editorState,
 		events: {
-			changed: () => undefined,
-			shimmer: () => undefined,
-			insertionMoved: () => undefined
+			shimmer: () => undefined
 		}
 	});
 	const controller = new NoteWorkspace(
@@ -208,6 +207,8 @@ export const noteWorkspaceFixture = async (overrides: Partial<Note> = {}) => {
 		background,
 		binding,
 		editorState,
+		editors,
+		editorIdentity,
 		cache,
 		repository,
 		outbox,

@@ -1620,3 +1620,75 @@ Observed correction verification:
   before captures. The publication-menu pair remains the original observed regression evidence.
 - Required architecture remains failing because of the inherited edges above. These failures
   are not suppressed, and #351 remains draft rather than merge-ready.
+
+## Browser editor and clipboard independence — 2026-10-10
+
+This follow-up starts from #351 at `15ed7610db3c2cddb47c798757bd0f5ff9eaca03` in
+`refactor/pr336-editor-independence`. ADRs 0007, 0015, 0037, 0040 and 0041 govern the
+ownership, failure, parsing and mounted-editor boundaries. The #345 inventory was checked
+against this base, its unchanged semantic checker, and the current open PRs.
+
+- [x] Remove `notes/editor-operations.ts` dependencies on clipboard and document controllers.
+      The editor prepares content through `NoteDocumentPresentation` and raw document copying.
+      Menu actions invoke the independent clipboard controller with the mounted editor identity.
+- [x] Remove `notes/clipboard-operations.ts` delegation to the Mermaid controller, including
+      the hidden `ClipboardTransfer` and `renderDiagram` callback chain. The clipboard controller
+      owns preparation, native writes, fallbacks, reporting, reads and insertion. It uses the
+      shared theme service and raw SVG/rendered-image mechanisms directly.
+- [x] Remove the remaining editor event forwarding. Each replacing controller computes changed
+      block indices through the pure presentation service; its shimmer callback only renders.
+      The UI forwards authored-change and insertion notifications from the editor event, using
+      passive readiness and returned insertion values. No controller callback invokes another
+      controller. Existing autosave and AI action implementations are unchanged.
+- [x] Move complete cut coordination out of the editor extension. The controller captures the
+      document and range, writes the clipboard, then checks lifetime and structural document
+      equality before deleting that range. Moving selection alone does not change the cut target.
+      Incomplete writes retain the source and report the reason.
+- [x] Reuse #351's mounted identity, raw port, passive state and registry. Shared raw editor and
+      document-copy contracts now live in models. Factories only construct and wire dependencies;
+      no controller is forwarded through a renamed interface, callback or adapter.
+- [x] Preserve synchronous native-write initiation with pending image/content promises. Preserve
+      rich fallbacks, remembered selection, undo/redo, initialization history, insertion tracking,
+      autosave and chat/tab identity. A passive document generation invalidates late paste after
+      a full document replacement, including the existing workspace restore path.
+- [x] Coordinate the contract overlap on #348. Its head remained `92860a95`; the existing pure
+      presentation/theme interfaces are unchanged. The coordination comment records the raw
+      contract moves and editor wiring. Proofreading, server work, general sync/review, widget
+      internals and AI workflows remain outside this contribution.
+- [x] Reproduce the five existing authenticated journeys before editing and capture matched
+      desktop/narrow evidence. Add native image/diagram copy-cut verification and controller race
+      tests. See [captures and reproduction](../pr-evidence/pr336-editor-independence/README.md).
+
+Architecture evidence, measured against the exact base:
+
+| Check                          | Before | After | New findings                             |
+| ------------------------------ | -----: | ----: | ---------------------------------------- |
+| Global controller-import audit |     66 |    63 | None; the three scoped edges are removed |
+| Chisel prohibited imports      |     42 |    42 | None                                     |
+| #345 semantic checker          |    762 |   762 | No new file/rule/message combinations    |
+
+The hidden clipboard delegation is removed in source even where the current semantic checker did
+not report it. The remaining findings stay errors. No checker, baseline or enforcement rule was
+changed. Existing clipboard failure-reporting allowances moved with the same fallback code; no
+new suppression was introduced. This contribution does not complete #336 or make the stack ready
+to merge. The required quality check remains blocked by inherited architecture failures.
+
+Observed verification:
+
+- Lint and type checking passed, with zero type errors or warnings.
+- Full unit suite: 582 files, 4,532 tests passed and one existing skip.
+- Focused editor/clipboard browser suite: 30 tests passed; workspace restoration: nine passed.
+- Six tracked authenticated E2E journeys and the additional matched-capture journey passed.
+- Source, test-quality and UI audits passed at zero new violations. Docs check passed with one
+  existing hint. `pnpm test:architecture` stops at the 63 inherited controller-import findings;
+  the remaining audit stages were run independently.
+- Full browser suite: 92 files, 607 tests passed, including the final activation-expiry scenarios.
+  Existing `derived_inert` and expected rasterization-failure test output remain.
+- Isolated note/sync database contracts: 28 files, 161 tests passed. The first command used
+  source-directory filters and selected no tests; the corrected integration-directory run passed.
+- The final callback correction passed 64 focused browser tests, including shimmer rendering,
+  insertion mapping and authored-change notification. The full unit/browser and seven authenticated
+  journeys were rerun after the correction. Remount fixtures use distinct identities, as production
+  does.
+- Production builds, the full PWA suite and live AI/object-storage flows were not run for this
+  browser-only slice. Development E2E retains the inherited `/offline-shell.html` 404 output.

@@ -1,15 +1,22 @@
-import type { NoteEditorView } from '$lib/controllers/notes/editor-operations';
-import type { EditorRange, NoteEditorState } from '$lib/models/browser-workspace';
+import type { EditorRange, NoteEditorState, NoteEditorView } from '$lib/models/browser-workspace';
 export class NoteEditorOperationStore implements NoteEditorState {
 	private live = true;
 	private ready = false;
+	private generation = 0;
+	get documentGeneration(): number {
+		return this.generation;
+	}
 	private holding = false;
 	private range = $state<EditorRange | undefined>();
 	private positions: Record<string, number> = {};
 	readonly view: NoteEditorView;
 	constructor() {
 		const currentRange = () => this.range;
+		const acceptsChanges = () => this.live && this.ready;
 		this.view = {
+			get acceptsChanges() {
+				return acceptsChanges();
+			},
 			get canCopy() {
 				return currentRange() !== undefined;
 			}
@@ -31,9 +38,11 @@ export class NoteEditorOperationStore implements NoteEditorState {
 		return this.positions;
 	}
 	initialize(): void {
+		this.generation++;
 		this.ready = true;
 	}
 	setInitialized(value: boolean): void {
+		if (!value) this.generation++;
 		this.ready = value;
 	}
 	setHoldingSelection(value: boolean): void {

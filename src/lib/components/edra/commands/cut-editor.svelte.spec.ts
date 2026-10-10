@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createEditor, type EdraEditorProps } from './editor';
+import { editorOperationsFixture } from '$lib/testing/notes/fixtures/editor-operations';
 import type { Editor } from './CoreEditor';
 
 const mounted: { editor: Editor; element: HTMLElement; dispose: () => void }[] = [];
-const mount = (props: EdraEditorProps): Editor => {
+const mount = () => {
+	const props: EdraEditorProps = {
+		onCut: () => {
+			void fixture.clipboard.cut(fixture.identity);
+		}
+	};
 	const element = document.createElement('div');
 	const host = document.createElement('div');
 	host.appendChild(element);
@@ -22,14 +28,23 @@ const mount = (props: EdraEditorProps): Editor => {
 			{
 				type: 'image',
 				attrs: {
-					src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='
+					src: document.createElement('canvas').toDataURL()
 				}
 			}
 		]
 	});
 	editor.commands.selectAll();
-	mounted.push({ editor, element: host, dispose });
-	return editor;
+	const fixture = editorOperationsFixture(editor);
+	editor.commands.selectAll();
+	mounted.push({
+		editor,
+		element: host,
+		dispose: () => {
+			fixture.controller.release();
+			dispose();
+		}
+	});
+	return fixture;
 };
 afterEach(() => {
 	for (const entry of mounted.splice(0)) {
@@ -37,7 +52,7 @@ afterEach(() => {
 		entry.element.remove();
 	}
 });
-const cut = (editor: Editor) =>
+const cut = (editor: import('@tiptap/core').Editor) =>
 	editor.view.dom.dispatchEvent(
 		new ClipboardEvent('cut', {
 			bubbles: true,
@@ -48,55 +63,47 @@ const cut = (editor: Editor) =>
 
 describe('cutting media from the editor', () => {
 	it('keeps the source when the clipboard result is incomplete', async () => {
-		const editor = mount({ onCut: async () => false });
-		const before = editor.getJSON();
-		cut(editor);
-		await Promise.resolve();
-		expect(editor.getJSON()).toEqual(before);
+		const f = mount();
+		f.writer.fail.add('rich');
+		const before = f.editor.getJSON();
+		cut(f.editor);
+		await expect
+			.poll(() => ({ document: f.editor.getJSON(), kept: f.input.kept }))
+			.toEqual({ document: before, kept: [false] });
 	});
 	it('deletes the captured selection after a complete clipboard write', async () => {
-		const editor = mount({ onCut: async () => true });
-		cut(editor);
-		await Promise.resolve();
-		expect(editor.getJSON()).toEqual({
-			type: 'doc',
-			content: [{ type: 'paragraph', attrs: { textAlign: null } }]
-		});
+		const f = mount();
+		cut(f.editor);
+		await expect.poll(() => f.editor.getText()).toBe('');
 	});
 	it('keeps intervening edits while an asynchronous clipboard write finishes', async () => {
-		let finish: (complete: boolean) => void = () => {
-			throw new Error('Copy did not begin');
-		};
-		const editor = mount({
-			onCut: () =>
-				new Promise((resolve) => {
-					finish = resolve;
-				})
+		const f = mount();
+		let finish!: () => void;
+		f.writer.pending = new Promise<void>((resolve) => {
+			finish = resolve;
 		});
-		cut(editor);
-		editor.commands.setContent('<p>New work while copying</p>');
-		finish(true);
-		await Promise.resolve();
-		expect(editor.getText()).toBe('New work while copying');
+		cut(f.editor);
+		f.editor.commands.setContent('<p>New work while copying</p>');
+		finish();
+		await expect
+			.poll(() => ({ text: f.editor.getText(), kept: f.input.kept }))
+			.toEqual({ text: 'New work while copying', kept: [true] });
 	});
 	it('does not delete a newly selected range while copying the captured range', async () => {
-		let finish: (complete: boolean) => void = () => {
-			throw new Error('Copy did not begin');
-		};
-		const editor = mount({
-			onCut: () =>
-				new Promise((resolve) => {
-					finish = resolve;
-				})
+		const f = mount();
+		let finish!: () => void;
+		f.writer.pending = new Promise<void>((resolve) => {
+			finish = resolve;
 		});
-		editor.commands.setNodeSelection(editor.state.doc.firstChild!.nodeSize);
-		cut(editor);
-		editor.commands.selectAll();
-		finish(true);
-		await Promise.resolve();
-		expect({ text: editor.getText().trim(), hasImage: editor.getHTML().includes('<img') }).toEqual({
-			text: 'Keep the surrounding prose',
-			hasImage: false
-		});
+		f.editor.commands.setNodeSelection(f.editor.state.doc.firstChild!.nodeSize);
+		cut(f.editor);
+		f.editor.commands.selectAll();
+		finish();
+		await expect
+			.poll(() => ({
+				text: f.editor.getText().trim(),
+				hasImage: f.editor.getHTML().includes('<img')
+			}))
+			.toEqual({ text: 'Keep the surrounding prose', hasImage: false });
 	});
 });

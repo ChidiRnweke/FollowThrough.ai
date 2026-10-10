@@ -146,7 +146,7 @@ export default defineConfig({
 						'src/lib/components/shared/workspace-write-review.svelte.spec.ts',
 						'src/lib/components/layout/error-boundary.svelte.spec.ts',
 						'src/lib/client/sync/database.svelte.spec.ts',
-						'src/lib/client/clipboard/transfer.svelte.spec.ts',
+						'src/lib/controllers/notes/clipboard-transfer.svelte.spec.ts',
 						'src/lib/client/markdown/rendering.svelte.spec.ts',
 						'src/lib/controllers/diagrams/mermaid.svelte.spec.ts',
 						'src/lib/components/edra/commands/cut-editor.svelte.spec.ts',

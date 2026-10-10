@@ -1,3 +1,6 @@
+import { NoteClipboard, type NoteClipboardDependencies } from './clipboard-operations';
+import { InMemoryClipboardInput } from '$lib/testing/notes/fakes/in-memory-clipboard-input';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { afterEach, expect, it } from 'vitest';
 import type { NoteRevision } from '$lib/models/notes';
 import { noteWorkspaceFixture } from '$lib/testing/notes/fixtures/workspace';
@@ -105,4 +108,28 @@ it('blocks restoring while an authored edit is still queued', async () => {
 	await f.controller.save();
 	const restored = await f.controller.restoreRevision(f.revision.id);
 	expect({ restored, text: f.editor.plainText }).toEqual({ restored: false, text: 'Offline' });
+});
+
+it('cancels pending clipboard paste when a historical revision replaces the mounted document', async () => {
+	const f = await setup();
+	const input = new InMemoryClipboardInput();
+	let finish!: () => void;
+	input.pending = new Promise<void>((resolve) => {
+		finish = resolve;
+	});
+	const clipboard = new NoteClipboard(
+		capabilityDependencies<NoteClipboardDependencies>({
+			editors: f.editors,
+			reader: input,
+			feedback: input
+		})
+	);
+	const paste = clipboard.paste(f.editorIdentity, 'raw');
+	await f.controller.restoreRevision(f.revision.id);
+	finish();
+	await paste;
+	expect({ document: f.editor.document, errors: input.errors }).toEqual({
+		document: f.revision.document,
+		errors: []
+	});
 });
