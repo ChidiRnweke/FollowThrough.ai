@@ -100,14 +100,9 @@ coverage, production build/output audit and required PR checks remain outstandin
 3. **Remaining server/composition boundaries:** remove application callbacks and authority workflows
    from agent tool definition factories; finish identity/startup coordination, concrete dependency
    leaks and any retained service state. Preserve tool coverage registration.
-   **Known gap — startup recovery:** `src/lib/server/application.ts` `recoverInterruptedRuns`
-   awaits five controller operations in order (agent, todos, references, relationships,
-   diagrams). The semantic audit classifies `application.ts` as `other`, so it does not report
-   this. The order is load-bearing: agent recovery fails every `running` run of any kind, and the
-   four workflow recoveries move `queued` workflow runs to `running`. Splitting them into
-   independent tasks without changing which runs agent recovery settles could fail a relaunched
-   run as "Process restarted". Resolve by scoping agent recovery to runs started before the
-   process, or by giving each workflow owner its own interrupted-run settlement.
+   Startup recovery: the startup hook (`src/hooks.server.ts`) calls the five recovery operations
+   as the outer caller, not composition. Agent recovery runs first, because it fails every
+   `running` run and the workflow recoveries move `queued` runs to `running`.
 4. **Remaining shared rules:** finish chat/context/mentions/model presentation, payload handling,
    workspace/sync/proofreading and every unresolved inventory entry. Some older inventory rows
    predate later migrations; reconcile them against code instead of treating them as completion.

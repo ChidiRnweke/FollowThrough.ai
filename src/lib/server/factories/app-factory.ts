@@ -59,10 +59,6 @@ export class AppFactory {
 		return this.application().controllers;
 	}
 
-	static recoverInterruptedRuns(): Promise<number> {
-		return this.application().recoverInterruptedRuns();
-	}
-
 	static eventBus(): AgentEventBus {
 		return this.application().eventBus;
 	}

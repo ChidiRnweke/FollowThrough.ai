@@ -20,7 +20,16 @@ const configurationDisabled = (): boolean => building || process.env.NODE_ENV ==
 export const init: ServerInit = async () => {
 	if (configurationDisabled()) return;
 	await hydrateEnvironment();
-	const recovered = await AppFactory.recoverInterruptedRuns();
+	const controllers = AppFactory.controllers();
+	// Agent recovery first: it fails every interrupted run, and the workflow
+	// recoveries below move queued runs to running.
+	const interrupted = await controllers.agent().recoverInterruptedRuns();
+	const queued =
+		(await controllers.todos().recoverQueuedPromiseRuns()) +
+		(await controllers.references().recoverQueuedReferenceRuns()) +
+		(await controllers.relationships().recoverQueuedRelatedNoteRuns()) +
+		(await controllers.diagrams().recoverQueuedDiagramRuns());
+	const recovered = interrupted + queued;
 	if (recovered > 0)
 		console.log(`[agent-run] Recovered ${recovered} interrupted run(s) on startup`);
 };

@@ -96,7 +96,6 @@ export interface ApplicationConfig {
 export interface ProductionApplication {
 	readonly mcpSurface: McpSurfaceFactory;
 	readonly controllers: ControllerFactory;
-	readonly recoverInterruptedRuns: () => Promise<number>;
 	readonly eventBus: AgentEventBus;
 	/**
 	 * Periodic work for the worker sidecar to run. The web process builds these
@@ -788,16 +787,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	return {
 		controllers: controllerFactory,
 		mcpSurface: agentCapability.mcpSurface,
-		recoverInterruptedRuns: async () => {
-			const interrupted = await controllerFactory.agent().recoverInterruptedRuns();
-			return (
-				interrupted +
-				(await controllerFactory.todos().recoverQueuedPromiseRuns()) +
-				(await controllerFactory.references().recoverQueuedReferenceRuns()) +
-				(await controllerFactory.relationships().recoverQueuedRelatedNoteRuns()) +
-				(await controllerFactory.diagrams().recoverQueuedDiagramRuns())
-			);
-		},
 		backgroundTasks: [
 			knowledgeSearch.maintenance,
 			attachmentCapability.retention,
