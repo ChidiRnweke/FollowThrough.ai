@@ -85,8 +85,8 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		runSettlements: settlements,
 		runEvents: { notify: () => {} },
 		selectionOrigins: notes.selectionOrigins,
-		suggestionCreator: suggestions.inbox,
-		suggestionAccepter: suggestions.inbox,
+		suggestionCreator: suggestions.creator,
+		suggestionAccepter: suggestions.accepter,
 		suggestionEffects: suggestions.effects,
 		todoCreator: todo.catalog,
 		trustPolicyEvaluator: trust

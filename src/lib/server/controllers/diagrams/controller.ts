@@ -76,7 +76,7 @@ import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AgentEventBus } from '$lib/server/stores/agent/events';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
-import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
+import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 
 /**
  * Application boundary for diagrams: generating and revising Mermaid diagrams from a

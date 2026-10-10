@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SelectionOrigins } from './selection-origin';
-import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import {
 	InMemoryNoteRepository,
 	InMemoryAnchorRepository
@@ -60,13 +60,13 @@ describe('Selection origins', () => {
 			pipeline: 'extract_promises',
 			metadata: {}
 		});
-		const inbox = new SuggestionInbox(
+		const inbox = createSuggestionServices(
 			new InMemorySuggestionRepository(),
 			notes,
 			provenance,
 			anchors
 		);
-		const suggestion = await inbox.createFromSelection(testActor(), origin, {
+		const suggestion = await inbox.creator.createFromSelection(testActor(), origin, {
 			kind: 'todo',
 			payload: { title: 'Do the work', responsibility: 'mine' }
 		});

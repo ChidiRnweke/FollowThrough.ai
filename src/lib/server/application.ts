@@ -270,7 +270,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const relationships = relationshipCapability.graph;
 	const references = referenceCapability.library;
 	const referenceFinder = referenceCapability.finder;
-	const suggestions = suggestionCapability.inbox;
+	const suggestions = suggestionCapability;
 	const skills = skillCapability.library;
 	const diagramCapability = createDiagramsCapability({
 		contextNotes: notes,
@@ -310,10 +310,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoDeleter: todos,
 			selectionOrigins: noteCapability.selectionOrigins,
 			promiseExtractor: todoCapability.promiseExtractor,
-			suggestionCreator: suggestions,
+			suggestionCreator: suggestions.creator,
 			trustPolicyEvaluator: trust,
 			todoCreator: todos,
-			suggestionAccepter: suggestions,
+			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
 			transactionRunner,
 			projectLister: projects,
@@ -332,7 +332,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			embeddings: searchEmbeddings,
 			reranker: searchReranker,
 			relationshipClassifier: relationshipCapability.classifier,
-			suggestionCreator: suggestions,
+			suggestionCreator: suggestions.creator,
 			transactionRunner,
 			noteActionRequests: agentCapability.noteActionRequests,
 			runSettlements,
@@ -344,7 +344,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			selectionOrigins: noteCapability.selectionOrigins,
 			referenceFinder,
 			referenceRanker: referenceCapability.ranking,
-			suggestionCreator: suggestions,
+			suggestionCreator: suggestions.creator,
 			transactionRunner,
 			noteActionRequests: agentCapability.noteActionRequests,
 			runSettlements,
@@ -357,7 +357,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			indexWriter: knowledgeSearch.indexWriter,
 			selectionOrigins: noteCapability.selectionOrigins,
 			generation: diagramCapability.generation,
-			suggestionCreator: suggestions,
+			suggestionCreator: suggestions.creator,
 			transactionRunner,
 			diagramFinder: diagrams,
 			mermaidValidator: diagramCapability.mermaidValidator,
@@ -395,13 +395,14 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			now: diagramCapability.now
 		},
 		suggestions: {
+			suggestionPresentation: suggestionCapability.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
-			suggestionLister: suggestions,
-			suggestionExpirer: suggestions,
-			suggestionContextReader: suggestions,
-			suggestionFinder: suggestions,
-			suggestionAccepter: suggestions,
+			suggestionLister: suggestions.lister,
+			suggestionExpirer: suggestions.expirer,
+			suggestionContextReader: suggestions.context,
+			suggestionFinder: suggestions.finder,
+			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
 			todoCreator: todos,
 			relationshipCreator: relationships,
@@ -416,8 +417,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			drawioLabels: diagramCapability.labels,
 			now: diagramCapability.now,
 			transactionRunner,
-			suggestionRejecter: suggestions,
-			suggestionReverter: suggestions
+			suggestionRejecter: suggestions.rejecter,
+			suggestionReverter: suggestions.reverter
 		},
 		agent: {
 			modelSelection: agentCapability.modelSelection,
@@ -552,13 +553,14 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			skillFinder: skills,
 			builtInSkills: skillCapability.builtIns,
 			transactionRunner,
-			suggestionLister: suggestions,
-			suggestionExpirer: suggestions,
+			suggestionLister: suggestions.lister,
+			suggestionExpirer: suggestions.expirer,
 			todoLister: todos,
 			waitingOnFinder: todos,
 			todoContextReader: todos
 		},
 		notes: {
+			suggestionPresentation: suggestionCapability.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			markdown: noteCapability.markdown,
@@ -579,9 +581,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			diagramLister: diagrams,
 			todoLister: todos,
 			todoContextReader: todos,
-			suggestionLister: suggestions,
-			suggestionExpirer: suggestions,
-			suggestionContextReader: suggestions,
+			suggestionLister: suggestions.lister,
+			suggestionExpirer: suggestions.expirer,
+			suggestionContextReader: suggestions.context,
 			noteEditor: notes,
 			noteTrash: notes,
 			noteTrashReader: notes,
@@ -613,8 +615,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			memoryEditor: memory.editor,
 			memoryDeleter: memory.deleter,
 			memoryChanges: memory.changes,
-			suggestionCreator: suggestions,
-			suggestionAccepter: suggestions,
+			suggestionCreator: suggestions.creator,
+			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
 			trustPolicyEvaluator: trust,
 			transactionRunner

@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
@@ -9,7 +10,11 @@ export const noteCreationControllers = (
 	transactionRunner: TransactionRunner
 ) => ({
 	notes: new Notes(
-		capabilityDependencies<NotesDependencies>({ noteCreation: catalog, transactionRunner })
+		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
+			noteCreation: catalog,
+			transactionRunner
+		})
 	),
 	projects: new Projects(
 		capabilityDependencies<ProjectsDependencies>({ noteCreation: catalog, transactionRunner })

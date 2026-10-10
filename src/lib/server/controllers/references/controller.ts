@@ -13,7 +13,7 @@ import type {
 	ReferenceSearchOptions
 } from '$lib/server/services/references/contracts';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
-import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
+import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type {
 	AgentRunReceipt,
 	AgentRunId,

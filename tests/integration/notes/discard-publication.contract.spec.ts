@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it, vi } from 'vitest';
 import type { Database } from '$lib/server/db';
 import type { AtomicOperation } from '$lib/models/workspace';
@@ -18,6 +19,7 @@ const controllerFor = (db: Database, transactionRunner: AtomicOperation) => {
 	const effects = new InMemoryNoteContent();
 	return new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
 			noteReader: catalog,
 			noteEditor: catalog,

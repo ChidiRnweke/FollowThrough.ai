@@ -4,7 +4,7 @@ import { decideTodoCreation } from '$lib/services/todos/creation';
 import { applyTodoEdit } from '$lib/services/todos/edits';
 import { assembleTodoView } from '$lib/services/todos/presentation';
 import { mutationResource } from '$lib/services/workspace/commands';
-import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
+import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type { TodoSuggestion } from '$lib/models/suggestions';
 import type { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
 import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
@@ -44,10 +44,7 @@ import type { SelectionOriginService } from '$lib/server/services/notes/contract
 import type { PromiseExtractor } from '$lib/server/services/todos/promise-extraction/contracts';
 import type { IPromiseRules } from '$lib/server/services/todos/promise-rules';
 import type { DateTime } from '$lib/models/workspace';
-import type {
-	SuggestionAccepter,
-	SuggestionCreator
-} from '$lib/server/services/suggestions/contracts';
+import type { SuggestionAccepter, SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type {
 	TodoCreator,
 	TodoDeleter,

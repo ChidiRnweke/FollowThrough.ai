@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { assembleSuggestionView } from './presentation';
+import { SuggestionPresentationService } from './presentation';
+const service = new SuggestionPresentationService();
 import {
 	noteBuilder,
 	memorySuggestionBuilder,
@@ -8,7 +9,7 @@ import {
 
 it('includes only the note identity and title needed by the review view', () => {
 	const note = noteBuilder();
-	const view = assembleSuggestionView(memorySuggestionBuilder(), {
+	const view = service.assembleSuggestionView(memorySuggestionBuilder(), {
 		note,
 		origin: { pipeline: 'memory', createdAt: testNow }
 	});
@@ -18,5 +19,5 @@ it('includes only the note identity and title needed by the review view', () => 
 it('renders a standalone proposal without fabricating a source note or anchor', () => {
 	const suggestion = memorySuggestionBuilder();
 	const origin = { pipeline: 'memory' as const, createdAt: testNow };
-	expect(assembleSuggestionView(suggestion, { origin })).toEqual({ suggestion, origin });
+	expect(service.assembleSuggestionView(suggestion, { origin })).toEqual({ suggestion, origin });
 });

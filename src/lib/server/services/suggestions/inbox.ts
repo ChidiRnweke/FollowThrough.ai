@@ -18,25 +18,64 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import type { SuggestionRepository } from '$lib/server/repositories/suggestions/suggestions';
+export type { SuggestionProposal, SuggestionContext } from '$lib/models/suggestions';
+export type { AppliedRecord } from '$lib/server/repositories/suggestions/application-effects';
 export interface Clock {
 	now(): DateTime;
 }
-
-export class SystemClock implements Clock {
-	now(): DateTime {
-		return new Date().toISOString() as DateTime;
-	}
+export interface SuggestionCreator {
+	create<P extends SuggestionProposal>(
+		actor: ActorContext,
+		proposal: P
+	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
+	createFromSelection<P extends SelectionProposal>(
+		actor: ActorContext,
+		origin: ProposalSelectionOrigin,
+		proposal: P
+	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
 }
-
-export class SuggestionInbox {
+export interface SuggestionFinder {
+	get(actor: ActorContext, id: SuggestionId): Promise<Suggestion>;
+}
+export interface SuggestionLister {
+	listByStatus(
+		actor: ActorContext,
+		status: SuggestionStatus,
+		noteId?: NoteId
+	): Promise<readonly Suggestion[]>;
+	countByStatus(actor: ActorContext, status: SuggestionStatus): Promise<number>;
+}
+export interface SuggestionContextReader {
+	readContexts(
+		actor: ActorContext,
+		suggestions: readonly Suggestion[]
+	): Promise<readonly SuggestionContext[]>;
+}
+export interface SuggestionAccepter {
+	accept(
+		actor: ActorContext,
+		suggestion: Suggestion,
+		appliedArtifactId: string,
+		autoAccepted: boolean
+	): Promise<Suggestion>;
+}
+export interface SuggestionRejecter {
+	reject(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion>;
+}
+export interface SuggestionReverter {
+	revert(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion>;
+}
+export interface SuggestionExpirer {
+	expire(actor: ActorContext): Promise<number>;
+}
+export class SuggestionCreationService implements SuggestionCreator {
 	constructor(
 		private readonly suggestions: SuggestionRepository,
 		private readonly notes: NoteRepository,
 		private readonly provenance: ProvenanceRepository,
 		private readonly anchors: SourceAnchorRepository,
-		private readonly clock: Clock = new SystemClock()
+		private readonly clock: Clock
 	) {}
-
 	async create<P extends SuggestionProposal>(
 		actor: ActorContext,
 		proposal: P
@@ -78,23 +117,31 @@ export class SuggestionInbox {
 		await this.suggestions.insert(actor, suggestion);
 		return suggestion;
 	}
-
+	private payloadBelongsToNote(
+		proposal: SuggestionProposal,
+		noteId: NoteId,
+		projectId: ProjectId
+	): boolean {
+		switch (proposal.kind) {
+			case 'todo':
+				return proposal.payload.projectId === projectId;
+			case 'backlink':
+				return proposal.payload.sourceNoteId === noteId;
+			case 'reference':
+			case 'diagram':
+				return proposal.payload.noteId === noteId;
+			case 'memory':
+				return proposal.payload.projectId === projectId;
+		}
+	}
+}
+export class SuggestionReadingService implements SuggestionFinder, SuggestionLister {
+	constructor(private readonly suggestions: SuggestionRepository) {}
 	async get(actor: ActorContext, id: SuggestionId): Promise<Suggestion> {
 		const suggestion = await this.suggestions.findById(actor, id);
 		if (!suggestion) throw new NotFoundError('Suggestion was not found', { suggestionId: id });
 		return suggestion;
 	}
-
-	/**
-	 * Readable suggestions only, with the rest reported rather than dropped
-	 * quietly.
-	 *
-	 * A suggestion whose payload no longer parses cannot be rendered, decided, or
-	 * accepted — the payload is the whole card. So the inbox omits it, and says
-	 * so where an operator will see it. That is the decision this layer is the
-	 * one able to make: the repository knows a row did not read, but only the
-	 * inbox knows the row was going to become a card.
-	 */
 	async listByStatus(
 		actor: ActorContext,
 		status: SuggestionStatus,
@@ -116,7 +163,13 @@ export class SuggestionInbox {
 	async countByStatus(actor: ActorContext, status: SuggestionStatus): Promise<number> {
 		return (await this.listByStatus(actor, status)).length;
 	}
-
+}
+export class SuggestionContextService implements SuggestionContextReader {
+	constructor(
+		private readonly notes: NoteRepository,
+		private readonly provenance: ProvenanceRepository,
+		private readonly anchors: SourceAnchorRepository
+	) {}
 	async readContexts(
 		actor: ActorContext,
 		suggestions: readonly Suggestion[]
@@ -135,7 +188,14 @@ export class SuggestionInbox {
 			})
 		);
 	}
-
+}
+export class SuggestionLifecycleService
+	implements SuggestionAccepter, SuggestionRejecter, SuggestionReverter, SuggestionExpirer
+{
+	constructor(
+		private readonly suggestions: SuggestionRepository,
+		private readonly clock: Clock
+	) {}
 	async accept(
 		actor: ActorContext,
 		suggestion: Suggestion,
@@ -172,7 +232,6 @@ export class SuggestionInbox {
 	async expire(actor: ActorContext): Promise<number> {
 		return this.suggestions.expireProposedThrough(actor, this.clock.now());
 	}
-
 	private async transition(
 		actor: ActorContext,
 		suggestion: Suggestion,
@@ -194,36 +253,17 @@ export class SuggestionInbox {
 		if (suggestion.status !== 'proposed')
 			throw new InvalidTransitionError('Suggestion is not pending');
 	}
-
-	private payloadBelongsToNote(
-		proposal: SuggestionProposal,
-		noteId: NoteId,
-		projectId: ProjectId
-	): boolean {
-		switch (proposal.kind) {
-			case 'todo':
-				return proposal.payload.projectId === projectId;
-			case 'backlink':
-				return proposal.payload.sourceNoteId === noteId;
-			case 'reference':
-			case 'diagram':
-				return proposal.payload.noteId === noteId;
-			case 'memory':
-				return proposal.payload.projectId === projectId;
-		}
-	}
 }
-
 type SuggestionIdentity = {
 	readonly id: SuggestionId;
 	readonly userId: ActorContext['userId'];
 	readonly now: DateTime;
 };
-export function createProposalRecord<P extends SuggestionProposal>(
+function createProposalRecord<P extends SuggestionProposal>(
 	proposal: P,
 	identity: SuggestionIdentity
 ): Extract<Suggestion, { kind: P['kind'] }>;
-export function createProposalRecord(
+function createProposalRecord(
 	proposal: SuggestionProposal,
 	identity: SuggestionIdentity
 ): Suggestion {
@@ -255,11 +295,11 @@ export function createProposalRecord(
 	}
 }
 
-export function selectionProposal<P extends SelectionProposal>(
+function selectionProposal<P extends SelectionProposal>(
 	origin: ProposalSelectionOrigin,
 	proposal: P
 ): Extract<SuggestionProposal, { kind: P['kind'] }>;
-export function selectionProposal(
+function selectionProposal(
 	origin: ProposalSelectionOrigin,
 	proposal: SelectionProposal
 ): SuggestionProposal {

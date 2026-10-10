@@ -24,10 +24,7 @@ import type { NoteTreeReader } from '$lib/server/services/notes/contracts';
 import type { ProjectLister } from '$lib/server/services/projects/contracts';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
-import type {
-	SuggestionExpirer,
-	SuggestionLister
-} from '$lib/server/services/suggestions/contracts';
+import type { SuggestionExpirer, SuggestionLister } from '$lib/server/services/suggestions/inbox';
 import type {
 	TodoLister,
 	TodoContextReader,

@@ -78,7 +78,7 @@ const setup = async (suffix: string) => {
 		transactionRunner,
 		selectionOrigins: notes.selectionOrigins,
 		drawioXmlValidator: new DrawioXmlValidator(),
-		suggestionCreator: suggestions.inbox,
+		suggestionCreator: suggestions.creator,
 		noteActionRequests: requests,
 		runSettlements: settlements,
 		runEvents: { notify: () => {} }

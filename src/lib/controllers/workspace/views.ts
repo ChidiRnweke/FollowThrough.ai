@@ -1,17 +1,13 @@
+import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { ShellContext, TodayView, NoteView } from '$lib/models/workspace-views';
 import type { Project } from '$lib/models/projects';
 import type { Note } from '$lib/models/notes';
 import type { WorkspaceViewState } from '$lib/models/workspace-views';
-import {
-	pendingMemorySuggestions,
-	newestMemoryViews
-} from '$lib/services/suggestions/presentation';
 import { assembleTodoView } from '$lib/services/todos/presentation';
 import { assembleProjectTree } from '$lib/services/projects/presentation';
 import { assembleNoteView } from '$lib/services/notes/presentation';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
 import { assembleReferenceView } from '$lib/services/references/presentation';
-import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
 import { TOOL_DESCRIPTIONS, LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { UserId } from '$lib/models/identity';
 import type {
@@ -99,6 +95,7 @@ export interface WorkspaceViewsController {
 export class WorkspaceViews implements WorkspaceViewsController {
 	constructor(
 		private readonly state: WorkspaceViewState,
+		private readonly suggestionPresentation: ISuggestionPresentationService,
 		private readonly memoryPresentation: IMemoryPresentationService
 	) {}
 	private get records() {
@@ -231,22 +228,24 @@ export class WorkspaceViews implements WorkspaceViewsController {
 	}
 	memorySuggestions(projectId?: ProjectId): readonly MemorySuggestionView[] {
 		if (projectId && !this.isActiveProject(projectId)) return [];
-		return newestMemoryViews(
-			pendingMemorySuggestions(this.pendingSuggestions, projectId).flatMap((suggestion) => {
-				const provenance = suggestion.provenanceId
-					? this.get('provenance', suggestion.provenanceId)
-					: undefined;
-				if (!provenance) return [];
-				const anchor = suggestion.sourceAnchorId
-					? this.get('source_anchors', suggestion.sourceAnchorId)
-					: undefined;
-				return [
-					assembleSuggestionView(suggestion, {
-						origin: provenanceOrigin(provenance),
-						anchor
-					})
-				];
-			})
+		return this.suggestionPresentation.newestMemoryViews(
+			this.suggestionPresentation
+				.pendingMemorySuggestions(this.pendingSuggestions, projectId)
+				.flatMap((suggestion) => {
+					const provenance = suggestion.provenanceId
+						? this.get('provenance', suggestion.provenanceId)
+						: undefined;
+					if (!provenance) return [];
+					const anchor = suggestion.sourceAnchorId
+						? this.get('source_anchors', suggestion.sourceAnchorId)
+						: undefined;
+					return [
+						this.suggestionPresentation.assembleSuggestionView(suggestion, {
+							origin: provenanceOrigin(provenance),
+							anchor
+						})
+					];
+				})
 		);
 	}
 	attachments(owner: { kind: 'project' | 'note'; id: string }): readonly AttachmentView[] {
@@ -535,7 +534,11 @@ export class WorkspaceViews implements WorkspaceViewsController {
 				if (suggestion.sourceAnchorId && !anchor)
 					missing.push({ type: 'source_anchors', id: [suggestion.sourceAnchorId] });
 				return [
-					assembleSuggestionView(suggestion, { note, anchor, origin: provenanceOrigin(provenance) })
+					this.suggestionPresentation.assembleSuggestionView(suggestion, {
+						note,
+						anchor,
+						origin: provenanceOrigin(provenance)
+					})
 				];
 			});
 		return {

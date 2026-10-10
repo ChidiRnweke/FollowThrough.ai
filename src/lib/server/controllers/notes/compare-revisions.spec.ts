@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -15,6 +16,7 @@ const setup = () => {
 	const content = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			noteReader: content,
 			noteEditor: content,
 			noteLinkReconciler: content,

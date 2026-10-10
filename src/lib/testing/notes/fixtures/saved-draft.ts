@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { ActorContext } from '$lib/models/identity';
 import type { Note } from '$lib/models/notes';
 import type { AtomicOperation } from '$lib/models/workspace';
@@ -16,6 +17,7 @@ export async function saveNoteDraft(
 	const effects = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
 			noteEditor: editor,
 			anchorRepairer: effects,

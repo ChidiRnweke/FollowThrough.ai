@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import {
@@ -21,6 +22,7 @@ export const reviewedNoteFixture = (
 	content.notes = [note];
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			markdown,
 			noteReader: content,
 			revisionReader: content,

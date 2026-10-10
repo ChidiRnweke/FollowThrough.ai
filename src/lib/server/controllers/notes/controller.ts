@@ -1,3 +1,4 @@
+import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import { noteTrashChange } from '$lib/services/notes/trash';
 import { prepareNotePublication } from '$lib/services/notes/publication';
@@ -10,7 +11,6 @@ import { assembleNoteView, noteEtag, noteMatchesEtag } from '$lib/services/notes
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
 import { assembleReferenceView } from '$lib/services/references/presentation';
 import { mutationResource } from '$lib/services/workspace/commands';
-import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
 import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { IndexingResult } from '$lib/models/knowledge-search';
@@ -124,7 +124,7 @@ import type {
 	SuggestionLister,
 	SuggestionExpirer,
 	SuggestionContextReader
-} from '$lib/server/services/suggestions/contracts';
+} from '$lib/server/services/suggestions/inbox';
 import type { TodoLister, TodoContextReader } from '$lib/server/services/todos/contracts';
 import type {
 	NoteAttachmentRestorer,
@@ -323,6 +323,7 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	readonly suggestionPresentation: ISuggestionPresentationService;
 	markdown: NoteMarkdown;
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
 	syncRetry: 'database-only' | 'never';
@@ -588,7 +589,11 @@ export class Notes implements NotesController {
 			diagrams,
 			todos: todoContexts.map((context) => assembleTodoView(context.todo, context)),
 			pendingSuggestions: pendingContexts.map(({ suggestion, note, anchor, provenance }) =>
-				assembleSuggestionView(suggestion, { note, anchor, origin: provenanceOrigin(provenance) })
+				this.dependencies.suggestionPresentation.assembleSuggestionView(suggestion, {
+					note,
+					anchor,
+					origin: provenanceOrigin(provenance)
+				})
 			),
 			sectionNumbering
 		});

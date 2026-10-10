@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { expect, it } from 'vitest';
 import { createAgentFilesCapability } from '$lib/server/factories/capabilities/agent-files-capability-factory';
@@ -27,6 +28,7 @@ const setup = async (suffix: string) => {
 	const effects = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner: tx.transactionRunner,
 			noteReader: catalog,
 			noteEditor: catalog,

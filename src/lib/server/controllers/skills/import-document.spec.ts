@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -266,6 +267,7 @@ describe('Skill document imports', () => {
 		const result = await controller.update(testActor(), input);
 		const publisher = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				suggestionPresentation: new SuggestionPresentationService(),
 				transactionRunner,
 				notePublisher: catalog,
 				revisionRecorder: catalog

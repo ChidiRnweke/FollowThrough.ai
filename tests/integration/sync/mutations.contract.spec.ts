@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
@@ -28,6 +29,7 @@ const setup = async (suffix: string) => {
 	const content = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner,

@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { DomainError } from '$lib/errors';
@@ -26,6 +27,7 @@ it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
 			notePublisher: catalog,
 			revisionRecorder: catalog
@@ -69,6 +71,7 @@ it.each([
 		});
 		const controller = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				suggestionPresentation: new SuggestionPresentationService(),
 				transactionRunner,
 				notePublisher: catalog,
 				revisionRecorder: catalog

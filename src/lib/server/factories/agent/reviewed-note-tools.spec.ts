@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, it, expect } from 'vitest';
 import { RunContext } from '@openai/agents';
@@ -217,6 +218,7 @@ describe('A note change that fails while it is being prepared', () => {
 		content.notes = [note];
 		const controller = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				suggestionPresentation: new SuggestionPresentationService(),
 				markdown: {
 					read: () => {
 						throw new TypeError('document.content[12] is not writable');

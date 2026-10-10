@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
@@ -62,6 +63,7 @@ it('restores a note at the root when its previous folder is archived', async () 
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			noteTrash: catalog,
 			noteIndexer: new InMemoryNoteContent(),
 			transactionRunner

@@ -76,7 +76,7 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 			},
 			transactionRunner,
 			drawioXmlValidator: new DrawioXmlValidator(),
-			suggestionCreator: suggestions.inbox
+			suggestionCreator: suggestions.creator
 		})
 	);
 	return { ...seeded, controller, provider: fixture.provider, records };

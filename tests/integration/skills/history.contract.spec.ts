@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it } from 'vitest';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -18,6 +19,7 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 	});
 	const notes = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
 			notePublisher: catalog,
 			revisionRecorder: catalog

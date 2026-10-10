@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 import { createWorkspaceViews } from '$lib/factories/workspace/views';
@@ -25,7 +26,7 @@ import {
 } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
-import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
@@ -77,7 +78,7 @@ describe('note view assembly', () => {
 			relevanceNote: 'Explains the note'
 		});
 		const todos = new InMemoryTodos();
-		const suggestions = new SuggestionInbox(
+		const suggestions = createSuggestionServices(
 			new InMemorySuggestionRepository(),
 			notes,
 			provenance,
@@ -97,12 +98,13 @@ describe('note view assembly', () => {
 			pipeline: 'extract_promises',
 			metadata: {}
 		});
-		const proposal = await suggestions.createFromSelection(actor, origin, {
+		const proposal = await suggestions.creator.createFromSelection(actor, origin, {
 			kind: 'todo',
 			payload: { title: 'Review the architecture', responsibility: 'mine' }
 		});
 		const controller = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				suggestionPresentation: new SuggestionPresentationService(),
 				noteReader: content,
 				projectReader: projects,
 				userPreferences: new InMemoryUserPreferencesRepository(),
@@ -113,9 +115,9 @@ describe('note view assembly', () => {
 				diagramLister: new InMemoryDiagramRepository(),
 				todoLister: todos,
 				todoContextReader: todos,
-				suggestionLister: suggestions,
-				suggestionExpirer: suggestions,
-				suggestionContextReader: suggestions
+				suggestionLister: suggestions.lister,
+				suggestionExpirer: suggestions.expirer,
+				suggestionContextReader: suggestions.context
 			})
 		);
 		const records = [

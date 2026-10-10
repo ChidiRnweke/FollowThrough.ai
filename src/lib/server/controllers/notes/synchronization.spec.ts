@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
@@ -37,6 +38,7 @@ const setup = () => {
 	});
 	const notes = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			syncMutations: mutations,
 			syncRetry: 'never',
 			noteReader: content,

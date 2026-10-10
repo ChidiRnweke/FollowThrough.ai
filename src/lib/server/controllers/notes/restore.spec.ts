@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { noteTrashWrite } from '$lib/testing/workspace/fixtures/commands';
 import { describe, expect, it } from 'vitest';
@@ -25,6 +26,7 @@ const setup = () => {
 	const indexer = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			noteTrash: service,
 			noteTrashReader: service,
 			noteIndexer: indexer,

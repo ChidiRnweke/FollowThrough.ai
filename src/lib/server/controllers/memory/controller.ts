@@ -1,3 +1,4 @@
+import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { IMemoryEditingService } from '$lib/services/memory/edits';
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
@@ -6,8 +7,7 @@ import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { MemoryIndexer } from '$lib/server/services/memory/library';
-import { mapAppliedChange } from '$lib/server/services/suggestions/effects';
-import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
+import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type { Suggestion } from '$lib/models/suggestions';
 import type {
 	MemoryMutationRequest,
@@ -34,10 +34,7 @@ import type {
 	MemoryEntryEditor,
 	MemoryEntryLister
 } from '$lib/server/services/memory/library';
-import type {
-	SuggestionAccepter,
-	SuggestionCreator
-} from '$lib/server/services/suggestions/contracts';
+import type { SuggestionAccepter, SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 
 /**
@@ -242,5 +239,19 @@ export class Memory implements MemoryController {
 			result.missing.map((chunk) => chunk.input)
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
+	}
+}
+
+function mapAppliedChange<Input, Output>(
+	change: AppliedChange<Input>,
+	map: (record: Input) => Output
+): AppliedChange<Output> {
+	switch (change.kind) {
+		case 'created':
+			return { kind: 'created', after: map(change.after) };
+		case 'modified':
+			return { kind: 'modified', before: map(change.before), after: map(change.after) };
+		case 'unchanged':
+			return { kind: 'unchanged', after: map(change.after) };
 	}
 }

@@ -6,7 +6,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type { UpdateTrustPolicyInput } from '$lib/models/agent';
 import { Memory, type MemoryDependencies } from './controller';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
-import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
@@ -86,7 +86,7 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 	const entries = new InMemoryMemoryEntryRepository();
 	const library = createMemoryServices(entries, new InMemoryProjectRepository(), provenance);
 	const records = new InMemorySuggestionRepository();
-	const inbox = new SuggestionInbox(
+	const inbox = createSuggestionServices(
 		records,
 		new InMemoryNoteRepository(),
 		provenance,
@@ -103,8 +103,8 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),
 			memoryChanges: library.changes,
-			suggestionCreator: inbox,
-			suggestionAccepter: inbox,
+			suggestionCreator: inbox.creator,
+			suggestionAccepter: inbox.accepter,
 			trustPolicyEvaluator: trust,
 			suggestionEffects: effects,
 			memoryIndexer: index.memories,

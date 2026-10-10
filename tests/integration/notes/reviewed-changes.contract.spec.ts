@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, it, expect } from 'vitest';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -39,6 +40,7 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 		});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			markdown,
 			transactionRunner,
 			noteReader: catalog,

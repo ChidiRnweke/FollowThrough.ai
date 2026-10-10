@@ -120,7 +120,7 @@ const setup = async (suffix: string) => {
 		runSettlements: settlements,
 		runEvents: { notify: () => {} },
 		selectionOrigins: notes.selectionOrigins,
-		suggestionCreator: suggestions.inbox
+		suggestionCreator: suggestions.creator
 	};
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({

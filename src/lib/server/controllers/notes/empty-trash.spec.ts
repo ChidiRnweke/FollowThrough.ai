@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
@@ -24,6 +25,7 @@ const setup = () => {
 	const service = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			noteDeletion: service,
 			transactionRunner: new InMemoryTransactionRunner([notes, projects])
 		})

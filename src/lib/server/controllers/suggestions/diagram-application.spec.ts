@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
 import { describe, expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
@@ -43,6 +44,7 @@ const setup = (source = VALID_DRAWIO_XML) => {
 	suggestions.suggestions = [suggestion];
 	const controller = new Suggestions(
 		capabilityDependencies<SuggestionsDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionFinder: suggestions,
 			suggestionAccepter: suggestions,
 			suggestionEffects: effects,

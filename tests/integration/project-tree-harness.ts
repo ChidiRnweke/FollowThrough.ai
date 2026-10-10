@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { vi } from 'vitest';
 import postgres from 'postgres';
 import type { Database } from '$lib/server/db';
@@ -31,6 +32,7 @@ export const treeControllers = (database: Database, transactionRunner: Transacti
 		),
 		notes: new Notes(
 			capabilityDependencies<NotesDependencies>({
+				suggestionPresentation: new SuggestionPresentationService(),
 				noteCreation: notes,
 				noteTrash: notes,
 				noteDeletion: notes,

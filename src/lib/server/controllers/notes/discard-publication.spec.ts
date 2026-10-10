@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it } from 'vitest';
 import type { Note } from '$lib/models/notes';
 const content = (text: string): Pick<Note, 'plainText' | 'document'> => ({
@@ -29,6 +30,7 @@ it('discards against the publication that committed before it acquired the note'
 	const effects = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner: new InMemoryTransactionRunner([records, effects]),
 			noteReader: catalog,
 			noteEditor: catalog,

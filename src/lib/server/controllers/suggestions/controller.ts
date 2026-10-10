@@ -1,9 +1,5 @@
+import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
-import {
-	groupSuggestionViews,
-	pendingMemorySuggestions,
-	newestMemoryViews
-} from '$lib/services/suggestions/presentation';
 import { searchableDrawioText } from '$lib/services/diagrams/labels';
 import { decideTodoCreation } from '$lib/services/todos/creation';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
@@ -14,12 +10,10 @@ import type {
 	DrawioXmlContentValidator,
 	DrawioSvgPreviewSanitizer
 } from '$lib/server/services/diagrams/contracts';
-import type { AppliedRecord } from '$lib/server/services/suggestions/contracts';
-import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
+import type { AppliedRecord } from '$lib/server/services/suggestions/inbox';
 import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { MemoryIndexer } from '$lib/server/services/memory/library';
 import type { AppliedChange } from '$lib/models/proposal-effects';
-import { mapAppliedChange } from '$lib/server/services/suggestions/effects';
 import type { Todo, TodoId, CreateTodoInput } from '$lib/models/todos';
 import type { ExternalReference } from '$lib/models/references';
 import type { NoteRelationship } from '$lib/models/notes';
@@ -47,8 +41,8 @@ import type { ListPendingMemoryInput } from '$lib/models/memory';
 import type { ListPendingMemoryOutput } from '$lib/models/suggestions';
 import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import { InvalidTransitionError, ValidationError } from '$lib/errors';
+import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type {
-	SuggestionEffectService,
 	SuggestionAccepter,
 	SuggestionFinder,
 	SuggestionLister,
@@ -56,7 +50,7 @@ import type {
 	SuggestionRejecter,
 	SuggestionReverter,
 	SuggestionContextReader
-} from '$lib/server/services/suggestions/contracts';
+} from '$lib/server/services/suggestions/inbox';
 
 type SuggestionArtifact = Todo | NoteRelationship | ExternalReference | Diagram | MemoryEntry;
 interface SuggestionApplicationResult {
@@ -125,6 +119,7 @@ export interface SuggestionsController {
 }
 /** Everything the {@link SuggestionsController} needs, injected so it can be built and tested without real stores. */
 export interface SuggestionsDependencies {
+	readonly suggestionPresentation: ISuggestionPresentationService;
 	suggestionLister: SuggestionLister;
 	suggestionExpirer: SuggestionExpirer;
 	suggestionContextReader: SuggestionContextReader;
@@ -161,7 +156,7 @@ export class Suggestions implements SuggestionsController {
 		await this.dependencies.suggestionExpirer.expire(actor);
 		const suggestions = await this.dependencies.suggestionLister.listByStatus(actor, input.status);
 		const views = await this.readViews(actor, suggestions);
-		return { groups: groupSuggestionViews(views) };
+		return { groups: this.dependencies.suggestionPresentation.groupSuggestionViews(views) };
 	}
 	async listPendingMemory(
 		actor: ActorContext,
@@ -169,10 +164,13 @@ export class Suggestions implements SuggestionsController {
 	): Promise<ListPendingMemoryOutput> {
 		await this.dependencies.suggestionExpirer.expire(actor);
 		const pending = await this.dependencies.suggestionLister.listByStatus(actor, 'proposed');
-		const memory = pendingMemorySuggestions(pending, input.projectId);
+		const memory = this.dependencies.suggestionPresentation.pendingMemorySuggestions(
+			pending,
+			input.projectId
+		);
 		const views = await this.readViews(actor, memory);
 		return {
-			suggestions: newestMemoryViews(views)
+			suggestions: this.dependencies.suggestionPresentation.newestMemoryViews(views)
 		};
 	}
 	private async readViews(
@@ -184,7 +182,11 @@ export class Suggestions implements SuggestionsController {
 			suggestions
 		);
 		return contexts.map(({ suggestion, note, anchor, provenance }) =>
-			assembleSuggestionView(suggestion, { note, anchor, origin: provenanceOrigin(provenance) })
+			this.dependencies.suggestionPresentation.assembleSuggestionView(suggestion, {
+				note,
+				anchor,
+				origin: provenanceOrigin(provenance)
+			})
 		);
 	}
 	accept(
@@ -403,5 +405,19 @@ export class Suggestions implements SuggestionsController {
 			result.missing.map((chunk) => chunk.input)
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
+	}
+}
+
+function mapAppliedChange<Input, Output>(
+	change: AppliedChange<Input>,
+	map: (record: Input) => Output
+): AppliedChange<Output> {
+	switch (change.kind) {
+		case 'created':
+			return { kind: 'created', after: map(change.after) };
+		case 'modified':
+			return { kind: 'modified', before: map(change.before), after: map(change.after) };
+		case 'unchanged':
+			return { kind: 'unchanged', after: map(change.after) };
 	}
 }

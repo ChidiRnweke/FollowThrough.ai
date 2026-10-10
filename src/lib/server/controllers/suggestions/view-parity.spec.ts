@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
 import { createWorkspaceViews } from '$lib/factories/workspace/views';
@@ -18,6 +19,7 @@ it('returns the same memory review view from server and downloaded records', asy
 	reader.contexts = [context];
 	const controller = new Suggestions(
 		capabilityDependencies<SuggestionsDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionLister: reader,
 			suggestionExpirer: reader,
 			suggestionContextReader: reader

@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it } from 'vitest';
 import type { Note } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -24,6 +25,7 @@ const setup = async (suffix: string) => {
 	const effects = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner: tx.transactionRunner,
 			noteReader: catalog,
 			noteEditor: catalog,

@@ -4,7 +4,7 @@ import { expect, it } from 'vitest';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
-import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
@@ -29,7 +29,7 @@ const setup = async (suffix: string) => {
 		createdAt: now
 	});
 	const suggestions = new SuggestionRecords(database);
-	const inbox = new SuggestionInbox(
+	const inbox = createSuggestionServices(
 		suggestions,
 		new NoteRecords(database),
 		provenance,
@@ -45,7 +45,7 @@ const setup = async (suffix: string) => {
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),
 			memoryChanges: library.changes,
-			suggestionCreator: inbox,
+			suggestionCreator: inbox.creator,
 			trustPolicyEvaluator: new InMemoryTrustPolicyEvaluator(),
 			transactionRunner
 		})

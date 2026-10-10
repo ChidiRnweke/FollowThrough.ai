@@ -1,3 +1,4 @@
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { describe, expect, it } from 'vitest';
@@ -57,6 +58,7 @@ describe('Proposal effect coordination', () => {
 		notes.notes = [noteBuilder()];
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
+				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionFinder: suggestions,
 				suggestionAccepter: suggestions,
 				suggestionEffects: effects,
@@ -118,6 +120,7 @@ describe('Proposal effect coordination', () => {
 		await indexer.index(testActor(), replacement);
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
+				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionFinder: suggestions,
 				suggestionReverter: suggestions,
 				suggestionEffects: effects,
