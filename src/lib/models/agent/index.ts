@@ -620,6 +620,18 @@ export interface AgentModel {
 	readonly capabilities: readonly string[];
 }
 
+/** A provider catalog read and the time it was taken. A timestamp never exists without its models. */
+export interface ModelCatalogSnapshot {
+	readonly models: readonly AgentModel[];
+	readonly refreshedAt: number;
+}
+
+/** Process-lifetime retention of the last successful catalog read. */
+export interface ModelCatalogCache {
+	readonly current: ModelCatalogSnapshot | undefined;
+	replace(snapshot: ModelCatalogSnapshot): void;
+}
+
 /**
  * One explicitly attached context note as assembled for a run. At or under the
  * token limit the full content rides inside the user message; a larger note
