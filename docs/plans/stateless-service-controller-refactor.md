@@ -1692,3 +1692,72 @@ Observed verification:
   does.
 - Production builds, the full PWA suite and live AI/object-storage flows were not run for this
   browser-only slice. Development E2E retains the inherited `/offline-shell.html` 404 output.
+
+## Browser note history independence — 2026-10-10
+
+This slice starts from #352 at `55383a596787bde5ddb42b90b5f7e9378158e5f6` in
+`refactor/pr336-note-history-independence`. ADRs 0007, 0011, 0015, 0037, 0040 and 0041
+were checked against the current implementation, existing plan and #345 inventory. #348,
+#351 and #352 retained their inspected heads. The shared-contract overlap is recorded on
+[#348](https://github.com/ChidiRnweke/FollowThrough.ai/pull/348#issuecomment-6102029661).
+
+- [x] Remove the history controller and store imports from note actions. The controller owns
+      list loading, preferred selection, revision reads, cancellation and failure handling.
+- [x] Replace the factory's workspace controller dependency with the existing passive
+      `workspaceSessionState`, narrowed to readonly account ID and generation. No forwarding
+      controller, callback, adapter or second session owner is introduced. Factories only construct.
+- [x] Store one captured account/session binding per history instance, with both facts required.
+      Keep a separate request generation for each pane. The existing session generation is reactive;
+      its lifetime and increment semantics are unchanged.
+- [x] Guard content and status against replacement and late list/read success or failure. Missing
+      account identity produces an explicit failure without issuing a read. Cancellation clears
+      the closed dialog; reopening starts fresh. A replaced session reports that the dialog must
+      be reopened, rather than exposing stale loading/error status or a false empty success.
+- [x] Preserve published-snapshot preference, newest-snapshot fallback, loading/error/empty states,
+      rapid selection and independent panes. Keep restoration in `NoteWorkspace.restoreRevision`,
+      including #352's cancellation of pending clipboard reads after document replacement.
+- [x] Reproduce authenticated history opening, closing/reopening and restoration before editing.
+      Add deferred-reader race tests and browser reactivity tests using the real session store.
+      Extend the tracked restoration E2E with dialog reopening. See
+      [matched evidence and reproduction](../pr-evidence/pr336-note-history-independence/README.md).
+
+Proofreading, server code, general workspace synchronization/review, widget internals,
+revision-comparison rules and AI action workflows remain outside this slice. Existing service
+and raw history-reader contracts are unchanged.
+
+Measured with unchanged enforcement against the exact base:
+
+| Check                          | Before | After | New findings                          |
+| ------------------------------ | -----: | ----: | ------------------------------------- |
+| Global controller-import audit |     63 |    62 | None; the history import is removed   |
+| Chisel prohibited imports      |     42 |    42 | None                                  |
+| #345 semantic checker          |    762 |   762 | No new file/rule/message combinations |
+
+The store import and factory-supplied controller are also removed in source, including the
+indirect behavioral dependency. Counts do not substitute for that review. No enforcement,
+suppression or migration baseline changed. These remaining findings are inherited errors;
+this slice does not complete #336 or make the stack ready to merge.
+
+Observed verification:
+
+- Lint and type checking passed; zero type errors or warnings.
+- Full unit suite: 583 files, 4,554 tests passed and one existing skip.
+- Focused browser history/dialog suite: three files, 19 tests passed, including reactive logout
+  and same-account restart. Existing `derived_inert` warnings remain.
+- Source, test-quality and UI audits passed. `pnpm test:architecture` fails at the 62 inherited
+  controller imports. Later audit stages were run independently; the unchanged #345 checker
+  and Chisel retain the inherited findings listed above.
+- Before implementation, seven authenticated journeys passed: six existing journeys and the
+  capture variant with dialog reopening. No live model calls were used.
+- Final authenticated E2E: all seven journeys passed, including the matched capture variant.
+  One earlier after-run timed out on autosave before reaching history. Three reruns against
+  unchanged #352 passed, so its cause is unclassified rather than claimed as inherited. The
+  final run passed without changing autosave or weakening assertions. The initial capture-only
+  toast wait used a strict locator for multiple toasts; the corrected capture waits for zero
+  toasts and disables animations. Both final before/after captures passed and were inspected.
+- Docs check passed with zero errors/warnings and one existing hint; generation retains the
+  existing TypeDoc entry-point warnings. Development E2E retains `/offline-shell.html` 404 output.
+- Production builds, full PWA verification, local database contracts and live AI/object-storage
+  flows were not run for this browser-only slice. Required CI results are reported in the PR.
+- Full browser suite: 93 files, 609 tests passed. This includes the final history reactivity tests
+  and existing editor/clipboard behavior. Existing derived/rasterization warnings remain.

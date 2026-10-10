@@ -182,6 +182,12 @@ export interface EditorInsertion {
 	readonly position: number;
 }
 
+/** Captured passive identity for an account-scoped history request. */
+export interface NoteHistoryBinding {
+	readonly accountId: string;
+	readonly generation: number;
+}
+
 /** Readonly binding facts and guarded state updates; no session operations. */
 export interface WorkspaceBindingState {
 	readonly generation: number;
