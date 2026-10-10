@@ -102,10 +102,25 @@
 	 * leave a link to bytes that were never stored.
 	 */
 	async function attach(files: readonly File[]): Promise<void> {
+		if (uploading) return;
+		const originalTodo = todoId;
+		const originalProject = projectId;
+		const session = attachmentsController.sessionGeneration;
+		let checkpoint = editorSession.checkpoint();
+		const current = () =>
+			checkpoint() &&
+			todoId === originalTodo &&
+			projectId === originalProject &&
+			attachmentsController.sessionGeneration === session;
 		uploading = true;
 		try {
 			for (const file of files) {
-				const url = await attachmentsController.uploadScreenshot(todoId, projectId, file);
+				const url = await attachmentsController.uploadScreenshot(
+					originalTodo,
+					originalProject,
+					file
+				);
+				if (!current()) return;
 				const caretStart = textarea?.selectionStart ?? draft.length;
 				const caretEnd = textarea?.selectionEnd ?? draft.length;
 				const next = insertAtCaret(
@@ -116,12 +131,14 @@
 				);
 				draft = next.text;
 				editorSession.changed();
+				checkpoint = editorSession.checkpoint();
 				textarea?.setSelectionRange(next.caret, next.caret);
 			}
 			await commit();
 			// audit-allow: silent-catch — screenshot upload failure is reported and the description remains editable.
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Could not upload the screenshot.');
+			if (current())
+				toast.error(error instanceof Error ? error.message : 'Could not upload the screenshot.');
 		} finally {
 			uploading = false;
 		}

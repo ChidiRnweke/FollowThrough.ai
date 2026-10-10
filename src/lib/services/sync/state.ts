@@ -537,3 +537,18 @@ export class CacheCommitService implements ICacheCommitService {
 		};
 	}
 }
+
+export interface IWorkspaceProjectionService {
+	project<C, T>(
+		records: ReadonlyMap<string, ResourceState<T>>,
+		pending: readonly OutboxEntry<C, T>[]
+	): ReadonlyMap<string, T>;
+}
+export class WorkspaceProjectionService implements IWorkspaceProjectionService {
+	project<C, T>(
+		records: ReadonlyMap<string, ResourceState<T>>,
+		pending: readonly OutboxEntry<C, T>[]
+	): ReadonlyMap<string, T> {
+		return visibleResources(records, pending);
+	}
+}
