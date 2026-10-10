@@ -1,3 +1,4 @@
+import type { Attributes } from '@opentelemetry/api';
 import { z } from 'zod';
 export type AgentRunExecutionOutcome = 'completed' | 'awaiting_approval' | 'cancelled';
 import type { PersistedSessionItem } from './session-item';
@@ -2058,3 +2059,21 @@ export type AgentToolOutcome =
 	| Exclude<ProviderToolOutput, { readonly kind: 'value' }>
 	| { readonly kind: 'succeeded'; readonly value: AgentPayload }
 	| { readonly kind: 'reported_failure'; readonly value: AgentPayload; readonly failure: string };
+
+/** Prepared autocomplete messages, with no provider protocol or executable rules. */
+export interface InlineCompletionPrompt {
+	readonly system: string;
+	readonly user: string;
+}
+export interface InlineCompletionResult {
+	readonly raw: string;
+	readonly attributes: Attributes;
+}
+/** The owner resolves the user preference or environment default before calling the provider. */
+export interface InlineCompletionGenerator {
+	complete(
+		prompt: InlineCompletionPrompt,
+		signal: AbortSignal,
+		model: string
+	): Promise<InlineCompletionResult>;
+}

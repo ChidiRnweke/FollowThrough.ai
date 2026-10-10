@@ -4,8 +4,6 @@ import type {
 	AgentRunContext,
 	AgentRunDecisionRecord,
 	AgentRunImages,
-	InlineCompletionContext,
-	InlineSuggestionRequest,
 	RunAgentInput,
 	WebResearchSettings
 } from '$lib/models/agent';
@@ -47,21 +45,6 @@ export interface AgentRunner {
 		readonly signal: AbortSignal;
 		readonly toolExecutor: AgentToolCompletionObserver;
 	}): AsyncIterable<AgentExecutionUpdate>;
-}
-
-/**
- * One toolless model call that turns assembled context into caret text.
- *
- * `model` is the caller's per-user choice; omitting it falls back to the
- * generator's own environment-derived default.
- */
-export interface InlineCompletionGenerator {
-	complete(
-		request: InlineSuggestionRequest,
-		context: InlineCompletionContext,
-		signal: AbortSignal,
-		model?: string
-	): Promise<string>;
 }
 
 /**

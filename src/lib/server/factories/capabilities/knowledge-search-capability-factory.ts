@@ -1,3 +1,8 @@
+import type { InlineCompletionGenerator } from '$lib/models/agent';
+import {
+	InlineCompletionRules,
+	type IInlineCompletionRules
+} from '$lib/server/services/inline-suggestions/completion-rules';
 import type { InlineSuggestionThrottle } from '$lib/models/agent';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import type { ScheduledTask } from '$lib/models/maintenance';
@@ -36,10 +41,7 @@ import { createInlineAdmission } from '$lib/server/factories/inline-admission';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
-import {
-	InlineSuggestionCompletion,
-	type IInlineSuggestionCompletion
-} from '$lib/server/services/inline-suggestions/inline-completion';
+import { createInlineCompletion } from '$lib/server/factories/inline-completion';
 import type { Reranker } from '$lib/models/knowledge-search';
 import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import {
@@ -90,7 +92,9 @@ export interface KnowledgeSearchFinalizeInput {
 
 export interface KnowledgeSearchFinalized {
 	readonly preferences: AgentPreferenceEditor;
-	readonly inlineCompletion: IInlineSuggestionCompletion;
+	readonly inlineCompletion: InlineCompletionGenerator;
+	readonly completionRules: IInlineCompletionRules;
+	readonly defaultCompletionModel: string;
 	readonly inlineContext: IInlineContextService;
 	readonly observer: typeof operationObserver;
 	readonly inlineAdmission: InlineSuggestionThrottle;
@@ -152,15 +156,16 @@ export const createKnowledgeSearchCapability = (
 		finalize: ({ preferences }) => ({
 			inlineContext: new InlineContextService(tokenizer),
 			preferences,
-			inlineCompletion: new InlineSuggestionCompletion(input.openRouterApiKey, {
-				model: normalizeLanguageModelId(
-					process.env.OPENROUTER_INLINE_COMPLETION_MODEL ??
-						process.env.OPENROUTER_INLINE_MODEL ??
-						'deepseek/deepseek-v4-flash'
-				),
+			completionRules: new InlineCompletionRules(),
+			defaultCompletionModel: normalizeLanguageModelId(
+				process.env.OPENROUTER_INLINE_COMPLETION_MODEL ??
+					process.env.OPENROUTER_INLINE_MODEL ??
+					'deepseek/deepseek-v4-flash'
+			),
+			inlineCompletion: createInlineCompletion({
+				apiKey: input.openRouterApiKey,
 				baseURL: input.openRouterBaseURL,
-				appURL: input.appURL,
-				observer: operationObserver
+				appURL: input.appURL
 			}),
 			observer: operationObserver,
 			inlineAdmission: createInlineAdmission()
