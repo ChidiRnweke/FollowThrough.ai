@@ -23,14 +23,49 @@ import {
 	OpenInferenceSpanKind,
 	SemanticConventions
 } from '@arizeai/openinference-semantic-conventions';
+import type { WorkflowTraceContext } from '$lib/models/telemetry';
+import type { TraceContextReader } from '$lib/server/controllers/agent/controller';
 import type {
-	WorkflowTraceContext,
-	AgentTurnContext,
-	TelemetryTracing,
-	TelemetryLogging,
-	TelemetryClock,
-	BoundaryLogger
-} from '$lib/models/telemetry';
+	AgentTurnObserver,
+	AgentTurnObservation
+} from '$lib/server/controllers/agent/execution';
+import type { TelemetryLogging, TelemetryClock, BoundaryLogger } from './logging';
+/**
+ * Infrastructure observation of one operation.
+ *
+ * `describeOutput` and `describeAttributes` turn a caller's result
+ * into span data, so the result type stays the caller's.
+ */
+export interface OperationObserver {
+	run<T>(
+		name: string,
+		context: WorkflowTraceContext,
+		body: () => Promise<T>,
+		describeOutput?: (result: T) => string,
+		describeAttributes?: (result: T) => Attributes
+	): Promise<T>;
+}
+
+/**
+ * The seam a controller uses to open a workflow root: a trace a user would
+ * recognise as one request (an inline suggestion, a diagram generation).
+ * Unlike `OperationObserver`, it always records, nesting under an active
+ * workflow when there is one.
+ */
+export interface WorkflowObserver {
+	run<T>(
+		name: string,
+		context: WorkflowTraceContext,
+		body: () => Promise<T>,
+		describeOutput?: (result: T) => string
+	): Promise<T>;
+}
+
+interface TelemetryTracing extends TraceContextReader {
+	traceOperation: OperationObserver['run'];
+	traceWorkflow: WorkflowObserver['run'];
+	traceAgentTurn: AgentTurnObserver['run'];
+}
 
 const TRACER_NAME = 'followthrough';
 const WORKFLOW_CONTEXT_KEY = createContextKey('followthrough.workflow');
@@ -209,7 +244,7 @@ export class OpenTelemetryTracing implements TelemetryTracing {
 	}
 
 	async *traceAgentTurn<T>(
-		params: AgentTurnContext,
+		params: AgentTurnObservation,
 		body: () => AsyncIterable<T>,
 		getOutput: () => string
 	): AsyncGenerator<T> {

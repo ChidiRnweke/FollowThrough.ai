@@ -1,6 +1,6 @@
+import type { WorkflowTraceContext } from '$lib/models/telemetry';
 import { ExternalServiceError } from '$lib/errors';
 import type { SearchQueryCache } from '$lib/models/knowledge-search/query-generation';
-import type { OperationObserver } from '$lib/models/telemetry';
 import type { ISearchQueryRules } from '$lib/server/services/knowledge-search/query-rules';
 import type { ConversationId } from '$lib/models/agent';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
@@ -18,6 +18,15 @@ import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import type { SearchQueryGenerator } from '$lib/models/knowledge-search/query-generation';
 import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
+
+interface QueryGenerationObserver {
+	run<T>(
+		name: string,
+		context: WorkflowTraceContext,
+		body: () => Promise<T>,
+		describeOutput?: (result: T) => string
+	): Promise<T>;
+}
 
 export interface SearchKnowledgeInput {
 	readonly query: string;
@@ -64,7 +73,7 @@ export interface RetrievalDependencies {
 	queryGenerator: SearchQueryGenerator;
 	queryRules: ISearchQueryRules;
 	queryCache?: SearchQueryCache;
-	observer: OperationObserver;
+	observer: QueryGenerationObserver;
 	conversations: Pick<ConversationMessages, 'listMessages'>;
 }
 

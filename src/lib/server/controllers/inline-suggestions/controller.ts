@@ -1,3 +1,5 @@
+import type { Attributes } from '@opentelemetry/api';
+import type { WorkflowTraceContext } from '$lib/models/telemetry';
 import type { InlineSuggestionThrottle } from '$lib/models/agent';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import { type ActorContext } from '$lib/models/identity';
@@ -14,13 +16,30 @@ import type { InlineCompletionGenerator } from '$lib/models/agent';
 import type { IInlineCompletionRules } from '$lib/server/services/inline-suggestions/completion-rules';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 
-import type { OperationObserver, WorkflowObserver } from '$lib/models/telemetry';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { Reranker } from '$lib/models/knowledge-search';
 import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import type { IInlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
+
+interface InlineOperationObserver {
+	run<T>(
+		name: string,
+		context: WorkflowTraceContext,
+		body: () => Promise<T>,
+		describeOutput?: (result: T) => string,
+		describeAttributes?: (result: T) => Attributes
+	): Promise<T>;
+}
+interface InlineWorkflowObserver {
+	run<T>(
+		name: string,
+		context: WorkflowTraceContext,
+		body: () => Promise<T>,
+		describeOutput?: (result: T) => string
+	): Promise<T>;
+}
 
 const INELIGIBLE: InlineSuggestion = { outcome: 'no_suggestion', reason: 'ineligible' };
 
@@ -48,8 +67,8 @@ export interface InlineSuggestionsDependencies {
 	knowledgeLookup: IKnowledgeLookup;
 	reranker: Reranker;
 	memory: MemoryEntryLister;
-	observer: OperationObserver;
-	workflow: WorkflowObserver;
+	observer: InlineOperationObserver;
+	workflow: InlineWorkflowObserver;
 	inlineSuggestionThrottle: InlineSuggestionThrottle;
 	noteReader: NoteReader;
 	preferences: AgentPreferencesStore;

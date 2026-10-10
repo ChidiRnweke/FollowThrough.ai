@@ -1,4 +1,4 @@
-import type { OperationObserver, WorkflowObserver } from '$lib/models/telemetry';
+import type { OperationObserver, WorkflowObserver } from '$lib/server/adapters/telemetry/tracing';
 import type { InlineCompletionGenerator } from '$lib/models/agent';
 import {
 	InlineCompletionRules,

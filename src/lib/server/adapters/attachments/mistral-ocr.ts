@@ -10,7 +10,7 @@ import {
 	type OcrPage,
 	type OcrResponse
 } from '$lib/models/attachment-recognition';
-import type { OperationObserver } from '$lib/models/telemetry';
+import type { OperationObserver } from '$lib/server/adapters/telemetry/tracing';
 import type { RecognizedContent, RecognizedPage } from '$lib/models/attachments/ocr';
 
 const directObserver: OperationObserver = {

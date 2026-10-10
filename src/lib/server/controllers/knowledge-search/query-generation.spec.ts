@@ -1,5 +1,5 @@
 import type { StoredMessage } from '$lib/models/agent';
-import type { OperationObserver } from '$lib/models/telemetry';
+import type { OperationObserver } from '$lib/server/adapters/telemetry/tracing';
 import { describe, expect, it } from 'vitest';
 import { createSearchQueryGeneration } from '$lib/server/factories/retrieval-providers';
 import { searchControllerFixture } from '$lib/testing/knowledge-search/fixtures/controller';

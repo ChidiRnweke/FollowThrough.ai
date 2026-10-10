@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { APIUserAbortError } from 'openai';
-import type { OperationObserver, WorkflowTraceContext } from '$lib/models/telemetry';
+import type { OperationObserver } from '$lib/server/adapters/telemetry/tracing';
+import type { WorkflowTraceContext } from '$lib/models/telemetry';
 import {
 	createEmbeddings,
 	createSearchQueryGeneration

@@ -1,4 +1,4 @@
-import type { WorkflowObserver } from '$lib/models/telemetry';
+import type { WorkflowTraceContext } from '$lib/models/telemetry';
 import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { AgentStreamState } from '$lib/server/stores/agent/stream';
 import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
@@ -91,6 +91,15 @@ import type { SelectionOriginService } from '$lib/server/services/notes/selectio
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 import type { AgentEventBus } from '$lib/server/stores/agent/events';
+
+interface DiagramWorkflowObserver {
+	run<T>(
+		name: string,
+		context: WorkflowTraceContext,
+		body: () => Promise<T>,
+		describeOutput?: (result: T) => string
+	): Promise<T>;
+}
 
 /**
  * Application boundary for diagrams: generating and revising Mermaid diagrams from a
@@ -218,7 +227,7 @@ export interface DiagramAgentDependencies {
 		reader: AgentStreamReader;
 		presentation: AgentStreamPresentation;
 	};
-	readonly observeWorkflow: WorkflowObserver;
+	readonly observeWorkflow: DiagramWorkflowObserver;
 	readonly generator: DiagramProviderFactory;
 	readonly createGenerationState: () => DiagramGenerationState;
 }

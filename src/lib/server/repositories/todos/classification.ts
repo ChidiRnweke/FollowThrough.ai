@@ -1,11 +1,21 @@
+import type { WorkflowTraceContext } from '$lib/models/telemetry';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import OpenAI from 'openai';
 import type { LocalDate } from '$lib/models/workspace';
 import type { PromiseModelContext } from '$lib/models/todos';
 import { promiseExtractionSchema } from '$lib/models/todos';
 import { ExternalServiceError } from '$lib/errors';
-import type { OperationObserver } from '$lib/models/telemetry';
-const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
+
+interface ExtractionObserver {
+	run<T>(
+		name: string,
+		context: WorkflowTraceContext,
+		body: () => Promise<T>,
+		describeOutput?: (result: T) => string
+	): Promise<T>;
+}
+
+const directObserver: ExtractionObserver = { run: (_name, _context, body) => body() };
 
 interface LanguageModelClientOptions {
 	readonly baseURL?: string;
@@ -50,12 +60,12 @@ Questions, suggestions, aspirations, and floated options are not promises.
 Use explicit for direct commitments, implied for contextually expected actions, and tentative for hedged commitments.`;
 
 export interface PromiseClassificationOptions extends LanguageModelClientOptions {
-	readonly observer?: OperationObserver;
+	readonly observer?: ExtractionObserver;
 }
 
 export class PromiseClassification implements StructuredPromiseClient {
 	private readonly client;
-	private readonly observer: OperationObserver;
+	private readonly observer: ExtractionObserver;
 
 	constructor(apiKey: string | undefined, options: PromiseClassificationOptions = {}) {
 		this.client = apiKey ? createLanguageModelClient(apiKey, options) : undefined;

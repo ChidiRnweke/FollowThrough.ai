@@ -1,10 +1,10 @@
 import { DomainError } from '$lib/errors';
+import type { OperationObserver } from '$lib/server/adapters/telemetry/tracing';
 import type {
-	OperationObserver,
 	TelemetryLogging,
 	TelemetryClock,
 	BoundaryLogger
-} from '$lib/models/telemetry';
+} from '$lib/server/adapters/telemetry/logging';
 import type { ControllerSurface } from '$lib/models/controller-boundary';
 
 /** Runtime boundary middleware. Construction creates a facade; calls retain original receivers. */

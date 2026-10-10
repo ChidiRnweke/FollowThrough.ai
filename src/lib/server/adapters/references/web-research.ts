@@ -8,7 +8,7 @@ import {
 } from '$lib/models/references';
 import type { WebResearchSettings } from '$lib/models/agent';
 import { withWebResearch } from '$lib/server/adapters/agent/web-research-transport';
-import type { OperationObserver } from '$lib/models/telemetry';
+import type { OperationObserver } from '$lib/server/adapters/telemetry/tracing';
 import { ExternalServiceError } from '$lib/errors';
 
 const prompt = `Search the web for sources that directly support or clarify the selected architecture text.

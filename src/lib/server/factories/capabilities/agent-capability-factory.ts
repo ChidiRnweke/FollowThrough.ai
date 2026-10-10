@@ -1,4 +1,4 @@
-import type { TraceContextReader } from '$lib/models/telemetry';
+import type { TraceContextReader } from '$lib/server/controllers/agent/controller';
 import type { WebResearchOptions, ToolActivityProjection } from '$lib/models/agent';
 import { createToolActivityProjection } from '$lib/server/factories/agent/tool-activity-factory';
 import { normalizeLanguageModelId } from '$lib/models/agent';

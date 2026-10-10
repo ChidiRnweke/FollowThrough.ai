@@ -1,4 +1,5 @@
-import type { AgentTurnContext, AgentTurnObserver } from '$lib/models/telemetry';
+import type { AgentTurnContext } from '$lib/models/telemetry';
+import type { AgentTurnObserver } from '$lib/server/controllers/agent/execution';
 export class InMemoryTurnObserver implements AgentTurnObserver {
 	readonly turns: AgentTurnContext[] = [];
 	async *run<T>(

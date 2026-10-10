@@ -1,4 +1,4 @@
-import type { OperationObserver } from '$lib/models/telemetry';
+import type { OperationObserver } from '$lib/server/adapters/telemetry/tracing';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
 import { createAgentToolResults } from '$lib/server/factories/agent/tool-result-factory';

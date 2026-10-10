@@ -56,7 +56,6 @@ import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AttachmentLookup } from '$lib/server/services/attachments/library';
 import type { DiagramFinder } from '$lib/server/services/diagrams/library';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
-import type { TraceContextReader } from '$lib/models/telemetry';
 import type { WidgetReader } from '$lib/server/services/widgets/library';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 
@@ -214,6 +213,11 @@ export interface AgentController {
 	 * @throws ValidationError if the conversation has an active run.
 	 */
 	deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void>;
+}
+
+/** Reads the W3C traceparent of the active operation, so a run can rejoin it later. */
+export interface TraceContextReader {
+	activeTraceparent(): string | undefined;
 }
 
 /**

@@ -1,5 +1,6 @@
 import type { Attributes } from '@opentelemetry/api';
-import type { OperationObserver, WorkflowTraceContext } from '$lib/models/telemetry';
+import type { OperationObserver } from '$lib/server/adapters/telemetry/tracing';
+import type { WorkflowTraceContext } from '$lib/models/telemetry';
 
 type ObservedOperation = {
 	readonly name: string;

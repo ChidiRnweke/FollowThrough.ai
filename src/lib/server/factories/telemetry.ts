@@ -1,13 +1,12 @@
+import type { OperationObserver, WorkflowObserver } from '$lib/server/adapters/telemetry/tracing';
+import type { AgentTurnObserver } from '$lib/server/controllers/agent/execution';
+import type { TraceContextReader } from '$lib/server/controllers/agent/controller';
 import type {
-	OperationObserver,
-	WorkflowObserver,
-	AgentTurnObserver,
-	TraceContextReader,
 	TelemetryLogging,
 	TelemetryClock,
 	BoundaryLogger,
 	TelemetryEnvironment
-} from '$lib/models/telemetry';
+} from '$lib/server/adapters/telemetry/logging';
 import { OpenTelemetryTracing } from '$lib/server/adapters/telemetry/tracing';
 import {
 	ProcessTelemetryEnvironment,

@@ -1,11 +1,7 @@
-import type {
-	LogLevel,
-	LogEnvironment,
-	TelemetryLogPolicy as TelemetryLogPolicyContract
-} from '$lib/models/telemetry';
-interface TelemetryLogPolicy {
-	enabled: TelemetryLogPolicyContract['enabled'];
-	summarize: TelemetryLogPolicyContract['summarize'];
+import type { LogLevel, LogEnvironment } from '$lib/models/telemetry';
+export interface TelemetryLogPolicy {
+	enabled(level: LogLevel, environment: LogEnvironment): boolean;
+	summarize(rendered: string, maxChars?: number): string;
 }
 const LOG_LEVEL_ORDER: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 const BASE64_DATA_URL = /data:[a-z0-9.+-]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/gi;
