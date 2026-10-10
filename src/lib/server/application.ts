@@ -315,7 +315,16 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const dependencies: ProductionControllerDependencies = {
 		agentFiles: {
 			...toolResults,
-			reader: agentFilesCapability.reader
+			resourcePaths: agentFilesCapability.resourcePaths,
+			paths: agentFilesCapability.paths,
+			metadata: agentFilesCapability.metadata,
+			commands: agentFilesCapability.commands,
+			projects: agentFilesCapability.projects,
+			notes: agentFilesCapability.notes,
+			attachments: agentFilesCapability.attachments,
+			diagrams: agentFilesCapability.diagrams,
+			stored: agentFilesCapability.repository,
+			noteMarkdown: agentFilesCapability.noteMarkdown
 		},
 		todos: {
 			...toolResults,
@@ -462,6 +471,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionReverter: suggestions.reverter
 		},
 		agent: {
+			filePaths: agentFilesCapability.paths,
 			runStatus: agentCapability.runStatus,
 			streamPresentation: agentCapability.streamPresentation,
 			conversationHistory: agentCapability.conversationHistory,
@@ -632,7 +642,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoContextReader: todos.context
 		},
 		notes: {
-			toolTokens: knowledgeSearch.tokenizer,
+			filePaths: agentFilesCapability.paths,
+			fileMetadata: agentFilesCapability.metadata,
 			projectLister: projects.lister,
 			...toolResults,
 			todoPresentation: todoCapability.presentation,

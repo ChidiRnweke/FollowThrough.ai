@@ -49,10 +49,7 @@ import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/muta
 
 import { AgentProviderFailure } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import {
-	attachmentFilePath,
-	diagramFilePath
-} from '$lib/server/services/agent-files/virtual-files';
+import type { AgentFilePaths } from '$lib/models/agent-files';
 import type { ConversationHistory } from '$lib/server/services/agent/conversations/history';
 import type { AttachedResource, IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
@@ -224,6 +221,7 @@ export interface AgentController {
  * controller can be built and tested with repository and provider fakes.
  */
 export interface AgentDependencies {
+	readonly filePaths: AgentFilePaths;
 	readonly runStatus: AgentRunStatusRules;
 	readonly streamPresentation: Pick<AgentStreamPresentation, 'segments'>;
 	readonly conversationHistory: Pick<ConversationHistory, 'rewind'>;
@@ -1154,14 +1152,21 @@ export class Agent implements AgentController {
 					};
 				case 'diagram': {
 					const diagram = await this.dependencies.contextDiagrams.get(actor, ref.id);
-					return { kind: 'diagram', diagram, filePath: diagramFilePath(diagram) };
+					return {
+						kind: 'diagram',
+						diagram,
+						filePath: this.dependencies.filePaths.diagram(diagram)
+					};
 				}
 				case 'attachment': {
 					const view = await this.dependencies.contextAttachments.get(actor, ref.id);
 					return {
 						kind: 'attachment',
 						view,
-						filePath: attachmentFilePath(view.attachment.projectId, view.attachment.id)
+						filePath: this.dependencies.filePaths.attachment(
+							view.attachment.projectId,
+							view.attachment.id
+						)
 					};
 				}
 			}

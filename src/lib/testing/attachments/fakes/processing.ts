@@ -1,3 +1,4 @@
+import type { ProjectId } from '$lib/models/projects';
 import type { AttachmentTextReader } from '$lib/server/controllers/attachment-processing/controller';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -92,8 +93,12 @@ export class InMemoryAttachmentRepository implements AttachmentRepository {
 	list(): Promise<readonly AttachmentView[]> {
 		throw new Error('not used');
 	}
-	listForProject(): Promise<readonly AttachmentView[]> {
-		throw new Error('not used');
+	async listForProject(
+		_actor: ActorContext,
+		projectId: ProjectId
+	): Promise<readonly AttachmentView[]> {
+		void _actor;
+		return this.found?.attachment.projectId === projectId ? [this.found] : [];
 	}
 	linkToTodo(): Promise<void> {
 		throw new Error('not used');

@@ -63,8 +63,8 @@ contract with equal recovery and ownership guarantees.
 
 ## Evidence
 
-- `src/lib/server/services/agent-files/virtual-files.ts` implements the namespace and typed command
-  outcomes.
+- `src/lib/server/controllers/agent-files/controller.ts` owns the namespace operations. Stateless
+  services in `src/lib/server/services/agent-files/` implement paths, metadata and typed command outcomes.
 - `src/lib/server/services/agent/conversations/replay-virtualizer.ts` sinks large history and tool
   payloads while preserving the diagram-specific canvas recovery path.
 - `src/lib/server/factories/agent/mcp-tool-factory.ts` promotes searched definitions as real MCP

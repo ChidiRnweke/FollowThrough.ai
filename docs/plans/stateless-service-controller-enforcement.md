@@ -629,3 +629,84 @@ application migration remains incomplete. No checker or suppression was added or
 
 Browser migrations, indexing redesign, telemetry restructuring and the diagram SDK mismatch remain
 outside this slice. Do not mark the overall refactor complete.
+
+## Agent-file boundaries — 2026-10-11
+
+This slice stacks on draft PR #364 at `77eb9d29498c1a0a406ca3ec2c970fbf5be4eb52`.
+Application revision: `aae492b65190314fab5ea679f6a881c996628aeb`. The checkers are unchanged.
+Baseline verification reproduced all 367 recorded semantic diagnostics, including provenance,
+and all 47 expanded Chisel messages and locations exactly.
+
+### Corrected boundaries
+
+AgentFiles now owns complete `ls`, `grep` and `sed` operations, including authorized exact
+resolution and repository enumeration. Stateless path, virtual-metadata and command services
+own canonical names, virtual identity, diagram media types, listing, RE2 matching, inclusive
+reads and typed recovery. Their internal helpers remain private. Agent receives paths directly
+for attached context; Notes receives paths and metadata for inspection. No controller chain or
+service-to-service composition was introduced.
+
+Shared contracts live in models. The capability factory constructs implementations and returns
+explicit interfaces; the application only wires them. Local service capability member types
+reference the model signatures, retaining one shared signature while satisfying both existing
+interface and lint checks. The same six controller operations retain their instrumentation and
+tool-coverage entries. Tool input schemas, error envelopes and recovery calls are unchanged.
+
+Resource-path parsing remains in the repository boundary behind an explicit read port. Persisted
+queries, row mapping, upserts and database-generated identifiers remain in AgentFileRecords. A
+shared content-measurement adapter supplies exact UTF-8 bytes, token counts, newline counts and
+checksums to persistence and virtual metadata. It prevents a replay service from reaching another
+service through persistence. Virtual identifiers still hash the exact path. No stored identifier
+is reconstructed as a virtual one.
+
+Exact reads retain stored-file precedence. Listings and grep retain generated/stored duplicate
+paths and ordering. Project checks, actor authorization, revisions, diagram extensions and
+unavailable versus empty attachments are preserved. Missing paths precede regex errors; empty
+files precede range errors. Existing end-past-EOF reads finish at EOF; reversed ranges and starts
+after EOF fail with exact recovery. No read cap or silent correction was added.
+
+### Complete remaining inventory
+
+| Rule                       | #364 | Remaining |
+| -------------------------- | ---: | --------: |
+| `controller-orchestration` |  277 |       277 |
+| `factory-workflow`         |   12 |        12 |
+| `store-workflow`           |   55 |        55 |
+| `public-service-helper`    |   13 |        10 |
+| `indirect-dependency`      |    9 |         9 |
+| `concrete-dependency`      |    1 |         1 |
+| Semantic total             |  367 |       364 |
+| Chisel prohibited imports  |   47 |        47 |
+
+The three removed identities are the attachment-path, diagram-path and virtual-file metadata
+helpers. No semantic identities were added. All Chisel diagnostics match the base exactly.
+The JSON contains every remaining diagnostic and separate constructor, factory-output, parsing,
+persistence, consumer, tool-surface and evaluation reviews. It remains evidence, not a suppression
+input. The overall application migration is incomplete.
+
+### Observed verification
+
+- Focused units: **35 files, 348 passed**, covering file rules and operations, Agent context and
+  replay, note inspection, agent/MCP tools and controller instrumentation.
+- Full units: **588 files, 4,594 passed, one existing skip**. Passing browser output retains the
+  existing Svelte `derived_inert` warnings and chart rendering error.
+- Affected isolated PostgreSQL contracts: **26 files, 165 passed**, with
+  `pnpm test:contracts:isolated tests/integration/notes tests/integration/attachments tests/integration/diagrams tests/integration/agent/repositories.contract.spec.ts tests/integration/agent/files.contract.spec.ts`.
+- New database contracts verify exact Unicode measurements and stored identity across overwrite,
+  stored precedence at a real note path, denial to another account and rejection of the wrong
+  project. Local controller fixtures cover duplicate enumeration, revision content, empty extraction,
+  unavailable text and matching/range recovery. No live providers ran.
+- Lint and type checking passed. Docs checking passed with zero errors/warnings and one existing
+  hint; TypeDoc entry-point warnings remain.
+- Every architecture stage ran. Topology, source, test quality and UI passed. Semantic failed with
+  **364** findings; standalone Chisel failed with **47** prohibited imports. No checker or
+  suppression changed.
+- Early checks found an incomplete listing fake, stale fixture construction and interface-form
+  mismatches. These were corrected before the passing results above. Manual review also removed
+  the attempted indirect metadata-service dependency through persistence.
+- Evaluation construction still uses production `createApplication`; local evaluation cache units
+  use supplied fakes. Live evaluations, Phoenix round-trip, E2E, PWA and production-build validation
+  were not run. CI results must be reported separately from these local results.
+
+Browser migrations, tool-activity projection, indexing redesign, telemetry restructuring and the
+diagram SDK mismatch remain outside this slice. Keep the stacked PR draft while migration gates fail.
