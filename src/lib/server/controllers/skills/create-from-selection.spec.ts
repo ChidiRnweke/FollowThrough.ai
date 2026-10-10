@@ -1,3 +1,4 @@
+import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
@@ -46,6 +47,7 @@ const setup = () => {
 	const library = new SkillLibrary(skills, repository, provenance);
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			noteReferences: new NoteReferenceService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
 			selectionOrigins: new SelectionOrigins(repository, anchors, provenance),

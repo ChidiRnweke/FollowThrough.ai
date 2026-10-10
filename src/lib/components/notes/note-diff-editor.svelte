@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { NoteId, ProseMirrorDocument } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
-	import type { DiffTone, FocusedSideBlock, SourceLine } from '$lib/models/notes/note-diff';
+	import type { DiffTone, FocusedSideBlock, SourceLine } from '$lib/models/note-comparison';
 	import { paintDiff } from './note-diff-decorations';
 	import NoteDiffSource from './note-diff-source.svelte';
 	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';

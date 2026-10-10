@@ -11,7 +11,6 @@ import type {
 	NoteTrashOperations,
 	NoteDeletion
 } from '$lib/server/services/notes/catalog';
-import { prepareNoteDeletion } from '$lib/server/services/notes/deletion';
 import type { DateTime } from '$lib/models/workspace';
 import { assembleTodoView } from '$lib/services/todos/presentation';
 import type { NotePresentation } from '$lib/services/notes/presentation';
@@ -101,7 +100,7 @@ import type {
 	ReplaceNoteTextInput,
 	ReplaceNoteTextOutput
 } from '$lib/models/notes';
-import { collectNoteLinkTargets } from '$lib/services/notes/references';
+import type { NoteReferences } from '$lib/services/notes/references';
 import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
 import {
@@ -331,6 +330,7 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	readonly noteReferences: NoteReferences;
 	readonly sections: NoteSectionNumbering;
 	readonly noteEditingRules: NoteEditingRules;
 	readonly notePublicationRules: NotePublicationRules;
@@ -795,7 +795,7 @@ export class Notes implements NotesController {
 			await this.dependencies.noteLinkReconciler.reconcile(
 				actor,
 				note,
-				collectNoteLinkTargets(note.document)
+				this.dependencies.noteReferences.links(note.document)
 			);
 			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 			return {
@@ -850,7 +850,7 @@ export class Notes implements NotesController {
 			await this.dependencies.noteLinkReconciler.reconcile(
 				actor,
 				restored,
-				collectNoteLinkTargets(restored.document)
+				this.dependencies.noteReferences.links(restored.document)
 			);
 			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, restored));
 			return { note: restored, etag: noteEtag(restored.id, restored.currentRevision) };
@@ -953,7 +953,10 @@ export class Notes implements NotesController {
 		// leave its contents at the project root with no way back to where they were.
 		return this.dependencies.transactionRunner.run(async () => {
 			const facts = await this.dependencies.noteDeletion.deletionFacts(actor, input.noteId);
-			const decision = prepareNoteDeletion(facts.trashed, { kind: 'one', note: facts.note });
+			const decision = this.dependencies.noteTrashRules.prepareDeletion(facts.trashed, {
+				kind: 'one',
+				note: facts.note
+			});
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const deletedNotes = await this.dependencies.noteDeletion.persistDeletion(
 				actor,
@@ -965,7 +968,7 @@ export class Notes implements NotesController {
 	async emptyTrash(actor: ActorContext, input: EmptyNoteTrashInput): Promise<EmptyNoteTrashOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const trashed = await this.dependencies.noteDeletion.trashForDeletion(actor, input.projectId);
-			const decision = prepareNoteDeletion(trashed, { kind: 'all' });
+			const decision = this.dependencies.noteTrashRules.prepareDeletion(trashed, { kind: 'all' });
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const deletedNotes = await this.dependencies.noteDeletion.persistDeletion(
 				actor,
@@ -1096,7 +1099,7 @@ export class Notes implements NotesController {
 			await this.dependencies.noteLinkReconciler.reconcile(
 				actor,
 				restored,
-				collectNoteLinkTargets(restored.document)
+				this.dependencies.noteReferences.links(restored.document)
 			);
 			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, restored));
 			return { note: restored, etag: noteEtag(restored.id, restored.currentRevision) };

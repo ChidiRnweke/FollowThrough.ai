@@ -1,3 +1,4 @@
+import type { ProseMirrorDocument } from '$lib/models/notes';
 /** Which side of a comparison a change belongs to, and so which wash it takes. */
 export type DiffTone = 'removed' | 'added';
 
@@ -76,3 +77,26 @@ export type FocusedSideBlock = DiffSideBlock | { readonly index: number; readonl
 export type RenderedAlignment =
 	| { readonly kind: 'aligned'; readonly storedIndex: readonly (number | null)[] }
 	| { readonly kind: 'failure' };
+
+export interface RenderedBlock {
+	readonly type: string;
+	readonly empty: boolean;
+}
+
+export interface FocusedDiffSide {
+	readonly document: ProseMirrorDocument;
+	readonly kinds: readonly FocusedSideBlock[];
+}
+
+export interface NoteComparisonOptions {
+	readonly focus: boolean;
+	readonly titles?: { readonly base: string; readonly candidate: string };
+}
+export interface NoteComparison {
+	readonly base: FocusedDiffSide;
+	readonly candidate: FocusedDiffSide;
+	readonly counts: NoteDiffCounts;
+}
+/** Inline atoms occupy one editor position. */
+export const INLINE_ATOM = '\uFFFC';
+export const DIFF_TEXTBLOCK_TYPES: readonly string[] = ['paragraph', 'heading', 'codeBlock'];

@@ -1,3 +1,4 @@
+import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
@@ -37,6 +38,7 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			noteReferences: new NoteReferenceService(),
 			sections: new NoteSectionNumberingService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteTrashRules: new NoteLifecycleRulesService(),
@@ -92,6 +94,7 @@ it('archives the authoritative note after a concurrent note edit commits', async
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			noteReferences: new NoteReferenceService(),
 			sections: new NoteSectionNumberingService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteTrashRules: new NoteLifecycleRulesService(),

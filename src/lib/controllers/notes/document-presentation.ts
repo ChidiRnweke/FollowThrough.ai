@@ -1,3 +1,4 @@
+import type { NoteReferences } from '$lib/services/notes/references';
 import type { SectionNumberingSetting, SectionNumberingLevel } from '$lib/models/notes';
 import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering';
 import type { NoteReadingStatistics } from '$lib/services/notes/reading-statistics';
@@ -14,6 +15,9 @@ export interface EditorDocumentCopy {
 	copy(document: ProseMirrorDocument): JSONContent;
 }
 export interface NoteDocumentsController {
+	widgetReferences(documents: readonly { document: ProseMirrorDocument }[]): string[];
+	diagramReferences(documents: readonly { document: ProseMirrorDocument }[]): string[];
+
 	numberingLevel(setting: SectionNumberingSetting): SectionNumberingLevel;
 	sectionNumbers(levels: readonly number[]): readonly string[];
 	readingMinutes(words: number): number;
@@ -28,8 +32,16 @@ export class NoteDocuments implements NoteDocumentsController {
 		private readonly presentation: NoteDocumentPresentation,
 		private readonly documents: EditorDocumentCopy,
 		private readonly reading: NoteReadingStatistics,
+		private readonly references: NoteReferences,
 		private readonly sections: NoteSectionNumbering
 	) {}
+	widgetReferences(documents: readonly { document: ProseMirrorDocument }[]): string[] {
+		return this.references.widgets(documents);
+	}
+	diagramReferences(documents: readonly { document: ProseMirrorDocument }[]): string[] {
+		return this.references.diagrams(documents);
+	}
+
 	numberingLevel(setting: SectionNumberingSetting): SectionNumberingLevel {
 		return this.sections.toMenu(setting);
 	}

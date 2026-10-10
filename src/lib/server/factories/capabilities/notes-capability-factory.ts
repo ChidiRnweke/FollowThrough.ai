@@ -1,3 +1,4 @@
+import { NoteReferenceService, type NoteReferences } from '$lib/services/notes/references';
 import {
 	NoteSectionNumberingService,
 	type NoteSectionNumbering
@@ -63,6 +64,7 @@ export interface NotesCapabilityInput {
 }
 
 export interface NotesCapability {
+	readonly references: NoteReferences;
 	readonly sections: NoteSectionNumbering;
 	readonly creationRules: NoteCreationRules;
 	readonly trashRules: NoteTrashRules;
@@ -86,6 +88,7 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 	const services = createNoteServices(repository, anchors, input.projects);
 	return {
 		presentation: new NotePresentationService(),
+		references: new NoteReferenceService(),
 		sections: new NoteSectionNumberingService(),
 		creationRules: lifecycleRules,
 		trashRules: lifecycleRules,

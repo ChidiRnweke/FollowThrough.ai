@@ -1,3 +1,4 @@
+import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteReadingStatisticsService } from '$lib/services/notes/reading-statistics';
 import {
@@ -10,5 +11,6 @@ export const noteDocuments: NoteDocumentsController = new NoteDocuments(
 	new NoteDocumentPresentationService(),
 	new TiptapDocumentCopy(),
 	new NoteReadingStatisticsService(),
+	new NoteReferenceService(),
 	new NoteSectionNumberingService()
 );

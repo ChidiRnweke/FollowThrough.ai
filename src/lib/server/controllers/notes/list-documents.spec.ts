@@ -1,3 +1,4 @@
+import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
@@ -17,6 +18,7 @@ const setup = () => {
 	const content = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			noteReferences: new NoteReferenceService(),
 			sections: new NoteSectionNumberingService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteTrashRules: new NoteLifecycleRulesService(),

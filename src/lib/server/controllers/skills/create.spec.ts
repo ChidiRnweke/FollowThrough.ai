@@ -1,3 +1,4 @@
+import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { describe, expect, it } from 'vitest';
@@ -32,6 +33,7 @@ const setup = () => {
 	const content = new InMemoryNoteContent();
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			noteReferences: new NoteReferenceService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
 			skillCreator: library,

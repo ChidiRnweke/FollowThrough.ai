@@ -22,7 +22,7 @@
 		FtEllipsis as Ellipsis
 	} from '$lib/components/icons';
 	import { formatDateTime } from '$lib/components/shared/labels';
-	import { drawioReferencesIn } from '$lib/services/notes/references';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -52,8 +52,9 @@
 		const resources = workspaceSession.current?.resources;
 		if (!resources || resources.availability !== 'complete') return null;
 		const id = removeTarget.id;
-		return resources.views.all('notes').filter((note) => drawioReferencesIn([note]).includes(id))
-			.length;
+		return resources.views
+			.all('notes')
+			.filter((note) => noteDocuments.diagramReferences([note]).includes(id)).length;
 	});
 
 	// Mirrors the loader's canonical URL exactly. A mismatch would make every

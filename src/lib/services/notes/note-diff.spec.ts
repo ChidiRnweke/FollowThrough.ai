@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-	alignRenderedBlocks,
-	countNoteDiff,
-	diffNoteDocuments,
-	focusNoteDiffSide,
-	withTitleBlock
-} from './note-diff';
-import type { NoteDiff } from '$lib/models/notes/note-diff';
+import { NoteComparisonService } from './note-diff';
+const comparison = new NoteComparisonService();
 import type {
 	ProseMirrorDocument,
 	ProseMirrorNode,
@@ -28,11 +22,18 @@ const heading = (text: string): ProseMirrorHeadingNode => ({
 const doc = (...content: ProseMirrorNode[]): ProseMirrorDocument => ({ type: 'doc', content });
 
 /** The classification of each side, as kinds only, so an assertion reads the property under test. */
-const kindsOf = (diff: NoteDiff) => ({
+const kindsOf = (diff: {
+	base: readonly { kind: string }[];
+	candidate: readonly { kind: string }[];
+}) => ({
 	base: diff.base.map((block) => block.kind),
 	candidate: diff.candidate.map((block) => block.kind)
 });
 
+const diffNoteDocuments = (base: ProseMirrorDocument, candidate: ProseMirrorDocument) => {
+	const result = comparison.compare(base, candidate, { focus: false });
+	return { base: result.base.kinds, candidate: result.candidate.kinds };
+};
 describe('diffNoteDocuments', () => {
 	it('is deterministic for the same pair of documents', () => {
 		const base = doc(para('same'), para('gone'));
@@ -104,28 +105,32 @@ describe('diffNoteDocuments', () => {
 	});
 });
 
-describe('countNoteDiff', () => {
+describe('comparison summary', () => {
 	it('counts added and removed blocks', () => {
-		const diff = diffNoteDocuments(
-			doc(para('kept'), para('gone'), para('rewritten')),
-			doc(para('kept'), para('rewritten differently'), para('fresh'))
-		);
-		expect(countNoteDiff(diff)).toEqual({ added: 2, removed: 2 });
+		expect(
+			comparison.compare(
+				doc(para('kept'), para('gone'), para('rewritten')),
+				doc(para('kept'), para('rewritten differently'), para('fresh')),
+				{ focus: false }
+			).counts
+		).toEqual({ added: 2, removed: 2 });
 	});
-
 	it('reports zero when nothing changed', () => {
-		expect(countNoteDiff(diffNoteDocuments(doc(para('same')), doc(para('same'))))).toEqual({
-			added: 0,
-			removed: 0
-		});
+		expect(
+			comparison.compare(doc(para('same')), doc(para('same')), { focus: false }).counts
+		).toEqual({ added: 0, removed: 0 });
 	});
 });
-
 it('compares a rename while preserving identical body blocks as context', () => {
 	const body = doc(para('Unchanged'));
-	expect(
-		kindsOf(diffNoteDocuments(withTitleBlock(body, 'Before'), withTitleBlock(body, 'After')))
-	).toEqual({ base: ['removed', 'context'], candidate: ['added', 'context'] });
+	const result = comparison.compare(body, body, {
+		focus: false,
+		titles: { base: 'Before', candidate: 'After' }
+	});
+	expect({
+		base: result.base.kinds.map((block) => block.kind),
+		candidate: result.candidate.kinds.map((block) => block.kind)
+	}).toEqual({ base: ['removed', 'context'], candidate: ['added', 'context'] });
 });
 it('detects a changed diagram identity inside a textless nested block', () => {
 	const before = doc({
@@ -148,8 +153,7 @@ describe('focusNoteDiffSide', () => {
 
 	/** Each focused block's text and kind, so an assertion reads the folded document. */
 	const outline = (base: ProseMirrorDocument, candidate: ProseMirrorDocument) => {
-		const diff = diffNoteDocuments(base, candidate);
-		const side = focusNoteDiffSide(candidate, diff.candidate);
+		const side = comparison.compare(base, candidate, { focus: true }).candidate;
 		return side.kinds.map((block) => {
 			const node = side.document.content?.[block.index];
 			const text = node?.type === 'paragraph' ? node.content?.[0] : undefined;
@@ -202,8 +206,7 @@ describe('focusNoteDiffSide', () => {
 	it('folds a side with no change of its own to a single singular-safe marker', () => {
 		const before = doc(...paragraphs(6));
 		const after = doc(...paragraphs(6), para('appended'));
-		const diff = diffNoteDocuments(before, after);
-		const side = focusNoteDiffSide(before, diff.base);
+		const side = comparison.compare(before, after, { focus: true }).base;
 		expect({ kinds: side.kinds, content: side.document.content }).toEqual({
 			kinds: [{ index: 0, kind: 'elided' }],
 			content: [para('6 unchanged blocks')]
@@ -214,12 +217,6 @@ describe('focusNoteDiffSide', () => {
 		const before = paragraphs(3);
 		const after = before.map((block, index) => (index === 2 ? para('edited') : block));
 		expect(outline(doc(...before), doc(...after))[0]).toBe('elided:1 unchanged block');
-	});
-
-	it('refuses classifications that do not match the document', () => {
-		expect(() =>
-			focusNoteDiffSide(doc(para('one'), para('two')), [{ index: 0, kind: 'added' }])
-		).toThrow('1 classifications for 2 blocks');
 	});
 });
 
@@ -344,7 +341,7 @@ describe('alignRenderedBlocks', () => {
 	it('maps the spacers the editor inserts around a diagram and at the end to no stored block', () => {
 		const stored = [heading('Architecture'), mermaid('graph TD'), heading('Next')];
 		expect(
-			alignRenderedBlocks(
+			comparison.align(
 				stored,
 				rendered(
 					['heading'],
@@ -361,12 +358,12 @@ describe('alignRenderedBlocks', () => {
 	it('keeps an empty paragraph the note really has as a stored block', () => {
 		const stored = [para('one'), { type: 'paragraph' } satisfies ProseMirrorNode, para('two')];
 		expect(
-			alignRenderedBlocks(stored, rendered(['paragraph'], ['paragraph', true], ['paragraph']))
+			comparison.align(stored, rendered(['paragraph'], ['paragraph', true], ['paragraph']))
 		).toEqual({ kind: 'aligned', storedIndex: [0, 1, 2] });
 	});
 
 	it('fails when the editor dropped content it could not load', () => {
-		expect(alignRenderedBlocks([para('one'), para('two')], rendered(['paragraph', true]))).toEqual({
+		expect(comparison.align([para('one'), para('two')], rendered(['paragraph', true]))).toEqual({
 			kind: 'failure'
 		});
 	});

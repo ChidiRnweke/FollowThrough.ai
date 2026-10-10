@@ -525,6 +525,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		skills: {
+			noteReferences: noteCapability.references,
 			noteCreationRules: noteCapability.creationRules,
 			noteEditingRules: noteCapability.editingRules,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
@@ -568,6 +569,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		notes: {
 			sections: noteCapability.sections,
+			noteReferences: noteCapability.references,
 			noteCreationRules: noteCapability.creationRules,
 			noteTrashRules: noteCapability.trashRules,
 			notePublicationRules: noteCapability.publicationRules,

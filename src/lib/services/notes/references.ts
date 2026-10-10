@@ -19,9 +19,7 @@ function collectWidgetIds(node: ProseMirrorNode, ids: string[]): void {
 }
 
 /** Every widget a set of documents embeds, in document order. */
-export function widgetReferencesIn(
-	documents: readonly { document: ProseMirrorDocument }[]
-): string[] {
+function widgetReferencesIn(documents: readonly { document: ProseMirrorDocument }[]): string[] {
 	const ids: string[] = [];
 	for (const entry of documents)
 		for (const node of entry.document.content ?? []) collectWidgetIds(node, ids);
@@ -29,9 +27,7 @@ export function widgetReferencesIn(
 }
 
 /** Every draw.io diagram referenced by a set of documents, in document order. */
-export function drawioReferencesIn(
-	documents: readonly { document: ProseMirrorDocument }[]
-): string[] {
+function drawioReferencesIn(documents: readonly { document: ProseMirrorDocument }[]): string[] {
 	const ids: string[] = [];
 	for (const entry of documents)
 		for (const node of entry.document.content ?? []) collectDrawioIds(node, ids);
@@ -39,7 +35,7 @@ export function drawioReferencesIn(
 }
 
 /** Distinct note-link targets in document order; backlinks are derived from these authored links. */
-export const collectNoteLinkTargets = (document: ProseMirrorDocument): readonly NoteId[] => {
+const collectNoteLinkTargets = (document: ProseMirrorDocument): readonly NoteId[] => {
 	const found = new Set<NoteId>();
 	const walk = (node: ProseMirrorNode): void => {
 		if ('marks' in node)
@@ -51,3 +47,20 @@ export const collectNoteLinkTargets = (document: ProseMirrorDocument): readonly 
 	for (const node of document.content ?? []) walk(node);
 	return [...found];
 };
+
+export interface NoteReferences {
+	widgets(documents: readonly { document: ProseMirrorDocument }[]): string[];
+	diagrams(documents: readonly { document: ProseMirrorDocument }[]): string[];
+	links(document: ProseMirrorDocument): readonly NoteId[];
+}
+export class NoteReferenceService implements NoteReferences {
+	widgets(documents: readonly { document: ProseMirrorDocument }[]): string[] {
+		return widgetReferencesIn(documents);
+	}
+	diagrams(documents: readonly { document: ProseMirrorDocument }[]): string[] {
+		return drawioReferencesIn(documents);
+	}
+	links(document: ProseMirrorDocument): readonly NoteId[] {
+		return collectNoteLinkTargets(document);
+	}
+}

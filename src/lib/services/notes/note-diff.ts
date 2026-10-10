@@ -1,3 +1,11 @@
+import {
+	INLINE_ATOM,
+	DIFF_TEXTBLOCK_TYPES,
+	type NoteComparison,
+	type NoteComparisonOptions,
+	type RenderedBlock,
+	type FocusedDiffSide
+} from '$lib/models/note-comparison';
 /**
  * Which top-level blocks of two note documents differ, for a before/after review.
  *
@@ -30,7 +38,7 @@ import type {
 	InnerChange,
 	RenderedAlignment,
 	SourceLine
-} from '$lib/models/notes/note-diff';
+} from '$lib/models/note-comparison';
 
 /**
  * The attributes that carry a node's identity, in the order they are read.
@@ -108,10 +116,7 @@ const sameBlock = (before: ProseMirrorNode, after: ProseMirrorNode): boolean =>
  * title change read as a changed first line in every view that compares notes —
  * the history dialog and the conflict dialog have to agree about that.
  */
-export const withTitleBlock = (
-	document: ProseMirrorDocument,
-	title: string
-): ProseMirrorDocument => ({
+const withTitleBlock = (document: ProseMirrorDocument, title: string): ProseMirrorDocument => ({
 	type: 'doc',
 	content: [
 		{ type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: title }] },
@@ -120,13 +125,11 @@ export const withTitleBlock = (
 });
 
 /** The node types whose content is inline, so a change inside them is a change of words. */
-const TEXTBLOCK_TYPES = new Set(['paragraph', 'heading', 'codeBlock']);
+const TEXTBLOCK_TYPES = new Set(DIFF_TEXTBLOCK_TYPES);
 
 /** Whether a node type is one the inner diff indexes as a textblock. */
-export const isDiffTextblock = (type: string): boolean => TEXTBLOCK_TYPES.has(type);
 
 /** Stands in for an inline node that is not text: one character, as it is one position. */
-export const INLINE_ATOM = '\uFFFC';
 
 /** A textblock's text, with each inline non-text node counted as one character. */
 const textblockText = (block: ProseMirrorNode): string => {
@@ -137,7 +140,7 @@ const textblockText = (block: ProseMirrorNode): string => {
 };
 
 /** The texts of every textblock inside `block`, in document order, the block itself included. */
-export const textblocks = (block: ProseMirrorNode): string[] => {
+const textblocks = (block: ProseMirrorNode): string[] => {
 	if (TEXTBLOCK_TYPES.has(block.type)) return [textblockText(block)];
 	if (!('content' in block) || !block.content) return [];
 	return block.content.flatMap(textblocks);
@@ -320,10 +323,7 @@ const pairBlocks = (
  * the changed words, cells or list items inside it, and an edited diagram carries its source
  * line diff. A pair that is not reads as one block removed and another added.
  */
-export const diffNoteDocuments = (
-	base: ProseMirrorDocument,
-	candidate: ProseMirrorDocument
-): NoteDiff => {
+const diffNoteDocuments = (base: ProseMirrorDocument, candidate: ProseMirrorDocument): NoteDiff => {
 	const before = [...(base.content ?? [])];
 	const after = [...(candidate.content ?? [])];
 	const baseBlocks: DiffSideBlock[] = [];
@@ -374,7 +374,7 @@ export const diffNoteDocuments = (
 };
 
 /** How much a diff actually changed, for a quiet summary caption. */
-export const countNoteDiff = (diff: NoteDiff): NoteDiffCounts => {
+const countNoteDiff = (diff: NoteDiff): NoteDiffCounts => {
 	let added = 0;
 	let removed = 0;
 	for (const block of diff.candidate) if (block.kind !== 'context') added += 1;
@@ -386,10 +386,6 @@ const isEmptyParagraph = (block: ProseMirrorNode): boolean =>
 	block.type === 'paragraph' && (!('content' in block) || !block.content?.length);
 
 /** One rendered top-level block, as much of it as alignment needs. */
-export interface RenderedBlock {
-	readonly type: string;
-	readonly empty: boolean;
-}
 
 /**
  * Which stored block each rendered top-level block shows.
@@ -401,7 +397,7 @@ export interface RenderedBlock {
  * not have at that point is a spacer; every other rendered block must be the next stored
  * block, of the same type, or the rendering is not one this function can account for.
  */
-export const alignRenderedBlocks = (
+const alignRenderedBlocks = (
 	stored: readonly ProseMirrorNode[],
 	rendered: readonly RenderedBlock[]
 ): RenderedAlignment => {
@@ -425,10 +421,6 @@ export const alignRenderedBlocks = (
 };
 
 /** One side of a diff trimmed to its changes; `kinds` is index-aligned with `document`. */
-export interface FocusedDiffSide {
-	readonly document: ProseMirrorDocument;
-	readonly kinds: readonly FocusedSideBlock[];
-}
 
 /** The paragraph that stands in for a folded run of unchanged blocks. */
 const elidedMarker = (count: number): ProseMirrorNode => ({
@@ -449,7 +441,7 @@ const elidedMarker = (count: number): ProseMirrorNode => ({
  * The returned `kinds` is index-aligned with the returned document, because the pane
  * paints by index and refuses to paint a document whose block count disagrees.
  */
-export const focusNoteDiffSide = (
+const focusNoteDiffSide = (
 	document: ProseMirrorDocument,
 	kinds: readonly DiffSideBlock[],
 	context = 1
@@ -488,3 +480,39 @@ export const focusNoteDiffSide = (
 	fold();
 	return { document: { ...document, content }, kinds: focused };
 };
+
+export interface NoteComparisonRules {
+	compare(
+		base: ProseMirrorDocument,
+		candidate: ProseMirrorDocument,
+		options: NoteComparisonOptions
+	): NoteComparison;
+	align(stored: readonly ProseMirrorNode[], rendered: readonly RenderedBlock[]): RenderedAlignment;
+	textblocks(block: ProseMirrorNode): readonly string[];
+}
+export class NoteComparisonService implements NoteComparisonRules {
+	compare(
+		base: ProseMirrorDocument,
+		candidate: ProseMirrorDocument,
+		options: NoteComparisonOptions
+	): NoteComparison {
+		const before = options.titles ? withTitleBlock(base, options.titles.base) : base;
+		const after = options.titles ? withTitleBlock(candidate, options.titles.candidate) : candidate;
+		const diff = diffNoteDocuments(before, after);
+		return {
+			base: options.focus
+				? focusNoteDiffSide(before, diff.base)
+				: { document: before, kinds: diff.base },
+			candidate: options.focus
+				? focusNoteDiffSide(after, diff.candidate)
+				: { document: after, kinds: diff.candidate },
+			counts: countNoteDiff(diff)
+		};
+	}
+	align(stored: readonly ProseMirrorNode[], rendered: readonly RenderedBlock[]): RenderedAlignment {
+		return alignRenderedBlocks(stored, rendered);
+	}
+	textblocks(block: ProseMirrorNode): readonly string[] {
+		return textblocks(block);
+	}
+}

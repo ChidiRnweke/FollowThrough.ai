@@ -16,6 +16,13 @@ export interface NoteCreationRules {
 		| { kind: 'invalid'; code: 'VALIDATION' | 'NOT_FOUND'; message: string };
 }
 export interface NoteTrashRules {
+	prepareDeletion(
+		trashed: readonly Note[],
+		scope: { kind: 'one'; note: Note } | { kind: 'all' }
+	):
+		| { kind: 'invalid'; message: string }
+		| { kind: 'delete'; notes: readonly Pick<Note, 'id' | 'title'>[] };
+
 	restorePlacement(
 		note: Pick<Note, 'parentId' | 'position' | 'archivedAt'>,
 		parent: Pick<Note, 'archivedAt'> | null
@@ -59,6 +66,37 @@ function decideNoteRestore(
 export class NoteLifecycleService
 	implements NoteCreationRules, NoteTrashRules, NotePublicationRules
 {
+	/** Permanent deletion includes visible trashed descendants, children first. */
+	prepareDeletion(
+		trashed: readonly Note[],
+		scope: { kind: 'one'; note: Note } | { kind: 'all' }
+	):
+		| { kind: 'invalid'; message: string }
+		| { kind: 'delete'; notes: readonly Pick<Note, 'id' | 'title'>[] } {
+		if (scope.kind === 'one') {
+			if (!scope.note.archivedAt)
+				return { kind: 'invalid', message: 'Only notes in the trash can be deleted permanently' };
+			if (scope.note.kind === 'skill')
+				return { kind: 'invalid', message: 'Skill notes are not deleted from the trash' };
+			if (!trashed.some((note) => note.id === scope.note.id))
+				return { kind: 'invalid', message: 'The note is no longer in the trash' };
+		}
+		// Skills are absent from the visible trash. Emptying it must not destroy hidden skills.
+		const visible = trashed.filter((note) => note.archivedAt && note.kind !== 'skill');
+		const roots = scope.kind === 'all' ? visible : [scope.note];
+		const seen = new Set<Note['id']>();
+		const ordered: Pick<Note, 'id' | 'title'>[] = [];
+		const visit = (note: Note): void => {
+			if (seen.has(note.id)) return;
+			seen.add(note.id);
+			for (const child of visible.filter((candidate) => candidate.parentId === note.id))
+				visit(child);
+			ordered.push({ id: note.id, title: note.title });
+		};
+		for (const root of roots) visit(root);
+		return { kind: 'delete', notes: ordered };
+	}
+
 	decideCreation(
 		input: NoteCreationIntent,
 		facts: NoteCreationFacts,

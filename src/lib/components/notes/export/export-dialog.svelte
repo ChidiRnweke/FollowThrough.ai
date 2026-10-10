@@ -3,7 +3,7 @@
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
 	import type { ProseMirrorDocument } from '$lib/models/notes';
-	import { drawioReferencesIn } from '$lib/services/notes/references';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import { defaultExportSettings } from '$lib/models/deliverables';
 	import { FtChevronRight as ChevronRight } from '$lib/components/icons';
 	import * as Collapsible from '$lib/components/ui/collapsible';
@@ -95,7 +95,8 @@
 	// draw.io diagrams travel as the SVG their editor exported, rasterized here the
 	// same way a mermaid render is. Only the ones the documents actually reference.
 	const referencedDrawio = $derived(
-		drawioReferencesIn(documents)
+		noteDocuments
+			.diagramReferences(documents)
 			.map((id) => diagrams.find((diagram) => diagram.id === id))
 			.filter((diagram) => diagram !== undefined)
 	);

@@ -10,7 +10,7 @@ import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
 import type { SkillEditInput, SkillPinChange } from '$lib/models/skills';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { Note, NoteId, CreateNoteInput } from '$lib/models/notes';
-import { collectNoteLinkTargets } from '$lib/services/notes/references';
+import type { NoteReferences } from '$lib/services/notes/references';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
 import type { NoteLinkReconciler } from '$lib/server/services/relationships/graph';
 import type {
@@ -97,6 +97,7 @@ export interface SkillsController {
 }
 /** Everything the {@link SkillsController} needs, injected so it can be built and tested without real stores. */
 export interface SkillsDependencies {
+	readonly noteReferences: NoteReferences;
 	readonly noteEditingRules: NoteEditingRules;
 	readonly noteCreationRules: NoteCreationRules;
 	builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
@@ -344,7 +345,7 @@ export class Skills implements SkillsController {
 		await this.dependencies.noteLinkReconciler.reconcile(
 			actor,
 			note,
-			collectNoteLinkTargets(note.document)
+			this.dependencies.noteReferences.links(note.document)
 		);
 		await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 		return note;
