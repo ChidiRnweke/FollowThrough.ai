@@ -1,3 +1,4 @@
+import { createToolActivityProjection } from '$lib/server/factories/agent/tool-activity-factory';
 import { DiagramGenerationStore } from '$lib/server/stores/diagrams/generation';
 import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import { InMemoryMermaidSyntaxReader } from '$lib/testing/diagrams/fakes/mermaid-syntax';
@@ -42,6 +43,7 @@ export const diagramGenerationFixture = () => {
 		}
 	];
 	const generation: DiagramAgentDependencies = {
+		toolActivityProjection: createToolActivityProjection(),
 		contextFormatter: createAgentContext(),
 		contextNotes: notes,
 		contextSkills: skills.skillFinder,

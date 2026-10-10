@@ -239,6 +239,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const {
 		conversations: conversationSessions,
 		conversationMessages,
+		toolActivityProjection,
 		preferences,
 		models: modelCatalog,
 		toolPreferences,
@@ -302,6 +303,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		context: agentContext,
 		conversations: conversationSessions,
 		conversationMessages,
+		toolActivityProjection,
 		preferences,
 		models: modelCatalog,
 		runs: runStore,
@@ -484,6 +486,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			syncRetry: synchronization.mutationRetry,
 			conversationSessions,
 			conversationMessages,
+			toolActivityProjection,
 			preferences,
 			models: modelCatalog,
 			runs: runRepository,

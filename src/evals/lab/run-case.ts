@@ -7,7 +7,7 @@ import type {
 	AgentRunStatus,
 	ConversationId
 } from '$lib/models/agent';
-import { toolOutcomeEvent } from '$lib/server/services/agent/conversations/tool-activity';
+import type { ToolActivityProjection } from '$lib/models/agent';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
@@ -128,8 +128,10 @@ export async function runCase(
 		conversationId: receipt.conversationId,
 		status,
 		finalResponse: reconstructText(events),
-		toolCalls: reconstructToolCalls(events),
-		calledToolNames: reconstructToolCalls(events).map((call) => call.name),
+		toolCalls: reconstructToolCalls(events, lab.toolActivityProjection),
+		calledToolNames: reconstructToolCalls(events, lab.toolActivityProjection).map(
+			(call) => call.name
+		),
 		...(snapshot.run.failure ? { failure: snapshot.run.failure } : {}),
 		model: snapshot.run.model,
 		durationMs: Date.now() - startedAt,
@@ -188,7 +190,10 @@ const reconstructText = (events: readonly AgentRunEventRecord[]): string =>
 		.map((event) => (event.type === 'text_delta' ? event.text : ''))
 		.join('');
 
-function reconstructToolCalls(events: readonly AgentRunEventRecord[]): readonly ToolCall[] {
+function reconstructToolCalls(
+	events: readonly AgentRunEventRecord[],
+	toolActivityProjection: ToolActivityProjection
+): readonly ToolCall[] {
 	const calls = new Map<string, ToolCall>();
 	const order: string[] = [];
 
@@ -202,7 +207,7 @@ function reconstructToolCalls(events: readonly AgentRunEventRecord[]): readonly 
 			});
 			continue;
 		}
-		const outcome = toolOutcomeEvent(event);
+		const outcome = toolActivityProjection.outcome(event);
 		if (outcome) {
 			// A completion the run could not name settles no call here. Correlating it
 			// by guesswork would attribute an outcome to a call that may not be its

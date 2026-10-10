@@ -1,3 +1,4 @@
+import type { ProviderStreamEvent } from '$lib/models/agent';
 import type { DiagramGenerationRequest, DiagramSubmission } from '$lib/models/diagrams/generation';
 import type {
 	DiagramProvider,
@@ -9,6 +10,7 @@ import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
 export class InMemoryDiagramGeneration implements DiagramProviderFactory {
 	closed = false;
+	events: ProviderStreamEvent[] = [];
 	source = VALID_DRAWIO_XML;
 	mermaidSource = 'flowchart LR\nA --> B';
 	submissions: DiagramSubmission[] | undefined;
@@ -41,6 +43,10 @@ export class InMemoryDiagramGeneration implements DiagramProviderFactory {
 		this.started.resolve();
 		await this.completion;
 		if (this.failure) throw this.failure;
+		for (const event of this.events) {
+			signal.throwIfAborted();
+			events.provider(event);
+		}
 		for (const draft of candidates) {
 			signal.throwIfAborted();
 			const decision = await events.submit(draft);

@@ -1,21 +1,21 @@
 {
 	"recordedAt": "2026-10-11",
-	"applicationRevision": "aae492b65190314fab5ea679f6a881c996628aeb",
+	"applicationRevision": "f09fd8125f2af896c9229d40c805845d76477912",
 	"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors. The overall refactor is incomplete.",
 	"comparison": {
-		"applicationBase": "77eb9d29498c1a0a406ca3ec2c970fbf5be4eb52",
+		"applicationBase": "d8ad32290ce8dcb1d0993cc53910364127f19afc",
 		"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
-		"method": "Baseline verification on draft #364 matched all 367 semantic diagnostics with provenance and all 47 expanded Chisel messages and locations exactly. The unchanged analyzers remove the three exported agent-file helper diagnostics and add none; all 47 Chisel diagnostics match the base exactly. Complete remaining source locations and provenance are refreshed. Constructor, factory-output, repository parsing/persistence, consumer, tool-surface and evaluation dependencies were reviewed separately.",
+		"method": "Baseline verification on draft #368 matched all 364 semantic diagnostics with provenance and all 47 expanded Chisel messages and locations exactly. Unchanged analyzers remove only the two tool-activity public-helper identities and add none. All 47 Chisel diagnostics match the base exactly. Complete remaining source locations and provenance are refreshed. Constructors, factory outputs, parsing, persistence, journal consumers, tool surfaces, tracing and evaluation dependencies were reviewed separately.",
 		"semanticCounts": {
 			"concrete-dependency": 1,
 			"controller-orchestration": 277,
 			"factory-workflow": 12,
 			"indirect-dependency": 9,
-			"public-service-helper": 13,
+			"public-service-helper": 10,
 			"store-workflow": 55
 		},
-		"semanticTotal": 367,
+		"semanticTotal": 364,
 		"chiselCounts": {
 			"import-boundary:banned-layer-import": 47
 		},
@@ -29,7 +29,7 @@
 			"controller-orchestration": 277,
 			"factory-workflow": 12,
 			"indirect-dependency": 9,
-			"public-service-helper": 10,
+			"public-service-helper": 8,
 			"store-workflow": 55
 		},
 		"violations": [
@@ -3616,22 +3616,6 @@
 				]
 			},
 			{
-				"file": "src/lib/server/services/agent/conversations/tool-activity.ts",
-				"line": 10,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/agent/conversations/tool-activity.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/agent/conversations/tool-activity.ts",
-				"line": 18,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/agent/conversations/tool-activity.ts:1"]
-			},
-			{
 				"file": "src/lib/server/services/telemetry.ts",
 				"line": 43,
 				"column": 14,
@@ -4805,6 +4789,59 @@
 				"src/evals/lab/application.ts"
 			],
 			"inventoryNote": "All production constructors are factory-owned; outputs are interface-typed. Tool schemas, errors, recovery envelopes and tracing registrations are unchanged. Evaluations use production createApplication with no direct dependency on the removed service. Local cache tests use supplied fakes; no live provider or evaluation suite ran. The overall application migration remains incomplete."
+		},
+		{
+			"subject": "Tool-activity projection capability, shared contract and controller ownership",
+			"status": "corrected",
+			"previousDependency": "Agent and Diagrams imported toolActivityFromEvent; evaluation reconstruction and timing imported toolOutcomeEvent. The exported service functions left the shared capability implicit.",
+			"currentOwner": "ToolActivityProjection in models/agent declares outcome and activity. ToolActivityProjectionService implements both without retained state or collaborators. Agent and diagram generation receive it directly and retain journal writes and operation sequencing.",
+			"evidence": [
+				"src/lib/models/agent/index.ts",
+				"src/lib/server/services/agent/conversations/tool-activity.ts",
+				"src/lib/server/controllers/agent/controller.ts",
+				"src/lib/server/controllers/diagrams/controller.ts",
+				"src/lib/server/controllers/agent/tool-activity.spec.ts",
+				"src/lib/server/controllers/diagrams/tool-activity.spec.ts"
+			],
+			"inventoryNote": "Preserves all event and activity states, missing call IDs, omitted success output, explicit null/false/zero/empty payloads, approval reviews and both reported-failure fields. Empty settled input stays unchanged. No helper exports, service composition, controller chains, defaults, or persisted-format changes were added."
+		},
+		{
+			"subject": "Tool-activity parsing, journal merging, transactions, authorization and tracing",
+			"status": "reviewed",
+			"previousDependency": "The controllers projected already resolved events before journal persistence; provider and persisted event readers parsed at existing boundaries. Browser readers merged activities after reading saved journal rows.",
+			"currentOwner": "Provider and repository readers keep parsing and failure classification. ConversationArchive keeps serialization and persistence; browser journal consumers keep identifier matching, argument merging and ordering. Agent retains approval/event transactions and notifications after commit. Diagrams retains provider mapping, authorization, cancellation and generation sequencing.",
+			"evidence": [
+				"src/lib/server/adapters/agent/stream-reader.ts",
+				"src/lib/server/repositories/agent/tool-failure.ts",
+				"src/lib/server/repositories/agent/postgres/agent-runs.ts",
+				"src/lib/server/services/agent/conversations/archive.ts",
+				"src/lib/stores/agent/chat-tools.ts",
+				"src/lib/server/factories/controller-surfaces.ts",
+				"src/lib/server/factories/agent/tool-coverage.ts",
+				"tests/integration/agent",
+				"tests/integration/diagrams"
+			],
+			"inventoryNote": "No public controller operation, tool schema, tool coverage entry, instrumentation registration, trace boundary, journal format, or database migration changed. Focused regressions and real isolated PostgreSQL contracts passed. The diagram SDK mismatch is outside scope."
+		},
+		{
+			"subject": "Tool-activity constructors, factory outputs, fixtures and evaluation consumers",
+			"status": "corrected",
+			"previousDependency": "Callers imported projection functions directly. Evaluation consumers had no explicit dependency for outcome classification.",
+			"currentOwner": "createToolActivityProjection is the only production constructor and returns the model interface explicitly. AgentCapability exposes the interface; application wiring supplies it to Agent and diagram generation. createLab constructs the same interface through the factory and passes it into private reconstruction/timing helpers and the existing public overlap assertion. Shared InMemory fixtures supply the capability.",
+			"evidence": [
+				"src/lib/server/factories/agent/tool-activity-factory.ts",
+				"src/lib/server/factories/capabilities/agent-capability-factory.ts",
+				"src/lib/server/factories/capabilities/diagrams-capability-factory.ts",
+				"src/lib/server/application.ts",
+				"src/evals/lab/application.ts",
+				"src/evals/lab/run-case.ts",
+				"src/evals/lab/run-case-projection.spec.ts",
+				"src/evals/cases/time-awareness.ts",
+				"src/evals/cases/time-awareness.spec.ts",
+				"src/lib/testing/agent/fixtures/rules.ts",
+				"src/lib/testing/diagrams/fixtures/generation.ts"
+			],
+			"inventoryNote": "Evaluation results preserve start order, original arguments, reported-failure detail, approval state, and omission of unidentified outcomes. Existing reconstruction fallbacks remain unchanged; none were added. Local runCase tests use the real Agent controller with InMemory repositories and runner. No private helper was exposed, no provider was called, and the overall migration remains incomplete."
 		}
 	]
 }

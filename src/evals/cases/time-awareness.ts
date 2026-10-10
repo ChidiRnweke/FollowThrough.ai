@@ -10,7 +10,7 @@ import {
 } from '../fixtures/workspaces/time-aware';
 import { findCall } from '../assertions/tool-calls';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
-import { toolOutcomeEvent } from '$lib/server/services/agent/conversations/tool-activity';
+import type { ToolActivityProjection } from '$lib/models/agent';
 import { judgeAdherenceConsensus } from '../judges/consensus';
 import { ARCHETYPES, type EvalCase } from './types';
 
@@ -390,12 +390,15 @@ type TimedToolCall = {
 	readonly end?: Date;
 };
 
-const timedToolCalls = (result: AgentRunResult): TimedToolCall[] => {
+const timedToolCalls = (
+	result: AgentRunResult,
+	toolActivityProjection: ToolActivityProjection
+): TimedToolCall[] => {
 	const started = new Map<string, Date>();
 	const completed = new Map<string, Date>();
 	for (const { event, createdAt } of result.events) {
 		if (event.type === 'tool_started') started.set(event.callId, createdAt);
-		const outcome = toolOutcomeEvent(event);
+		const outcome = toolActivityProjection.outcome(event);
 		if (outcome?.callId !== undefined) completed.set(outcome.callId, createdAt);
 	}
 	return result.toolCalls.map((call) => ({
@@ -462,9 +465,10 @@ interface ExpectedNoteBodyRead {
 /** Verify that each expected note body was read from its own path during overlapping calls. */
 export function allExpectedNoteBodiesOverlap(
 	result: AgentRunResult,
-	expected: readonly ExpectedNoteBodyRead[]
+	expected: readonly ExpectedNoteBodyRead[],
+	toolActivityProjection: ToolActivityProjection
 ): boolean {
-	const reads = timedToolCalls(result)
+	const reads = timedToolCalls(result, toolActivityProjection)
 		.filter((call) => !call.failure && (call.name === 'grep' || call.name === 'sed'))
 		.map((call) => ({
 			noteId: expected.find(({ path }) => call.arguments.path === path)?.noteId,
@@ -514,7 +518,9 @@ export const parallelExecutionCases: readonly EvalCase[] = [
 			});
 			logOutput(result);
 
-			const calls = timedToolCalls(result).filter((call) => !call.failure);
+			const calls = timedToolCalls(result, lab.toolActivityProjection).filter(
+				(call) => !call.failure
+			);
 			const todayRead = calls.filter(
 				(call) =>
 					['get_today_view', 'list_todos'].includes(call.name) &&
@@ -609,7 +615,11 @@ export const parallelExecutionCases: readonly EvalCase[] = [
 					content
 				};
 			});
-			const allThreeOverlap = allExpectedNoteBodiesOverlap(result, expectedReads);
+			const allThreeOverlap = allExpectedNoteBodiesOverlap(
+				result,
+				expectedReads,
+				lab.toolActivityProjection
+			);
 			const answer = result.finalResponse.toLowerCase();
 			const groundedAnswer =
 				answer.includes('platform lead') &&

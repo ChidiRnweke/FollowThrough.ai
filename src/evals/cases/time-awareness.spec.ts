@@ -1,3 +1,4 @@
+import { createToolActivityProjection } from '$lib/server/factories/agent/tool-activity-factory';
 import { describe, expect, it } from 'vitest';
 import type { AgentRunResult } from '../lab/run-case';
 import {
@@ -115,9 +116,17 @@ describe('time-awareness assertions', () => {
 			]
 		);
 		expect({
-			valid: allExpectedNoteBodiesOverlap(positive, expectedPaths),
-			duplicatePath: allExpectedNoteBodiesOverlap(duplicatePath, expectedPaths),
-			serialThirdRead: allExpectedNoteBodiesOverlap(serialThird, expectedPaths)
+			valid: allExpectedNoteBodiesOverlap(positive, expectedPaths, createToolActivityProjection()),
+			duplicatePath: allExpectedNoteBodiesOverlap(
+				duplicatePath,
+				expectedPaths,
+				createToolActivityProjection()
+			),
+			serialThirdRead: allExpectedNoteBodiesOverlap(
+				serialThird,
+				expectedPaths,
+				createToolActivityProjection()
+			)
 		}).toEqual({ valid: true, duplicatePath: false, serialThirdRead: false });
 	});
 });

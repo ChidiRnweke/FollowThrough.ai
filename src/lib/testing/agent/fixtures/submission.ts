@@ -60,6 +60,7 @@ export const agentSubmissionFixture = (
 	);
 	return {
 		controller,
+		eventBus: dependencies.eventBus,
 		models,
 		preferences,
 		preferenceRecords,

@@ -1,3 +1,4 @@
+import type { ToolActivityProjection } from '$lib/models/agent';
 import { DiagramGenerationStore } from '$lib/server/stores/diagrams/generation';
 import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import {
@@ -88,6 +89,7 @@ import { traceWorkflow } from '$lib/server/services/telemetry';
 import type { ProjectRepository } from '$lib/server/repositories/projects';
 
 export interface DiagramsCapabilityInput {
+	readonly toolActivityProjection: ToolActivityProjection;
 	readonly db: Database;
 	readonly notes: NoteRepository;
 	readonly anchors: SourceAnchorRepository;
@@ -164,6 +166,7 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 			contextMemory: input.contextMemory,
 			conversations: input.conversations,
 			conversationMessages: input.conversationMessages,
+			toolActivityProjection: input.toolActivityProjection,
 			preferences: input.preferences,
 			models: input.models,
 			runs: input.runs,

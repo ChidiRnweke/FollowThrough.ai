@@ -710,3 +710,76 @@ input. The overall application migration is incomplete.
 
 Browser migrations, tool-activity projection, indexing redesign, telemetry restructuring and the
 diagram SDK mismatch remain outside this slice. Keep the stacked PR draft while migration gates fail.
+
+## Tool-activity projection — 2026-10-11
+
+This slice stacks on draft PR #368 at `d8ad32290ce8dcb1d0993cc53910364127f19afc`.
+Application revision: `f09fd8125f2af896c9229d40c805845d76477912`. The checkers are unchanged.
+Baseline verification reproduced all 364 recorded semantic diagnostics, including provenance,
+and all 47 expanded Chisel messages and locations exactly.
+
+### Corrected boundaries
+
+ToolActivityProjection is one model-owned contract with outcome and activity methods.
+ToolActivityProjectionService implements the cohesive capability without collaborators or retained
+state. Its activity method reuses its outcome rule. The old function exports are removed.
+Agent and diagram generation receive explicit dependencies and keep their operations and journal
+writes. The dedicated factory constructs the service and returns the model interface. AgentCapability
+exposes that interface; the application wires it into both consumers without constructing a service.
+
+The evaluation lab constructs the same interface through the factory. Reconstruction and timing
+helpers receive it explicitly and stay private. The existing overlap assertion also receives it.
+Local runCase tests drive the real Agent controller with InMemory repositories and runner. They
+verify start ordering, original arguments, reported-failure detail, approval state and omission of
+unidentified outcomes. Existing evaluation fallbacks are unchanged; no new defaults were added.
+
+Projection preserves missing call IDs, absent success output, explicit null/false/zero/empty payloads,
+approval reviews, and reported failures with both failure and output. Settled activity still has
+empty input. Browser journal consumers retain matching, argument merging and ordering. Provider and
+repository parsing, persisted null encoding and persistence stay with their existing owners.
+Agent retains approval/event transactions and notifications after commit. Authorization, cancellation,
+tool contracts, controller surfaces and tracing remain unchanged. No service composition, controller
+chains, test-only production helpers or suppressions were added.
+
+### Complete remaining inventory
+
+| Rule                       | #368 | Remaining |
+| -------------------------- | ---: | --------: |
+| `controller-orchestration` |  277 |       277 |
+| `factory-workflow`         |   12 |        12 |
+| `store-workflow`           |   55 |        55 |
+| `public-service-helper`    |   10 |         8 |
+| `indirect-dependency`      |    9 |         9 |
+| `concrete-dependency`      |    1 |         1 |
+| Semantic total             |  364 |       362 |
+| Chisel prohibited imports  |   47 |        47 |
+
+Only the two tool-activity public-helper diagnostic identities were removed. None were added.
+All Chisel diagnostics match the base exactly. The JSON contains every remaining diagnostic,
+refreshed source locations and provenance, plus separate constructor, factory-output, parsing,
+persistence, journal-consumer, tool-surface, tracing and evaluation reviews. It remains evidence,
+not a suppression input. The overall application migration is incomplete.
+
+### Observed verification
+
+- Focused units and regressions: **69 files, 632 passed, one existing skip**. Coverage includes
+  event readers, corpus conformance, archive/history, journal merging, Agent/diagram operations,
+  approval/replay, cancellation, tools, instrumentation and local evaluation consumers/cache tests.
+- Full units: **591 files, 4,621 passed, one existing skip**. Passing browser output retains the
+  existing Svelte `derived_inert` warnings and chart rendering error.
+- Affected isolated PostgreSQL contracts: **17 files, 95 passed**, with
+  `pnpm test:contracts:isolated tests/integration/agent tests/integration/diagrams`.
+- Lint and type checking passed. Docs checking passed with zero errors/warnings and one existing
+  hint; TypeDoc entry-point warnings remain. All three SvelteKit, QA and PR skill copies match.
+- Every architecture stage ran. Topology, source, test quality and UI passed. The architecture
+  chain stopped at **362** semantic findings. Standalone Chisel failed with the same **47**
+  prohibited imports. No checker or suppression changed.
+- Early consumer tests caught a fixture waiting on a competing execution attempt and a failure
+  payload that did not use the canonical tool envelope. Both fixtures were corrected before the
+  passing results above. No production behavior changed to satisfy them.
+- No live provider, live evaluation suite, Phoenix round-trip, E2E, PWA or production-build
+  validation ran. Cache unit messages labelled “live” use local supplied fakes. Local evidence
+  does not imply CI success. Keep the stacked PR draft while migration gates fail.
+
+Browser migrations, journal redesign, agent-file changes, indexing, telemetry restructuring and
+the diagram SDK mismatch remain outside this slice. Do not mark the overall refactor complete.

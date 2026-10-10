@@ -70,7 +70,7 @@ import type {
 	ConversationMessages,
 	ConversationSessions
 } from '$lib/server/services/agent/conversations/archive';
-import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
+import type { ToolActivityProjection } from '$lib/models/agent';
 import type {
 	AgentRunner,
 	AgentToolCompletionObserver
@@ -221,6 +221,7 @@ export interface AgentController {
  * controller can be built and tested with repository and provider fakes.
  */
 export interface AgentDependencies {
+	readonly toolActivityProjection: ToolActivityProjection;
 	readonly filePaths: AgentFilePaths;
 	readonly runStatus: AgentRunStatusRules;
 	readonly streamPresentation: Pick<AgentStreamPresentation, 'segments'>;
@@ -910,7 +911,7 @@ export class Agent implements AgentController {
 								...(pending.review ? { review: pending.review } : {})
 							};
 							const record = await this.dependencies.events.append(run.id, 1, event);
-							const activity = toolActivityFromEvent(event);
+							const activity = this.dependencies.toolActivityProjection.activity(event);
 							if (activity)
 								await this.dependencies.conversationMessages.recordToolActivity(
 									actor,
@@ -1220,7 +1221,7 @@ export class Agent implements AgentController {
 	): Promise<AgentRunEventRecord> {
 		const record = await this.dependencies.transactionRunner.run(async () => {
 			const record = await this.dependencies.events.append(run.id, 1, event);
-			const activity = toolActivityFromEvent(event);
+			const activity = this.dependencies.toolActivityProjection.activity(event);
 			if (activity)
 				await this.dependencies.conversationMessages.recordToolActivity(
 					actor,
