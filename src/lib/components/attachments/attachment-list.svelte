@@ -11,6 +11,7 @@
 	import { attachmentStatusStyle, formatBytes } from '../shared/labels';
 	import { toast } from 'svelte-sonner';
 	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import { userFacingMessage } from '$lib/errors';
 	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
 	import { storeUploadBytes } from '$lib/client/attachments/object-storage';
@@ -152,17 +153,29 @@
 		{@render uploadButton()}{:else if items.length === 0}
 		<!-- An empty region is an invitation, not dead text: the one action the
 		     space exists for sits inside the empty state. -->
-		<EmptyState
-			icon={Icon.Attachment}
-			title="No attachments yet."
-			hint="Briefs, screenshots, and exports you add here ground the agent's answers in this project."
-			size={heroEmpty ? 'large' : 'default'}
-			label={heroEmpty ? 'Attachments' : undefined}
-		>
-			{#snippet action()}
-				{@render uploadButton()}
-			{/snippet}
-		</EmptyState>
+		{#if heroEmpty}
+			<EmptyState
+				size="large"
+				scene={Scene.Attachment}
+				title="No attachments yet."
+				hint="Briefs, screenshots, and exports you add here ground the agent's answers in this project."
+				label="Attachments"
+			>
+				{#snippet action()}
+					{@render uploadButton()}
+				{/snippet}
+			</EmptyState>
+		{:else}
+			<EmptyState
+				icon={Icon.Attachment}
+				title="No attachments yet."
+				hint="Briefs, screenshots, and exports you add here ground the agent's answers in this project."
+			>
+				{#snippet action()}
+					{@render uploadButton()}
+				{/snippet}
+			</EmptyState>
+		{/if}
 	{:else}
 		<div class="flex flex-wrap items-center gap-2">
 			{@render uploadButton()}

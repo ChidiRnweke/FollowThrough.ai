@@ -300,6 +300,41 @@
 	}
 }
 
+/* Empty-state scenes draw themselves in when they mount, step by step, and the dot lands last.
+   In a scene the dot is teal from the start: it marks the one action the empty region invites. */
+.ft-scene .ft-stroke {
+	animation: ft-trace 900ms var(--ease-standard) both;
+}
+
+.ft-scene .ft-accent {
+	--ft-accent: var(--color-brand);
+	animation: ft-land 380ms 820ms var(--ease-land) both;
+}
+
+.ft-scene .ft-accent-stroke {
+	stroke: var(--color-brand);
+}
+
+.ft-scene .ft-soft {
+	opacity: 0.45;
+}
+
+.ft-scene .ft-d1 {
+	animation-delay: 110ms;
+}
+
+.ft-scene .ft-d2 {
+	animation-delay: 220ms;
+}
+
+.ft-scene .ft-d3 {
+	animation-delay: 330ms;
+}
+
+.ft-scene .ft-d4 {
+	animation-delay: 440ms;
+}
+
 /* Every state still reads without motion: the dot's colour and position carry it. */
 @media (prefers-reduced-motion: reduce) {
 	.ft-stroke,

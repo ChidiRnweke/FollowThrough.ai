@@ -15,6 +15,7 @@
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import { formatDateTime } from '$lib/components/shared/labels';
 	import { widgetReferencesIn } from '$lib/services/notes/references';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
@@ -123,7 +124,7 @@
 
 	{#if !data.selectedProjectId}
 		<EmptyState
-			icon={Icon.Widget}
+			scene={Scene.Project}
 			title="Select a project to see its widgets."
 			size="large"
 			label="Widgets"
@@ -166,7 +167,7 @@
 			</EmptyState>
 		{:else if data.widgets.length === 0}
 			<EmptyState
-				icon={Icon.Widget}
+				scene={Scene.Widget}
 				title="No widgets yet."
 				hint="Type /widget in a note to add one. It is saved here and can be shown in other notes."
 				size="large"

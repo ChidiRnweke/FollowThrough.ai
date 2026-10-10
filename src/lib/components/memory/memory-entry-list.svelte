@@ -16,6 +16,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { toast } from 'svelte-sonner';
 	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import EmptyState from '../shared/empty-state.svelte';
 
 	import type { WorkspaceDraft, WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
@@ -237,17 +238,25 @@
 			{@render addButton()}{:else if isEmpty}
 			<!-- Whole-page contexts (profile, project memory) get the hero-sized shared
 		     EmptyState; the side panel keeps the slot size. -->
-			<EmptyState
-				icon={Icon.Memory}
-				title={emptyText}
-				hint={emptyHint}
-				size={heroEmpty ? 'large' : 'default'}
-				label={heroEmpty ? 'Empty memory' : undefined}
-			>
-				{#snippet action()}
-					{@render addButton()}
-				{/snippet}
-			</EmptyState>
+			{#if heroEmpty}
+				<EmptyState
+					size="large"
+					scene={Scene.Memory}
+					title={emptyText}
+					hint={emptyHint}
+					label="Empty memory"
+				>
+					{#snippet action()}
+						{@render addButton()}
+					{/snippet}
+				</EmptyState>
+			{:else}
+				<EmptyState icon={Icon.Memory} title={emptyText} hint={emptyHint}>
+					{#snippet action()}
+						{@render addButton()}
+					{/snippet}
+				</EmptyState>
+			{/if}
 		{:else}
 			<div class="flex justify-end">
 				{@render addButton()}

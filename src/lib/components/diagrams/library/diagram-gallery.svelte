@@ -16,6 +16,7 @@
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import DiagramPreview from '../diagram-preview.svelte';
 	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import { formatDateTime } from '$lib/components/shared/labels';
 	import { drawioReferencesIn } from '$lib/services/notes/references';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
@@ -165,7 +166,7 @@
 
 	{#if !data.selectedProjectId}
 		<EmptyState
-			icon={Icon.Diagram}
+			scene={Scene.Project}
 			title="Select a project to see its diagrams."
 			size="large"
 			label="Diagrams"
@@ -209,7 +210,7 @@
 			</EmptyState>
 		{:else if diagrams.length === 0}
 			<EmptyState
-				icon={Icon.Diagram}
+				scene={Scene.Diagram}
 				title="No diagrams yet."
 				hint="A diagram starts in conversation, and can be linked into any note once you keep it."
 				size="large"

@@ -12,6 +12,7 @@
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import {
 		SYNC_GAP_BOND,
 		SYNC_GAP_ITEM,
@@ -305,7 +306,7 @@
 							</div>
 						</div>
 						{#if !resources.pending.length}<EmptyState
-								icon={Icon.Check}
+								scene={Scene.Saved}
 								title="Everything is saved"
 								hint="There are no changes waiting for your decision."
 								size="large"
