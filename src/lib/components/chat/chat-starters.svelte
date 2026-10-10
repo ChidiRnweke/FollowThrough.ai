@@ -65,4 +65,8 @@
 			</li>
 		{/each}
 	</ul>
+	<!-- The agent also starts from a selection, which nothing in an empty chat shows. -->
+	<p class="px-2 text-xs text-muted-foreground">
+		Or select text in a note and choose Ask about this.
+	</p>
 </div>
