@@ -103,7 +103,7 @@ describe('direct inline completion', () => {
 	});
 	it('refuses a second completion while one is admitted', async () => {
 		const fixture = setup();
-		fixture.admission.admit(actor.userId);
+		fixture.admissions.register(actor.userId);
 		expect(await fixture.controller.suggest(actor, request(), signal())).toEqual({
 			outcome: 'busy',
 			retryAfterMs: 250

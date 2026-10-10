@@ -396,7 +396,7 @@ Every service module below has a planned disposition. This is routing, not compl
 - Process active-run handles: `server/stores/agent/active-runs.ts`; controllers perform abort after durable cancellation. Identity-safe release preserved.
 - Process run subscriptions: `server/stores/agent/events.ts`; application factory exposes `AgentEventBus`.
 - Catalog models and timestamp: one snapshot in `server/stores/agent/model-catalog.ts`; refresh and existing stale-cache behavior in `server/controllers/agent/model-catalog.ts`.
-- Per-user admission and recent timestamps: `server/stores/inline-suggestions/admission.ts`; the admission controller reserves synchronously.
+- Per-user admission and recent timestamps: `server/stores/inline-suggestions/admission.ts`; the inline suggestions controller reserves synchronously.
 - All other state fields, controller members, factory dependencies and component edges retain pending semantic-review status in the inventory. No whole subsystem is complete.
 
 ### Verification observed so far

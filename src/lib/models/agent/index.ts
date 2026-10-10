@@ -2039,12 +2039,6 @@ export type InlineSuggestionAdmission =
 			readonly retryAfterMs: number;
 	  };
 
-export interface InlineSuggestionThrottle {
-	admit(userId: string): InlineSuggestionAdmission;
-	consume(userId: string): InlineSuggestionAdmission;
-	release(userId: string): void;
-}
-
 export type LanguageModelId = string & { readonly __brand: 'LanguageModelId' };
 
 /** Construct the canonical identifier spelling without selecting a model or consulting a catalog. */

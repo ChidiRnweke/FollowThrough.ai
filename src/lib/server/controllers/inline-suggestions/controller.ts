@@ -1,4 +1,4 @@
-import type { InlineSuggestionThrottle } from '$lib/models/agent';
+import type { InlineSuggestionAdmission } from '$lib/models/agent';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import { type ActorContext } from '$lib/models/identity';
 import {
@@ -20,6 +20,8 @@ import type { Reranker } from '$lib/models/knowledge-search';
 import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import type { IInlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
+import type { IInlineAdmissionRules } from '$lib/server/services/inline-suggestions/inline-admission';
+import type { InlineAdmissionState } from '$lib/server/stores/inline-suggestions/admission';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 
 const INELIGIBLE: InlineSuggestion = { outcome: 'no_suggestion', reason: 'ineligible' };
@@ -50,7 +52,10 @@ export interface InlineSuggestionsDependencies {
 	memory: MemoryEntryLister;
 	observer: OperationObserver;
 	workflow: WorkflowObserver;
-	inlineSuggestionThrottle: InlineSuggestionThrottle;
+	admissionRules: IInlineAdmissionRules;
+	/** Process-wide: controllers are constructed per request, the spend guard is not. */
+	admissions: InlineAdmissionState;
+	now: () => number;
 	noteReader: NoteReader;
 	preferences: AgentPreferencesStore;
 }
@@ -69,7 +74,7 @@ export class InlineSuggestions implements InlineSuggestionsController {
 		const preferences = await this.dependencies.preferences.get(actor);
 		const note = await this.authorize(actor, request, preferences.inlineSuggestionsEnabled);
 		if (!note) return INELIGIBLE;
-		const admission = this.dependencies.inlineSuggestionThrottle.admit(actor.userId);
+		const admission = this.admit(actor.userId);
 		if (!admission.allowed)
 			return { outcome: admission.reason, retryAfterMs: admission.retryAfterMs };
 		const authoritativeRequest = { ...request, projectId: note.projectId };
@@ -96,7 +101,7 @@ export class InlineSuggestions implements InlineSuggestionsController {
 			async () => {
 				try {
 					const context = await this.buildContext(actor, authoritativeRequest, note, signal);
-					const budget = this.dependencies.inlineSuggestionThrottle.consume(actor.userId);
+					const budget = this.consume(actor.userId);
 					if (!budget.allowed) return { outcome: budget.reason, retryAfterMs: budget.retryAfterMs };
 					let text: string;
 					try {
@@ -125,11 +130,29 @@ export class InlineSuggestions implements InlineSuggestionsController {
 						}
 					};
 				} finally {
-					this.dependencies.inlineSuggestionThrottle.release(actor.userId);
+					this.dependencies.admissions.release(actor.userId);
 				}
 			},
 			(result) => JSON.stringify(result)
 		);
+	}
+
+	/** Admission and reservation happen synchronously, before any provider work is awaited. */
+	private admit(userId: string): InlineSuggestionAdmission {
+		const result = this.dependencies.admissionRules.admit(
+			this.dependencies.admissions.hasRequest(userId)
+		);
+		if (result.allowed) this.dependencies.admissions.register(userId);
+		return result;
+	}
+
+	private consume(userId: string): InlineSuggestionAdmission {
+		const result = this.dependencies.admissionRules.consume(
+			this.dependencies.admissions.recent(userId),
+			this.dependencies.now()
+		);
+		this.dependencies.admissions.replaceRecent(userId, result.recent);
+		return result.admission;
 	}
 
 	private async generate(
