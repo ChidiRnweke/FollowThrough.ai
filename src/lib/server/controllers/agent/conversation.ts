@@ -2,12 +2,19 @@ import type { ActorContext } from '$lib/models/identity';
 import type {
 	ConversationId,
 	PersistedSessionItem,
-	ConversationJsonReader,
-	ConversationSessionController
+	ConversationJsonReader
 } from '$lib/models/agent';
 import type { ConversationHistory } from '$lib/server/services/agent/conversations/history';
 import type { ReplayVirtualization } from '$lib/server/services/agent/conversations/replay-virtualizer';
 import type { ConversationSessionStore } from '$lib/server/stores/agent/conversation';
+export interface ConversationSessionController {
+	readonly id: ConversationId;
+	getItems(limit?: number): Promise<readonly PersistedSessionItem[]>;
+	addItems(items: readonly PersistedSessionItem[]): Promise<void>;
+	popItem(): Promise<PersistedSessionItem | undefined>;
+	clear(): void;
+	snapshot(): Promise<readonly PersistedSessionItem[]>;
+}
 export class ConversationSessions implements ConversationSessionController {
 	constructor(
 		private readonly history: ConversationHistory,

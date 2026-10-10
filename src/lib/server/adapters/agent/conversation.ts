@@ -1,3 +1,4 @@
+import type { ConversationSessionController } from '$lib/server/controllers/agent/conversation';
 import { sessionJsonSchema, type SessionJson } from '$lib/models/agent';
 import type { AgentInputItem, Session } from '@openai/agents';
 import {
@@ -6,11 +7,7 @@ import {
 	type PersistedSessionItem,
 	type SessionJsonObject
 } from '$lib/models/agent';
-import type {
-	ConversationSessionController,
-	ConversationJsonReader,
-	SessionItemSerialization
-} from '$lib/models/agent';
+import type { ConversationJsonReader, SessionItemSerialization } from '$lib/models/agent';
 export interface BufferedConversationSession extends Session {
 	snapshot(): Promise<readonly PersistedSessionItem[]>;
 }
