@@ -1,29 +1,33 @@
 {
 	"recordedAt": "2026-10-10",
-	"applicationRevision": "8e3e72fbf88dc9affb5980476134dad35c6a27ba",
-	"toolingRevision": "8e3e72fbf88dc9affb5980476134dad35c6a27ba",
+	"applicationRevision": "d43716c570e63e9f05e39bac12005fbcb523a66f",
+	"toolingRevision": "d43716c570e63e9f05e39bac12005fbcb523a66f",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors. The overall refactor is incomplete.",
 	"comparison": {
-		"applicationBase": "92860a95b0ead8a1b05268087089be50423f671d",
-		"toolingRevision": "8e3e72fbf88dc9affb5980476134dad35c6a27ba",
-		"method": "Analyze #348 TypeScript/Svelte sources from git objects with the current analyzer and compiler options. No baseline source files were edited.",
+		"applicationBase": "28d54ce6005c3f7f3060ec17d0a9f700246f47fd",
+		"toolingRevision": "d43716c570e63e9f05e39bac12005fbcb523a66f",
+		"method": "The unchanged analyzers were run against #350 at 28d54ce6. Both complete inventories exactly matched its recorded diagnostics before implementation. Counts below compare that branch with this server controller repair.",
 		"semanticCounts": {
 			"concrete-dependency": 2,
-			"controller-orchestration": 399,
-			"factory-workflow": 284,
+			"controller-orchestration": 290,
+			"factory-workflow": 14,
 			"indirect-dependency": 11,
 			"public-service-helper": 21,
 			"store-workflow": 55
 		},
-		"semanticTotal": 772
+		"semanticTotal": 393,
+		"chiselCounts": {
+			"import-boundary:banned-layer-import": 53
+		},
+		"chiselTotal": 53
 	},
 	"semantic": {
 		"command": "node --experimental-strip-types scripts/audit-architecture.ts --json",
 		"exitStatus": 1,
 		"counts": {
 			"concrete-dependency": 2,
-			"controller-orchestration": 290,
-			"factory-workflow": 14,
+			"controller-orchestration": 277,
+			"factory-workflow": 13,
 			"indirect-dependency": 11,
 			"public-service-helper": 21,
 			"store-workflow": 55
@@ -3612,160 +3616,6 @@
 				]
 			},
 			{
-				"file": "src/lib/server/controllers/agent/conversation.ts",
-				"line": 61,
-				"column": 20,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/agent/conversation.ts:61",
-					"src/lib/server/controllers/agent/replay.ts:8"
-				]
-			},
-			{
-				"file": "src/lib/server/controllers/agent/execution.ts",
-				"line": 213,
-				"column": 24,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/agent/execution.ts:213",
-					"src/lib/server/controllers/agent/stream-events.ts:16"
-				]
-			},
-			{
-				"file": "src/lib/server/controllers/agent/execution.ts",
-				"line": 215,
-				"column": 29,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/agent/execution.ts:215",
-					"src/lib/server/controllers/agent/stream-events.ts:16"
-				]
-			},
-			{
-				"file": "src/lib/server/controllers/deliverables/controller.ts",
-				"line": 501,
-				"column": 12,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/deliverables/controller.ts:501",
-					"src/lib/server/controllers/deliverables/diagram-rendering.ts:10"
-				]
-			},
-			{
-				"file": "src/lib/server/controllers/deliverables/controller.ts",
-				"line": 566,
-				"column": 6,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/deliverables/controller.ts:566",
-					"src/lib/server/controllers/deliverables/pdf.ts:12"
-				]
-			},
-			{
-				"file": "src/lib/server/controllers/deliverables/controller.ts",
-				"line": 611,
-				"column": 24,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/deliverables/controller.ts:611",
-					"src/lib/server/controllers/deliverables/pdf.ts:12"
-				]
-			},
-			{
-				"file": "src/lib/server/controllers/diagrams/controller.ts",
-				"line": 781,
-				"column": 21,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/diagrams/controller.ts:781",
-					"src/lib/server/controllers/diagrams/generation.ts:20"
-				]
-			},
-			{
-				"file": "src/lib/server/controllers/diagrams/controller.ts",
-				"line": 803,
-				"column": 9,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/diagrams/controller.ts:803",
-					"src/lib/server/controllers/diagrams/generation.ts:15"
-				]
-			},
-			{
-				"file": "src/lib/server/controllers/diagrams/controller.ts",
-				"line": 806,
-				"column": 8,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/diagrams/controller.ts:806",
-					"src/lib/server/controllers/diagrams/generation.ts:15"
-				]
-			},
-			{
-				"file": "src/lib/server/controllers/diagrams/controller.ts",
-				"line": 820,
-				"column": 26,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/diagrams/controller.ts:820",
-					"src/lib/server/controllers/diagrams/generation.ts:16"
-				]
-			},
-			{
-				"file": "src/lib/server/controllers/diagrams/controller.ts",
-				"line": 832,
-				"column": 12,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/diagrams/controller.ts:832",
-					"src/lib/server/controllers/diagrams/generation.ts:17"
-				]
-			},
-			{
-				"file": "src/lib/server/controllers/references/controller.ts",
-				"line": 207,
-				"column": 23,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/references/controller.ts:207",
-					"src/lib/server/controllers/references/search.ts:25"
-				]
-			},
-			{
-				"file": "src/lib/server/controllers/todos/controller.ts",
-				"line": 273,
-				"column": 21,
-				"rule": "controller-orchestration",
-				"message": "Controllers must coordinate services, not invoke another controller operation.",
-				"provenance": [
-					"src/lib/server/controllers/todos/controller.ts:273",
-					"src/lib/server/controllers/deliverables/pdf.ts:12"
-				]
-			},
-			{
-				"file": "src/lib/server/factories/agent/conversation-factory.ts",
-				"line": 35,
-				"column": 13,
-				"rule": "factory-workflow",
-				"message": "factories must not invoke or expose repositories behavior. Move the operation to a controller.",
-				"provenance": [
-					"src/lib/server/factories/agent/conversation-factory.ts:35",
-					"src/lib/server/repositories/agent/session-items.ts:6"
-				]
-			},
-			{
 				"file": "src/lib/server/factories/app-factory.ts",
 				"line": 76,
 				"column": 9,
@@ -4638,7 +4488,7 @@
 		"command": "pnpm exec chisel-js check . --json",
 		"exitStatus": 1,
 		"counts": {
-			"import-boundary:banned-layer-import": 53
+			"import-boundary:banned-layer-import": 47
 		},
 		"violations": [
 			{
@@ -4846,46 +4696,10 @@
 				"message": "controllers must not import controllers (src/lib/controllers/sync/submission.ts). Controllers do not chain, including through type-only operation interfaces. Compose services in the owning controller and move shared data contracts to models."
 			},
 			{
-				"file": "src/lib/server/controllers/agent/conversation.ts",
-				"line": 4,
+				"file": "src/lib/server/adapters/agent/conversation.ts",
+				"line": 1,
 				"rule": "import-boundary:banned-layer-import",
-				"message": "controllers must not import controllers (src/lib/server/controllers/agent/replay.ts). Controllers do not chain, including through type-only operation interfaces. Compose services in the owning controller and move shared data contracts to models."
-			},
-			{
-				"file": "src/lib/server/controllers/agent/execution.ts",
-				"line": 22,
-				"rule": "import-boundary:banned-layer-import",
-				"message": "controllers must not import controllers (src/lib/server/controllers/agent/stream-events.ts). Controllers do not chain, including through type-only operation interfaces. Compose services in the owning controller and move shared data contracts to models."
-			},
-			{
-				"file": "src/lib/server/controllers/deliverables/controller.ts",
-				"line": 4,
-				"rule": "import-boundary:banned-layer-import",
-				"message": "controllers must not import controllers (src/lib/server/controllers/deliverables/pdf.ts). Controllers do not chain, including through type-only operation interfaces. Compose services in the owning controller and move shared data contracts to models."
-			},
-			{
-				"file": "src/lib/server/controllers/deliverables/controller.ts",
-				"line": 75,
-				"rule": "import-boundary:banned-layer-import",
-				"message": "controllers must not import controllers (src/lib/server/controllers/deliverables/diagram-rendering.ts). Controllers do not chain, including through type-only operation interfaces. Compose services in the owning controller and move shared data contracts to models."
-			},
-			{
-				"file": "src/lib/server/controllers/diagrams/controller.ts",
-				"line": 40,
-				"rule": "import-boundary:banned-layer-import",
-				"message": "controllers must not import controllers (src/lib/server/controllers/diagrams/generation.ts). Controllers do not chain, including through type-only operation interfaces. Compose services in the owning controller and move shared data contracts to models."
-			},
-			{
-				"file": "src/lib/server/controllers/references/controller.ts",
-				"line": 22,
-				"rule": "import-boundary:banned-layer-import",
-				"message": "controllers must not import controllers (src/lib/server/controllers/references/search.ts). Controllers do not chain, including through type-only operation interfaces. Compose services in the owning controller and move shared data contracts to models."
-			},
-			{
-				"file": "src/lib/server/controllers/todos/controller.ts",
-				"line": 7,
-				"rule": "import-boundary:banned-layer-import",
-				"message": "controllers must not import controllers (src/lib/server/controllers/deliverables/pdf.ts). Controllers do not chain, including through type-only operation interfaces. Compose services in the owning controller and move shared data contracts to models."
+				"message": "adapters must not import repositories (src/lib/server/repositories/agent/session-items.ts). Depend on the repository interface and let the factory inject the implementation."
 			},
 			{
 				"file": "src/lib/stores/agent/app-context.svelte.ts",
