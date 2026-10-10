@@ -20,6 +20,7 @@ import { ConversationRecords } from '$lib/server/repositories/agent/postgres/con
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { InMemoryAgentRunner } from '$lib/testing/agent/fakes/in-memory-agent';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -76,6 +77,7 @@ const setup = async (suffix: string) => {
 			settlements: new RunSettlements(runs, events),
 			conversationMessages: new ConversationArchive(conversations),
 			conversationSessions: new ConversationArchive(conversations),
+			toolActivity: new ToolActivityProjection(),
 			runner,
 			eventBus: { notify: () => {} }
 		})
