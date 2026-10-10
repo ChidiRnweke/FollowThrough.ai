@@ -1,6 +1,6 @@
 # RCA: agent and observability errors, 2026-10-10
 
-Status: investigation recorded; plan tasks 1–4 resolved (see Resolution log).
+Status: investigation recorded; plan tasks 1–5 dispositioned (see Resolution log).
 
 This record covers **2026-10-08 06:43:09 UTC through 2026-10-10 06:43:09 UTC**.
 It preserves the evidence for the [remediation plan](../plans/agent-error-remediation-plan.md).
@@ -265,3 +265,22 @@ response body or a controlled request to confirm (plan task 6).
 Evidence: a test of every tool schema the agent sends found `sed: oneOf` before the change and none
 after. Tests through the tool's public invocation show a blank memory id treated as omitted and a
 broken memory rule returned as `VALIDATION`; both failed before the change.
+
+### Plan task 5 (E7–E8)
+
+No contract or recovery defect was found. The safeguards behave as ADR 0003 and ADR 0010 require.
+
+- A stale review fails and does not overwrite the newer note.
+- A fresh call is reviewed against the newer revision and, once approved, applies.
+- An unmatched anchor applies nothing and reports every failing edit, with the nearest text.
+- An edit whose old text is absent never asks for approval.
+
+Unresolved: whether the stale reviews in `2b166ab4…` and `a2c9b418…` came from a concurrent human
+edit, another tool write, or stale model context, and whether the unmatched old text in `6f49595f…`
+and `559b11c0…` existed in the revision the model read. Answering this needs the traces' preceding
+reads and revisions, which this code-side work did not query.
+
+Evidence: a runner test approves a review, changes the note, and resumes. The stale review fails,
+the model submits a fresh call, and the approved fresh review applies. With the revision check
+disabled, this test and the existing stale-review test both fail. Existing tests in `patches.spec.ts`
+and `agent-tool-factory.spec.ts` cover unmatched anchors and approval for absent text.

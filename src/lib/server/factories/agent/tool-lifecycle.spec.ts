@@ -150,6 +150,52 @@ describe('Reviewed tool recovery and terminal boundaries', () => {
 			)
 		}).toEqual({ body: 'Launch Friday.', failed: true });
 	});
+	/**
+	 * ADR 0003: a stale review fails rather than overwriting the newer note, and the agent must
+	 * read the note and submit a new call for review. That new call is reviewed against the
+	 * newer revision and, once approved, applies.
+	 */
+	it('applies a fresh review after a stale one fails', async () => {
+		const fixture = scenario(0, 'approval_required');
+		const edit = (oldText: string, newText: string) => ({
+			noteId: fixture.note.id,
+			edits: [{ oldText, newText }]
+		});
+		const model = new InMemoryToolCallingModel(
+			'edit_note',
+			JSON.stringify(edit('Monday', 'Tuesday')),
+			JSON.stringify(edit('Friday', 'Wednesday')),
+			'changed'
+		);
+		const approveAndRun = async (
+			registry: ReturnType<typeof fixture.createRegistry>,
+			previous: Awaited<ReturnType<typeof run>>,
+			pending: PendingAgentDecision
+		) => {
+			const next = fixture.createRegistry([registry.reviewDecision(pending)]);
+			const agent = new Agent({ name: 'Fresh review', model, tools: next.tools() });
+			const state = await RunState.fromString(agent, previous.state.toString());
+			for (const interruption of state.getInterruptions()) state.approve(interruption);
+			return { registry: next, result: await run(agent, state) };
+		};
+		const first = await run(
+			new Agent({ name: 'Fresh review', model, tools: fixture.registry.tools() })
+		);
+		fixture.content.notes = [
+			{ ...fixture.note, ...noteContentFromMarkdown('Launch Friday.'), currentRevision: 2 }
+		];
+		const stale = await approveAndRun(fixture.registry, first, {
+			callId: 'call-invalid',
+			toolName: 'edit_note',
+			arguments: edit('Monday', 'Tuesday')
+		});
+		await approveAndRun(stale.registry, stale.result, {
+			callId: 'call-corrected',
+			toolName: 'edit_note',
+			arguments: edit('Friday', 'Wednesday')
+		});
+		expect(fixture.content.notes[0].plainText).toBe('Launch Wednesday.');
+	});
 	it('emits the failed call and corrected success with their identities', async () => {
 		const fixture = scenario(0, 'auto_accept');
 		const events: AgentEvent[] = [];

@@ -93,7 +93,7 @@ journal failures remain outside ordinary tool recovery.
       range. The model fixture corrects only after receiving feedback; corrected calls succeed
       through the full stream path. An invalid mutation has no saved effect.
 
-- [ ] **5. Explain note conflicts and unmatched edits (E7–E8).**
+- [x] **5. Explain note conflicts and unmatched edits (E7–E8).**
       Correlate preceding reads, prepared base revisions, approval decisions, writes, and recovery
       calls in the RCA's traces. Inspect reviewed note preparation and apply paths. Determine
       whether stale data came from a concurrent edit, stale model context, or an incorrect
