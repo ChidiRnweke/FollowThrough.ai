@@ -47,12 +47,7 @@ import type {
 	ArchiveLinkIssue,
 	ParsedMarkdownNote
 } from '$lib/models/projects';
-import {
-	resolveArchiveLinks,
-	indexArchiveReferences,
-	uniqueTitleIn,
-	unmappedFrontmatterKeys
-} from '$lib/server/services/notes/import';
+import type { NoteArchiveImportPreparation } from '$lib/server/services/notes/import';
 import type {
 	ArchiveNoteInput,
 	ArchiveNoteOutput,
@@ -327,6 +322,7 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	readonly archiveImport: NoteArchiveImportPreparation;
 	readonly patchPreparation: NotePatchPreparation;
 	readonly revisionComparison: NoteRevisionComparison;
 	readonly todoPresentation: TodoPresentation;
@@ -417,11 +413,8 @@ export class Notes implements NotesController {
 		const failed: { path: string; message: string }[] = [];
 		const folders = new Map<string, NoteId>();
 		const blocked = new Set<string>();
-		const paths = new Set<string>();
-		for (const note of input.notes)
-			for (let depth = 1; depth <= note.folders.length; depth++)
-				paths.add(note.folders.slice(0, depth).join('/'));
-		for (const path of [...paths].sort((a, b) => a.split('/').length - b.split('/').length)) {
+		const plan = this.dependencies.archiveImport.prepare(input.notes);
+		for (const path of plan.folders) {
 			const parts = path.split('/');
 			const parentPath = parts.slice(0, -1).join('/');
 			if (blocked.has(parentPath)) {
@@ -447,7 +440,6 @@ export class Notes implements NotesController {
 			} else folders.set(path, result.value.id);
 		}
 
-		const takenByFolder = new Map<string, Set<string>>();
 		const pending: { note: ParsedMarkdownNote; created: Note }[] = [];
 		const references: ArchiveNoteReference[] = [];
 		for (const note of input.notes) {
@@ -461,12 +453,10 @@ export class Notes implements NotesController {
 				continue;
 			}
 			const parentId = folderPath ? importedFolderId(folders, folderPath) : input.parentId;
-			const taken = takenByFolder.get(folderPath) ?? new Set<string>();
-			takenByFolder.set(folderPath, taken);
 			const result = await importAttempt(() =>
 				this.create(actor, {
 					projectId: input.projectId,
-					title: uniqueTitleIn(taken, note.title),
+					title: plan.titles.get(note)!,
 					...(parentId ? { parentId } : {})
 				})
 			);
@@ -483,10 +473,13 @@ export class Notes implements NotesController {
 			}
 		}
 		const unresolvedLinks: ArchiveLinkIssue[] = [];
-		const referenceIndex = indexArchiveReferences(references);
+		const resolvedNotes = this.dependencies.archiveImport.resolve(
+			pending.map(({ note }) => note),
+			references
+		);
 		for (const { note, created } of pending) {
 			if (!note.markdown.trim()) continue;
-			const resolved = resolveArchiveLinks(note, referenceIndex);
+			const resolved = resolvedNotes.get(note)!;
 			unresolvedLinks.push(...resolved.issues);
 			const result = await importAttempt(() =>
 				this.save(actor, {
@@ -500,7 +493,7 @@ export class Notes implements NotesController {
 			createdFolderIds: [...folders.values()],
 			skipped: input.skipped,
 			failed,
-			unmappedFrontmatterKeys: unmappedFrontmatterKeys(input.notes),
+			unmappedFrontmatterKeys: plan.unmappedFrontmatterKeys,
 			unresolvedLinks
 		};
 	}

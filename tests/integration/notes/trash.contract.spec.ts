@@ -1,3 +1,4 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
@@ -42,6 +43,7 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
 			patchPreparation: new NotePatchPreparationService(),
 			revisionComparison: new NoteRevisionComparisonService(),
 			todoPresentation: new TodoPresentationService(),
@@ -102,6 +104,7 @@ it('archives the authoritative note after a concurrent note edit commits', async
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
 			patchPreparation: new NotePatchPreparationService(),
 			revisionComparison: new NoteRevisionComparisonService(),
 			todoPresentation: new TodoPresentationService(),

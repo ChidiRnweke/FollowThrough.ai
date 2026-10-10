@@ -1,4 +1,8 @@
 import {
+	NoteArchiveImportService,
+	type NoteArchiveImportPreparation
+} from '$lib/server/services/notes/import';
+import {
 	NotePatchPreparationService,
 	type NotePatchPreparation
 } from '$lib/server/services/notes/patches';
@@ -73,6 +77,7 @@ export interface NotesCapabilityInput {
 }
 
 export interface NotesCapability {
+	readonly archiveImport: NoteArchiveImportPreparation;
 	readonly patchPreparation: NotePatchPreparation;
 	readonly revisionComparison: NoteRevisionComparison;
 	readonly references: NoteReferences;
@@ -99,6 +104,7 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 	const lifecycleRules = new SharedNoteLifecycleService();
 	const services = createNoteServices(repository, anchors, input.projects);
 	return {
+		archiveImport: new NoteArchiveImportService(),
 		patchPreparation: new NotePatchPreparationService(),
 		revisionComparison: new NoteRevisionComparisonService(),
 		presentation: new NotePresentationService(),

@@ -1011,3 +1011,20 @@ Every service module below has a planned disposition. This is routing, not compl
   Type checking and lint pass; 37 focused files / 362 tests and 52 isolated database contract files /
   244 tests pass. Architecture remains at 52 prohibited imports and seven missing interfaces, with
   topology/source/test-quality passing. Import and document conversion rules remain pending.
+
+## Archive import preparation and browser coordination — 2026-10-10
+
+- NoteArchiveImportService prepares folder order, per-folder unique titles and unmapped metadata,
+  then resolves all links against completed identity outcomes. Its reference index, traversal and
+  naming helpers are private. Notes still creates identities before bodies and retains partial
+  successes, failed descendants, blank notes after failed body saves and exact unresolved links.
+- ArchiveImports coordinates multipart upload, response reading and workspace synchronization.
+  The component observes progress and the complete report; the adapter owns FormData and fetch.
+  Reset/destination changes and account teardown prevent late results and follow-up synchronization.
+  Accepted uploads still synchronize when report parsing fails; rejected uploads do not.
+- Six new controller scenarios use the real workspace projection and explicit upload outcomes.
+  Focused import tests pass: four files / 38 tests. Wider note/agent tests pass: 38 files / 352 tests.
+  Note browser tests pass: 13 files / 101 tests. Isolated note/project/skill contracts pass: 35 files /
+  145 tests. Type check and lint pass before the final destination-lifetime effect adjustment;
+  subsequent artifact changes are being checked together. Architecture remains at 52 prohibited
+  imports and seven missing interfaces; topology/source/test-quality pass. Final verification remains.

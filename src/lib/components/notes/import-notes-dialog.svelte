@@ -1,17 +1,12 @@
 <script lang="ts">
-	import type {
-		ImportMarkdownArchiveOutput,
-		ProjectId,
-		ArchiveLinkIssue
-	} from '$lib/models/projects';
-	import { readArchiveImportResponse } from '$lib/client/notes/import-response';
+	import type { ProjectId, ArchiveLinkIssue } from '$lib/models/projects';
+	import { createArchiveImports } from '$lib/factories/notes/archive-import';
+	const imports = createArchiveImports();
 	import type { NoteId } from '$lib/models/notes';
-	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import FileDropzone from '../attachments/file-dropzone.svelte';
 
-	/** Mirrors DEFAULT_ARCHIVE_LIMITS server-side, so the reject happens before the upload. */
 	const linkIssueMessages: Record<ArchiveLinkIssue['reason'], string> = {
 		ambiguous: 'More than one note matches. Choose the intended note.',
 		missing: 'No matching note exists in this archive.',
@@ -34,36 +29,24 @@
 	} = $props();
 
 	let archive = $state<File | undefined>(undefined);
-	let busy = $state(false);
-	let error = $state('');
-	let report = $state<ImportMarkdownArchiveOutput | undefined>(undefined);
+	const busy = $derived(imports.busy);
+	const error = $derived(imports.error);
+	const report = $derived(imports.report);
 
-	async function run(): Promise<void> {
-		if (!archive) return;
-		busy = true;
-		error = '';
-		try {
-			const body = new FormData();
-			body.set('archive', archive);
-			body.set('projectId', projectId);
-			if (parentId) body.set('parentId', parentId);
-			const response = await fetch('/api/imports', { method: 'POST', body });
-			const result = await readArchiveImportResponse(response);
-			if (response.ok) await workspaceSession.synchronize();
-			if (result.kind === 'failure') error = result.message;
-			else report = result.report;
-			// audit-allow: silent-catch — an uncertain import outcome is rendered with advice to inspect the project before retrying.
-		} catch {
-			error = 'The import outcome could not be confirmed. Check the project before trying again.';
-		} finally {
-			busy = false;
-		}
+	$effect(() => {
+		// An in-flight import belongs to this dialog destination.
+		const scope = { open, projectId, parentId };
+		if (!scope.open) return;
+		return () => imports.reset();
+	});
+
+	function run(): void {
+		if (archive) void imports.import(archive, projectId, parentId);
 	}
 
 	function reset(): void {
 		archive = undefined;
-		report = undefined;
-		error = '';
+		imports.reset();
 	}
 </script>
 

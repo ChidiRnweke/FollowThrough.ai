@@ -1,3 +1,4 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
@@ -48,6 +49,7 @@ export const importedNotesFixture = () => {
 	const consequences = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
 			patchPreparation: new NotePatchPreparationService(),
 			revisionComparison: new NoteRevisionComparisonService(),
 			todoPresentation: new TodoPresentationService(),

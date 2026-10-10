@@ -1,3 +1,4 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
@@ -28,6 +29,7 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 	});
 	const notes = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
 			patchPreparation: new NotePatchPreparationService(),
 			revisionComparison: new NoteRevisionComparisonService(),
 			todoPresentation: new TodoPresentationService(),
