@@ -318,3 +318,14 @@ export interface DiagramRenderResources {
 	readonly mermaidScript: string;
 	readonly fontData: string;
 }
+
+export interface ArtifactFile {
+	readonly name: string;
+	readonly mediaType: string;
+}
+
+export interface BundleFile {
+	/** Folder-relative, extension included. Sanitized here, so callers may pass note titles. */
+	readonly path: string;
+	readonly bytes: Uint8Array;
+}

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { Document, Packer, Paragraph } from 'docx';
 import { Deliverables, type DeliverablesDependencies } from './controller';
-import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
-import { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
+import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
+import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
 import {
 	InMemoryAttachmentStorage,
 	InMemoryTemplateRepository
@@ -17,9 +17,9 @@ const setup = async () => {
 	const repository = new InMemoryTemplateRepository();
 	const controller = new Deliverables(
 		capabilityDependencies<DeliverablesDependencies>({
-			templates: new DocumentTemplates(repository, () => testNow),
+			...createTemplateServices(repository, () => testNow),
 			templateStorage: storage,
-			templateStyles: verifiedTemplateStyles,
+			templateStyles: new DocxTemplateStyleReader(),
 			// Object storage does not participate in the database transaction.
 			transactionRunner: new InMemoryTransactionRunner([repository])
 		})

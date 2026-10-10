@@ -1,3 +1,4 @@
+import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
 import { describe, expect, it } from 'vitest';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import {
@@ -7,8 +8,7 @@ import {
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';
-import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
-import { InMemoryArtifactRepository } from '$lib/testing/attachments/fakes/in-memory-deliverables';
+import { ArtifactSettingsService } from '$lib/server/services/deliverables/artifacts';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { actor, context, seedNote } from '../database-harness';
 
@@ -17,12 +17,13 @@ const setup = async (suffix: string) => {
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const sync = createSyncCapability({ db: database });
 	const settings = new ExportSettingsRecords(database);
-	const artifacts = new ArtifactLibrary(new InMemoryArtifactRepository(), settings);
+	const artifacts = new ArtifactSettingsService(settings);
 	const controller = new Deliverables(
 		capabilityDependencies<DeliverablesDependencies>({
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			transactionRunner,
+			exportSettingsRules: new ExportSettingsRuleService(),
 			exportSettingsWriter: artifacts
 		})
 	);

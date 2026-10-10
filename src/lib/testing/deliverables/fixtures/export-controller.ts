@@ -1,10 +1,12 @@
+import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
+import { ArtifactFileService } from '$lib/services/deliverables/artifact-files';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import {
 	Deliverables,
 	type DeliverablesDependencies
 } from '$lib/server/controllers/deliverables/controller';
-import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
-import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
+import { createArtifactServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
+import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
 import {
 	prepareExport,
 	exportImageSources,
@@ -12,7 +14,7 @@ import {
 	exportWidgetReferences
 } from '$lib/services/deliverables/export-preparation';
 import { fetchRemoteDataUrl } from '$lib/server/repositories/deliverables/export-images';
-import { packZip } from '$lib/server/services/deliverables/bundle';
+import { DocumentBundleService } from '$lib/server/services/deliverables/bundle';
 import {
 	InMemoryArtifactRepository,
 	InMemoryAttachmentStorage,
@@ -35,19 +37,21 @@ export const exportControllerFixture = (overrides: Partial<DeliverablesDependenc
 	const templates = new InMemoryTemplateRepository();
 	const exportSettings = new InMemoryExportSettingsRepository();
 	const provenance = new InMemoryProvenanceRecorder();
-	const library = new ArtifactLibrary(artifacts, exportSettings);
+	const library = createArtifactServices(artifacts, exportSettings);
 	const widgets = new InMemoryWidgetRepository();
 	const todos = new InMemoryTodoRepository();
 	const service = new Deliverables(
 		capabilityDependencies<DeliverablesDependencies>({
-			templates: new DocumentTemplates(templates),
+			exportSettingsRules: new ExportSettingsRuleService(),
+			artifactFiles: new ArtifactFileService(),
+			...createTemplateServices(templates),
 			artifactStorage: storage,
-			artifactWriter: library,
-			artifactReader: library,
-			artifactLister: library,
-			artifactDeleter: library,
-			exportSettingsReader: library,
-			exportSettingsWriter: library,
+			artifactWriter: library.artifactWriter,
+			artifactReader: library.artifactReader,
+			artifactLister: library.artifactLister,
+			artifactDeleter: library.artifactDeleter,
+			exportSettingsReader: library.exportSettingsReader,
+			exportSettingsWriter: library.exportSettingsWriter,
 			noteReader: notes,
 			provenanceRecorder: provenance,
 			prepareExport,
@@ -64,7 +68,7 @@ export const exportControllerFixture = (overrides: Partial<DeliverablesDependenc
 			fetchImage: fetchRemoteDataUrl,
 			docxGenerator: async () => Buffer.from('docx'),
 			pdfGenerator: async () => Buffer.from('pdf'),
-			zipPacker: packZip,
+			zipPacker: new DocumentBundleService(),
 			transactionRunner: new InMemoryTransactionRunner([artifacts, provenance]),
 			...overrides
 		})

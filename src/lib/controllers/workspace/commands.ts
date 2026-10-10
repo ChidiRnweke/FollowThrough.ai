@@ -1,3 +1,4 @@
+import type { ExportSettingsRules } from '$lib/services/deliverables/settings';
 import type { NoteCreationRules, NoteTrashRules } from '$lib/services/notes/lifecycle';
 import type { NoteEditingRules } from '$lib/services/notes/editing';
 import type { IWidgetLifecycleService } from '$lib/services/widgets/trash';
@@ -244,6 +245,7 @@ export interface WorkspaceCommandController {
 /** Resolve required inventory and prepare the complete optimistic command from observed facts. */
 export class WorkspaceCommands implements WorkspaceCommandController {
 	constructor(
+		private readonly exportSettingsRules: ExportSettingsRules,
 		private readonly diagramEditing: DiagramEditingRules,
 		private readonly diagramLifecycle: DiagramLifecycleRules,
 		private readonly skillMetadataEditing: SkillMetadataEditing,
@@ -471,7 +473,11 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 				return content(
 					{
 						type: 'export_settings',
-						value: { ...value('export_settings'), settings: command.settings, updatedAt: now }
+						value: {
+							...value('export_settings'),
+							settings: this.exportSettingsRules.validate(command.settings),
+							updatedAt: now
+						}
 					},
 					[projectKey(command.projectId)]
 				);

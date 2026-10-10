@@ -1,11 +1,14 @@
 import AdmZip from 'adm-zip';
 import { createHash } from 'node:crypto';
 import { ValidationError } from '$lib/errors';
-import type { TemplateUpload } from '$lib/models/projects';
+import type {
+	TemplateStyleReader,
+	TemplateUploadProof
+} from '$lib/server/controllers/deliverables/controller';
 import type { ExtractedTemplateStyles } from '$lib/models/deliverables';
 
-export async function verifiedTemplateStyles(
-	upload: TemplateUpload,
+async function verifiedTemplateStyles(
+	upload: TemplateUploadProof,
 	bytes: Uint8Array
 ): Promise<ExtractedTemplateStyles> {
 	if (bytes.byteLength !== upload.byteSize)
@@ -134,7 +137,7 @@ function extractPageMargins(documentXml: string): ExtractedTemplateStyles['pageM
 	};
 }
 
-export async function extractTemplateStyles(docxBuffer: Buffer): Promise<ExtractedTemplateStyles> {
+async function extractTemplateStyles(docxBuffer: Buffer): Promise<ExtractedTemplateStyles> {
 	const zip = new AdmZip(docxBuffer);
 
 	const stylesEntry = zip.getEntry('word/styles.xml');
@@ -188,4 +191,11 @@ export async function extractTemplateStyles(docxBuffer: Buffer): Promise<Extract
 		...(footerContent ? { footerContent } : {}),
 		themeColors
 	};
+}
+
+/** Verify the uploaded package and decode DOCX metadata at the file boundary. */
+export class DocxTemplateStyleReader implements TemplateStyleReader {
+	read(upload: TemplateUploadProof, bytes: Uint8Array): Promise<ExtractedTemplateStyles> {
+		return verifiedTemplateStyles(upload, bytes);
+	}
 }

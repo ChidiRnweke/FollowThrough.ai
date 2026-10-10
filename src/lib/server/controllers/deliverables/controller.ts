@@ -1,3 +1,4 @@
+import type { DocumentBundlePacker } from '$lib/server/services/deliverables/bundle';
 import { WidgetExportService } from '$lib/services/widgets/export-blocks';
 const widgetExporting = new WidgetExportService();
 import { WidgetSourceService } from '$lib/services/widgets/sources';
@@ -16,11 +17,8 @@ import type { AttachmentId } from '$lib/models/attachments';
 import type { Note, NoteId, NoteSummary } from '$lib/models/notes';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { Provenance, ProvenanceRequest } from '$lib/models/provenance';
-import {
-	mediaTypeFor,
-	safeFilename,
-	validateSettings
-} from '$lib/server/services/deliverables/artifacts';
+import type { ExportSettingsRules } from '$lib/services/deliverables/settings';
+import type { ArtifactFiles } from '$lib/services/deliverables/artifact-files';
 import type {
 	prepareExport,
 	exportImageSources,
@@ -60,9 +58,21 @@ import type {
 	ArtifactReader,
 	ExportSettingsReader,
 	ExportSettingsWriter
-} from '$lib/server/services/deliverables/artifact-contracts';
-import type { DocumentTemplates } from '$lib/server/services/deliverables/templates';
-import type { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
+} from '$lib/server/services/deliverables/artifacts';
+import type {
+	TemplateUploadLifecycle,
+	TemplateReader,
+	TemplateWriter,
+	TemplateLifecycle
+} from '$lib/server/services/deliverables/templates';
+import type { ExtractedTemplateStyles } from '$lib/models/deliverables';
+export interface TemplateUploadProof {
+	readonly byteSize: number;
+	readonly checksumSha256: string;
+}
+export interface TemplateStyleReader {
+	read(upload: TemplateUploadProof, bytes: Uint8Array): Promise<ExtractedTemplateStyles>;
+}
 export interface ExportObjectStorage {
 	createUploadUrl(input: {
 		objectKey: string;
@@ -173,11 +183,16 @@ export interface DeliverablesController {
 
 /** Everything the {@link DeliverablesController} needs, injected so it can be built and tested without real stores. */
 export interface DeliverablesDependencies {
+	readonly exportSettingsRules: ExportSettingsRules;
+	readonly artifactFiles: ArtifactFiles;
 	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
-	templates: DocumentTemplates;
+	templateUploads: TemplateUploadLifecycle;
+	templateReader: TemplateReader;
+	templateWriter: TemplateWriter;
+	templateLifecycle: TemplateLifecycle;
 	templateStorage: ExportObjectStorage;
-	templateStyles: typeof verifiedTemplateStyles;
+	templateStyles: TemplateStyleReader;
 	noteReader: { get(actor: ActorContext, id: NoteId): Promise<Note> };
 	provenanceRecorder: {
 		record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
@@ -203,7 +218,7 @@ export interface DeliverablesDependencies {
 	readonly mermaidThemes: MermaidThemeRules;
 	docxGenerator: (input: PreparedExport) => Promise<Buffer>;
 	pdfGenerator: (input: PreparedExport) => Promise<Buffer>;
-	zipPacker: (files: readonly { path: string; bytes: Uint8Array }[]) => Buffer;
+	zipPacker: DocumentBundlePacker;
 	exportSettingsReader: ExportSettingsReader;
 	exportSettingsWriter: ExportSettingsWriter;
 	artifactLister: ArtifactLister;
@@ -255,7 +270,7 @@ export class Deliverables implements DeliverablesController {
 			checksumSha256: string;
 		}
 	) {
-		const upload = await this.dependencies.templates.reserveUpload(actor, input);
+		const upload = await this.dependencies.templateUploads.reserveUpload(actor, input);
 		const uploadUrl = await this.dependencies.templateStorage.createUploadUrl({
 			objectKey: upload.objectKey,
 			mediaType: upload.mediaType,
@@ -275,49 +290,51 @@ export class Deliverables implements DeliverablesController {
 
 	async completeTemplateUpload(actor: ActorContext, templateId: TemplateId): Promise<void> {
 		const {
-			templates,
+			templateUploads,
+			templateReader,
+			templateWriter,
 			templateStorage: storage,
 			templateStyles,
 			transactionRunner
 		} = this.dependencies;
 		const stagingKey = `staging/${actor.userId}/templates/${templateId}`;
-		if (await templates.find(actor, templateId)) {
+		if (await templateReader.find(actor, templateId)) {
 			await storage.remove(stagingKey);
 			return;
 		}
 		let upload: TemplateUpload;
 		let bytes: Uint8Array;
 		try {
-			upload = await templates.upload(actor, templateId);
+			upload = await templateUploads.upload(actor, templateId);
 			bytes = await storage.read(upload.objectKey, upload.byteSize);
 		} catch (error) {
 			// Another completion may remove the reservation or staging after our initial read.
-			if (await templates.find(actor, templateId)) {
+			if (await templateReader.find(actor, templateId)) {
 				await storage.remove(stagingKey);
 				return;
 			}
 			throw error;
 		}
-		const styles = await templateStyles(upload, bytes);
+		const styles = await templateStyles.read(upload, bytes);
 		const destination = `projects/${upload.projectId}/templates/${templateId}`;
 		// Write the exact bytes verified above. A signed staging URL may still accept writes.
 		await storage.put(destination, bytes, upload.mediaType);
 		await transactionRunner.run(async () => {
-			const locked = await templates.lockUpload(actor, templateId);
-			if (await templates.find(actor, templateId)) return;
+			const locked = await templateUploads.lockUpload(actor, templateId);
+			if (await templateReader.find(actor, templateId)) return;
 			if (!locked) throw new NotFoundError('Template upload no longer exists');
-			await templates.store(actor, locked, destination, styles);
-			await templates.finishUpload(actor, templateId);
+			await templateWriter.store(actor, locked, destination, styles);
+			await templateUploads.finishUpload(actor, templateId);
 		});
 		await storage.remove(stagingKey);
 	}
 
 	async listTemplates(actor: ActorContext, projectId: ProjectId) {
-		return this.dependencies.templates.list(actor, projectId);
+		return this.dependencies.templateReader.list(actor, projectId);
 	}
 
 	async deleteTemplate(actor: ActorContext, templateId: TemplateId): Promise<void> {
-		await this.dependencies.templates.delete(actor, templateId);
+		await this.dependencies.templateLifecycle.delete(actor, templateId);
 	}
 
 	async generateDocument(
@@ -329,12 +346,16 @@ export class Deliverables implements DeliverablesController {
 		const id = randomUUID() as ArtifactId;
 		const objectKey = `artifacts/${actor.userId}/${id}.${input.format}`;
 		const storage = this.dependencies.artifactStorage;
-		await storage.put(objectKey, buffer, mediaTypeFor(input.format));
+		await storage.put(
+			objectKey,
+			buffer,
+			this.dependencies.artifactFiles.describe(input.title, input.format).mediaType
+		);
 		try {
 			const downloadUrl = await storage.createDownloadUrl(
 				objectKey,
 				3600,
-				safeFilename(input.title, input.format)
+				this.dependencies.artifactFiles.describe(input.title, input.format).name
 			);
 			const artifact = await this.dependencies.transactionRunner.run(async () => {
 				const provenance = await this.dependencies.provenanceRecorder.record(actor, {
@@ -384,10 +405,10 @@ export class Deliverables implements DeliverablesController {
 		);
 		const notes = sourceNotes.map((note) => ({ title: note.title, document: note.document }));
 		const settings = input.settings
-			? validateSettings(input.settings)
+			? this.dependencies.exportSettingsRules.validate(input.settings)
 			: await this.getExportSettings(actor, input.projectId);
 		const styles = input.templateId
-			? await this.dependencies.templates.styles(actor, input.templateId, input.projectId)
+			? await this.dependencies.templateReader.styles(actor, input.templateId, input.projectId)
 			: undefined;
 		const images = new Map<string, string>();
 		const pendingDiagrams = new Map<string, ExportDiagramSource>();
@@ -505,14 +526,14 @@ export class Deliverables implements DeliverablesController {
 			const bytes = await this.renderDocument(input.format, { ...prepared, title: note.title });
 			files.push({ path: `${entry.path}.${input.format}`, bytes });
 		}
-		const buffer = this.dependencies.zipPacker(files);
+		const buffer = this.dependencies.zipPacker.pack(files);
 		const objectKey = `bundles/${actor.userId}/${randomUUID()}.zip`;
 		await this.dependencies.artifactStorage.put(objectKey, buffer, 'application/zip');
 		try {
 			const downloadUrl = await this.dependencies.artifactStorage.createDownloadUrl(
 				objectKey,
 				3600,
-				safeFilename(input.title, 'zip')
+				this.dependencies.artifactFiles.describe(input.title, 'zip').name
 			);
 			return { downloadUrl, fileCount: files.length, byteSize: buffer.length };
 		} catch (error) {
@@ -546,7 +567,11 @@ export class Deliverables implements DeliverablesController {
 		projectId: ProjectId,
 		settings: ExportSettings
 	): Promise<ExportSettings> {
-		return this.dependencies.exportSettingsWriter.updateSettings(actor, projectId, settings);
+		return this.dependencies.exportSettingsWriter.updateSettings(
+			actor,
+			projectId,
+			this.dependencies.exportSettingsRules.validate(settings)
+		);
 	}
 
 	async listArtifacts(
@@ -571,7 +596,7 @@ export class Deliverables implements DeliverablesController {
 			url: await this.dependencies.artifactStorage.createDownloadUrl(
 				artifact.objectKey,
 				3600,
-				safeFilename(artifact.title, artifact.format)
+				this.dependencies.artifactFiles.describe(artifact.title, artifact.format).name
 			)
 		};
 	}

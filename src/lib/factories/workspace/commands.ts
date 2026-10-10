@@ -1,3 +1,4 @@
+import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
 import { DiagramEditingService } from '$lib/services/diagrams/editing';
 import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
@@ -14,6 +15,7 @@ import { WidgetLifecycleService } from '$lib/services/widgets/trash';
 import { createWidgetEditingController } from '$lib/factories/widgets/editing';
 export const createWorkspaceCommands = (): WorkspaceCommandController =>
 	new WorkspaceCommands(
+		new ExportSettingsRuleService(),
 		new DiagramEditingService(),
 		new DiagramLifecycleService(),
 		new SkillMetadataEditingService(),

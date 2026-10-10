@@ -1,12 +1,27 @@
-import { MermaidThemeService } from '$lib/services/diagrams/mermaid-theme';
+import type { TemplateStyleReader } from '$lib/server/controllers/deliverables/controller';
+import type { DiagramExportRenderer } from '$lib/server/controllers/deliverables/diagram-rendering';
+import {
+	ExportSettingsRuleService,
+	type ExportSettingsRules
+} from '$lib/services/deliverables/settings';
+import { ArtifactFileService, type ArtifactFiles } from '$lib/services/deliverables/artifact-files';
+import { MermaidThemeService, type MermaidThemeRules } from '$lib/services/diagrams/mermaid-theme';
 import type { Database } from '$lib/server/db';
 import { ArtifactRecords } from '$lib/server/repositories/deliverables/postgres/artifacts';
 import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';
 import { TemplateRecords } from '$lib/server/repositories/deliverables/postgres/templates';
 import { fetchRemoteDataUrl } from '$lib/server/repositories/deliverables/export-images';
 import type { IAttachmentStorage } from '$lib/server/repositories/attachments/object-storage';
-import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
-import { packZip } from '$lib/server/services/deliverables/bundle';
+import {
+	createArtifactServices,
+	createTemplateServices,
+	type ArtifactServices,
+	type TemplateServices
+} from './deliverable-storage-factory';
+import {
+	DocumentBundleService,
+	type DocumentBundlePacker
+} from '$lib/server/services/deliverables/bundle';
 import { generateDocx } from '$lib/server/services/deliverables/docx';
 import { generatePdf } from '$lib/server/services/deliverables/pdf';
 import {
@@ -16,8 +31,7 @@ import {
 	exportWidgetReferences
 } from '$lib/services/deliverables/export-preparation';
 import { createDiagramExportRenderer } from '$lib/server/factories/capabilities/diagram-rendering-factory';
-import { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
-import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
+import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 
 export interface DeliverablesCapabilityInput {
@@ -25,11 +39,35 @@ export interface DeliverablesCapabilityInput {
 	readonly storage: IAttachmentStorage;
 }
 
-export const createDeliverablesCapability = (input: DeliverablesCapabilityInput) => ({
-	templates: new DocumentTemplates(new TemplateRecords(input.db)),
+export interface DeliverablesCapability {
+	readonly exportSettingsRules: ExportSettingsRules;
+	readonly artifactFiles: ArtifactFiles;
+	readonly templates: TemplateServices;
+	readonly templateStorage: IAttachmentStorage;
+	readonly templateStyles: TemplateStyleReader;
+	readonly artifacts: ArtifactServices;
+	readonly artifactStorage: IAttachmentStorage;
+	readonly fetchImage: typeof fetchRemoteDataUrl;
+	readonly prepareExport: typeof prepareExport;
+	readonly exportImageSources: typeof exportImageSources;
+	readonly exportDiagramReferences: typeof exportDiagramReferences;
+	readonly exportWidgetReferences: typeof exportWidgetReferences;
+	readonly diagramRenderer: DiagramExportRenderer;
+	readonly mermaidThemes: MermaidThemeRules;
+	readonly docxGenerator: typeof generateDocx;
+	readonly pdfGenerator: typeof generatePdf;
+	readonly zipPacker: DocumentBundlePacker;
+	readonly markdownToContent: typeof noteContentFromMarkdown;
+}
+export const createDeliverablesCapability = (
+	input: DeliverablesCapabilityInput
+): DeliverablesCapability => ({
+	exportSettingsRules: new ExportSettingsRuleService(),
+	artifactFiles: new ArtifactFileService(),
+	templates: createTemplateServices(new TemplateRecords(input.db)),
 	templateStorage: input.storage,
-	templateStyles: verifiedTemplateStyles,
-	artifacts: new ArtifactLibrary(
+	templateStyles: new DocxTemplateStyleReader(),
+	artifacts: createArtifactServices(
 		new ArtifactRecords(input.db),
 		new ExportSettingsRecords(input.db)
 	),
@@ -43,6 +81,6 @@ export const createDeliverablesCapability = (input: DeliverablesCapabilityInput)
 	mermaidThemes: new MermaidThemeService(),
 	docxGenerator: generateDocx,
 	pdfGenerator: generatePdf,
-	zipPacker: packZip,
+	zipPacker: new DocumentBundleService(),
 	markdownToContent: noteContentFromMarkdown
 });

@@ -941,3 +941,20 @@ Every service module below has a planned disposition. This is routing, not compl
   one existing skip. Type check and lint pass. Architecture remains incomplete at 55 prohibited
   imports and nine missing interfaces; topology/source/test-quality pass. Final verification and
   the remaining artifact/template/export capabilities are still pending.
+
+## Artifact and template capabilities — 2026-10-10
+
+- Artifact storage now exposes writing, reading, lifecycle and project-settings capabilities.
+  Templates expose upload reservations, reading, writing and deletion interfaces. Factories return
+  interface-typed groups; controller transactions retain upload locking, completion races and cleanup.
+- Shared export-settings validation serves optimistic browser preparation and server writes.
+  ArtifactFileService prepares filenames and MIME types. Existing bounds, names and defaults remain.
+  The server settings persistence capability accepts the controller's validated settings.
+- DOCX package integrity and style parsing are private to the file-boundary reader. The controller
+  invokes that reader before permanent upload and transactional completion. DocumentBundleService
+  packs sanitized, deduplicated paths; all intermediate naming helpers remain private.
+- Full unit verification passes: 546 files / 4,327 tests / one existing skip. Type check and lint
+  pass. Focused export/workspace tests pass: 50 files / 269 tests. Isolated deliverable/sync
+  contracts pass: 20 files / 123 tests. Architecture remains incomplete at 55 prohibited imports
+  and seven missing interfaces; topology/source/test-quality pass. Document rendering, shared
+  export preparation and complete browser export workflows still need migration.
