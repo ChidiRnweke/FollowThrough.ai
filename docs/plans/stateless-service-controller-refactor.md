@@ -680,3 +680,21 @@ Every service module below has a planned disposition. This is routing, not compl
 - Inventory: 65 shared modules / 160 value exports (21 classes), 96 server modules / 166 value
   exports (91 classes), 11,371 rows and 12,645 resolved imports. The note run-stream store, its
   registry and component result handling remain pending. No phase is complete.
+
+## Note action replay and editor lifetime — 2026-10-10
+
+- NoteActionRuns owns stream delivery, synchronization, persisted cursors, cancellation and replay.
+  NoteActionRunStore owns editor entries and continuation handles only. The global registry is
+  removed; the tracking controller opens editor-scoped instances through a construction factory.
+  Workbench routing already prevents the same note occupying both panes.
+- Account replacement and editor teardown prevent late delivery or cursor acknowledgement.
+  Closing releases handlers and subscriptions while leaving recovery records in session storage.
+  A terminal event delivered during stream opening closes its new stream. Handler failures retain
+  the original cursor so the subscription can replay them.
+- The event boundary validates each action's result into a discriminated type. Components no longer
+  cast JSON payloads into promise, reference or diagram results. The wire and storage formats remain
+  unchanged. Component application sequencing still needs the broader note-editor migration.
+- Focused node/browser tests pass: 12 files / 85 tests, including existing subscription/recovery
+  cases, late synchronization, pending handler teardown and invalid payloads. Type checking passes
+  with zero errors/warnings and lint passes. Architecture remains incomplete at 84 prohibited imports
+  and 27 missing interfaces; topology/source/test-quality audits pass. No phase is complete.
