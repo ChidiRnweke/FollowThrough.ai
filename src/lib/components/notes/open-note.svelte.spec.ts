@@ -88,7 +88,8 @@ describe('opening a stored note', () => {
 		expect(screen.container.querySelector('[contenteditable="true"]')?.textContent).not.toBe('');
 
 		expect(
-			proseMirrorDocumentSchema.safeParse(screen.component.getDocument()).error?.issues[0]
+			proseMirrorDocumentSchema.safeParse(screen.component.operations!.getDocument()).error
+				?.issues[0]
 		).toBeUndefined();
 
 		const textIn = (node: ProseMirrorNode): string[] => {

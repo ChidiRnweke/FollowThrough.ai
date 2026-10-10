@@ -6,17 +6,11 @@
 	import { mount, onMount, unmount, untrack } from 'svelte';
 	import { getTextBetween, getTextSerializersFromSchema, isTextSelection } from '@tiptap/core';
 	import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
-	import {
-		Plugin,
-		PluginKey,
-		TextSelection as PmTextSelection,
-		type EditorState
-	} from '@tiptap/pm/state';
+	import { Plugin, PluginKey } from '@tiptap/pm/state';
 	import { Decoration, DecorationSet } from '@tiptap/pm/view';
 	import type { Diagram, DiagramId } from '$lib/models/diagrams';
-	import { inlineSuggestionSchema, type AgentRunId } from '$lib/models/agent';
+	import { type AgentRunId } from '$lib/models/agent';
 	import {
-		proseMirrorDocumentSchema,
 		type NoteId,
 		type NoteLinkTarget,
 		type OutlineHeading,
@@ -26,19 +20,16 @@
 	} from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import { ProjectDiagramPicker, MermaidNodeView } from '$lib/components/diagrams';
-	import { revealHeading } from '$lib/components/edra/commands/HeadingLinkSuggestion.js';
 	import type { ReferenceView } from '$lib/models/references';
 	import type { SkillSummary } from '$lib/models/skills';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
-	import { completePendingConversion } from '$lib/components/edra/commands/diagram-references.js';
 	import { rankNoteLinkTargets } from '$lib/components/edra/commands/NoteLinkSuggestion.js';
-	import type { InlineSuggestionRequestInput } from '$lib/components/edra/commands/InlineSuggestion.js';
+	import { noteWriting } from '$lib/factories/notes/writing';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
 	import { WidgetInserter, WidgetNode } from '$lib/components/edra/commands/BuiltinExtensions.js';
 	import { WidgetNodeView, WidgetPicker, type WidgetPick } from '$lib/components/widgets';
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
-	import type { Editor } from '$lib/components/edra/commands/CoreEditor.js';
 	import type { Editor as TiptapEditor } from '@tiptap/core';
 	import type { PerNoteEditorSlot } from './editor-context';
 	import Tiptap from '$lib/components/edra/Tiptap.svelte';
@@ -78,26 +69,21 @@
 		type AnchoredReferenceLink,
 		type ResolvedReferenceLinkGroup
 	} from './reference-link-plugin';
-	import { createSelectionActionPlugin, selectionActionKey } from './selection-action-plugin';
+	import {
+		createSelectionActionPlugin,
+		selectionActionKey
+	} from '$lib/client/notes/selection-action-plugin';
 	import { createSearchRevealPlugin, searchRevealKey } from './search-reveal-plugin';
 	import type { SearchRevealRange } from './search-reveal-plugin';
 	import {
 		createPendingInsertionsPlugin,
-		getPendingInsertion,
-		holdPendingInsertion,
-		pendingInsertionsKey,
-		releasePendingInsertion
-	} from './pending-insertions-plugin';
+		pendingInsertionsKey
+	} from '$lib/client/notes/pending-insertions-plugin';
 	import TodoNodeView from '../todos/todo-node.svelte';
 	import { toast } from 'svelte-sonner';
-	import {
-		selectRange,
-		clipboardSource,
-		selectionMarkdown,
-		selectionPlainText,
-		type SelectedRange
-	} from '$lib/components/edra/commands/clipboard-payload';
-	import { noteClipboard } from '$lib/stores/notes/clipboard';
+	import { createNoteEditorOperations } from '$lib/factories/notes/editor-operations';
+	import type { NoteEditorOperations } from '$lib/controllers/notes/editor-operations';
+	import { noteClipboard } from '$lib/factories/notes/clipboard';
 	import NoteReadingStats from './note-reading-stats.svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import ActionProgress from '$lib/components/shared/action-progress.svelte';
@@ -155,6 +141,7 @@
 	}
 
 	let {
+		onready,
 		noteId,
 		projectId,
 		revision,
@@ -181,6 +168,7 @@
 		onoutline,
 		onactiveheading
 	}: {
+		onready?: (operations: NoteEditorOperations | undefined) => void;
 		noteId: NoteId;
 		/** Scopes the project-diagram picker: a note only renders its own project's diagrams. */
 		projectId: ProjectId;
@@ -224,7 +212,6 @@
 		onactiveheading?: (id: string | undefined) => void;
 	} = $props();
 
-	let initialized = false;
 	let hydrated = $state(false);
 	/** Guards the shimmer teardown: only the latest replacement removes its decoration. */
 	let shimmerGeneration = 0;
@@ -256,35 +243,6 @@
 			});
 		};
 		wait(frames);
-	}
-	/**
-	 * Fetches proactive ghost text. Failures — including the abort the extension
-	 * issues on the next keystroke — resolve to no suggestion rather than
-	 * surfacing: an autocomplete that cannot answer should stay quiet.
-	 */
-	async function requestInlineSuggestion(
-		input: InlineSuggestionRequestInput,
-		signal: AbortSignal
-	): Promise<{ readonly text: string }> {
-		try {
-			const response = await fetch('/api/inline-suggestions', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					requestId: crypto.randomUUID(),
-					noteId,
-					revision,
-					...input
-				}),
-				signal
-			});
-			if (!response.ok) throw new Error(`Writing suggestion failed with status ${response.status}`);
-			const result = inlineSuggestionSchema.parse(await response.json());
-			return result.outcome === 'suggested' ? { text: result.text } : { text: '' };
-		} catch (error) {
-			if (signal.aborted) return { text: '' };
-			throw error;
-		}
 	}
 
 	/**
@@ -382,26 +340,12 @@
 		editor?.chain().focus().setDrawio(diagramId).run();
 	}
 
-	export function scrollToHeading(id: string): void {
-		if (editor && !editor.isDestroyed) revealHeading(editor.view.dom, id);
-	}
-
 	const editor = createEditor(
 		{
 			ariaLabel: 'Note body',
 			mermaidView: MermaidNodeView,
-			onCut: async (selection) => {
-				const report = await noteClipboard.copy(selection);
-				if (report.kind !== 'complete')
-					toast.warning(
-						'The selection was kept in the note because it could not be copied completely.'
-					);
-				return report.kind === 'complete';
-			},
-			onCutChanged: () =>
-				toast.warning(
-					'Copied the selection, but kept it in the note because the note changed during copying.'
-				),
+			onCut: (selection) => noteClipboard.cut(selection),
+			onCutChanged: () => noteClipboard.cutChanged(),
 			onCopy: (selection) => {
 				void noteClipboard.copy(selection);
 			},
@@ -446,7 +390,8 @@
 					throw error;
 				}
 			},
-			getInlineSuggestion: requestInlineSuggestion,
+			getInlineSuggestion: (input, signal) =>
+				noteWriting.suggest({ noteId, revision, ...input }, signal),
 			// The dictionary is applied here rather than left to the checker: Harper's
 			// own copy only takes effect on the next pass, and the block the caret sits
 			// in is not re-linted until the writer stops typing — so a word they just
@@ -463,7 +408,7 @@
 			},
 			onUpdate: () => {
 				closeActiveLink();
-				if (initialized) onchange?.();
+				binding?.lifecycle.changed();
 			}
 		},
 		[
@@ -472,6 +417,15 @@
 			WidgetInserter.configure({ insert: (target) => (widgetTarget = target) })
 		]
 	);
+	const binding = editor
+		? createNoteEditorOperations(editor, {
+				changed: () => onchange?.(),
+				shimmer: (previous, next) => shimmerChangedBlocks(previous, next),
+				insertionMoved: (runId, position) => onInsertionPointMoved?.(runId, position)
+			})
+		: undefined;
+	export const operations = binding?.operations;
+
 	$effect(() => {
 		editor?.commands.setInlineSuggestionsEnabled(inlineSuggestionsEnabled);
 	});
@@ -489,7 +443,6 @@
 	 * True only for the instant the blur handler below collapses the selection itself, so
 	 * `selectionUpdate` can tell that transaction apart from the author moving the caret.
 	 */
-	let holdingSelection = false;
 
 	function readSelection(): TextSelection | undefined {
 		if (!editor) return undefined;
@@ -599,104 +552,6 @@
 		});
 	});
 
-	/**
-	 * The range the context menu was opened over.
-	 *
-	 * By the time a menu item is clicked the editor's own selection is usually gone. A
-	 * right-click that lands anywhere but on the selection collapses it to a caret before
-	 * the menu even opens, and opening the menu moves focus off the contenteditable — so
-	 * every copy read an empty selection and silently put nothing on the clipboard. The
-	 * range is taken at `contextmenu`, ahead of both, and re-applied when an item runs.
-	 */
-	let contextRange = $state<SelectedRange | undefined>(undefined);
-
-	function rememberContextRange(): void {
-		const selection = editor?.view.state.selection;
-		contextRange =
-			selection && !selection.empty ? { from: selection.from, to: selection.to } : undefined;
-	}
-
-	/** The state a copy serializes from, or undefined when there is nothing to copy. */
-	function copySource(): EditorState | undefined {
-		if (!editor) return undefined;
-		const state = selectRange(editor.view.state, contextRange);
-		return state.selection.empty ? undefined : state;
-	}
-
-	async function copySelectionMarkdown(): Promise<void> {
-		const state = copySource();
-		if (!state) return;
-		try {
-			// A node the Markdown serializer has no syntax for still has text worth carrying,
-			// and an empty clipboard is indistinguishable from a copy that never happened.
-			const text = selectionMarkdown(state) || selectionPlainText(state);
-			if (!text) {
-				toast.error('The selection could not be copied');
-				return;
-			}
-			await navigator.clipboard.writeText(text);
-			// audit-allow: silent-catch — clipboard write failure is reported while the source text remains selected.
-		} catch {
-			toast.error('The clipboard could not be written');
-		}
-	}
-
-	async function copySelectionFormatted(): Promise<void> {
-		const state = copySource();
-		if (!state) return;
-		// A direct call, not a `copy` event, so it misses the editor's own handler —
-		// it shares the payload builder instead, and pastes the same pictures.
-		try {
-			await noteClipboard.copy(clipboardSource(state));
-			// audit-allow: silent-catch — formatted clipboard write failure is reported while the selection remains intact.
-		} catch {
-			toast.error('The clipboard could not be written');
-		}
-	}
-
-	/**
-	 * Puts the remembered range back on the view, so a paste from this menu replaces what
-	 * was selected rather than landing at the caret the menu left behind.
-	 */
-	function restoreContextRange(): void {
-		if (!editor || !contextRange) return;
-		const restored = selectRange(editor.view.state, contextRange);
-		if (restored.selection.empty) return;
-		editor.view.dispatch(editor.view.state.tr.setSelection(restored.selection));
-	}
-
-	async function pasteRaw(): Promise<void> {
-		if (!editor) return;
-		try {
-			const text = await navigator.clipboard.readText();
-			if (!text) return;
-			editor.view.focus();
-			restoreContextRange();
-			editor.view.pasteText(text);
-			// audit-allow: silent-catch — clipboard read failure is reported and the document is not changed.
-		} catch {
-			toast.error('The clipboard could not be read');
-		}
-	}
-
-	async function pasteFormatted(): Promise<void> {
-		if (!editor) return;
-		try {
-			const htmlItem = (await navigator.clipboard.read()).find((item) =>
-				item.types.includes('text/html')
-			);
-			// No rich content on the clipboard: raw is the formatted answer too.
-			if (!htmlItem) return await pasteRaw();
-			const html = await (await htmlItem.getType('text/html')).text();
-			editor.view.focus();
-			restoreContextRange();
-			editor.view.pasteHTML(html);
-			// audit-allow: silent-catch — formatted clipboard read failure is reported and the document is not changed.
-		} catch {
-			toast.error('The clipboard could not be read');
-		}
-	}
-
 	// Pending suggestions whose source text can be highlighted inline.
 	const anchored: readonly AnchoredSuggestion[] = $derived(
 		(perNote?.suggestions ?? []).flatMap((item) =>
@@ -758,10 +613,6 @@
 	let linkedReferencesSnapshot = untrack(() => linkedReferences);
 	let revisionSnapshot = untrack(() => revision);
 
-	// What the run store last saw for each pending insertion point, so the
-	// transaction listener only reports actual movement, not every keystroke.
-	let lastReportedInsertionPoint: Record<string, number> = {};
-
 	$effect(() => {
 		anchoredSnapshot = anchored;
 		linkedReferencesSnapshot = linkedReferences;
@@ -772,8 +623,8 @@
 		if (!editor) return;
 
 		// Initial content only; the page remounts per note via {#key}.
-		editor.commands.setContent(noteDocuments.editorContent(untrack(() => document)));
-		initialized = true;
+		binding?.lifecycle.initialize(untrack(() => document));
+		onready?.(operations);
 		editor.registerPlugin(
 			createSuggestionAnchorPlugin({
 				getAnchored: () => anchoredSnapshot,
@@ -808,18 +659,12 @@
 		// author is still typing lands the diagram where the text is, not where it was.
 		editor.on('transaction', () => {
 			const points = pendingInsertionsKey.getState(editor.state);
-			if (!points) return;
-			for (const [runId, point] of Object.entries(points)) {
-				if (typeof point === 'number' && point !== lastReportedInsertionPoint[runId]) {
-					lastReportedInsertionPoint[runId] = point;
-					onInsertionPointMoved?.(runId as AgentRunId, point);
-				}
-			}
+			if (points) binding?.lifecycle.reportInsertions(points);
 		});
 		editor.on('selectionUpdate', () => {
 			// The collapse below is this component's doing, not the author's, and the passage
 			// they highlighted is still the one attached to whatever they are typing next.
-			if (holdingSelection) return;
+			if (binding?.holdingSelection) return;
 			const selection = readSelection();
 			if (selection) perNote?.selection.set(selection);
 			else perNote?.selection.clear();
@@ -837,19 +682,8 @@
 		// `isDestroyed` first: a blur fires as the view is torn down, and by then reading
 		// `activeAction` — a prop, and so a derived — would warn about a destroyed effect.
 		editor.on('blur', () => {
-			if (editor.isDestroyed || activeAction !== undefined) return;
-			const { doc, selection } = editor.state;
-			if (selection.empty) return;
-			const { from, to } = selection;
-			holdingSelection = true;
-			editor.view.dispatch(
-				editor.view.state.tr
-					// `near`, not `create`: a table's cell selection starts at a cell boundary,
-					// where a text selection is not valid.
-					.setSelection(PmTextSelection.near(doc.resolve(from)))
-					.setMeta(selectionActionKey, { from, to, variant: 'held' })
-			);
-			holdingSelection = false;
+			if (editor.isDestroyed) return;
+			binding?.lifecycle.blur(activeAction !== undefined);
 		});
 		// Back in the editor: the caret is about to say where the author actually is, so the
 		// held wash has nothing left to stand in for. An action's own wash is not ours to
@@ -859,7 +693,11 @@
 			editor.view.dispatch(editor.view.state.tr.setMeta(selectionActionKey, null));
 		});
 		hydrated = true;
-		return retainActiveLink;
+		return () => {
+			binding?.lifecycle.release();
+			onready?.(undefined);
+			retainActiveLink();
+		};
 	});
 
 	// Track the reader's position down the note. The scroll listener sits on the
@@ -1074,122 +912,6 @@
 		// the pane closes. The release effect below clears it once none remains.
 		revealActive = true;
 	}
-
-	export function getDocument(): ProseMirrorDocument {
-		return proseMirrorDocumentSchema.parse(
-			editor?.state.doc.toJSON() ?? { type: 'doc', content: [] }
-		);
-	}
-
-	export function getEditor(): Editor | undefined {
-		return editor;
-	}
-
-	export function getPlainText(): string {
-		return editor?.getText({ blockSeparator: '\n\n' }) ?? '';
-	}
-
-	export function replaceDocument(
-		nextDocument: ProseMirrorDocument,
-		previousDocument?: ProseMirrorDocument
-	): void {
-		if (!editor) return;
-		initialized = false;
-		editor.commands.setContent(noteDocuments.editorContent(nextDocument));
-		initialized = true;
-		if (previousDocument) shimmerChangedBlocks(previousDocument, nextDocument);
-	}
-
-	export function focusStart(): void {
-		editor?.commands.focus('start');
-	}
-
-	export function focusEnd(): void {
-		editor?.commands.focus('end');
-	}
-
-	/** Records where a pending diagram run's node should be inserted. */
-	export function holdInsertionPoint(runId: string, at: number): void {
-		if (!editor) return;
-		editor.view.dispatch(holdPendingInsertion(editor.state.tr, runId, at));
-	}
-
-	/**
-	 * Where a pending diagram's node goes right now, and stops tracking it.
-	 * `'lost'` means the location was deleted or replaced while the run was in
-	 * flight; `undefined` means this editor never held it (e.g. after a refresh).
-	 */
-	export function consumeInsertionPoint(runId: string): number | 'lost' | undefined {
-		if (!editor) return undefined;
-		const point = getPendingInsertion(editor.state, runId);
-		editor.view.dispatch(releasePendingInsertion(editor.state.tr, runId));
-		return point;
-	}
-
-	/** Insert a mermaid diagram node at the given ProseMirror position, if it is valid. */
-	export function insertMermaid(at: number, source: string): boolean {
-		if (!editor) return false;
-		// The captured position can be stale (the author kept typing while the run
-		// was in flight): out of bounds positions throw on resolve, so bail out and
-		// let the caller fall back to the suggestion tray.
-		if (!Number.isFinite(at) || at < 0 || at > editor.state.doc.content.size) return false;
-		try {
-			editor
-				.chain()
-				.focus()
-				.insertContentAt(at, {
-					type: 'mermaid',
-					content: source ? [{ type: 'text', text: source }] : []
-				})
-				.run();
-			return true;
-			// audit-allow: silent-catch — false is the typed decision outcome consumed by the suggestion UI, which keeps the action available.
-		} catch {
-			return false;
-		}
-	}
-
-	/**
-	 * Swap one mermaid node's source for a revised one, matched by its current text.
-	 *
-	 * The live revision path applies the result inside the node view that asked for
-	 * it. This is for the other path: after a refresh that node view is a fresh
-	 * component with no memory of the request, so the source it had when the
-	 * revision started is the only handle left on it. Returns whether a node matched.
-	 */
-	export function replaceMermaid(previousSource: string, source: string): boolean {
-		if (!editor) return false;
-		let target: number | undefined;
-		editor.state.doc.descendants((node, pos) => {
-			if (target !== undefined) return false;
-			if (node.type.name === 'mermaid' && node.textContent === previousSource) target = pos;
-			return true;
-		});
-		if (target === undefined) return false;
-		editor
-			.chain()
-			.focus()
-			.insertContentAt(
-				{ from: target, to: target + (editor.state.doc.nodeAt(target)?.nodeSize ?? 0) },
-				{ type: 'mermaid', content: source ? [{ type: 'text', text: source }] : [] }
-			)
-			.run();
-		return true;
-	}
-
-	export function completeDrawioConversion(suggestionId: SuggestionId, diagramId: DiagramId): void {
-		if (!editor) throw new Error('The editor is not ready.');
-		const completed = completePendingConversion(
-			{
-				state: editor.state,
-				schema: editor.schema,
-				dispatch: (transaction) => editor.view.dispatch(transaction)
-			},
-			suggestionId,
-			diagramId
-		);
-		if (!completed) throw new Error('The pending draw.io conversion is no longer in this note.');
-	}
 </script>
 
 {#snippet fallback(error: App.Error, reset: () => void)}
@@ -1218,7 +940,10 @@
 	<ContextMenu.Root>
 		<!-- Before bits-ui's own handler, which focuses the menu and so collapses the
 		     selection the items are about to act on. -->
-		<ContextMenu.Trigger class="flex min-h-96 flex-1 flex-col" oncontextmenu={rememberContextRange}>
+		<ContextMenu.Trigger
+			class="flex min-h-96 flex-1 flex-col"
+			oncontextmenu={() => binding?.lifecycle.rememberContextRange()}
+		>
 			<!--
 			The editor is the one surface where degrading quietly would be wrong: a
 			node view that throws must not read as "the note is empty". State what
@@ -1402,20 +1127,22 @@
 			<!-- Disabled rather than absent, so a right-click with nothing selected explains
 			     itself instead of offering an item that would do nothing. -->
 			<ContextMenu.Item
-				disabled={contextRange === undefined}
-				onclick={() => void copySelectionMarkdown()}
+				disabled={!binding?.view.canCopy}
+				onclick={() => void binding?.lifecycle.copy('markdown')}
 			>
 				Copy as markdown
 			</ContextMenu.Item>
 			<ContextMenu.Item
-				disabled={contextRange === undefined}
-				onclick={() => void copySelectionFormatted()}
+				disabled={!binding?.view.canCopy}
+				onclick={() => void binding?.lifecycle.copy('formatted')}
 			>
 				Copy with formatting
 			</ContextMenu.Item>
 			<ContextMenu.Separator />
-			<ContextMenu.Item onclick={() => void pasteRaw()}>Paste raw</ContextMenu.Item>
-			<ContextMenu.Item onclick={() => void pasteFormatted()}>
+			<ContextMenu.Item onclick={() => void binding?.lifecycle.paste('raw')}
+				>Paste raw</ContextMenu.Item
+			>
+			<ContextMenu.Item onclick={() => void binding?.lifecycle.paste('formatted')}>
 				Paste with formatting
 			</ContextMenu.Item>
 		</ContextMenu.Content>

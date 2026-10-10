@@ -1,3 +1,4 @@
+import { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
@@ -5,7 +6,6 @@ import { Editor, Node } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { GapCursor } from '@tiptap/pm/gapcursor';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
-import { CellSelection } from '@tiptap/pm/tables';
 import NoteEditor from './note-editor.svelte';
 import '../../../routes/layout.css';
 import {
@@ -336,10 +336,10 @@ describe('Note editor keyboard integration', () => {
 							]
 						: []
 			});
-			screen.component.focusEnd();
+			screen.component.operations!.focusEnd();
 			await userEvent.keyboard('{Backspace}');
 
-			expect({ document: screen.component.getDocument(), updates }).toEqual({
+			expect({ document: screen.component.operations!.getDocument(), updates }).toEqual({
 				document: documentWith({ type: 'paragraph', attrs: { textAlign: null } }),
 				updates: 1
 			});
@@ -383,7 +383,7 @@ describe('Agent-updated block shimmer', () => {
 		await new Promise((resolve) =>
 			requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))
 		);
-		screen.component.replaceDocument(after, before);
+		screen.component.operations!.replaceDocument(after, before);
 
 		const shimmered = (await untilShimmered(screen.container)).map(
 			(element) => element.textContent
@@ -442,7 +442,7 @@ describe('Agent-updated block shimmer', () => {
 		await new Promise((resolve) =>
 			requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))
 		);
-		screen.component.replaceDocument(after, before);
+		screen.component.operations!.replaceDocument(after, before);
 		await untilShimmered(screen.container);
 		const header = screen.container.querySelector<HTMLElement>('th')!;
 		// Start the table below the stick line, as under a real note header;
@@ -475,7 +475,7 @@ describe('Agent-updated block shimmer', () => {
 			},
 			onrejectDrawio: async () => undefined
 		});
-		screen.component.replaceDocument(after);
+		screen.component.operations!.replaceDocument(after);
 		await new Promise((resolve) =>
 			requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))
 		);
@@ -516,7 +516,7 @@ describe('Diagram insert point tracking', () => {
 		const screen = renderEditor();
 		await untilMounted();
 
-		expect(screen.component.insertMermaid(99999, 'graph TD')).toBe(false);
+		expect(screen.component.operations!.insertMermaid(99999, 'graph TD')).toBe(false);
 	});
 
 	it('maps a held insert point past typing and inserts there', async () => {
@@ -527,24 +527,24 @@ describe('Diagram insert point tracking', () => {
 		await untilMounted();
 		const firstParagraphText = () =>
 			(
-				screen.component.getDocument() as {
+				screen.component.operations!.getDocument() as {
 					content?: readonly { content?: readonly { text?: string }[] }[];
 				}
 			).content?.[0]?.content
 				?.map((node) => node.text ?? '')
 				.join('') ?? '';
-		screen.component.holdInsertionPoint('run-1', 7);
-		screen.component.focusStart();
+		screen.component.operations!.holdInsertionPoint('run-1', 7);
+		screen.component.operations!.focusStart();
 		const before = firstParagraphText();
 		await userEvent.keyboard('Well, ');
 		await vi.waitFor(() => {
 			expect(moved.at(-1)).toEqual(['run-1', 7 + (firstParagraphText().length - before.length)]);
 		});
-		screen.component.insertMermaid(
-			screen.component.consumeInsertionPoint('run-1') as number,
+		screen.component.operations!.insertMermaid(
+			screen.component.operations!.consumeInsertionPoint('run-1') as number,
 			'graph TD'
 		);
-		const document = screen.component.getDocument() as {
+		const document = screen.component.operations!.getDocument() as {
 			content?: readonly { type: string }[];
 		};
 
@@ -577,16 +577,10 @@ describe('Deselect on editor blur', () => {
 	};
 
 	const selectHello = async (screen: ReturnType<typeof render>) => {
-		const editor = screen.component.getEditor();
-		if (!editor) throw new Error('The editor never mounted.');
-		// Real interaction establishes DOM focus, which programmatic focus() does not
-		// reliably get in this environment (the blur handler checks activeAction only,
-		// but the interaction here must stick for the blur event to fire later).
 		const editable = screen.container.querySelector<HTMLElement>('[contenteditable="true"]');
-		if (editable) await userEvent.click(editable);
-		editor.view.dispatch(
-			editor.state.tr.setSelection(TextSelection.create(editor.state.doc, 1, 2))
-		);
+		if (!editable) throw new Error('The editor never mounted.');
+		await userEvent.click(editable);
+		await userEvent.keyboard('{Home}{Shift>}{ArrowRight}{/Shift}');
 	};
 
 	const blurEditor = (screen: ReturnType<typeof render>) => {
@@ -600,43 +594,22 @@ describe('Deselect on editor blur', () => {
 		blurEditor(screen);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
-		expect(screen.component.getEditor()?.state.selection.empty).toBe(true);
+		expect(window.getSelection()?.isCollapsed).toBe(true);
 	});
 
-	// A row grip selects cells, and a cell selection starts at a cell boundary: a text
-	// selection built there is invalid, and ProseMirror is left with no caret to type at.
-	it('collapses a table row selection onto text when the editor loses focus', async () => {
-		const cell = (text: string) => ({
-			type: 'tableCell',
-			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
-		});
-		const screen = renderEditor({
-			document: documentWith({
-				type: 'table',
-				content: [
-					{ type: 'tableRow', content: [cell('a'), cell('b')] },
-					{ type: 'tableRow', content: [cell('c'), cell('d')] }
-				]
-			}) as ProseMirrorDocument
-		});
+	it('keeps the selected passage attached to chat when the editor blurs', async () => {
+		const selection = new EditorSelectionStore();
+		const screen = renderEditor({ perNote: { suggestions: [], selection } });
 		await untilMounted();
-		const editor = screen.component.getEditor();
-		if (!editor) throw new Error('The editor never mounted.');
-		// Into a cell rather than the editable's centre, which lands on no focusable text.
-		const firstCell = screen.container.querySelector<HTMLElement>('td p');
-		if (!firstCell) throw new Error('The table never rendered.');
-		await userEvent.click(firstCell);
-		const cells: number[] = [];
-		editor.state.doc.descendants((node, pos) => {
-			if (node.type.name === 'tableCell') cells.push(pos);
-		});
-		editor.view.dispatch(
-			editor.state.tr.setSelection(CellSelection.create(editor.state.doc, cells[0], cells[1]))
-		);
+		await selectHello(screen);
 		blurEditor(screen);
-		await new Promise((resolve) => setTimeout(resolve, 0));
-
-		expect(editor.state.selection.$from.parent.inlineContent).toBe(true);
+		expect(selection.current).toEqual({
+			noteId: '00000000-0000-4000-8000-000000000002',
+			revision: 1,
+			from: 0,
+			to: 1,
+			text: 'H'
+		});
 	});
 
 	it('keeps the selection while an action is running', async () => {
@@ -646,6 +619,6 @@ describe('Deselect on editor blur', () => {
 		blurEditor(screen);
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
-		expect(screen.component.getEditor()?.state.selection.empty).toBe(false);
+		expect(window.getSelection()?.isCollapsed).toBe(false);
 	});
 });
