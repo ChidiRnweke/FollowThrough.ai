@@ -5,6 +5,9 @@
 	// the mobile sidebar is a sheet that unmounts the tree on every close; a
 	// reopen must not undo a collapse the reader made after that reveal.
 	let revealedNoteId: NoteId | undefined;
+	// The last place scrolled into view, a note or a project page, for the same reason:
+	// a reopened sheet must not yank the list back after the reader scrolled away.
+	let scrolledTo: string | undefined;
 </script>
 
 <script lang="ts">
@@ -14,7 +17,8 @@
 	import { goto } from '$app/navigation';
 	import { TRIGGERS, type DndEvent } from 'svelte-dnd-action';
 	import { toast } from 'svelte-sonner';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
+	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
 	import { ancestorFolderIds, isWithinSubtree } from '$lib/services/projects/tree-expansion';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
@@ -149,6 +153,36 @@
 		toggled.delete(`project:${node.projectId}`);
 		for (const parentId of ancestorFolderIds(node, byId)) toggled.add(parentId);
 		revealedNoteId = activeNoteId;
+	});
+
+	// A project page names its project in the path; expand it as a note's ancestors are.
+	const routeProjectId = $derived(
+		activePath.startsWith('/projects/') ? (activePath.split('/')[2] as ProjectId) : undefined
+	);
+	$effect(() => {
+		if (!togglesRestored || !routeProjectId || scrolledTo === routeProjectId) return;
+		toggled.delete(`project:${routeProjectId}`);
+	});
+
+	// Expanding is not enough when the open project sits below the fold of a long list:
+	// bring its row into view once per change of place, after the expansion renders.
+	const reducedMotion = new PrefersReducedMotion();
+	$effect(() => {
+		const place = activeNoteId ?? routeProjectId;
+		if (!togglesRestored || !place || place === scrolledTo) return;
+		scrolledTo = place;
+		void tick().then(() => {
+			const row = document.querySelector<HTMLElement>(
+				'[data-sidebar="sidebar"] [data-active="true"]'
+			);
+			const list = row?.closest<HTMLElement>('[data-sidebar="content"]');
+			if (!row || !list) return;
+			const shown = list.getBoundingClientRect();
+			const at = row.getBoundingClientRect();
+			if (at.top >= shown.top && at.bottom <= shown.bottom) return;
+			// Centred, so the rows under an expanded project show with it.
+			row.scrollIntoView({ block: 'center', behavior: reducedMotion.current ? 'auto' : 'smooth' });
+		});
 	});
 
 	// --- Drag and drop (within a project only; the zone type enforces it) ---
