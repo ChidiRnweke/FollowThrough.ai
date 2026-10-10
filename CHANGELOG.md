@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.2.0...v2.3.0) (2026-10-10)
+
+
+### Features
+
+* **notes:** scroll over-wide tables horizontally ([#319](https://github.com/ChidiRnweke/FollowThrough.ai/issues/319)) ([f8f5c1f](https://github.com/ChidiRnweke/FollowThrough.ai/commit/f8f5c1facb4515fcb79dcc5ec2b138afc13c1d04))
+
 ## [2.2.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.1.3...v2.2.0) (2026-10-06)
 
 
