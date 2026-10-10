@@ -1,25 +1,25 @@
 {
 	"recordedAt": "2026-10-10",
-	"applicationRevision": "d43716c570e63e9f05e39bac12005fbcb523a66f",
-	"toolingRevision": "d43716c570e63e9f05e39bac12005fbcb523a66f",
+	"applicationRevision": "5a22f8289a7afb19f557f384c663dd1f94da9f55",
+	"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors. The overall refactor is incomplete.",
 	"comparison": {
-		"applicationBase": "28d54ce6005c3f7f3060ec17d0a9f700246f47fd",
-		"toolingRevision": "d43716c570e63e9f05e39bac12005fbcb523a66f",
-		"method": "The unchanged analyzers were run against #350 at 28d54ce6. Both complete inventories exactly matched its recorded diagnostics before implementation. Counts below compare that branch with this server controller repair.",
+		"applicationBase": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
+		"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
+		"method": "The unchanged analyzers were run against draft #353 at 85f5cc7b before implementation. Semantic diagnostics matched exactly; expanding Chisel message references reproduced its complete recorded inventory. Counts compare that branch with this server composition repair.",
 		"semanticCounts": {
 			"concrete-dependency": 2,
-			"controller-orchestration": 290,
-			"factory-workflow": 14,
+			"controller-orchestration": 277,
+			"factory-workflow": 13,
 			"indirect-dependency": 11,
 			"public-service-helper": 21,
 			"store-workflow": 55
 		},
-		"semanticTotal": 393,
+		"semanticTotal": 379,
 		"chiselCounts": {
-			"import-boundary:banned-layer-import": 53
+			"import-boundary:banned-layer-import": 47
 		},
-		"chiselTotal": 53
+		"chiselTotal": 47
 	},
 	"semantic": {
 		"command": "node --experimental-strip-types scripts/audit-architecture.ts --json",
@@ -27,9 +27,9 @@
 		"counts": {
 			"concrete-dependency": 2,
 			"controller-orchestration": 277,
-			"factory-workflow": 13,
-			"indirect-dependency": 11,
-			"public-service-helper": 21,
+			"factory-workflow": 12,
+			"indirect-dependency": 9,
+			"public-service-helper": 20,
 			"store-workflow": 55
 		},
 		"violations": [
@@ -3616,17 +3616,6 @@
 				]
 			},
 			{
-				"file": "src/lib/server/factories/app-factory.ts",
-				"line": 76,
-				"column": 9,
-				"rule": "factory-workflow",
-				"message": "factories must not invoke or expose services behavior. Move the operation to a controller.",
-				"provenance": [
-					"src/lib/server/factories/app-factory.ts:76",
-					"src/lib/server/services/identity/users.ts:11"
-				]
-			},
-			{
 				"file": "src/lib/server/services/agent-files/virtual-files.ts",
 				"line": 61,
 				"column": 14,
@@ -3665,28 +3654,6 @@
 				"rule": "public-service-helper",
 				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
 				"provenance": ["src/lib/server/services/agent/conversations/tool-activity.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/agent/runs/preferences.ts",
-				"line": 40,
-				"column": 10,
-				"rule": "indirect-dependency",
-				"message": "services must not invoke or expose services behavior. Move the operation to a controller.",
-				"provenance": [
-					"src/lib/server/services/agent/runs/preferences.ts:40",
-					"src/lib/server/repositories/agent/postgres/agent-settings.ts:146",
-					"src/lib/server/repositories/agent/postgres/agent-settings.ts:148",
-					"src/lib/server/factories/capabilities/agent-capability-factory.ts:172",
-					"src/lib/services/workspace/commands.ts:170"
-				]
-			},
-			{
-				"file": "src/lib/server/services/identity/users.ts",
-				"line": 11,
-				"column": 2,
-				"rule": "public-service-helper",
-				"message": "Public service members must belong to the implemented capability contract.",
-				"provenance": ["src/lib/server/services/identity/users.ts:8"]
 			},
 			{
 				"file": "src/lib/server/services/inline-suggestions/inline-completion.ts",
@@ -3850,20 +3817,6 @@
 				"rule": "public-service-helper",
 				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
 				"provenance": ["src/lib/server/services/telemetry.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/workspace/mutation-receipts.ts",
-				"line": 97,
-				"column": 9,
-				"rule": "indirect-dependency",
-				"message": "services must not invoke or expose services behavior. Move the operation to a controller.",
-				"provenance": [
-					"src/lib/server/services/workspace/mutation-receipts.ts:97",
-					"src/lib/server/repositories/workspace/sync-receipts.ts:53",
-					"src/lib/server/repositories/workspace/sync-receipts.ts:55",
-					"src/lib/server/factories/capabilities/sync-capability-factory.ts:40",
-					"src/lib/services/workspace/commands.ts:170"
-				]
 			},
 			{
 				"file": "src/lib/stores/agent/app-context.svelte.ts",

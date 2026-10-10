@@ -255,3 +255,75 @@ The remaining 277 controller findings are outside these server chains. Browser c
 workflows, other factory workflows, public service helpers, indirect dependencies and concrete
 exposures remain in the complete inventory. The overall refactor is incomplete. Keep this stacked
 PR draft while the migration gates fail.
+
+## Server composition dependencies — 2026-10-10
+
+This slice stacks on draft PR #353 at `85f5cc7bea5229f5cefaa31e8e59806304bcde0f`. Application revision:
+`5a22f8289a7afb19f557f384c663dd1f94da9f55`. The checkers are unchanged. Before implementation, the semantic
+inventory matched all 379 diagnostics exactly. Expanding Chisel's JSON message references
+reproduced all 47 recorded diagnostics, including their messages and locations.
+
+| Rule                       | #353 | Remaining |
+| -------------------------- | ---: | --------: |
+| `controller-orchestration` |  277 |       277 |
+| `factory-workflow`         |   13 |        12 |
+| `store-workflow`           |   55 |        55 |
+| `public-service-helper`    |   21 |        20 |
+| `indirect-dependency`      |   11 |         9 |
+| `concrete-dependency`      |    2 |         2 |
+| Semantic total             |  379 |       375 |
+| Chisel prohibited imports  |   47 |        47 |
+
+### Corrected dependencies
+
+- AgentSettings resolves the canonical preference resource key through WorkspaceCommandRules
+  before passing it through the preference capability to persistence. AgentPreferenceRecords
+  no longer receives or invokes a rule callback.
+- Each of the 13 synchronization owners resolves its resource identity and key before receipt
+  preparation. WorkspaceSyncReceipts receives that data and owns the existing SQL locks.
+  The resolved resource and receipt lookup contracts live in models.
+- LocalIdentity owns local-user provisioning followed by verified profile lookup. UserDirectory
+  declares separate provisioning and reading capabilities. AppFactory constructs and exposes the
+  instrumented controller; it no longer executes local initialization. The request hook, MCP
+  authentication-disabled path and evaluation workspace invoke the same complete operation.
+
+Authorization and public transport contracts remain unchanged. Repositories retain persistence,
+absent-row advisory locking, actor/resource hash keys and source-row lock order. Operation locks,
+request hashes, transactions, replay/cancellation proofs, deferred journal publication and
+tombstone reads retain their behavior. Existing local profiles and preference defaults are preserved.
+The new standalone controller surface is instrumented; existing controller and agent-tool maps
+remain total. No schema, protocol, checker, suppression or guidance change was made.
+
+### Observed verification
+
+- Focused units: **14 files, 91 passed** (identity, agent settings, note synchronization,
+  receipts and controller instrumentation).
+- `pnpm test:unit`: **569 files, 4,492 passed, one existing skip**. Browser output retains
+  Svelte `derived_inert` warnings and the chart rendering error recorded by the previous slice.
+- Isolated PostgreSQL contracts: **23 files, 149 passed**, across two commands:
+  `pnpm test:contracts:isolated tests/integration/identity tests/integration/agent/preference-writes.contract.spec.ts tests/integration/agent/repositories.contract.spec.ts tests/integration/sync`
+  ran 22 files / 148 tests before the new lock-contention file was added;
+  `pnpm test:contracts:isolated tests/integration/sync/preference-locking.contract.spec.ts`
+  then passed its one test.
+- The new contract starts an ordinary write with no preference row, holds its transaction,
+  and observes synchronized creation waiting on an advisory lock. After the ordinary write
+  commits, synchronization returns conflict and preserves the saved defaults and patch.
+  Existing contracts cover concurrent independent preference edits, identity initialization,
+  receipt replay/cancellation, transaction recovery, publication and deletion.
+- `pnpm lint`: passed. `pnpm check`: zero errors and warnings.
+  An initial check found a missing type import after the receipt-contract move; it was fixed
+  before the passing check and full suite.
+- `pnpm docs:check`: zero errors/warnings and one existing hint; TypeDoc entry-point warnings remain.
+- Topology, source and test-quality stages passed. The architecture chain stopped at **375**
+  semantic errors. Chisel and UI ran independently: **47** Chisel errors; UI passed.
+- SvelteKit, QA and PR skill trees match across `.agents`, `.claude` and `.opencode`.
+- No live provider, E2E, PWA or production-build validation was run. Local results do not imply CI success.
+
+### Remaining work
+
+The JSON retains every semantic and Chisel diagnostic with provenance. Browser controller/store
+workflows, remaining factory workflows, public service helpers and concrete exposures still need
+migration. The separate WorkspaceSyncChanges repository callback to workspace resource-key rules
+also remains; removing the receipt dependency does not establish compliance for that read path.
+Telemetry restructuring and the existing diagram SDK submission-tool mismatch remain outside
+this slice. The overall refactor is incomplete. Keep the stacked PR draft while migration gates fail.
