@@ -138,6 +138,8 @@ export default defineConfig({
 						'src/lib/components/diagrams/drawio-embed.svelte.spec.ts',
 						'src/lib/components/notes/export/export-slider.svelte.spec.ts',
 						'src/lib/components/notes/note-conflict-dialog.svelte.spec.ts',
+						'src/lib/components/notes/note-sync-status.svelte.spec.ts',
+						'src/lib/components/edra/section-numbering.svelte.spec.ts',
 						'src/lib/components/shared/safe-svg-preview.svelte.spec.ts',
 						'src/lib/components/shared/workspace-write-review.svelte.spec.ts',
 						'src/lib/components/layout/error-boundary.svelte.spec.ts',

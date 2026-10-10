@@ -177,7 +177,7 @@
 	}
 	async function publish(output: DrawioExport): Promise<void> {
 		await stage({ kind: 'publishDiagram', diagramId, source: output.xml, renderedSvg: output.svg });
-		toast.success('Publication saved on this device');
+		toast.success('Published', { description: 'Saved on this device. It syncs to the server.' });
 	}
 
 	async function retry(): Promise<void> {

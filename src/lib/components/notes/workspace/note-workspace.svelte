@@ -641,7 +641,7 @@
 					publishedRevision: result.value.publishedRevision,
 					publishedAt: result.value.publishedAt
 				};
-			toast.success('Publication saved on this device');
+			toast.success('Published', { description: 'Saved on this device. It syncs to the server.' });
 		} finally {
 			publishing = false;
 		}

@@ -385,6 +385,29 @@
 		if (editor && !editor.isDestroyed) revealHeading(editor.view.dom, id);
 	}
 
+	/**
+	 * The area the bubble menu must stay inside: the note pane, read when the menu is
+	 * placed. The editor DOM joins the pane only after the menu registers, so an
+	 * element looked up at registration is still missing; floating-ui copies a
+	 * rectangle's fields on every placement, so these getters always see the pane.
+	 */
+	const paneBounds = () =>
+		paneViewport()?.getBoundingClientRect() ??
+		new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+	const menuBoundary = {
+		get x() {
+			return paneBounds().x;
+		},
+		get y() {
+			return paneBounds().y;
+		},
+		get width() {
+			return paneBounds().width;
+		},
+		get height() {
+			return paneBounds().height;
+		}
+	};
 	const editor = createEditor(
 		{
 			ariaLabel: 'Note body',
@@ -1235,7 +1258,11 @@
 						options={{
 							strategy: 'fixed',
 							scrollTarget:
-								editor.view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]') ?? window
+								editor.view.dom.closest<HTMLElement>('[data-slot="scroll-area-viewport"]') ??
+								window,
+							/* Without a boundary the menu only stays inside the window, so a
+							   selection near the left edge of the pane pushed it over the sidebar. */
+							shift: { padding: 8, boundary: menuBoundary }
 						}}
 						class="z-30 flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
 					>

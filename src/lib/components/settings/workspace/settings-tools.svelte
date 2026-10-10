@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { toolSummary } from './tool-summary';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ToolClassification, ToolPreference } from '$lib/models/agent';
@@ -216,9 +217,9 @@
 	<!-- A preamble for the whole panel, not a caption on the scope control below
 	     it — so it sits a step further out than the gap between the groups. -->
 	<p class="pb-2 text-sm text-muted-foreground">
-		Turn off anything you would rather the assistant not do. Changes write to your workspace,
-		proposals wait for your review, and reading never writes. A tool you turn off disappears
-		entirely — from chat, from tool search, and from any connected MCP client.
+		Turn off anything you would rather the agent not do. Changes write to your workspace, proposals
+		wait for your review, and reading never writes. A tool you turn off disappears entirely — from
+		chat, from tool search, and from any connected MCP client.
 	</p>
 
 	<div class="flex flex-col gap-2">
@@ -314,9 +315,9 @@
 										<span class="shrink-0 font-mono text-sm">{preference.name}</span>
 										<span
 											class="truncate text-sm text-muted-foreground"
-											title={preference.description}
+											title={toolSummary(preference.description)}
 										>
-											{preference.description}
+											{toolSummary(preference.description)}
 										</span>
 									</div>
 									{#if preference.locked}
