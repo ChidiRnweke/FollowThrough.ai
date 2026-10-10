@@ -39,13 +39,11 @@ export const editorOperationsFixture = (mountedEditor?: Editor) => {
 		adapter,
 		new TiptapDocumentCopy(),
 		new NoteDocumentPresentationService(),
-		capabilityDependencies<NoteEditorEvents>({
-			changed: () => {
-				changes++;
-			}
-		})
+		capabilityDependencies<NoteEditorEvents>({})
 	);
-	editor.on('update', () => controller.changed());
+	editor.on('update', () => {
+		if (state.view.acceptsChanges) changes++;
+	});
 	controller.initialize(
 		mountedEditor
 			? adapter.getDocument()

@@ -409,7 +409,7 @@
 			},
 			onUpdate: () => {
 				closeActiveLink();
-				binding?.lifecycle.changed();
+				if (binding?.view.acceptsChanges) onchange?.();
 			}
 		},
 		[
@@ -420,9 +420,7 @@
 	);
 	const binding = editor
 		? createNoteEditorOperations(editor, {
-				changed: () => onchange?.(),
-				shimmer: (previous, next) => shimmerChangedBlocks(previous, next),
-				insertionMoved: (runId, position) => onInsertionPointMoved?.(runId, position)
+				shimmer: (indices) => shimmerChangedBlocks(indices)
 			})
 		: undefined;
 	export const operations = binding?.operations;
@@ -660,7 +658,10 @@
 		// author is still typing lands the diagram where the text is, not where it was.
 		editor.on('transaction', () => {
 			const points = pendingInsertionsKey.getState(editor.state);
-			if (points) binding?.lifecycle.reportInsertions(points);
+			if (points && binding) {
+				for (const moved of binding.lifecycle.reportInsertions(points))
+					onInsertionPointMoved?.(moved.runId, moved.position);
+			}
 		});
 		editor.on('selectionUpdate', () => {
 			// The collapse below is this component's doing, not the author's, and the passage
@@ -822,12 +823,8 @@
 	 * and a refresh never passes a previous document, so a note that is merely
 	 * reopened shows nothing.
 	 */
-	function shimmerChangedBlocks(
-		previousDocument: ProseMirrorDocument,
-		nextDocument: ProseMirrorDocument
-	): void {
+	function shimmerChangedBlocks(indices: readonly number[]): void {
 		if (!editor) return;
-		const indices = noteDocuments.changedBlocks(previousDocument, nextDocument);
 		if (indices.length === 0) return;
 		const positions: number[] = [];
 		editor.state.doc.forEach((_node, offset, index) => {

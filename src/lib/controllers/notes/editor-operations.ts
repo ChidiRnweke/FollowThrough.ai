@@ -4,7 +4,8 @@ import type {
 	NoteEditorIdentity,
 	NoteEditorPort,
 	NoteEditorState,
-	EditorDocumentCopy
+	EditorDocumentCopy,
+	EditorInsertion
 } from '$lib/models/browser-workspace';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { ProseMirrorDocument } from '$lib/models/notes';
@@ -17,9 +18,6 @@ export type {
 	NoteEditorState
 } from '$lib/models/browser-workspace';
 
-export interface NoteEditorView {
-	readonly canCopy: boolean;
-}
 export interface NoteEditorOperations {
 	readonly identity: NoteEditorIdentity;
 	getDocument(): ProseMirrorDocument;
@@ -40,9 +38,8 @@ export interface NoteEditorLifecycle {
 	initialize(document: ProseMirrorDocument): void;
 	release(): void;
 	rememberContextRange(): void;
-	changed(): void;
 	blur(actionRunning: boolean): void;
-	reportInsertions(points: Readonly<Record<string, number | 'lost'>>): void;
+	reportInsertions(points: Readonly<Record<string, number | 'lost'>>): readonly EditorInsertion[];
 }
 
 export class NoteEditor implements NoteEditorOperations, NoteEditorLifecycle {
@@ -61,9 +58,6 @@ export class NoteEditor implements NoteEditorOperations, NoteEditorLifecycle {
 	release(): void {
 		this.state.release();
 	}
-	changed(): void {
-		if (this.state.active && this.state.initialized) this.events.changed();
-	}
 	rememberContextRange(): void {
 		this.state.rememberRange(this.editor.selection());
 	}
@@ -77,13 +71,15 @@ export class NoteEditor implements NoteEditorOperations, NoteEditorLifecycle {
 			this.state.setHoldingSelection(false);
 		}
 	}
-	reportInsertions(points: Readonly<Record<string, number | 'lost'>>): void {
-		if (!this.active) return;
+	reportInsertions(points: Readonly<Record<string, number | 'lost'>>): readonly EditorInsertion[] {
+		if (!this.active) return [];
+		const moved: EditorInsertion[] = [];
 		for (const [runId, point] of Object.entries(points)) {
 			if (typeof point !== 'number' || this.state.reportedInsertions[runId] === point) continue;
 			this.state.reportInsertion(runId, point);
-			this.events.insertionMoved(runId as AgentRunId, point);
+			moved.push({ runId: runId as AgentRunId, position: point });
 		}
+		return moved;
 	}
 	getDocument(): ProseMirrorDocument {
 		this.requireActive();
@@ -101,7 +97,7 @@ export class NoteEditor implements NoteEditorOperations, NoteEditorLifecycle {
 		} finally {
 			this.state.setInitialized(true);
 		}
-		if (previous) this.events.shimmer(previous, document);
+		if (previous) this.events.shimmer(this.presentation.changedBlocks(previous, document));
 	}
 	focusStart(): void {
 		if (this.active) this.editor.focus('start');

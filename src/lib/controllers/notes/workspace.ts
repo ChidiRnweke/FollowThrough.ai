@@ -1869,7 +1869,8 @@ export class NoteWorkspace implements NoteWorkspaceController {
 		} finally {
 			editor.state.setInitialized(true);
 		}
-		if (previous) editor.events.shimmer(previous, document);
+		if (previous)
+			editor.events.shimmer(this.dependencies.presentation.changedBlocks(previous, document));
 	}
 	private bindingCurrent(): boolean {
 		const { binding, account } = this.dependencies;

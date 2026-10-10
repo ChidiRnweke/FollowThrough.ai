@@ -1,5 +1,4 @@
-import type { NoteEditorView } from '$lib/controllers/notes/editor-operations';
-import type { EditorRange, NoteEditorState } from '$lib/models/browser-workspace';
+import type { EditorRange, NoteEditorState, NoteEditorView } from '$lib/models/browser-workspace';
 export class NoteEditorOperationStore implements NoteEditorState {
 	private live = true;
 	private ready = false;
@@ -13,7 +12,11 @@ export class NoteEditorOperationStore implements NoteEditorState {
 	readonly view: NoteEditorView;
 	constructor() {
 		const currentRange = () => this.range;
+		const acceptsChanges = () => this.live && this.ready;
 		this.view = {
+			get acceptsChanges() {
+				return acceptsChanges();
+			},
 			get canCopy() {
 				return currentRange() !== undefined;
 			}

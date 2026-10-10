@@ -169,10 +169,17 @@ export interface NoteEditorState {
 	releaseInsertion(runId: string): void;
 	release(): void;
 }
+/** Rendering only; application notifications return to the UI event owner. */
 export interface NoteEditorEvents {
-	changed(): void;
-	shimmer(previous: ProseMirrorDocument, next: ProseMirrorDocument): void;
-	insertionMoved(runId: AgentRunId, position: number): void;
+	shimmer(indices: readonly number[]): void;
+}
+export interface NoteEditorView {
+	readonly canCopy: boolean;
+	readonly acceptsChanges: boolean;
+}
+export interface EditorInsertion {
+	readonly runId: AgentRunId;
+	readonly position: number;
 }
 
 /** Readonly binding facts and guarded state updates; no session operations. */

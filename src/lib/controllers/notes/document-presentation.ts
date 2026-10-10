@@ -20,7 +20,6 @@ export interface NoteDocumentsController {
 	sectionNumbers(levels: readonly number[]): readonly string[];
 	readingMinutes(words: number): number;
 	editorContent(document: ProseMirrorDocument): JSONContent;
-	changedBlocks(previous: ProseMirrorDocument, next: ProseMirrorDocument): readonly number[];
 	outline(items: readonly OutlineSource[]): readonly OutlineHeading[];
 	activeHeading(offsets: readonly OutlineOffset[], line: number): string | undefined;
 }
@@ -51,9 +50,6 @@ export class NoteDocuments implements NoteDocumentsController {
 	}
 	editorContent(document: ProseMirrorDocument): JSONContent {
 		return this.documents.copy(this.presentation.prepare(document));
-	}
-	changedBlocks(previous: ProseMirrorDocument, next: ProseMirrorDocument): readonly number[] {
-		return this.presentation.changedBlocks(previous, next);
 	}
 	outline(items: readonly OutlineSource[]): readonly OutlineHeading[] {
 		return this.presentation.outline(items);

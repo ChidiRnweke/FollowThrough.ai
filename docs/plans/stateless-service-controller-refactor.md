@@ -1635,6 +1635,11 @@ against this base, its unchanged semantic checker, and the current open PRs.
       the hidden `ClipboardTransfer` and `renderDiagram` callback chain. The clipboard controller
       owns preparation, native writes, fallbacks, reporting, reads and insertion. It uses the
       shared theme service and raw SVG/rendered-image mechanisms directly.
+- [x] Remove the remaining editor event forwarding. Each replacing controller computes changed
+      block indices through the pure presentation service; its shimmer callback only renders.
+      The UI forwards authored-change and insertion notifications from the editor event, using
+      passive readiness and returned insertion values. No controller callback invokes another
+      controller. Existing autosave and AI action implementations are unchanged.
 - [x] Move complete cut coordination out of the editor extension. The controller captures the
       document and range, writes the clipboard, then checks lifetime and structural document
       equality before deleting that range. Moving selection alone does not change the cut target.
@@ -1681,7 +1686,9 @@ Observed verification:
   Existing `derived_inert` and expected rasterization-failure test output remain.
 - Isolated note/sync database contracts: 28 files, 161 tests passed. The first command used
   source-directory filters and selected no tests; the corrected integration-directory run passed.
-- The final remount fixture uses distinct mounted identities, as production does; its 14-test
-  editor/clipboard file was rerun successfully after that fixture correction.
+- The final callback correction passed 64 focused browser tests, including shimmer rendering,
+  insertion mapping and authored-change notification. The full unit/browser and seven authenticated
+  journeys were rerun after the correction. Remount fixtures use distinct identities, as production
+  does.
 - Production builds, the full PWA suite and live AI/object-storage flows were not run for this
   browser-only slice. Development E2E retains the inherited `/offline-shell.html` 404 output.

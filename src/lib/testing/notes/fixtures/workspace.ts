@@ -166,9 +166,7 @@ export const noteWorkspaceFixture = async (overrides: Partial<Note> = {}) => {
 		}),
 		state: editorState,
 		events: {
-			changed: () => undefined,
-			shimmer: () => undefined,
-			insertionMoved: () => undefined
+			shimmer: () => undefined
 		}
 	});
 	const controller = new NoteWorkspace(
