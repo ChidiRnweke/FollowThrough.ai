@@ -23,7 +23,7 @@
 		type ContextChip,
 		type ResourceChip
 	} from '$lib/stores/agent/chat.svelte';
-	import { liveSelectionChipOf, selectionChipOf } from '$lib/stores/agent/selection-chip';
+	import { agentSelectionContext } from '$lib/factories/agent/selection-context';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -184,7 +184,7 @@
 		// same passage twice is a no-op: the chip's id is its range.
 		if (request.selection) {
 			const title = shell?.noteTree.find((entry) => entry.id === request.selection?.noteId)?.title;
-			chat.addChip(selectionChipOf(request.selection, title ?? 'Untitled note'));
+			chat.addChip(agentSelectionContext.pin(request.selection, title ?? 'Untitled note'));
 		}
 		saveDraft();
 		// The textarea may not be bound yet on the mount path, so go through the tick
@@ -373,9 +373,10 @@
 		const title = selection
 			? shell?.noteTree.find((entry) => entry.id === selection.noteId)?.title
 			: undefined;
-		return liveSelectionChipOf(
-			selection,
-			title ?? 'Untitled note',
+		return agentSelectionContext.live(
+			selection
+				? { kind: 'selected', selection, noteTitle: title ?? 'Untitled note' }
+				: { kind: 'none' },
 			chat.chips.filter((chip) => chip.kind === 'selection').map((chip) => chip.id),
 			chat.dismissedSelectionId
 		);

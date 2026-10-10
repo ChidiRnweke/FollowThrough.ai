@@ -32,7 +32,7 @@ import {
 } from './chat-tools';
 import { appContext } from './app-context.svelte';
 import type { ChatHandoff } from './chat-handoff';
-import type { SelectionChip } from './selection-chip';
+import type { SelectionChip } from '$lib/models/chat';
 import { SvelteSet } from 'svelte/reactivity';
 import type { ContextChip, MentionHistory } from '$lib/models/chat';
 import { createMentionHistory } from '$lib/services/chat/mentions';
@@ -40,7 +40,7 @@ import { contextResourceRefOf, uniqueContextResources } from '$lib/services/chat
 export type { ContextChip, ResourceChip } from '$lib/models/chat';
 
 export type { ChatToolActivity } from './chat-tools';
-export type { SelectionChip } from './selection-chip';
+export type { SelectionChip } from '$lib/models/chat';
 
 const STORAGE_KEY_PREFIX = 'followthrough.agent.conversation';
 const browser = typeof window !== 'undefined';

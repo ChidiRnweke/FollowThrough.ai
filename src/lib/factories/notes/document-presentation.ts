@@ -1,3 +1,4 @@
+import { NoteReadingStatisticsService } from '$lib/services/notes/reading-statistics';
 import {
 	NoteDocuments,
 	type NoteDocumentsController
@@ -6,5 +7,6 @@ import { NoteDocumentPresentationService } from '$lib/services/notes/document-pr
 import { TiptapDocumentCopy } from '$lib/client/notes/editor-document';
 export const noteDocuments: NoteDocumentsController = new NoteDocuments(
 	new NoteDocumentPresentationService(),
-	new TiptapDocumentCopy()
+	new TiptapDocumentCopy(),
+	new NoteReadingStatisticsService()
 );

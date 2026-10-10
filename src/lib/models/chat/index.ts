@@ -50,3 +50,8 @@ export type MentionInput =
 	{ readonly kind: 'edit'; readonly edit: MentionEdit } | { readonly kind: 'untracked' };
 
 export const MENTION_PATTERN = /(^|\s)@([^\s@]*)$/;
+
+/** Whether the active note offers a passage to the composer. */
+export type NoteSelectionContext =
+	| { readonly kind: 'none' }
+	| { readonly kind: 'selected'; readonly selection: TextSelection; readonly noteTitle: string };

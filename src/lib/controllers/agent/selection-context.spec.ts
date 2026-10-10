@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TextSelection } from '$lib/models/notes';
 import { testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { liveSelectionChipOf, selectionChipIdOf, selectionChipOf } from './selection-chip';
+import { agentSelectionContext } from '$lib/factories/agent/selection-context';
 
 describe('Pinning a passage to the composer', () => {
 	const selection = (overrides: Partial<TextSelection> = {}): TextSelection => ({
@@ -14,7 +14,7 @@ describe('Pinning a passage to the composer', () => {
 	});
 
 	it('labels the chip with the note it came from', () => {
-		const chip = selectionChipOf(selection(), 'Q3 planning');
+		const chip = agentSelectionContext.pin(selection(), 'Q3 planning');
 		expect({ name: chip.name, wordCount: chip.wordCount, excerpt: chip.selection.text }).toEqual({
 			name: 'Q3 planning',
 			wordCount: 6,
@@ -24,19 +24,21 @@ describe('Pinning a passage to the composer', () => {
 
 	/** The dedup in `ChatStore.addChip` is by id, so this is what stops a double pin. */
 	it('gives the same passage the same id whenever it is pinned', () => {
-		expect(selectionChipIdOf(selection())).toBe(selectionChipIdOf(selection()));
+		expect(agentSelectionContext.pin(selection(), 'Q3 planning').id).toBe(
+			agentSelectionContext.pin(selection(), 'Q3 planning').id
+		);
 	});
 
 	it('gives two ranges of one note different ids', () => {
-		expect(selectionChipIdOf(selection({ from: 60, to: 80 }))).not.toBe(
-			selectionChipIdOf(selection())
+		expect(agentSelectionContext.pin(selection({ from: 60, to: 80 }), 'Q3 planning').id).not.toBe(
+			agentSelectionContext.pin(selection(), 'Q3 planning').id
 		);
 	});
 
 	it('gives the same range in two notes different ids', () => {
-		expect(selectionChipIdOf(selection({ noteId: testNoteId(2) }))).not.toBe(
-			selectionChipIdOf(selection())
-		);
+		expect(
+			agentSelectionContext.pin(selection({ noteId: testNoteId(2) }), 'Q3 planning').id
+		).not.toBe(agentSelectionContext.pin(selection(), 'Q3 planning').id);
 	});
 });
 
@@ -51,33 +53,48 @@ describe('The passage highlighted right now', () => {
 	});
 
 	it('shows as a chip without anyone pinning it', () => {
-		expect(liveSelectionChipOf(selection(), 'Q3 planning', [])?.wordCount).toBe(6);
+		expect(
+			agentSelectionContext.live(
+				{ kind: 'selected', selection: selection(), noteTitle: 'Q3 planning' },
+				[]
+			)?.wordCount
+		).toBe(6);
 	});
 
 	it('shows nothing when nothing is highlighted', () => {
-		expect(liveSelectionChipOf(undefined, 'Q3 planning', [])).toBeUndefined();
+		expect(agentSelectionContext.live({ kind: 'none' }, [])).toBeUndefined();
 	});
 
 	/** Otherwise the same passage would sit in the composer twice over. */
 	it('steps aside once that same passage is pinned', () => {
 		expect(
-			liveSelectionChipOf(selection(), 'Q3 planning', [selectionChipIdOf(selection())])
+			agentSelectionContext.live(
+				{ kind: 'selected', selection: selection(), noteTitle: 'Q3 planning' },
+				[agentSelectionContext.pin(selection(), 'Q3 planning').id]
+			)
 		).toBeUndefined();
 	});
 
 	it('stays away once dismissed', () => {
 		expect(
-			liveSelectionChipOf(selection(), 'Q3 planning', [], selectionChipIdOf(selection()))
+			agentSelectionContext.live(
+				{ kind: 'selected', selection: selection(), noteTitle: 'Q3 planning' },
+				[],
+				agentSelectionContext.pin(selection(), 'Q3 planning').id
+			)
 		).toBeUndefined();
 	});
 
 	it('comes back for a different passage after a dismissal', () => {
 		expect(
-			liveSelectionChipOf(
-				selection({ from: 60, to: 80, text: 'and the importer after that' }),
-				'Q3 planning',
+			agentSelectionContext.live(
+				{
+					kind: 'selected',
+					selection: selection({ from: 60, to: 80, text: 'and the importer after that' }),
+					noteTitle: 'Q3 planning'
+				},
 				[],
-				selectionChipIdOf(selection())
+				agentSelectionContext.pin(selection(), 'Q3 planning').id
 			)?.wordCount
 		).toBe(5);
 	});
