@@ -85,15 +85,18 @@ pnpm dev
 Configuration is loaded from Infisical before the SvelteKit server is imported, in both dev and
 production. `.env` carries only the `INFISICAL_*` bootstrap values; database, object-storage, and
 model settings live in the Infisical project, with `.env.infiscal.example` as the reference
-template for those. `DATABASE_URL`, `OPENROUTER_API_KEY` and `MISTRAL_API_KEY` are required; other
-values fall back to the defaults in that template. Shell variables win over `.env`.
+template for those. `DATABASE_URL`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, and all four
+`AUTHENTIK_*` settings are required; other values fall back to the defaults in that template. Shell variables win over `.env`.
 
 `MISTRAL_API_KEY` powers attachment OCR through Mistral Document AI, which reads PDFs, office
 documents, ebooks and images. Note that OCR fetches each attachment from a presigned object-storage
 URL, so the bucket must be reachable from Mistral — a bucket bound to `localhost` will not work.
 
-Auth is disabled in single-user dev mode, so `/` redirects straight to `/today`. Append `?landing`
-to reach the public landing page while working on it.
+Authentication is required in development and production. Missing Authentik configuration fails
+startup; there is no anonymous single-user mode. Signed-in, approved users visiting `/` redirect
+to `/today`. Append `?landing` to reach the public landing page while signed in.
+Browser tests mint database-backed sessions without contacting Authentik. Their managed server
+uses dummy provider settings; `E2E_USER_ID` selects the test account.
 
 **Schema changes.** The dev database is push-managed:
 

@@ -19,7 +19,9 @@ The same capture can serve both; copy it to both locations.
 
 ## How to capture
 
-Auth is disabled in single-user dev mode, so a local Playwright run reaches every page directly.
+Authentication is required. Run the authenticated Playwright setup (`tests/auth.setup.ts`)
+against the local test database, then use `tests/.auth/state.json` as the browser storage state.
+`pnpm test:e2e` runs this setup; starting the dev server alone does not create a session.
 
 ```sh
 pnpm dev

@@ -45,7 +45,7 @@ try {
 				CI: '1',
 				CONFIG_SOURCE: 'env',
 				DATABASE_URL: databaseUrl,
-				LOCAL_USER_ID: userId
+				E2E_USER_ID: userId
 			}
 		}
 	);

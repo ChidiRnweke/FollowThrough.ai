@@ -8,7 +8,7 @@ test('restores each account’s saved tabs after switching accounts on the same 
 	context
 }) => {
 	const databaseUrl = process.env.DATABASE_URL;
-	const firstAccount = process.env.LOCAL_USER_ID;
+	const firstAccount = process.env.E2E_USER_ID;
 	if (!databaseUrl || !firstAccount)
 		throw new Error('The isolated PWA database and account are required');
 	const sql = postgres(databaseUrl, { max: 1 });

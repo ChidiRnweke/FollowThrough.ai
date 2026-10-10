@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { config as loadDotenv } from 'dotenv';
 import postgres from 'postgres';
 
-const LOCAL_USER_FALLBACK = '00000000-0000-4000-8000-000000000001';
+const E2E_USER_FALLBACK = '00000000-0000-4000-8000-000000000001';
 const SESSION_TTL_DAYS = 30;
 const stateFile = fileURLToPath(new URL('.auth/state.json', import.meta.url));
 
@@ -52,12 +52,11 @@ export default async function globalSetup() {
 
 	const databaseUrl = process.env.DATABASE_URL;
 	if (!databaseUrl) throw new Error('DATABASE_URL is required to mint the e2e session');
-	const userId = process.env.LOCAL_USER_ID ?? LOCAL_USER_FALLBACK;
+	const userId = process.env.E2E_USER_ID ?? E2E_USER_FALLBACK;
 
 	const sql = postgres(databaseUrl, { max: 1 });
 	try {
-		// The app auto-provisions this row with role WAITING, which hooks would
-		// lock to /waiting — force a usable role.
+		// Seed an approved test account; ordinary sign-ins begin with role WAITING.
 		await sql`
 			insert into users (id, email, display_name, role)
 			values (${userId}, ${`${userId}@local.invalid`}, 'Architect', 'USER')

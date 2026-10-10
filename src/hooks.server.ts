@@ -12,13 +12,9 @@ import {
 import { redirect, type Handle } from '@sveltejs/kit';
 import { DOMAIN_ERROR_STATUS, DomainError } from '$lib/errors';
 
-// Prerendering during `vite build` and unit tests both run without a secrets
-// backend, and must not pull configuration (which would, among other things,
-// enable auth and redirect prerendered routes).
-const configurationDisabled = (): boolean => building || process.env.NODE_ENV === 'test';
-
 export const init: ServerInit = async () => {
-	if (configurationDisabled()) return;
+	// Builds and prerendering do not load deployment secrets.
+	if (building) return;
 	await hydrateEnvironment();
 	const recovered = await AppFactory.recoverInterruptedRuns();
 	if (recovered > 0)
@@ -47,73 +43,61 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (building || event.url.pathname === '/offline') return resolve(event);
 
 	// Served from the secrets backend's TTL cache, so this is a no-op between refreshes.
-	if (!configurationDisabled()) await hydrateEnvironment();
+	await hydrateEnvironment();
 
 	// The MCP endpoint authenticates with a bearer token and speaks JSON-RPC.
 	// It must never see the 303 to /auth/login below, which an MCP client
-	// cannot interpret — the route answers 401 itself. Skipping the block
-	// entirely also keeps its behaviour identical when auth is disabled in dev.
+	// cannot interpret — the route answers 401 itself.
 	if (event.url.pathname.startsWith('/mcp')) return resolve(event);
 
 	const sessionId = getSessionCookie(event.cookies);
 
-	// If auth is enabled, validate sessions
-	if (AppFactory.isAuthEnabled()) {
-		if (sessionId) {
-			const authService = AppFactory.sessions();
-			const result = await authService.validateSession(sessionId);
-			if (result) {
-				// Session validation may extend the stored deadline. Keep the browser in sync.
-				setSessionCookie(
-					event.cookies,
-					result.session.id,
-					event.url.protocol === 'https:',
-					result.session.expiresAt
-				);
-				event.locals.user = result.user;
-			}
+	if (sessionId) {
+		const authService = AppFactory.sessions();
+		const result = await authService.validateSession(sessionId);
+		if (result) {
+			// Session validation may extend the stored deadline. Keep the browser in sync.
+			setSessionCookie(
+				event.cookies,
+				result.session.id,
+				event.url.protocol === 'https:',
+				result.session.expiresAt
+			);
+			event.locals.user = result.user;
 		}
+	}
 
-		const user = event.locals.user;
-		if (user) setWorkspaceAccountCookie(event.cookies, user.id, event.url.protocol === 'https:');
-		else clearWorkspaceAccountCookie(event.cookies);
-		const path = event.url.pathname;
+	const user = event.locals.user;
+	if (user) setWorkspaceAccountCookie(event.cookies, user.id, event.url.protocol === 'https:');
+	else clearWorkspaceAccountCookie(event.cookies);
+	const path = event.url.pathname;
 
-		// Public surface: the auth flow, and the landing page at the root.
-		if (path.startsWith('/auth/') || path === '/') {
-			return resolve(event);
+	// Public surface: the auth flow, and the landing page at the root.
+	if (path.startsWith('/auth/') || path === '/') {
+		return resolve(event);
+	}
+
+	// Redirect unauthenticated users to login
+	if (!user) {
+		throw redirect(303, '/auth/login');
+	}
+
+	// Role: WAITING — lock to /waiting and /auth/logout
+	if (user.role === 'WAITING') {
+		const allowedPaths = ['/waiting', '/auth/logout'];
+		if (!allowedPaths.some((p) => path.startsWith(p))) {
+			throw redirect(303, '/waiting');
 		}
+	}
 
-		// Redirect unauthenticated users to login
-		if (!user) {
-			throw redirect(303, '/auth/login');
-		}
+	// Redirect out of /waiting if approved
+	if (user.role !== 'WAITING' && path === '/waiting') {
+		throw redirect(303, '/today');
+	}
 
-		// Role: WAITING — lock to /waiting and /auth/logout
-		if (user.role === 'WAITING') {
-			const allowedPaths = ['/waiting', '/auth/logout'];
-			if (!allowedPaths.some((p) => path.startsWith(p))) {
-				throw redirect(303, '/waiting');
-			}
-		}
-
-		// Redirect out of /waiting if approved
-		if (user.role !== 'WAITING' && path === '/waiting') {
-			throw redirect(303, '/today');
-		}
-
-		// Role: ADMIN required for /_admin
-		if (path.startsWith('/_admin') && user.role !== 'ADMIN') {
-			throw redirect(303, '/today');
-		}
-	} else {
-		// Auth disabled — single-user mode (dev)
-		// Establish the local profile before any workspace or tool write.
-		setWorkspaceAccountCookie(
-			event.cookies,
-			(await AppFactory.localActor()).userId,
-			event.url.protocol === 'https:'
-		);
+	// Role: ADMIN required for /_admin
+	if (path.startsWith('/_admin') && user.role !== 'ADMIN') {
+		throw redirect(303, '/today');
 	}
 
 	return resolve(event);
