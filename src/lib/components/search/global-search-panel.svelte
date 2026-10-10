@@ -9,6 +9,7 @@
 	import { Toggle } from '$lib/components/ui/toggle';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { globalSearch } from '$lib/stores/search/global-search.svelte';
@@ -227,7 +228,7 @@
 	<div class="mt-2 min-h-0 flex-1 overflow-y-auto">
 		{#if globalSearch.query === ''}
 			<EmptyState
-				icon={Icon.Search}
+				scene={Scene.Search}
 				title="Search every note's title and text."
 				hint="Toggle .* for regex."
 				size="large"
@@ -239,7 +240,7 @@
 			</div>
 		{:else if globalSearch.hits.length === 0 && !globalSearch.searchError}
 			<EmptyState
-				icon={Icon.Search}
+				scene={Scene.Search}
 				title="No results for “{globalSearch.query}”."
 				size="large"
 				label="No results"

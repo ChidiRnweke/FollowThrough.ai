@@ -20,6 +20,7 @@
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import { toast } from 'svelte-sonner';
 	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import EmptyState from '../../shared/empty-state.svelte';
@@ -370,7 +371,7 @@
 		divider rather than competing side by side: start fresh, or bring what you have.
 	-->
 	<EmptyState
-		icon={Icon.Document}
+		scene={Scene.Project}
 		title="Nothing here yet."
 		hint="Notes you write in this project show up here."
 		size="large"

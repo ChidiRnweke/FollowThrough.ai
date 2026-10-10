@@ -250,10 +250,14 @@ product celebrates the absence of work rather than apologizing for empty screens
 Empty regions are invitations to act, never dead blank space. Use `empty-state.svelte`: a quiet
 icon, one voice line, an optional hint, and at most one action. The default slot size (bare muted
 icon, all-muted copy) fills inline gaps; `size="large"` is the hero treatment for a region that
-carries a page or a whole section — a brand-wash icon tile (`size-16 rounded-lg bg-brand/10
-text-brand dark:bg-brand/15`), a statement in foreground, one supporting line, then the action.
+carries a page or a whole section — a drawn scene from `$lib/components/icons/scenes`
+(`import * as Scene`), a statement in foreground, one supporting line, then the action. A scene
+is a small 64-unit illustration in the icon stroke; it draws itself in when the region appears and
+its dot lands last, in teal from the start, because it marks the one action the region invites.
+The props are a discriminated union: the slot takes an `icon`, the hero takes a `scene` and an
+optional accessible `label`; a region that changes size branches at the call site.
 Kanban columns keep their drop zone and center the voice line inside it. The icon stays near its
-drawn size at every scale — the `size="large"` tile is how an icon gets presence, never a
+drawn size at every scale — the scene is how a large empty state gets presence, never a
 scaled-up glyph. Controls that only operate on content (tabs, filters, sort, bulk toolbars) hide
 while the region is empty; the empty state and its one action are the whole surface.
 

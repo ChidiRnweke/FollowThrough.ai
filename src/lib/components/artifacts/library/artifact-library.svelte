@@ -5,6 +5,7 @@
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import { toast } from 'svelte-sonner';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
@@ -131,7 +132,7 @@
 	{/snippet}
 	{#if !data.selectedProjectId}
 		<EmptyState
-			icon={Icon.Artifact}
+			scene={Scene.Project}
 			title="Select a project to see its artifacts."
 			size="large"
 			label="Artifacts"
@@ -168,14 +169,14 @@
 			</Form>
 		{/if}
 		{#if artifacts.length === 0 && data.query}
-			<EmptyState icon={Icon.Search} title="No artifacts match “{data.query}”." size="large">
+			<EmptyState scene={Scene.Search} title="No artifacts match “{data.query}”." size="large">
 				{#snippet action()}
 					<Button variant="outline" onclick={clearSearch}>Clear search</Button>
 				{/snippet}
 			</EmptyState>
 		{:else if artifacts.length === 0}
 			<EmptyState
-				icon={Icon.Export}
+				scene={Scene.Artifact}
 				title="No artifacts yet."
 				hint="Exports of your notes and project documents show up here."
 				size="large"

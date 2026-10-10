@@ -15,6 +15,7 @@
 	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import { formatRelativeTime } from '$lib/components/shared/labels';
 	import {
 		trashEntryIcon,
@@ -91,7 +92,7 @@
 
 {#if entries.length === 0}
 	<EmptyState
-		icon={Icon.Trash}
+		scene={Scene.Trash}
 		title={emptyTitle}
 		hint={emptyHint}
 		size="large"
