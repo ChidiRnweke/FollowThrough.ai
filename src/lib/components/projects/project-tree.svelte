@@ -15,7 +15,7 @@
 	import { TRIGGERS, type DndEvent } from 'svelte-dnd-action';
 	import { toast } from 'svelte-sonner';
 	import { onMount } from 'svelte';
-	import { ancestorFolderIds, isWithinSubtree } from '$lib/services/projects/tree-expansion';
+	import { projectTreeController } from '$lib/factories/projects/tree';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -147,7 +147,7 @@
 		const node = byId.get(activeNoteId);
 		if (!node) return;
 		toggled.delete(`project:${node.projectId}`);
-		for (const parentId of ancestorFolderIds(node, byId)) toggled.add(parentId);
+		for (const parentId of projectTreeController.revealPath(node, byId)) toggled.add(parentId);
 		revealedNoteId = activeNoteId;
 	});
 
@@ -208,7 +208,7 @@
 	function isDropBlocked(folderId: NoteId): boolean {
 		if (draggingId === undefined) return false;
 		const folder = byId.get(folderId);
-		return folder !== undefined && isWithinSubtree(folder, draggingId, byId);
+		return folder !== undefined && projectTreeController.contains(folder, draggingId, byId);
 	}
 
 	function handleDndConsider(

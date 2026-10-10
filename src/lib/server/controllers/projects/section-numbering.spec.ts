@@ -1,8 +1,10 @@
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { ProjectDetailService } from '$lib/services/projects/details';
 import { describe, expect, it } from 'vitest';
 import { Projects, type ProjectsDependencies } from './controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import {
 	projectBuilder,
 	testActor,
@@ -14,7 +16,9 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	const controller = new Projects(
 		capabilityDependencies<ProjectsDependencies>({
-			projectEditor: new ProjectCatalog(projects, projects)
+			details: new ProjectDetailService(),
+			presentation: new ProjectTreePresentationService(),
+			projectEditor: createProjectServices(projects, projects).editor
 		})
 	);
 	return { projects, controller };

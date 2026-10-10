@@ -1,3 +1,4 @@
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { WorkspaceViews, type WorkspaceViewsController } from '$lib/controllers/workspace/views';
@@ -9,5 +10,6 @@ export const createWorkspaceViews = (
 	new WorkspaceViews(
 		new WorkspaceProjectionStore(records),
 		new SuggestionPresentationService(),
-		new MemoryPresentationService()
+		new MemoryPresentationService(),
+		new ProjectTreePresentationService()
 	);

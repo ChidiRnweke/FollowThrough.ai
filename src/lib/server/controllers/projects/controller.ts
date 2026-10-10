@@ -1,9 +1,9 @@
-import { decideProjectEntryMove } from '$lib/server/services/projects/catalog';
+import type { ProjectPlacement } from '$lib/services/projects/placement';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
-import { assembleProjectTree } from '$lib/services/projects/presentation';
-import { decideProjectDetails } from '$lib/services/projects/details';
+import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
+import type { ProjectDetailRules } from '$lib/services/projects/details';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { Note, NoteId } from '$lib/models/notes';
@@ -31,13 +31,14 @@ import type {
 	SetProjectSectionNumberingOutput
 } from '$lib/models/projects';
 import type {
+	ProjectLifecycle,
 	ProjectCreator,
 	ProjectEditor,
 	ProjectTreeWriter,
 	ProjectLister,
 	ProjectReader,
 	ProjectTreeReader
-} from '$lib/server/services/projects/contracts';
+} from '$lib/server/services/projects/catalog';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 
 /**
@@ -75,6 +76,10 @@ export interface ProjectsDependencies {
 	projectReader: ProjectReader;
 	projectLister: ProjectLister;
 	projectEditor: ProjectEditor;
+	projectLifecycle: ProjectLifecycle;
+	placement: ProjectPlacement;
+	details: ProjectDetailRules;
+	presentation: ProjectTreePresentation;
 	projectTreeReader: ProjectTreeReader;
 	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
 	entryWriter: ProjectTreeWriter;
@@ -139,11 +144,11 @@ export class Projects implements ProjectsController {
 			this.dependencies.projectReader.get(actor, input.projectId),
 			this.dependencies.projectTreeReader.readEntries(actor, input.projectId)
 		]);
-		return { project, tree: assembleProjectTree(entries) };
+		return { project, tree: this.dependencies.presentation.assemble(entries) };
 	}
 
 	async create(actor: ActorContext, input: CreateProjectInput): Promise<CreateProjectOutput> {
-		const details = decideProjectDetails(input);
+		const details = this.dependencies.details.decide(input);
 		if (details.kind === 'invalid') throw new ValidationError(details.message);
 		return {
 			project: await this.dependencies.projectCreator.create(actor, {
@@ -155,7 +160,7 @@ export class Projects implements ProjectsController {
 	}
 
 	async rename(actor: ActorContext, input: RenameProjectInput): Promise<RenameProjectOutput> {
-		const details = decideProjectDetails(input);
+		const details = this.dependencies.details.decide(input);
 		if (details.kind === 'invalid') throw new ValidationError(details.message);
 		return {
 			project: await this.dependencies.projectEditor.rename(actor, {
@@ -167,7 +172,7 @@ export class Projects implements ProjectsController {
 	}
 
 	async archive(actor: ActorContext, input: ArchiveProjectInput): Promise<ArchiveProjectOutput> {
-		return { project: await this.dependencies.projectEditor.archive(actor, input.projectId) };
+		return { project: await this.dependencies.projectLifecycle.archive(actor, input.projectId) };
 	}
 
 	async setSectionNumberingDefault(
@@ -209,7 +214,7 @@ export class Projects implements ProjectsController {
 	): Promise<MoveProjectEntryOutput<Note>> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const entries = await this.dependencies.entryWriter.readForMove(actor, input.projectId);
-			const decision = decideProjectEntryMove(input, entries);
+			const decision = this.dependencies.placement.decide(input, entries);
 			if (decision.kind === 'invalid') {
 				if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
 				throw new ValidationError(decision.message);

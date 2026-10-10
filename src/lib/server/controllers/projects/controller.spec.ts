@@ -1,8 +1,10 @@
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { ProjectDetailService } from '$lib/services/projects/details';
 import { describe, expect, it } from 'vitest';
 import { Projects, type ProjectsDependencies } from './controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
@@ -14,15 +16,19 @@ import {
 
 const setup = () => {
 	const projects = new InMemoryProjectRepository();
-	const catalog = new ProjectCatalog(projects, projects);
+	const catalog = createProjectServices(projects, projects);
 	const controller = new Projects(
 		capabilityDependencies<ProjectsDependencies>({
-			projectCreator: catalog,
-			projectReader: catalog,
-			projectLister: catalog,
-			projectEditor: catalog,
-			projectTreeReader: catalog,
-			entryWriter: catalog,
+			details: new ProjectDetailService(),
+			presentation: new ProjectTreePresentationService(),
+			placement: catalog.placement,
+			projectLifecycle: catalog.lifecycle,
+			projectCreator: catalog.creator,
+			projectReader: catalog.reader,
+			projectLister: catalog.lister,
+			projectEditor: catalog.editor,
+			projectTreeReader: catalog.treeReader,
+			entryWriter: catalog.treeWriter,
 			transactionRunner: new InMemoryTransactionRunner([])
 		})
 	);

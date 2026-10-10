@@ -1,3 +1,4 @@
+import { ProjectDetailService } from '$lib/services/projects/details';
 import { MemoryEditingService } from '$lib/services/memory/edits';
 import {
 	WorkspaceCommands,
@@ -9,5 +10,6 @@ export const createWorkspaceCommands = (): WorkspaceCommandController =>
 	new WorkspaceCommands(
 		createWidgetEditingController(),
 		new WidgetLifecycleService(),
-		new MemoryEditingService()
+		new MemoryEditingService(),
+		new ProjectDetailService()
 	);

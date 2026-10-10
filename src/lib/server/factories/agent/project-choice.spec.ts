@@ -1,10 +1,12 @@
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { ProjectDetailService } from '$lib/services/projects/details';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { expect, it } from 'vitest';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { AgentTools } from './agent-tool-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -19,9 +21,15 @@ import {
 const toolsFor = (hasProject: boolean) => {
 	const projects = new InMemoryProjectRepository();
 	if (hasProject) projects.projects = [projectBuilder({ role: 'inbox', name: 'Renamed inbox' })];
-	const catalog = new ProjectCatalog(projects, projects);
+	const catalog = createProjectServices(projects, projects);
 	const controller = new Projects(
-		capabilityDependencies<ProjectsDependencies>({ projectLister: catalog })
+		capabilityDependencies<ProjectsDependencies>({
+			details: new ProjectDetailService(),
+			presentation: new ProjectTreePresentationService(),
+			placement: catalog.placement,
+			projectLifecycle: catalog.lifecycle,
+			projectLister: catalog.lister
+		})
 	);
 	return new AgentTools(
 		testTokenizer,

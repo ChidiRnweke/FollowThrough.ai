@@ -3,7 +3,7 @@ import { decideNoteRestore, noteTrashChange } from '$lib/services/notes/trash';
 import { decideTodoCreation } from '$lib/services/todos/creation';
 import { applyTodoEdit } from '$lib/services/todos/edits';
 import { decideNoteCreation } from '$lib/services/notes/creation';
-import { decideProjectDetails } from '$lib/services/projects/details';
+import type { ProjectDetailRules } from '$lib/services/projects/details';
 import { decideDiagramRevision } from '$lib/services/diagrams/editing';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
 import type { IMemoryEditingService } from '$lib/services/memory/edits';
@@ -48,8 +48,14 @@ const todoWrite = (
 });
 
 /** Initial representations use client IDs; server acknowledgment replaces only authoritative fields. */
-const newProject = (id: ProjectId, userId: UserId, name: string, timestamp: DateTime): Project => {
-	const decision = decideProjectDetails({ name });
+const newProject = (
+	rules: ProjectDetailRules,
+	id: ProjectId,
+	userId: UserId,
+	name: string,
+	timestamp: DateTime
+): Project => {
+	const decision = rules.decide({ name });
 	if (decision.kind === 'invalid') throw new Error(decision.message);
 	return {
 		id,
@@ -237,7 +243,8 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 	constructor(
 		private readonly widgetEditing: WidgetEditingController,
 		private readonly widgetLifecycle: IWidgetLifecycleService,
-		private readonly memoryEditing: IMemoryEditingService
+		private readonly memoryEditing: IMemoryEditingService,
+		private readonly projectDetails: ProjectDetailRules
 	) {}
 	async prepare(
 		command: PreparedWorkspaceCommand,
@@ -309,7 +316,7 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 			case 'createProject':
 				return content({
 					type: 'projects',
-					value: newProject(command.id, userId, command.name, now)
+					value: newProject(this.projectDetails, command.id, userId, command.name, now)
 				});
 			case 'createNote':
 			case 'createFolder': {
@@ -332,7 +339,7 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 				]);
 			}
 			case 'renameProject': {
-				const decision = decideProjectDetails(command);
+				const decision = this.projectDetails.decide(command);
 				if (decision.kind === 'invalid') throw new Error(decision.message);
 				return content({
 					type: 'projects',

@@ -1,3 +1,4 @@
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { createWorkspaceCommands } from '$lib/factories/workspace/commands';
@@ -43,7 +44,8 @@ export const assembleWorkspaceResources = (
 		new WorkspaceViews(
 			projection,
 			new SuggestionPresentationService(),
-			new MemoryPresentationService()
+			new MemoryPresentationService(),
+			new ProjectTreePresentationService()
 		),
 		{
 			view: <K extends WorkspaceResourceType>(

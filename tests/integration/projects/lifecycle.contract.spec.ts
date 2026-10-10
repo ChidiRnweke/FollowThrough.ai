@@ -1,6 +1,8 @@
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { ProjectDetailService } from '$lib/services/projects/details';
 import { expect, it } from 'vitest';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -9,14 +11,18 @@ import { seedUser, actor, context } from '../database-harness';
 
 const setup = () => {
 	const repository = new ProjectRecords(context.db);
-	const catalog = new ProjectCatalog(repository, repository);
+	const catalog = createProjectServices(repository, repository);
 	const controller = new Projects(
 		capabilityDependencies<ProjectsDependencies>({
-			projectCreator: catalog,
-			projectReader: catalog,
-			projectLister: catalog,
-			projectTreeReader: catalog,
-			projectEditor: catalog
+			details: new ProjectDetailService(),
+			presentation: new ProjectTreePresentationService(),
+			placement: catalog.placement,
+			projectLifecycle: catalog.lifecycle,
+			projectCreator: catalog.creator,
+			projectReader: catalog.reader,
+			projectLister: catalog.lister,
+			projectTreeReader: catalog.treeReader,
+			projectEditor: catalog.editor
 		})
 	);
 	return { repository, controller };

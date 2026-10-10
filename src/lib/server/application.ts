@@ -167,7 +167,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	});
 
 	const projectRepository = projectCapability.repository;
-	const projects = projectCapability.catalog;
+	const projects = projectCapability;
 	const noteRepository = noteCapability.repository;
 	const anchorRepository = noteCapability.anchors;
 	const provenanceRepository = noteCapability.provenanceRepository;
@@ -318,7 +318,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
 			transactionRunner,
-			projectLister: projects,
+			projectLister: projects.lister,
 			markdownToContent: deliverables.markdownToContent,
 			exportPreparer: deliverables.prepareExport,
 			pdfGenerator: deliverables.pdfGenerator,
@@ -453,7 +453,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			contextAttachments: attachmentCapability.reader,
 			builtInSkills: skillCapability.builtIns,
 			contextMemory: memory.lister,
-			contextProjects: projects,
+			contextProjects: projects.reader,
 			contextConversations: conversationJournal,
 			provenance
 		},
@@ -553,7 +553,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			writeRecovery: synchronization.mutations,
 			syncObjects: synchronization.objects,
 			userReader: identity.userReader,
-			projectLister: projects,
+			projectLister: projects.lister,
 			noteTreeReader: notes,
 			skillFinder: skills,
 			builtInSkills: skillCapability.builtIns,
@@ -576,7 +576,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteTextSearcher: notes,
 			noteCreation: notes,
 			noteSectionNumbering: notes,
-			projectReader: projects,
+			projectReader: projects.reader,
 			userPreferences: identity.userPreferences,
 			relationshipFinder: relationships.finder,
 			backlinkContextReader: relationships.contexts,
@@ -645,13 +645,17 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		projects: {
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			projectCreator: projects,
-			projectReader: projects,
-			projectLister: projects,
-			projectEditor: projects,
-			projectTreeReader: projects,
+			placement: projects.placement,
+			details: projects.details,
+			presentation: projects.presentation,
+			projectLifecycle: projects.lifecycle,
+			projectCreator: projects.creator,
+			projectReader: projects.reader,
+			projectLister: projects.lister,
+			projectEditor: projects.editor,
+			projectTreeReader: projects.treeReader,
 			noteCreation: notes,
-			entryWriter: projects,
+			entryWriter: projects.treeWriter,
 			transactionRunner
 		},
 		retrieval: {

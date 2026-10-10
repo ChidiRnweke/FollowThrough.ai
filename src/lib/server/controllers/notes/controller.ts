@@ -103,7 +103,7 @@ import {
 	searchNoteTargets
 } from '$lib/services/notes/text-search';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { ProjectReader } from '$lib/server/services/projects/contracts';
+import type { ProjectReader } from '$lib/server/services/projects/catalog';
 import type { UserPreferencesReader } from '$lib/server/services/identity/user-preferences';
 import type {
 	BacklinkContextReader,

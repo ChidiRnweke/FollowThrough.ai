@@ -1,3 +1,5 @@
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { ProjectDetailService } from '$lib/services/projects/details';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { vi } from 'vitest';
 import postgres from 'postgres';
@@ -7,7 +9,7 @@ import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-contex
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -17,15 +19,19 @@ import { context } from './database-harness';
 
 export const treeControllers = (database: Database, transactionRunner: TransactionRunner) => {
 	const projects = new ProjectRecords(database);
-	const catalog = new ProjectCatalog(projects, projects);
+	const catalog = createProjectServices(projects, projects);
 	const records = new NoteRecords(database);
 	const notes = new NoteCatalog(records, new SourceAnchorRecords(database), projects);
 	return {
 		records,
 		projects: new Projects(
 			capabilityDependencies<ProjectsDependencies>({
-				entryWriter: catalog,
-				projectEditor: catalog,
+				details: new ProjectDetailService(),
+				presentation: new ProjectTreePresentationService(),
+				placement: catalog.placement,
+				projectLifecycle: catalog.lifecycle,
+				entryWriter: catalog.treeWriter,
+				projectEditor: catalog.editor,
 				noteCreation: notes,
 				transactionRunner
 			})

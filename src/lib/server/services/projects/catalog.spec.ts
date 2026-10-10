@@ -1,27 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { projectBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { ProjectCatalog } from './catalog';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 
 const setup = () => {
 	const repository = new InMemoryProjectRepository();
 	repository.projects = [projectBuilder()];
-	return { repository, service: new ProjectCatalog(repository, repository) };
+	return { repository, service: createProjectServices(repository, repository) };
 };
 
 describe('Project management invariants', () => {
 	it('hides a project tree after the project is archived', async () => {
 		const { service } = setup();
-		await service.archive(testActor(), projectBuilder().id);
-		await expect(service.readEntries(testActor(), projectBuilder().id)).rejects.toMatchObject({
+		await service.lifecycle.archive(testActor(), projectBuilder().id);
+		await expect(
+			service.treeReader.readEntries(testActor(), projectBuilder().id)
+		).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});
 
 	it('allows an archived project name to be reused', async () => {
 		const { service } = setup();
-		await service.archive(testActor(), projectBuilder().id);
-		const replacement = await service.create(testActor(), {
+		await service.lifecycle.archive(testActor(), projectBuilder().id);
+		const replacement = await service.creator.create(testActor(), {
 			name: projectBuilder().name,
 			description: undefined
 		});
@@ -30,9 +32,9 @@ describe('Project management invariants', () => {
 
 	it('rejects renaming to another active project name', async () => {
 		const { service } = setup();
-		await service.create(testActor(), { name: 'Other', description: undefined });
+		await service.creator.create(testActor(), { name: 'Other', description: undefined });
 		await expect(
-			service.rename(testActor(), {
+			service.editor.rename(testActor(), {
 				projectId: projectBuilder().id,
 				name: 'other',
 				description: undefined

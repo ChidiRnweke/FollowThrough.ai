@@ -1,3 +1,5 @@
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { ProjectDetailService } from '$lib/services/projects/details';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
@@ -17,6 +19,11 @@ export const noteCreationControllers = (
 		})
 	),
 	projects: new Projects(
-		capabilityDependencies<ProjectsDependencies>({ noteCreation: catalog, transactionRunner })
+		capabilityDependencies<ProjectsDependencies>({
+			details: new ProjectDetailService(),
+			presentation: new ProjectTreePresentationService(),
+			noteCreation: catalog,
+			transactionRunner
+		})
 	)
 });

@@ -1,3 +1,5 @@
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { ProjectDetailService } from '$lib/services/projects/details';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -5,7 +7,7 @@ import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
 import { expect, it } from 'vitest';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
@@ -16,7 +18,7 @@ it('keeps a folder at the project root after reloading a completed move', async 
 	const owner = await seedUser('13901');
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const repository = new ProjectRecords(database);
-	const catalog = new ProjectCatalog(repository, repository);
+	const catalog = createProjectServices(repository, repository);
 	const project = await repository.insert(owner, { name: 'Root folder move' });
 	const creation = noteCreationControllers(
 		new NoteCatalog(new NoteRecords(database), new SourceAnchorRecords(database), repository),
@@ -33,9 +35,13 @@ it('keeps a folder at the project root after reloading a completed move', async 
 	});
 	const controller = new Projects(
 		capabilityDependencies<ProjectsDependencies>({
-			projectReader: catalog,
-			projectTreeReader: catalog,
-			entryWriter: catalog,
+			details: new ProjectDetailService(),
+			presentation: new ProjectTreePresentationService(),
+			placement: catalog.placement,
+			projectLifecycle: catalog.lifecycle,
+			projectReader: catalog.reader,
+			projectTreeReader: catalog.treeReader,
+			entryWriter: catalog.treeWriter,
 			transactionRunner
 		})
 	);

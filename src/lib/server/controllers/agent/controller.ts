@@ -72,7 +72,7 @@ import {
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
-import type { ProjectReader } from '$lib/server/services/projects/contracts';
+import type { ProjectReader } from '$lib/server/services/projects/catalog';
 import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
 import type { AgentRunContext, ContextResourceRef, PreparedAgentRun } from '$lib/models/agent';

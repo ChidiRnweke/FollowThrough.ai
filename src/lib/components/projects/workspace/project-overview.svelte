@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 	import type { GetProjectOutput, ProjectExportEntry, ProjectTreeNode } from '$lib/models/projects';
-	import { projectExportEntries } from '$lib/services/projects/export-entries';
+	import { projectTreeController } from '$lib/factories/projects/tree';
 	import type { NoteId, NoteSummary, TrashedNote } from '$lib/models/notes';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -353,9 +353,10 @@
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
-					{#if isFolder && projectExportEntries(node.children).length > 0}
+					{#if isFolder && projectTreeController.exportEntries(node.children).length > 0}
 						<DropdownMenu.Item
-							onclick={() => onexport?.(node.entry.title, projectExportEntries(node.children))}
+							onclick={() =>
+								onexport?.(node.entry.title, projectTreeController.exportEntries(node.children))}
 						>
 							Export…
 						</DropdownMenu.Item>

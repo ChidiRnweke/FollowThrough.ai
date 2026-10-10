@@ -4,7 +4,7 @@ import type { Project } from '$lib/models/projects';
 import type { Note } from '$lib/models/notes';
 import type { WorkspaceViewState } from '$lib/models/workspace-views';
 import { assembleTodoView } from '$lib/services/todos/presentation';
-import { assembleProjectTree } from '$lib/services/projects/presentation';
+import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
 import { assembleNoteView } from '$lib/services/notes/presentation';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
 import { assembleReferenceView } from '$lib/services/references/presentation';
@@ -96,7 +96,8 @@ export class WorkspaceViews implements WorkspaceViewsController {
 	constructor(
 		private readonly state: WorkspaceViewState,
 		private readonly suggestionPresentation: ISuggestionPresentationService,
-		private readonly memoryPresentation: IMemoryPresentationService
+		private readonly memoryPresentation: IMemoryPresentationService,
+		private readonly projectPresentation: ProjectTreePresentation
 	) {}
 	private get records() {
 		return this.state.records;
@@ -479,7 +480,7 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		const entries = this.notes
 			.filter((note) => note.projectId === projectId && note.kind !== 'skill')
 			.sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt));
-		return { project, tree: assembleProjectTree(entries) };
+		return { project, tree: this.projectPresentation.assemble(entries) };
 	}
 	note(
 		noteId: NoteId

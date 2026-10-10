@@ -16,7 +16,7 @@
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { BulkExportDialog, ExportSettingsDialog, ImportNotesDialog } from '$lib/components/notes';
 	import type { ProjectExportEntry } from '$lib/models/projects';
-	import { projectExportEntries } from '$lib/services/projects/export-entries';
+	import { projectTreeController } from '$lib/factories/projects/tree';
 	import { type SectionNumberingLevel } from '$lib/models/notes';
 	import {
 		sectionNumberingLevelFor,
@@ -56,7 +56,7 @@
 
 	// The whole project, folders preserved as folders inside the zip. A project with no
 	// notes in it gets no menu item rather than a dialog with nothing to offer.
-	const projectEntries = $derived(view ? projectExportEntries(view.tree) : []);
+	const projectEntries = $derived(view ? projectTreeController.exportEntries(view.tree) : []);
 
 	function startExport(sourceTitle: string, entries: readonly ProjectExportEntry[]): void {
 		exportSourceTitle = sourceTitle;
