@@ -23,7 +23,7 @@ import type { WebReferenceClient } from '$lib/server/controllers/references/cont
 import type { ReferenceCandidatePreparation } from '$lib/server/services/references/discovery';
 import type { AgentRunSettings } from '$lib/services/agent/run-settings';
 import type { WebResearchOptions } from '$lib/models/agent';
-import { operationObserver } from '$lib/server/services/telemetry';
+import { createTelemetryCapability } from '$lib/server/factories/telemetry';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 
 export interface ReferencesCapabilityInput {
@@ -64,7 +64,7 @@ export const createReferencesCapability = (
 			baseURL: input.openRouterBaseURL,
 			appURL: input.appURL,
 			defaultModel: normalizeLanguageModelId(input.defaultModel),
-			observer: operationObserver
+			observer: createTelemetryCapability().operations
 		}),
 	candidates: new ReferenceDiscovery(),
 	settings: new AgentRunSettingsService(),

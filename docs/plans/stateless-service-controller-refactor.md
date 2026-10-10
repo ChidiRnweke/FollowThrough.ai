@@ -321,7 +321,7 @@ Every service module below has a planned disposition. This is routing, not compl
 | `src/lib/server/services/skills/pins.ts`                            | `SkillPins`                                                                                                                                                                                                                                | Explicit creation, reading, editing, usage, provisioning, pin, surface-selection, portability and metadata interfaces. Private helpers and immutable released definitions preserve existing rules. Browser editor workflow moved to SkillEditor; catalog actions remain pending. |
 | `src/lib/server/services/suggestions/effects.ts`                    | SuggestionEffects                                                                                                                                                                                                                          | Explicit effect recording and restoration contract. Record-shape mapping is private to controllers; transactions remain controller-owned.                                                                                                                                        |
 | `src/lib/server/services/suggestions/inbox.ts`                      | SuggestionCreationService, SuggestionReadingService, SuggestionContextService, SuggestionLifecycleService                                                                                                                                  | Explicit creation, reading, context and lifecycle contracts. Creation helpers private; clock supplied by composition. Factory outputs narrow interfaces.                                                                                                                         |
-| `src/lib/server/services/telemetry.ts`                              | `traceWorkflow`, `traceOperation`, `traceAgentTurn`, `resolveLogLevel`, `logLevelEnabled`, `summarize`, `activeTraceparent`, `operationObserver`                                                                                           | Named telemetry.ts capabilities; private helpers, boundary adapters and state require semantic review. Pending.                                                                                                                                                                  |
+| `src/lib/server/services/telemetry.ts`                              | `traceWorkflow`, `traceOperation`, `traceAgentTurn`, `resolveLogLevel`, `logLevelEnabled`, `summarize`, `activeTraceparent`, `operationObserver`                                                                                           | Corrected above #370: factory-owned observers, data models, owner-declared behavior contracts, SDK/context adapters, and stateless logging rules. See telemetry continuation; overall migration incomplete.                                                                      |
 | `src/lib/server/services/todos/batch-receipts.ts`                   | `TodoBatchReceipts`                                                                                                                                                                                                                        | Resolved into explicit todo capability interfaces; internal rules and export helpers are private. Browser board export is a complete controller operation. Other browser todo actions remain pending.                                                                            |
 | `src/lib/server/services/todos/catalog.ts`                          | `TodoCatalog`                                                                                                                                                                                                                              | Resolved into explicit todo capability interfaces; internal rules and export helpers are private. Browser board export is a complete controller operation. Other browser todo actions remain pending.                                                                            |
 | `src/lib/server/services/todos/promise-discovery.ts`                | `PromiseDiscovery`, `promisesForResponsibility`                                                                                                                                                                                            | Resolved into explicit todo capability interfaces; internal rules and export helpers are private. Browser board export is a complete controller operation. Other browser todo actions remain pending.                                                                            |
@@ -1599,3 +1599,44 @@ in [the enforcement record](stateless-service-controller-enforcement.md#tool-act
 The overall refactor remains incomplete. Keep this stacked PR draft. Browser migrations, journal
 redesign, agent-file changes, indexing, telemetry restructuring and the diagram SDK mismatch remain
 outside this slice.
+
+## Telemetry boundaries — 2026-10-11
+
+Continues above draft #370 at `85def21d534c7278283d0e3d8e6f6f1a999a6acc`.
+Application revision: `2da09b3422bb2ac8c8af98747f94b7ad248ba8be`.
+Sibling draft #371 was inspected. This slice carries its telemetry adapter placement and
+workflow/context injection onto #370, preserving the agent-file and projection implementations
+already present here. It additionally makes construction and dependencies explicit, extracts
+stateless log rules, assigns behavior contracts to their owners and removes the implicit turn observer.
+
+Controllers retain operations, transactions, journal ownership and execution order. Adapters own
+span/context mechanics, SDK cancellation recognition and serialization. Factories expose declared
+capability interfaces. Telemetry models contain only trace/configuration data; callable contracts
+live with services/adapters or the controllers/repositories that consume them. The turn callback
+is declared on the execution observation contract, not model data. Existing tracing hierarchy,
+durable traceparent format, cancellation/errors, per-call log configuration, summary markers and
+payload redaction remain covered by local regressions.
+
+Focused regressions passed 55 files/377 tests. Full units passed 595 files/4,631 tests with one
+existing skip. Affected isolated PostgreSQL contracts passed 39 files/190 tests. Lint, type/docs
+checks, topology, source, test quality and UI passed. Semantic findings decreased from 362 to 351;
+all 47 Chisel findings remain unchanged. Complete diagnostics and manual dependency reviews are
+refreshed in the [enforcement record](stateless-service-controller-enforcement.md#telemetry-boundaries--2026-10-11)
+and JSON companion. No checks or suppressions changed.
+
+The startup recovery ordering gap noted in #371 remains visible in application.ts and is recorded
+as pending. Zero server semantic findings does not establish overall compliance. The wider
+migration remains incomplete; keep this stacked PR draft while migration gates fail.
+Browser migrations, journal redesign, indexing, collector configuration and the diagram SDK
+mismatch remain outside this slice. No live providers or external telemetry services ran.
+
+### Telemetry contract placement correction — 2026-10-11
+
+Callable interfaces and the turn callback have been removed from models/telemetry. The logging
+service now declares its own public interface directly. Infrastructure interfaces live with the
+adapters, and application consumers own their outbound ports. Factory construction checks their
+compatibility without importing adapters into controllers or re-exporting behavior through models.
+This changes only type ownership and imports: all 26 changed files emit identical JavaScript
+with TypeScript ESNext and comments removed. AST inspection confirms no callable signatures
+remain in the telemetry model. The validation results above were repeated for this correction;
+351 semantic findings and 47 Chisel findings remain unchanged. No checks or suppressions changed.

@@ -1,3 +1,4 @@
+import type { WorkflowTraceContext } from '$lib/models/telemetry';
 import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { AgentStreamState } from '$lib/server/stores/agent/stream';
 import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
@@ -28,7 +29,6 @@ import type {
 	RunSettlementOutcome,
 	WorkflowRunContext
 } from '$lib/models/agent';
-import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { Note, NoteId, TextSelection } from '$lib/models/notes';
 import type { Provenance, ProvenanceId, ProvenanceRequest } from '$lib/models/provenance';
 import type { Skill } from '$lib/models/skills';
@@ -91,6 +91,15 @@ import type { SelectionOriginService } from '$lib/server/services/notes/selectio
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 import type { AgentEventBus } from '$lib/server/stores/agent/events';
+
+interface DiagramWorkflowObserver {
+	run<T>(
+		name: string,
+		context: WorkflowTraceContext,
+		body: () => Promise<T>,
+		describeOutput?: (result: T) => string
+	): Promise<T>;
+}
 
 /**
  * Application boundary for diagrams: generating and revising Mermaid diagrams from a
@@ -179,19 +188,6 @@ export interface DiagramsController {
 		input: AgentToolInput<'promote_diagram'>
 	): Promise<AgentPayload>;
 }
-
-type DiagramWorkflowObserver = <T>(
-	name: string,
-	context: {
-		input: string;
-		sessionId: string;
-		userId?: string;
-		metadata?: AgentPayloadObject;
-		tags?: readonly string[];
-	},
-	operation: () => Promise<T>,
-	output: (result: T) => string
-) => Promise<T>;
 
 export interface DiagramAgentDependencies {
 	readonly toolActivityProjection: ToolActivityProjection;
@@ -781,7 +777,7 @@ export class Diagrams implements DiagramsController {
 			await this.dependencies.generation.runContext.persist(actor, run.id, change);
 		});
 
-		return await this.dependencies.generation.observeWorkflow(
+		return await this.dependencies.generation.observeWorkflow.run(
 			'diagram.agent-turn',
 			{
 				input: input.prompt,

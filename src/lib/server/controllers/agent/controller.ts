@@ -56,7 +56,6 @@ import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AttachmentLookup } from '$lib/server/services/attachments/library';
 import type { DiagramFinder } from '$lib/server/services/diagrams/library';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
-import { activeTraceparent } from '$lib/server/services/telemetry';
 import type { WidgetReader } from '$lib/server/services/widgets/library';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 
@@ -216,11 +215,17 @@ export interface AgentController {
 	deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void>;
 }
 
+/** Reads the W3C traceparent of the active operation, so a run can rejoin it later. */
+export interface TraceContextReader {
+	activeTraceparent(): string | undefined;
+}
+
 /**
  * Everything the {@link AgentController} needs to do its work, injected so the
  * controller can be built and tested with repository and provider fakes.
  */
 export interface AgentDependencies {
+	readonly traceContext: TraceContextReader;
 	readonly toolActivityProjection: ToolActivityProjection;
 	readonly filePaths: AgentFilePaths;
 	readonly runStatus: AgentRunStatusRules;
@@ -401,7 +406,7 @@ export class Agent implements AgentController {
 				// Seeds the run with the requesting operation's span, so the first
 				// turn joins this request's trace even though execution starts
 				// after this transaction commits. Approval parks refresh it.
-				const submittedTraceparent = activeTraceparent();
+				const submittedTraceparent = this.dependencies.traceContext.activeTraceparent();
 				const run: AgentRun = {
 					kind: 'agent',
 					id: crypto.randomUUID() as AgentRunId,
@@ -589,7 +594,7 @@ export class Agent implements AgentController {
 					throw new ValidationError('Only failed or cancelled runs can be retried');
 				const submittedAt = now();
 				// Joins the retry request's trace, same as a fresh submit.
-				const retryTraceparent = activeTraceparent();
+				const retryTraceparent = this.dependencies.traceContext.activeTraceparent();
 				const retry: AgentRun = {
 					kind: 'agent',
 					id: crypto.randomUUID() as AgentRunId,

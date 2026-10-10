@@ -1,3 +1,4 @@
+import type { AgentTurnContext } from '$lib/models/telemetry';
 import type { AgentToolCompletionObserver } from '$lib/models/agent-tool-protocol';
 import { AgentProviderFailure } from '$lib/errors';
 import type {
@@ -28,32 +29,23 @@ import type { AgentPromptPreparation } from '$lib/server/services/agent/runs/ins
 import type { AgentToolRecovery } from '$lib/server/services/agent/runs/tool-recovery';
 import type { OpenAIProvider, Session, Tool } from '@openai/agents';
 
+/** Observation callbacks belong to the execution contract, not the model data. */
+export interface AgentTurnObservation extends AgentTurnContext {
+	readonly onRoot?: (traceparent: string) => void;
+}
+export interface AgentTurnObserver {
+	run<T>(
+		params: AgentTurnObservation,
+		body: () => AsyncIterable<T>,
+		output: () => string
+	): AsyncIterable<T>;
+}
 export interface AgentExecutionSessions {
 	create(actor: ActorContext, conversationId: ConversationId): BufferedSession;
 }
 interface BufferedSession extends Session {
 	snapshot(): Promise<readonly PersistedSessionItem[]>;
 }
-
-interface AgentTurnContext {
-	readonly input: string;
-	readonly sessionId: string;
-	readonly model: string;
-	readonly userId?: string;
-	readonly runId?: string;
-	readonly parentTraceparent?: string;
-	readonly onRoot?: (traceparent: string) => void;
-}
-
-type AgentTurnObserver = <T>(
-	context: AgentTurnContext,
-	operation: () => AsyncIterable<T>,
-	output: () => string
-) => AsyncIterable<T>;
-
-const directTurnObserver: AgentTurnObserver = async function* (_context, operation) {
-	yield* operation();
-};
 
 export interface AgentProviderTurn {
 	readonly events: AsyncIterable<ProviderStreamEvent>;
@@ -116,7 +108,7 @@ export class AgentExecution implements AgentRunner {
 		private readonly sessions: AgentExecutionSessions,
 		private readonly available: boolean,
 		private readonly providers: AgentExecutionInfrastructure,
-		private readonly observeTurn: AgentTurnObserver = directTurnObserver
+		private readonly observeTurn: AgentTurnObserver
 	) {}
 
 	async *execute(input: {
@@ -243,7 +235,7 @@ export class AgentExecution implements AgentRunner {
 
 				yield { type: 'completed', sessionItems: await session.snapshot() };
 			};
-			yield* this.observeTurn(
+			yield* this.observeTurn.run(
 				{
 					input: request.prompt ?? '',
 					sessionId: run.conversationId,

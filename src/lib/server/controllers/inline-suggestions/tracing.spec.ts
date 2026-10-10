@@ -4,7 +4,10 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { SemanticConventions as S } from '@arizeai/openinference-semantic-conventions';
 import type { InlineSuggestionRequest } from '$lib/models/agent';
-import { operationObserver } from '$lib/server/services/telemetry';
+import { createTelemetryCapability } from '$lib/server/factories/telemetry';
+const telemetry = createTelemetryCapability();
+const operationObserver = telemetry.operations;
+
 import { createInlineCompletion } from '$lib/server/factories/inline-completion';
 import { inlineCompletionProvider } from '$lib/testing/inline-suggestions/fixtures/provider';
 import { inlineSuggestionFixture } from '$lib/testing/inline-suggestions/fixtures/context';
@@ -40,6 +43,7 @@ const request: InlineSuggestionRequest = {
 };
 const fixtureFor = (baseURL: string) => {
 	const fixture = inlineSuggestionFixture({
+		workflow: telemetry.workflows,
 		observer: operationObserver,
 		inlineCompletionGenerator: createInlineCompletion({
 			apiKey: 'local-key',

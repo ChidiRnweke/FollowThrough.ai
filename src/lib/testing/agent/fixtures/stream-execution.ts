@@ -1,3 +1,4 @@
+import { InMemoryTurnObserver } from '$lib/testing/telemetry/fakes/in-memory-turn-observer';
 import type {
 	AgentRunId,
 	ConversationId,
@@ -62,7 +63,8 @@ export const streamExecutionFixture = (events: readonly ProviderStreamEvent[]) =
 			})
 		},
 		true,
-		infrastructure
+		infrastructure,
+		new InMemoryTurnObserver()
 	);
 	const collect = async (): Promise<AgentEvent[]> => {
 		const result: AgentEvent[] = [];

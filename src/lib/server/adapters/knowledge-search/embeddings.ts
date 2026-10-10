@@ -1,6 +1,6 @@
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
 import type { EmbeddingBatch, EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
-import type { OperationObserver } from '$lib/models/telemetry';
+import type { OperationObserver } from '$lib/server/adapters/telemetry/tracing';
 import { getEmbeddingAttributes } from '@arizeai/openinference-core';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 import type OpenAI from 'openai';

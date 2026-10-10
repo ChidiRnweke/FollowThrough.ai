@@ -45,7 +45,7 @@ import {
 	DeterministicPromiseExtractor,
 	type IPromiseRules
 } from '$lib/server/services/todos/promise-rules';
-import { operationObserver } from '$lib/server/services/telemetry';
+import { createTelemetryCapability } from '$lib/server/factories/telemetry';
 
 export interface TodosCapabilityInput {
 	readonly db: Database;
@@ -88,7 +88,7 @@ export const createTodosCapability = (input: TodosCapabilityInput): TodosCapabil
 		new PromiseClassification(process.env.OPENROUTER_API_KEY, {
 			baseURL: process.env.OPENROUTER_BASE_URL,
 			appURL: process.env.ORIGIN,
-			observer: operationObserver
+			observer: createTelemetryCapability().operations
 		})
 	)
 });

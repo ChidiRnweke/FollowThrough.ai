@@ -2,17 +2,7 @@ import type { Attributes } from '@opentelemetry/api';
 import type { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 
-/**
- * What a service says about an operation it is asking to have traced.
- *
- * It lives here rather than beside the tracer because a service may not import
- * another service, and nine of them need to name it. They each declared a
- * private observer port taking `unknown` instead, and the tracer then asserted
- * this exact type back out of it — one shape, ten declarations, none of them
- * checked against the others.
- *
- * Pure data: the vendor imports are type-only, so nothing here runs.
- */
+/** Data attached to a traced workflow or operation. */
 export interface WorkflowTraceContext {
 	readonly input?: string;
 	readonly inputMimeType?: MimeType;
@@ -35,19 +25,24 @@ export interface WorkflowTraceContext {
 	readonly onlyWithinWorkflow?: boolean;
 }
 
-/**
- * The seam a service uses to trace one operation.
- *
- * Declared once, next to the context it carries. `describeOutput` and
- * `describeAttributes` are the two hooks a caller uses to turn its own result
- * into span data, so the result type stays the caller's.
- */
-export interface OperationObserver {
-	run<T>(
-		name: string,
-		context: WorkflowTraceContext,
-		body: () => Promise<T>,
-		describeOutput?: (result: T) => string,
-		describeAttributes?: (result: T) => Attributes
-	): Promise<T>;
+export interface AgentTurnContext {
+	readonly input: string;
+	readonly sessionId: string;
+	readonly model: string;
+	readonly userId?: string;
+	readonly runId?: string;
+	/**
+	 * W3C traceparent of the operation that started this run. Seeded onto the run
+	 * at submit time so the first turn joins the requesting trace, and carried
+	 * across an approval park so the resumed turn hangs off the original root
+	 * instead of opening a second trace for the same user request. When absent,
+	 * the turn joins an active workflow context if there is one, else roots.
+	 */
+	readonly parentTraceparent?: string;
+}
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export interface LogEnvironment {
+	readonly LOG_LEVEL: string | undefined;
+	readonly NODE_ENV: string | undefined;
 }

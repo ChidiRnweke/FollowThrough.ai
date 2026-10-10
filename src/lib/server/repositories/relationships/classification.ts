@@ -1,11 +1,20 @@
+import type { WorkflowTraceContext } from '$lib/models/telemetry';
 import OpenAI from 'openai';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import {
 	relationshipClassificationSchema,
 	type RelationshipClassification
 } from '$lib/models/relationships';
-import type { OperationObserver } from '$lib/models/telemetry';
 import { ExternalServiceError } from '$lib/errors';
+
+interface ClassificationObserver {
+	run<T>(
+		name: string,
+		context: WorkflowTraceContext,
+		body: () => Promise<T>,
+		describeOutput?: (result: T) => string
+	): Promise<T>;
+}
 
 export interface StructuredRelationshipClient {
 	classify(
@@ -29,7 +38,7 @@ export class RelationshipLanguageModel implements StructuredRelationshipClient {
 		private readonly options: {
 			readonly baseURL: string;
 			readonly appURL: string;
-			readonly observer: OperationObserver;
+			readonly observer: ClassificationObserver;
 		}
 	) {}
 

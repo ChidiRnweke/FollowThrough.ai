@@ -1,4 +1,4 @@
-import type { OperationObserver } from '$lib/models/telemetry';
+import type { OperationObserver } from '$lib/server/adapters/telemetry/tracing';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
 import { createAgentToolResults } from '$lib/server/factories/agent/tool-result-factory';
@@ -486,6 +486,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			syncRetry: synchronization.mutationRetry,
 			conversationSessions,
 			conversationMessages,
+			traceContext: agentCapability.traceContext,
 			toolActivityProjection,
 			preferences,
 			models: modelCatalog,
@@ -788,6 +789,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			reranker: searchReranker,
 			memory: memory.lister,
 			observer: finalizedKnowledgeSearch.observer,
+			workflow: finalizedKnowledgeSearch.workflow,
 			// Controllers are constructed per request, so the process-wide spend
 			// guard is wired once here.
 			inlineSuggestionThrottle: finalizedKnowledgeSearch.inlineAdmission

@@ -44,6 +44,7 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 			inlineSuggestionThrottle: admission,
 			preferences,
 			observer: { run: (_name, _context, body) => body() },
+			workflow: { run: (_name, _context, body) => body() },
 			...overrides
 		})
 	);

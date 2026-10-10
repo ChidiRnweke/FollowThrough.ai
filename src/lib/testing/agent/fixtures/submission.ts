@@ -1,3 +1,4 @@
+import { createTelemetryCapability } from '$lib/server/factories/telemetry';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
@@ -46,6 +47,7 @@ export const agentSubmissionFixture = (
 	const controller = new Agent(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
+			traceContext: createTelemetryCapability().traceContext,
 			...agentRulesFixture(),
 			...dependencies,
 			conversationMessages: journal,

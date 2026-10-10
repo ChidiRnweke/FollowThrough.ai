@@ -1,3 +1,4 @@
+import { InMemoryTurnObserver } from '$lib/testing/telemetry/fakes/in-memory-turn-observer';
 import type { AgentRunContext, PreparedAgentRun, RunAgentInput } from '$lib/models/agent';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
@@ -97,7 +98,7 @@ const setup = (fetch: typeof globalThis.fetch, prepare = async () => {}) => {
 			fetch,
 			() => provider
 		),
-		undefined
+		new InMemoryTurnObserver()
 	);
 	const execute = async (signal = new AbortController().signal, input = request) => {
 		const updates = [];

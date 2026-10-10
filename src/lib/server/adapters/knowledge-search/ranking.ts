@@ -7,7 +7,7 @@ import {
 import { DEFAULT_RERANK_MODEL, rerankDocumentText } from './rerank-protocol';
 import { rerankerInputTraceAttributes, rerankerOutputTraceAttributes } from './rerank-tracing';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
-import type { OperationObserver } from '$lib/models/telemetry';
+import type { OperationObserver } from '$lib/server/adapters/telemetry/tracing';
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
 
 const DEFAULT_LANGUAGE_MODEL_BASE_URL = 'https://openrouter.ai/api/v1';

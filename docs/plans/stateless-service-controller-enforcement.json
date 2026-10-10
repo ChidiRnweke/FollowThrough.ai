@@ -1,21 +1,21 @@
 {
 	"recordedAt": "2026-10-11",
-	"applicationRevision": "f09fd8125f2af896c9229d40c805845d76477912",
+	"applicationRevision": "2da09b3422bb2ac8c8af98747f94b7ad248ba8be",
 	"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors. The overall refactor is incomplete.",
 	"comparison": {
-		"applicationBase": "d8ad32290ce8dcb1d0993cc53910364127f19afc",
+		"applicationBase": "85def21d534c7278283d0e3d8e6f6f1a999a6acc",
 		"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
-		"method": "Baseline verification on draft #368 matched all 364 semantic diagnostics with provenance and all 47 expanded Chisel messages and locations exactly. Unchanged analyzers remove only the two tool-activity public-helper identities and add none. All 47 Chisel diagnostics match the base exactly. Complete remaining source locations and provenance are refreshed. Constructors, factory outputs, parsing, persistence, journal consumers, tool surfaces, tracing and evaluation dependencies were reviewed separately.",
+		"method": "Baseline #370 reproduced every recorded semantic diagnostic and provenance and every expanded Chisel finding exactly. The telemetry slice carries selected boundary wiring from sibling draft #371 and completes explicit construction, log-rule and shared-contract boundaries on #370. The only removed diagnostics are all 11 findings in the former services/telemetry.ts (eight public-service-helper and three indirect-dependency). All other semantic diagnostics, including provenance and source locations, and all 47 Chisel findings match the base exactly. No checks or suppressions changed. Manual reviews include observers, logging, context propagation, constructors, factories, evaluations and diagnostic scripts. The overall migration remains incomplete.",
 		"semanticCounts": {
 			"concrete-dependency": 1,
 			"controller-orchestration": 277,
 			"factory-workflow": 12,
 			"indirect-dependency": 9,
-			"public-service-helper": 10,
+			"public-service-helper": 8,
 			"store-workflow": 55
 		},
-		"semanticTotal": 364,
+		"semanticTotal": 362,
 		"chiselCounts": {
 			"import-boundary:banned-layer-import": 47
 		},
@@ -28,8 +28,7 @@
 			"concrete-dependency": 1,
 			"controller-orchestration": 277,
 			"factory-workflow": 12,
-			"indirect-dependency": 9,
-			"public-service-helper": 8,
+			"indirect-dependency": 6,
 			"store-workflow": 55
 		},
 		"violations": [
@@ -3616,105 +3615,6 @@
 				]
 			},
 			{
-				"file": "src/lib/server/services/telemetry.ts",
-				"line": 43,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/telemetry.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/telemetry.ts",
-				"line": 60,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/telemetry.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/telemetry.ts",
-				"line": 79,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/telemetry.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/telemetry.ts",
-				"line": 107,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/telemetry.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/telemetry.ts",
-				"line": 171,
-				"column": 1,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/telemetry.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/telemetry.ts",
-				"line": 187,
-				"column": 18,
-				"rule": "indirect-dependency",
-				"message": "services must not invoke or expose controllers behavior. Move the operation to a controller.",
-				"provenance": [
-					"src/lib/server/services/telemetry.ts:187",
-					"src/lib/server/controllers/inline-suggestions/controller.ts:131"
-				]
-			},
-			{
-				"file": "src/lib/server/services/telemetry.ts",
-				"line": 217,
-				"column": 1,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/telemetry.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/telemetry.ts",
-				"line": 226,
-				"column": 61,
-				"rule": "indirect-dependency",
-				"message": "services must not invoke or expose controllers behavior. Move the operation to a controller.",
-				"provenance": [
-					"src/lib/server/services/telemetry.ts:226",
-					"src/lib/server/controllers/instrumentation.ts:25"
-				]
-			},
-			{
-				"file": "src/lib/server/services/telemetry.ts",
-				"line": 263,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/telemetry.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/telemetry.ts",
-				"line": 271,
-				"column": 10,
-				"rule": "indirect-dependency",
-				"message": "services must not invoke or expose controllers behavior. Move the operation to a controller.",
-				"provenance": [
-					"src/lib/server/services/telemetry.ts:271",
-					"src/lib/server/services/telemetry.ts:217",
-					"src/lib/server/services/telemetry.ts:226",
-					"src/lib/server/controllers/instrumentation.ts:25"
-				]
-			},
-			{
-				"file": "src/lib/server/services/telemetry.ts",
-				"line": 323,
-				"column": 1,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/telemetry.ts:1"]
-			},
-			{
 				"file": "src/lib/stores/agent/app-context.svelte.ts",
 				"line": 141,
 				"column": 6,
@@ -4842,6 +4742,97 @@
 				"src/lib/testing/diagrams/fixtures/generation.ts"
 			],
 			"inventoryNote": "Evaluation results preserve start order, original arguments, reported-failure detail, approval state, and omission of unidentified outcomes. Existing reconstruction fallbacks remain unchanged; none were added. Local runCase tests use the real Agent controller with InMemory repositories and runner. No private helper was exposed, no provider was called, and the overall migration remains incomplete."
+		},
+		{
+			"subject": "Telemetry rules and SDK/context boundaries",
+			"status": "corrected",
+			"previousDependency": "Telemetry helpers mixed SDK/context mechanics, log policy, serialization and ambient process dependencies.",
+			"currentOwner": "TelemetryLogPolicyService owns level selection and rendered-text redaction/truncation. OpenTelemetryTracing owns SDK context/span/traceparent mechanics. TelemetryLogRendering owns generic serialization with an explicit failure result. Environment, logger and clock are injected through factory construction.",
+			"evidence": [
+				"src/lib/models/telemetry/index.ts",
+				"src/lib/server/services/telemetry/log-policy.ts",
+				"src/lib/server/adapters/telemetry/tracing.ts",
+				"src/lib/server/adapters/telemetry/logging.ts"
+			],
+			"inventoryNote": "Preserves per-call environment reads, current default thresholds and 500-character summary policy, cancellation recognition, traceparent encoding/parser behavior and exact markers. No additional defaults or suppressions. Infrastructure observer consumers are controllers, adapters and repositories; no service-to-service dependency is introduced."
+		},
+		{
+			"subject": "Controller instrumentation and durable execution consumers",
+			"status": "corrected",
+			"previousDependency": "ControllerBoundary, Agent submission/retry and inline suggestions imported global helpers. Agent execution and diagram generation duplicated observer contracts.",
+			"currentOwner": "ControllerBoundary is infrastructure middleware with explicit observer/logging/clock/logger inputs. Existing controllers keep operations, transactions, journal writes and execution order. Agent owns the TraceContextReader outbound contract. AgentExecution owns AgentTurnObserver and its onRoot observation callback; diagrams, inline suggestions and knowledge search declare their own outbound observer requirements.",
+			"evidence": [
+				"src/lib/server/adapters/telemetry/controller-boundary.ts",
+				"src/lib/server/controllers/agent/controller.ts",
+				"src/lib/server/controllers/agent/execution.ts",
+				"src/lib/server/controllers/agent/trace-submission.spec.ts",
+				"src/lib/server/controllers/inline-suggestions/controller.ts",
+				"src/lib/server/controllers/diagrams/controller.ts",
+				"src/lib/server/factories/controller-instrumentation.spec.ts"
+			],
+			"inventoryNote": "Local exported-span assertions cover saved submission/retry context, turn resume parentage, asynchronous iterator steps, early exit, errors and cancellation. Controller surfaces and tool coverage are unchanged. Boundary loggers remain separate from tracing debug output, preserving the previous custom-logger behavior."
+		},
+		{
+			"subject": "Telemetry factory outputs, observer consumers and evaluations",
+			"status": "corrected",
+			"previousDependency": "Capability factories imported singleton observers; knowledge search exposed typeof operationObserver.",
+			"currentOwner": "createTelemetryCapability constructs log policy, environment, rendering and tracing and returns owner-declared interfaces. Capability factories wire observers into controllers and provider/repository adapters. Application wiring constructs no service. Models hold trace/configuration data only; no executable contracts are re-exported through models.",
+			"evidence": [
+				"src/lib/server/factories/telemetry.ts",
+				"src/lib/server/factories/capabilities/agent-capability-factory.ts",
+				"src/lib/server/factories/capabilities/knowledge-search-capability-factory.ts",
+				"src/lib/server/factories/capabilities/attachments-capability-factory.ts",
+				"src/lib/server/factories/capabilities/references-capability-factory.ts",
+				"src/lib/server/factories/capabilities/relationships-capability-factory.ts",
+				"src/lib/server/factories/capabilities/todos-capability-factory.ts",
+				"src/lib/server/factories/capabilities/diagrams-capability-factory.ts",
+				"src/lib/server/application.ts",
+				"src/evals/lab/application.ts"
+			],
+			"inventoryNote": "Evaluation construction still uses production createApplication and preserves queryObserver suppression. Local evaluation cache/projection tests pass; labels saying live describe supplied local fakes, not external calls. No direct production constructor outside factories, concrete output leak, controller-backed observer or new service composition was found."
+		},
+		{
+			"subject": "Telemetry diagnostic scripts and collector boundary",
+			"status": "corrected",
+			"previousDependency": "Two Phoenix diagnostic scripts imported the removed telemetry service module.",
+			"currentOwner": "Scripts obtain operation/workflow observers through the telemetry factory. SDK preload, collector routing and shutdown remain unchanged.",
+			"evidence": [
+				"scripts/phoenix-smoke-test.js",
+				"scripts/phoenix-trace-validation.js",
+				"scripts/otel-instrumentation.js",
+				"scripts/telemetry-shutdown.spec.ts",
+				"scripts/web-shutdown.spec.ts"
+			],
+			"inventoryNote": "Both changed scripts pass node --check. Factory imports and span generation run through local fixtures. Bun is absent, so diagnostic Bun execution is unverified. No external telemetry service, live provider or collector round-trip was used."
+		},
+		{
+			"subject": "Startup recovery orchestration gap identified in sibling PR #371",
+			"status": "pending",
+			"previousDependency": "application.ts invokes five controller recovery operations in sequence, outside the checker classification for controllers.",
+			"currentOwner": "Existing application recovery retains agent recovery before queued workflow recoveries; this telemetry slice does not change the sequence.",
+			"evidence": ["src/lib/server/application.ts"],
+			"inventoryNote": "Confirmed current source still contains the gap reported in #371. Zero remaining server semantic findings does not establish complete ADR 0007 compliance. Resolve separately without reordering recovery as part of this slice."
+		},
+		{
+			"subject": "Telemetry data and behavioral contract ownership",
+			"status": "corrected",
+			"previousDependency": "models/telemetry held observer, logging-policy and runtime interfaces plus the onRoot callback. These describe behavior, not model data.",
+			"currentOwner": "Models retain only WorkflowTraceContext, AgentTurnContext, LogLevel and LogEnvironment. TelemetryLogPolicy is declared directly beside its service. Tracing, rendering and runtime interfaces live beside their adapters. Agent controllers own their outbound context/turn ports; other controller and repository consumers declare the observation ports they need. Factories check structural compatibility when supplying adapters. No behavioral re-export remains in models.",
+			"evidence": [
+				"src/lib/models/telemetry/index.ts",
+				"src/lib/server/services/telemetry/log-policy.ts",
+				"src/lib/server/adapters/telemetry/tracing.ts",
+				"src/lib/server/adapters/telemetry/logging.ts",
+				"src/lib/server/controllers/agent/controller.ts",
+				"src/lib/server/controllers/agent/execution.ts",
+				"src/lib/server/controllers/inline-suggestions/controller.ts",
+				"src/lib/server/controllers/knowledge-search/controller.ts",
+				"src/lib/server/controllers/diagrams/controller.ts",
+				"src/lib/server/repositories/todos/classification.ts",
+				"src/lib/server/repositories/relationships/classification.ts",
+				"src/lib/server/factories/telemetry.ts"
+			],
+			"inventoryNote": "AST inspection finds no function types, method signatures, call signatures or construct signatures in models/telemetry/index.ts. TypeScript ESNext emission with comments removed is identical for all 26 changed files against 99ed86a3. Runtime rules, callback invocation, span behavior and persisted formats are unchanged. Existing semantic and Chisel diagnostics match exactly; no checks or suppressions changed. Focused regressions, full units, affected isolated contracts and all architecture stages were rerun."
 		}
 	]
 }

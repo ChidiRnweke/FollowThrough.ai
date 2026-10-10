@@ -783,3 +783,101 @@ not a suppression input. The overall application migration is incomplete.
 
 Browser migrations, journal redesign, agent-file changes, indexing, telemetry restructuring and
 the diagram SDK mismatch remain outside this slice. Do not mark the overall refactor complete.
+
+## Telemetry boundaries — 2026-10-11
+
+Base: draft #370 at `85def21d534c7278283d0e3d8e6f6f1a999a6acc`.
+Application revision: `2da09b3422bb2ac8c8af98747f94b7ad248ba8be`. Checkers are unchanged.
+The baseline reproduced all 362 recorded semantic diagnostics and provenance and all 47 expanded
+Chisel findings exactly. Sibling draft #371 (`49e62a50`) supplied the adapter placement and
+workflow/context injection pattern; its agent-file and tool-activity alternatives were not ported
+over the implementations already in #370.
+
+### Corrected boundaries
+
+Telemetry models describe only trace context, turn context, log levels and environment values.
+The logging-policy service declares its own public behavior interface. Tracing, rendering and
+runtime interfaces live with their adapters. Agent controllers own their outbound context/turn
+contracts, including the onRoot callback. Other controller and repository consumers declare the
+observation ports they need. Factory construction checks compatibility against those requirements.
+No behavior contract is re-exported through models, and controllers do not import adapter modules.
+
+The telemetry factory constructs implementations and exposes declared interfaces. Knowledge search
+no longer exposes a singleton-derived type. All affected factories, application wiring,
+provider/repository observers and evaluations were checked. Evaluations retain their production
+application path and query-observer suppression.
+
+OpenTelemetryTracing owns span/context mechanics, traceparent compatibility and SDK cancellation
+recognition. TelemetryLogPolicyService owns level selection and rendered-text redaction/truncation.
+TelemetryLogRendering handles arbitrary values and returns an explicit serialization failure marker.
+No new suppression, default, duplicate rule or test-only production helper was introduced.
+
+ControllerBoundary is infrastructure middleware. Its observer, log policy access, clock and logger
+are explicit. It preserves receiver binding, cached methods, one kind-null boundary span, log
+severity and summaries. Custom boundary loggers remain distinct from tracing debug output.
+Agent submission/retry use the injected context reader; execution, diagrams and inline suggestions
+use owner-declared observer ports. Controllers retain complete operations and transaction/journal ownership.
+No service composition or controller chains were introduced.
+
+### Complete remaining inventory
+
+| Rule                       | #370 | Remaining |
+| -------------------------- | ---: | --------: |
+| `controller-orchestration` |  277 |       277 |
+| `factory-workflow`         |   12 |        12 |
+| `store-workflow`           |   55 |        55 |
+| `public-service-helper`    |    8 |         0 |
+| `indirect-dependency`      |    9 |         6 |
+| `concrete-dependency`      |    1 |         1 |
+| Semantic total             |  362 |       351 |
+| Chisel findings            |   47 |        47 |
+
+Only the former telemetry service's eight public-helper and three indirect-dependency findings
+were removed. Every other semantic finding, provenance and source location matches the base;
+all Chisel findings match exactly. The complete JSON remains evidence, never a suppression input.
+One existing Chisel finding is server-side: the agent conversation adapter imports a repository
+mapper. The startup recovery sequence in application.ts also remains an unaudited orchestration
+gap, as reported by #371 and confirmed here. It is recorded as pending; zero server semantic
+findings is not a claim that the overall refactor is complete.
+
+### Observed verification
+
+- Focused regressions: **55 files, 377 passed**. Includes observation adapters, rule tests,
+  controller instrumentation, Agent/diagram/inline/search operations, provider protocols,
+  local evaluation cache/projection fixtures and telemetry shutdown tests.
+- Full units: **595 files, 4,631 passed, one existing skip**. Browser output retains the existing
+  `derived_inert` warnings and chart rendering error.
+- Affected isolated PostgreSQL contracts: **39 files, 190 passed** using
+  `pnpm test:contracts:isolated tests/integration/agent tests/integration/diagrams tests/integration/knowledge-search tests/integration/references tests/integration/relationships tests/integration/attachments tests/integration/todos`.
+- Lint and type checking passed. Docs checking passed with zero errors/warnings and one existing
+  hint; TypeDoc entry-point warnings remain.
+- Every architecture stage ran. Topology, source, test quality and UI passed. The architecture
+  chain stopped at **351** semantic findings; standalone Chisel failed with **47** unchanged errors.
+- Local in-memory exporters verify actual submission/retry spans saved on durable runs, turn
+  resume parentage, async iterator context, early exit, cancellation and exceptions. Logging tests
+  preserve dynamic levels, redaction and explicit unserializable markers.
+- Early checks caught incorrect factory scope, a fixture observer argument and changed routing
+  of custom boundary logger output. These were corrected before the results above. Lint also
+  caught two unused leftovers, which were removed.
+- Both changed Phoenix scripts pass `node --check`. Bun is not installed, so their Bun runtime
+  path is unverified. No Phoenix round-trip, live provider/evaluation, E2E, PWA or production-build
+  validation ran. Local evaluation messages labelled “live” use supplied fakes.
+- Local results do not imply CI success. Keep the PR draft while migration gates fail.
+
+Browser migrations, journal redesign, indexing, collector configuration and the diagram SDK
+mismatch remain out of scope. The original application checklist remains incomplete.
+
+### Contract-placement revalidation
+
+The callable contracts previously placed in models/telemetry have moved to their service,
+infrastructure or consuming operation owners. The telemetry model now has no function types,
+method signatures, call signatures or construct signatures. No alias or barrel preserves the
+old behavioral model API. The log policy has a direct local public interface, without forwarding
+method types from models.
+
+This correction emits identical JavaScript for all 26 changed files against `99ed86a3`, using
+TypeScript ESNext with comments removed. It does not move or duplicate runtime rules. Focused
+regressions (55 files/377 tests), full units (595 files/4,631 tests, one skip), affected isolated
+contracts (39 files/190 tests), lint, type/docs checks and every architecture stage were rerun.
+The complete semantic and Chisel inventories match the preceding revision exactly. The wider
+migration remains incomplete; the PR stays draft. No check or suppression changed.

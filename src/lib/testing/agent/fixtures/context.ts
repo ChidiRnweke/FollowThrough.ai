@@ -1,3 +1,4 @@
+import { createTelemetryCapability } from '$lib/server/factories/telemetry';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { ConversationHistoryService } from '$lib/server/services/agent/conversations/history';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
@@ -71,7 +72,11 @@ export const agentContextFixture = () => {
 	};
 	const controller = new Agent(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({ ...dependencies, ...agentRulesFixture() })
+		capabilityDependencies<AgentDependencies>({
+			traceContext: createTelemetryCapability().traceContext,
+			...dependencies,
+			...agentRulesFixture()
+		})
 	);
 	const builder = {
 		async build(actor: ActorContext, input: RunAgentInput, origin: { provenanceId: ProvenanceId }) {

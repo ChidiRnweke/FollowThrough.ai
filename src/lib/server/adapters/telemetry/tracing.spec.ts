@@ -1,13 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { context, ROOT_CONTEXT, type Context, type ContextManager } from '@opentelemetry/api';
-import {
-	activeTraceparent,
-	logLevelEnabled,
-	resolveLogLevel,
-	summarize,
-	traceOperation
-} from '$lib/server/services/telemetry';
+import { createTelemetryCapability } from '$lib/server/factories/telemetry';
+const telemetry = createTelemetryCapability();
+const activeTraceparent = telemetry.traceContext.activeTraceparent.bind(telemetry.traceContext);
+const traceOperation = telemetry.operations.run;
 
 /**
  * Vitest loads no OTel SDK, so the global context manager is a no-op and
@@ -83,44 +80,6 @@ describe('operation nesting', () => {
 		});
 
 		expect(described).toBe(true);
-	});
-});
-
-describe('resolveLogLevel', () => {
-	test('defaults to debug outside production and test runs', () => {
-		expect(resolveLogLevel({})).toBe('debug');
-	});
-
-	test('defaults to info in production', () => {
-		expect(resolveLogLevel({ NODE_ENV: 'production' })).toBe('info');
-	});
-
-	test('LOG_LEVEL overrides the environment default', () => {
-		expect(resolveLogLevel({ NODE_ENV: 'production', LOG_LEVEL: 'debug' })).toBe('debug');
-	});
-});
-
-describe('logLevelEnabled', () => {
-	test('suppresses debug records when the resolved level is info', () => {
-		expect(logLevelEnabled('debug', { LOG_LEVEL: 'info' })).toBe(false);
-	});
-
-	test('allows error records at every resolved level', () => {
-		expect(logLevelEnabled('error', { LOG_LEVEL: 'error' })).toBe(true);
-	});
-});
-
-describe('summarize', () => {
-	test('elides base64 data URLs', () => {
-		const summary = summarize({ image: `data:image/png;base64,${'A'.repeat(2048)}` });
-
-		expect(summary).toContain('<base64 elided');
-	});
-
-	test('caps the rendering at maxChars', () => {
-		const summary = summarize({ text: 'x'.repeat(1000) }, 100);
-
-		expect(summary.length).toBeLessThanOrEqual(140);
 	});
 });
 

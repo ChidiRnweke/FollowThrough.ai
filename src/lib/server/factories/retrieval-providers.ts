@@ -7,7 +7,7 @@ import {
 	DEFAULT_SEARCH_QUERY_MODEL,
 	type SearchQueryGenerator
 } from '$lib/models/knowledge-search/query-generation';
-import type { OperationObserver } from '$lib/models/telemetry';
+import type { OperationObserver } from '$lib/server/adapters/telemetry/tracing';
 import { Embeddings } from '$lib/server/adapters/knowledge-search/embeddings';
 import { SearchQueryGeneration } from '$lib/server/adapters/knowledge-search/query-generation';
 

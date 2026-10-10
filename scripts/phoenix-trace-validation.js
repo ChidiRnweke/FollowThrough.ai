@@ -42,11 +42,12 @@ process.stdout.write(
 );
 
 const { shutdownTelemetry } = await import('./otel-instrumentation.js');
-const { traceOperation, traceWorkflow } = await import('../src/lib/server/services/telemetry.ts');
+const { createTelemetryCapability } = await import('../src/lib/server/factories/telemetry.ts');
+const { operations, workflows } = createTelemetryCapability();
 const { rerankerInputTraceAttributes, rerankerOutputTraceAttributes } =
 	await import('../src/lib/server/adapters/knowledge-search/rerank-tracing.ts');
 
-await traceWorkflow(
+await workflows.run(
 	'inline.suggestion',
 	{
 		input: marker,
@@ -54,12 +55,12 @@ await traceWorkflow(
 		tags: ['diagnostic', 'trace-validation']
 	},
 	async () => {
-		await traceOperation('inline.context', { input: query }, async () => {
-			await traceOperation(
+		await operations.run('inline.context', { input: query }, async () => {
+			await operations.run(
 				'retrieval.vector-search',
 				{ input: query, kind: OpenInferenceSpanKind.RETRIEVER },
 				() =>
-					traceOperation(
+					operations.run(
 						'embedding.batch',
 						{
 							input: JSON.stringify([query]),
@@ -74,7 +75,7 @@ await traceWorkflow(
 				() => JSON.stringify({ matchCount: 1 })
 			);
 
-			await traceOperation(
+			await operations.run(
 				'retrieval.rerank',
 				{
 					input: JSON.stringify({ query, documents: [match.document] }),
@@ -95,7 +96,7 @@ await traceWorkflow(
 			);
 		});
 
-		await traceOperation(
+		await operations.run(
 			'inline.generate',
 			{ input: query, kind: OpenInferenceSpanKind.LLM },
 			async () => 'validated suggestion',
