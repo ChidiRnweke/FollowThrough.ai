@@ -1,4 +1,8 @@
 import {
+	AgentPreferenceEditingService,
+	type AgentPreferenceEditing
+} from '$lib/services/agent/preferences';
+import {
 	AgentModelSelectionService,
 	AgentModelChoiceService,
 	type IAgentModelSelectionService,
@@ -85,6 +89,7 @@ export interface AgentCapabilityInput {
 }
 
 export interface AgentCapability {
+	readonly preferenceEditing: AgentPreferenceEditing;
 	readonly mcpSurface: McpSurfaceFactory;
 	readonly now: () => DateTime;
 	readonly webSearchDefaults: WebResearchSettings;
@@ -174,6 +179,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		conversations,
 		preferences,
 		models,
+		preferenceEditing: new AgentPreferenceEditingService(),
 		modelSelection: new AgentModelSelectionService(),
 		modelChoices: new AgentModelChoiceService(),
 		toolPreferences: new ToolAccess(new ToolPreferenceRecords(input.db), agentToolCatalog),

@@ -17,7 +17,7 @@ import type {
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
 import type { UpdateAgentPreferencesInput } from '$lib/models/agent';
-import { applyAgentPreferenceUpdate } from '$lib/services/agent/preferences';
+import type { AgentPreferenceEditing } from '$lib/services/agent/preferences';
 import type { DiagramLifecycleRules } from '$lib/services/diagrams/trash';
 import type { Todo, UpdateTodoInput } from '$lib/models/todos';
 import type { Project, ProjectId } from '$lib/models/projects';
@@ -175,12 +175,13 @@ const skillMetadataWrite = (
 });
 
 const agentPreferenceWrite = (
+	editing: AgentPreferenceEditing,
 	entry: WorkspaceValues['agent_preferences'],
 	patch: UpdateAgentPreferencesInput,
 	timestamp: DateTime
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
 	command: { kind: 'updateAgentPreferences', userId: entry.userId, patch },
-	local: { type: 'agent_preferences', value: applyAgentPreferenceUpdate(entry, patch, timestamp) },
+	local: { type: 'agent_preferences', value: editing.apply(entry, patch, timestamp) },
 	coalesce: null,
 	references: []
 });
@@ -257,7 +258,8 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 		private readonly projectDetails: ProjectDetailRules,
 		private readonly noteCreationRules: NoteCreationRules,
 		private readonly noteTrashRules: NoteTrashRules,
-		private readonly noteEditingRules: NoteEditingRules
+		private readonly noteEditingRules: NoteEditingRules,
+		private readonly agentPreferenceEditing: AgentPreferenceEditing
 	) {}
 	async prepare(
 		command: PreparedWorkspaceCommand,
@@ -459,7 +461,12 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 				return skillMetadataWrite(value('skills'), patch, this.skillMetadataEditing);
 			}
 			case 'updateAgentPreferences':
-				return agentPreferenceWrite(value('agent_preferences'), command.patch, now);
+				return agentPreferenceWrite(
+					this.agentPreferenceEditing,
+					value('agent_preferences'),
+					command.patch,
+					now
+				);
 			case 'updateUserPreferences':
 				return content({
 					type: 'user_preferences',

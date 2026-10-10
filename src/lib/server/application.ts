@@ -467,6 +467,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			provenance
 		},
 		agentSettings: {
+			preferenceEditing: agentCapability.preferenceEditing,
 			modelSelection: agentCapability.modelSelection,
 			modelChoices: agentCapability.modelChoices,
 			webSearchDefaults: agentCapability.webSearchDefaults,

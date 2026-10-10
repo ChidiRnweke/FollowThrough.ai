@@ -1060,3 +1060,13 @@ Every service module below has a planned disposition. This is routing, not compl
 - Latest inventory: 63 shared modules / 105 exports (45 classes), 88 server modules / 169 exports
   (120 classes), 12,043 rows and 13,105 resolved imports. Agent preference rules, execution/state
   ownership, remaining browser operations and whole-application final verification remain pending.
+
+## Shared agent preference editing — 2026-10-10
+
+- AgentPreferenceEditingService implements validation and complete preference updates for browser
+  commands and server settings. Internal update helpers are private. Server validation remains
+  before transaction entry; reads, timestamps and persistence retain their existing order.
+- Type checking and lint pass. Focused agent tests pass: 32 files / 163 tests. Isolated preference
+  contracts pass: two files / six tests. Architecture remains incomplete at 52 prohibited imports
+  and six missing interfaces; topology/source/test-quality pass. Run settings, reference research
+  coordination and the other outstanding capability migrations remain pending.

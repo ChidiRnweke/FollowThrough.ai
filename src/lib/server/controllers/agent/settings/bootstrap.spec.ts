@@ -1,3 +1,4 @@
+import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
 import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { expect, it } from 'vitest';
 import { InMemoryModelCatalog } from '$lib/testing/agent/fakes/in-memory-model-catalog';
@@ -9,6 +10,7 @@ const setup = () => {
 	const models = new InMemoryModelCatalog();
 	const controller = new AgentSettings(
 		capabilityDependencies<AgentSettingsDependencies>({
+			preferenceEditing: new AgentPreferenceEditingService(),
 			...agentModelRulesFixture(),
 			models,
 			defaultModel: 'test/chat',

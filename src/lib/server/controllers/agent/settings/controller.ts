@@ -5,10 +5,7 @@ import type {
 import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
 import { DEFAULT_AGENT_MAX_TURNS, type WebResearchSettings } from '$lib/models/agent';
 
-import {
-	validateAgentPreferenceUpdate,
-	applyAgentPreferenceUpdate
-} from '$lib/services/agent/preferences';
+import type { AgentPreferenceEditing } from '$lib/services/agent/preferences';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
 import type {
@@ -65,6 +62,7 @@ export interface AgentSettingsController {
 }
 
 export interface AgentSettingsDependencies {
+	readonly preferenceEditing: AgentPreferenceEditing;
 	readonly modelSelection: IAgentModelSelectionService;
 	readonly modelChoices: IAgentModelChoiceService;
 	syncMutations: WorkspaceMutationGuard;
@@ -142,12 +140,12 @@ export class AgentSettings implements AgentSettingsController {
 				if (issue) throw new ValidationError(issue);
 			}
 		}
-		validateAgentPreferenceUpdate(input);
+		this.dependencies.preferenceEditing.validate(input);
 		return this.dependencies.transactionRunner.run(async () => {
 			const stored = await this.dependencies.preferences.getForWrite(actor);
 			const timestamp = this.dependencies.now();
 			const current = stored ?? this.dependencies.preferences.defaults(actor, timestamp);
-			const preferences = applyAgentPreferenceUpdate(current, input, timestamp);
+			const preferences = this.dependencies.preferenceEditing.apply(current, input, timestamp);
 			return this.dependencies.preferences.persist(actor, preferences);
 		});
 	}

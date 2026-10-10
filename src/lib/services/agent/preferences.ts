@@ -14,7 +14,7 @@ const preferenceEdit = <K extends string, V>(
 };
 
 /** Apply omitted, cleared, and explicit preferences identically on the device and server. */
-export const applyAgentPreferenceUpdate = (
+const applyAgentPreferenceUpdate = (
 	current: AgentPreferences,
 	input: UpdateAgentPreferencesInput,
 	timestamp: DateTime
@@ -51,10 +51,31 @@ const assertRange = (
 		throw new ValidationError(`${label} must be a whole number between ${minimum} and ${maximum}`);
 };
 
-export const validateAgentPreferenceUpdate = (input: UpdateAgentPreferencesInput): void => {
+const validateAgentPreferenceUpdate = (input: UpdateAgentPreferencesInput): void => {
 	if (input.webSearchEngine && !webSearchEngines.includes(input.webSearchEngine))
 		throw new ValidationError(`Web search engine must be one of: ${webSearchEngines.join(', ')}`);
 	assertRange('Web search results', input.webSearchMaxResults, 1, 50);
 	assertRange('Total web search results', input.webSearchMaxTotalResults, 1, 100);
 	assertRange('Agent turn limit', input.agentMaxTurns, 1, 50);
 };
+
+export interface AgentPreferenceEditing {
+	validate(input: UpdateAgentPreferencesInput): void;
+	apply(
+		current: AgentPreferences,
+		input: UpdateAgentPreferencesInput,
+		timestamp: DateTime
+	): AgentPreferences;
+}
+export class AgentPreferenceEditingService implements AgentPreferenceEditing {
+	validate(input: UpdateAgentPreferencesInput): void {
+		validateAgentPreferenceUpdate(input);
+	}
+	apply(
+		current: AgentPreferences,
+		input: UpdateAgentPreferencesInput,
+		timestamp: DateTime
+	): AgentPreferences {
+		return applyAgentPreferenceUpdate(current, input, timestamp);
+	}
+}

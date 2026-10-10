@@ -1,3 +1,4 @@
+import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
 import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
 import { DiagramEditingService } from '$lib/services/diagrams/editing';
 import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
@@ -27,5 +28,6 @@ export const createWorkspaceCommands = (): WorkspaceCommandController =>
 		new ProjectDetailService(),
 		new NoteLifecycleService(),
 		new NoteLifecycleService(),
-		new NoteEditingService()
+		new NoteEditingService(),
+		new AgentPreferenceEditingService()
 	);

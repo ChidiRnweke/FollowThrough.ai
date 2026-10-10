@@ -1,3 +1,4 @@
+import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
 import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { describe, expect, it } from 'vitest';
@@ -27,6 +28,7 @@ const setup = async (suffix: string) => {
 	);
 	const agent = new AgentSettings(
 		capabilityDependencies<AgentSettingsDependencies>({
+			preferenceEditing: new AgentPreferenceEditingService(),
 			...agentModelRulesFixture(),
 			preferences,
 			now: () => now,
