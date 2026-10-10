@@ -1,3 +1,4 @@
+import { createSessionItemSerialization } from '$lib/server/factories/agent/session-item-serialization-factory';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
@@ -71,7 +72,7 @@ const setup = async (suffix: string, memory = new InMemoryMemoryEntryRepository(
 			cancellations: new RunCancellation(runs),
 			settlements: new RunSettlements(runs, events),
 			decisions: new AgentRunDecisionRecords(database),
-			sessions: new AgentSessionRecords(database),
+			sessions: new AgentSessionRecords(database, createSessionItemSerialization()),
 			conversationMessages: new ConversationArchive(conversations),
 			conversationSessions: new ConversationArchive(conversations)
 		})

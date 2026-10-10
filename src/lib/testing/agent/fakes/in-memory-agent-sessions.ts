@@ -8,7 +8,7 @@ import type {
 	PersistedSessionItem
 } from '$lib/models/agent';
 import { persistedSessionItemSchema, sessionJsonObjectSchema } from '$lib/models/agent';
-import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
+import { createSessionItemSerialization } from '$lib/server/factories/agent/session-item-serialization-factory';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type {
 	RestoreSnapshot,
@@ -29,6 +29,7 @@ const restoredItemsSchema = z.array(
 
 export class InMemoryAgentSessionRepository implements AgentSessionRepository, SnapshotParticipant {
 	items: AgentSessionItem[] = [];
+	private readonly serialization = createSessionItemSerialization();
 
 	async listCanvasResults(actor: ActorContext, conversationId: ConversationId) {
 		return (await this.list(actor, conversationId)).map((row) => readCanvasSessionResult(row.item));
@@ -105,7 +106,7 @@ export class InMemoryAgentSessionRepository implements AgentSessionRepository, S
 	 */
 	snapshot(): RestoreSnapshot {
 		const stored = structuredClone(
-			this.items.map((row) => ({ ...row, item: toStoredSessionItem(row.item) }))
+			this.items.map((row) => ({ ...row, item: this.serialization.serialize(row.item) }))
 		);
 		return () => {
 			this.items = restoredItemsSchema

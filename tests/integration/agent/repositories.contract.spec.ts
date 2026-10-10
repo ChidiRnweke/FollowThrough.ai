@@ -1,3 +1,4 @@
+import { createSessionItemSerialization } from '$lib/server/factories/agent/session-item-serialization-factory';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 
@@ -10,7 +11,7 @@ import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import type {
@@ -599,16 +600,51 @@ describe('Postgres agent session repository invariants', () => {
 
 	it('returns every arm it was given, through the jsonb column', async () => {
 		const { owner, conversationId } = await seedConversation('81');
-		const repository = new AgentSessionRecords(context.db);
+		const repository = new AgentSessionRecords(context.db, createSessionItemSerialization());
 		await repository.append(owner, conversationId, transcript);
 		expect((await repository.list(owner, conversationId)).map((row) => row.item)).toEqual(
 			transcript
 		);
 	});
 
+	it('replaces session rows in order and preserves unknown wire payloads', async () => {
+		const { owner, conversationId } = await seedConversation('90');
+		const repository = new AgentSessionRecords(context.db, createSessionItemSerialization());
+		await repository.append(owner, conversationId, transcript);
+		await repository.replace(conversationId, [
+			userItem('Replacement'),
+			unrecognisedItem('compaction')
+		]);
+		const rows = await context.db
+			.select({ position: schema.agentSessionItems.position, item: schema.agentSessionItems.item })
+			.from(schema.agentSessionItems)
+			.where(eq(schema.agentSessionItems.conversationId, conversationId))
+			.orderBy(schema.agentSessionItems.position);
+		expect(rows).toEqual([
+			{ position: 0, item: { type: 'message', role: 'user', content: 'Replacement' } },
+			{ position: 1, item: { type: 'compaction', payload: 'kept whole' } }
+		]);
+	});
+
+	it('returns the ordered tail after replacement and a subsequent append', async () => {
+		const { owner, conversationId } = await seedConversation('91');
+		const repository = new AgentSessionRecords(context.db, createSessionItemSerialization());
+		await repository.replace(conversationId, [userItem('First'), userItem('Second')]);
+		await repository.append(owner, conversationId, [assistantItem('Third')]);
+		expect(
+			(await repository.list(owner, conversationId, 2)).map(({ position, item }) => ({
+				position,
+				item
+			}))
+		).toEqual([
+			{ position: 1, item: userItem('Second') },
+			{ position: 2, item: assistantItem('Third') }
+		]);
+	});
+
 	it('recovers the latest saved canvas through ordered persisted results', async () => {
 		const { owner, conversationId } = await seedConversation('85');
-		const repository = new AgentSessionRecords(context.db);
+		const repository = new AgentSessionRecords(context.db, createSessionItemSerialization());
 		await repository.append(owner, conversationId, [
 			resultItem('create_diagram', 'old', JSON.stringify({ diagramId: testDiagramId(1) })),
 			resultItem('edit_diagram', 'new', JSON.stringify({ diagramId: testDiagramId(2) })),
@@ -621,7 +657,7 @@ describe('Postgres agent session repository invariants', () => {
 
 	it('refuses to read canvas results from another account conversation', async () => {
 		const { owner, conversationId } = await seedConversation('86');
-		const repository = new AgentSessionRecords(context.db);
+		const repository = new AgentSessionRecords(context.db, createSessionItemSerialization());
 		await repository.append(owner, conversationId, [
 			resultItem('create_diagram', 'call', JSON.stringify({ diagramId: testDiagramId() }))
 		]);
@@ -632,7 +668,7 @@ describe('Postgres agent session repository invariants', () => {
 
 	it('fails when canvas selection reaches corrupt persisted output', async () => {
 		const { owner, conversationId } = await seedConversation('88');
-		const repository = new AgentSessionRecords(context.db);
+		const repository = new AgentSessionRecords(context.db, createSessionItemSerialization());
 		await repository.append(owner, conversationId, [resultItem('edit_diagram', 'corrupt', '{')]);
 		await expect(
 			new PresentedCanvasSource(repository).latest(owner, conversationId)
@@ -641,7 +677,7 @@ describe('Postgres agent session repository invariants', () => {
 
 	it('recovers a newer persisted canvas after a superseded corrupt result', async () => {
 		const { owner, conversationId } = await seedConversation('89');
-		const repository = new AgentSessionRecords(context.db);
+		const repository = new AgentSessionRecords(context.db, createSessionItemSerialization());
 		await repository.append(owner, conversationId, [
 			resultItem('edit_diagram', 'corrupt', '{'),
 			resultItem('create_diagram', 'saved', JSON.stringify({ diagramId: testDiagramId() }))
@@ -655,7 +691,7 @@ describe('Postgres agent session repository invariants', () => {
 	// met must not make the conversation unreadable.
 	it('round-trips an unrecognised stored row without changing its data', async () => {
 		const { owner, conversationId } = await seedConversation('82');
-		const repository = new AgentSessionRecords(context.db);
+		const repository = new AgentSessionRecords(context.db, createSessionItemSerialization());
 		const item = unrecognisedItem('compaction');
 		await repository.append(owner, conversationId, [item]);
 		const [row] = await repository.list(owner, conversationId);
@@ -671,9 +707,12 @@ describe('Postgres agent session repository invariants', () => {
 			// audit-allow: shape-cast — the point of the test is a column the mapper's own writer cannot produce, so the row is inserted past the typed write path
 			item: 'not an item' as unknown as StoredSessionItem
 		});
-		await expect(new AgentSessionRecords(context.db).list(owner, conversationId)).rejects.toThrow(
-			'Invalid input'
-		);
+		await expect(
+			new AgentSessionRecords(context.db, createSessionItemSerialization()).list(
+				owner,
+				conversationId
+			)
+		).rejects.toThrow('Invalid input');
 	});
 });
 describe('Postgres trust-policy repository invariants', () => {

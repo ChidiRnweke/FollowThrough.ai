@@ -22,7 +22,7 @@ import type {
 	WorkflowAgentRun
 } from '$lib/models/agent';
 import { persistedSessionItemSchema, workflowRunContextSchema } from '$lib/models/agent';
-import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
+import type { SessionItemSerialization } from '$lib/models/agent';
 import {
 	parseAgentRunContextSnapshot,
 	parseRunAgentInput,
@@ -565,7 +565,10 @@ const toSessionItem = (row: typeof schema.agentSessionItems.$inferSelect): Agent
 });
 
 export class AgentSessionRecords implements AgentSessionRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly database: Database,
+		private readonly serialization: SessionItemSerialization
+	) {}
 
 	async listCanvasResults(actor: ActorContext, conversationId: ConversationId) {
 		return (await this.list(actor, conversationId)).map((row) => readCanvasSessionResult(row.item));
@@ -625,7 +628,7 @@ export class AgentSessionRecords implements AgentSessionRepository {
 				id: crypto.randomUUID(),
 				conversationId,
 				position: start + index,
-				item: toStoredSessionItem(item)
+				item: this.serialization.serialize(item)
 			}))
 		);
 	}
@@ -671,7 +674,7 @@ export class AgentSessionRecords implements AgentSessionRepository {
 						id: crypto.randomUUID(),
 						conversationId,
 						position,
-						item: toStoredSessionItem(item)
+						item: this.serialization.serialize(item)
 					}))
 				);
 		});

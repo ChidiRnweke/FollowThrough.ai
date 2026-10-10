@@ -1,3 +1,4 @@
+import { createSessionItemSerialization } from '$lib/server/factories/agent/session-item-serialization-factory';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
@@ -28,7 +29,8 @@ export const createConversationSession = (
 			conversationId,
 			virtualizer,
 			new ConversationJsonBoundary(readToolFailure)
-		)
+		),
+		createSessionItemSerialization()
 	);
 
 export const createReplayVirtualizer = (

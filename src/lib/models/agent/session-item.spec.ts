@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { persistedSessionItemSchema } from './session-item';
-import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
 
 const storedUser = { type: 'message', role: 'user', content: 'Summarise this' };
 const storedAssistant = {
@@ -104,30 +103,5 @@ describe('an item no arm recognises', () => {
 
 	it('throws when the column does not hold a JSON object at all', () => {
 		expect(() => persistedSessionItemSchema.parse('not an item')).toThrow('Invalid input');
-	});
-});
-
-describe('writing a session item back', () => {
-	it('leaves an absent optional absent rather than writing an undefined', () => {
-		expect(
-			Object.keys(toStoredSessionItem(persistedSessionItemSchema.parse(storedUser)))
-		).not.toContain('id');
-	});
-
-	// `call_id` is normalised on the way in, so the row is rewritten in the
-	// spelling everything downstream now uses.
-	it('writes a normalised call id back in one spelling', () => {
-		const item = persistedSessionItemSchema.parse({
-			type: 'function_call',
-			name: 'search',
-			call_id: 'call-legacy',
-			arguments: '{}'
-		});
-		expect(toStoredSessionItem(item)).toEqual({
-			type: 'function_call',
-			name: 'search',
-			callId: 'call-legacy',
-			arguments: '{}'
-		});
 	});
 });

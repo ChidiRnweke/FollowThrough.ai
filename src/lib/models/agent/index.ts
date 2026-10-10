@@ -2083,3 +2083,12 @@ export interface InlineCompletionGenerator {
 		model: string
 	): Promise<InlineCompletionResult>;
 }
+
+export interface ConversationSessionController {
+	readonly id: ConversationId;
+	getItems(limit?: number): Promise<readonly PersistedSessionItem[]>;
+	addItems(items: readonly PersistedSessionItem[]): Promise<void>;
+	popItem(): Promise<PersistedSessionItem | undefined>;
+	clear(): void;
+	snapshot(): Promise<readonly PersistedSessionItem[]>;
+}

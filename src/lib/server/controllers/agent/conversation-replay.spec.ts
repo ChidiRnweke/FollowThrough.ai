@@ -1,5 +1,5 @@
 import type { AgentInputItem } from '@openai/agents';
-import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
+import { createSessionItemSerialization } from '$lib/server/factories/agent/session-item-serialization-factory';
 import type { BufferedConversationSession } from '$lib/server/adapters/agent/conversation';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, expect, it } from 'vitest';
@@ -16,6 +16,7 @@ import {
 	userItemWithImage
 } from '$lib/testing/agent/session-items';
 
+const serialization = createSessionItemSerialization();
 const conversationId = 'conversation-1' as ConversationId;
 const actor: ActorContext = { userId: 'user-1' as ActorContext['userId'] };
 
@@ -40,7 +41,7 @@ const bufferWith = async (
 	items: readonly PersistedSessionItem[]
 ): Promise<BufferedConversationSession> => {
 	const buffer = bufferOver([]);
-	await buffer.addItems(items.map((item) => toStoredSessionItem(item) as AgentInputItem));
+	await buffer.addItems(items.map((item) => serialization.serialize(item) as AgentInputItem));
 	return buffer;
 };
 

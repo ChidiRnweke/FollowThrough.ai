@@ -1,4 +1,3 @@
-import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
 import { sessionJsonSchema, type SessionJson } from '$lib/models/agent';
 import type { AgentInputItem, Session } from '@openai/agents';
 import {
@@ -9,20 +8,24 @@ import {
 } from '$lib/models/agent';
 import type {
 	ConversationSessionController,
-	ConversationJsonReader
-} from '$lib/server/controllers/agent/conversation';
+	ConversationJsonReader,
+	SessionItemSerialization
+} from '$lib/models/agent';
 export interface BufferedConversationSession extends Session {
 	snapshot(): Promise<readonly PersistedSessionItem[]>;
 }
 /** The SDK's item union is parsed here before any controller sees it. */
 export class ConversationSessionAdapter implements BufferedConversationSession {
-	constructor(private readonly session: ConversationSessionController) {}
+	constructor(
+		private readonly session: ConversationSessionController,
+		private readonly serialization: SessionItemSerialization
+	) {}
 	async getSessionId(): Promise<string> {
 		return this.session.id;
 	}
 	async getItems(limit?: number): Promise<AgentInputItem[]> {
 		return (await this.session.getItems(limit)).map(
-			(item) => toStoredSessionItem(item) as AgentInputItem
+			(item) => this.serialization.serialize(item) as AgentInputItem
 		);
 	}
 	addItems(items: AgentInputItem[]): Promise<void> {
@@ -30,7 +33,7 @@ export class ConversationSessionAdapter implements BufferedConversationSession {
 	}
 	async popItem(): Promise<AgentInputItem | undefined> {
 		const item = await this.session.popItem();
-		return item && (toStoredSessionItem(item) as AgentInputItem);
+		return item && (this.serialization.serialize(item) as AgentInputItem);
 	}
 	async clearSession(): Promise<void> {
 		this.session.clear();
