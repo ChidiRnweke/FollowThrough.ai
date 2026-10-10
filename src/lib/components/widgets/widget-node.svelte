@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { NodeViewProps } from '@tiptap/core';
 	import { untrack } from 'svelte';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { widgetTab } from '$lib/stores/workbench/tab-ref';
+	import { workbenchNavigation } from '$lib/factories/workbench/workbench';
+	import { widgetTab } from '$lib/client/workbench/tab-ref';
 	import type { WidgetId } from '$lib/models/widgets';
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -65,8 +65,8 @@
 						event.preventDefault();
 						const tab = widgetTab(widgetId);
 						void (event.metaKey || event.ctrlKey
-							? workbench.openTabInBackground(tab)
-							: workbench.openTab(tab));
+							? workbenchNavigation.openTabInBackground(tab)
+							: workbenchNavigation.openTab(tab));
 					}}
 				>
 					<OpenIcon />

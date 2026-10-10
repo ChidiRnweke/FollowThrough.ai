@@ -89,12 +89,10 @@ coverage, production build/output audit and required PR checks remain outstandin
 
 ### Remaining implementation and restart point
 
-1. **Browser chat:** separate session-scoped reactive state from hydration, submission, approval,
-   reconnect, cancellation and teardown. Extract transcript models and boundary readers first;
-   then put rules behind cohesive service contracts and complete operations behind controllers.
-   Preserve reactive entry identity, durable cursors, exact saved reviews and account-generation
-   guards. Chat inspection after `93cea77b` was read-only; there are no unfinished chat edits.
-2. **Remaining browser surfaces:** complete workbench/shell, note editor/publication/review,
+1. **Browser chat:** completed in the #338 contribution below. Preserve its session lifecycle,
+   generation guards, readonly views and context handoffs. The older inspection-only restart
+   entry applied to `93cea77b` and is superseded by that contribution.
+2. **Remaining browser surfaces:** complete the remaining shell boundaries, note editor/publication/review,
    todo/skill/memory/suggestion, widget/canvas, settings and feedback boundaries. Remove raw drafts,
    mutable stores, resources and indirect service/remote access from components and adjacent code.
 3. **Remaining server/composition boundaries:** remove application callbacks and authority workflows
@@ -154,6 +152,68 @@ worktree's server. The unchanged-base comparison used port 5188. The dev server 
 its existing missing `/offline-shell.html` response. No new content was seeded for these checks.
 Production build and full PWA verification remain part of the parent PR's final acceptance.
 Existing application-wide checklist items remain open unless their complete scope was verified.
+
+## Workbench navigation and persistence contribution — 2026-10-10
+
+This contribution starts from #338 at `dc4bd7a2` on
+`refactor/pr336-workbench-boundaries`. It completes general workbench navigation and layout
+persistence. It does not complete the parent architecture refactor or change server code.
+
+- [x] Reconcile the stale chat restart entry against #338. Its lifecycle and context handoffs
+      are implemented; the general workbench navigation and persistence exclusion was current.
+- [x] Move open/background-open/focus/close/bulk-close/move/replace/split/prune workflows into
+      a navigation controller over a stateless transition capability.
+- [x] Move account attachment, restoration, preference updates and persistence into a layout
+      controller. Keep reactive layout values and retained binding/generation/operation guards
+      in explicit state owners. Keep IndexedDB connection lifetime in the account adapter.
+- [x] Expose readonly workbench views and narrow operation interfaces from composition.
+      Keep restoration/reconciliation mechanisms off component-facing interfaces. URL/tab
+      readers and preference storage are client adapters; types and schemas are model-owned.
+- [x] Move shell reconciliation and project resolution into a controller. Restore and save
+      layout without requiring the initial workspace catalog download. Prune only against
+      complete inventory. Preserve account cleanup and #338 chat session/context ownership.
+- [x] Preserve tab encodings, URL/history behavior, existing storage keys/record format, deep-link
+      focus, saved sibling tabs, pin/preference restoration, interaction focus and late-account guards.
+- [x] Migrate regression tests and add preference/failure, shell readiness and history cases.
+      Replace the obsolete `draft:` fixture with a production-supported `diagram:` tab.
+- [x] Capture matching authenticated split layouts at 1,680×1,000 and 900×1,000 before/after.
+      Evidence uses a synthetic account and two notes, without provider calls.
+- [x] Record local verification below. Publish the stacked PR and record its required checks;
+      inherited architecture failures keep delivery in draft.
+
+The older workbench/shell and chat/context checklist rows below remain application-wide audit
+items. These checked contribution tasks establish only this slice, not every adjacent shell or
+browser boundary. Do not reopen #338's completed chat work from the historical inventory.
+
+Observed validation and reproduction:
+
+- Focused workbench tests: 144 passed across eight files after the restoration readiness fix.
+- Authenticated browser comparison: 28 passed after the refactor, including all 16 composer
+  scenarios, both note-to-chat handoffs and all six split scenarios. The same three navigation
+  progress cases failed on unchanged #338 and the refactor. The baseline run had 12 passed.
+  Commands selected `workbench-tabs`, `workbench-split`, `chat-handoff` and (after) `chat-composer-anchor`
+  from `tests/e2e/`, using an isolated development server on port 5191.
+- Account switching: `workbench-account.e2e.ts` passed with the PWA configuration against an isolated
+  Postgres testcontainer and production preview on port 5192. A first run exposed premature catalog
+  access during restoration; the fix and a regression test now separate those lifetimes.
+  Repeat with `pnpm test:sync:pwa tests/e2e/workbench-account.e2e.ts` on a free configured port.
+- Database contracts: 108 files / 522 passed in a Postgres testcontainer.
+- Production web/worker build and output audit: passed. The audit permits the existing oversized
+  Mermaid vendor chunk; no application chunk exceeded its threshold.
+- Full unit suite: 570 files / 4,458 passed / one existing skip. The existing Svelte
+  `derived_inert` warning remains. After tightening the layout fake to reject use after close,
+  all 39 workbench controller tests passed again.
+- `pnpm lint`, `pnpm check`, `pnpm docs:check` and the separate `pnpm test:ui`: passed.
+- `pnpm test:architecture`: topology, source and test-quality audits passed. Chisel failed on
+  the same 46 prohibited imports as unchanged #338. File/rule diagnostics match after excluding
+  source line positions. No new allowances or baselines were added.
+- A synthetic UI check passed focus → browser Back → Close all → reload, with an empty saved
+  working set after reload. Move/replace remain controller operations without an exposed reorder
+  UI in this base; transition and navigation-history tests verify those boundaries.
+- The full PWA suite and multiple-passage selection scenario remain parent-level verification
+  gaps. This contribution ran the isolated account-switch PWA test, not the full PWA suite.
+- Required stacked PR checks are pending publication. This slice does not resolve inherited
+  architecture failures or make #336/#338 merge-ready.
 
 ## A. Inventory and regression evidence
 

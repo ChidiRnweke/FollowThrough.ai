@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { ProjectId } from '$lib/models/projects';
 	import { type ChatSessionKey } from '$lib/models/chat';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { chatTab, type TabId } from '$lib/stores/workbench/tab-ref';
+	import { workbench, workbenchNavigation } from '$lib/factories/workbench/workbench';
+	import { chatTab, type TabId } from '$lib/client/workbench/tab-ref';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -41,7 +41,7 @@
 		try {
 			if (keepableIn) diagramRegistry.useProject(sessionKey, keepableIn);
 			rightPanel.close();
-			await workbench.openSplit(chatTab(sessionKey), canvasTab);
+			await workbenchNavigation.openSplit(chatTab(sessionKey), canvasTab);
 		} finally {
 			// The card usually unmounts on the navigation above, but not always — a
 			// failed navigation leaves it standing, and a button stuck on "Opening"

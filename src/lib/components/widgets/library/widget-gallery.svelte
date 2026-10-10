@@ -23,8 +23,8 @@
 	import { formatDateTime } from '$lib/components/shared/labels';
 	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import { workspaceSession } from '$lib/factories/workspace/session';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { widgetTab } from '$lib/stores/workbench/tab-ref';
+	import { workbenchNavigation } from '$lib/factories/workbench/workbench';
+	import { widgetTab } from '$lib/client/workbench/tab-ref';
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import WidgetView from '../widget-view.svelte';
 	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
@@ -74,7 +74,7 @@
 		await goto(urlFor(1, ''));
 	}
 
-	const open = (widget: Widget) => void workbench.openTab(widgetTab(widget.id));
+	const open = (widget: Widget) => void workbenchNavigation.openTab(widgetTab(widget.id));
 
 	/** A widget needs no note: start a blank one here and open it to be edited. */
 	async function startWidget(): Promise<{ kind: 'opened' } | { kind: 'failure'; message: string }> {
@@ -82,7 +82,7 @@
 		if (!projectId) return { kind: 'failure', message: 'Select a project first' };
 		try {
 			const widgetId = await widgetEdits.createFromTemplate({ template: 'blank', projectId });
-			await workbench.openTab(widgetTab(widgetId));
+			await workbenchNavigation.openTab(widgetTab(widgetId));
 			return { kind: 'opened' };
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'The widget could not be created';

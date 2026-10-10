@@ -3,7 +3,10 @@
 
 	import type { ProjectId } from '$lib/models/projects';
 
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import {
+		workbench as defaultWorkbench,
+		workbenchNavigation
+	} from '$lib/factories/workbench/workbench';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -19,7 +22,7 @@
 		readActiveTabDrag,
 		writeTabDrag
 	} from '$lib/client/workbench/tab-drag';
-	import { isChatTab, noteIdOf, parseTabId, type TabId } from '$lib/stores/workbench/tab-ref';
+	import { isChatTab, noteIdOf, parseTabId, type TabId } from '$lib/client/workbench/tab-ref';
 	import { chatRegistry } from '$lib/factories/agent/chat';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { Conversation } from '$lib/models/agent';
@@ -27,12 +30,14 @@
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
 
 	let {
+		workbench = defaultWorkbench,
 		shell,
 		sessions,
 		hidden = false,
 		oncreateNote,
 		ontoggleHidden
 	}: {
+		workbench?: import('$lib/models/workbench').WorkbenchView;
 		shell: ShellContext;
 		sessions: readonly Conversation[];
 		/** Collapsed state — when true, the strip shrinks to 24px. */
@@ -151,7 +156,7 @@
 
 	function showTab(projectId: string, noteId: TabId): boolean {
 		if (!folded.has(projectId)) return true;
-		return workbench.isPinned(noteId);
+		return workbench.pinnedTabs.includes(noteId);
 	}
 
 	const tabCount = $derived(workbench.openTabs.length);
@@ -188,7 +193,7 @@
 		noteDragOver = false;
 		const tabId = readActiveTabDrag(event.dataTransfer, shell.noteTree, workbench.openTabs);
 		if (!tabId) return;
-		void workbench.openTabInBackground(tabId);
+		void workbenchNavigation.openTabInBackground(tabId);
 	}
 
 	// Folding a group tweens each tab's width to zero rather than swapping the run's
@@ -466,9 +471,9 @@
 												ondragstart={(event) => {
 													if (event.dataTransfer) writeTabDrag(event.dataTransfer, noteId);
 												}}
-												onclick={() => void workbench.focusTab(noteId)}
+												onclick={() => void workbenchNavigation.focusTab(noteId)}
 											>
-												{#if workbench.isPinned(noteId)}
+												{#if workbench.pinnedTabs.includes(noteId)}
 													<Pin
 														class="size-3 shrink-0 text-brand-muted-foreground"
 														aria-hidden="true"
@@ -484,13 +489,13 @@
 														: ''}"
 													onclick={(event) => {
 														event.stopPropagation();
-														void workbench.closeTab(noteId);
+														void workbenchNavigation.closeTab(noteId);
 													}}
 													onkeydown={(event) => {
 														if (event.key === 'Enter' || event.key === ' ') {
 															event.preventDefault();
 															event.stopPropagation();
-															void workbench.closeTab(noteId);
+															void workbenchNavigation.closeTab(noteId);
 														}
 													}}
 												>
@@ -567,7 +572,7 @@
 								type="button"
 								class="tactile h-7 rounded-md text-brand-muted-foreground hover:bg-destructive/10 hover:text-destructive-muted-foreground"
 								aria-label={`Close all ${tabCount} tabs`}
-								onclick={() => void workbench.closeTabs(workbench.openTabs)}
+								onclick={() => void workbenchNavigation.closeTabs(workbench.openTabs)}
 							>
 								<X class="size-3.5" />
 								<span>Close all</span>

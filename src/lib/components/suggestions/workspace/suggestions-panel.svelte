@@ -3,7 +3,7 @@
 	import { toast } from 'svelte-sonner';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import { workspaceSession } from '$lib/factories/workspace/session';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { workbench } from '$lib/factories/workbench/workbench';
 	import SuggestionCard from '../suggestion-card.svelte';
 
 	const projection = $derived(

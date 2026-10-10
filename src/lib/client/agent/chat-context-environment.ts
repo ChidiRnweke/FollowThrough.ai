@@ -1,11 +1,14 @@
 import type { ChatContextEnvironment } from '$lib/controllers/agent/app-context';
 import type { ChatWorkbenchFacts } from '$lib/models/chat';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
-import { workbench } from '$lib/stores/workbench/workbench.svelte';
-import { chatKeyOf, noteIdOf, widgetIdOf } from '$lib/stores/workbench/tab-ref';
+import type { WorkbenchView } from '$lib/models/workbench';
+import { chatKeyOf, noteIdOf, widgetIdOf } from '$lib/client/workbench/tab-ref';
 import type { WorkspaceSessionController } from '$lib/controllers/workspace/session';
 export class BrowserChatContextEnvironment implements ChatContextEnvironment {
-	constructor(private readonly workspace: WorkspaceSessionController) {}
+	constructor(
+		private readonly workspace: WorkspaceSessionController,
+		private readonly view: WorkbenchView
+	) {}
 	now(): Date {
 		return new Date();
 	}
@@ -22,23 +25,23 @@ export class BrowserChatContextEnvironment implements ChatContextEnvironment {
 		surface: AppContextSnapshotV1['surface']['kind']
 	): ChatWorkbenchFacts {
 		const inWorkbench =
-			surface === 'note_workbench' || surface === 'diagram_editor' || workbench.isWorkbenchPath;
+			surface === 'note_workbench' || surface === 'diagram_editor' || this.view.isWorkbenchPath;
 		const focused = inWorkbench
-			? (workbench.interactionFocusedNoteId ?? workbench.focusedNoteId)
+			? (this.view.interactionFocusedNoteId ?? this.view.focusedNoteId)
 			: undefined;
 		const widgetId =
 			widgetIdOf(focused) ??
 			(pathname.startsWith('/widgets/') ? pathname.split('/')[2] : undefined);
 		return {
-			isWorkbenchPath: workbench.isWorkbenchPath,
-			interactionFocusedNoteId: workbench.interactionFocusedNoteId,
-			focusedNoteId: workbench.focusedNoteId,
-			splitNoteId: workbench.splitNoteId,
-			openNotes: workbench.openTabs.flatMap((tab) => {
+			isWorkbenchPath: this.view.isWorkbenchPath,
+			interactionFocusedNoteId: this.view.interactionFocusedNoteId,
+			focusedNoteId: this.view.focusedNoteId,
+			splitNoteId: this.view.splitNoteId,
+			openNotes: this.view.openTabs.flatMap((tab) => {
 				const id = noteIdOf(tab);
 				return id ? [id] : [];
 			}),
-			openChats: workbench.openTabs.flatMap((tab) => {
+			openChats: this.view.openTabs.flatMap((tab) => {
 				const key = chatKeyOf(tab);
 				return key ? [key] : [];
 			}),

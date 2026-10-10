@@ -7,13 +7,13 @@
 	import { FtDocument as FileText } from '$lib/components/icons';
 	import { commandRegistry } from '$lib/commands/registry';
 	import { palette } from '$lib/stores/shell/palette.svelte';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { workbenchNavigation } from '$lib/factories/workbench/workbench';
 
 	let { shell }: { shell: ShellContext } = $props();
 
 	function openNote(note: NoteSummary): void {
 		palette.close();
-		void workbench.openTab(note.id);
+		void workbenchNavigation.openTab(note.id);
 	}
 </script>
 

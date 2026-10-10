@@ -5,8 +5,8 @@ import { page } from '$app/state';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
 import type { EntityKind, EntityRef } from '$lib/components/agent';
-import { workbench } from '$lib/stores/workbench/workbench.svelte';
-import { diagramTab } from '$lib/stores/workbench/tab-ref';
+import { workbenchNavigation } from '$lib/factories/workbench/workbench';
+import { diagramTab } from '$lib/client/workbench/tab-ref';
 import {
 	FtDocument,
 	FtFolder,
@@ -59,7 +59,7 @@ export function openEntity(entity: Pick<EntityRef, 'kind' | 'id' | 'destination'
 	if (entity.destination) {
 		const destination = entity.destination;
 		if (destination.kind === 'note') {
-			void workbench.openTab(destination.noteId as NoteId);
+			void workbenchNavigation.openTab(destination.noteId as NoteId);
 			return;
 		}
 		if (destination.kind === 'page') {
@@ -71,13 +71,13 @@ export function openEntity(entity: Pick<EntityRef, 'kind' | 'id' | 'destination'
 	}
 	const id = entity.id as string;
 	if (entity.kind === 'note' || entity.kind === 'skill') {
-		void workbench.openTab(id as NoteId);
+		void workbenchNavigation.openTab(id as NoteId);
 		return;
 	}
 	// A diagram is a workbench tab of its own kind, not a note. It was routed as a note
 	// until now, which meant the tab it opened could never load.
 	if (entity.kind === 'diagram') {
-		void workbench.openTab(diagramTab(id as DiagramId));
+		void workbenchNavigation.openTab(diagramTab(id as DiagramId));
 		return;
 	}
 	if (entity.kind === 'todo') {

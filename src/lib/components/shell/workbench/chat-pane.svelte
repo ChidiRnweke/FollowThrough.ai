@@ -11,8 +11,8 @@
 	import { chatCanvas } from '$lib/factories/agent/chat-canvas';
 	import { conversationProjectId } from '$lib/stores/diagrams/chat-project';
 	import { canvasOpenings } from '$lib/stores/diagrams/canvas-opening.svelte';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { chatTab } from '$lib/stores/workbench/tab-ref';
+	import { workbench, workbenchNavigation } from '$lib/factories/workbench/workbench';
+	import { chatTab } from '$lib/client/workbench/tab-ref';
 	import { appContext } from '$lib/factories/agent/app-context';
 	import { ChatPanel } from '$lib/components/chat';
 	import { Button } from '$lib/components/ui/button';
@@ -72,7 +72,7 @@
 		if (!canvas) return;
 		if (!canvasOpenings.shouldOpen(sessionKey, canvas.diagramId)) return;
 		canvasOpenings.markShown(sessionKey, canvas.diagramId);
-		void workbench.setSplit(canvas.tab);
+		void workbenchNavigation.setSplit(canvas.tab);
 	});
 
 	let releaseContext: (() => void) | undefined;

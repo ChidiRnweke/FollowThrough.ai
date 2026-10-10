@@ -9,10 +9,14 @@
 	import { onMount, untrack } from 'svelte';
 	import { AppSidebar, CommandPalette, RightPanel, WorkspaceTabs } from '$lib/components/shell';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import { parseTabId, noteIdOf, openResourceOf, type TabId } from '$lib/stores/workbench/tab-ref';
+	import { openResourceOf } from '$lib/client/workbench/tab-ref';
 	import type { ProjectId } from '$lib/models/projects';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { IndexedDbWorkbenchLayout } from '$lib/client/workbench/indexeddb-layout';
+	import {
+		workbench,
+		workbenchNavigation,
+		workbenchLayout,
+		workbenchShell
+	} from '$lib/factories/workbench/workbench';
 	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
 	import { chatRegistry } from '$lib/factories/agent/chat';
 	import { projectActions } from '$lib/factories/projects/actions';
@@ -91,26 +95,13 @@
 		if (insetRef) insetRef.scrollTop = 0;
 	});
 
-	// Pre-compute the noteId → projectId map once per shell reload so the
-	// workbench can resolve the focused tab's project without re-scanning.
-	const projectOfTab = $derived.by(() => (tabId: TabId): ProjectId | undefined => {
-		const ref = parseTabId(tabId);
-		if (ref?.kind === 'diagram')
-			return data.session.resources.views.diagram(ref.diagramId)?.projectId;
-		if (ref?.kind === 'widget') return data.session.resources.views.widget(ref.widgetId)?.projectId;
-		return shell?.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.projectId;
-	});
-
 	const workbenchAccountId = $derived(data.session.bootstrap.accountId);
 	$effect(() => {
 		const accountId = workbenchAccountId;
 		return untrack(() => {
-			const layout = new IndexedDbWorkbenchLayout(accountId);
-			const detachWorkbench = workbench.attach(layout);
-			void workbench.hydrate(projectOfTab);
+			const detachWorkbench = workbenchShell.start(accountId, chatRegistry);
 			return () => {
 				detachWorkbench();
-				layout.close();
 				chatPanel.reset();
 				chatRegistry.stop();
 				appContext.clear();
@@ -119,10 +110,6 @@
 	});
 
 	onMount(() => {
-		// Injected rather than imported by the store: the agent stores reach back
-		// into the workbench through the app context, so importing them there would
-		// close an initialisation loop.
-		workbench.conversationOf = (sessionKey) => chatRegistry.peek(sessionKey)?.conversationId;
 		// Read here rather than in the note editor so the answer is already known
 		// when a note pane mounts; a pane that started before it would spend its
 		// first seconds underlining words the reader had already dismissed. This
@@ -143,22 +130,8 @@
 		void page.url;
 		if (!shell) return;
 		appContext.configure(shell, page.url);
-		workbench.syncFromUrl();
-		workbench.refreshActiveProjectId(projectOfTab);
-		void pruneClosedTabs();
+		void workbenchShell.reconcile({ shell, resources: data.session.resources });
 	});
-
-	// Drop tabs whose notes have been archived or deleted since the last sync.
-	// Every live tree entry counts as known, not just `kind === 'note'`: a tab on
-	// a folder would otherwise never be prunable-and-done, so each pass would
-	// prune it again and fire another navigation.
-	async function pruneClosedTabs(): Promise<void> {
-		if (!shell || data.session.resources.availability !== 'complete') return;
-		const known = new Set<NoteId>(
-			shell.noteTree.filter((entry) => !entry.archivedAt).map((entry) => entry.id)
-		);
-		await workbench.pruneClosedNotes(known);
-	}
 
 	const activeNoteId = $derived(workbench.focusedNoteId ?? urlActiveNoteId());
 	const openResource = $derived(openResourceOf(workbench.focusedTabId));
@@ -218,7 +191,7 @@
 			return;
 		}
 		const output = await projectActions.createNote('Untitled', projectId);
-		if (output) await workbench.openTab(output.note.id);
+		if (output) await workbenchNavigation.openTab(output.note.id);
 	}
 </script>
 
@@ -295,7 +268,7 @@
 				sessions={data.session.sessions}
 				hidden={workbench.stripHidden}
 				oncreateNote={inventoryLoading ? undefined : () => void createNoteFromStrip()}
-				ontoggleHidden={() => workbench.toggleStripHidden()}
+				ontoggleHidden={() => workbenchLayout.toggleStripHidden()}
 			/>
 		{/if}
 		{#if contentReady}

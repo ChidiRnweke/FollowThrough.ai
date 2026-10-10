@@ -1,3 +1,4 @@
+import { diagramTab } from '$lib/client/workbench/tab-ref';
 import type { DiagramId } from '$lib/models/diagrams';
 import {
 	writtenDiagram,
@@ -7,6 +8,9 @@ import {
 } from '$lib/models/chat';
 import type { ChatCanvasReader } from '$lib/controllers/agent/chat-canvas';
 export class BrowserChatCanvasReader implements ChatCanvasReader {
+	tab(diagramId: DiagramId): string {
+		return diagramTab(diagramId);
+	}
 	read(tool: ChatToolActivity): DiagramId | undefined {
 		if (tool.status !== 'succeeded') return undefined;
 		if (tool.name === 'create_diagram' || tool.name === 'edit_diagram')

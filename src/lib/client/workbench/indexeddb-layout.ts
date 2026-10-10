@@ -1,4 +1,6 @@
 import { workbenchLayoutSchema, type WorkbenchLayoutRecord } from '$lib/models/workbench';
+import type { WorkbenchLayoutRepository } from '$lib/controllers/workbench/contracts';
+
 export type { WorkbenchLayoutRecord } from '$lib/models/workbench';
 
 const STORE_NAME = 'workspace';
@@ -31,7 +33,7 @@ const transactionDone = (transaction: IDBTransaction): Promise<void> =>
 			reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
 	});
 
-export class IndexedDbWorkbenchLayout {
+export class IndexedDbWorkbenchLayout implements WorkbenchLayoutRepository {
 	private database?: Promise<IDBDatabase>;
 	private connection?: IDBDatabase;
 	private closed = false;

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ChatWorkspace } from '$lib/components/chat';
 	import { WorkspacePanes } from '$lib/components/shell';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { workbench } from '$lib/factories/workbench/workbench';
 	let { data } = $props();
 	const conversation = $derived(data.session.resources.views.conversation(data.conversationId));
 </script>
