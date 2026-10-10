@@ -14,6 +14,26 @@ export interface SchedulerHandle {
 	stop(): Promise<void>;
 }
 
+/** Runs each task on its own interval. Each tick runs one task; ticks never sequence tasks. */
+export interface Scheduler extends SchedulerHandle {
+	start(): void;
+}
+
+export type SchedulerStatus = 'idle' | 'running' | 'stopped';
+
+/** One worker lifetime of timers and in-flight ticks. Stopping is permanent. */
+export interface SchedulerState {
+	readonly status: SchedulerStatus;
+	setStatus(status: 'running' | 'stopped'): void;
+	addTimer(timer: TimerHandle): void;
+	removeTimer(timer: TimerHandle): void;
+	pendingTimers(): readonly TimerHandle[];
+	clearTimers(): void;
+	addExecution(execution: Promise<void>): void;
+	removeExecution(execution: Promise<void>): void;
+	pendingExecutions(): readonly Promise<void>[];
+}
+
 /**
  * What a clock's `setTimeout` hands back.
  *

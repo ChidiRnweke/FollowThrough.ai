@@ -1,11 +1,11 @@
-import type { TimerHandle } from '$lib/models/maintenance';
+import type { SchedulerState, SchedulerStatus, TimerHandle } from '$lib/models/maintenance';
 
 /** One worker lifetime. Stopping is permanent, including before the first start. */
-export class SchedulerStore {
-	private phase: 'idle' | 'running' | 'stopped' = 'idle';
+export class SchedulerStore implements SchedulerState {
+	private phase: SchedulerStatus = 'idle';
 	private readonly timers = new Set<TimerHandle>();
 	private readonly executions = new Set<Promise<void>>();
-	get status(): 'idle' | 'running' | 'stopped' {
+	get status(): SchedulerStatus {
 		return this.phase;
 	}
 	setStatus(status: 'running' | 'stopped'): void {
