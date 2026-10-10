@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.3.1...v3.0.0) (2026-10-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **auth:** All deployments require complete Authentik configuration. Anonymous single-user access and the runtime LOCAL_USER_ID setting are removed. Browser test account selection now uses E2E_USER_ID.
+
+### Bug Fixes
+
+* **auth:** remove unauthenticated single-user access ([#326](https://github.com/ChidiRnweke/FollowThrough.ai/issues/326)) ([499288e](https://github.com/ChidiRnweke/FollowThrough.ai/commit/499288e4762f7e1eb5fc2dbc6517dab56f19c946))
+
 ## [2.3.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.3.0...v2.3.1) (2026-10-10)
 
 
