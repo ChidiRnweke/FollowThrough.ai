@@ -126,11 +126,17 @@
 	>
 		<!-- The split answers to the width it is given, not to the window's: at `sm:` a
 		     384px panel on a wide desktop got two columns it had no room for, and each side
-		     wrapped a word per line. Stacked, the same two sides run full width instead. -->
+		     wrapped a word per line. Stacked, the same two sides run full width instead.
+
+		     Stacked, spacing alone separates the halves: 20px between them against the 4px
+		     that binds each label to its content — the subject and bond steps of the chat
+		     ladder (`CHAT_GAP_SUBJECT`, `CHAT_GAP_BOND`) this preview sits inside. With a
+		     hairline and 8px between them the two halves read as one column. -->
 		<div
 			class={cn(
 				'grid min-w-0',
-				layout === 'split' ? '@2xl/diff:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : ''
+				layout === 'split' ? '@2xl/diff:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : '',
+				layout === 'stacked' ? 'gap-5' : ''
 			)}
 		>
 			{#if layout !== 'candidate'}
@@ -138,14 +144,17 @@
 					document={baseSide.document}
 					kinds={baseSide.kinds}
 					label={baseLabel}
+					tone="removed"
 					sublabel={baseSublabel}
 					{compact}
 					{perNote}
 					{diagrams}
 					{noteId}
 					class={cn(
-						'min-w-0 border-b border-border @2xl/diff:border-r @2xl/diff:border-border',
-						layout === 'split' ? '@2xl/diff:border-b-0' : '',
+						'min-w-0',
+						layout === 'split'
+							? 'border-b border-border @2xl/diff:border-r @2xl/diff:border-b-0 @2xl/diff:border-border'
+							: '',
 						stackedPane
 					)}
 				/>
@@ -160,6 +169,7 @@
 				document={candidateSide.document}
 				kinds={candidateSide.kinds}
 				label={candidateLabel}
+				tone="added"
 				sublabel={candidateSublabel}
 				showLabel={layout !== 'candidate'}
 				{compact}

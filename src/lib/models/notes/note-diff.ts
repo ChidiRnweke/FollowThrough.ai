@@ -1,10 +1,52 @@
-export type DiffBlockKind = 'context' | 'removed' | 'added';
+/** Which side of a comparison a change belongs to, and so which wash it takes. */
+export type DiffTone = 'removed' | 'added';
 
-/** The classification of one top-level block, by its index in its own document. */
-export interface DiffSideBlock {
-	readonly index: number;
-	readonly kind: DiffBlockKind;
+/**
+ * One change inside a block that was edited rather than replaced.
+ *
+ * `textblock` is the index, in document order, of a textblock (paragraph, heading or code
+ * block) inside the block — a table cell's paragraph counts like any other. `text` changes
+ * carry character offsets into that textblock's text, where every inline node that is not
+ * text counts as one character, as it occupies one position in the editor.
+ */
+export type InnerChange =
+	| { readonly kind: 'textblock'; readonly textblock: number }
+	| {
+			readonly kind: 'text';
+			readonly textblock: number;
+			readonly from: number;
+			readonly to: number;
+	  };
+
+/** One line of a diagram's source, as the line diff of an edited diagram states it. */
+export interface SourceLine {
+	readonly kind: 'context' | DiffTone;
+	readonly text: string;
 }
+
+/**
+ * The classification of one top-level block, by its index in its own document.
+ *
+ * `removed` and `added` mark a whole block that exists on one side only. `edited` marks a
+ * block paired with its counterpart on the other side, carrying the changes inside it so
+ * the reader sees the words or cells that moved rather than a washed paragraph or table.
+ * `diagram-edited` is the candidate side of an edited diagram: a picture cannot show which
+ * line of its source changed, so the line diff travels with it.
+ */
+export type DiffSideBlock =
+	| { readonly index: number; readonly kind: 'context' }
+	| { readonly index: number; readonly kind: DiffTone }
+	| {
+			readonly index: number;
+			readonly kind: 'edited';
+			readonly tone: DiffTone;
+			readonly changes: readonly InnerChange[];
+	  }
+	| {
+			readonly index: number;
+			readonly kind: 'diagram-edited';
+			readonly lines: readonly SourceLine[];
+	  };
 
 export interface NoteDiff {
 	/** Classification of the base document's top-level blocks, in order. */
@@ -19,13 +61,18 @@ export interface NoteDiffCounts {
 }
 
 /**
- * A focused block's kind: the diff kinds, plus `elided` for the marker that stands in
- * for a run of unchanged blocks folded out of a focused side.
+ * The classification of one top-level block of a focused side, by its index there: a diff
+ * classification, or the `elided` marker that stands in for a run of unchanged blocks
+ * folded out of the side.
  */
-export type FocusedBlockKind = DiffBlockKind | 'elided';
+export type FocusedSideBlock = DiffSideBlock | { readonly index: number; readonly kind: 'elided' };
 
-/** The classification of one top-level block of a focused side, by its index there. */
-export interface FocusedSideBlock {
-	readonly index: number;
-	readonly kind: FocusedBlockKind;
-}
+/**
+ * Where each rendered top-level block came from in the stored document. The editor may
+ * insert empty spacer paragraphs (between a heading and a diagram, after a trailing
+ * non-paragraph block); those map to `null`. A rendered document the walk cannot account
+ * for is a failure, which the pane must say rather than paint nothing.
+ */
+export type RenderedAlignment =
+	| { readonly kind: 'aligned'; readonly storedIndex: readonly (number | null)[] }
+	| { readonly kind: 'failure' };
