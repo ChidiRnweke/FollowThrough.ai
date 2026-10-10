@@ -999,3 +999,15 @@ Every service module below has a planned disposition. This is routing, not compl
   server modules / 175 exports (117 classes), 11,970 rows and 13,057 resolved imports. Artifact
   library actions, note conversion, agent workflows and other browser capabilities remain pending.
   No whole implementation phase or final verification is complete.
+
+## Reviewed note patch and revision rules — 2026-10-10
+
+- NotePatchPreparationService returns a complete patch or the existing actionable rejection messages.
+  Exact/tolerant matching, source-byte preservation and rejection formatting stay private. Revision
+  comparison has an explicit capability contract. Notes receives both through its capability factory.
+  No controller transactions or public tool/transport results changed.
+- Tests assert complete public preparation outcomes instead of internal failure classifications.
+  Existing multi-assertion cases touched here now have one assertion for their related outcomes.
+  Type checking and lint pass; 37 focused files / 362 tests and 52 isolated database contract files /
+  244 tests pass. Architecture remains at 52 prohibited imports and seven missing interfaces, with
+  topology/source/test-quality passing. Import and document conversion rules remain pending.

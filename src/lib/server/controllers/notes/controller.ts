@@ -22,8 +22,8 @@ import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import { applyNotePatch, describeNotePatchFailure } from '$lib/server/services/notes/patches';
-import { diffNoteRevisionTexts } from '$lib/server/services/notes/revision-diff';
+import type { NotePatchPreparation } from '$lib/server/services/notes/patches';
+import type { NoteRevisionComparison } from '$lib/server/services/notes/revision-diff';
 import {
 	type NoteChangeRequest,
 	type NoteChangeTarget,
@@ -327,6 +327,8 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	readonly patchPreparation: NotePatchPreparation;
+	readonly revisionComparison: NoteRevisionComparison;
 	readonly todoPresentation: TodoPresentation;
 	readonly textSearch: NoteTextSearch;
 	readonly noteReferences: NoteReferences;
@@ -714,9 +716,11 @@ export class Notes implements NotesController {
 					operation: { kind: 'replace' }
 				}
 			};
-		const patch = applyNotePatch(this.dependencies.markdown.write(note.document), input.edits);
-		if (!patch.ok)
-			return { kind: 'failure', problems: patch.failures.map(describeNotePatchFailure) };
+		const patch = this.dependencies.patchPreparation.prepare(
+			this.dependencies.markdown.write(note.document),
+			input.edits
+		);
+		if (!patch.ok) return { kind: 'failure', problems: patch.problems };
 		return {
 			kind: 'prepared',
 			change: {
@@ -1073,7 +1077,10 @@ export class Notes implements NotesController {
 					noteId: input.noteId
 				});
 		}
-		return { diff: diffNoteRevisionTexts(baseline, revision), againstRevision: baseline.revision };
+		return {
+			diff: this.dependencies.revisionComparison.compare(baseline, revision),
+			againstRevision: baseline.revision
+		};
 	}
 	async restoreRevision(
 		actor: ActorContext,

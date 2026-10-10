@@ -1,3 +1,5 @@
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { NoteTextSearchService } from '$lib/services/notes/text-search';
 import { NoteReferenceService } from '$lib/services/notes/references';
@@ -47,6 +49,8 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 		});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
 			todoPresentation: new TodoPresentationService(),
 			textSearch: new NoteTextSearchService(),
 			noteReferences: new NoteReferenceService(),

@@ -30,4 +30,4 @@ export type NotePatchResult =
 			/** The text each edit actually replaced; a tolerant match may differ from oldText. */
 			readonly matchedTexts: readonly string[];
 	  }
-	| { readonly ok: false; readonly failures: readonly NotePatchFailure[] };
+	| { readonly ok: false; readonly problems: readonly string[] };

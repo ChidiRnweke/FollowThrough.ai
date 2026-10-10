@@ -1,3 +1,5 @@
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
 import { SkillPortabilityService } from '$lib/services/skills/manifest';
 import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
@@ -281,6 +283,8 @@ describe('Skill document imports', () => {
 		const result = await controller.update(testActor(), input);
 		const publisher = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				patchPreparation: new NotePatchPreparationService(),
+				revisionComparison: new NoteRevisionComparisonService(),
 				todoPresentation: new TodoPresentationService(),
 				textSearch: new NoteTextSearchService(),
 				noteReferences: new NoteReferenceService(),

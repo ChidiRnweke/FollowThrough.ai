@@ -1,3 +1,11 @@
+import {
+	NotePatchPreparationService,
+	type NotePatchPreparation
+} from '$lib/server/services/notes/patches';
+import {
+	NoteRevisionComparisonService,
+	type NoteRevisionComparison
+} from '$lib/server/services/notes/revision-diff';
 import { NoteTextSearchService, type NoteTextSearch } from '$lib/services/notes/text-search';
 import { NoteReferenceService, type NoteReferences } from '$lib/services/notes/references';
 import {
@@ -65,6 +73,8 @@ export interface NotesCapabilityInput {
 }
 
 export interface NotesCapability {
+	readonly patchPreparation: NotePatchPreparation;
+	readonly revisionComparison: NoteRevisionComparison;
 	readonly references: NoteReferences;
 	readonly textSearch: NoteTextSearch;
 	readonly sections: NoteSectionNumbering;
@@ -89,6 +99,8 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 	const lifecycleRules = new SharedNoteLifecycleService();
 	const services = createNoteServices(repository, anchors, input.projects);
 	return {
+		patchPreparation: new NotePatchPreparationService(),
+		revisionComparison: new NoteRevisionComparisonService(),
 		presentation: new NotePresentationService(),
 		references: new NoteReferenceService(),
 		textSearch: new NoteTextSearchService(),

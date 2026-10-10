@@ -593,6 +593,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			markdown: noteCapability.markdown,
+			patchPreparation: noteCapability.patchPreparation,
+			revisionComparison: noteCapability.revisionComparison,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			noteReader: notes.reader,

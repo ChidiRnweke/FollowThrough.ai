@@ -152,7 +152,10 @@ const nearestText = (markdown: string, oldText: string): string | undefined => {
  * partial application is worse than a clean rejection here: the caller saves the whole
  * body, so a half-applied patch is a silently corrupted note rather than a failed one.
  */
-export const applyNotePatch = (markdown: string, edits: readonly NoteEdit[]): NotePatchResult => {
+type PatchAttempt =
+	| Extract<NotePatchResult, { ok: true }>
+	| { readonly ok: false; readonly failures: readonly NotePatchFailure[] };
+const applyNotePatch = (markdown: string, edits: readonly NoteEdit[]): PatchAttempt => {
 	const failures: NotePatchFailure[] = [];
 	const matchedTexts: string[] = [];
 	let working = markdown;
@@ -215,7 +218,7 @@ export const applyNotePatch = (markdown: string, edits: readonly NoteEdit[]): No
 };
 
 /** One line a model can act on, for each way a patch can be rejected. */
-export const describeNotePatchFailure = (failure: NotePatchFailure): string => {
+const describeNotePatchFailure = (failure: NotePatchFailure): string => {
 	switch (failure.reason) {
 		case 'empty_anchor':
 			return `Edit ${failure.editIndex + 1}: oldText is empty. Quote the text you want to replace.`;
@@ -229,3 +232,15 @@ export const describeNotePatchFailure = (failure: NotePatchFailure): string => {
 				: `Edit ${failure.editIndex + 1}: oldText was not found. Read the note again and quote it exactly.`;
 	}
 };
+
+export interface NotePatchPreparation {
+	prepare(markdown: string, edits: readonly NoteEdit[]): NotePatchResult;
+}
+export class NotePatchPreparationService implements NotePatchPreparation {
+	prepare(markdown: string, edits: readonly NoteEdit[]): NotePatchResult {
+		const result = applyNotePatch(markdown, edits);
+		return result.ok
+			? result
+			: { ok: false, problems: result.failures.map(describeNotePatchFailure) };
+	}
+}
