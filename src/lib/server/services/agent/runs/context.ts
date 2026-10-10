@@ -17,7 +17,7 @@ import type { Widget } from '$lib/models/widgets';
 import type { Note } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
 import type { SkillSummary } from '$lib/models/skills';
-import { getEncoding, type Tiktoken } from 'js-tiktoken';
+import type { TokenCounter } from '$lib/models/tokenization';
 
 export type CurrentContextNote =
 	{ readonly kind: 'note'; readonly note: Note } | { readonly kind: 'no_current_note' };
@@ -47,27 +47,19 @@ export interface AgentContextValues {
  * content rides inside the user message; larger notes carry no content and the
  * prompt assembly points the model at get_note and sed for them instead.
  */
-let sharedEncoding: Tiktoken | undefined;
-const encoding = (): Tiktoken => (sharedEncoding ??= getEncoding('cl100k_base'));
-
-const contextNoteTokenLimit = (): number => {
-	const raw = Number(process.env.CONTEXT_NOTE_TOKEN_LIMIT ?? '4000');
-	return Number.isInteger(raw) && raw > 0 ? raw : 4000;
-};
-
-const contextNoteOf = (note: Note): ContextNote => {
-	const tokenCount = encoding().encode(note.plainText).length;
+const contextNoteOf = (note: Note, tokens: TokenCounter, limit: number): ContextNote => {
+	const tokenCount = tokens.count(note.plainText);
 	return {
 		noteId: note.id,
 		title: note.title,
-		...(tokenCount <= contextNoteTokenLimit() ? { content: note.plainText } : {}),
+		...(tokenCount <= limit ? { content: note.plainText } : {}),
 		tokenCount
 	};
 };
 
-const contextTextOf = (text: string): ContextResourceText => {
-	const tokenCount = encoding().encode(text).length;
-	return tokenCount <= contextNoteTokenLimit()
+const contextTextOf = (text: string, tokens: TokenCounter, limit: number): ContextResourceText => {
+	const tokenCount = tokens.count(text);
+	return tokenCount <= limit
 		? { inclusion: 'inline', text, tokenCount }
 		: { inclusion: 'too_large', tokenCount };
 };
@@ -78,7 +70,11 @@ const contextTextOf = (text: string): ContextResourceText => {
  * labels: the XML is mostly geometry, and stays one sed call away at its file path. Mermaid
  * source is already the readable form. A file is its extracted text.
  */
-const contextResourceOf = (resource: AttachedResource): ContextResource => {
+const contextResourceOf = (
+	resource: AttachedResource,
+	tokens: TokenCounter,
+	limit: number
+): ContextResource => {
 	switch (resource.kind) {
 		case 'widget': {
 			const { widget } = resource;
@@ -86,7 +82,11 @@ const contextResourceOf = (resource: AttachedResource): ContextResource => {
 				kind: 'widget',
 				widgetId: widget.id,
 				title: widget.title,
-				text: contextTextOf(JSON.stringify({ layout: widget.layout, data: widget.data }, null, 2))
+				text: contextTextOf(
+					JSON.stringify({ layout: widget.layout, data: widget.data }, null, 2),
+					tokens,
+					limit
+				)
 			};
 		}
 		case 'diagram': {
@@ -97,7 +97,11 @@ const contextResourceOf = (resource: AttachedResource): ContextResource => {
 				diagramKind: diagram.kind,
 				title: diagram.title || 'Untitled diagram',
 				filePath: resource.filePath,
-				text: contextTextOf(diagram.kind === 'mermaid' ? diagram.source : diagram.searchableText)
+				text: contextTextOf(
+					diagram.kind === 'mermaid' ? diagram.source : diagram.searchableText,
+					tokens,
+					limit
+				)
 			};
 		}
 		case 'attachment': {
@@ -112,7 +116,7 @@ const contextResourceOf = (resource: AttachedResource): ContextResource => {
 						: {
 								kind: 'extracted',
 								filePath: resource.filePath,
-								text: contextTextOf(version.extractedText)
+								text: contextTextOf(version.extractedText, tokens, limit)
 							}
 			};
 		}
@@ -126,7 +130,27 @@ interface AdvertisedSkill {
 }
 
 /** Formats resolved resources for a run. Controllers own every resource read. */
-export class AgentContext {
+export interface IAgentContext {
+	base(
+		input: Pick<RunAgentInput, 'projectId' | 'selection' | 'selections'>,
+		current: CurrentContextNote
+	): BaseAgentContextData;
+	build(input: RunAgentInput, values: AgentContextValues): AgentRunContext;
+	appContext(
+		snapshot: AppContextSnapshotV1,
+		conversation: Conversation,
+		origin: ConversationContextProject
+	): ResolvedAgentAppContextV1;
+	requestedScope(
+		snapshot: AppContextSnapshotV1,
+		resolved: { readonly project?: Project; readonly note?: Note }
+	): NonNullable<ResolvedAgentAppContextV1['requestedScope']>;
+}
+export class AgentContext implements IAgentContext {
+	constructor(
+		private readonly tokens: TokenCounter,
+		private readonly contextNoteTokenLimit: number
+	) {}
 	base(
 		input: Pick<RunAgentInput, 'projectId' | 'selection' | 'selections'>,
 		current: CurrentContextNote
@@ -160,8 +184,12 @@ export class AgentContext {
 			...values.base,
 			...(values.appContext ? { appContext: values.appContext } : {}),
 			...(userMemories.length ? { userMemory: userMemories.map((entry) => entry.content) } : {}),
-			contextNotes: values.contextNotes.map(contextNoteOf),
-			contextResources: values.contextResources.map(contextResourceOf),
+			contextNotes: values.contextNotes.map((note) =>
+				contextNoteOf(note, this.tokens, this.contextNoteTokenLimit)
+			),
+			contextResources: values.contextResources.map((resource) =>
+				contextResourceOf(resource, this.tokens, this.contextNoteTokenLimit)
+			),
 			skills: this.buildCatalog(values.skills, (skill) =>
 				this.isRequested(skill, requested, requestedNoteIds)
 			)

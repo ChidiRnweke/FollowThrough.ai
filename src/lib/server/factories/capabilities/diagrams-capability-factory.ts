@@ -9,7 +9,7 @@ import type {
 } from '$lib/server/repositories/provenance';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import type { AgentContext } from '$lib/server/services/agent/runs/context';
+import type { IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { SkillFinder } from '$lib/server/services/skills/contracts';
 import type { MemoryLibrary } from '$lib/server/services/memory/library';
@@ -44,7 +44,7 @@ export interface DiagramsCapabilityInput {
 	readonly anchors: SourceAnchorRepository;
 	readonly provenanceRepository: ProvenanceRepository;
 	readonly provenance: ProvenanceRecorder;
-	readonly context: AgentContext;
+	readonly context: IAgentContext;
 	readonly contextNotes: NoteReader;
 	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
 	readonly contextMemory: Pick<MemoryLibrary, 'list'>;

@@ -1,3 +1,4 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -5,7 +6,6 @@ import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -20,10 +20,10 @@ const setup = async (suffix: string) => {
 		projects: new ProjectRecords(database)
 	});
 	const search = new KnowledgeIndexRecords(database);
-	const index = new ContentIndex(
+	const index = createContentIndex(
 		search,
 		new InMemoryEmbeddingClient().model,
-		new TokenAwareChunker(),
+		{ targetTokens: 2400, overlapTokens: 480 },
 		true
 	).notes;
 	const original = await Promise.all(

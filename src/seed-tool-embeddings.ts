@@ -1,3 +1,4 @@
+import { Cl100kTokenizer } from '$lib/server/adapters/tokenization/cl100k';
 /**
  * Deploy-time seeder for the `tool_embeddings` table.
  *
@@ -20,10 +21,14 @@ import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
 
 const main = async (): Promise<void> => {
 	await hydrateEnvironment();
-	const embeddings = new Embeddings(requiredEnvironmentValue('OPENROUTER_API_KEY'), {
-		baseURL: process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL,
-		appURL: process.env.ORIGIN ?? 'http://localhost:5173'
-	});
+	const embeddings = new Embeddings(
+		requiredEnvironmentValue('OPENROUTER_API_KEY'),
+		new Cl100kTokenizer(),
+		{
+			baseURL: process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL,
+			appURL: process.env.ORIGIN ?? 'http://localhost:5173'
+		}
+	);
 	const transaction = createTransactionContext(db);
 	const summary = await new ToolDiscovery(
 		new ToolCatalogIndex(new ToolEmbeddingRecords(transaction.database)),

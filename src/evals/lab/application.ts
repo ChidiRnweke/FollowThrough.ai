@@ -1,7 +1,11 @@
+import { Cl100kTokenizer } from '$lib/server/adapters/tokenization/cl100k';
 import { InMemoryAttachmentClaims } from '$lib/testing/attachments/fakes/claims';
 import { fileURLToPath } from 'node:url';
 import { createApplication, type ProductionApplication } from '$lib/server/application';
-import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
+import {
+	Embeddings,
+	DEFAULT_EMBEDDING_MODEL
+} from '$lib/server/services/knowledge-search/embeddings';
 import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
 import { SearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
@@ -18,7 +22,7 @@ import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 import { createPGliteDatabase } from './pglite-database';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import { ToolDiscovery } from '$lib/server/controllers/tool-discovery/controller';
-import { ToolCatalogIndex, toolEmbeddingText } from '$lib/server/services/agent/tools/tool-index';
+import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 import { TOOL_CATALOG } from '$lib/services/agent/tool-catalog';
 
 const CACHE_PATH = fileURLToPath(new URL('../fixtures/auxiliary-cache.json', import.meta.url));
@@ -73,10 +77,12 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	const { database, transactionRunner, close: closeDatabase } = await createPGliteDatabase();
 
 	const cache = new DiskCache(CACHE_PATH);
-	const deterministicToolTexts = new Set(TOOL_CATALOG.map(toolEmbeddingText));
+	const toolIndex = new ToolCatalogIndex(new ToolEmbeddingRecords(database));
+	const toolPlan = await toolIndex.prepare(TOOL_CATALOG, DEFAULT_EMBEDDING_MODEL);
+	const deterministicToolTexts = new Set(toolPlan.pending.map((entry) => entry.input));
 	const clientOptions = { baseURL, appURL };
 	const embeddingClient = new CachedEmbeddingClient(
-		new Embeddings(openRouterApiKey, clientOptions),
+		new Embeddings(openRouterApiKey, new Cl100kTokenizer(), clientOptions),
 		cache,
 		(content) => deterministicToolTexts.has(content)
 	);
@@ -107,11 +113,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	// explicitly rather than making every long-tail tool appear unavailable.
 	// Deploys run this seed next to migrations; the lab has to do the same or it
 	// evaluates a configuration that never ships.
-	await new ToolDiscovery(
-		new ToolCatalogIndex(new ToolEmbeddingRecords(database)),
-		embeddingClient,
-		transactionRunner
-	).seed();
+	await new ToolDiscovery(toolIndex, embeddingClient, transactionRunner).seed();
 
 	return {
 		...application,

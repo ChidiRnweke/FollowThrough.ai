@@ -1,3 +1,4 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, it, expect } from 'vitest';
 import { Agent, Runner, RunState } from '@openai/agents';
 import { AgentTools } from './agent-tool-factory';
@@ -37,6 +38,7 @@ const scenario = (
 	const fixture = reviewedNoteFixture(note, options.markdown);
 	const createRegistry = (pending: readonly PendingAgentDecision[] = []) =>
 		new AgentTools(
+			testTokenizer,
 			fixture.factory,
 			testActor(),
 			mode,

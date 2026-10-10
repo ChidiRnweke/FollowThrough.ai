@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { createWidgetRules } from '$lib/factories/widgets/rules';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { describe, expect, it } from 'vitest';
@@ -7,7 +9,6 @@ import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widge
 import { WidgetLibrary } from '$lib/server/services/widgets/library';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
@@ -36,7 +37,7 @@ const setup = () => {
 	projects.projects = [projectBuilder()];
 	const library = new WidgetLibrary(repository, projects, new InMemoryNoteRepository());
 	const embeddings = new InMemoryEmbeddingClient();
-	const index = new ContentIndex(new InMemorySearchRepository(), embeddings.model);
+	const index = createContentIndex(new InMemorySearchRepository(), embeddings.model);
 	const controller = new Widgets(
 		capabilityDependencies<WidgetsDependencies>({
 			...createWidgetRules(),
@@ -50,6 +51,7 @@ const setup = () => {
 		})
 	);
 	const tools = new AgentTools(
+		testTokenizer,
 		capabilityDependencies<ControllerFactory>({ widgets: () => controller }),
 		testActor(),
 		'auto_accept',

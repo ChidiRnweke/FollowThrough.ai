@@ -1,3 +1,4 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { expect, it } from 'vitest';
 import type { ActorContext } from '$lib/models/identity';
 import type { UpdateTrustPolicyInput } from '$lib/models/agent';
@@ -5,7 +6,6 @@ import { Memory, type MemoryDependencies } from './controller';
 import { MemoryLibrary } from '$lib/server/services/memory/library';
 import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -95,7 +95,7 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 	const effects = new InMemorySuggestionEffects();
 	const search = new InMemorySearchRepository();
 	const embeddings = new InMemoryEmbeddingClient();
-	const index = new ContentIndex(search, embeddings.model);
+	const index = createContentIndex(search, embeddings.model);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
 			memoryChanges: library,

@@ -1,3 +1,4 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
 import { Attachments, type AttachmentsDependencies } from './controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -5,7 +6,6 @@ import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
 import { view } from '$lib/testing/attachments/fakes/processing';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 describe('attachment search removal', () => {
 	it('removes the attachment and its indexed content together', async () => {
@@ -15,7 +15,7 @@ describe('attachment search removal', () => {
 		const controller = new Attachments(
 			capabilityDependencies<AttachmentsDependencies>({
 				attachments: service,
-				attachmentIndexer: new ContentIndex(search, new InMemoryEmbeddingClient().model)
+				attachmentIndexer: createContentIndex(search, new InMemoryEmbeddingClient().model)
 					.attachments,
 				transactionRunner: new InMemoryTransactionRunner([repository, search])
 			})
@@ -67,7 +67,8 @@ it('commits physical cleanup intent without deleting bytes inside the transactio
 	const controller = new Attachments(
 		capabilityDependencies<AttachmentsDependencies>({
 			attachments: service,
-			attachmentIndexer: new ContentIndex(search, new InMemoryEmbeddingClient().model).attachments,
+			attachmentIndexer: createContentIndex(search, new InMemoryEmbeddingClient().model)
+				.attachments,
 			transactionRunner: new InMemoryTransactionRunner([repository, search])
 		})
 	);

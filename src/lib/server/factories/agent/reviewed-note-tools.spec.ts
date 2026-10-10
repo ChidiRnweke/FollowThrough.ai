@@ -1,3 +1,4 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, it, expect } from 'vitest';
 import { RunContext } from '@openai/agents';
 import { AgentTools } from './agent-tool-factory';
@@ -32,6 +33,7 @@ const setup = () => {
 		mode: AgentExecutionMode = 'approval_required'
 	) =>
 		new AgentTools(
+			testTokenizer,
 			fixture.factory,
 			testActor(),
 			mode,
@@ -230,6 +232,7 @@ describe('A note change that fails while it is being prepared', () => {
 			})
 		);
 		const tools = new AgentTools(
+			testTokenizer,
 			capabilityDependencies<ControllerFactory>({ notes: () => controller }),
 			testActor(),
 			'approval_required',

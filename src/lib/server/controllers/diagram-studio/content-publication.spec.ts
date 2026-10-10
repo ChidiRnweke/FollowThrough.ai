@@ -1,9 +1,9 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { expect, it } from 'vitest';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 import { type DiagramWriteOutcome } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/services/diagrams/editing';
 import { DiagramLibrary } from '$lib/server/services/diagrams/library';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	DrawioXmlValidator,
 	DrawioSvgSanitizer,
@@ -49,7 +49,7 @@ const setup = () => {
 	);
 	const search = new InMemorySearchRepository();
 	const embeddings = new InMemoryEmbeddingClient();
-	const index = new ContentIndex(search, embeddings.model);
+	const index = createContentIndex(search, embeddings.model);
 	const controller = new DiagramStudio(
 		capabilityDependencies<DiagramStudioDependencies>({
 			diagramSourceNotes: notes,

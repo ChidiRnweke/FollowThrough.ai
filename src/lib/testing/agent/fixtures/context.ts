@@ -1,3 +1,4 @@
+import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
@@ -9,7 +10,6 @@ import type { AgentRunId, RunAgentInput } from '$lib/models/agent';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { AgentEventStore } from '$lib/server/stores/agent/events';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
@@ -50,7 +50,7 @@ export const agentContextFixture = () => {
 		sessions,
 		transactionRunner: transactions,
 		settlements: new RunSettlements(runs, runs),
-		contextFormatter: new AgentContext(),
+		contextFormatter: createAgentContext(),
 		contextNotes: notes,
 		contextSkills: skills,
 		contextWidgets: resources.widgetReader,

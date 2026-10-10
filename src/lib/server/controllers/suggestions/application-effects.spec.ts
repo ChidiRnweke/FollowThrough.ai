@@ -1,3 +1,4 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { describe, expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
@@ -19,7 +20,6 @@ import {
 	noteBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	DrawioXmlValidator,
 	DrawioSvgSanitizer,
@@ -87,7 +87,7 @@ describe('Proposal effect coordination', () => {
 		const suggestions = new InMemorySuggestions();
 		const effects = new InMemorySuggestionEffects();
 		const search = new InMemorySearchRepository();
-		const indexWriter = new ContentIndex(
+		const indexWriter = createContentIndex(
 			search,
 			new InMemoryEmbeddingClient().model,
 			undefined,

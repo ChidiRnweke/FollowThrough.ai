@@ -1,3 +1,4 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { expect, it } from 'vitest';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { AgentTools } from './agent-tool-factory';
@@ -23,6 +24,7 @@ const toolsFor = (hasProject: boolean) => {
 		capabilityDependencies<ProjectsDependencies>({ projectLister: catalog })
 	);
 	return new AgentTools(
+		testTokenizer,
 		capabilityDependencies<ControllerFactory>({ projects: () => controller }),
 		testActor(),
 		'auto_accept',

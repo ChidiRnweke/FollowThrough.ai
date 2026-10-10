@@ -1,4 +1,5 @@
-import { getEncoding } from 'js-tiktoken';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { afterAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -8,7 +9,6 @@ import { PostgresAttachmentClaims } from '$lib/server/repositories/attachments/p
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
 import {
 	InMemoryTextParser,
@@ -35,7 +35,7 @@ const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
 	await Promise.all(clients.map((client) => client.end()));
 });
-const setup = async (suffix: string, chunker = new TokenAwareChunker()) => {
+const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapTokens: 480 }) => {
 	const owner = actor(suffix);
 	await new UserRecords(context.db).ensureLocal(owner);
 	const { note } = await seedNote(suffix, owner);
@@ -93,7 +93,7 @@ const setup = async (suffix: string, chunker = new TokenAwareChunker()) => {
 				updatedAt: now
 			})
 		},
-		indexer: new ContentIndex(search, new InMemoryEmbeddingClient().model, chunker).attachments,
+		indexer: createContentIndex(search, new InMemoryEmbeddingClient().model, chunker).attachments,
 		transactionRunner: transaction.transactionRunner,
 		visionModel: 'test/model',
 		logger: { error: () => {} }
@@ -102,10 +102,10 @@ const setup = async (suffix: string, chunker = new TokenAwareChunker()) => {
 };
 describe('attachment processing persistence', () => {
 	it('recovers an old truncated index from saved extraction without parsing again', async () => {
-		const { owner, records, search, view, parser, worker } = await setup(
-			'9751',
-			new TokenAwareChunker(30, 5)
-		);
+		const { owner, records, search, view, parser, worker } = await setup('9751', {
+			targetTokens: 30,
+			overlapTokens: 5
+		});
 		const text =
 			Array.from(
 				{ length: 60 },
@@ -194,7 +194,7 @@ it('preserves successful empty extraction when the version is read back', async 
 	});
 	const files = new AgentVirtualFiles(
 		capabilityDependencies<AgentVirtualFilesDependencies>({
-			countTokens: (text) => getEncoding('cl100k_base').encode(text).length,
+			tokens: testTokenizer,
 			attachments: records,
 			stored: new InMemoryAgentFiles()
 		})

@@ -1,7 +1,7 @@
+import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import type { DiagramAgentDependencies } from '$lib/server/controllers/diagrams/controller';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
-import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
@@ -39,7 +39,7 @@ export const diagramGenerationFixture = () => {
 		}
 	];
 	const generation: DiagramAgentDependencies = {
-		contextFormatter: new AgentContext(),
+		contextFormatter: createAgentContext(),
 		contextNotes: notes,
 		contextSkills: skills.skillFinder,
 		contextMemory: new InMemoryMemoryEntryRepository(),

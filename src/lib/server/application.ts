@@ -1,3 +1,4 @@
+import type { McpSurfaceFactory } from './factories/agent/mcp-tool-factory';
 import {
 	ProductionControllerFactory,
 	type ProductionControllerDependencies
@@ -80,6 +81,7 @@ export interface ApplicationConfig {
 }
 
 export interface ProductionApplication {
+	readonly mcpSurface: McpSurfaceFactory;
 	readonly controllers: ProductionControllerFactory;
 	readonly recoverInterruptedRuns: () => Promise<number>;
 	readonly eventBus: AgentEventBus;
@@ -191,6 +193,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	} = knowledgeSearch;
 	const toolRetriever = knowledgeSearch.toolRetriever;
 	const agentFilesCapability = createAgentFilesCapability({
+		tokens: knowledgeSearch.tokenizer,
 		db,
 		projects: projectRepository,
 		notes: noteRepository
@@ -206,6 +209,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		provenance: provenanceRepository
 	}).library;
 	const agentCapability = createAgentCapability({
+		tokens: knowledgeSearch.tokenizer,
 		db,
 		controllers: () => controllerFactory,
 		toolRetriever,
@@ -644,6 +648,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			conversations: conversationJournal
 		},
 		inlineSuggestions: {
+			context: finalizedKnowledgeSearch.inlineContext,
 			noteReader: notes,
 			preferences: finalizedKnowledgeSearch.preferences,
 			inlineCompletionGenerator: finalizedKnowledgeSearch.inlineCompletion,
@@ -661,6 +666,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const controllerFactory = new ProductionControllerFactory(dependencies);
 	return {
 		controllers: controllerFactory,
+		mcpSurface: agentCapability.mcpSurface,
 		recoverInterruptedRuns: async () => {
 			const interrupted = await controllerFactory.agent().recoverInterruptedRuns();
 			return (

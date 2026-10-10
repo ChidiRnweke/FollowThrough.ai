@@ -1,3 +1,4 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -6,7 +7,6 @@ import { ProjectRecords } from '$lib/server/repositories/projects/postgres/proje
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import { seedUser, context, replaceNoteFixture, seedNote } from '../database-harness';
 import { competingSkillWrites, skillController } from './edit-harness';
 
@@ -142,12 +142,12 @@ it('allows note indexing to finish while a pin holds project locks and waits for
 			await new NoteRecords(edit.database).findForWrite(owner, note.id);
 			ready.resolve();
 			await index.promise;
-			await new ContentIndex(
+			await createContentIndex(
 				new KnowledgeIndexRecords(edit.database),
 				'contract-model',
-				new TokenAwareChunker(),
+				{ targetTokens: 2400, overlapTokens: 480 },
 				true
-			).indexNote(owner, note);
+			).notes.index(owner, note);
 		})
 		.then(
 			() => ({ kind: 'success' as const }),

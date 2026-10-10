@@ -1,5 +1,6 @@
+import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AgentContext, type AttachedResource } from './context';
+import { type AttachedResource } from './context';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import { attachmentViewBuilder } from '$lib/testing/attachments/fixtures/views';
 import {
@@ -9,7 +10,7 @@ import {
 import type { DrawioDiagram } from '$lib/models/diagrams';
 
 const formatted = (resource: AttachedResource) =>
-	new AgentContext().build(runAgentInputBuilder(), {
+	createAgentContext().build(runAgentInputBuilder(), {
 		base: {},
 		skills: [],
 		contextNotes: [],

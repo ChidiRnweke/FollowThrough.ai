@@ -1,4 +1,4 @@
-import { getEncoding } from 'js-tiktoken';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { prepareRunImages } from './images';
 import { describe, expect, it } from 'vitest';
@@ -80,7 +80,7 @@ const setup = (fetch: typeof globalThis.fetch, prepare = async () => {}) => {
 				repository,
 				actor,
 				id,
-				new AgentReplayVirtualizer(new InMemoryAgentFiles(), countTokens)
+				new AgentReplayVirtualizer(new InMemoryAgentFiles(), tokens)
 			),
 		undefined,
 		() => provider
@@ -254,5 +254,4 @@ describe('agent image preparation', () => {
 	});
 });
 
-const tokenEncoder = getEncoding('cl100k_base');
-const countTokens = (text: string): number => tokenEncoder.encode(text).length;
+const tokens = testTokenizer;

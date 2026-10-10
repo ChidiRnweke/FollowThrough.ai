@@ -1,3 +1,7 @@
+import type {
+	IndexCompletion,
+	WidgetIndexing
+} from '$lib/server/services/knowledge-search/indexing';
 import type { WidgetCatalogReader } from '$lib/models/widgets';
 import { StaleRevisionError, ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
@@ -8,7 +12,6 @@ import type { IWidgetSearchService } from '$lib/services/widgets/search-text';
 
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	widgetCatalog,
 	type CreateWidgetInput,
@@ -73,9 +76,9 @@ export interface WidgetsDependencies {
 	widgetLister: WidgetLister;
 	widgetWriter: WidgetWriter;
 	/** Keeps the knowledge index in step with what each widget shows (ADR 0019). */
-	widgetIndexer: ContentIndex['widgets'];
+	widgetIndexer: WidgetIndexing;
 	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	indexWriter: IndexCompletion;
 	transactionRunner: TransactionRunner;
 }
 

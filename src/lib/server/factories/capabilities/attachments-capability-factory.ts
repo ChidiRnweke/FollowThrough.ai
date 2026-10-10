@@ -1,3 +1,4 @@
+import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/indexing';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import { UploadRetentionStore } from '$lib/server/stores/attachments/upload-retention';
 import { AttachmentObjectRemoval } from '$lib/server/controllers/attachments/object-removal';
@@ -22,7 +23,6 @@ import {
 	type IAttachmentStorage,
 	type ObjectStorageConfig
 } from '$lib/server/services/attachments/storage';
-import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import { operationObserver } from '$lib/server/services/telemetry';
 import {
 	DEFAULT_MISTRAL_BASE_URL,
@@ -38,7 +38,7 @@ export interface AttachmentsCapabilityInput {
 	readonly visionModel: string;
 	readonly notes: NoteRepository;
 	readonly preferences: AgentPreferenceEditor;
-	readonly indexer: ContentIndex['attachments'];
+	readonly indexer: AttachmentIndexing;
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;

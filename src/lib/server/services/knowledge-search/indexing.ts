@@ -18,40 +18,30 @@ import type {
 } from '$lib/server/repositories/knowledge-search';
 import type { EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 
-import { getEncoding, type Tiktoken } from 'js-tiktoken';
+import type { TokenCodec } from '$lib/models/tokenization';
 
 export const diagramIndexNoteId = (diagram: Diagram) =>
 	diagram.archivedAt === undefined && diagram.searchableText.trim()
 		? diagram.sourceNoteId
 		: undefined;
-let sharedEncoding: Tiktoken | undefined;
-export const retrievalEncoding = (): Tiktoken => (sharedEncoding ??= getEncoding('cl100k_base'));
-export interface ContentChunker {
-	chunk(content: string): readonly string[];
-}
 export type { EmbeddingBatch };
 const decideIndexPlan = (content: IndexContent): IndexPlan =>
 	content.contents.length
 		? { kind: 'index', ...content }
 		: { kind: 'remove', source: content.source };
 
-const DEFAULT_TARGET_TOKENS = 2400;
-const DEFAULT_OVERLAP_TOKENS = 480;
 const MEMORY_SOURCE_TITLE = 'Project memory';
 
-export class TokenAwareChunker implements ContentChunker {
-	private readonly encoding: Tiktoken;
-
+class TokenAwareChunker {
 	constructor(
-		private readonly targetTokens = DEFAULT_TARGET_TOKENS,
-		private readonly overlapTokens = DEFAULT_OVERLAP_TOKENS,
-		encoding: Tiktoken = retrievalEncoding()
+		private readonly targetTokens: number,
+		private readonly overlapTokens: number,
+		private readonly encoding: TokenCodec
 	) {
 		if (!Number.isInteger(targetTokens) || targetTokens <= 0)
 			throw new Error('Retrieval chunk target must be a positive integer');
 		if (!Number.isInteger(overlapTokens) || overlapTokens < 0 || overlapTokens >= targetTokens)
 			throw new Error('Retrieval chunk overlap must be non-negative and smaller than target');
-		this.encoding = encoding;
 	}
 
 	chunk(content: string): readonly string[] {
@@ -78,7 +68,7 @@ export class TokenAwareChunker implements ContentChunker {
 		return chunks;
 	}
 
-	count(content: string): number {
+	private count(content: string): number {
 		return this.encoding.encode(content).length;
 	}
 
@@ -111,13 +101,7 @@ export class TokenAwareChunker implements ContentChunker {
 	}
 }
 
-export const retrievalChunkerFromEnv = (): TokenAwareChunker => {
-	const target = Number(process.env.RETRIEVAL_CHUNK_TOKENS ?? DEFAULT_TARGET_TOKENS);
-	const overlap = Number(process.env.RETRIEVAL_CHUNK_OVERLAP_TOKENS ?? DEFAULT_OVERLAP_TOKENS);
-	return new TokenAwareChunker(target, overlap);
-};
-
-export const retrievalContentHash = async (
+const retrievalContentHash = async (
 	content: string,
 	metadata: { readonly sourceTitle?: string; readonly sectionPath?: string } = {}
 ): Promise<ContentHash> => {
@@ -246,13 +230,55 @@ const applyIndex = async (
 	return { kind: 'stored' };
 };
 
-export class ContentIndex {
+export interface IndexChunking {
+	readonly targetTokens: number;
+	readonly overlapTokens: number;
+}
+export interface IndexCompletion {
+	complete(
+		actor: ActorContext,
+		pending: Extract<IndexingResult, { kind: 'needs_embeddings' }>,
+		batch: EmbeddingBatch
+	): Promise<void>;
+}
+export interface NoteIndexing {
+	index(actor: ActorContext, note: Note): Promise<IndexingResult>;
+}
+export interface AttachmentIndexing {
+	index(actor: ActorContext, attachment: Attachment, text: string): Promise<void>;
+	remove(actor: ActorContext, attachmentId: Attachment['id']): Promise<void>;
+}
+export interface MemoryIndexing {
+	index(actor: ActorContext, entry: MemoryEntry): Promise<IndexingResult>;
+}
+export interface DiagramIndexing {
+	index(
+		actor: ActorContext,
+		diagram: Diagram,
+		context: DiagramIndexContext
+	): Promise<IndexingResult>;
+}
+export interface WidgetIndexing {
+	index(actor: ActorContext, widget: Widget, searchableText: string): Promise<IndexingResult>;
+}
+export interface IndexCapabilities extends IndexCompletion {
+	readonly notes: NoteIndexing;
+	readonly attachments: AttachmentIndexing;
+	readonly memories: MemoryIndexing;
+	readonly diagrams: DiagramIndexing;
+	readonly widgets: WidgetIndexing;
+}
+export class ContentIndex implements IndexCapabilities {
+	private readonly chunker: TokenAwareChunker;
 	constructor(
 		private readonly repository: RetrievalIndexRepository,
 		private readonly embeddingModel: string,
-		private readonly chunker: ContentChunker = new TokenAwareChunker(),
-		private readonly defer = false
-	) {}
+		tokenizer: TokenCodec,
+		chunking: IndexChunking,
+		private readonly defer: boolean
+	) {
+		this.chunker = new TokenAwareChunker(chunking.targetTokens, chunking.overlapTokens, tokenizer);
+	}
 	async complete(
 		actor: ActorContext,
 		pending: Extract<IndexingResult, { kind: 'needs_embeddings' }>,
@@ -282,10 +308,10 @@ export class ContentIndex {
 	readonly memories = { index: this.indexMemory.bind(this) };
 	readonly diagrams = { index: this.indexDiagram.bind(this) };
 	readonly widgets = { index: this.indexWidget.bind(this) };
-	apply(actor: ActorContext, plan: IndexPlan, defer = this.defer): Promise<IndexingResult> {
+	private apply(actor: ActorContext, plan: IndexPlan, defer = this.defer): Promise<IndexingResult> {
 		return applyIndex(this.repository, this.embeddingModel, defer, actor, plan);
 	}
-	async indexNote(actor: ActorContext, note: Note): Promise<IndexingResult> {
+	private async indexNote(actor: ActorContext, note: Note): Promise<IndexingResult> {
 		return this.apply(
 			actor,
 			decideIndexPlan({
@@ -302,7 +328,11 @@ export class ContentIndex {
 			})
 		);
 	}
-	async indexAttachment(actor: ActorContext, attachment: Attachment, text: string): Promise<void> {
+	private async indexAttachment(
+		actor: ActorContext,
+		attachment: Attachment,
+		text: string
+	): Promise<void> {
 		const contents = this.chunker.chunk(text);
 		const sourceTitle = attachment.path.split('/').at(-1) ?? attachment.path;
 		await this.apply(
@@ -324,7 +354,7 @@ export class ContentIndex {
 			true
 		);
 	}
-	async indexMemory(actor: ActorContext, entry: MemoryEntry): Promise<IndexingResult> {
+	private async indexMemory(actor: ActorContext, entry: MemoryEntry): Promise<IndexingResult> {
 		// User-profile entries (no project) are injected into agent context directly and
 		// never enter the retrieval index.
 		const projectId = entry.projectId;
@@ -354,7 +384,7 @@ export class ContentIndex {
 			})
 		);
 	}
-	async indexDiagram(
+	private async indexDiagram(
 		actor: ActorContext,
 		diagram: Diagram,
 		context: DiagramIndexContext
@@ -402,7 +432,7 @@ export class ContentIndex {
 	 * A widget is indexed by the words it shows, which its controller derives. A widget in the
 	 * trash, or one that shows no words, answers no searches.
 	 */
-	async indexWidget(
+	private async indexWidget(
 		actor: ActorContext,
 		widget: Widget,
 		searchableText: string

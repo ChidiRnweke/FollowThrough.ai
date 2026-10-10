@@ -1,3 +1,4 @@
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { DrawioLabelReader } from '$lib/server/services/diagrams/drawio';
 import { searchableDrawioText } from '$lib/services/diagrams/labels';
 import { prepareDiagramWrite } from '$lib/services/diagrams/editing';
@@ -9,10 +10,7 @@ import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import {
-	diagramIndexNoteId,
-	type ContentIndex
-} from '$lib/server/services/knowledge-search/indexing';
+import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
 import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type {
 	DiagramMutationRequest,
@@ -211,7 +209,7 @@ export interface DiagramStudioDependencies {
 	diagramWriter: Pick<DiagramWriter, 'create'>;
 	diagramSourceNotes: NoteReader;
 	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	indexWriter: IndexCompletion;
 	diagramIndexer: DiagramIndexer;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;

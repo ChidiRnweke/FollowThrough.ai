@@ -96,3 +96,10 @@ export interface InitiateTemplateUploadOutput {
 	readonly uploadUrl: string;
 	readonly requiredHeaders: Record<string, string>;
 }
+
+/** A reservation together with the owner required to reclaim it. */
+export interface OwnedAttachmentUpload {
+	readonly userId: Brand<string, 'UserId'>;
+	readonly upload: AttachmentUpload;
+}
+export type UploadRetentionCursor = Pick<AttachmentUpload, 'expiresAt' | 'id'>;

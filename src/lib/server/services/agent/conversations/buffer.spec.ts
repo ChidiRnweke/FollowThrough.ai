@@ -1,4 +1,4 @@
-import { getEncoding } from 'js-tiktoken';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, expect, it } from 'vitest';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
@@ -29,7 +29,7 @@ const bufferOver = (stored: readonly PersistedSessionItem[]): ConversationBuffer
 		repository,
 		actor,
 		conversationId,
-		new AgentReplayVirtualizer(new InMemoryAgentFiles(), countTokens)
+		new AgentReplayVirtualizer(new InMemoryAgentFiles(), tokens)
 	);
 };
 
@@ -133,5 +133,4 @@ describe('ConversationBuffer', () => {
 	});
 });
 
-const tokenEncoder = getEncoding('cl100k_base');
-const countTokens = (text: string): number => tokenEncoder.encode(text).length;
+const tokens = testTokenizer;

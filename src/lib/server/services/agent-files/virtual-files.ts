@@ -1,3 +1,4 @@
+import type { TokenCounter } from '$lib/models/tokenization';
 import { createHash } from 'node:crypto';
 import { readAgentResourcePath } from '$lib/server/repositories/agent-files/agent-files';
 import {
@@ -30,7 +31,7 @@ import type {
 } from '$lib/models/agent-files';
 
 export interface AgentVirtualFilesDependencies {
-	readonly countTokens: (text: string) => number;
+	readonly tokens: TokenCounter;
 	readonly projects: ProjectRepository;
 	readonly notes: NoteRepository;
 	readonly attachments: AttachmentRepository;
@@ -62,7 +63,7 @@ export const diagramFilePath = (diagram: Pick<Diagram, 'projectId' | 'id' | 'kin
 	`/projects/${diagram.projectId}/diagrams/${diagram.id}.${diagram.kind === 'mermaid' ? 'mmd' : 'drawio'}`;
 
 export const agentFileOf = (
-	countTokens: (text: string) => number,
+	tokens: TokenCounter,
 	path: string,
 	mediaType: string,
 	content: string
@@ -73,7 +74,7 @@ export const agentFileOf = (
 		path,
 		mediaType,
 		byteSize: Buffer.byteLength(content, 'utf8'),
-		tokenCount: countTokens(content),
+		tokenCount: tokens.count(content),
 		lineCount: lineCount(content),
 		checksumSha256: createHash('sha256').update(content).digest('hex')
 	},
@@ -112,7 +113,7 @@ export class AgentVirtualFiles {
 			if (!found || found.projectId !== resource.projectId || found.kind === 'folder')
 				return undefined;
 			return agentFileOf(
-				this.dependencies.countTokens,
+				this.dependencies.tokens,
 				path,
 				'text/markdown',
 				this.dependencies.noteMarkdown(found.document)
@@ -127,7 +128,7 @@ export class AgentVirtualFiles {
 			);
 			return revision
 				? agentFileOf(
-						this.dependencies.countTokens,
+						this.dependencies.tokens,
 						path,
 						'text/markdown',
 						this.dependencies.noteMarkdown(revision.document)
@@ -143,12 +144,7 @@ export class AgentVirtualFiles {
 				found.version.extractedText === undefined
 			)
 				return undefined;
-			return agentFileOf(
-				this.dependencies.countTokens,
-				path,
-				'text/plain',
-				found.version.extractedText
-			);
+			return agentFileOf(this.dependencies.tokens, path, 'text/plain', found.version.extractedText);
 		}
 
 		if (resource?.kind === 'diagram') {
@@ -160,7 +156,7 @@ export class AgentVirtualFiles {
 			)
 				return undefined;
 			return agentFileOf(
-				this.dependencies.countTokens,
+				this.dependencies.tokens,
 				path,
 				found.kind === 'mermaid' ? 'text/vnd.mermaid' : 'application/vnd.jgraph.mxfile+xml',
 				found.source
@@ -188,7 +184,7 @@ export class AgentVirtualFiles {
 							.map(async (note) =>
 								(await this.dependencies.notes.listRevisions(actor, note.id)).map((revision) =>
 									agentFileOf(
-										this.dependencies.countTokens,
+										this.dependencies.tokens,
 										`/projects/${project.id}/notes/${note.id}/versions/${revision.revision}.md`,
 										'text/markdown',
 										this.dependencies.noteMarkdown(revision.document)
@@ -202,7 +198,7 @@ export class AgentVirtualFiles {
 						.filter((note) => note.kind !== 'folder')
 						.map((note) =>
 							agentFileOf(
-								this.dependencies.countTokens,
+								this.dependencies.tokens,
 								`/projects/${project.id}/notes/${note.id}.md`,
 								'text/markdown',
 								this.dependencies.noteMarkdown(note.document)
@@ -215,7 +211,7 @@ export class AgentVirtualFiles {
 							? []
 							: [
 									agentFileOf(
-										this.dependencies.countTokens,
+										this.dependencies.tokens,
 										attachmentFilePath(project.id, view.attachment.id),
 										'text/plain',
 										text
@@ -224,7 +220,7 @@ export class AgentVirtualFiles {
 					}),
 					...diagramPage.diagrams.map((diagram) =>
 						agentFileOf(
-							this.dependencies.countTokens,
+							this.dependencies.tokens,
 							diagramFilePath(diagram),
 							diagram.kind === 'mermaid' ? 'text/vnd.mermaid' : 'application/vnd.jgraph.mxfile+xml',
 							diagram.source

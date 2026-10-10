@@ -1,4 +1,4 @@
-import { getEncoding } from 'js-tiktoken';
+import type { TokenCounter } from '$lib/models/tokenization';
 import type { Database } from '$lib/server/db';
 import { AgentFileRecords } from '$lib/server/repositories/agent-files/postgres/agent-files';
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
@@ -9,6 +9,7 @@ import { AgentVirtualFiles } from '$lib/server/services/agent-files/virtual-file
 import { noteMarkdownFromContent } from '$lib/server/services/notes/markdown';
 
 export interface AgentFilesCapabilityInput {
+	readonly tokens: TokenCounter;
 	readonly db: Database;
 	readonly projects: ProjectRepository;
 	readonly notes: NoteRepository;
@@ -22,11 +23,12 @@ export interface AgentFilesCapability {
 export const createAgentFilesCapability = (
 	input: AgentFilesCapabilityInput
 ): AgentFilesCapability => {
-	const repository = new AgentFileRecords(input.db);
+	const tokens = input.tokens;
+	const repository = new AgentFileRecords(input.db, tokens);
 	return {
 		repository,
 		reader: new AgentVirtualFiles({
-			countTokens,
+			tokens,
 			projects: input.projects,
 			notes: input.notes,
 			attachments: new AttachmentRecords(input.db),
@@ -36,6 +38,3 @@ export const createAgentFilesCapability = (
 		})
 	};
 };
-
-const tokenEncoder = getEncoding('cl100k_base');
-const countTokens = (text: string): number => tokenEncoder.encode(text).length;

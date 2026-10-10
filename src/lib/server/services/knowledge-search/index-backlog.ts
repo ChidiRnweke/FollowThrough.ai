@@ -1,13 +1,31 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { SearchDocument } from '$lib/models/knowledge-search';
+import type {
+	SearchDocument,
+	SearchDocumentId,
+	PendingIndexSource
+} from '$lib/models/knowledge-search';
 import type {
 	EmbeddedChunk,
 	IndexSource,
 	RetrievalIndexRepository
 } from '$lib/server/repositories/knowledge-search';
 
+export interface IIndexBacklog {
+	listSources(limit: number, after?: string): Promise<readonly PendingIndexSource[]>;
+	read(
+		actor: ActorContext,
+		source: IndexSource
+	): Promise<readonly { readonly id: SearchDocumentId; readonly input: string }[]>;
+	complete(
+		actor: ActorContext,
+		source: IndexSource,
+		chunks: readonly EmbeddedChunk[],
+		model: string
+	): Promise<void>;
+}
+
 /** Stored pending chunks are the durable embedding queue. */
-export class IndexBacklog {
+export class IndexBacklog implements IIndexBacklog {
 	constructor(private readonly repository: RetrievalIndexRepository) {}
 
 	listSources(limit: number, after?: string) {

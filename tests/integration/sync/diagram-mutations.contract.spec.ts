@@ -1,7 +1,7 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
 import type { DiagramId } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/services/diagrams/editing';
-import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import {
@@ -48,10 +48,10 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 	});
 	await records.insert(seeded.owner, diagram);
 	const search = new KnowledgeIndexRecords(database);
-	const index = new ContentIndex(
+	const index = createContentIndex(
 		search,
 		new InMemoryEmbeddingClient().model,
-		new TokenAwareChunker(),
+		{ targetTokens: 2400, overlapTokens: 480 },
 		true
 	).diagrams;
 	await index.index(seeded.owner, diagram, { kind: 'note', title: seeded.note.title });

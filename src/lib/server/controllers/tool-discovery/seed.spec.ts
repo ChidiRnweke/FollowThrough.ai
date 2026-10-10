@@ -6,7 +6,7 @@ import {
 } from '$lib/testing/agent/fixtures/tool-discovery';
 
 it('seeds all catalog entries with their active-model vectors', async () => {
-	const { controller, repository } = toolDiscoveryFixture();
+	const { controller, repository } = await toolDiscoveryFixture();
 	const result = await controller.seed(catalog);
 	expect({
 		result,
@@ -28,13 +28,15 @@ it('seeds all catalog entries with their active-model vectors', async () => {
 });
 
 it('keeps an unchanged catalog usable when the embedding provider is unavailable', async () => {
-	const { controller, embeddings } = toolDiscoveryFixture(catalog.map((tool) => storedTool(tool)));
+	const { controller, embeddings } = await toolDiscoveryFixture(
+		catalog.map((tool) => storedTool(tool))
+	);
 	embeddings.failure = new Error('Provider unavailable');
 	expect(await controller.seed(catalog)).toEqual({ embedded: 0, unchanged: 3, removed: 0 });
 });
 
 it('replaces only the vector whose discovery text changed', async () => {
-	const { controller, repository } = toolDiscoveryFixture(
+	const { controller, repository } = await toolDiscoveryFixture(
 		catalog.map((tool) =>
 			storedTool(tool.name === 'archive_note' ? { ...tool, description: 'Old wording' } : tool)
 		)
@@ -54,14 +56,14 @@ it('replaces only the vector whose discovery text changed', async () => {
 });
 
 it('replaces all vectors after an embedding model change', async () => {
-	const { controller } = toolDiscoveryFixture(
+	const { controller } = await toolDiscoveryFixture(
 		catalog.map((tool) => storedTool(tool, [1, 0], 'old-model'))
 	);
 	expect(await controller.seed(catalog)).toEqual({ embedded: 3, unchanged: 0, removed: 0 });
 });
 
 it('removes retired tools from the stored index', async () => {
-	const { controller, repository } = toolDiscoveryFixture([
+	const { controller, repository } = await toolDiscoveryFixture([
 		...catalog.map((tool) => storedTool(tool)),
 		storedTool({ name: 'retired', description: 'Removed tool' })
 	]);
@@ -70,7 +72,7 @@ it('removes retired tools from the stored index', async () => {
 });
 
 it('rejects a short provider batch before replacing stored vectors', async () => {
-	const { controller, embeddings } = toolDiscoveryFixture();
+	const { controller, embeddings } = await toolDiscoveryFixture();
 	embeddings.vectors = [];
 	await expect(controller.seed(catalog)).rejects.toMatchObject({
 		code: 'INVALID_GENERATED_CONTENT'
@@ -78,8 +80,8 @@ it('rejects a short provider batch before replacing stored vectors', async () =>
 });
 
 it('restores earlier vectors if pruning fails after writing replacements', async () => {
-	const original = [storedTool({ ...catalog[0]!, description: 'Old wording' })];
-	const { controller, repository } = toolDiscoveryFixture(original);
+	const original = [await storedTool({ ...catalog[0]!, description: 'Old wording' })];
+	const { controller, repository } = await toolDiscoveryFixture(original);
 	repository.pruneFailure = new Error('Pruning failed');
 	await controller.seed(catalog).then(
 		() => {
@@ -93,8 +95,8 @@ it('restores earlier vectors if pruning fails after writing replacements', async
 });
 
 it('leaves stored tools intact when embedding fails', async () => {
-	const original = [storedTool({ ...catalog[0]!, description: 'Old wording' })];
-	const { controller, repository, embeddings } = toolDiscoveryFixture(original);
+	const original = [await storedTool({ ...catalog[0]!, description: 'Old wording' })];
+	const { controller, repository, embeddings } = await toolDiscoveryFixture(original);
 	embeddings.failure = new Error('Provider unavailable');
 	await controller.seed(catalog).then(
 		() => {

@@ -1,4 +1,4 @@
-import { getEncoding } from 'js-tiktoken';
+import type { TokenCounter } from '$lib/models/tokenization';
 import type { AgentController } from '$lib/server/controllers/agent/controller';
 // chisel-ignore-file structural:factory-contains-logic -- Agent protocol adapter maps controller capabilities to SDK schemas; it makes no application-assembly decisions, and Chisel has no adapter layer.
 import type { Tool } from '@openai/agents';
@@ -1169,6 +1169,7 @@ export class AgentTools {
 	private readonly noteReviews = new Map<string, NoteChangeReview>();
 
 	constructor(
+		private readonly tokens: TokenCounter,
 		controllers: ControllerFactory,
 		actor: ActorContext,
 		mode: AgentExecutionMode,
@@ -1248,7 +1249,7 @@ export class AgentTools {
 		const selection = this.context.input.selection;
 		return [
 			...Object.values(
-				sharedToolDefinitions(this.controllers, this.actor, this.context.provenanceId)
+				sharedToolDefinitions(this.controllers, this.actor, this.context.provenanceId, this.tokens)
 			),
 			...Object.values(appToolDefinitions(this.controllers, this.actor, this.context)),
 			...(selection
@@ -1460,7 +1461,8 @@ export class AgentTools {
 const sharedToolDefinitions = (
 	factory: ControllerFactory,
 	actor: ActorContext,
-	provenanceId: ProvenanceId
+	provenanceId: ProvenanceId,
+	tokens: TokenCounter
 ) => {
 	const define = defineTool;
 	const retrieval = () => ({
@@ -1639,10 +1641,7 @@ const sharedToolDefinitions = (
 				const view = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
 				const path = `/projects/${view.note.projectId}/notes/${view.note.id}.md`;
 				const markdown = noteMarkdownFromContent(view.note.document);
-				return projectNoteView(
-					view,
-					agentFileOf(countTokens, path, 'text/markdown', markdown).metadata
-				);
+				return projectNoteView(view, agentFileOf(tokens, path, 'text/markdown', markdown).metadata);
 			}
 		),
 		create_note: define(
@@ -2674,6 +2673,7 @@ type _BuildersNameNothingElse = Total<Exclude<BuiltToolName, ToolName>>;
 
 export class McpTools {
 	constructor(
+		private readonly tokens: TokenCounter,
 		private readonly controllers: ControllerFactory,
 		private readonly actor: ActorContext,
 		private readonly context: McpToolContext,
@@ -2688,7 +2688,7 @@ export class McpTools {
 			: undefined;
 		return [
 			...Object.values(
-				sharedToolDefinitions(this.controllers, this.actor, this.context.provenanceId)
+				sharedToolDefinitions(this.controllers, this.actor, this.context.provenanceId, this.tokens)
 			),
 			...Object.values(mcpOnlyDefinitions(this.controllers, this.actor, this.context))
 		].filter(
@@ -2700,7 +2700,7 @@ export class McpTools {
 }
 
 export const agentToolRegistry =
-	(controllers: () => ControllerFactory, toolRetriever: ToolRetriever) =>
+	(controllers: () => ControllerFactory, toolRetriever: ToolRetriever, tokens: TokenCounter) =>
 	async ({
 		actor,
 		request,
@@ -2722,6 +2722,7 @@ export const agentToolRegistry =
 			preferences.filter((preference) => !preference.enabled).map((preference) => preference.name)
 		);
 		return new AgentTools(
+			tokens,
 			factory,
 			actor,
 			run.executionMode,
@@ -2737,6 +2738,3 @@ export const agentToolRegistry =
 			signal
 		);
 	};
-
-const tokenEncoder = getEncoding('cl100k_base');
-const countTokens = (text: string): number => tokenEncoder.encode(text).length;

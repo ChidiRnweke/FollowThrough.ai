@@ -1,3 +1,4 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import {
 	memoryEntryBuilder,
 	testMemoryEntryId
@@ -20,7 +21,6 @@ import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	projectBuilder,
 	testActor,
@@ -61,7 +61,7 @@ const setup = () => {
 	projects.projects = [projectBuilder()];
 	const search = new InMemorySearchRepository();
 	const indexEmbeddings = new InMemoryEmbeddingClient();
-	const indexWriter = new ContentIndex(search, indexEmbeddings.model);
+	const indexWriter = createContentIndex(search, indexEmbeddings.model);
 	const memory = new MemoryLibrary(entries, projects, provenanceRepository);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({

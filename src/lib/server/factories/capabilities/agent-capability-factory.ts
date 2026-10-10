@@ -1,7 +1,13 @@
+import {
+	createMcpToolSurface,
+	type McpSurfaceFactory
+} from '$lib/server/factories/agent/mcp-tool-factory';
+import type { IAgentContext } from '$lib/server/services/agent/runs/context';
+import { createAgentContext } from '$lib/server/factories/agent-context';
 import { CachedAgentModels } from '$lib/server/controllers/agent/model-catalog';
 import { ModelCatalogStore } from '$lib/server/stores/agent/model-catalog';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { getEncoding } from 'js-tiktoken';
+import type { TokenCounter } from '$lib/models/tokenization';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
@@ -29,7 +35,6 @@ import { ToolPreferenceRecords } from '$lib/server/repositories/agent/postgres/t
 import { TrustPolicyRecords } from '$lib/server/repositories/agent/postgres/trust-policies';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { ConversationBuffer } from '$lib/server/services/agent/conversations/buffer';
-import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { AgentEventStore, type AgentEventBus } from '$lib/server/stores/agent/events';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import {
@@ -50,6 +55,7 @@ import type { AgentFileRepository } from '$lib/server/repositories/agent-files/a
 import { AgentReplayVirtualizer } from '$lib/server/services/agent/conversations/replay-virtualizer';
 
 export interface AgentCapabilityInput {
+	readonly tokens: TokenCounter;
 	readonly db: Database;
 	readonly controllers: () => ProductionControllerFactory;
 	readonly toolRetriever: ToolRetriever;
@@ -64,6 +70,7 @@ export interface AgentCapabilityInput {
 }
 
 export interface AgentCapability {
+	readonly mcpSurface: McpSurfaceFactory;
 	readonly now: () => DateTime;
 	readonly webSearchDefaults: WebResearchSettings;
 	readonly agentAvailable: boolean;
@@ -81,7 +88,7 @@ export interface AgentCapability {
 	readonly runEvents: AgentRunEventRecords;
 	readonly runDecisions: AgentRunDecisionRecords;
 	readonly sessions: AgentSessionRecords;
-	readonly context: AgentContext;
+	readonly context: IAgentContext;
 	readonly runner: AgentReasoning;
 	readonly settlements: RunSettlements;
 	readonly noteActionRequests: NoteActionRequests;
@@ -107,6 +114,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 			),
 			new ModelCatalogStore()
 		);
+	const tokens = input.tokens;
 	const runs = new AgentRunRecords(input.db);
 	const runLedger = new AgentRunLedger(runs);
 	const runEvents = new AgentRunEventRecords(input.db);
@@ -114,9 +122,9 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	const runDecisions = new AgentRunDecisionRecords(input.db);
 	const sessions = new AgentSessionRecords(input.db);
 	const eventBus = new AgentEventStore();
-	const context = new AgentContext();
+	const context = createAgentContext(tokens);
 	const runner = new AgentReasoning(
-		agentToolRegistry(input.controllers, input.toolRetriever),
+		agentToolRegistry(input.controllers, input.toolRetriever, tokens),
 		sessions,
 		input.openRouterApiKey,
 		input.openRouterBaseURL,
@@ -127,12 +135,19 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 				repository,
 				actor,
 				conversationId,
-				new AgentReplayVirtualizer(input.files, countTokens)
+				new AgentReplayVirtualizer(input.files, tokens)
 			),
 		traceAgentTurn
 	);
 
 	return {
+		mcpSurface: (context) =>
+			createMcpToolSurface({
+				...context,
+				controllers: input.controllers(),
+				tokens,
+				toolRetriever: input.toolRetriever
+			}),
 		webSearchDefaults: resolveWebResearch(
 			webSearchOptionsFromEnvironment(process.env),
 			CHAT_WEB_SEARCH_DEFAULTS
@@ -160,6 +175,3 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		eventBus
 	};
 };
-
-const tokenEncoder = getEncoding('cl100k_base');
-const countTokens = (text: string): number => tokenEncoder.encode(text).length;

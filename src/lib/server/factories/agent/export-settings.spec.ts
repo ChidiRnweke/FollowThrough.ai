@@ -1,3 +1,4 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, expect, it } from 'vitest';
 import { AgentTools } from './agent-tool-factory';
 import { defaultExportSettings } from '$lib/models/deliverables';
@@ -17,6 +18,7 @@ describe('agent export settings', () => {
 		const { service } = exportControllerFixture();
 		const factory = capabilityDependencies<ControllerFactory>({ deliverables: () => service });
 		const tools = new AgentTools(
+			testTokenizer,
 			factory,
 			testActor(),
 			'auto_accept',

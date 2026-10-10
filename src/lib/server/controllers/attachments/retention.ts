@@ -2,16 +2,21 @@ import type { ScheduledTask } from '$lib/models/maintenance';
 import type { UploadRetentionStore } from '$lib/server/stores/attachments/upload-retention';
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	AttachmentRepository,
-	OwnedAttachmentUpload
-} from '$lib/server/repositories/attachments/attachments';
+	AttachmentUpload,
+	OwnedAttachmentUpload,
+	UploadRetentionCursor
+} from '$lib/models/attachments';
 export interface AttachmentStorage {
 	remove(objectKey: string): Promise<void>;
 }
-export type UploadRetentionRepository = Pick<
-	AttachmentRepository,
-	'listExpiredUploads' | 'deleteUpload'
->;
+export interface UploadRetentionRepository {
+	listExpiredUploads(
+		cutoff: Date,
+		limit: number,
+		after?: UploadRetentionCursor
+	): Promise<readonly OwnedAttachmentUpload[]>;
+	deleteUpload(actor: ActorContext, id: AttachmentUpload['id']): Promise<void>;
+}
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 const DEFAULT_MAX_PER_TICK = 500;

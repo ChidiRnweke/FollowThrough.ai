@@ -8,14 +8,25 @@ import type {
 import type { EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type { ToolEmbeddingRepository } from '$lib/server/repositories/agent/tool-embeddings';
 
-export const toolEmbeddingText = (entry: ToolDescriptor): string =>
+const toolEmbeddingText = (entry: ToolDescriptor): string =>
 	`${entry.name}: ${entry.retrievalText ?? entry.description}`;
 
-export const toolContentHash = (entry: ToolDescriptor): string =>
+const toolContentHash = (entry: ToolDescriptor): string =>
 	createHash('sha256').update(toolEmbeddingText(entry)).digest('hex');
 
+export interface IToolCatalogIndex {
+	prepare(catalog: readonly ToolDescriptor[], model: string): Promise<ToolIndexPlan>;
+	complete(plan: ToolIndexPlan, batch: EmbeddingBatch): Promise<ToolEmbeddingSeedSummary>;
+	rank(
+		names: readonly string[],
+		vector: readonly number[],
+		model: string,
+		limit: number
+	): Promise<string[]>;
+}
+
 /** Stored tool vectors and catalog drift; no provider calls. */
-export class ToolCatalogIndex {
+export class ToolCatalogIndex implements IToolCatalogIndex {
 	constructor(private readonly repository: ToolEmbeddingRepository) {}
 
 	async prepare(catalog: readonly ToolDescriptor[], model: string): Promise<ToolIndexPlan> {

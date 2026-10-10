@@ -1,3 +1,4 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { loadedSkillFixture } from '$lib/testing/skills/fixtures/loaded-skill';
 import { describe, expect, it } from 'vitest';
@@ -51,14 +52,15 @@ const executeDirectly: AgentToolExecutor = {
 const allTools: ToolAccessPolicy = { isEnabled: () => true };
 
 const createAgentTools = (
-	controllers: ConstructorParameters<typeof AgentTools>[0],
-	actor: ConstructorParameters<typeof AgentTools>[1],
-	mode: ConstructorParameters<typeof AgentTools>[2],
-	context: ConstructorParameters<typeof AgentTools>[3],
+	controllers: ConstructorParameters<typeof AgentTools>[1],
+	actor: ConstructorParameters<typeof AgentTools>[2],
+	mode: ConstructorParameters<typeof AgentTools>[3],
+	context: ConstructorParameters<typeof AgentTools>[4],
 	executor: AgentToolExecutor = executeDirectly,
 	retriever: InMemoryToolRetriever = new InMemoryToolRetriever(),
 	access: ToolAccessPolicy = allTools
-): AgentTools => new AgentTools(controllers, actor, mode, context, executor, retriever, access);
+): AgentTools =>
+	new AgentTools(testTokenizer, controllers, actor, mode, context, executor, retriever, access);
 
 let freshKeyCounter = 0;
 const freshKey = (): string => `fresh:${freshKeyCounter++}`;
@@ -153,6 +155,7 @@ const registry = memoizeAgentTools(
 		options.factory ? freshKey() : `registry:${mode}`,
 	(mode: 'approval_required' | 'auto_accept', options: { factory?: ControllerFactory } = {}) =>
 		new MemoizedAgentTools(
+			testTokenizer,
 			options.factory ?? ({} as ControllerFactory),
 			testActor(),
 			mode,
@@ -212,6 +215,7 @@ const agentToolsRegistry = memoizeAgentTools(
 		options: { factory?: ControllerFactory; retriever?: InMemoryToolRetriever } = {}
 	) =>
 		new MemoizedAgentTools(
+			testTokenizer,
 			options.factory ?? ({} as ControllerFactory),
 			testActor(),
 			mode,
@@ -367,6 +371,7 @@ describe('Agent tool coverage invariants', () => {
 	 */
 	it('builds every contract on the MCP surface except the app-surface tools', () => {
 		const mcp = new McpTools(
+			testTokenizer,
 			{} as ControllerFactory,
 			testActor(),
 			{ provenanceId: testProvenanceId() },
@@ -771,7 +776,8 @@ describe('Agent tool coverage invariants', () => {
 		};
 		const registry = await agentToolRegistry(
 			() => factory,
-			new InMemoryToolRetriever()
+			new InMemoryToolRetriever(),
+			testTokenizer
 		)({
 			actor: testActor(),
 			request: { prompt: 'Help' } as never,
@@ -924,7 +930,13 @@ describe('Agent tool coverage invariants', () => {
 		const input = JSON.stringify(payload);
 		const first = await selected.invoke({} as never, input);
 		const retry = await selected.invoke({} as never, input);
-		const mcp = new McpTools(factory, testActor(), { provenanceId: testProvenanceId() }, allTools)
+		const mcp = new McpTools(
+			testTokenizer,
+			factory,
+			testActor(),
+			{ provenanceId: testProvenanceId() },
+			allTools
+		)
 			.definitions()
 			.find((definition) => definition.name === 'create_todos');
 		if (!mcp) throw new Error('Missing task batch tool');
@@ -1526,6 +1538,7 @@ describe('Deselected tools', () => {
 		(...disabled: string[]): AgentTools => {
 			const policy: ToolAccessPolicy = { isEnabled: (name) => !disabled.includes(name) };
 			return new MemoizedAgentTools(
+				testTokenizer,
 				{} as ControllerFactory,
 				testActor(),
 				'auto_accept',

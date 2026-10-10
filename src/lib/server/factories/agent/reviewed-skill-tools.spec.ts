@@ -1,3 +1,4 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, expect, it } from 'vitest';
 import { RunContext } from '@openai/agents';
 import { AgentTools } from './agent-tool-factory';
@@ -25,6 +26,7 @@ const setup = (kind: 'skill' | 'note' = 'skill', operation: 'replace' | 'patch' 
 		mode: AgentExecutionMode = 'approval_required'
 	) =>
 		new AgentTools(
+			testTokenizer,
 			fixture.factory,
 			testActor(),
 			mode,

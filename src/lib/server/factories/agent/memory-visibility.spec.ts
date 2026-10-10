@@ -1,3 +1,4 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { expect, it } from 'vitest';
 import { AgentTools } from './agent-tool-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
@@ -61,6 +62,7 @@ const setup = (scope: 'user' | 'project') => {
 	);
 	const factory = capabilityDependencies<ControllerFactory>({ memory: () => controller });
 	const tools = new AgentTools(
+		testTokenizer,
 		factory,
 		testActor(),
 		'auto_accept',

@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { InlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
 import {
 	InlineSuggestions,
 	type InlineSuggestionsDependencies
@@ -29,6 +31,7 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 	const admission = createInlineAdmission();
 	const controller = new InlineSuggestions(
 		capabilityDependencies<InlineSuggestionsDependencies>({
+			context: new InlineContextService(testTokenizer),
 			noteReader: notes,
 			memory,
 			embeddings,

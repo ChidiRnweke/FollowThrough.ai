@@ -1,3 +1,4 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { describe, expect, it } from 'vitest';
 import { widgetTemplates, type WidgetId } from '$lib/models/widgets';
@@ -7,7 +8,6 @@ import { createSyncCapability } from '$lib/server/factories/capabilities/sync-ca
 import { createWidgetsCapability } from '$lib/server/factories/capabilities/widgets-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { context, seedNote } from '../database-harness';
@@ -22,7 +22,12 @@ const setup = async (suffix: string) => {
 		notes: new NoteRecords(database)
 	});
 	// Deferred, as production is: chunks land without vectors and the worker embeds them (ADR 0021).
-	const index = new ContentIndex(new KnowledgeIndexRecords(database), 'contract', undefined, true);
+	const index = createContentIndex(
+		new KnowledgeIndexRecords(database),
+		'contract',
+		undefined,
+		true
+	);
 	const controller = new Widgets(
 		capabilityDependencies<WidgetsDependencies>({
 			catalogReader: widgets.catalogReader,

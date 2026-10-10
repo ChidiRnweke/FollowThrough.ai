@@ -1,3 +1,4 @@
+import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { expect, it } from 'vitest';
 import type { SkillSummary } from '$lib/models/skills';
 import {
@@ -5,7 +6,6 @@ import {
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { AgentContext } from './context';
 import { buildAgentInstructions } from './reasoning';
 
 const skill = (name: string): SkillSummary => ({
@@ -20,7 +20,7 @@ const skill = (name: string): SkillSummary => ({
 	isPinned: false
 });
 const contextFor = (skills: readonly SkillSummary[]) =>
-	new AgentContext().build(
+	createAgentContext().build(
 		{ conversationId: testConversationId(), prompt: 'Help' },
 		{ base: {}, skills, contextNotes: [], contextResources: [], profileMemory: [] }
 	);
@@ -44,7 +44,7 @@ it('keeps skill descriptions inside the untrusted data boundary', () => {
 it.each([{ requestedSkillNames: ['REVIEW'] }, { requestedSkillNoteIds: [testNoteId()] }])(
 	'advertises an opted-out skill by portable name or explicit note identity: %j',
 	(requested) => {
-		const context = new AgentContext().build(
+		const context = createAgentContext().build(
 			{ conversationId: testConversationId(), prompt: 'Help', ...requested },
 			{
 				base: {},
@@ -64,7 +64,7 @@ it('does not treat pinning as permission for implicit invocation', () => {
 	).toEqual([]);
 });
 it('keeps an explicitly requested disabled skill out of the advertised catalog', () => {
-	const context = new AgentContext().build(
+	const context = createAgentContext().build(
 		{ conversationId: testConversationId(), prompt: 'Help', requestedSkillNoteIds: [testNoteId()] },
 		{
 			base: {},

@@ -1,3 +1,4 @@
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import { prepareNoteSave, sameNoteDraft } from '$lib/services/notes/editing';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { decideNoteCreation } from '$lib/services/notes/creation';
@@ -8,7 +9,6 @@ import { validatePortableSkill } from '$lib/services/skills/manifest';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
 import type { SkillEditInput, SkillPinChange } from '$lib/models/skills';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { Note, NoteId, CreateNoteInput } from '$lib/models/notes';
 import { collectNoteLinkTargets } from '$lib/services/notes/references';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
@@ -108,7 +108,7 @@ export interface SkillsDependencies {
 	attachmentRestorer: NoteAttachmentRestorer;
 	anchorRepairer: SourceAnchorRepairer;
 	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	indexWriter: IndexCompletion;
 	noteIndexer: NoteIndexer;
 	noteLinkReconciler: NoteLinkReconciler;
 	skillEditor: SkillEditor;

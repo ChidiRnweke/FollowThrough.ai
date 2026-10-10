@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
 import { AgentTools } from '$lib/server/factories/agent/agent-tool-factory';
 import { ConversationBuffer } from '$lib/server/services/agent/conversations/buffer';
@@ -13,7 +15,6 @@ import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
-import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
@@ -126,7 +127,7 @@ const setup = <T extends AgentRunner>(
 			sessions,
 			transactionRunner: transactions,
 			settlements: new RunSettlements(runs, runs),
-			contextFormatter: new AgentContext(),
+			contextFormatter: createAgentContext(),
 			contextNotes: new InMemoryNoteContent(),
 			contextSkills: new InMemorySkills(),
 			builtInSkills: builtInSkillsFixture().builtInSkills,
@@ -602,6 +603,7 @@ it('journals a failed tool call and its correction through the production runner
 		async ({ run, executor, signal }) => {
 			if (!run.inputSnapshot) throw new Error('Run input is missing');
 			return new AgentTools(
+				testTokenizer,
 				notes.factory,
 				testActor(),
 				run.executionMode,

@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
 import { view } from '$lib/testing/attachments/fakes/processing';
-import { TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 describe('repairing historical truncated attachment indexes', () => {
 	it('keeps saved extraction eligible for repair when indexing fails', async () => {
-		const { repository, search, worker } = setupAttachments(new TokenAwareChunker(30, 5));
+		const { repository, search, worker } = setupAttachments({ targetTokens: 30, overlapTokens: 5 });
 		const original = view('text/plain');
 		const text = Array.from(
 			{ length: 60 },

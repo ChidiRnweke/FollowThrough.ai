@@ -1,3 +1,4 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { expect, it } from 'vitest';
 import { createAgentFilesCapability } from '$lib/server/factories/capabilities/agent-files-capability-factory';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
@@ -96,6 +97,7 @@ it('makes stored history unavailable when its project is archived', async () => 
 it('reads the old publication from the agent version path', async () => {
 	const { owner, note, project, revisions } = await setup('28008');
 	const { reader } = createAgentFilesCapability({
+		tokens: testTokenizer,
 		db: context.db,
 		projects: new ProjectRecords(context.db),
 		notes: new NoteRecords(context.db)

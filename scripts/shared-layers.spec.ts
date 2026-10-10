@@ -121,3 +121,57 @@ describe('Shared service and controller placement', () => {
 		).toContain('import-boundary:layer-no-internal-imports');
 	});
 });
+
+it('lets a controller update its explicit server state store', () => {
+	expect(
+		inspect({
+			'src/lib/server/stores/agent/runs.ts':
+				'export class Runs { private count = 0; increment(): void { this.count += 1; } }',
+			'src/lib/server/controllers/agent/controller.ts':
+				"import type { Runs } from '$lib/server/stores/agent/runs'; export class Agent { constructor(private readonly state: Runs) {} start(): void { this.state.increment(); } }"
+		})
+	).toEqual([]);
+});
+
+it('keeps services from reaching explicit server state stores', () => {
+	expect(
+		inspect({
+			'src/lib/server/stores/agent/runs.ts':
+				'export class Runs { private count = 0; increment(): void { this.count += 1; } }',
+			'src/lib/server/services/agent/runs.ts':
+				"import type { Runs } from '$lib/server/stores/agent/runs'; export class RunRules { constructor(private readonly state: Runs) {} start(): void { this.state.increment(); } }"
+		})
+	).toContain('import-boundary:banned-layer-import');
+});
+
+it('classifies SDK adapters and lets factories construct them', () => {
+	expect(
+		inspect({
+			'src/lib/server/adapters/tokenization/codec.ts':
+				'export class Codec { count(value: string): number { return value.length; } }',
+			'src/lib/server/codec-factory.ts':
+				"import { Codec } from '$lib/server/adapters/tokenization/codec'; export const createCodec = () => new Codec();"
+		})
+	).toEqual([]);
+});
+
+it('keeps domain workflows out of SDK adapters', () => {
+	expect(
+		inspect({
+			'src/lib/server/controllers/notes/controller.ts': 'export const save = () => 1;',
+			'src/lib/server/adapters/tokenization/codec.ts':
+				"import { save } from '$lib/server/controllers/notes/controller'; export class Codec { count(): number { return save(); } }"
+		})
+	).toContain('import-boundary:banned-layer-import');
+});
+
+it('requires services to receive adapters through interfaces instead of constructing SDK clients', () => {
+	expect(
+		inspect({
+			'src/lib/server/adapters/tokenization/codec.ts':
+				'export class Codec { count(value: string): number { return value.length; } }',
+			'src/lib/server/services/notes/title.ts':
+				"import { Codec } from '$lib/server/adapters/tokenization/codec'; export const count = (value: string) => new Codec().count(value);"
+		})
+	).toContain('import-boundary:banned-layer-import');
+});

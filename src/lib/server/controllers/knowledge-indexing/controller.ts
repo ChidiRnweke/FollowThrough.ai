@@ -3,7 +3,7 @@ import type { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embe
 import type { ActorContext } from '$lib/models/identity';
 import type { EmbeddedChunk, IndexSource, PendingIndexSource } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
+import type { IIndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { InvalidGeneratedContentError } from '$lib/errors';
 
 interface TransactionRunner {
@@ -33,7 +33,7 @@ export class EmbeddingMaintenance implements ScheduledTask {
 	private readonly logger: Pick<Console, 'error' | 'log'>;
 
 	constructor(
-		private readonly backlog: IndexBacklog,
+		private readonly backlog: IIndexBacklog,
 		private readonly embeddingClient: IEmbeddings,
 		private readonly transactions: TransactionRunner,
 		private readonly progress: EmbeddingProgressStore,

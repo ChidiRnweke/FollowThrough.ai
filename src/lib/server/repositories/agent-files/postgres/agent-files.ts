@@ -1,13 +1,11 @@
 import { createHash } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
-import { getEncoding } from 'js-tiktoken';
+import type { TokenCounter } from '$lib/models/tokenization';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentFileId, StoredAgentFile, StoreAgentFileInput } from '$lib/models/agent-files';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/agent';
-
-const encoding = getEncoding('cl100k_base');
 
 const toStoredFile = (row: typeof schema.agentFiles.$inferSelect): StoredAgentFile => ({
 	conversationId: row.conversationId as StoredAgentFile['conversationId'],
@@ -25,7 +23,10 @@ const toStoredFile = (row: typeof schema.agentFiles.$inferSelect): StoredAgentFi
 });
 
 export class AgentFileRecords implements AgentFileRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly database: Database,
+		private readonly tokens: TokenCounter
+	) {}
 
 	async list(actor: ActorContext): Promise<readonly StoredAgentFile[]> {
 		return (
@@ -52,7 +53,7 @@ export class AgentFileRecords implements AgentFileRepository {
 			mediaType: input.mediaType,
 			content: input.content,
 			byteSize: Buffer.byteLength(input.content, 'utf8'),
-			tokenCount: encoding.encode(input.content).length,
+			tokenCount: this.tokens.count(input.content),
 			lineCount: input.content.length === 0 ? 0 : input.content.split('\n').length,
 			checksumSha256: createHash('sha256').update(input.content).digest('hex'),
 			updatedAt: new Date()

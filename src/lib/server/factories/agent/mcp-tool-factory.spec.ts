@@ -1,3 +1,4 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { z } from 'zod';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
@@ -26,6 +27,7 @@ const connect = async (
 	} = {}
 ): Promise<Client> => {
 	const server = createMcpToolSurface({
+		tokens: testTokenizer,
 		controllers: options.factory ?? ({} as ControllerFactory),
 		actor: testActor(),
 		scope,

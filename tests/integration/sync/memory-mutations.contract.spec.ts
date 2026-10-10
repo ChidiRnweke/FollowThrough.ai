@@ -1,3 +1,4 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
 import type { MemoryEntryId } from '$lib/models/memory';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
@@ -6,7 +7,6 @@ import { createSyncCapability } from '$lib/server/factories/capabilities/sync-ca
 import { createMemoryCapability } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
@@ -24,7 +24,7 @@ const setup = async (suffix: string) => {
 		provenance: new ProvenanceRecords(database)
 	});
 	const indexEmbeddings = new InMemoryEmbeddingClient();
-	const indexWriter = new ContentIndex(new InMemorySearchRepository(), indexEmbeddings.model);
+	const indexWriter = createContentIndex(new InMemorySearchRepository(), indexEmbeddings.model);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
 			syncMutations: sync.mutations,

@@ -1,4 +1,4 @@
-import type { UploadRetentionCursor } from '$lib/server/repositories/attachments/attachments';
+import type { UploadRetentionCursor } from '$lib/models/attachments';
 
 export interface UploadTraversal {
 	readonly cutoff: Date;

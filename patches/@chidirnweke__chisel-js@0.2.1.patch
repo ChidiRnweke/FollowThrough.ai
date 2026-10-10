@@ -1,8 +1,16 @@
 diff --git a/dist/main.js b/dist/main.js
-index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce38e34822 100755
+index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..04dc2ed69145cd8d6586f7b65dec9965c26f84e1 100644
 --- a/dist/main.js
 +++ b/dist/main.js
-@@ -8333,6 +8333,7 @@ var LAYER_MATCHERS = [
+@@ -8267,6 +8267,7 @@ var Layer = {
+   ERRORS: "errors",
+   CONFIG: "config",
+   SERVICES: "services",
++  ADAPTERS: "adapters",
+   REPOSITORIES: "repositories",
+   CONTROLLERS: "controllers",
+   FACTORY: "factory",
+@@ -8333,11 +8334,14 @@ var LAYER_MATCHERS = [
    [/^src\/lib\/testing\//, Layer.TESTS],
    [/^src\/hooks\.(server\.)?(ts|js)$/, Layer.HOOKS],
    [/\.remote\.(ts|js)$/, Layer.REMOTE],
@@ -10,7 +18,38 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce
    [/^src\/routes\/.*\+.*\.server\.(ts|js)$/, Layer.ROUTES],
    [/^src\/routes\/.*\+server\.(ts|js)$/, Layer.ROUTES],
    [/^src\/routes\//, Layer.COMPONENTS],
-@@ -9087,6 +9088,12 @@ class ImportBoundaryService {
+   [/^src\/lib\/server\/(repositories|db)\//, Layer.REPOSITORIES],
+   [/^src\/lib\/server\/services\//, Layer.SERVICES],
++  [/^src\/lib\/server\/adapters\//, Layer.ADAPTERS],
++  [/^src\/lib\/server\/stores\//, Layer.STORES],
+   [/^src\/lib\/server\/controllers\//, Layer.CONTROLLERS],
+   [/^src\/lib\/server\/config\.(ts|js)$/, Layer.CONFIG],
+   [/^src\/lib\/server\/[^/]*[Ff]actory\.(ts|js)$/, Layer.FACTORY],
+@@ -8998,7 +9002,6 @@ var BANNED_INTERNAL = new Map([
+     Layer.REMOTE,
+     Layer.HOOKS,
+     Layer.CONFIG,
+-    Layer.STORES,
+     Layer.CLIENT,
+     Layer.COMPONENTS
+   ])],
+@@ -9033,6 +9036,15 @@ var BANNED_INTERNAL = new Map([
+     Layer.HOOKS
+   ])]
+ ]);
++BANNED_INTERNAL.set(Layer.ADAPTERS, new Set([
++  Layer.SERVICES, Layer.REPOSITORIES, Layer.CONTROLLERS, Layer.FACTORY,
++  Layer.ROUTES, Layer.REMOTE, Layer.HOOKS, Layer.STORES, Layer.CLIENT,
++  Layer.COMPONENTS, Layer.CONFIG, Layer.UTILS
++]));
++for (const [layer, banned] of BANNED_INTERNAL) {
++  if (layer !== Layer.FACTORY && layer !== Layer.ADAPTERS && banned !== null)
++    banned.add(Layer.ADAPTERS);
++}
+ var PACKAGE_RULES = [
+   {
+     match: (s) => s === "drizzle-orm" || s.startsWith("drizzle-orm/"),
+@@ -9087,6 +9099,12 @@ class ImportBoundaryService {
      const importedLayer = layers.get(edge.imported);
      if (importedLayer === undefined)
        return [];
@@ -23,8 +62,12 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce
      const banned = BANNED_INTERNAL.get(importerLayer);
      if (banned === undefined)
        return [];
-@@ -9208,8 +9215,6 @@ function fixFor(importer, imported) {
- var SERVER_LAYER_FOLDERS = new Set(["repositories", "db", "services", "controllers"]);
+@@ -9205,11 +9223,9 @@ function fixFor(importer, imported) {
+ }
+ 
+ // src/chisel/checker/services/architecture/layout.ts
+-var SERVER_LAYER_FOLDERS = new Set(["repositories", "db", "services", "controllers"]);
++var SERVER_LAYER_FOLDERS = new Set(["repositories", "db", "services", "controllers", "stores", "adapters"]);
  var SERVER_ROOT_FILE_RE = /^src\/lib\/server\/([^/]*[Ff]actory|application|config|index)\.(ts|js)$/;
  var MISPLACED_LAYER_DIRS = [
 -  [/^src\/lib\/services\//, "src/lib/services/", "src/lib/server/services/"],
@@ -32,7 +75,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce
    [/^src\/lib\/repositories\//, "src/lib/repositories/", "src/lib/server/repositories/"],
    [/^src\/lib\/(factories|factory)\//, "src/lib/factories/", "src/lib/server/"]
  ];
-@@ -10244,7 +10249,6 @@ class TestStructureService {
+@@ -10244,7 +10260,6 @@ class TestStructureService {
          continue;
        violations.push(...this._checkTestLocation(file));
        violations.push(...this._checkTestNaming(file));
@@ -40,7 +83,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce
        violations.push(...this._checkMockingBanned(file));
        violations.push(...this._checkSkipReason(file));
      }
-@@ -10291,29 +10295,6 @@ class TestStructureService {
+@@ -10291,29 +10306,6 @@ class TestStructureService {
      }
      return violations;
    }
@@ -70,7 +113,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce
    _checkMockingBanned(file) {
      const violations = [];
      if (!file.path.includes("tests/"))
-@@ -10370,7 +10351,6 @@ class TestStructureService {
+@@ -10370,7 +10362,6 @@ class TestStructureService {
          description: "Test name does not describe an invariant",
          fixGuidance: "Name the test after the invariant it proves: test_cannot_X, test_returns_Y_when_Z."
        },

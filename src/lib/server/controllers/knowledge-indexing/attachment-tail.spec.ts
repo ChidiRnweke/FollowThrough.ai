@@ -1,11 +1,9 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { describe, expect, it } from 'vitest';
-import {
-	ContentIndex,
-	TokenAwareChunker,
-	retrievalEncoding
-} from '$lib/server/services/knowledge-search/indexing';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+const tokenizer = testTokenizer;
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import { Embeddings, type EmbeddingClient } from '$lib/server/services/knowledge-search/embeddings';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
@@ -26,20 +24,20 @@ describe('complete attachment search', () => {
 		const provider: EmbeddingClient = {
 			embeddings: {
 				create: async ({ input: contents }) => {
-					batchTokens.push(
-						contents.reduce((sum, content) => sum + retrievalEncoding().encode(content).length, 0)
-					);
+					batchTokens.push(contents.reduce((sum, content) => sum + tokenizer.count(content), 0));
 					return { data: contents.map((_, index) => ({ index, embedding: [1, 0, 0] })) };
 				}
 			}
 		};
-		const client = new Embeddings('test-key', { client: provider, model: 'test-embedding' });
+		const client = new Embeddings('test-key', testTokenizer, {
+			client: provider,
+			model: 'test-embedding'
+		});
 		const attachment = view('text/plain', 'report.txt').attachment;
-		await new ContentIndex(
-			repository,
-			client.model,
-			new TokenAwareChunker(700, 50)
-		).attachments.index(testActor(), attachment, text);
+		await createContentIndex(repository, client.model, {
+			targetTokens: 700,
+			overlapTokens: 50
+		}).attachments.index(testActor(), attachment, text);
 		const matches = await repository.search(testActor(), 'amberfalcon', 10);
 		const literalMatch = matches.map(({ document }) => ({
 			beyondOldLimit: document.chunkIndex >= 50,

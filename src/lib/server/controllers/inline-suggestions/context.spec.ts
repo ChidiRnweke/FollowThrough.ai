@@ -13,10 +13,9 @@ import {
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import {
-	inlineContextTraceOutput,
-	vectorSearchTraceOutput
-} from '$lib/server/services/inline-suggestions/inline-context';
+import { InlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+const rules = new InlineContextService(testTokenizer);
 
 const actor = testActor();
 const note = noteBuilder({
@@ -168,7 +167,7 @@ describe('inline completion context', () => {
 describe('trace output payloads', () => {
 	it('serializes the actual memories and passages, never counts', async () => {
 		const context = await build([match('Greek epic content')], [userMemory(0)]);
-		expect(JSON.parse(inlineContextTraceOutput(context))).toEqual({
+		expect(JSON.parse(rules.inlineContextTraceOutput(context))).toEqual({
 			noteTitle: 'Architecture',
 			userMemory: ['memory 0'],
 			projectPassages: [
@@ -179,7 +178,7 @@ describe('trace output payloads', () => {
 
 	it('serializes actual vector-search matches with scores and content', () => {
 		const results = [match('Greek epic content')];
-		expect(JSON.parse(vectorSearchTraceOutput(results))).toEqual([
+		expect(JSON.parse(rules.vectorSearchTraceOutput(results))).toEqual([
 			{
 				id: results[0].document.id,
 				sourceTitle: 'The Odyssey',

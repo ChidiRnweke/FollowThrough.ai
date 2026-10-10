@@ -11,11 +11,7 @@ import { relatedNoteMatches, relatedNoteCandidate } from '$lib/services/relation
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { RelationshipClassifier } from '$lib/server/services/relationships/contracts';
 import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
-import {
-	queryVector,
-	searchCandidateLimit,
-	type KnowledgeLookup
-} from '$lib/server/services/knowledge-search/semantic';
+import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 import type {
@@ -60,7 +56,7 @@ export interface RelationshipsController {
 
 export interface RelationshipsDependencies {
 	selectionOrigins: SelectionOriginService;
-	knowledgeLookup: Pick<KnowledgeLookup, 'search'>;
+	knowledgeLookup: IKnowledgeLookup;
 	embeddings: EmbeddingClient;
 	reranker: Reranker;
 	relationshipClassifier: RelationshipClassifier;
@@ -248,8 +244,8 @@ export class Relationships implements RelationshipsController {
 		signal?.throwIfAborted();
 		const candidates = await this.dependencies.knowledgeLookup.search(
 			actor,
-			queryVector(batch),
-			searchCandidateLimit(12),
+			batch,
+			this.dependencies.knowledgeLookup.candidateLimit(12),
 			note.projectId
 		);
 		// ADR 0036 permits vector order on provider failure, but never on cancellation.

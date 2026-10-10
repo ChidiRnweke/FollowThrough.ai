@@ -1,7 +1,7 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { describe, expect, it } from 'vitest';
-import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
@@ -13,7 +13,7 @@ import type { TransactionRunner } from '$lib/server/repositories/workspace';
 const immediateTransactions: TransactionRunner = { run: (work) => work() };
 
 const deferredIndexer = (repository: InMemorySearchRepository, client: InMemoryEmbeddingClient) =>
-	new ContentIndex(repository, client.model, new TokenAwareChunker(200, 0), true).notes;
+	createContentIndex(repository, client.model, { targetTokens: 200, overlapTokens: 0 }, true).notes;
 
 const backfill = (repository: InMemorySearchRepository, client: InMemoryEmbeddingClient) =>
 	new EmbeddingMaintenance(

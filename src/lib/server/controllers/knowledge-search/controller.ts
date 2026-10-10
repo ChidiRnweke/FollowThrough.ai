@@ -4,16 +4,8 @@ import type { ConversationId } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
-import {
-	queryVector,
-	knowledgeSearchSource,
-	searchCandidateLimit,
-	type KnowledgeLookup
-} from '$lib/server/services/knowledge-search/semantic';
-import {
-	searchQueryInput,
-	type ISearchQueryGeneration
-} from '$lib/server/services/knowledge-search/query-generation';
+import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import type { ISearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
 import type { ConversationJournal } from '$lib/server/services/agent/runs/contracts';
 import type { DateTime } from '$lib/models/workspace';
 
@@ -49,7 +41,7 @@ export interface RetrievalController {
 }
 
 export interface RetrievalDependencies {
-	knowledgeLookup: Pick<KnowledgeLookup, 'search'>;
+	knowledgeLookup: IKnowledgeLookup;
 	embeddings: EmbeddingClient;
 	reranker: Reranker;
 	queryGenerator: ISearchQueryGeneration;
@@ -71,8 +63,8 @@ export class Retrieval implements RetrievalController {
 		const batch = await this.dependencies.embeddings.embed([query]);
 		const candidates = await this.dependencies.knowledgeLookup.search(
 			actor,
-			queryVector(batch),
-			searchCandidateLimit(limit),
+			batch,
+			this.dependencies.knowledgeLookup.candidateLimit(limit),
 			input.projectId,
 			{
 				createdAfter: input.createdAfter,
@@ -95,7 +87,7 @@ export class Retrieval implements RetrievalController {
 			matches = ranking.kind === 'ranked' ? ranking.matches : candidates.slice(0, limit);
 		}
 		return matches.map((match) => ({
-			source: knowledgeSearchSource(match.document),
+			source: this.dependencies.knowledgeLookup.source(match.document),
 			noteId: match.document.noteId,
 			content: match.document.content,
 			score: match.score,
@@ -110,7 +102,7 @@ export class Retrieval implements RetrievalController {
 	private async resolveQuery(actor: ActorContext, input: SearchKnowledgeInput): Promise<string> {
 		if (!input.conversationId) return input.query;
 		const history = await this.dependencies.conversations.listMessages(actor, input.conversationId);
-		const query = searchQueryInput(input.query, history);
+		const query = this.dependencies.knowledgeLookup.queryInput(input.query, history);
 		return query.kind === 'direct'
 			? query.query
 			: this.dependencies.queryGenerator.generate(query.transcript);

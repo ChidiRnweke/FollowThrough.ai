@@ -1,3 +1,4 @@
+import type { TokenCounter } from '$lib/models/tokenization';
 // chisel-ignore-file structural:factory-contains-logic -- MCP protocol adapter owns registration and wire results, not application composition.
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -24,13 +25,19 @@ import {
 	prepareToolCall
 } from './tool-call-boundary';
 
-export interface McpToolSurfaceOptions {
-	readonly controllers: ControllerFactory;
+export interface McpRequestContext {
 	readonly actor: ActorContext;
 	readonly scope: ApiTokenScope;
 	readonly provenanceId: ProvenanceId;
-	readonly toolRetriever: ToolRetriever;
 	readonly toolAccess: ToolAccessPolicy;
+}
+
+export type McpSurfaceFactory = (context: McpRequestContext) => Server;
+
+export interface McpToolSurfaceOptions extends McpRequestContext {
+	readonly tokens: TokenCounter;
+	readonly controllers: ControllerFactory;
+	readonly toolRetriever: ToolRetriever;
 }
 
 const result = (value: AgentPayload) => ({
@@ -41,6 +48,7 @@ const result = (value: AgentPayload) => ({
 /** Validate inside our boundary, so schema errors and domain errors have one format. */
 export const createMcpToolSurface = (options: McpToolSurfaceOptions): Server => {
 	const registry = new McpTools(
+		options.tokens,
 		options.controllers,
 		options.actor,
 		{ provenanceId: options.provenanceId },

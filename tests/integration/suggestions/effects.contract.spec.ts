@@ -1,3 +1,4 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -21,7 +22,6 @@ import { RelationshipGraph } from '$lib/server/services/relationships/graph';
 import { MemoryLibrary } from '$lib/server/services/memory/library';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { context, now, seedNote, seedProvenance } from '../database-harness';
@@ -46,7 +46,7 @@ const application = (
 			Array.from({ length: 3072 }, (_, i) => (i === 0 ? 1 : 0))
 		);
 	}
-	const index = new ContentIndex(search, embeddings.model);
+	const index = createContentIndex(search, embeddings.model);
 	const controller = new Suggestions(
 		capabilityDependencies<SuggestionsDependencies>({
 			suggestionFinder: inbox,

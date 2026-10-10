@@ -1,3 +1,4 @@
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { prepareMermaidRevision } from '$lib/server/services/diagrams/mermaid-revision';
 import type { DiagramDraftWriter } from '$lib/server/services/diagrams/contracts';
@@ -29,16 +30,13 @@ import {
 } from '$lib/server/services/diagrams/submission-validation';
 import type { DiagramGenerator } from '$lib/server/services/diagrams/generation';
 import type { DiagramSubmission } from '$lib/models/diagrams/generation';
-import type { AgentContext } from '$lib/server/services/agent/runs/context';
+import type { IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { SkillFinder } from '$lib/server/services/skills/contracts';
 import type { MemoryLibrary } from '$lib/server/services/memory/library';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import {
-	diagramIndexNoteId,
-	type ContentIndex
-} from '$lib/server/services/knowledge-search/indexing';
+import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -183,7 +181,7 @@ type DiagramWorkflowObserver = <T>(
 ) => Promise<T>;
 
 export interface DiagramAgentDependencies {
-	readonly contextFormatter: AgentContext;
+	readonly contextFormatter: IAgentContext;
 	readonly contextNotes: NoteReader;
 	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
 	readonly contextMemory: Pick<MemoryLibrary, 'list'>;
@@ -254,7 +252,7 @@ export interface DiagramsDependencies {
 	diagramWriter: DiagramWriter;
 	diagramSourceNotes: NoteReader;
 	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	indexWriter: IndexCompletion;
 	diagramIndexer: DiagramIndexer;
 	noteActionRequests: NoteActionRequests;
 	runSettlements: RunSettlement;

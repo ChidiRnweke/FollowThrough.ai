@@ -1,3 +1,4 @@
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import { noteTrashChange } from '$lib/services/notes/trash';
 import { prepareNotePublication } from '$lib/services/notes/publication';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
@@ -14,7 +15,6 @@ import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import { applyNotePatch, describeNotePatchFailure } from '$lib/server/services/notes/patches';
 import { diffNoteRevisionTexts } from '$lib/server/services/notes/revision-diff';
 import {
@@ -354,7 +354,7 @@ export interface NotesDependencies {
 	attachmentRestorer: NoteAttachmentRestorer;
 	anchorRepairer: SourceAnchorRepairer;
 	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	indexWriter: IndexCompletion;
 	noteIndexer: NoteIndexer;
 	transactionRunner: TransactionRunner;
 }

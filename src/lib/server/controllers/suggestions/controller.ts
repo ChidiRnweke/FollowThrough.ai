@@ -1,3 +1,4 @@
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import {
 	groupSuggestionViews,
 	pendingMemorySuggestions,
@@ -7,10 +8,7 @@ import { searchableDrawioText } from '$lib/services/diagrams/labels';
 import { decideTodoCreation } from '$lib/services/todos/creation';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import {
-	diagramIndexNoteId,
-	type ContentIndex
-} from '$lib/server/services/knowledge-search/indexing';
+import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
 import type {
 	DiagramWriter,
 	DrawioXmlContentValidator,
@@ -141,7 +139,7 @@ export interface SuggestionsDependencies {
 	sourceNotes: NoteReader;
 	suggestionEffects: SuggestionEffectService;
 	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	indexWriter: IndexCompletion;
 	memoryIndexer: MemoryIndexer;
 	diagramIndexer: {
 		index(

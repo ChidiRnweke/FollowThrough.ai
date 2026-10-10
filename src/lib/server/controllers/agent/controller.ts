@@ -64,7 +64,7 @@ import { activeTraceparent } from '$lib/server/services/telemetry';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import { AgentProviderFailure } from '$lib/errors';
-import type { AgentContext, AttachedResource } from '$lib/server/services/agent/runs/context';
+import type { IAgentContext, AttachedResource } from '$lib/server/services/agent/runs/context';
 import type { WidgetReader } from '$lib/server/services/widgets/library';
 import type { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import type { AttachmentLibrary } from '$lib/server/services/attachments/library';
@@ -253,7 +253,7 @@ export interface AgentDependencies {
 
 	readonly settlements: RunSettlement;
 
-	readonly contextFormatter: AgentContext;
+	readonly contextFormatter: IAgentContext;
 
 	readonly contextNotes: NoteReader;
 

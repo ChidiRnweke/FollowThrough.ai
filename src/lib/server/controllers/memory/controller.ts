@@ -1,3 +1,4 @@
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import {
 	sharedMemoryEntries,
 	decideMemoryCreation,
@@ -7,7 +8,6 @@ import { ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
 import { mapAppliedChange } from '$lib/server/services/suggestions/effects';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
@@ -82,7 +82,7 @@ export interface MemoryController {
 
 export interface MemoryDependencies {
 	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	indexWriter: IndexCompletion;
 	memoryIndexer: MemoryIndexer;
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
 	syncRetry: 'database-only' | 'never';
