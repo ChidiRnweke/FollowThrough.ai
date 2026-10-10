@@ -20,8 +20,6 @@
 	import { agentActions } from '$lib/components/agent';
 	import { workbench, workbenchNavigation } from '$lib/factories/workbench/workbench';
 	import { noteActions } from '$lib/factories/notes/actions';
-	import { noteActionTracking } from '$lib/factories/notes/action-runs';
-	import type { NoteActionContext } from '$lib/models/agent';
 	import { projectActions } from '$lib/factories/projects/actions';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import type { PerNoteEditorSlot } from '../editor-context';
@@ -76,11 +74,6 @@
 	let outline = $state<readonly OutlineHeading[]>([]);
 	let activeHeading = $state<string | undefined>(undefined);
 	let utilityHeaderHeight = $state(0);
-	const actionRuns = noteActionTracking.open(untrack(() => view.note.id));
-	const activeAction = $derived(
-		actionRuns.activeSelectionAction?.action as NoteAiAction | undefined
-	);
-	const cancellingAction = $derived(actionRuns.activeSelectionAction?.cancelling ?? false);
 	let lastSaveKeyTime = 0;
 	let conflictOpen = $state(false);
 	const workspace = untrack(() =>
@@ -93,6 +86,10 @@
 			}
 		)
 	);
+	const activeAction = $derived(
+		workspace.activeSelectionAction?.action as NoteAiAction | undefined
+	);
+	const cancellingAction = $derived(workspace.activeSelectionAction?.cancelling ?? false);
 	untrack(() => workspace.open());
 	const note = $derived(workspace.note);
 	const dirty = $derived(workspace.dirty);
@@ -121,14 +118,10 @@
 	const unsynced = $derived(workspace.unsynced);
 
 	onMount(() => {
-		// Registered before hydrating: a run that finished while the tab was away
-		// delivers its result the moment the stream reattaches.
-		registerActionHandlers();
-		actionRuns.hydrate();
+		workspace.hydrateActions();
 		return () => {
 			workspace.close();
 			history.cancel();
-			actionRuns.detach();
 		};
 	});
 
@@ -235,100 +228,12 @@
 			toast.error(noteActions.lastError ?? 'The action could not be started. Try again.');
 			return;
 		}
-		// The insertion point is captured now: the selection may move or clear
-		// while the diagram is generated, and a refresh loses it entirely. The
-		// editor holds it and maps it through every edit the author makes in
-		// between, so the node lands where the text is when the run settles.
-		if (action === 'diagram' && insertAt !== undefined) {
-			editorRef?.holdInsertionPoint(receipt.runId, insertAt);
-		}
-		const outcome = await actionRuns.track(receipt, {
+		const outcome = await workspace.trackAction(receipt, {
 			action,
 			...(insertAt === undefined ? {} : { context: { insertAt } })
 		});
 		if (outcome.status === 'failed')
 			toast.error(outcome.message ?? 'The action failed. Try again.');
-	}
-
-	/**
-	 * What to do with each action's result, registered once rather than written at
-	 * the call site: after a refresh the call site is gone, and the replayed result
-	 * still has to land in the same place.
-	 */
-	function registerActionHandlers(): void {
-		actionRuns.on('promises', async (result) => {
-			if (result.action !== 'promises') throw new Error('Unexpected note action result');
-			const output = result.output;
-			if (output.createdTodos.length > 0) {
-				toast.success(`${output.createdTodos.length} todo(s) created from explicit promises`);
-				await workspaceSession.synchronize();
-			}
-			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
-		});
-		actionRuns.on('relate', (result) => {
-			if (result.action !== 'relate') throw new Error('Unexpected note action result');
-			const output = result.output;
-			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
-		});
-		actionRuns.on('reference', async (result) => {
-			if (result.action !== 'reference') throw new Error('Unexpected note action result');
-			const output = result.output;
-			if (output.outcome === 'nothing_relevant') {
-				toast.info('Nothing sufficiently relevant found.');
-				return;
-			}
-			await workspaceSession.synchronize();
-			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
-		});
-		actionRuns.on('diagram', async (result, context, runId) => {
-			if (result.action !== 'diagram') throw new Error('Unexpected note action result');
-			const output = result.output;
-			if (output.suggestion.kind !== 'diagram') return;
-			const live = editorRef?.consumeInsertionPoint(runId);
-			// The live mapped point wins; a refresh leaves no plugin state behind, so
-			// fall back to the persisted one, which the editor kept current as the
-			// author typed. 'lost' means the location was deleted while the run flew.
-			const insertAt = live === 'lost' ? undefined : (live ?? insertionPoint(context));
-			if (
-				insertAt === undefined ||
-				!editorRef?.insertMermaid(insertAt, output.suggestion.payload.source)
-			) {
-				toast.error(
-					'The diagram is ready, but its place in the note was lost. Copy it from the suggestion tray.'
-				);
-				return;
-			}
-			workspace.changed();
-			await suggestionActions.decide(output.suggestion.id, 'accept');
-			toast.success('Diagram inserted — undo with Ctrl+Z');
-		});
-		actionRuns.on('convert', (result) => {
-			if (result.action !== 'convert') throw new Error('Unexpected note action result');
-			const output = result.output;
-			if (output.suggestion.kind !== 'diagram' || output.suggestion.payload.kind !== 'drawio')
-				return;
-			toast.success('draw.io conversion ready to review');
-		});
-		actionRuns.on('revise', (result, context) => {
-			if (result.action !== 'revise') throw new Error('Unexpected note action result');
-			const output = result.output;
-			const previous = typeof context.source === 'string' ? context.source : undefined;
-			// On the live path the Mermaid node view applies this itself from the
-			// promise; this branch is the one a refresh leaves behind.
-			if (previous && editorRef?.replaceMermaid(previous, output.source))
-				toast.success('Diagram revised — undo with Ctrl+Z');
-		});
-	}
-
-	const insertionPoint = (context: NoteActionContext): number | undefined =>
-		typeof context.insertAt === 'number' ? context.insertAt : undefined;
-
-	function reportAdded(added: number): void {
-		if (added > 0)
-			toast.success(
-				`${added} suggestion${added === 1 ? '' : 's'} added — accept or dismiss ${added === 1 ? 'it' : 'them'} in the note`
-			);
-		else toast.info('No suggestions found.');
 	}
 
 	async function reviseMermaid(
@@ -347,7 +252,7 @@
 		if (!receipt) throw new Error(noteActions.lastError ?? 'Diagram revision failed. Try again.');
 		// `source` travels as context so a refresh can still find the node this
 		// revision belongs to and apply it there.
-		const outcome = await actionRuns.track(receipt, { action: 'revise', context: { source } });
+		const outcome = await workspace.trackAction(receipt, { action: 'revise', context: { source } });
 		if (outcome.status === 'cancelled') throw new Error('Diagram revision cancelled.');
 		if (outcome.status !== 'completed')
 			throw new Error(outcome.message ?? 'Diagram revision failed. Try again.');
@@ -361,7 +266,10 @@
 			throw new Error('Sync the note before converting its diagram.');
 		const receipt = await noteActions.convertDiagram(note.id, source, instruction);
 		if (!receipt) throw new Error(noteActions.lastError ?? 'Diagram conversion failed. Try again.');
-		const outcome = await actionRuns.track(receipt, { action: 'convert', context: { source } });
+		const outcome = await workspace.trackAction(receipt, {
+			action: 'convert',
+			context: { source }
+		});
 		if (outcome.status === 'cancelled') throw new Error('Diagram conversion cancelled.');
 		if (outcome.status !== 'completed')
 			throw new Error(outcome.message ?? 'Diagram conversion failed. Try again.');
@@ -542,14 +450,14 @@
 			{activeAction}
 			actionCancelling={cancellingAction}
 			onInsertionPointMoved={(runId, position) =>
-				actionRuns.updateContext(runId, { insertAt: position })}
+				workspace.updateActionContext(runId, { insertAt: position })}
 			oncancelaction={() => {
-				const run = actionRuns.activeSelectionAction;
-				if (run) void actionRuns.cancel(run.runId);
+				const run = workspace.activeSelectionAction;
+				if (run) void workspace.cancelAction(run.runId);
 			}}
 			oncancelmermaid={(kind) => {
-				const run = actionRuns.find(kind);
-				if (run) void actionRuns.cancel(run.runId);
+				const run = workspace.findAction(kind);
+				if (run) void workspace.cancelAction(run.runId);
 			}}
 			onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
 			onskill={runSkill}

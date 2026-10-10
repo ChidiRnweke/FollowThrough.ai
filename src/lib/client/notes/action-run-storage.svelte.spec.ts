@@ -34,3 +34,14 @@ it('reports unreadable saved actions for their account', () => {
 	sessionStorage.setItem('followthrough.notes.active-actions.action-test-a', 'corrupt');
 	expect(() => new SessionRunStorage(sessionStorage, 'action-test-a').load()).toThrow();
 });
+
+it('restores the durable insertion phase without changing the recovery cursor', () => {
+	const inserted: StoredNoteActionRun = {
+		...run,
+		action: 'diagram',
+		context: { insertAt: 13 },
+		delivery: 'inserted'
+	};
+	new SessionRunStorage(sessionStorage, 'action-test-a').save([inserted]);
+	expect(new SessionRunStorage(sessionStorage, 'action-test-a').load()).toEqual([inserted]);
+});

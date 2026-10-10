@@ -1,19 +1,22 @@
-import type { AgentRunId, NoteActionKind, NoteActionContext } from '$lib/models/agent';
+import type { AgentRunId, NoteActionContext } from '$lib/models/agent';
 import type {
 	NoteActionRun,
-	NoteActionHandler,
+	NoteActionRunState,
 	NoteActionOutcome,
 	NoteActionEventStream
-} from '$lib/controllers/notes/action-runs';
+} from '$lib/models/browser-workspace';
 
 /** State belongs to one mounted editor. No storage or event work happens here. */
-export class NoteActionRunStore {
+export class NoteActionRunStore implements NoteActionRunState {
 	private entries = $state<readonly NoteActionRun[]>([]);
 	private closed = $state(false);
 	/* eslint-disable svelte/prefer-svelte-reactivity -- internal continuation ownership; only entries and closed are observed. */
 	private readonly streams = new Map<AgentRunId, NoteActionEventStream>();
-	private readonly handlers = new Map<NoteActionKind, NoteActionHandler>();
-	private readonly waiters = new Map<AgentRunId, (outcome: NoteActionOutcome) => void>();
+	private readonly inserted = new Set<AgentRunId>();
+	private readonly waiters = new Map<
+		AgentRunId,
+		readonly ((outcome: NoteActionOutcome) => void)[]
+	>();
 	/* eslint-enable svelte/prefer-svelte-reactivity */
 	get running(): readonly NoteActionRun[] {
 		return this.entries;
@@ -39,19 +42,25 @@ export class NoteActionRunStore {
 			entry.runId === runId ? { ...entry, cursor } : entry
 		);
 	}
-	setHandler(action: NoteActionKind, handler: NoteActionHandler): void {
-		this.handlers.set(action, handler);
+	setDelivery(runId: AgentRunId, delivery: 'inserted'): void {
+		this.entries = this.entries.map((entry) =>
+			entry.runId === runId ? { ...entry, delivery } : entry
+		);
 	}
-	handler(action: NoteActionKind): NoteActionHandler | undefined {
-		return this.handlers.get(action);
+	hasInserted(runId: AgentRunId): boolean {
+		return this.inserted.has(runId);
+	}
+	markInserted(runId: AgentRunId): void {
+		this.inserted.add(runId);
 	}
 	setWaiter(runId: AgentRunId, waiter: (outcome: NoteActionOutcome) => void): void {
-		this.waiters.set(runId, waiter);
+		this.waiters.set(runId, [...(this.waiters.get(runId) ?? []), waiter]);
 	}
-	takeWaiter(runId: AgentRunId): ((outcome: NoteActionOutcome) => void) | undefined {
-		const waiter = this.waiters.get(runId);
+	takeWaiters(runId: AgentRunId): readonly ((outcome: NoteActionOutcome) => void)[] {
+		const waiters = this.waiters.get(runId) ?? [];
 		this.waiters.delete(runId);
-		return waiter;
+		this.inserted.delete(runId);
+		return waiters;
 	}
 	setStream(runId: AgentRunId, stream: NoteActionEventStream): void {
 		this.streams.set(runId, stream);
@@ -65,7 +74,7 @@ export class NoteActionRunStore {
 		const streams = [...this.streams.values()];
 		this.closed = true;
 		this.streams.clear();
-		this.handlers.clear();
+		this.inserted.clear();
 		this.waiters.clear();
 		this.entries = [];
 		return streams;

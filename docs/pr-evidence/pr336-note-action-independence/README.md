@@ -25,6 +25,19 @@ The draw.io iframe is the real diagrams.net editor. Selection, generation and ac
 
 ## Observed validation and limits
 
-All nine unique authenticated E2E scenarios passed: three note-action cases, four note-workspace cases and two note-editor-operation cases. The initial eight-case run passed in 26.5 seconds. The three-case action file, including immediate acceptance failure and dismissal, passed in 7.9 seconds. Targeted ESLint passed. Screenshots were inspected for the stated states.
+All eleven authenticated E2E scenarios passed together in 44.3 seconds: five note-action cases, four note-workspace cases and two note-editor-operation cases. The same eleven scenarios passed on the action-run baseline in 38.7 seconds. After the final storage-ordering change, all five note-action scenarios passed again in 23.6 seconds on the HMR-disabled server. Targeted ESLint passed. Screenshots were inspected for the stated states. The final dedicated development server disabled HMR so concurrent type-check generation could not reload the browser during autosave. With HMR enabled, two broad runs hit the existing clipboard/autosave poll timeout during development-server reloads; the isolated case passed on both revisions, and the complete stable-server rerun passed without assertion changes.
 
 The final isolated before and after captures produced no browser page errors. Both development servers logged a missing `/offline-shell.html` request; service-worker installation and offline-shell availability are not established by these captures. The existing offline-save and conflict E2E scenarios passed separately.
+
+## Action-run hydration and cancellation
+
+The action-run before captures use `1ff7a20c`, the initial #357 implementation before action-run ownership moved into `NoteWorkspace`. The action-run after captures use the completed controller-independence change. Both use Chromium at 1280 × 850 in the light theme.
+
+The hydration test seeds a completed diagram revision run, its prepared context and provenance, a saved `workflow_result` event and a terminal event in local Postgres. It stores the pending run under the existing account-scoped sessionStorage key. The test temporarily holds the real SSE request to capture the mounted original Mermaid diagram, then releases it. The application replays the saved event, replaces the diagram source, saves the note through normal autosave and removes the acknowledged pending run. The model is not executed and the event payload is not substituted at the network boundary.
+
+The cancellation test seeds a queued selection run and its durable queue event after server startup. It hydrates the pending run, opens the selection controls and clicks Cancel. The real cancellation endpoint and event stream deliver a cancelled result, and the browser removes the pending record. No worker is started for the seeded run.
+
+| Before                                                                                                 | After                                                                                                | Caption                                                                          |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| ![Before: mounted original diagram awaiting saved revision replay](run-before/hydration-pending.png)   | ![After: mounted original diagram awaiting saved revision replay](run-after/hydration-pending.png)   | The saved pending run hydrates while its original diagram remains visible.       |
+| ![Before: replayed revision changes the diagram to Approved release](run-before/hydration-revised.png) | ![After: replayed revision changes the diagram to Approved release](run-after/hydration-revised.png) | Saved event replay updates the mounted diagram and autosaves its revised source. |

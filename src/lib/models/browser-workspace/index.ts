@@ -1,4 +1,10 @@
-import type { AgentRunId, AgentRunReceipt } from '$lib/models/agent';
+import type { NoteActionResult, NoteActionEventRecord } from '$lib/models/note-actions';
+import type {
+	AgentRunId,
+	AgentRunReceipt,
+	StoredNoteActionRun,
+	NoteActionContext
+} from '$lib/models/agent';
 import type { ClipboardPaste, ClipboardSource } from '$lib/models/clipboard';
 import type { DiagramId, DiagramActionInput, DiagramActionSubmission } from '$lib/models/diagrams';
 import type {
@@ -259,7 +265,45 @@ export interface NoteReviewRemote {
 	reject(input: { suggestionId: SuggestionId }): Promise<Suggestion>;
 }
 
-/** Existing action-run binding contract; streaming lifetime remains owned by action runs. */
-export interface NoteActionSession {
-	readonly bootstrap: { readonly accountId: string };
+export interface NoteActionRun extends StoredNoteActionRun {
+	readonly cancelling: boolean;
+}
+export type NoteActionOutcome =
+	| { readonly status: 'completed'; readonly result: NoteActionResult }
+	| { readonly status: 'cancelled' }
+	| { readonly status: 'failed'; readonly message: string };
+export interface NoteActionEventStream {
+	close(): void;
+}
+export interface NoteActionRunTransport {
+	open(
+		runId: AgentRunId,
+		after: string,
+		onEvent: (record: NoteActionEventRecord) => void | Promise<void>
+	): NoteActionEventStream;
+	cancel(runId: AgentRunId): Promise<void>;
+}
+export interface NoteActionRunStorage {
+	load(): readonly StoredNoteActionRun[];
+	save(runs: readonly StoredNoteActionRun[]): void;
+}
+
+export interface NoteActionReviewTransport {
+	accept(suggestionId: SuggestionId): Promise<void>;
+}
+export interface NoteActionRunState {
+	readonly running: readonly NoteActionRun[];
+	readonly detached: boolean;
+	replace(entries: readonly NoteActionRun[]): void;
+	setCancelling(runId: AgentRunId, cancelling: boolean): void;
+	setContext(runId: AgentRunId, context: NoteActionContext): void;
+	setCursor(runId: AgentRunId, cursor: string): void;
+	setDelivery(runId: AgentRunId, delivery: 'inserted'): void;
+	hasInserted(runId: AgentRunId): boolean;
+	markInserted(runId: AgentRunId): void;
+	setWaiter(runId: AgentRunId, waiter: (outcome: NoteActionOutcome) => void): void;
+	takeWaiters(runId: AgentRunId): readonly ((outcome: NoteActionOutcome) => void)[];
+	setStream(runId: AgentRunId, stream: NoteActionEventStream): void;
+	takeStream(runId: AgentRunId): NoteActionEventStream | undefined;
+	close(): readonly NoteActionEventStream[];
 }

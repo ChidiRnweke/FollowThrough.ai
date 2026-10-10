@@ -1,11 +1,10 @@
 import { NoteActionEventReader } from '$lib/client/notes/action-event-reader';
 import type { NoteActionEventRecord } from '$lib/models/note-actions';
-import type { SessionSynchronization } from '$lib/controllers/workspace/session';
 import type {
-	NoteActionRunWorkspace,
 	NoteActionRunTransport,
-	NoteActionRunStorage
-} from '$lib/controllers/notes/action-runs';
+	NoteActionRunStorage,
+	NoteActionReviewTransport
+} from '$lib/models/browser-workspace';
 import type {
 	AgentEvent,
 	StoredAgentRunEventRecord,
@@ -92,6 +91,7 @@ export class InMemoryNoteActionRunTransport implements NoteActionRunTransport {
 
 /** Session storage without a browser, and shareable across two stores to model a refresh. */
 export class InMemoryNoteActionRunStorage implements NoteActionRunStorage {
+	saveFailure: Error | null = null;
 	private records: readonly StoredNoteActionRun[] = [];
 
 	load(): readonly StoredNoteActionRun[] {
@@ -99,13 +99,14 @@ export class InMemoryNoteActionRunStorage implements NoteActionRunStorage {
 	}
 
 	save(runs: readonly StoredNoteActionRun[]): void {
+		if (this.saveFailure) throw this.saveFailure;
 		this.records = runs;
 	}
 }
 
-export class InMemoryNoteActionRunWorkspace implements NoteActionRunWorkspace {
-	readonly session = { bootstrap: { accountId: 'note-action-runs-account' } };
-	current: NoteActionRunWorkspace['current'] = this.session;
+export class InMemoryNoteActionReview implements NoteActionReviewTransport {
+	readonly accepted: import('$lib/models/suggestions').SuggestionId[] = [];
+	failure: Error | null = null;
 	private gate: { started(): void; ready: Promise<void> } | null = null;
 	pause() {
 		const started = Promise.withResolvers<void>();
@@ -113,13 +114,14 @@ export class InMemoryNoteActionRunWorkspace implements NoteActionRunWorkspace {
 		this.gate = { started: started.resolve, ready: ready.promise };
 		return { started: started.promise, release: ready.resolve };
 	}
-	async synchronize(): Promise<SessionSynchronization> {
+	async accept(suggestionId: import('$lib/models/suggestions').SuggestionId): Promise<void> {
 		const gate = this.gate;
 		this.gate = null;
 		if (gate) {
 			gate.started();
 			await gate.ready;
 		}
-		return { kind: 'complete' };
+		if (this.failure) throw this.failure;
+		this.accepted.push(suggestionId);
 	}
 }

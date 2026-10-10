@@ -3,10 +3,7 @@ import type { NoteActionEventRecord } from '$lib/models/note-actions';
 import { RunEventSubscription } from '$lib/client/agent/runs/subscription';
 import { cancelAgentRun } from '$lib/remote/agent/chat.remote';
 import type { AgentRunId } from '$lib/models/agent';
-import type {
-	NoteActionRunTransport,
-	NoteActionEventStream
-} from '$lib/controllers/notes/action-runs';
+import type { NoteActionRunTransport, NoteActionEventStream } from '$lib/models/browser-workspace';
 
 export class BrowserNoteActionRunTransport implements NoteActionRunTransport {
 	constructor(private readonly reader: NoteActionEventReader) {}

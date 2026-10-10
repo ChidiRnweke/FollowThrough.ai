@@ -128,3 +128,131 @@ test('failed immediate draw.io acceptance keeps the conversion available for dis
 		await sql.end();
 	}
 });
+
+test('hydration replays a completed diagram revision into the mounted note and saves it', async ({
+	page,
+	actionNote
+}) => {
+	const databaseUrl = process.env.DATABASE_URL;
+	if (!databaseUrl) throw new Error('Missing local database');
+	const sql = postgres(databaseUrl, { max: 1 });
+	const runId = randomUUID();
+	const conversationId = randomUUID();
+	const provenanceId = randomUUID();
+	const source = 'graph LR; A[Review]-->B[Approve]';
+	const revised = 'graph LR; A[Review]-->B[Approved release]';
+	const key = `followthrough.notes.active-actions.${actionNote.accountId}`;
+	const release = Promise.withResolvers<void>();
+	try {
+		const document = {
+			type: 'doc',
+			content: [{ type: 'mermaid', content: [{ type: 'text', text: source }] }]
+		};
+		await sql`update notes set document = ${sql.json(document)}, plain_text = ${source} where id = ${actionNote.noteId}`;
+		await sql`insert into conversations (id, user_id, kind, context_note_id, title) values (${conversationId}, ${actionNote.accountId}, 'workflow', ${actionNote.noteId}, 'Diagram revision')`;
+		await sql`insert into provenance (id, user_id, producer_kind, producer_name, pipeline, run_id, model, metadata) values (${provenanceId}, ${actionNote.accountId}, 'agent', 'Diagram Agent', 'agent', ${runId}, 'test/model', ${sql.json({ conversationId, operation: 'revise' })})`;
+		const context = {
+			kind: 'diagram_action',
+			prepared: {
+				provenanceId,
+				context: {
+					noteId: actionNote.noteId,
+					noteTitle: 'Release workflow',
+					contextNotes: [],
+					contextResources: [],
+					skills: { items: [] }
+				}
+			},
+			model: 'test/model',
+			input: {
+				operation: 'revise',
+				noteId: actionNote.noteId,
+				source,
+				instruction: 'Label the completed release'
+			}
+		};
+		await sql`insert into agent_runs (id, kind, user_id, conversation_id, model, execution_mode, status, context_snapshot, started_at, finished_at) values (${runId}, 'workflow', ${actionNote.accountId}, ${conversationId}, 'test/model', 'auto_accept', 'completed', ${sql.json(context)}, now(), now())`;
+		await sql`insert into agent_run_events (run_id, attempt, event) values (${runId}, 1, ${sql.json({ type: 'workflow_result', action: 'revise', result: { source: revised } })}), (${runId}, 1, ${sql.json({ type: 'completed', runId, conversationId, model: 'test/model' })})`;
+		await page.addInitScript(
+			({ storageKey, run }) => {
+				if (!sessionStorage.getItem('action-recovery-seeded')) {
+					sessionStorage.setItem(storageKey, JSON.stringify([run]));
+					sessionStorage.setItem('action-recovery-seeded', 'true');
+				}
+			},
+			{
+				storageKey: key,
+				run: {
+					runId,
+					noteId: actionNote.noteId,
+					action: 'revise',
+					cursor: '0',
+					context: { source }
+				}
+			}
+		);
+		await page.route(`**/api/agent/runs/${runId}/events?*`, async (route) => {
+			await release.promise;
+			await route.continue();
+		});
+		await page.goto(`/notes/${actionNote.noteId}`);
+		await page.getByRole('textbox', { name: 'Note body', exact: true }).waitFor();
+		await page.locator('.mermaid-container svg').waitFor();
+		const evidence = process.env.NOTE_ACTION_EVIDENCE;
+		if (evidence) await page.screenshot({ path: `${evidence}/hydration-pending.png` });
+		release.resolve();
+		await expect
+			.poll(async () => ({
+				storedSource: (
+					await sql`select document->'content'->0->'content'->0->>'text' as source from notes where id = ${actionNote.noteId}`
+				)[0]?.source,
+				pending: await page.evaluate((storageKey) => sessionStorage.getItem(storageKey), key)
+			}))
+			.toEqual({ storedSource: revised, pending: null });
+		if (evidence) {
+			await page.getByText('Approved release', { exact: true }).first().waitFor();
+			await page.screenshot({ path: `${evidence}/hydration-revised.png` });
+		}
+	} finally {
+		release.resolve();
+		await sql.end();
+	}
+});
+
+test('hydrated queued selection action can be cancelled without executing a model', async ({
+	page,
+	actionNote
+}) => {
+	await page.request.get('/auth/login');
+	const databaseUrl = process.env.DATABASE_URL;
+	if (!databaseUrl) throw new Error('Missing local database');
+	const sql = postgres(databaseUrl, { max: 1 });
+	const runId = randomUUID();
+	const conversationId = randomUUID();
+	const key = `followthrough.notes.active-actions.${actionNote.accountId}`;
+	try {
+		await sql`insert into conversations (id, user_id, kind, context_note_id, title) values (${conversationId}, ${actionNote.accountId}, 'workflow', ${actionNote.noteId}, 'Promise extraction')`;
+		await sql`insert into agent_runs (id, kind, user_id, conversation_id, model, execution_mode, status, context_snapshot) values (${runId}, 'workflow', ${actionNote.accountId}, ${conversationId}, 'test/model', 'auto_accept', 'queued', ${sql.json({ kind: 'promise_extraction', generation: { kind: 'rules' }, selection: { noteId: actionNote.noteId, revision: 1, from: 0, to: 54, text: 'We will review the proposal, then approve the release.' } })})`;
+		await sql`insert into agent_run_events (run_id, attempt, event) values (${runId}, 1, ${sql.json({ type: 'run_queued', runId, attempt: 1, reason: 'submitted' })})`;
+		await page.addInitScript(
+			({ storageKey, run }) => sessionStorage.setItem(storageKey, JSON.stringify([run])),
+			{
+				storageKey: key,
+				run: { runId, noteId: actionNote.noteId, action: 'promises', cursor: '0', context: {} }
+			}
+		);
+		await page.goto(`/notes/${actionNote.noteId}`);
+		const body = page.getByRole('textbox', { name: 'Note body', exact: true });
+		await body.click();
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.getByRole('button', { name: /Cancel reading for commitments/i }).click();
+		await expect
+			.poll(async () => ({
+				status: (await sql`select status from agent_runs where id = ${runId}`)[0]?.status,
+				pending: await page.evaluate((storageKey) => sessionStorage.getItem(storageKey), key)
+			}))
+			.toEqual({ status: 'cancelled', pending: null });
+	} finally {
+		await sql.end();
+	}
+});

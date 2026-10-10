@@ -1,4 +1,4 @@
-import type { NoteReviewRemote } from '$lib/models/browser-workspace';
+import type { NoteReviewRemote, NoteActionReviewTransport } from '$lib/models/browser-workspace';
 import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 export class RemoteNoteReviews implements NoteReviewRemote {
 	accept(input: Parameters<NoteReviewRemote['accept']>[0]) {
@@ -6,5 +6,11 @@ export class RemoteNoteReviews implements NoteReviewRemote {
 	}
 	reject(input: Parameters<NoteReviewRemote['reject']>[0]) {
 		return rejectSuggestion(input);
+	}
+}
+
+export class RemoteNoteActionReview implements NoteActionReviewTransport {
+	async accept(suggestionId: Parameters<NoteActionReviewTransport['accept']>[0]): Promise<void> {
+		await acceptSuggestion({ suggestionId });
 	}
 }

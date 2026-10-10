@@ -1769,7 +1769,10 @@ This slice starts from #355 at `5f491f0d08ca6e0f548d18b5db8c716073145cfa` in
 0040 and 0041 govern ownership, review, durable receipts and browser boundaries.
 The existing #345 inventory was checked against current source. #348, #350, #351,
 #352 and #355 retained their inspected heads. Contract coordination is recorded on
-[#348](https://github.com/ChidiRnweke/FollowThrough.ai/pull/348#issuecomment-6102253641).
+[#348](https://github.com/ChidiRnweke/FollowThrough.ai/pull/348).
+The user expanded #357 to include complete action-run independence after identifying the
+remaining action-run/workspace controller dependency. The final scope includes streaming,
+hydration, cancellation and result delivery.
 
 - [x] Move selection and diagram submission sequencing into `NoteActions`. Remove the
       redundant submission controller and factory after confirming no other production callers.
@@ -1788,28 +1791,44 @@ The existing #345 inventory was checked against current source. #348, #350, #351
       suppress stale results, failures and completion. Missing-session errors also carry the
       existing generation, so they cannot reappear after a later login/logout cycle.
 - [x] Preserve parsing in the browser storage readers and diagram candidate boundary.
-      No storage format, public action signature, remote payload or receipt contract changes.
-      Action-run code changes only its import of the unchanged passive session type; streaming,
-      hydration, cancellation and result-delivery orchestration remain outside this slice.
+      Account-scoped keys, public action signatures, remote payloads and receipt contracts remain.
+      Stored runs gain an optional `delivery: 'inserted'` phase after local document persistence.
+- [x] Absorb action-run streaming, hydration, cancellation and result delivery into the existing
+      independent `NoteWorkspace` owner. Retire the two action-run controllers and their factory.
+      Remove component result callbacks into workspace and suggestion controllers. The workspace
+      factory constructs raw run storage/transport/review dependencies and passive state only.
+- [x] Preserve per-run cursors and every caller waiting on a reused receipt. Update storage only
+      for the affected run, so concurrent panes neither erase nor resurrect each other's runs.
+      Initial tracking persists before publishing state. Terminal cleanup persists before closing
+      the stream or settling callers, so storage failure retains a replayable cursor and waiter.
+      Synchronization/acceptance failures retain recovery and report explicit errors. Result
+      delivery checks the captured session generation, editor identity and document generation.
+- [x] Persist an inserted diagram before accepting its suggestion. Retain its insertion phase
+      across a lost acceptance response and refresh; retries skip duplicate insertion. A fresh raw
+      suggestion read recognizes acceptance that already committed, because the server rejects a
+      second acceptance. Failed local persistence keeps only the in-memory marker and retries saving before acceptance.
+      Save continuations check the existing account binding before publishing state.
 - [x] Migrate submission tests to the public action controller and add typed deferred transport
       coverage for persistence, retries, uncertain intent, concurrent acknowledgment, review state
       and account/session races. Real session-store browser tests verify reactive invalidation.
 
 Proofreading, server code, prompts, general workspace synchronization/review, widget internals,
-editor/clipboard operations, note history and revision comparison remain unchanged.
+editor/clipboard operations, note history and revision comparison remain outside this slice.
+The existing raw synchronization workflow is reused inside its owner; it is not copied or wrapped.
 
 Measured with unchanged checkers against the exact base:
 
 | Check                          | Before | After | New findings                          |
 | ------------------------------ | -----: | ----: | ------------------------------------- |
-| Global controller-import audit |     62 |    60 | None                                  |
+| Global controller-import audit |     62 |    59 | None                                  |
 | Chisel prohibited imports      |     42 |    42 | No new diagnostic identities          |
 | #345 semantic checker          |    762 |   762 | No new file/rule/message combinations |
-| #350 strengthened checker      |   1297 |  1285 | No new file/rule/message combinations |
+| #350 strengthened checker      |   1297 |  1283 | No new file/rule/message combinations |
 
-The two removed imports are the submission delegation and the action-run import of the passive
-session type formerly declared in actions. The store/controller dependency and factory-injected
-workspace controller are removed in source as well. Counts do not replace that review.
+The three removed imports were submission delegation, the action-run session type import from
+its sibling action controller, and action-run delegation to the workspace controller. Store
+controller dependencies and callback/factory forwarding are removed as well. Counts do not
+replace that source review.
 The #350 figures run its strengthened checker against this branch's source; they are not #350's
 own application inventory. No enforcement, baseline or suppression changed. Required architecture
 still fails on inherited findings, so this slice does not complete #336 or make the stack ready
@@ -1818,20 +1837,29 @@ to merge.
 Observed verification:
 
 - Lint and type checking passed; zero type errors or warnings.
-- Full unit suite: 583 files, 4,554 passed and one existing skip.
-- Full browser suite: 96 files, 634 passed, including 25 new action/review/race cases.
+- Full unit suite: 585 files, 4,579 passed and one existing skip.
+- Full browser suite: 96 files, 635 passed, including 25 new action/review/race cases.
 - Selected isolated database contracts: four files, 50 passed. These cover durable diagram
   generation, run context, agent repositories and suggestion effects.
 - Source, test-quality and UI audits passed. `pnpm test:architecture` still fails on the
-  60 inherited controller imports. Later audit stages and both external semantic checkers
+  59 inherited controller imports. Later audit stages and both external semantic checkers
   were run independently. No new diagnostic identities were found.
 - Docs check passed with zero errors/warnings and one existing hint. Generation retains
   existing TypeDoc entry-point warnings. Browser output retains `derived_inert` and expected
   rasterization-failure test output.
 - Before implementation, all 20 existing submission/action browser tests passed on the exact base.
-  Nine distinct authenticated E2E journeys passed across the combined note/editor run and
-  final action run. Matched captures are documented in the
+  Eleven authenticated E2E journeys passed on both the action-run baseline (`1ff7a20c`) and
+  final code. Seeded completed-run replay exercises real SSE, editor replacement and autosave;
+  seeded queued-run cancellation exercises the real endpoint and event stream without a model.
+  Final runs disabled development HMR to prevent concurrent type-check generation from reloading
+  the autosave scenario. No assertions were relaxed. Matched captures are documented in the
   [evidence report](../pr-evidence/pr336-note-action-independence/README.md).
 - Production builds, full PWA verification and live model execution were not run for this
   browser-only slice. Successful draw.io acceptance is covered by typed transport tests;
   it is not claimed as a full server acceptance/embedding journey.
+
+- Action-run verification adds 44 lifecycle, synchronization and delivery cases; all 87 workspace
+  node tests pass. Four browser storage cases include the additive delivery-phase roundtrip.
+  Same-account session, account, pane, document replacement and editor-disposal races retain
+  recovery without publishing late results. The final focused suite also verifies repeated
+  receipts settle all waiting callers through the controller, while the store remains passive.
