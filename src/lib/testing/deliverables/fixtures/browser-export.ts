@@ -21,7 +21,7 @@ import {
 	InMemoryWorkspaceRecovery
 } from '$lib/testing/sync/fakes/in-memory-session';
 import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
-import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
@@ -45,7 +45,7 @@ export const browserExportFixture = async () => {
 		environment,
 		{ create: () => resources },
 		new InMemoryWorkspaceRecovery(),
-		agentModelRulesFixture()
+		agentRulesFixture()
 	);
 	const renderer = new InMemoryMermaidRenderer();
 	const images = new InMemoryExportDiagramImages();

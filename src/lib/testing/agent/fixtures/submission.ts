@@ -1,4 +1,4 @@
-import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import type { WebResearchSettings } from '$lib/models/agent';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
@@ -44,7 +44,7 @@ export const agentSubmissionFixture = (
 	const preferences = new AgentPreferenceCatalog(preferenceRecords);
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
-			...agentModelRulesFixture(),
+			...agentRulesFixture(),
 			...dependencies,
 			conversationMessages: journal,
 			conversationSessions: journal,

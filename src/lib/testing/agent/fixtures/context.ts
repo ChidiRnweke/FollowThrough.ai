@@ -1,5 +1,5 @@
 import { ConversationHistoryService } from '$lib/server/services/agent/conversations/history';
-import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
@@ -69,7 +69,7 @@ export const agentContextFixture = () => {
 		eventBus: new AgentEventStore()
 	};
 	const controller = new Agent(
-		capabilityDependencies<AgentDependencies>({ ...dependencies, ...agentModelRulesFixture() })
+		capabilityDependencies<AgentDependencies>({ ...dependencies, ...agentRulesFixture() })
 	);
 	const builder = {
 		async build(actor: ActorContext, input: RunAgentInput, origin: { provenanceId: ProvenanceId }) {

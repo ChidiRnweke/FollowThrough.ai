@@ -1233,3 +1233,19 @@ Every service module below has a planned disposition. This is routing, not compl
   reviewed-note and synchronized tool-policy contracts pass: 12 files / 72 tests. Architecture
   remains at 51 prohibited imports; topology/source/test-quality pass. Tool-definition callbacks,
   browser operations, stronger enforcement and final whole-application checks remain pending.
+
+## Run status and transcript reconstruction — 2026-10-10
+
+- AgentRunStatusService implements terminal-state and durable-tail completion rules. The agent
+  controller receives its interface. Cursor comparison still uses BigInt, including beyond the
+  safe integer range. AgentStreamPresentationService now reconstructs contiguous output segments;
+  tool activity and unreadable events still break segments. The old output function module is gone.
+- Agent capability outputs now name run/event/decision/session repository interfaces and existing
+  trust/settlement interfaces. Renamed the shared agent test-rule fixture to reflect its expanded
+  scope. No model defaults, transcript formats, settlement transactions or failure behavior changed.
+- Type checking and lint pass. Focused agent tests pass: 68 files / 632 tests. Isolated agent,
+  diagram, reference, relationship and promise-run contracts pass: 21 files / 108 tests. Full unit
+  verification passes: 558 files / 4,370 tests / one existing skip. Initial checks found remaining
+  test imports of removed functions; updated them before these successful runs.
+- Architecture remains at 51 prohibited imports; topology/source/test-quality pass. Browser chat
+  state and workflows are under review next; the remaining inventory and final checks stay pending.

@@ -434,6 +434,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionReverter: suggestions.reverter
 		},
 		agent: {
+			runStatus: agentCapability.runStatus,
+			streamPresentation: agentCapability.streamPresentation,
 			conversationHistory: agentCapability.conversationHistory,
 			imagePreparation: agentCapability.imagePreparation,
 			modelSelection: agentCapability.modelSelection,

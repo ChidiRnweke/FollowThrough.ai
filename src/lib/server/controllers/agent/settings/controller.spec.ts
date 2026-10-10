@@ -1,5 +1,5 @@
 import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
-import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
 import type { DateTime } from '$lib/models/workspace';
@@ -44,7 +44,7 @@ const setup = () => {
 		controller: new AgentSettings(
 			capabilityDependencies<AgentSettingsDependencies>({
 				preferenceEditing: new AgentPreferenceEditingService(),
-				...agentModelRulesFixture(),
+				...agentRulesFixture(),
 				preferences,
 				webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 				agentAvailable: true,

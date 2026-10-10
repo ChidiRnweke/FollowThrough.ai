@@ -1,3 +1,14 @@
+import type {
+	AgentRunRepository,
+	AgentRunEventRepository,
+	AgentRunDecisionRepository,
+	AgentSessionRepository
+} from '$lib/server/repositories/agent';
+import { AgentRunStatusService, type AgentRunStatusRules } from '$lib/services/agent/run-status';
+import {
+	AgentStreamPresentationService,
+	type AgentStreamPresentation
+} from '$lib/server/services/agent/runs/stream-presentation';
 import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
 import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
@@ -45,7 +56,7 @@ import {
 	type RunCancellationDecisions
 } from '$lib/server/services/agent/runs/cancellation';
 import type { DateTime } from '$lib/models/workspace';
-import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { RunSettlements, type RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import {
 	NoteActionRequests,
 	type NoteActionSubmission
@@ -83,7 +94,11 @@ import {
 	type AgentModelCatalog
 } from '$lib/server/services/agent/runs/preferences';
 import { AgentExecution } from '$lib/server/controllers/agent/execution';
-import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
+import {
+	ToolTrust,
+	type TrustPolicyStore,
+	type TrustPolicyEvaluator
+} from '$lib/server/services/agent/runs/tool-trust';
 import {
 	ToolAccess,
 	type ToolPreferenceCapability
@@ -112,6 +127,8 @@ export interface AgentCapabilityInput {
 }
 
 export interface AgentCapability {
+	readonly runStatus: AgentRunStatusRules;
+	readonly streamPresentation: Pick<AgentStreamPresentation, 'segments'>;
 	readonly conversationHistory: Pick<ConversationHistory, 'rewind'>;
 	readonly imagePreparation: AgentImagePreparation;
 	readonly preferenceEditing: AgentPreferenceEditing;
@@ -128,19 +145,19 @@ export interface AgentCapability {
 	readonly modelChoices: IAgentModelChoiceService;
 	readonly toolPreferences: ToolPreferenceCapability;
 	readonly toolCatalog: AgentToolCatalog;
-	readonly trust: ToolTrust;
-	readonly runs: AgentRunRecords;
+	readonly trust: TrustPolicyStore & TrustPolicyEvaluator;
+	readonly runs: AgentRunRepository;
 	readonly cancellations: RunCancellationDecisions;
 	readonly approvals: RunApprovalDecisions;
 	readonly preparation: ChatRunPreparation;
 	readonly checkpoints: RunCheckpointWriter;
 	readonly runLedger: WorkflowRunLedger;
-	readonly runEvents: AgentRunEventRecords;
-	readonly runDecisions: AgentRunDecisionRecords;
-	readonly sessions: AgentSessionRecords;
+	readonly runEvents: AgentRunEventRepository;
+	readonly runDecisions: AgentRunDecisionRepository;
+	readonly sessions: AgentSessionRepository;
 	readonly context: IAgentContext;
 	readonly runner: AgentRunner;
-	readonly settlements: RunSettlements;
+	readonly settlements: RunSettlement;
 	readonly noteActionRequests: NoteActionSubmission;
 	readonly eventBus: AgentEventBus;
 }
@@ -207,6 +224,8 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 				toolRetriever: input.toolRetriever
 			}),
 		imagePreparation: new AgentImagePreparationService(),
+		runStatus: new AgentRunStatusService(),
+		streamPresentation: new AgentStreamPresentationService(),
 		runSettings: new AgentRunSettingsService(),
 		webSearchOverrides: webSearchOptionsFromEnvironment(process.env),
 		agentAvailable: Boolean(input.openRouterApiKey.trim()),

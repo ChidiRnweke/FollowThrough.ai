@@ -1,5 +1,5 @@
 import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
-import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
@@ -35,7 +35,7 @@ it.each([false, true])(
 			return new AgentSettings(
 				capabilityDependencies<AgentSettingsDependencies>({
 					preferenceEditing: new AgentPreferenceEditingService(),
-					...agentModelRulesFixture(),
+					...agentRulesFixture(),
 					preferences: new AgentPreferenceCatalog(
 						new AgentPreferenceRecords(database, workspaceResourceKey)
 					),

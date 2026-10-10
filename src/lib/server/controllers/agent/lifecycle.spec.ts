@@ -5,7 +5,7 @@ import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-r
 import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
-import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { AgentExecution } from '$lib/server/controllers/agent/execution';
@@ -126,7 +126,7 @@ const setup = <T extends AgentRunner>(
 	const transactions = new InMemoryTransactionRunner([runs, sessions]);
 	const lifecycle = new Agent(
 		capabilityDependencies<AgentDependencies>({
-			...agentModelRulesFixture(),
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),

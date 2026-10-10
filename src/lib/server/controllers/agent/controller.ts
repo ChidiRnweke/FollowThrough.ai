@@ -5,8 +5,8 @@ import type {
 import type { AgentRunSettings } from '$lib/services/agent/run-settings';
 import { CHAT_WEB_SEARCH_DEFAULTS, type WebResearchOptions } from '$lib/models/agent';
 import type { AgentImagePreparation } from '$lib/server/services/agent/runs/images';
-import { segmentOutput } from '$lib/server/services/agent/runs/output';
-import { isTerminalAgentRunStatus, isRunEventStreamComplete } from '$lib/services/agent/run-status';
+import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
+import type { AgentRunStatusRules } from '$lib/services/agent/run-status';
 import type { RunCheckpointWriter } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparationCancelled } from '$lib/errors';
 import type { ChatRunPreparation } from '$lib/server/services/agent/runs/preparation';
@@ -216,6 +216,8 @@ export interface AgentController {
  * controller can be built and tested with repository and provider fakes.
  */
 export interface AgentDependencies {
+	readonly runStatus: AgentRunStatusRules;
+	readonly streamPresentation: Pick<AgentStreamPresentation, 'segments'>;
 	readonly conversationHistory: Pick<ConversationHistory, 'rewind'>;
 	readonly imagePreparation: AgentImagePreparation;
 	readonly modelSelection: IAgentModelSelectionService;
@@ -448,7 +450,11 @@ export class Agent implements AgentController {
 	): Promise<boolean> {
 		const run = await this.requireRun(actor, runId);
 		const latestCursor = await this.dependencies.events.latestCursor(actor, runId);
-		return isRunEventStreamComplete(run.status, deliveredCursor, latestCursor);
+		return this.dependencies.runStatus.eventStreamComplete(
+			run.status,
+			deliveredCursor,
+			latestCursor
+		);
 	}
 
 	/**
@@ -563,7 +569,10 @@ export class Agent implements AgentController {
 		try {
 			const receipt = await this.dependencies.transactionRunner.run(async () => {
 				const original = await this.requireAgentRun(actor, runId);
-				if (!isTerminalAgentRunStatus(original.status) || original.status === 'completed')
+				if (
+					!this.dependencies.runStatus.isTerminal(original.status) ||
+					original.status === 'completed'
+				)
 					throw new ValidationError('Only failed or cancelled runs can be retried');
 				const submittedAt = now();
 				// Joins the retry request's trace, same as a fresh submit.
@@ -1232,7 +1241,7 @@ export class Agent implements AgentController {
 			// Written as a single blob it could only be replayed after every tool call, which
 			// is why a reopened conversation read as "all the work, then all the words".
 			const records = await this.dependencies.events.listAttempt(run.id, 1);
-			const segments = segmentOutput(records);
+			const segments = this.dependencies.streamPresentation.segments(records);
 			for (const segment of segments) {
 				const provenance = { runId: run.id, eventCursor: segment.cursor };
 				if (segment.kind === 'reasoning')

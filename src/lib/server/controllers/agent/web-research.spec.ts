@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+const runStatus = new AgentRunStatusService();
 import { agentSubmissionFixture } from '$lib/testing/agent/fixtures/submission';
 import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
@@ -15,7 +16,7 @@ afterEach(async () => {
 		for (const run of fixture.runs.runs) await fixture.controller.cancel(testActor(), run.id);
 		fixture.release();
 		await vi.waitFor(() => {
-			if (fixture.runs.runs.some((run) => !isTerminalAgentRunStatus(run.status)))
+			if (fixture.runs.runs.some((run) => !runStatus.isTerminal(run.status)))
 				throw new Error('Run did not settle');
 		});
 	}

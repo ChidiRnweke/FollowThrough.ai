@@ -1,7 +1,8 @@
 import { expect, it, vi } from 'vitest';
 import { agentSubmissionFixture } from '$lib/testing/agent/fixtures/submission';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+const runStatus = new AgentRunStatusService();
 
 it('still aborts the resumed provider after separate decisions reach the queued run', async () => {
 	const fixture = agentSubmissionFixture('approval');
@@ -49,7 +50,7 @@ it('still aborts the resumed provider after separate decisions reach the queued 
 		fixture.release();
 		await fixture.controller.cancel(testActor(), receipt.runId);
 		await vi.waitFor(() => {
-			if (fixture.runs.runs.some((run) => !isTerminalAgentRunStatus(run.status)))
+			if (fixture.runs.runs.some((run) => !runStatus.isTerminal(run.status)))
 				throw new Error('Run has not settled');
 		});
 	}

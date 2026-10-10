@@ -1,4 +1,4 @@
-import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
@@ -67,7 +67,7 @@ const approvalController = (db: typeof context.db) => {
 	runner.abortable = true;
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
-			...agentModelRulesFixture(),
+			...agentRulesFixture(),
 			runs,
 			approvals: new RunApprovals(runs),
 			runner,

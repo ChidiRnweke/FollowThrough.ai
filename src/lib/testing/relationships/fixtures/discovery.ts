@@ -1,4 +1,4 @@
-import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import {
 	Relationships,
@@ -76,7 +76,7 @@ export const relatedNoteFixture = () => {
 	};
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
-			...agentModelRulesFixture(),
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events: runs,

@@ -1,7 +1,8 @@
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
-import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+const runStatus = new AgentRunStatusService();
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { afterAll, expect, it, vi } from 'vitest';
@@ -88,7 +89,7 @@ const setup = async (suffix: string) => {
 	});
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
-			...agentModelRulesFixture(),
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
@@ -108,7 +109,7 @@ const setup = async (suffix: string) => {
 	const finished = async (runId: AgentRunId) => {
 		await vi.waitFor(async () => {
 			const run = await runs.findById(seeded.owner, runId);
-			if (!run || !isTerminalAgentRunStatus(run.status)) throw new Error('Diagram has not settled');
+			if (!run || !runStatus.isTerminal(run.status)) throw new Error('Diagram has not settled');
 		});
 	};
 	return {
