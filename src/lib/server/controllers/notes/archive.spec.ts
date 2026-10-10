@@ -1,5 +1,5 @@
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { noteTrashWrite } from '$lib/controllers/workspace/commands';
+import { noteTrashWrite } from '$lib/testing/workspace/fixtures/commands';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
@@ -17,7 +17,6 @@ import {
 	testNoteId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
 const setup = () => {
 	const notes = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository();
@@ -33,7 +32,6 @@ const setup = () => {
 	);
 	return { notes, controller, indexer };
 };
-
 describe('Note archive invariants', () => {
 	it('rolls back the archive when indexing fails', async () => {
 		const { notes, controller, indexer } = setup();
@@ -46,18 +44,16 @@ describe('Note archive invariants', () => {
 		);
 		expect(outcome).toEqual({ kind: 'failure', notes: [original] });
 	});
-
 	it('uses the same resolved note as the offline archive command', async () => {
 		const { notes, controller } = setup();
 		const original = noteBuilder();
 		notes.notes = [original];
 		const { note } = await controller.archive(testActor(), { noteId: original.id });
-		expect(noteTrashWrite(original, 'archive', [original], note.updatedAt).local).toEqual({
+		expect((await noteTrashWrite(original, 'archive', [original], note.updatedAt)).local).toEqual({
 			type: 'notes',
 			value: note
 		});
 	});
-
 	it('archives the note through the controller', async () => {
 		const { notes, controller, indexer } = setup();
 		notes.notes = [noteBuilder()];
@@ -66,7 +62,6 @@ describe('Note archive invariants', () => {
 		expect(await notes.listActive(testActor())).toEqual([]);
 		expect(indexer.indexedNoteIds).toEqual([testNoteId()]);
 	});
-
 	it('rejects archiving a folder with active contents', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [
@@ -78,7 +73,6 @@ describe('Note archive invariants', () => {
 		});
 	});
 });
-
 it('rejects archiving a note that is already archived', async () => {
 	const { notes, controller } = setup();
 	notes.notes = [noteBuilder({ archivedAt: testNow })];

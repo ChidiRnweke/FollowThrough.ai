@@ -17,11 +17,9 @@ import type { SubmissionResult } from '$lib/models/sync';
 import type { MutationQueueController } from '$lib/controllers/sync/submission';
 import type { ResourceCacheController } from '$lib/controllers/sync/cache';
 import { workspaceReadiness } from '$lib/services/workspace/startup';
-import { SvelteDate, SvelteMap, createSubscriber } from 'svelte/reactivity';
 
 import type { WorkspaceSynchronizationController } from '$lib/controllers/sync/execution';
 
-import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteRevision } from '$lib/models/notes';
 import {
@@ -48,10 +46,7 @@ import {
 	type WorkspaceCommand
 } from '$lib/models/workspace-mutations';
 import { mutationResource, assertWorkspaceWriteIdentity } from '$lib/services/workspace/commands';
-import {
-	prepareWorkspaceCommand,
-	workspaceCommandNeedsInventory
-} from '$lib/controllers/workspace/commands';
+import type { WorkspaceCommandController } from '$lib/controllers/workspace/commands';
 import {
 	type WorkspaceResourceType,
 	type WorkspaceResourceIdentity
@@ -61,8 +56,13 @@ import type { WorkspaceViewsController } from '$lib/controllers/workspace/views'
 
 import { type CacheAccess, type SyncEtag, type SyncSnapshot } from '$lib/models/sync';
 
-const plain = <T>(value: T): T => $state.snapshot(value) as T;
-
+/** Framework mechanics at the browser input/observation boundary. */
+export interface WorkspaceEditingEnvironment {
+	now(): DateTime;
+	operationId(): string;
+	snapshot<T>(value: T): T;
+	observe(start: () => void): () => void;
+}
 export interface WorkspaceResourcesController {
 	readonly accountId: string;
 	readonly active: boolean;
@@ -230,7 +230,9 @@ export class WorkspaceResources
 		private readonly data: WorkspaceResourceStore,
 		private readonly projection: WorkspaceProjectionStore,
 		private readonly projections: WorkspaceViewsController,
-		private readonly surfaces: WorkspaceSurfaceFactory
+		private readonly surfaces: WorkspaceSurfaceFactory,
+		private readonly environment: WorkspaceEditingEnvironment,
+		private readonly commands: WorkspaceCommandController
 	) {}
 	private observe(): void {
 		this.data.addSubscriptions(
@@ -468,37 +470,14 @@ export class WorkspaceResources
 		await this.readLocal();
 	}
 
-	async prepareCommand(
+	prepareCommand(
 		command: PreparedWorkspaceCommand,
 		observed: WorkspaceRecord | null,
 		now: DateTime
-	) {
-		const createsEntry = command.kind === 'createNote' || command.kind === 'createFolder';
-		const projectId = createsEntry
-			? command.projectId
-			: observed?.type === 'notes'
-				? observed.value.projectId
-				: null;
-		const newParentId = createsEntry
-			? command.parentId
-			: command.kind === 'archiveNote'
-				? command.noteId
-				: null;
-		// A queued creation establishes an empty starting collection for its new identity.
-		const knownNewScope = this.pending.some(
-			({ intent }) =>
-				(intent.command.kind === 'createProject' && intent.command.id === projectId) ||
-				(intent.command.kind === 'createFolder' && intent.command.id === newParentId)
-		);
-		if (workspaceCommandNeedsInventory(command, observed, this.records) && !knownNewScope)
-			await this.requireCollections();
-		return prepareWorkspaceCommand(command, observed, {
-			userId: this.accountId as UserId,
-			now,
-			records: this.records,
-			inventory: knownNewScope || this.collectionReadiness() === 'ready' ? 'complete' : 'partial'
-		});
+	): Promise<WriteContent<WorkspaceCommand, WorkspaceRecord>> {
+		return this.commands.prepare(command, observed, this, now);
 	}
+
 	async create(
 		command: Extract<
 			PreparedWorkspaceCommand,
@@ -513,14 +492,14 @@ export class WorkspaceResources
 			}
 		>
 	): Promise<WorkspaceRecord> {
-		const input = plain(command);
-		const now = new SvelteDate().toISOString() as DateTime;
+		const input = this.environment.snapshot(command);
+		const now = this.environment.now();
 		await this.initialize();
 		const content = await this.prepareCommand(input, null, now);
 		if (!content.local) throw new Error('Creation must produce a resource');
 		await this.append({
 			...content,
-			operationId: crypto.randomUUID(),
+			operationId: this.environment.operationId(),
 			key: workspaceResourceKey(mutationResource(input)),
 			base: null,
 			basedOn: null
@@ -540,7 +519,7 @@ export class WorkspaceResources
 		assertWorkspaceWriteIdentity(draft);
 		// IndexedDB cannot clone a Svelte proxy; snapshot once at the shared UI boundary.
 		await this.initialize();
-		const operationId = await this.dependencies.writes.append(plain(draft));
+		const operationId = await this.dependencies.writes.append(this.environment.snapshot(draft));
 		await this.readLocal();
 		const staged = this.staged(draft, operationId);
 		void this.synchronize();
@@ -575,7 +554,7 @@ export class WorkspaceResources
 	stop(): void {
 		this.data.update({ stopped: true, local: null });
 		this.data.setInitializing(null);
-		this.projection.replace(new SvelteMap());
+		this.projection.replace(new Map());
 		this.data.invalidate();
 		this.runtime.stop();
 		this.dependencies.cache.stop();
@@ -603,9 +582,10 @@ export class ResourceView<K extends WorkspaceResourceType> implements ResourceVi
 	constructor(
 		private readonly resources: WorkspaceResourcesController,
 		readonly identity: WorkspaceResourceIdentity & { type: K },
-		private readonly data: ResourceObservationStore
+		private readonly data: ResourceObservationStore,
+		private readonly environment: WorkspaceEditingEnvironment
 	) {
-		this.observe = createSubscriber(() => {
+		this.observe = this.environment.observe(() => {
 			void this.retry();
 		});
 	}
@@ -661,7 +641,8 @@ export class WorkspaceDraft<
 	constructor(
 		private readonly resources: WorkspaceEditorCoordinator,
 		readonly identity: WorkspaceResourceIdentity & { type: K },
-		private readonly data: WorkspaceDraftStore
+		private readonly data: WorkspaceDraftStore,
+		private readonly environment: WorkspaceEditingEnvironment
 	) {
 		this.key = workspaceResourceKey(identity);
 	}
@@ -826,8 +807,8 @@ export class WorkspaceDraft<
 		return this.enqueue({ kind: 'discardPublished', revision });
 	}
 	private enqueue(command: DraftCommand): ReturnType<WorkspaceDraft<K>['save']> {
-		const input = plain(command);
-		const now = new SvelteDate().toISOString() as DateTime;
+		const input = this.environment.snapshot(command);
+		const now = this.environment.now();
 		this.savingLocal++;
 		const operation = this.staging
 			.then(() => this.save(input, now))
@@ -857,7 +838,7 @@ export class WorkspaceDraft<
 			if (content.local) this.valueOf(content.local);
 			const staged = await this.resources.stage({
 				...content,
-				operationId: crypto.randomUUID(),
+				operationId: this.environment.operationId(),
 				key: this.key,
 				base: context.base,
 				basedOn: context.basedOn

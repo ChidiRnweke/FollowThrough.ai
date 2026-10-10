@@ -17,7 +17,7 @@ import {
 	InMemoryDiagrams
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { prepareWorkspaceCommand } from '$lib/controllers/workspace/commands';
+import { prepareWorkspaceCommand } from '$lib/testing/workspace/fixtures/commands';
 import {
 	testNow,
 	testNoteId,
@@ -25,7 +25,6 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { DateTime } from '$lib/models/workspace';
 const timestamp = '2026-09-23T12:00:00.000Z' as DateTime;
-
 const setup = () => {
 	const sourceNotes = new InMemoryNoteContent();
 	sourceNotes.notes = [noteBuilder()];
@@ -55,7 +54,6 @@ const setup = () => {
 	);
 	return { diagrams, controller, index, library, notes };
 };
-
 describe('diagram trash transitions', () => {
 	it('requires trashing a diagram before permanent deletion', async () => {
 		const { controller, diagrams } = setup();
@@ -113,15 +111,17 @@ describe('diagram trash transitions', () => {
 				kind: action === 'archive' ? 'archiveDiagram' : 'restoreDiagram',
 				diagramId: diagram.id
 			} as const;
-			const local = prepareWorkspaceCommand(
-				command,
-				{ type: 'diagrams', value: diagram },
-				{
-					userId: testActor().userId,
-					now: timestamp,
-					records: new Map(),
-					inventory: 'complete'
-				}
+			const local = (
+				await prepareWorkspaceCommand(
+					command,
+					{ type: 'diagrams', value: diagram },
+					{
+						userId: testActor().userId,
+						now: timestamp,
+						records: new Map(),
+						inventory: 'complete'
+					}
+				)
 			).local;
 			const stored =
 				action === 'archive'
@@ -131,7 +131,6 @@ describe('diagram trash transitions', () => {
 		}
 	);
 });
-
 describe('Diagram soft delete', () => {
 	it('takes a restored diagram back out of the trash', async () => {
 		const { controller, library, diagrams } = setup();
@@ -143,7 +142,6 @@ describe('Diagram soft delete', () => {
 		const listed = await library.listForProject(testActor(), diagram.projectId);
 		expect(listed.diagrams).toHaveLength(1);
 	});
-
 	// The defect this whole block exists for: archiving marked the row and hid it
 	// from nothing, so the gallery still listed it. Pressing "Move to trash" again
 	// then failed, because the diagram was already there.
@@ -159,7 +157,6 @@ describe('Diagram soft delete', () => {
 		]);
 		expect(await library.countForProject(testActor(), diagram.projectId)).toBe(0);
 	});
-
 	// The gallery's confirmation promises a note shows the diagram as unavailable
 	// until it is restored, so the note's own listing has to agree.
 	it('takes an archived diagram out of its note listing', async () => {
@@ -171,7 +168,6 @@ describe('Diagram soft delete', () => {
 		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
 		expect(await library.listForNote(testActor(), testNoteId())).toHaveLength(0);
 	});
-
 	// Otherwise `create_diagram` refuses a new diagram by naming one the user threw
 	// away, which is worse than the guess that refusal replaced.
 	it('treats a conversation whose diagram is archived as having none', async () => {

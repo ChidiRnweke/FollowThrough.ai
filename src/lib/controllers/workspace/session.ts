@@ -4,12 +4,12 @@ import type {
 } from '$lib/services/agent/model-selection';
 import type { DateTime } from '$lib/models/workspace';
 import type { WorkspaceValues } from '$lib/models/workspace-records';
-import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 
 import type { ShellContext } from '$lib/models/workspace-views';
 import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 import type { WorkspaceBootstrap, StoredBootstrap } from '$lib/models/workspace-bootstrap';
-import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources.svelte';
+import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
 import type { WorkspaceSessionStore } from '$lib/stores/workspace/session.svelte';
 export interface WorkspaceSession {
 	readonly resources: WorkspaceResourcesController;

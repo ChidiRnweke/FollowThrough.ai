@@ -2,7 +2,7 @@ import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules'
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
 import type { DateTime } from '$lib/models/workspace';
-import { agentPreferenceWrite } from '$lib/controllers/workspace/commands';
+import { agentPreferenceWrite } from '$lib/testing/workspace/fixtures/commands';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { InMemoryAgentPreferencesRepository } from '$lib/testing/agent/fakes/in-memory-inline-completion';
 import { InMemoryModelCatalog } from '$lib/testing/agent/fakes/in-memory-model-catalog';
@@ -10,12 +10,10 @@ import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memor
 import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { AgentSettings, type AgentSettingsDependencies } from './controller';
-
 /** What the deployment falls back to when the user has chosen nothing. */
 const DEPLOYMENT_CHAT_MODEL = 'deepseek/deepseek-v4-flash';
 const DEPLOYMENT_VISION_MODEL = 'mistral/pixtral-large';
 const timestamp = '2026-09-23T12:00:00.000Z' as DateTime;
-
 const setup = () => {
 	const repository = new InMemoryAgentPreferencesRepository();
 	repository.entries.set(testActor().userId, {
@@ -57,7 +55,6 @@ const setup = () => {
 		)
 	};
 };
-
 describe('agent settings controller behavior', () => {
 	it.each([
 		['defaultModel', DEPLOYMENT_CHAT_MODEL],
@@ -152,7 +149,7 @@ describe('agent settings controller behavior', () => {
 		const patch = { defaultModel: null, inlineSuggestionsEnabled: false };
 		const saved = await controller.updatePreferences(testActor(), patch);
 		expect({ type: 'agent_preferences', value: saved }).toEqual(
-			agentPreferenceWrite(current, patch, timestamp).local
+			(await agentPreferenceWrite(current, patch, timestamp)).local
 		);
 	});
 	it('keeps another account’s preferences separate', async () => {
@@ -161,7 +158,6 @@ describe('agent settings controller behavior', () => {
 		await controller.updatePreferences(testActor(2), { inlineSuggestionsEnabled: false });
 		expect(await controller.getPreferences(testActor())).toEqual(original);
 	});
-
 	it('includes the deployment chat model alongside provider models', async () => {
 		const { controller, models } = setup();
 		expect(await controller.listModels(testActor())).toEqual([
@@ -177,7 +173,6 @@ describe('agent settings controller behavior', () => {
 			}
 		]);
 	});
-
 	it('persists a selectable default model', async () => {
 		const { controller } = setup();
 		const updated = await controller.updatePreferences(testActor(), {
@@ -185,7 +180,6 @@ describe('agent settings controller behavior', () => {
 		});
 		expect(updated.defaultModel).toBe('vendor/tool-model');
 	});
-
 	it('does not persist an unavailable default model', async () => {
 		const { controller } = setup();
 		await expect(
@@ -193,7 +187,6 @@ describe('agent settings controller behavior', () => {
 		).rejects.toThrow('unavailable or does not support tools');
 	});
 });
-
 /**
  * The composer names this model on screen. It has to be resolved here because the
  * last link in the chain is deployment configuration the browser cannot read, and
@@ -207,14 +200,12 @@ describe('agent settings model defaults', () => {
 			visionModelId: DEPLOYMENT_VISION_MODEL
 		});
 	});
-
 	it('prefers the user default chat model over the deployment one', async () => {
 		const { controller } = setup();
 		await controller.updatePreferences(testActor(), { defaultModel: 'vendor/tool-model' });
 		expect((await controller.resolveDefaults(testActor())).chatModelId).toBe('vendor/tool-model');
 	});
 });
-
 describe('offline bootstrap deployment defaults', () => {
 	it('keeps deployment models independent of the users current overrides', async () => {
 		const { controller } = setup();

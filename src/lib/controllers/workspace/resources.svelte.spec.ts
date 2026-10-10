@@ -27,7 +27,7 @@ import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 import type {
 	WorkspaceResourcesController,
 	ResourceViewController
-} from '$lib/controllers/workspace/resources.svelte';
+} from '$lib/controllers/workspace/resources';
 
 const project = workspaceRecordSchema.parse({
 	type: 'projects',

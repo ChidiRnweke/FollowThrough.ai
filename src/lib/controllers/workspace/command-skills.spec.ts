@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { resourceDataSchemas } from '$lib/models/workspace-records';
 import { testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import { skillMetadataWrite } from '$lib/controllers/workspace/commands';
+import { skillMetadataWrite } from '$lib/testing/workspace/fixtures/commands';
 import { mutationResource } from '$lib/services/workspace/commands';
-
 const entry = resourceDataSchemas.skills.parse({
 	noteId: testNoteId(),
 	name: 'Writing',
@@ -16,29 +15,29 @@ const entry = resourceDataSchemas.skills.parse({
 	createdAt: testNow,
 	updatedAt: testNow
 });
-
 describe('local skill metadata edits', () => {
-	it('guards the metadata record rather than its independent note body', () => {
-		expect(mutationResource(skillMetadataWrite(entry, { description: 'Edited' }).command)).toEqual({
+	it('guards the metadata record rather than its independent note body', async () => {
+		expect(
+			mutationResource((await skillMetadataWrite(entry, { description: 'Edited' })).command)
+		).toEqual({
 			type: 'skills',
 			id: [entry.noteId]
 		});
 	});
-	it('retains other metadata while disabling a skill', () => {
-		expect(skillMetadataWrite(entry, { isEnabled: false }).local).toEqual({
+	it('retains other metadata while disabling a skill', async () => {
+		expect((await skillMetadataWrite(entry, { isEnabled: false })).local).toEqual({
 			type: 'skills',
 			value: { ...entry, isEnabled: false }
 		});
 	});
-	it('matches the domain rule that an empty description retains the existing description', () => {
+	it('matches the domain rule that an empty description retains the existing description', async () => {
 		expect(
-			skillMetadataWrite(entry, { description: '  ', displayName: ' Renamed ' }).local
+			(await skillMetadataWrite(entry, { description: '  ', displayName: ' Renamed ' })).local
 		).toEqual({ type: 'skills', value: { ...entry, name: 'Renamed' } });
 	});
 });
-
-it('refuses a local description that cannot be exported as SKILL.md', () => {
-	expect(() => skillMetadataWrite(entry, { description: 'x'.repeat(1025) })).toThrow(
-		'Skill description is too long'
-	);
+it('refuses a local description that cannot be exported as SKILL.md', async () => {
+	await expect(
+		async () => await skillMetadataWrite(entry, { description: 'x'.repeat(1025) })
+	).rejects.toThrow('Skill description is too long');
 });

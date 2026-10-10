@@ -3,7 +3,7 @@
 	import { type OutboxEntry } from '$lib/models/outbox';
 	import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 	import type { WorkspaceRecord } from '$lib/models/workspace-records';
-	import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources.svelte';
+	import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import WorkspaceRecordPreview from './workspace-record-preview.svelte';

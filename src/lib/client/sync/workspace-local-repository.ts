@@ -1,5 +1,5 @@
-import type { WorkspaceLocalRepository } from '$lib/controllers/workspace/resources.svelte';
-export type { WorkspaceLocalRepository } from '$lib/controllers/workspace/resources.svelte';
+import type { WorkspaceLocalRepository } from '$lib/controllers/workspace/resources';
+export type { WorkspaceLocalRepository } from '$lib/controllers/workspace/resources';
 import { liveQuery } from 'dexie';
 import type { z } from 'zod';
 import type { WorkspaceLocalProjection } from '$lib/models/workspace-local';

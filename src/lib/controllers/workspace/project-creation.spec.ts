@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { prepareWorkspaceCommand } from './commands';
+import { prepareWorkspaceCommand } from '$lib/testing/workspace/fixtures/commands';
 import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
@@ -9,10 +9,9 @@ import {
 	testProjectId,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
-it('opens a locally created project with its stable identity before acknowledgment', () => {
+it('opens a locally created project with its stable identity before acknowledgment', async () => {
 	const records = new Map<string, WorkspaceRecord>();
-	const result = prepareWorkspaceCommand(
+	const result = await prepareWorkspaceCommand(
 		{ kind: 'createProject', id: testProjectId(), name: '  Research  ' },
 		null,
 		{ userId: testActor().userId, now: testNow, records, inventory: 'complete' }
@@ -24,7 +23,7 @@ it('opens a locally created project with its stable identity before acknowledgme
 		tree: []
 	});
 });
-it('opens nested folders created against a local project before server acknowledgment', () => {
+it('opens nested folders created against a local project before server acknowledgment', async () => {
 	const records = new Map<string, WorkspaceRecord>();
 	const context = {
 		userId: testActor().userId,
@@ -32,7 +31,7 @@ it('opens nested folders created against a local project before server acknowled
 		records,
 		inventory: 'complete' as const
 	};
-	const project = prepareWorkspaceCommand(
+	const project = await prepareWorkspaceCommand(
 		{ kind: 'createProject', id: testProjectId(), name: 'Research' },
 		null,
 		context
@@ -43,7 +42,7 @@ it('opens nested folders created against a local project before server acknowled
 		[testNoteId(), undefined, 'Parent'],
 		[testNoteId(2), testNoteId(), '  Decisions  ']
 	] as const) {
-		const folder = prepareWorkspaceCommand(
+		const folder = await prepareWorkspaceCommand(
 			{ kind: 'createFolder', id, projectId: testProjectId(), parentId, name },
 			null,
 			context

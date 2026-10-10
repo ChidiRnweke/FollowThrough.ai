@@ -10,7 +10,7 @@ import { buildNoteSearchPattern, searchNoteTargets } from '$lib/services/notes/t
 import type { ProjectId } from '$lib/models/projects';
 import { workspaceSession } from '$lib/factories/workspace/session';
 import { replaceNoteDrafts } from '$lib/controllers/notes/replace';
-import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources.svelte';
+import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
 
 const SEARCH_DEBOUNCE_MS = 300;
 

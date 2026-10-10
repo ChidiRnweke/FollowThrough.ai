@@ -1,12 +1,14 @@
+import { createWorkspaceCommands } from '$lib/factories/workspace/commands';
+import { BrowserWorkspaceEditingEnvironment } from '$lib/client/workspace/editing-environment.svelte';
 import type { WorkspaceResourceType, WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import type { WorkspaceEditorCoordinator } from '$lib/controllers/workspace/resources.svelte';
+import type { WorkspaceEditorCoordinator } from '$lib/controllers/workspace/resources';
 import {
 	WorkspaceResources,
 	WorkspaceDraft,
 	ResourceView,
 	type WorkspaceResourcesController,
 	type WorkspaceResourcesDependencies
-} from '$lib/controllers/workspace/resources.svelte';
+} from '$lib/controllers/workspace/resources';
 import { WorkspaceResourceStore } from '$lib/stores/workspace/resources.svelte';
 import { WorkspaceDraftStore, ResourceObservationStore } from '$lib/stores/workspace/draft.svelte';
 import { WorkspaceProjectionStore } from '$lib/stores/workspace/projection.svelte';
@@ -30,6 +32,7 @@ export const assembleWorkspaceResources = (
 	dependencies: WorkspaceResourcesDependencies
 ): WorkspaceResourcesController => {
 	const projection = new WorkspaceProjectionStore(new Map());
+	const environment = new BrowserWorkspaceEditingEnvironment();
 	return new WorkspaceResources(
 		accountId,
 		dependencies,
@@ -40,12 +43,14 @@ export const assembleWorkspaceResources = (
 			view: <K extends WorkspaceResourceType>(
 				resources: WorkspaceResourcesController,
 				identity: WorkspaceResourceIdentity & { type: K }
-			) => new ResourceView<K>(resources, identity, new ResourceObservationStore()),
+			) => new ResourceView<K>(resources, identity, new ResourceObservationStore(), environment),
 			draft: <K extends WorkspaceResourceType>(
 				resources: WorkspaceEditorCoordinator,
 				identity: WorkspaceResourceIdentity & { type: K }
-			) => new WorkspaceDraft<K>(resources, identity, new WorkspaceDraftStore())
-		}
+			) => new WorkspaceDraft<K>(resources, identity, new WorkspaceDraftStore(), environment)
+		},
+		environment,
+		createWorkspaceCommands()
 	);
 };
 export const createWorkspaceResources = (accountId: string): WorkspaceResourcesController => {

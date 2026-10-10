@@ -6,7 +6,7 @@
 	import { sectionNumberingLevelFor } from '$lib/services/notes/section-numbering';
 	import type { ProjectId } from '$lib/models/projects';
 
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';

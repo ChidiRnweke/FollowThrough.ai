@@ -1,5 +1,4 @@
-import { WidgetLifecycleService } from '$lib/services/widgets/trash';
-const widgetLifecycle = new WidgetLifecycleService();
+import type { IWidgetLifecycleService } from '$lib/services/widgets/trash';
 import { decideNoteRestore, noteTrashChange } from '$lib/services/notes/trash';
 import { decideTodoCreation } from '$lib/services/todos/creation';
 import { applyTodoEdit } from '$lib/services/todos/edits';
@@ -8,8 +7,7 @@ import { decideProjectDetails } from '$lib/services/projects/details';
 import { decideDiagramRevision } from '$lib/services/diagrams/editing';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
 import { decideMemoryCreation, decideMemoryEdit } from '$lib/services/memory/edits';
-import { createWidgetEditingController } from '$lib/factories/widgets/editing';
-const widgetEditing = createWidgetEditingController();
+import type { WidgetEditingController } from '$lib/controllers/widgets/editing';
 
 import { widgetCatalog, type Widget, type WidgetEditResult } from '$lib/models/widgets';
 import type {
@@ -27,7 +25,7 @@ import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import { type Note, type NoteId } from '$lib/models/notes';
 import { applyNoteDraftEdit } from '$lib/services/notes/editing';
-import type { WriteContent } from '$lib/models/outbox';
+import type { WriteContent, OutboxEntry } from '$lib/models/outbox';
 import { type WorkspaceRecord, type WorkspaceValues } from '$lib/models/workspace-records';
 import { isWorkspaceRecord } from '$lib/services/workspace/commands';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
@@ -36,7 +34,7 @@ import type {
 	PreparedWorkspaceCommand,
 	WorkspaceCommandContext
 } from '$lib/models/workspace-mutations';
-export const todoWrite = (
+const todoWrite = (
 	todo: Todo,
 	patch: Omit<UpdateTodoInput, 'todoId'>,
 	timestamp: Todo['updatedAt']
@@ -50,12 +48,7 @@ export const todoWrite = (
 });
 
 /** Initial representations use client IDs; server acknowledgment replaces only authoritative fields. */
-export const newProject = (
-	id: ProjectId,
-	userId: UserId,
-	name: string,
-	timestamp: DateTime
-): Project => {
+const newProject = (id: ProjectId, userId: UserId, name: string, timestamp: DateTime): Project => {
 	const decision = decideProjectDetails({ name });
 	if (decision.kind === 'invalid') throw new Error(decision.message);
 	return {
@@ -68,7 +61,7 @@ export const newProject = (
 	};
 };
 
-export const newNote = (
+const newNote = (
 	id: NoteId,
 	project: Project,
 	title: string,
@@ -93,7 +86,7 @@ export const newNote = (
 };
 
 /** Match the trash placement rules while retaining the complete local note. */
-export const noteTrashWrite = (
+const noteTrashWrite = (
 	note: Note,
 	action: 'archive' | 'restore',
 	notes: readonly Note[],
@@ -128,7 +121,7 @@ export const noteTrashWrite = (
 	};
 };
 
-export const newMemory = (
+const newMemory = (
 	id: MemoryEntryId,
 	userId: UserId,
 	input: CreateMemoryEntryInput,
@@ -139,7 +132,7 @@ export const newMemory = (
 	return decision.entry;
 };
 
-export const memoryWrite = (
+const memoryWrite = (
 	entry: MemoryEntry,
 	patch: Omit<UpdateMemoryEntryInput, 'memoryEntryId'>
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => {
@@ -153,7 +146,7 @@ export const memoryWrite = (
 	};
 };
 
-export const skillMetadataWrite = (
+const skillMetadataWrite = (
 	entry: WorkspaceValues['skills'],
 	patch: Omit<Extract<WorkspaceCommand, { kind: 'updateSkill' }>, 'kind' | 'noteId'>
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
@@ -170,7 +163,7 @@ export const skillMetadataWrite = (
 	references: []
 });
 
-export const agentPreferenceWrite = (
+const agentPreferenceWrite = (
 	entry: WorkspaceValues['agent_preferences'],
 	patch: UpdateAgentPreferencesInput,
 	timestamp: DateTime
@@ -182,7 +175,7 @@ export const agentPreferenceWrite = (
 });
 
 /** Commands whose meaning depends on a complete collection rather than one loaded record. */
-export function workspaceCommandNeedsInventory(
+function workspaceCommandNeedsInventory(
 	command: PreparedWorkspaceCommand,
 	observed: WorkspaceRecord | null,
 	records: ReadonlyMap<string, WorkspaceRecord>
@@ -222,294 +215,366 @@ const appliedWidget = (result: WidgetEditResult): Widget => {
 };
 
 /** Derive local effects from the command and the version this editor actually observed. */
-export const prepareWorkspaceCommand = (
-	command: PreparedWorkspaceCommand,
-	observed: WorkspaceRecord | null,
-	context: WorkspaceCommandContext
-): WriteContent<WorkspaceCommand, WorkspaceRecord> => {
-	if (
-		workspaceCommandNeedsInventory(command, observed, context.records) &&
-		context.inventory !== 'complete'
-	)
-		throw new Error(
-			'Required workspace data is not available on this device. Reconnect and retry.'
+export interface WorkspaceCommandSource {
+	readonly accountId: string;
+	readonly records: ReadonlyMap<string, WorkspaceRecord>;
+	readonly pending: readonly OutboxEntry<WorkspaceCommand, WorkspaceRecord>[];
+	collectionReadiness(): 'unknown' | 'ready';
+	requireCollections(): Promise<void>;
+}
+export interface WorkspaceCommandController {
+	prepare(
+		command: PreparedWorkspaceCommand,
+		observed: WorkspaceRecord | null,
+		workspace: WorkspaceCommandSource,
+		now: DateTime
+	): Promise<WriteContent<WorkspaceCommand, WorkspaceRecord>>;
+}
+/** Resolve required inventory and prepare the complete optimistic command from observed facts. */
+export class WorkspaceCommands implements WorkspaceCommandController {
+	constructor(
+		private readonly widgetEditing: WidgetEditingController,
+		private readonly widgetLifecycle: IWidgetLifecycleService
+	) {}
+	async prepare(
+		command: PreparedWorkspaceCommand,
+		observed: WorkspaceRecord | null,
+		workspace: WorkspaceCommandSource,
+		now: DateTime
+	): Promise<WriteContent<WorkspaceCommand, WorkspaceRecord>> {
+		const createsEntry = command.kind === 'createNote' || command.kind === 'createFolder';
+		const projectId = createsEntry
+			? command.projectId
+			: observed?.type === 'notes'
+				? observed.value.projectId
+				: null;
+		const newParentId = createsEntry
+			? command.parentId
+			: command.kind === 'archiveNote'
+				? command.noteId
+				: null;
+		// A queued creation establishes an empty starting collection for its new identity.
+		const knownNewScope = workspace.pending.some(
+			({ intent }) =>
+				(intent.command.kind === 'createProject' && intent.command.id === projectId) ||
+				(intent.command.kind === 'createFolder' && intent.command.id === newParentId)
 		);
-	const { userId, now, records } = context;
-	const value = <K extends WorkspaceRecord['type']>(type: K): WorkspaceValues[K] => {
-		if (!observed || !isWorkspaceRecord(observed, type))
-			throw new Error('Open the resource before editing');
-		return observed.value;
-	};
-	const content = (
-		local: WorkspaceRecord | null,
-		references: readonly string[] = [],
-		coalesce: string | null = null
-	): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({ command, local, references, coalesce });
-	const projectKey = (id: ProjectId) => workspaceResourceKey({ type: 'projects', id: [id] });
-	const notes = () =>
-		[...records.values()].filter((record) => record.type === 'notes').map((record) => record.value);
-	switch (command.kind) {
-		case 'createProject':
-			return content({
-				type: 'projects',
-				value: newProject(command.id, userId, command.name, now)
-			});
-		case 'createNote':
-		case 'createFolder': {
-			const project = records.get(projectKey(command.projectId));
-			if (project?.type !== 'projects') throw new Error('The project is unavailable');
-			const note = newNote(
-				command.id,
-				project.value,
-				command.kind === 'createNote' ? command.title : command.name,
-				command.kind === 'createNote' ? 'note' : 'folder',
-				notes(),
-				now,
-				command.parentId
+		if (workspaceCommandNeedsInventory(command, observed, workspace.records) && !knownNewScope)
+			await workspace.requireCollections();
+		return this.apply(command, observed, {
+			userId: workspace.accountId as UserId,
+			now,
+			records: workspace.records,
+			inventory:
+				knownNewScope || workspace.collectionReadiness() === 'ready' ? 'complete' : 'partial'
+		});
+	}
+	private apply(
+		command: PreparedWorkspaceCommand,
+		observed: WorkspaceRecord | null,
+		context: WorkspaceCommandContext
+	): WriteContent<WorkspaceCommand, WorkspaceRecord> {
+		if (
+			workspaceCommandNeedsInventory(command, observed, context.records) &&
+			context.inventory !== 'complete'
+		)
+			throw new Error(
+				'Required workspace data is not available on this device. Reconnect and retry.'
 			);
-			return content({ type: 'notes', value: note }, [
-				projectKey(command.projectId),
-				...(command.parentId
-					? [workspaceResourceKey({ type: 'notes', id: [command.parentId] })]
-					: [])
-			]);
-		}
-		case 'renameProject': {
-			const decision = decideProjectDetails(command);
-			if (decision.kind === 'invalid') throw new Error(decision.message);
-			return content({
-				type: 'projects',
-				value: {
-					...value('projects'),
-					name: decision.name,
-					updatedAt: now
-				}
-			});
-		}
-		case 'archiveProject':
-			return content({
-				type: 'projects',
-				value: { ...value('projects'), archivedAt: now, updatedAt: now }
-			});
-		case 'projectNumbering':
-			return content({
-				type: 'projects',
-				value: { ...value('projects'), sectionNumberingDefault: command.enabled, updatedAt: now }
-			});
-		case 'renameNote':
-			return content({
-				type: 'notes',
-				value: { ...value('notes'), title: command.title.trim(), updatedAt: now }
-			});
-		case 'noteNumbering':
-			return content({
-				type: 'notes',
-				value: { ...value('notes'), sectionNumbering: command.enabled, updatedAt: now }
-			});
-		case 'saveNote': {
-			const note = value('notes');
-			return content(
-				{
+		const { userId, now, records } = context;
+		const value = <K extends WorkspaceRecord['type']>(type: K): WorkspaceValues[K] => {
+			if (!observed || !isWorkspaceRecord(observed, type))
+				throw new Error('Open the resource before editing');
+			return observed.value;
+		};
+		const content = (
+			local: WorkspaceRecord | null,
+			references: readonly string[] = [],
+			coalesce: string | null = null
+		): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
+			command,
+			local,
+			references,
+			coalesce
+		});
+		const projectKey = (id: ProjectId) => workspaceResourceKey({ type: 'projects', id: [id] });
+		const notes = () =>
+			[...records.values()]
+				.filter((record) => record.type === 'notes')
+				.map((record) => record.value);
+		switch (command.kind) {
+			case 'createProject':
+				return content({
+					type: 'projects',
+					value: newProject(command.id, userId, command.name, now)
+				});
+			case 'createNote':
+			case 'createFolder': {
+				const project = records.get(projectKey(command.projectId));
+				if (project?.type !== 'projects') throw new Error('The project is unavailable');
+				const note = newNote(
+					command.id,
+					project.value,
+					command.kind === 'createNote' ? command.title : command.name,
+					command.kind === 'createNote' ? 'note' : 'folder',
+					notes(),
+					now,
+					command.parentId
+				);
+				return content({ type: 'notes', value: note }, [
+					projectKey(command.projectId),
+					...(command.parentId
+						? [workspaceResourceKey({ type: 'notes', id: [command.parentId] })]
+						: [])
+				]);
+			}
+			case 'renameProject': {
+				const decision = decideProjectDetails(command);
+				if (decision.kind === 'invalid') throw new Error(decision.message);
+				return content({
+					type: 'projects',
+					value: {
+						...value('projects'),
+						name: decision.name,
+						updatedAt: now
+					}
+				});
+			}
+			case 'archiveProject':
+				return content({
+					type: 'projects',
+					value: { ...value('projects'), archivedAt: now, updatedAt: now }
+				});
+			case 'projectNumbering':
+				return content({
+					type: 'projects',
+					value: { ...value('projects'), sectionNumberingDefault: command.enabled, updatedAt: now }
+				});
+			case 'renameNote':
+				return content({
 					type: 'notes',
-					value: applyNoteDraftEdit(note, command, now)
-				},
-				[],
-				'document'
-			);
-		}
-		case 'publishNote': {
-			const note = value('notes');
-			return content({
-				type: 'notes',
-				value: { ...note, publishedRevision: note.currentRevision, publishedAt: now }
-			});
-		}
-		case 'archiveNote':
-		case 'restoreNote':
-			return noteTrashWrite(
-				value('notes'),
-				command.kind === 'archiveNote' ? 'archive' : 'restore',
-				notes(),
-				now
-			);
-		case 'createTodo': {
-			const decision = decideTodoCreation(command, { id: command.id, userId, timestamp: now });
-			if (decision.kind === 'invalid') throw new Error(decision.message);
-			return content({ type: 'todos', value: decision.todo }, [projectKey(command.projectId)]);
-		}
-		case 'updateTodo': {
-			const { kind, todoId, ...patch } = command;
-			void kind;
-			void todoId;
-			return todoWrite(value('todos'), patch, now);
-		}
-		case 'createMemory':
-			return content(
-				{ type: 'memory_entries', value: newMemory(command.id, userId, command, now) },
-				command.projectId ? [projectKey(command.projectId)] : []
-			);
-		case 'updateMemory': {
-			const { kind, memoryEntryId, ...patch } = command;
-			void kind;
-			void memoryEntryId;
-			return memoryWrite(value('memory_entries'), patch);
-		}
-		case 'deleteTodo':
-		case 'deleteMemory':
-		case 'resetProjectToolOverride':
-			return content(null);
-		case 'renameConversation':
-			return content({
-				type: 'conversations',
-				value: { ...value('conversations'), title: command.title.trim(), updatedAt: now }
-			});
-		case 'updateSkill': {
-			const { kind, noteId, ...patch } = command;
-			void kind;
-			void noteId;
-			return skillMetadataWrite(value('skills'), patch);
-		}
-		case 'updateAgentPreferences':
-			return agentPreferenceWrite(value('agent_preferences'), command.patch, now);
-		case 'updateUserPreferences':
-			return content({
-				type: 'user_preferences',
-				value: {
-					...value('user_preferences'),
-					sectionNumberingDefault: command.sectionNumberingDefault,
-					updatedAt: now
+					value: { ...value('notes'), title: command.title.trim(), updatedAt: now }
+				});
+			case 'noteNumbering':
+				return content({
+					type: 'notes',
+					value: { ...value('notes'), sectionNumbering: command.enabled, updatedAt: now }
+				});
+			case 'saveNote': {
+				const note = value('notes');
+				return content(
+					{
+						type: 'notes',
+						value: applyNoteDraftEdit(note, command, now)
+					},
+					[],
+					'document'
+				);
+			}
+			case 'publishNote': {
+				const note = value('notes');
+				return content({
+					type: 'notes',
+					value: { ...note, publishedRevision: note.currentRevision, publishedAt: now }
+				});
+			}
+			case 'archiveNote':
+			case 'restoreNote':
+				return noteTrashWrite(
+					value('notes'),
+					command.kind === 'archiveNote' ? 'archive' : 'restore',
+					notes(),
+					now
+				);
+			case 'createTodo': {
+				const decision = decideTodoCreation(command, { id: command.id, userId, timestamp: now });
+				if (decision.kind === 'invalid') throw new Error(decision.message);
+				return content({ type: 'todos', value: decision.todo }, [projectKey(command.projectId)]);
+			}
+			case 'updateTodo': {
+				const { kind, todoId, ...patch } = command;
+				void kind;
+				void todoId;
+				return todoWrite(value('todos'), patch, now);
+			}
+			case 'createMemory':
+				return content(
+					{ type: 'memory_entries', value: newMemory(command.id, userId, command, now) },
+					command.projectId ? [projectKey(command.projectId)] : []
+				);
+			case 'updateMemory': {
+				const { kind, memoryEntryId, ...patch } = command;
+				void kind;
+				void memoryEntryId;
+				return memoryWrite(value('memory_entries'), patch);
+			}
+			case 'deleteTodo':
+			case 'deleteMemory':
+			case 'resetProjectToolOverride':
+				return content(null);
+			case 'renameConversation':
+				return content({
+					type: 'conversations',
+					value: { ...value('conversations'), title: command.title.trim(), updatedAt: now }
+				});
+			case 'updateSkill': {
+				const { kind, noteId, ...patch } = command;
+				void kind;
+				void noteId;
+				return skillMetadataWrite(value('skills'), patch);
+			}
+			case 'updateAgentPreferences':
+				return agentPreferenceWrite(value('agent_preferences'), command.patch, now);
+			case 'updateUserPreferences':
+				return content({
+					type: 'user_preferences',
+					value: {
+						...value('user_preferences'),
+						sectionNumberingDefault: command.sectionNumberingDefault,
+						updatedAt: now
+					}
+				});
+			case 'updateExportSettings':
+				return content(
+					{
+						type: 'export_settings',
+						value: { ...value('export_settings'), settings: command.settings, updatedAt: now }
+					},
+					[projectKey(command.projectId)]
+				);
+			case 'updateTrustPolicy':
+				return content({
+					type: 'trust_policies',
+					value: {
+						...value('trust_policies'),
+						autoAcceptEnabled: command.autoAcceptEnabled,
+						minimumConfidence: command.minimumConfidence,
+						updatedAt: now
+					}
+				});
+			case 'setToolPreference':
+				return content({
+					type: 'tool_preferences',
+					value: { ...value('tool_preferences'), enabled: command.enabled, updatedAt: now }
+				});
+			case 'setProjectToolOverride':
+				return content(
+					{
+						type: 'project_tool_overrides',
+						value: { ...value('project_tool_overrides'), enabled: command.enabled, updatedAt: now }
+					},
+					[projectKey(command.projectId)]
+				);
+			case 'renameDiagram':
+				return content({
+					type: 'diagrams',
+					value: { ...value('diagrams'), title: command.title.trim(), updatedAt: now }
+				});
+			case 'archiveDiagram':
+			case 'restoreDiagram':
+			case 'deleteDiagram': {
+				const diagram = value('diagrams');
+				const action =
+					command.kind === 'archiveDiagram'
+						? 'archive'
+						: command.kind === 'restoreDiagram'
+							? 'restore'
+							: 'delete';
+				if (action === 'delete') {
+					const decision = decideDiagramTrash(action, diagram);
+					if (decision.kind === 'invalid') throw new Error(decision.message);
+					return content(null);
 				}
-			});
-		case 'updateExportSettings':
-			return content(
-				{
-					type: 'export_settings',
-					value: { ...value('export_settings'), settings: command.settings, updatedAt: now }
-				},
-				[projectKey(command.projectId)]
-			);
-		case 'updateTrustPolicy':
-			return content({
-				type: 'trust_policies',
-				value: {
-					...value('trust_policies'),
-					autoAcceptEnabled: command.autoAcceptEnabled,
-					minimumConfidence: command.minimumConfidence,
-					updatedAt: now
-				}
-			});
-		case 'setToolPreference':
-			return content({
-				type: 'tool_preferences',
-				value: { ...value('tool_preferences'), enabled: command.enabled, updatedAt: now }
-			});
-		case 'setProjectToolOverride':
-			return content(
-				{
-					type: 'project_tool_overrides',
-					value: { ...value('project_tool_overrides'), enabled: command.enabled, updatedAt: now }
-				},
-				[projectKey(command.projectId)]
-			);
-		case 'renameDiagram':
-			return content({
-				type: 'diagrams',
-				value: { ...value('diagrams'), title: command.title.trim(), updatedAt: now }
-			});
-		case 'archiveDiagram':
-		case 'restoreDiagram':
-		case 'deleteDiagram': {
-			const diagram = value('diagrams');
-			const action =
-				command.kind === 'archiveDiagram'
-					? 'archive'
-					: command.kind === 'restoreDiagram'
-						? 'restore'
-						: 'delete';
-			if (action === 'delete') {
-				const decision = decideDiagramTrash(action, diagram);
+				const decision = diagramTrashChange(action, diagram, now);
+				if (decision.kind === 'invalid') throw new Error(decision.message);
+				return content({ type: 'diagrams', value: decision.diagram });
+			}
+			case 'saveDiagram':
+			case 'publishDiagram': {
+				const diagram = value('diagrams');
+				if (diagram.kind !== 'drawio') throw new Error('Only draw.io diagrams can be edited');
+				const decision = decideDiagramRevision(
+					{
+						kind: command.kind === 'saveDiagram' ? 'save' : 'publish',
+						baseMatches: true,
+						contentChanged: diagram.source !== command.source
+					},
+					diagram
+				);
+				if (decision.kind === 'conflict')
+					throw new Error('The diagram changed since it was loaded');
+				const revision =
+					decision.kind === 'write' ? decision.currentRevision : diagram.currentRevision;
+				return content(
+					{
+						type: 'diagrams',
+						value: {
+							...diagram,
+							source: command.source,
+							currentRevision: revision,
+							updatedAt: now,
+							...(command.kind === 'publishDiagram'
+								? {
+										renderedSvg: command.renderedSvg,
+										publishedRevision: revision,
+										publishedAt: now
+									}
+								: {})
+						}
+					},
+					[],
+					command.kind === 'saveDiagram' ? 'document' : null
+				);
+			}
+			case 'createWidget':
+				return content(
+					{
+						type: 'widgets',
+						value: appliedWidget(
+							this.widgetEditing.createWidget(
+								command.draft,
+								{
+									id: command.id,
+									userId,
+									projectId: command.projectId,
+									...(command.sourceNoteId ? { sourceNoteId: command.sourceNoteId } : {}),
+									now
+								},
+								widgetCatalog
+							)
+						)
+					},
+					[projectKey(command.projectId)]
+				);
+			case 'editWidget':
+				return content({
+					type: 'widgets',
+					value: appliedWidget(
+						this.widgetEditing.applyWidgetChange(
+							value('widgets'),
+							command.change,
+							widgetCatalog,
+							now
+						)
+					)
+				});
+			case 'archiveWidget':
+			case 'restoreWidget': {
+				const change = this.widgetLifecycle.change(
+					command.kind === 'archiveWidget' ? 'archive' : 'restore',
+					value('widgets'),
+					now
+				);
+				if (change.kind === 'invalid') throw new Error(change.message);
+				return content({ type: 'widgets', value: change.widget });
+			}
+			case 'deleteWidget': {
+				const decision = this.widgetLifecycle.decide('delete', value('widgets'));
 				if (decision.kind === 'invalid') throw new Error(decision.message);
 				return content(null);
 			}
-			const decision = diagramTrashChange(action, diagram, now);
-			if (decision.kind === 'invalid') throw new Error(decision.message);
-			return content({ type: 'diagrams', value: decision.diagram });
+			default:
+				throw new Error(`Unhandled command: ${command satisfies never}`);
 		}
-		case 'saveDiagram':
-		case 'publishDiagram': {
-			const diagram = value('diagrams');
-			if (diagram.kind !== 'drawio') throw new Error('Only draw.io diagrams can be edited');
-			const decision = decideDiagramRevision(
-				{
-					kind: command.kind === 'saveDiagram' ? 'save' : 'publish',
-					baseMatches: true,
-					contentChanged: diagram.source !== command.source
-				},
-				diagram
-			);
-			if (decision.kind === 'conflict') throw new Error('The diagram changed since it was loaded');
-			const revision =
-				decision.kind === 'write' ? decision.currentRevision : diagram.currentRevision;
-			return content(
-				{
-					type: 'diagrams',
-					value: {
-						...diagram,
-						source: command.source,
-						currentRevision: revision,
-						updatedAt: now,
-						...(command.kind === 'publishDiagram'
-							? { renderedSvg: command.renderedSvg, publishedRevision: revision, publishedAt: now }
-							: {})
-					}
-				},
-				[],
-				command.kind === 'saveDiagram' ? 'document' : null
-			);
-		}
-		case 'createWidget':
-			return content(
-				{
-					type: 'widgets',
-					value: appliedWidget(
-						widgetEditing.createWidget(
-							command.draft,
-							{
-								id: command.id,
-								userId,
-								projectId: command.projectId,
-								...(command.sourceNoteId ? { sourceNoteId: command.sourceNoteId } : {}),
-								now
-							},
-							widgetCatalog
-						)
-					)
-				},
-				[projectKey(command.projectId)]
-			);
-		case 'editWidget':
-			return content({
-				type: 'widgets',
-				value: appliedWidget(
-					widgetEditing.applyWidgetChange(value('widgets'), command.change, widgetCatalog, now)
-				)
-			});
-		case 'archiveWidget':
-		case 'restoreWidget': {
-			const change = widgetLifecycle.change(
-				command.kind === 'archiveWidget' ? 'archive' : 'restore',
-				value('widgets'),
-				now
-			);
-			if (change.kind === 'invalid') throw new Error(change.message);
-			return content({ type: 'widgets', value: change.widget });
-		}
-		case 'deleteWidget': {
-			const decision = widgetLifecycle.decide('delete', value('widgets'));
-			if (decision.kind === 'invalid') throw new Error(decision.message);
-			return content(null);
-		}
-		default:
-			throw new Error(`Unhandled command: ${command satisfies never}`);
 	}
-};
+}

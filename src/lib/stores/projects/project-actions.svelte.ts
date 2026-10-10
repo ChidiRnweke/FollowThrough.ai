@@ -29,7 +29,7 @@ import type { PreparedWorkspaceCommand } from '$lib/models/workspace-mutations';
 
 import type { WorkspaceValues } from '$lib/models/workspace-records';
 
-import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 
 class ProjectActionsStore {
 	busy = $state(false);

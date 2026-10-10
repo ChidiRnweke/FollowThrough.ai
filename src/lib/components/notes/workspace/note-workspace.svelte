@@ -42,7 +42,7 @@
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import type { PerNoteEditorSlot } from '../editor-context';
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';

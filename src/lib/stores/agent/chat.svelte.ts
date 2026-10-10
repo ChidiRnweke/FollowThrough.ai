@@ -20,7 +20,7 @@ import type {
 } from '$lib/client/agent/runs/contracts';
 import { RemoteAgentRunTransport } from '$lib/client/agent/runs/remote-transport';
 import { SessionAgentRunStorage } from '$lib/client/agent/runs/session-storage';
-import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources.svelte';
+import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
 import type { WorkspaceValues } from '$lib/models/workspace-records';
 import { accessMessage } from '$lib/services/sync/state';
 import {

@@ -12,7 +12,7 @@
 	import type { DiagramMutationRequest } from '$lib/models/workspace-mutations';
 	import { workspaceResourceKey } from '$lib/services/workspace/commands';
 
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';

@@ -2,7 +2,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId, TodoStatus, UpdateTodoInput } from '$lib/models/todos';
 
-import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 import { workspaceSession } from '$lib/factories/workspace/session';
 import { rightPanel } from '../shell/right-panel.svelte';
 

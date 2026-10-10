@@ -1,5 +1,5 @@
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { noteTrashWrite } from '$lib/controllers/workspace/commands';
+import { noteTrashWrite } from '$lib/testing/workspace/fixtures/commands';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
@@ -17,7 +17,6 @@ import {
 	testNoteId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
 const setup = () => {
 	const notes = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository();
@@ -34,7 +33,6 @@ const setup = () => {
 	);
 	return { notes, controller, indexer };
 };
-
 describe('Note restore invariants', () => {
 	it('matches offline restoration when an archived parent requires root placement', async () => {
 		const { notes, controller } = setup();
@@ -43,7 +41,7 @@ describe('Note restore invariants', () => {
 		const inventory = [parent, original, noteBuilder({ id: testNoteId(3) })];
 		notes.notes = inventory;
 		const { note } = await controller.restore(testActor(), { noteId: original.id });
-		expect(noteTrashWrite(original, 'restore', inventory, note.updatedAt).local).toEqual({
+		expect((await noteTrashWrite(original, 'restore', inventory, note.updatedAt)).local).toEqual({
 			type: 'notes',
 			value: note
 		});
@@ -59,18 +57,16 @@ describe('Note restore invariants', () => {
 		);
 		expect(outcome).toEqual({ kind: 'failure', notes: [original] });
 	});
-
 	it('uses the same resolved note as the offline restore command', async () => {
 		const { notes, controller } = setup();
 		const original = noteBuilder({ archivedAt: testNow });
 		notes.notes = [original];
 		const { note } = await controller.restore(testActor(), { noteId: original.id });
-		expect(noteTrashWrite(original, 'restore', [original], note.updatedAt).local).toEqual({
+		expect((await noteTrashWrite(original, 'restore', [original], note.updatedAt)).local).toEqual({
 			type: 'notes',
 			value: note
 		});
 	});
-
 	it('clears the archived marker', async () => {
 		const { notes, controller, indexer } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
@@ -79,7 +75,6 @@ describe('Note restore invariants', () => {
 		expect(await notes.listActive(testActor())).toHaveLength(1);
 		expect(indexer.indexedNoteIds).toEqual([testNoteId()]);
 	});
-
 	it('rejects restoring a note that was never trashed', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder()];
@@ -87,7 +82,6 @@ describe('Note restore invariants', () => {
 			code: 'VALIDATION'
 		});
 	});
-
 	// A note trashed inside a folder that was trashed after it would otherwise come back
 	// parented to something invisible, so it would restore into nowhere.
 	it('reattaches a note whose parent folder is still in the trash to the project root', async () => {
@@ -99,7 +93,6 @@ describe('Note restore invariants', () => {
 		const result = await controller.restore(testActor(), { noteId: testNoteId(2) });
 		expect(result.note.parentId).toBeUndefined();
 	});
-
 	it('keeps a note under its parent when the folder is still active', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [
@@ -109,7 +102,6 @@ describe('Note restore invariants', () => {
 		const result = await controller.restore(testActor(), { noteId: testNoteId(2) });
 		expect(result.note.parentId).toBe(testNoteId());
 	});
-
 	it('does not expose another user’s trashed note', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];

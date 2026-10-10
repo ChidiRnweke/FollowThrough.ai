@@ -6,7 +6,7 @@
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { syncIndicator } from '$lib/services/sync/indicator';
-	import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources.svelte';
+	import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';

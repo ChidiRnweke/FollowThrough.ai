@@ -25,7 +25,7 @@
 	import type {
 		WorkspaceDraftController,
 		WorkspaceResourcesController
-	} from '$lib/controllers/workspace/resources.svelte';
+	} from '$lib/controllers/workspace/resources';
 
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 	import { formatRelativeTime, memoryEntryTypeLabels } from '../shared/labels';

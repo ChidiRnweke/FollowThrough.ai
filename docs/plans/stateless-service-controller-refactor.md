@@ -503,3 +503,20 @@ Every service module below has a planned disposition. This is routing, not compl
   The scanner now distinguishes actual `.svelte.ts` modules from virtual Svelte script files,
   correcting the earlier classification of rune stores as components.
   Export totals include constants. These counts do not establish that every capability is resolved.
+
+### Workspace boundary and preparation follow-through
+
+- Browser time, operation identity, Svelte proxy snapshots and reactive observation now live in
+  `BrowserWorkspaceEditingEnvironment`. The workspace controllers are ordinary TypeScript and
+  receive this boundary adapter through their factory.
+- `WorkspaceCommands.prepare` owns inventory resolution and complete optimistic preparation.
+  Widget editing and lifecycle capabilities are factory-injected. Preparation, creation and trash
+  helper functions are private. Existing parity tests now exercise the controller through fixture
+  input adapters rather than importing production helpers.
+- Corrected a test fixture that represented a memory command without its required sharing choice.
+  The omitted-choice default remains covered at the actual memory creation rule boundary; the
+  workspace command test supplies the already-resolved choice. No product default changed.
+- Type checking passes. Focused controller, browser, domain and server parity tests pass: 71 files,
+  476 tests. The previous boundary-only extraction passed 32 files / 189 tests. Architecture still
+  fails at 89 Chisel import edges; topology, source and test-quality audits pass. Full final
+  verification remains required after the remaining application migration.

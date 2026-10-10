@@ -8,7 +8,7 @@
 </script>
 
 <script lang="ts">
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 	import type { NoteSummary } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import { goto } from '$app/navigation';

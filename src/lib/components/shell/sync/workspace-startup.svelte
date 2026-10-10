@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources.svelte';
+	import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
 	import type { WorkspaceReadiness } from '$lib/models/workspace-startup';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { Button } from '$lib/components/ui/button';

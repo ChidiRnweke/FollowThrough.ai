@@ -6,7 +6,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import ExportSettingsFields from './export-settings-fields.svelte';
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 	import type { DateTime } from '$lib/models/workspace';
 	import type { ProjectId } from '$lib/models/projects';
 

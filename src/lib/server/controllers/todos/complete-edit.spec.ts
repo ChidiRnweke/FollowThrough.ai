@@ -1,4 +1,4 @@
-import { todoWrite } from '$lib/controllers/workspace/commands';
+import { todoWrite } from '$lib/testing/workspace/fixtures/commands';
 import type { UpdateTodoInput } from '$lib/models/todos';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
@@ -19,7 +19,6 @@ import {
 	testNoteId,
 	todoBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
 const setup = () => {
 	const records = new InMemoryTodoRepository();
 	const original = todoBuilder({
@@ -47,7 +46,6 @@ const setup = () => {
 	);
 	return { records, original, controller };
 };
-
 describe('complete task edits', () => {
 	const edits: readonly Omit<UpdateTodoInput, 'todoId'>[] = [
 		{ title: '  Retitled  ', status: 'done' },
@@ -64,9 +62,8 @@ describe('complete task edits', () => {
 	it.each(edits)('matches the offline task preview for %j', async (edit) => {
 		const { controller, original } = setup();
 		const { todo } = await controller.update(testActor(), { todoId: original.id, ...edit });
-		expect(todo).toEqual(todoWrite(original, edit, testNow).local?.value);
+		expect(todo).toEqual((await todoWrite(original, edit, testNow)).local?.value);
 	});
-
 	it('leaves all fields unchanged when saving the completed task fails', async () => {
 		const { controller, records, original } = setup();
 		records.updateFailures.set('done', new Error('Completion write failed'));

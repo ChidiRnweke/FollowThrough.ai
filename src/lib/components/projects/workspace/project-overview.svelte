@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 	import type { GetProjectOutput, ProjectExportEntry, ProjectTreeNode } from '$lib/models/projects';
 	import { projectExportEntries } from '$lib/services/projects/export-entries';
 	import type { NoteId, NoteSummary, TrashedNote } from '$lib/models/notes';

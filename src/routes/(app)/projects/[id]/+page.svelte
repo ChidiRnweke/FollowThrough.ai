@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { NameDialog, ProjectOverview } from '$lib/components/projects';
 	import { Button } from '$lib/components/ui/button';

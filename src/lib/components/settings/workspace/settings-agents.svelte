@@ -2,7 +2,7 @@
 	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { onMount } from 'svelte';
 	import { workspaceSession } from '$lib/factories/workspace/session';
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 
 	import { Form } from '$lib/components/ui/form';
 	import type { AgentExecutionMode, WebSearchEngine } from '$lib/models/agent';
