@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.0.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.0.0...v3.0.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **agent:** keep recovered tool calls from ending the agent turn ([#322](https://github.com/ChidiRnweke/FollowThrough.ai/issues/322)) ([fc7d4fc](https://github.com/ChidiRnweke/FollowThrough.ai/commit/fc7d4fcca09d3e5e87fec92e0172b205828e04bc))
+* **agent:** keep who rejected a provider request ([#330](https://github.com/ChidiRnweke/FollowThrough.ai/issues/330)) ([ded7b26](https://github.com/ChidiRnweke/FollowThrough.ai/commit/ded7b269f2b741e993b1c0befcaa46c18a942e36))
+* **agent:** send only tool schema keywords strict function calling accepts ([#328](https://github.com/ChidiRnweke/FollowThrough.ai/issues/328)) ([cc0f7e2](https://github.com/ChidiRnweke/FollowThrough.ai/commit/cc0f7e2e21ed96255756849f29b8802834b000a1))
+
 ## [3.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.3.1...v3.0.0) (2026-10-10)
 
 
