@@ -1424,3 +1424,80 @@ Every service module below has a planned disposition. This is routing, not compl
   test imports of removed functions; updated them before these successful runs.
 - Architecture remains at 51 prohibited imports; topology/source/test-quality pass. Browser chat
   state and workflows are under review next; the remaining inventory and final checks stay pending.
+
+## Browser editor and clipboard contribution — 2026-10-10
+
+This slice starts from #347 at `4bbca131` in `refactor/pr336-editor-operations`.
+It uses a separate worktree. Open PRs #338/#347 already own chat and workbench lifetimes;
+#337/#340 own server boundaries; #345 owns enforcement. PR #348 owns proofreading/dictionary contracts and their consumers. This slice does not duplicate
+that agent's changes or claim the wider notes/browser refactor is complete.
+
+- [x] Reproduce copy, remembered-selection paste, undo/redo and note-to-chat handoff before
+      editing. Capture the same synthetic split-note state at desktop and narrow widths.
+- [x] Move clipboard construction from the store to a factory. Controllers coordinate copy,
+      cut eligibility, reads and feedback. Adapters own clipboard I/O, current theme and toasts.
+      Preserve rich/media fallback reports and immediate writes for browser user activation.
+- [x] Replace the parent component-instance binding and raw editor export with narrow editor
+      operations. An editor-scoped owner retains initialization, context range, blur guards
+      and reported insertion positions. Components receive a readonly copy-availability view.
+- [x] Move document reads/writes, selection restoration, held selection collapse, insertion
+      point consumption and diagram insertion mechanics behind a Tiptap adapter. Relocate
+      selection/insertion plugins and their tests to the browser boundary. Keep the same
+      mounted editor, selection registry identity and existing save/session controller.
+- [x] Keep initial note hydration out of undo history. A fast first paste previously could
+      join the initial load, so Undo removed the loaded note. The immediate-paste regression
+      now proves that Undo restores the original passage. Later edits retain their history.
+- [x] Move inline writing HTTP and response parsing behind an adapter and controller. Preserve
+      request fields and failure behavior; discard responses to aborted caret requests.
+- [x] Add controller/adapter tests for remembered paste and undo, failed reads preserving the
+      document/selection, late paste after release, incomplete cut, authored-change reporting,
+      table-selection collapse and aborted writing responses. Retain clipboard and editor races.
+- [x] Add an authenticated synthetic E2E scenario for clipboard, undo/redo, durable autosave,
+      sibling-tab identity, reload and chat handoff. Verify attachment insertion with a typed
+      upload callback; this is browser integration evidence, not live object-storage evidence.
+- [x] Verify offline note publication and per-account saved tabs in an isolated Postgres
+      production-preview run. Capture matched after images in `docs/pr-evidence/pr336-editor-operations`.
+- [x] Publish stacked draft PR [#349](https://github.com/ChidiRnweke/FollowThrough.ai/pull/349)
+      on #347. Required CI results are tracked on the PR. Inherited architecture findings
+      still prevent merge readiness; pending checks are not passing evidence.
+
+### Inventory reconciliation
+
+The #345 inventory was checked against current #347 source and rerun with #345's semantic
+checker against both roots. Clipboard store orchestration was still present; it is now removed.
+Raw browser clipboard access and editor instance exposure were also confirmed and extracted.
+No shared services, server implementation, general workspace synchronization/review or widget
+internals changed. No enforcement rules, allowances or migration baselines were added.
+
+Proofreading findings remain current and deferred: the store still mixes preference persistence,
+worker loading and dictionary decisions; the component still coordinates lint/filter/learn/fix;
+Harper still imports service contracts/rules. PR #348 changes those surfaces on its own stack; preserve its interfaces when the stacks are combined. Do not mark the broad notes/proofreading checklist or these findings complete.
+Selection-to-chat registry writes and presentation-only search/shimmer/heading behavior remain
+in the component; this slice preserves their current contract rather than expanding into #338.
+
+### Observed verification
+
+- Type checking: zero errors and warnings. Lint, docs check and standalone UI audit passed.
+- Unit suite: 574 files; 4,469 passed, one existing skip. Full browser suite: 92 files;
+  595 passed. The existing `derived_inert` warning remains. After the initialization-history
+  fix, the focused editor/controller suite passed all 43 tests. A final component regression
+  also passed all 35 editor tests, including retained passage context after blur.
+- Synthetic authenticated E2E: passed clipboard, undo/redo, autosave confirmed in Postgres,
+  sibling-tab navigation, reload and a staged chat prompt without starting a run.
+- Production web and worker builds and the build-output audit passed.
+- Isolated production preview: offline note edit/publication and account tab restoration
+  passed against a temporary Postgres container. The full PWA suite was not run.
+- Architecture: topology, source and test-quality checks passed. Chisel reports 44 inherited
+  imports, down from #347's 46; the two removed entries belonged to the clipboard store.
+  File/rule comparison found no new entries. No enforcement or allowances changed.
+- #345 semantic checker: fresh #347 baseline 767 findings; this slice 765. Both removed
+  findings were clipboard store workflows. File/rule/message comparison found no new findings.
+- Attachment insertion used a typed upload callback, not a live object-storage upload.
+  Local database contracts are unchanged and were not rerun; required CI runs them.
+
+Browser checks ran serially after build/type generation. An early E2E run reloaded before
+tab navigation settled; the scenario now waits for the selected content and URL. Another
+run overlapped generated-file changes and was repeated after generation finished. The first
+repeat capture exposed the initial-load undo grouping fixed above. Final browser evidence
+uses the successful repeat. Temporary native-clipboard captures must run without a competing
+browser suite because the clipboard requires active browser focus.

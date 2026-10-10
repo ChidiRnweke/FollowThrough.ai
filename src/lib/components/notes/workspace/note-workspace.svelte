@@ -36,6 +36,7 @@
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';
+	import type { NoteEditorOperations } from '$lib/controllers/notes/editor-operations';
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
 	import NoteOutlineRail from '../note-outline-rail.svelte';
 	import type { OutlineHeading } from '$lib/models/notes';
@@ -79,7 +80,7 @@
 	});
 	let reviewingSuggestion = $state<DiagramSuggestion | null>(null);
 	let reviewDialogOpen = $state(false);
-	let editorRef = $state<NoteEditor | null>(null);
+	let editorRef = $state<NoteEditorOperations>();
 	// The note's shape, as the editor reports it. Local `$state` rather than a
 	// store: the outline is derived from the document and re-emitted on every
 	// remount, and this component is instantiated once per pane — so a split
@@ -763,7 +764,7 @@
 		     section-numbering counters to this editor, not to change layout. -->
 	<div class="contents" class:note-section-numbering={sectionNumbering.effective}>
 		<NoteEditor
-			bind:this={editorRef}
+			onready={(operations) => (editorRef = operations)}
 			noteId={note.id}
 			projectId={note.projectId}
 			revision={note.currentRevision}
