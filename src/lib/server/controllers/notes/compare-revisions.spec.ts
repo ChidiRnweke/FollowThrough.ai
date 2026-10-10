@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
@@ -5,7 +6,7 @@ import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content'
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import type { NoteRevisionId } from '$lib/models/notes';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import {
 	noteBuilder,
 	testActor,
@@ -16,6 +17,7 @@ const setup = () => {
 	const content = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			noteReader: content,
 			noteEditor: content,
@@ -41,7 +43,7 @@ const publishRepeatedly = async (
 		const current = content.notes[0]!;
 		await controller.publish(testActor(), {
 			noteId: current.id,
-			baseEtag: noteEtag(current)
+			baseEtag: noteEtag(current.id, current.currentRevision)
 		});
 		await controller.save(testActor(), {
 			note: { ...content.notes[0]!, plainText: `Body ${round}` }

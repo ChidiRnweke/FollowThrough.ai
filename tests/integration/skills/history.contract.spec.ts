@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it } from 'vitest';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -5,7 +6,7 @@ import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/con
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import { actor, context, seedNote } from '../database-harness';
 import { skillController } from './edit-harness';
 
@@ -19,6 +20,7 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 	});
 	const notes = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
 			notePublisher: catalog,
@@ -28,7 +30,7 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 	const created = await skills.create(owner, { projectId: project.id, name: 'Review' });
 	await notes.publish(owner, {
 		noteId: created.skill.note.id,
-		baseEtag: noteEtag(created.skill.note)
+		baseEtag: noteEtag(created.skill.note.id, created.skill.note.currentRevision)
 	});
 	const second = await skills.update(owner, {
 		noteId: created.skill.note.id,
@@ -40,7 +42,7 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 	});
 	await notes.publish(owner, {
 		noteId: second.skill.note.id,
-		baseEtag: noteEtag(second.skill.note)
+		baseEtag: noteEtag(second.skill.note.id, second.skill.note.currentRevision)
 	});
 	await skills.update(owner, {
 		noteId: second.skill.note.id,

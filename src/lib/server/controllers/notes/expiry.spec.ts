@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
@@ -10,6 +11,7 @@ it('reports expiry failure before presenting a note’s pending proposals', asyn
 	proposals.expiryFailure = new Error('Expiry storage is unavailable');
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionExpirer: proposals
 		})

@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import AdmZip from 'adm-zip';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -39,6 +40,7 @@ export const importedNotesFixture = () => {
 	const consequences = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			noteCreation: catalog,
 			noteEditor: catalog,

@@ -565,6 +565,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoContextReader: todos
 		},
 		notes: {
+			notePresentation: noteCapability.presentation,
 			suggestionPresentation: suggestionCapability.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,

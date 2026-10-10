@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { ProjectDetailService } from '$lib/services/projects/details';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
@@ -69,6 +70,7 @@ it('restores a note at the root when its previous folder is archived', async () 
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			noteTrash: catalog,
 			noteIndexer: new InMemoryNoteContent(),

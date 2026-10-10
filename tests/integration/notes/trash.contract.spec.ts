@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
@@ -33,6 +34,7 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			noteTrash: catalog,
 			noteIndexer: new InMemoryNoteContent(),
@@ -82,6 +84,7 @@ it('archives the authoritative note after a concurrent note edit commits', async
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			noteTrash: catalog,
 			noteIndexer: new InMemoryNoteContent(),

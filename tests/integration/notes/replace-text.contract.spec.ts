@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
@@ -40,6 +41,7 @@ const setup = async (suffix: string) => {
 	const faults = { secondIndex: false };
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
 			noteReader: catalog,

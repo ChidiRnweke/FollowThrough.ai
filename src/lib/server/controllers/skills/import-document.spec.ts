@@ -1,8 +1,9 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import { Skills, type SkillsDependencies } from './controller';
 import { SkillLibrary } from '$lib/server/services/skills/library';
 import { readSkillManifest } from '$lib/remote/skills/manifest-reader.server';
@@ -267,6 +268,7 @@ describe('Skill document imports', () => {
 		const result = await controller.update(testActor(), input);
 		const publisher = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				notePresentation: new NotePresentationService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				transactionRunner,
 				notePublisher: catalog,
@@ -275,7 +277,7 @@ describe('Skill document imports', () => {
 		);
 		await publisher.publish(testActor(), {
 			noteId: result.skill.note.id,
-			baseEtag: noteEtag(result.skill.note)
+			baseEtag: noteEtag(result.skill.note.id, result.skill.note.currentRevision)
 		});
 		expect(notes.revisions.map((snapshot) => snapshot.plainText)).toEqual([
 			'Write a decision and explain its consequences.'

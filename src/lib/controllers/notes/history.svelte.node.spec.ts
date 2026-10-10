@@ -1,8 +1,27 @@
 import { expect, it } from 'vitest';
-import { NoteHistory } from './history.svelte';
+import { NoteHistory, type NoteHistoryReader } from './history';
+import { NoteHistoryStore } from '$lib/stores/notes/history.svelte';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import type { NoteActionWorkspace } from './actions';
 import type { NoteRevision, NoteRevisionId, NoteRevisionSummary } from '$lib/models/notes';
 import { testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
+const workspace: NoteActionWorkspace = {
+	current: { bootstrap: { accountId: 'note-history-test' } }
+};
+const createHistory = (
+	noteId: ReturnType<typeof testNoteId>,
+	list: NoteHistoryReader['list'],
+	read: NoteHistoryReader['read'],
+	session = workspace
+) =>
+	new NoteHistory(
+		noteId,
+		new NoteHistoryStore(),
+		session,
+		{ list, read },
+		new NotePresentationService()
+	);
 const revision = (value: number): NoteRevision => ({
 	id: `70000000-0000-4000-8000-${String(value).padStart(12, '0')}` as NoteRevisionId,
 	noteId: testNoteId(),
@@ -16,7 +35,7 @@ it('keeps the latest selected revision when an earlier read finishes later', asy
 	const earlier = revision(1),
 		latest = revision(2);
 	const delayed = Promise.withResolvers<NoteRevision>();
-	const history = new NoteHistory(
+	const history = createHistory(
 		testNoteId(),
 		async () => [],
 		async (_noteId, id) => (id === earlier.id ? delayed.promise : latest)
@@ -34,7 +53,7 @@ it('keeps a newer successful selection when an earlier read fails later', async 
 	const earlier = revision(1),
 		latest = revision(2);
 	const delayed = Promise.withResolvers<NoteRevision>();
-	const history = new NoteHistory(
+	const history = createHistory(
 		testNoteId(),
 		async () => [],
 		async (_noteId, id) => (id === earlier.id ? delayed.promise : latest)
@@ -56,7 +75,7 @@ const summary = (value: number, isPublished = false): NoteRevisionSummary => ({
 it('keeps the newer history list when a previous opening finishes later', async () => {
 	const delayed = Promise.withResolvers<readonly NoteRevisionSummary[]>();
 	let opening = 0;
-	const history = new NoteHistory(
+	const history = createHistory(
 		testNoteId(),
 		async () => (++opening === 1 ? delayed.promise : [summary(2)]),
 		async () => revision(2)
@@ -69,7 +88,7 @@ it('keeps the newer history list when a previous opening finishes later', async 
 });
 it('does not adopt a selected revision after history is closed', async () => {
 	const delayed = Promise.withResolvers<NoteRevision>();
-	const history = new NoteHistory(
+	const history = createHistory(
 		testNoteId(),
 		async () => [],
 		async () => delayed.promise
@@ -81,7 +100,7 @@ it('does not adopt a selected revision after history is closed', async () => {
 	expect(history.selected).toBeUndefined();
 });
 it('prefers the published snapshot when a newer snapshot exists', async () => {
-	const history = new NoteHistory(
+	const history = createHistory(
 		testNoteId(),
 		async () => [summary(2), summary(1, true)],
 		async (_noteId, id) => (id === revision(1).id ? revision(1) : revision(2))
@@ -90,7 +109,7 @@ it('prefers the published snapshot when a newer snapshot exists', async () => {
 	expect(history.selected?.id).toBe(revision(1).id);
 });
 it('uses the newest snapshot when no revision is marked published', async () => {
-	const history = new NoteHistory(
+	const history = createHistory(
 		testNoteId(),
 		async () => [summary(2), summary(1)],
 		async () => revision(2)
@@ -99,7 +118,7 @@ it('uses the newest snapshot when no revision is marked published', async () => 
 	expect(history.selectedId).toBe(revision(2).id);
 });
 it('distinguishes a failed list request from an empty result', async () => {
-	const history = new NoteHistory(
+	const history = createHistory(
 		testNoteId(),
 		async () => {
 			throw new Error('Unavailable');
@@ -110,7 +129,7 @@ it('distinguishes a failed list request from an empty result', async () => {
 	expect(history.readState.kind).toBe('failure');
 });
 it('accepts a successful empty history without selecting a version', async () => {
-	const history = new NoteHistory(
+	const history = createHistory(
 		testNoteId(),
 		async () => [],
 		async () => revision(1)
@@ -124,7 +143,7 @@ it('accepts a successful empty history without selecting a version', async () =>
 });
 it('clears a previously selected snapshot when reopening starts', async () => {
 	const delayed = Promise.withResolvers<readonly NoteRevisionSummary[]>();
-	const history = new NoteHistory(
+	const history = createHistory(
 		testNoteId(),
 		async () => delayed.promise,
 		async () => revision(1)
@@ -135,4 +154,26 @@ it('clears a previously selected snapshot when reopening starts', async () => {
 	delayed.resolve([]);
 	await loading;
 	expect(selectedWhileLoading).toBeUndefined();
+});
+
+it('does not expose a revision after its account is replaced', async () => {
+	const delayed = Promise.withResolvers<NoteRevision>();
+	const session: { current: NoteActionWorkspace['current'] } = {
+		current: { bootstrap: { accountId: 'previous' } }
+	};
+	const history = createHistory(
+		testNoteId(),
+		async () => [],
+		async () => delayed.promise,
+		session
+	);
+	const reading = history.select(revision(1).id);
+	session.current = { bootstrap: { accountId: 'replacement' } };
+	delayed.resolve(revision(1));
+	await reading;
+	expect({
+		selected: history.selected,
+		selectedId: history.selectedId,
+		revisions: history.revisions
+	}).toEqual({ selected: undefined, selectedId: undefined, revisions: [] });
 });

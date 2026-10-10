@@ -17,7 +17,7 @@ import type { ApiTokensController } from '$lib/server/controllers/api-tokens/con
 import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import {
 	appContextBuilder,
@@ -661,7 +661,7 @@ describe('Agent tool coverage invariants', () => {
 			notes: () => ({
 				get: async () => ({
 					note,
-					etag: noteEtag(note),
+					etag: noteEtag(note.id, note.currentRevision),
 					backlinks: [{ id: 'bl' }],
 					references: [{ id: 'ref' }],
 					diagrams: [{ id: 'dg' }],
@@ -681,7 +681,7 @@ describe('Agent tool coverage invariants', () => {
 		expect(result).toMatchObject({
 			noteId: note.id,
 			title: note.title,
-			etag: noteEtag(note),
+			etag: noteEtag(note.id, note.currentRevision),
 			backlinks: [{ id: 'bl' }],
 			references: [{ id: 'ref' }],
 			diagrams: [{ id: 'dg' }],

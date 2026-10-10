@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it, vi } from 'vitest';
 import type { Database } from '$lib/server/db';
@@ -11,7 +12,7 @@ import { ProjectRecords } from '$lib/server/repositories/projects/postgres/proje
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import { context, seedNote } from '../database-harness';
 
 const controllerFor = (db: Database, transactionRunner: AtomicOperation) => {
@@ -19,6 +20,7 @@ const controllerFor = (db: Database, transactionRunner: AtomicOperation) => {
 	const effects = new InMemoryNoteContent();
 	return new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
 			noteReader: catalog,
@@ -42,7 +44,10 @@ it('discards to the publication committed while it waits for the note lock', asy
 	const seedTx = createTransactionContext(context.db);
 	const seed = controllerFor(seedTx.database, seedTx.transactionRunner);
 	const first = await seed.save(owner, { note: { ...note, ...content('First publication') } });
-	const published = await seed.publish(owner, { noteId: note.id, baseEtag: noteEtag(first.note) });
+	const published = await seed.publish(owner, {
+		noteId: note.id,
+		baseEtag: noteEtag(first.note.id, first.note.currentRevision)
+	});
 	const draft = await seed.save(owner, {
 		note: { ...published.note, ...content('New publication') }
 	});
@@ -55,7 +60,7 @@ it('discards to the publication committed while it waits for the note lock', asy
 	const publishing = peerTx.transactionRunner.run(async () => {
 		const result = await controllerFor(peerTx.database, peerTx.transactionRunner).publish(owner, {
 			noteId: note.id,
-			baseEtag: noteEtag(draft.note)
+			baseEtag: noteEtag(draft.note.id, draft.note.currentRevision)
 		});
 		ready.resolve();
 		await release.promise;

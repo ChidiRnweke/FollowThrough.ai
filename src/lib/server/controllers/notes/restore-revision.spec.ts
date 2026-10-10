@@ -1,10 +1,11 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import {
 	noteBuilder,
 	testActor,
@@ -16,6 +17,7 @@ const setup = () => {
 	const content = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			noteReader: content,
 			noteEditor: content,
@@ -40,7 +42,7 @@ describe('Note revision restore invariants', () => {
 		const publishedNote = content.notes[0]!;
 		await controller.publish(testActor(), {
 			noteId: publishedNote.id,
-			baseEtag: noteEtag(publishedNote)
+			baseEtag: noteEtag(publishedNote.id, publishedNote.currentRevision)
 		});
 		const changedBody = noteContentFromMarkdown('# Current heading\n\nThe changed *body*.');
 		await controller.save(testActor(), {

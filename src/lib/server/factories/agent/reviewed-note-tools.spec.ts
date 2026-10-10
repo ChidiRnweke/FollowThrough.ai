@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, it, expect } from 'vitest';
@@ -218,6 +219,7 @@ describe('A note change that fails while it is being prepared', () => {
 		content.notes = [note];
 		const controller = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				notePresentation: new NotePresentationService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				markdown: {
 					read: () => {

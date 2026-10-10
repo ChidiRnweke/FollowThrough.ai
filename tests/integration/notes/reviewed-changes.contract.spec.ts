@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, it, expect } from 'vitest';
@@ -40,6 +41,7 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 		});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			markdown,
 			transactionRunner,

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { NoteHistory } from '$lib/stores/notes/history.svelte';
+	import { createNoteHistory } from '$lib/factories/notes/history';
 	import type { DiagramSuggestion } from '$lib/models/suggestions';
 
 	import type { ShellContext } from '$lib/models/workspace-views';
@@ -73,14 +73,7 @@
 
 	let exportOpen = $state(false);
 	let historyOpen = $state(false);
-	const history = untrack(
-		() =>
-			new NoteHistory(
-				view.note.id,
-				async (noteId) => (await listNoteRevisions(noteId)).revisions,
-				async (noteId, revisionId) => (await getNoteRevision({ noteId, revisionId })).revision
-			)
-	);
+	const history = untrack(() => createNoteHistory(view.note.id));
 	$effect(() => {
 		if (!historyOpen) history.cancel();
 	});

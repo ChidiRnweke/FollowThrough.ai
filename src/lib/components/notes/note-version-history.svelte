@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { NoteHistoryReadState } from '$lib/stores/notes/history.svelte';
+	import type { NoteHistoryReadState } from '$lib/models/notes';
 	import type { Note, NoteId, NoteRevision, NoteRevisionSummary } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
 	import { countNoteDiff, diffNoteDocuments, withTitleBlock } from '$lib/services/notes/note-diff';

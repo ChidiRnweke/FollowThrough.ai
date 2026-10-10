@@ -7,7 +7,8 @@ import { prepareNoteDeletion } from '$lib/server/services/notes/deletion';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
 import { assembleTodoView } from '$lib/services/todos/presentation';
-import { assembleNoteView, noteEtag, noteMatchesEtag } from '$lib/services/notes/presentation';
+import type { NotePresentation } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
 import { assembleReferenceView } from '$lib/services/references/presentation';
 import { mutationResource } from '$lib/services/workspace/commands';
@@ -323,6 +324,7 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	readonly notePresentation: NotePresentation;
 	readonly suggestionPresentation: ISuggestionPresentationService;
 	markdown: NoteMarkdown;
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
@@ -530,7 +532,10 @@ export class Notes implements NotesController {
 					throw new ValidationError('The note no longer exists');
 				await this.publish(actor, {
 					noteId: command.noteId,
-					baseEtag: noteEtag(current.snapshot.value.value)
+					baseEtag: noteEtag(
+						current.snapshot.value.value.id,
+						current.snapshot.value.value.currentRevision
+					)
 				});
 				break;
 			case 'discardNoteDraft':
@@ -578,7 +583,7 @@ export class Notes implements NotesController {
 				this.dependencies.suggestionContextReader.readContexts(actor, pending),
 				this.resolveSectionNumbering(actor, note)
 			]);
-		return assembleNoteView({
+		return this.dependencies.notePresentation.assemble({
 			note,
 			backlinks: backlinkContexts.map(({ relationship, source, target }) =>
 				assembleBacklinkView(relationship, source, target)
@@ -777,18 +782,22 @@ export class Notes implements NotesController {
 				collectNoteLinkTargets(note.document)
 			);
 			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
-			return { note, etag: noteEtag(note), repairedAnchorIds: anchors.map((anchor) => anchor.id) };
+			return {
+				note,
+				etag: noteEtag(note.id, note.currentRevision),
+				repairedAnchorIds: anchors.map((anchor) => anchor.id)
+			};
 		});
 	}
 	publish(actor: ActorContext, input: PublishNoteInput): Promise<PublishNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.notePublisher.getForPublication(actor, input.noteId);
-			if (!noteMatchesEtag(note, input.baseEtag))
+			if (noteEtag(note.id, note.currentRevision) !== input.baseEtag)
 				throw new StaleRevisionError('The note has changed since it was loaded');
 			const write = prepareNotePublication(note, new Date().toISOString() as DateTime);
 			await this.dependencies.revisionRecorder.record(actor, note);
 			const published = await this.dependencies.notePublisher.persistPublication(actor, write);
-			return { note: published, etag: noteEtag(published) };
+			return { note: published, etag: noteEtag(published.id, published.currentRevision) };
 		});
 	}
 	async discardDraft(
@@ -825,7 +834,7 @@ export class Notes implements NotesController {
 				collectNoteLinkTargets(restored.document)
 			);
 			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, restored));
-			return { note: restored, etag: noteEtag(restored) };
+			return { note: restored, etag: noteEtag(restored.id, restored.currentRevision) };
 		});
 	}
 	async searchText(actor: ActorContext, input: SearchNoteTextInput): Promise<SearchNoteTextOutput> {
@@ -1071,7 +1080,7 @@ export class Notes implements NotesController {
 				collectNoteLinkTargets(restored.document)
 			);
 			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, restored));
-			return { note: restored, etag: noteEtag(restored) };
+			return { note: restored, etag: noteEtag(restored.id, restored.currentRevision) };
 		});
 	}
 	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {

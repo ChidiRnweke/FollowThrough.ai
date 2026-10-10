@@ -24,7 +24,13 @@ export type FolderContextResolution =
 	| { readonly kind: 'incomplete' }
 	| { readonly kind: 'missing'; readonly folderId: NoteId };
 
-export type NoteEtag = Brand<string, 'NoteEtag'>;
+export type NoteEtag = string & { readonly __brand: 'NoteEtag' };
+export const noteEtag = (id: string, revision: number): NoteEtag =>
+	`note:${id}:r${revision}` as NoteEtag;
+export type NoteHistoryReadState =
+	| { readonly kind: 'ready' }
+	| { readonly kind: 'loading' }
+	| { readonly kind: 'failure'; readonly message: string };
 
 export type NoteRevisionId = Brand<string, 'NoteRevisionId'>;
 

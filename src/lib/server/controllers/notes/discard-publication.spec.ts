@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it } from 'vitest';
 import type { Note } from '$lib/models/notes';
@@ -7,7 +8,7 @@ const content = (text: string): Pick<Note, 'plainText' | 'document'> => ({
 });
 import { Notes, type NotesDependencies } from './controller';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import {
 	InMemoryNoteRepository,
 	InMemoryAnchorRepository
@@ -30,6 +31,7 @@ it('discards against the publication that committed before it acquired the note'
 	const effects = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner: new InMemoryTransactionRunner([records, effects]),
 			noteReader: catalog,
@@ -47,7 +49,7 @@ it('discards against the publication that committed before it acquired the note'
 	records.notes = [original];
 	const first = await controller.publish(testActor(), {
 		noteId: original.id,
-		baseEtag: noteEtag(original)
+		baseEtag: noteEtag(original.id, original.currentRevision)
 	});
 	const { note: draft } = await controller.save(testActor(), {
 		note: { ...first.note, ...content('New publication') }
@@ -58,7 +60,7 @@ it('discards against the publication that committed before it acquired the note'
 	try {
 		const latest = await controller.publish(testActor(), {
 			noteId: draft.id,
-			baseEtag: noteEtag(draft)
+			baseEtag: noteEtag(draft.id, draft.currentRevision)
 		});
 		paused.release();
 		expect((await discarding).note).toEqual(latest.note);

@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
@@ -45,7 +46,8 @@ export const assembleWorkspaceResources = (
 			projection,
 			new SuggestionPresentationService(),
 			new MemoryPresentationService(),
-			new ProjectTreePresentationService()
+			new ProjectTreePresentationService(),
+			new NotePresentationService()
 		),
 		{
 			view: <K extends WorkspaceResourceType>(

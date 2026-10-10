@@ -698,3 +698,16 @@ Every service module below has a planned disposition. This is routing, not compl
   cases, late synchronization, pending handler teardown and invalid payloads. Type checking passes
   with zero errors/warnings and lint passes. Architecture remains incomplete at 84 prohibited imports
   and 27 missing interfaces; topology/source/test-quality audits pass. No phase is complete.
+
+## Note history and presentation — 2026-10-10
+
+- NoteHistory coordinates list/read operations and guards stale selections, cancelled dialogs and
+  account replacement. Its store exposes controlled state updates only; components receive a
+  readonly controller. The remote reader is a boundary adapter and the factory only constructs.
+- NotePresentationService supplies browser/server note surfaces and the preferred history snapshot.
+  The publication token is a scalar branded value constructor in the note model. Token spelling,
+  publication guards and newest-first revision preference remain unchanged.
+- Full unit verification passes: 536 files / 4,279 passed / one skipped. Type check passes with
+  zero errors/warnings and lint passes. Focused history/workspace/note tests pass: 61 files / 383
+  tests. Isolated note/skill/sync contracts pass: 29 files / 128 tests. Architecture remains at 84
+  prohibited imports and 27 missing interfaces; topology/source/test-quality pass. No phase is complete.

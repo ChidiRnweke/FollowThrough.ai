@@ -1,15 +1,23 @@
 import { expect, it } from 'vitest';
-import { noteEtag, noteMatchesEtag } from './presentation';
-import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
-
-it('identifies the note and its saved revision in the publish token', () => {
-	const note = noteBuilder({ currentRevision: 3 });
-	expect(noteEtag(note)).toBe(`note:${note.id}:r3`);
+import { NotePresentationService } from './presentation';
+import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { NoteRevisionId, NoteRevisionSummary } from '$lib/models/notes';
+const revision = (value: number, isPublished: boolean): NoteRevisionSummary => ({
+	id: `70000000-0000-4000-8000-${String(value).padStart(12, '0')}` as NoteRevisionId,
+	title: `Version ${value}`,
+	revision: value,
+	createdAt: testNow,
+	isPublished
 });
-
-it.each([noteBuilder({ currentRevision: 2 }), noteBuilder({ id: testNoteId(2) })])(
-	'rejects a publish token from a different note or revision',
-	(note) => {
-		expect(noteMatchesEtag(note, noteEtag(noteBuilder()))).toBe(false);
-	}
-);
+const presentation = new NotePresentationService();
+it('opens the published revision before a newer unpublished snapshot', () => {
+	expect(presentation.preferredRevision([revision(2, false), revision(1, true)])?.revision).toBe(1);
+});
+it('uses the newest snapshot when none is published', () => {
+	expect(presentation.preferredRevision([revision(2, false), revision(1, false)])?.revision).toBe(
+		2
+	);
+});
+it('keeps a successful empty history empty', () => {
+	expect(presentation.preferredRevision([])).toBeUndefined();
+});

@@ -1,3 +1,4 @@
+import { NotePresentationService, type NotePresentation } from '$lib/services/notes/presentation';
 import {
 	noteContentFromMarkdown,
 	noteMarkdownFromContent
@@ -19,6 +20,7 @@ export interface NotesCapabilityInput {
 }
 
 export interface NotesCapability {
+	readonly presentation: NotePresentation;
 	readonly markdown: NoteMarkdown;
 	readonly repository: NoteRepository;
 	readonly anchors: SourceAnchorRepository;
@@ -34,6 +36,7 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 	const provenanceRepository = new ProvenanceRecords(input.db);
 	const catalog = new NoteCatalog(repository, anchors, input.projects);
 	return {
+		presentation: new NotePresentationService(),
 		markdown: { read: noteContentFromMarkdown, write: noteMarkdownFromContent },
 		repository,
 		anchors,

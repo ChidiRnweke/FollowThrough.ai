@@ -5,7 +5,7 @@ import type { Note } from '$lib/models/notes';
 import type { WorkspaceViewState } from '$lib/models/workspace-views';
 import { assembleTodoView } from '$lib/services/todos/presentation';
 import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
-import { assembleNoteView } from '$lib/services/notes/presentation';
+import type { NotePresentation } from '$lib/services/notes/presentation';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
 import { assembleReferenceView } from '$lib/services/references/presentation';
 import { TOOL_DESCRIPTIONS, LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
@@ -97,7 +97,8 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		private readonly state: WorkspaceViewState,
 		private readonly suggestionPresentation: ISuggestionPresentationService,
 		private readonly memoryPresentation: IMemoryPresentationService,
-		private readonly projectPresentation: ProjectTreePresentation
+		private readonly projectPresentation: ProjectTreePresentation,
+		private readonly notePresentation: NotePresentation
 	) {}
 	private get records() {
 		return this.state.records;
@@ -543,7 +544,7 @@ export class WorkspaceViews implements WorkspaceViewsController {
 				];
 			});
 		return {
-			view: assembleNoteView({
+			view: this.notePresentation.assemble({
 				note,
 				backlinks,
 				references,

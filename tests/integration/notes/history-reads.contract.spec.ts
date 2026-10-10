@@ -1,3 +1,4 @@
+import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { expect, it } from 'vitest';
@@ -10,7 +11,7 @@ import { createNotesCapability } from '$lib/server/factories/capabilities/notes-
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import { context, seedNote } from '../database-harness';
 
 const content = (text: string): Pick<Note, 'title' | 'plainText' | 'document'> => ({
@@ -28,6 +29,7 @@ const setup = async (suffix: string) => {
 	const effects = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner: tx.transactionRunner,
 			noteReader: catalog,
@@ -45,12 +47,15 @@ const setup = async (suffix: string) => {
 	});
 	const published = await controller.publish(seed.owner, {
 		noteId: seed.note.id,
-		baseEtag: noteEtag(first.note)
+		baseEtag: noteEtag(first.note.id, first.note.currentRevision)
 	});
 	const second = await controller.save(seed.owner, {
 		note: { ...published.note, ...content('Second publication') }
 	});
-	await controller.publish(seed.owner, { noteId: seed.note.id, baseEtag: noteEtag(second.note) });
+	await controller.publish(seed.owner, {
+		noteId: seed.note.id,
+		baseEtag: noteEtag(second.note.id, second.note.currentRevision)
+	});
 	const { revisions } = await controller.listRevisions(seed.owner, { noteId: seed.note.id });
 	return { ...seed, controller, revisions };
 };
