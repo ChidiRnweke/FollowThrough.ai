@@ -34,7 +34,7 @@
 	import { askAgent } from '$lib/client/shell/responsive-surfaces';
 	import { agentActions } from '$lib/components/agent';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { noteActions } from '$lib/stores/notes/note-actions.svelte';
+	import { noteActions } from '$lib/factories/notes/actions';
 	import {
 		noteActionRunsFor,
 		type NoteActionContext

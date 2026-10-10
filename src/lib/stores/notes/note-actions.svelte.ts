@@ -1,161 +1,33 @@
-import type { AgentRunReceipt } from '$lib/models/agent';
-import { SelectionSubmissions } from '$lib/client/notes/selection-submissions';
-import { DiagramSubmissions } from '$lib/client/notes/diagram-submissions';
-import { workspaceSession } from '$lib/factories/workspace/session';
-import type { DrawioDiagram } from '$lib/models/diagrams';
-import type { Suggestion, SuggestionId } from '$lib/models/suggestions';
-import type { Note, TextSelection } from '$lib/models/notes';
-import {
-	extractPromises,
-	relateNote,
-	findReferences,
-	generateDiagram,
-	reviseDiagram,
-	convertDiagram
-} from '$lib/remote/notes/notes.remote';
-import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
-
-class NoteActionsStore {
-	running = $state(false);
-	lastError = $state<string | undefined>(undefined);
-
-	private async call<T>(
-		fn: () => Promise<T>,
-		{ run = false }: { run?: boolean } = {}
-	): Promise<T | undefined> {
-		this.lastError = undefined;
-		if (run) this.running = true;
-		try {
-			return await fn();
-			// audit-allow: silent-catch — undefined is the typed action failure outcome and lastError supplies the caller's user-visible message.
-		} catch (error) {
-			this.lastError = error instanceof Error ? error.message : 'The request failed.';
-			return undefined;
-		} finally {
-			if (run) this.running = false;
-		}
+import type { NoteActionSession } from '$lib/controllers/notes/actions';
+export class NoteActionStore {
+	private account = $state.raw<NoteActionSession | null>(null);
+	private pendingReviews = $state(0);
+	private error = $state<string | undefined>(undefined);
+	private generation = 0;
+	get binding(): NoteActionSession | null {
+		return this.account;
 	}
-
-	extractPromises(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(async () => {
-			const session = workspaceSession.current;
-			if (!session) throw new Error('The workspace is not ready to extract promises');
-			const accountId = session.bootstrap.accountId;
-			const submissions = new SelectionSubmissions(sessionStorage, 'promises');
-			const input = submissions.prepare(accountId, selection);
-			const receipt = await extractPromises(input);
-			submissions.acknowledge(accountId, input.requestId);
-			return receipt;
-		});
+	get running(): boolean {
+		return this.pendingReviews > 0;
 	}
-	relate(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(async () => {
-			const session = workspaceSession.current;
-			if (!session) throw new Error('The workspace is not ready to find related notes');
-			const accountId = session.bootstrap.accountId;
-			const submissions = new SelectionSubmissions(sessionStorage, 'relate');
-			const input = submissions.prepare(accountId, selection);
-			const receipt = await relateNote(input);
-			submissions.acknowledge(accountId, input.requestId);
-			return receipt;
-		});
+	get lastError(): string | undefined {
+		return this.error;
 	}
-	findReferences(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(async () => {
-			const session = workspaceSession.current;
-			if (!session) throw new Error('The workspace is not ready to search for references');
-			const accountId = session.bootstrap.accountId;
-			const submissions = new SelectionSubmissions(sessionStorage, 'reference');
-			const input = submissions.prepare(accountId, selection);
-			const receipt = await findReferences(input);
-			submissions.acknowledge(accountId, input.requestId);
-			return receipt;
-		});
+	reset(binding: NoteActionSession | null): void {
+		this.generation += 1;
+		this.account = binding;
+		this.pendingReviews = 0;
+		this.error = undefined;
 	}
-	generateDiagram(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(async () => {
-			const session = workspaceSession.current;
-			if (!session) throw new Error('The workspace is not ready to generate a diagram');
-			const accountId = session.bootstrap.accountId;
-			const submissions = new DiagramSubmissions(sessionStorage);
-			const { operation: _operation, ...input } = submissions.prepare(accountId, {
-				operation: 'generate',
-				selection
-			});
-			const receipt = await generateDiagram(input);
-			submissions.acknowledge(accountId, input.requestId);
-			return receipt;
-		});
+	begin(review: boolean): { generation: number; review: boolean } {
+		this.error = undefined;
+		if (review) this.pendingReviews += 1;
+		return { generation: this.generation, review };
 	}
-	reviseDiagram(
-		noteId: Note['id'],
-		source: string,
-		instruction: string,
-		renderedPngDataUrl?: string
-	): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(async () => {
-			const session = workspaceSession.current;
-			if (!session) throw new Error('The workspace is not ready to revise a diagram');
-			const accountId = session.bootstrap.accountId;
-			const submissions = new DiagramSubmissions(sessionStorage);
-			const { operation: _operation, ...input } = submissions.prepare(accountId, {
-				operation: 'revise',
-				noteId,
-				source,
-				instruction,
-				renderedPngDataUrl
-			});
-			const receipt = await reviseDiagram(input);
-			submissions.acknowledge(accountId, input.requestId);
-			return receipt;
-		});
+	fail(generation: number, message: string): void {
+		if (generation === this.generation) this.error = message;
 	}
-
-	convertDiagram(
-		noteId: Note['id'],
-		source: string,
-		instruction?: string
-	): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(async () => {
-			const session = workspaceSession.current;
-			if (!session) throw new Error('The workspace is not ready to convert a diagram');
-			const accountId = session.bootstrap.accountId;
-			const submissions = new DiagramSubmissions(sessionStorage);
-			const { operation: _operation, ...input } = submissions.prepare(accountId, {
-				operation: 'convert',
-				noteId,
-				source,
-				instruction
-			});
-			const receipt = await convertDiagram(input);
-			submissions.acknowledge(accountId, input.requestId);
-			return receipt;
-		});
-	}
-
-	async acceptDrawio(
-		noteId: Note['id'],
-		suggestionId: SuggestionId,
-		source: string,
-		renderedSvg: string
-	): Promise<DrawioDiagram | undefined> {
-		return this.call<DrawioDiagram>(
-			async () => {
-				const accepted = await acceptSuggestion({
-					suggestionId,
-					drawioReview: { noteId, source, renderedSvg }
-				});
-				if (accepted.suggestion.kind !== 'diagram' || accepted.suggestion.payload.kind !== 'drawio')
-					throw new Error('The accepted suggestion did not create the expected draw.io diagram.');
-				return accepted.artifact as DrawioDiagram;
-			},
-			{ run: true }
-		);
-	}
-
-	rejectDrawio(suggestionId: SuggestionId): Promise<Suggestion | undefined> {
-		return this.call(() => rejectSuggestion({ suggestionId }), { run: true });
+	finish(token: { generation: number; review: boolean }): void {
+		if (token.generation === this.generation && token.review) this.pendingReviews -= 1;
 	}
 }
-
-export const noteActions = new NoteActionsStore();

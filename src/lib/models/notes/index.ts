@@ -1291,3 +1291,5 @@ export interface NoteBuiltInRepairWrite {
 	readonly archivedAt: null;
 	readonly updatedAt: DateTime;
 }
+
+export type SelectionAction = 'promises' | 'reference' | 'relate';

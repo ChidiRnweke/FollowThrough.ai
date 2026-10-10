@@ -479,3 +479,8 @@ export interface DrawioRevision {
 	readonly source: string;
 	readonly renderedSvg: string;
 }
+
+export type DiagramActionInput =
+	| Omit<Extract<DiagramActionSubmission, { operation: 'generate' }>, 'requestId'>
+	| Omit<Extract<DiagramActionSubmission, { operation: 'revise' }>, 'requestId'>
+	| Omit<Extract<DiagramActionSubmission, { operation: 'convert' }>, 'requestId'>;

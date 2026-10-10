@@ -15,9 +15,6 @@ import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { MemoryIndexer } from '$lib/server/services/memory/library';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { Todo, TodoId, CreateTodoInput } from '$lib/models/todos';
-import type { ExternalReference } from '$lib/models/references';
-import type { NoteRelationship } from '$lib/models/notes';
-import type { MemoryEntry } from '$lib/models/memory';
 import type { TodoCreator } from '$lib/server/services/todos/contracts';
 import type { RelationshipCreator } from '$lib/server/services/relationships/graph';
 import type { ReferenceCreator } from '$lib/server/services/references/library';
@@ -52,7 +49,7 @@ import type {
 	SuggestionContextReader
 } from '$lib/server/services/suggestions/inbox';
 
-type SuggestionArtifact = Todo | NoteRelationship | ExternalReference | Diagram | MemoryEntry;
+import type { SuggestionArtifact } from '$lib/models/suggestions';
 interface SuggestionApplicationResult {
 	readonly artifact: SuggestionArtifact;
 	readonly changes: readonly AppliedChange<AppliedRecord>[];

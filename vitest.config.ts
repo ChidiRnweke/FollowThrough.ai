@@ -122,8 +122,9 @@ export default defineConfig({
 						// Drives real svelte-dnd-action drags against the zone geometry of the tree;
 						// dropping into folders broke silently when that geometry drifted.
 						'src/lib/components/projects/project-tree-drop.svelte.spec.ts',
-						'src/lib/client/notes/selection-submissions.svelte.spec.ts',
-						'src/lib/client/notes/diagram-submissions.svelte.spec.ts',
+						'src/lib/controllers/notes/actions.svelte.spec.ts',
+						'src/lib/controllers/notes/selection-submissions.svelte.spec.ts',
+						'src/lib/controllers/notes/diagram-submissions.svelte.spec.ts',
 						'src/lib/client/notes/action-run-storage.svelte.spec.ts',
 						// Feeds real editor JSON through `parseProseMirrorDocument` and asserts
 						// `attrs: { textAlign: null }`. It would have caught the strict-schema

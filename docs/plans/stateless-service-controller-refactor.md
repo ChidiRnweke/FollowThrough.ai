@@ -660,3 +660,23 @@ Every service module below has a planned disposition. This is routing, not compl
   27 missing interfaces; topology/source/test-quality audits pass. Whole-application final
   verification is still pending. The next browser workflow under review is durable note-action
   submission and its retained request identities.
+
+## Durable browser note submissions — 2026-10-10
+
+- NoteSubmissions owns read → identity decision → persist → submit → acknowledge. Browser storage
+  adapters only read/write and parse candidate/persisted shapes. NoteActionIdentityService owns
+  selection and normalized diagram intent matching. Session-storage keys and values are unchanged.
+- NoteActions owns submission and draw.io review operations. Its store retains account-bound error
+  and review-running status only. The note component sees a controller interface. Late receipts and
+  failures do not publish after account/session replacement. A valid late receipt can release only
+  its original account's retained request, without populating the replacement account.
+- Moved the existing browser identity scenarios to complete controller operations and retained all
+  scenarios. Corrupt storage still blocks submission; lost receipts retain identities; successful
+  receipts release them. Added account-stop/replacement cases and complete-intent identity checks.
+  SuggestionArtifact is now shared model data; draw.io acceptance narrows the actual artifact.
+- Type check passes with zero errors/warnings. Focused node/browser tests pass: 34 files / 259 tests.
+  Isolated suggestion/agent/diagram contracts pass: 20 files / 112 tests. Lint passes. Architecture
+  remains at 85 prohibited imports and 27 missing interfaces; topology/source/test-quality pass.
+- Inventory: 65 shared modules / 160 value exports (21 classes), 96 server modules / 166 value
+  exports (91 classes), 11,371 rows and 12,645 resolved imports. The note run-stream store, its
+  registry and component result handling remain pending. No phase is complete.
