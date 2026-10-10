@@ -41,6 +41,35 @@ const base = {
 };
 
 describe('NoteVersionDiff', () => {
+	it('folds unchanged stretches out of a focused comparison', async () => {
+		const before = Array.from({ length: 8 }, (_, index) => para(`unchanged ${index + 1}`));
+		const after = before.map((block, index) => (index === 4 ? para('the edit') : block));
+		const screen = await render(NoteVersionDiff, {
+			...base,
+			base: doc(...before),
+			candidate: doc(...after),
+			focus: true
+		});
+		const text = screen.container.textContent ?? '';
+		expect({
+			edit: text.includes('the edit'),
+			neighbour: text.includes('unchanged 4'),
+			distant: text.includes('unchanged 1'),
+			folds: screen.container.querySelectorAll('.diff-elided').length
+		}).toEqual({ edit: true, neighbour: true, distant: false, folds: 4 });
+	});
+
+	it('keeps every block of an unfocused comparison', async () => {
+		const before = Array.from({ length: 8 }, (_, index) => para(`unchanged ${index + 1}`));
+		const after = before.map((block, index) => (index === 4 ? para('the edit') : block));
+		const screen = await render(NoteVersionDiff, {
+			...base,
+			base: doc(...before),
+			candidate: doc(...after)
+		});
+		expect(screen.container.querySelectorAll('.diff-elided')).toHaveLength(0);
+	});
+
 	it('shows a paired title change without marking the unchanged body', async () => {
 		const unchanged = doc(para('Unchanged body'));
 		const screen = await render(NoteVersionDiff, {

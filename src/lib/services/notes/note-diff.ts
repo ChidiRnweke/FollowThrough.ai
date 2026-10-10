@@ -22,7 +22,12 @@
 
 import { diffArrays } from 'diff';
 import type { ProseMirrorDocument, ProseMirrorNode } from '$lib/models/notes';
-import type { NoteDiff, NoteDiffCounts, DiffSideBlock } from '$lib/models/notes/note-diff';
+import type {
+	NoteDiff,
+	NoteDiffCounts,
+	DiffSideBlock,
+	FocusedSideBlock
+} from '$lib/models/notes/note-diff';
 
 /**
  * The attributes that carry a node's identity, in the order they are read.
@@ -149,4 +154,69 @@ export const countNoteDiff = (diff: NoteDiff): NoteDiffCounts => {
 	for (const block of diff.candidate) if (block.kind === 'added') added += 1;
 	for (const block of diff.base) if (block.kind === 'removed') removed += 1;
 	return { added, removed };
+};
+
+/** One side of a diff trimmed to its changes; `kinds` is index-aligned with `document`. */
+export interface FocusedDiffSide {
+	readonly document: ProseMirrorDocument;
+	readonly kinds: readonly FocusedSideBlock[];
+}
+
+/** The paragraph that stands in for a folded run of unchanged blocks. */
+const elidedMarker = (count: number): ProseMirrorNode => ({
+	type: 'paragraph',
+	content: [{ type: 'text', text: `${count} unchanged ${count === 1 ? 'block' : 'blocks'}` }]
+});
+
+/**
+ * One side of a diff with its unchanged stretches folded away, for a preview that has
+ * room only for the change.
+ *
+ * Every changed block stays, with up to `context` unchanged neighbours either side so
+ * the change still reads in place; each run of unchanged blocks beyond that becomes one
+ * `elided` marker saying how many it hides. A side with no change of its own — the base
+ * side of a pure insertion — folds to a single marker: the other side carries the change,
+ * and the whole note repeated above it is exactly what the fold exists to remove.
+ *
+ * The returned `kinds` is index-aligned with the returned document, because the pane
+ * paints by index and refuses to paint a document whose block count disagrees.
+ */
+export const focusNoteDiffSide = (
+	document: ProseMirrorDocument,
+	kinds: readonly DiffSideBlock[],
+	context = 1
+): FocusedDiffSide => {
+	const blocks = document.content ?? [];
+	if (kinds.length !== blocks.length) {
+		throw new Error(
+			`Cannot focus a diff side: ${kinds.length} classifications for ${blocks.length} blocks`
+		);
+	}
+	const kept = kinds.map(() => false);
+	kinds.forEach((block, index) => {
+		if (block.kind === 'context') return;
+		const from = Math.max(0, index - context);
+		const to = Math.min(kinds.length - 1, index + context);
+		for (let near = from; near <= to; near += 1) kept[near] = true;
+	});
+	const content: ProseMirrorNode[] = [];
+	const focused: FocusedSideBlock[] = [];
+	let folded = 0;
+	const fold = () => {
+		if (folded === 0) return;
+		focused.push({ index: content.length, kind: 'elided' });
+		content.push(elidedMarker(folded));
+		folded = 0;
+	};
+	blocks.forEach((block, index) => {
+		if (!kept[index]) {
+			folded += 1;
+			return;
+		}
+		fold();
+		focused.push({ index: content.length, kind: kinds[index].kind });
+		content.push(block);
+	});
+	fold();
+	return { document: { ...document, content }, kinds: focused };
 };

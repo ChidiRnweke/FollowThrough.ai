@@ -1,7 +1,12 @@
 <script lang="ts">
 	import type { NoteId, ProseMirrorDocument } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
-	import { countNoteDiff, diffNoteDocuments, withTitleBlock } from '$lib/services/notes/note-diff';
+	import {
+		countNoteDiff,
+		diffNoteDocuments,
+		focusNoteDiffSide,
+		withTitleBlock
+	} from '$lib/services/notes/note-diff';
 	import type { PerNoteEditorSlot } from './editor-context';
 	import { cn } from '$lib/utils';
 	import NoteDiffEditor from './note-diff-editor.svelte';
@@ -19,6 +24,7 @@
 		layout = 'split',
 		frame = 'box',
 		showCounts = true,
+		focus = false,
 		perNote,
 		diagrams,
 		noteId
@@ -54,6 +60,13 @@
 		frame?: 'box' | 'bare';
 		/** Off where the caller shows the summary somewhere better, e.g. beside the version. */
 		showCounts?: boolean;
+		/**
+		 * Folds each side's unchanged stretches down to a one-line marker, keeping every
+		 * change and a neighbour either side. For a preview with room only for the change —
+		 * a one-paragraph edit to a long note otherwise arrives as the whole note, twice. A
+		 * review that is the reader's last look at the full note leaves it off.
+		 */
+		focus?: boolean;
 		perNote?: PerNoteEditorSlot;
 		diagrams?: readonly Diagram[];
 		noteId?: NoteId;
@@ -65,6 +78,16 @@
 	);
 	const diff = $derived(diffNoteDocuments(baseDocument, candidateDocument));
 	const counts = $derived(countNoteDiff(diff));
+	const baseSide = $derived(
+		focus
+			? focusNoteDiffSide(baseDocument, diff.base)
+			: { document: baseDocument, kinds: diff.base }
+	);
+	const candidateSide = $derived(
+		focus
+			? focusNoteDiffSide(candidateDocument, diff.candidate)
+			: { document: candidateDocument, kinds: diff.candidate }
+	);
 
 	/**
 	 * Stacked and compact, each half is bounded so the second is never below the fold. The
@@ -112,8 +135,8 @@
 		>
 			{#if layout !== 'candidate'}
 				<NoteDiffEditor
-					document={baseDocument}
-					kinds={diff.base}
+					document={baseSide.document}
+					kinds={baseSide.kinds}
 					label={baseLabel}
 					sublabel={baseSublabel}
 					{compact}
@@ -134,8 +157,8 @@
 				carries the label either way.
 			-->
 			<NoteDiffEditor
-				document={candidateDocument}
-				kinds={diff.candidate}
+				document={candidateSide.document}
+				kinds={candidateSide.kinds}
 				label={candidateLabel}
 				sublabel={candidateSublabel}
 				showLabel={layout !== 'candidate'}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { NoteId, ProseMirrorDocument } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
-	import type { DiffSideBlock } from '$lib/models/notes/note-diff';
+	import type { FocusedSideBlock } from '$lib/models/notes/note-diff';
 	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';
 	import type { PerNoteEditorSlot } from './editor-context';
 	import { createEditor } from '$lib/components/edra/commands/editor';
@@ -31,7 +31,7 @@
 	}: {
 		document: ProseMirrorDocument;
 		/** Classification of each top-level block of `document`, in order. */
-		kinds: readonly DiffSideBlock[];
+		kinds: readonly FocusedSideBlock[];
 		label: string;
 		/** A quieter second line under the label, e.g. a date or provenance note. */
 		sublabel?: string;
@@ -84,7 +84,7 @@
 
 	const diffKey = new PluginKey('note-diff-highlight');
 
-	const createHighlightPlugin = (blocks: readonly DiffSideBlock[]) =>
+	const createHighlightPlugin = (blocks: readonly FocusedSideBlock[]) =>
 		new Plugin({
 			key: diffKey,
 			props: {

@@ -201,3 +201,63 @@ describe('Reviewed note approval controls', () => {
 			.toBeDisabled();
 	});
 });
+
+/**
+ * A one-paragraph edit to a long note arrived in the chat panel as the whole note, twice,
+ * with the change somewhere inside two 160px scrollers. The inline card is for the change;
+ * the dialog is where the reader sees the whole note.
+ */
+describe('The review card focuses a note change on what changed', () => {
+	const paragraph = (text: string) => ({
+		type: 'paragraph' as const,
+		content: [{ type: 'text' as const, text }]
+	});
+	const longReview = () => {
+		const review = noteReviewBuilder();
+		const before = Array.from({ length: 12 }, (_, index) => paragraph(`Section ${index + 1}`));
+		const after = before.map((block, index) => (index === 6 ? paragraph('Rewritten') : block));
+		return {
+			...review,
+			change: {
+				...review.change,
+				base: { ...review.change.base, document: { type: 'doc' as const, content: before } },
+				result: {
+					...review.change.result,
+					document: { type: 'doc' as const, content: after }
+				}
+			}
+		};
+	};
+	const renderLong = () =>
+		renderCard({
+			...pendingCall('save_note', { noteId: NOTE_ID, markdown: 'Rewritten' }),
+			status: 'approval_required',
+			noteReview: longReview()
+		});
+
+	it('shows the edit and its neighbours inline and folds the rest', async () => {
+		const screen = await renderLong();
+		const lines = Array.from(
+			screen.container.querySelectorAll('.note-diff-content p'),
+			(line) => line.textContent
+		);
+		expect(lines).toEqual([
+			'5 unchanged blocks',
+			'Section 6',
+			'Section 7',
+			'Section 8',
+			'4 unchanged blocks',
+			'5 unchanged blocks',
+			'Section 6',
+			'Rewritten',
+			'Section 8',
+			'4 unchanged blocks'
+		]);
+	});
+
+	it('shows the whole note in the full review', async () => {
+		const screen = await renderLong();
+		await screen.getByRole('button', { name: 'Review in full' }).click();
+		await expect.element(screen.getByText('Section 12', { exact: true }).first()).toBeVisible();
+	});
+});

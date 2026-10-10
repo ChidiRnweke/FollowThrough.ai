@@ -1491,6 +1491,18 @@
 	.dark .note-diff-pane .tiptap .diff-added {
 		background-color: color-mix(in oklab, var(--color-brand) 15%, transparent);
 	}
+	/* A focused pane's fold: the line that stands in for unchanged blocks it left out.
+	   No wash, because it is not content — it reads as a gap in the document, not a
+	   change to it. */
+	.note-diff-pane .tiptap .diff-elided {
+		margin-block: 0.25rem;
+		border-block: 1px dashed var(--color-border);
+		padding-block: 0.125rem;
+		color: var(--color-muted-foreground);
+		font-size: 0.75rem;
+		line-height: 1rem;
+		text-align: center;
+	}
 }
 
 /* An inline preview of a change, in a 384px column beside a conversation. The editor
