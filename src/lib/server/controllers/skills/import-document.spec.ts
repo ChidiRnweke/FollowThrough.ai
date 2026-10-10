@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
@@ -36,6 +38,8 @@ const setup = () => {
 	const transactionRunner = new InMemoryTransactionRunner([notes, skills]);
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			skillFinder: service,
 			skillEditor: service,
 			skillUsageLister: service,
@@ -268,6 +272,10 @@ describe('Skill document imports', () => {
 		const result = await controller.update(testActor(), input);
 		const publisher = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				noteCreationRules: new NoteLifecycleRulesService(),
+				noteTrashRules: new NoteLifecycleRulesService(),
+				notePublicationRules: new NoteLifecycleRulesService(),
+				noteEditingRules: new NoteEditingRulesService(),
 				notePresentation: new NotePresentationService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				transactionRunner,

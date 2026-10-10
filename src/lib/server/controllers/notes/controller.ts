@@ -1,14 +1,17 @@
+import type { NoteEditingRules } from '$lib/services/notes/editing';
+import type {
+	NoteCreationRules,
+	NoteTrashRules,
+	NotePublicationRules
+} from '$lib/services/notes/lifecycle';
 import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
-import { noteTrashChange } from '$lib/services/notes/trash';
-import { prepareNotePublication } from '$lib/services/notes/publication';
 import type {
 	NoteCreator,
 	NoteTrashOperations,
 	NoteDeletion
 } from '$lib/server/services/notes/catalog';
 import { prepareNoteDeletion } from '$lib/server/services/notes/deletion';
-import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
 import { assembleTodoView } from '$lib/services/todos/presentation';
 import type { NotePresentation } from '$lib/services/notes/presentation';
@@ -30,7 +33,6 @@ import {
 	type ApplyReviewedNoteChangeOutput
 } from '$lib/models/notes';
 import type { NoteMarkdown } from '$lib/server/services/notes/contracts';
-import { applyNoteDraftEdit, prepareNoteSave } from '$lib/services/notes/editing';
 import type { BacklinkView } from '$lib/models/relationships';
 import type { ReferenceView } from '$lib/models/references';
 import type { Diagram } from '$lib/models/diagrams';
@@ -329,6 +331,10 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	readonly noteEditingRules: NoteEditingRules;
+	readonly notePublicationRules: NotePublicationRules;
+	readonly noteTrashRules: NoteTrashRules;
+	readonly noteCreationRules: NoteCreationRules;
 	readonly notePresentation: NotePresentation;
 	readonly suggestionPresentation: ISuggestionPresentationService;
 	markdown: NoteMarkdown;
@@ -553,7 +559,7 @@ export class Notes implements NotesController {
 				if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
 					throw new ValidationError('The note no longer exists');
 				await this.save(actor, {
-					note: applyNoteDraftEdit(
+					note: this.dependencies.noteEditingRules.edit(
 						current.snapshot.value.value,
 						command,
 						current.snapshot.value.value.updatedAt
@@ -656,7 +662,7 @@ export class Notes implements NotesController {
 	): Promise<Note> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
-			const decision = decideNoteCreation(
+			const decision = this.dependencies.noteCreationRules.decideCreation(
 				{
 					id: input.id ?? (crypto.randomUUID() as NoteId),
 					title: input.title,
@@ -768,7 +774,11 @@ export class Notes implements NotesController {
 
 	private async persistEditedNote(actor: ActorContext, candidate: Note): Promise<Note> {
 		const current = await this.dependencies.noteEditor.getForEdit(actor, candidate);
-		const decision = prepareNoteSave(current, candidate, new Date().toISOString() as DateTime);
+		const decision = this.dependencies.noteEditingRules.prepareSave(
+			current,
+			candidate,
+			new Date().toISOString() as DateTime
+		);
 		return decision.kind === 'unchanged'
 			? decision.note
 			: this.dependencies.noteEditor.persistEdit(actor, decision.write);
@@ -799,7 +809,10 @@ export class Notes implements NotesController {
 			const note = await this.dependencies.notePublisher.getForPublication(actor, input.noteId);
 			if (noteEtag(note.id, note.currentRevision) !== input.baseEtag)
 				throw new StaleRevisionError('The note has changed since it was loaded');
-			const write = prepareNotePublication(note, new Date().toISOString() as DateTime);
+			const write = this.dependencies.notePublicationRules.preparePublication(
+				note,
+				new Date().toISOString() as DateTime
+			);
 			await this.dependencies.revisionRecorder.record(actor, note);
 			const published = await this.dependencies.notePublisher.persistPublication(actor, write);
 			return { note: published, etag: noteEtag(published.id, published.currentRevision) };
@@ -903,7 +916,7 @@ export class Notes implements NotesController {
 	async archive(actor: ActorContext, input: ArchiveNoteInput): Promise<ArchiveNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const facts = await this.dependencies.noteTrash.archiveFacts(actor, input.noteId);
-			const decision = noteTrashChange(
+			const decision = this.dependencies.noteTrashRules.changeTrash(
 				facts.note,
 				{ kind: 'archive', ...facts },
 				new Date().toISOString() as DateTime
@@ -917,7 +930,7 @@ export class Notes implements NotesController {
 	async restore(actor: ActorContext, input: RestoreNoteInput): Promise<RestoreNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const facts = await this.dependencies.noteTrash.restoreFacts(actor, input.noteId);
-			const decision = noteTrashChange(
+			const decision = this.dependencies.noteTrashRules.changeTrash(
 				facts.note,
 				{ kind: 'restore', ...facts },
 				new Date().toISOString() as DateTime

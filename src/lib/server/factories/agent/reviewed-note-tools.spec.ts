@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -219,6 +221,10 @@ describe('A note change that fails while it is being prepared', () => {
 		content.notes = [note];
 		const controller = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				noteCreationRules: new NoteLifecycleRulesService(),
+				noteTrashRules: new NoteLifecycleRulesService(),
+				notePublicationRules: new NoteLifecycleRulesService(),
+				noteEditingRules: new NoteEditingRulesService(),
 				notePresentation: new NotePresentationService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				markdown: {

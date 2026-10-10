@@ -1,8 +1,8 @@
+import type { NoteCreationRules, NoteTrashRules } from '$lib/services/notes/lifecycle';
+import type { NoteEditingRules } from '$lib/services/notes/editing';
 import type { IWidgetLifecycleService } from '$lib/services/widgets/trash';
-import { decideNoteRestore, noteTrashChange } from '$lib/services/notes/trash';
 import { decideTodoCreation } from '$lib/services/todos/creation';
 import { applyTodoEdit } from '$lib/services/todos/edits';
-import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { ProjectDetailRules } from '$lib/services/projects/details';
 import { decideDiagramRevision } from '$lib/services/diagrams/editing';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
@@ -24,7 +24,6 @@ import type { Project, ProjectId } from '$lib/models/projects';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import { type Note, type NoteId } from '$lib/models/notes';
-import { applyNoteDraftEdit } from '$lib/services/notes/editing';
 import type { WriteContent, OutboxEntry } from '$lib/models/outbox';
 import { type WorkspaceRecord, type WorkspaceValues } from '$lib/models/workspace-records';
 import { isWorkspaceRecord } from '$lib/services/workspace/commands';
@@ -68,6 +67,7 @@ const newProject = (
 };
 
 const newNote = (
+	rules: NoteCreationRules,
 	id: NoteId,
 	project: Project,
 	title: string,
@@ -76,7 +76,7 @@ const newNote = (
 	timestamp: DateTime,
 	parentId?: NoteId
 ): Note => {
-	const decision = decideNoteCreation(
+	const decision = rules.decideCreation(
 		{ id, title, kind, parentId },
 		{
 			project,
@@ -93,12 +93,13 @@ const newNote = (
 
 /** Match the trash placement rules while retaining the complete local note. */
 const noteTrashWrite = (
+	rules: NoteTrashRules,
 	note: Note,
 	action: 'archive' | 'restore',
 	notes: readonly Note[],
 	timestamp: DateTime
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => {
-	const decision = noteTrashChange(
+	const decision = rules.changeTrash(
 		note,
 		action === 'archive'
 			? {
@@ -184,6 +185,7 @@ const agentPreferenceWrite = (
 
 /** Commands whose meaning depends on a complete collection rather than one loaded record. */
 function workspaceCommandNeedsInventory(
+	rules: NoteTrashRules,
 	command: PreparedWorkspaceCommand,
 	observed: WorkspaceRecord | null,
 	records: ReadonlyMap<string, WorkspaceRecord>
@@ -199,7 +201,7 @@ function workspaceCommandNeedsInventory(
 			const parent = observed.value.parentId
 				? records.get(workspaceResourceKey({ type: 'notes', id: [observed.value.parentId] }))
 				: undefined;
-			const decision = decideNoteRestore(
+			const decision = rules.restorePlacement(
 				observed.value,
 				parent?.type === 'notes' ? parent.value : null
 			);
@@ -244,7 +246,10 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 		private readonly widgetEditing: WidgetEditingController,
 		private readonly widgetLifecycle: IWidgetLifecycleService,
 		private readonly memoryEditing: IMemoryEditingService,
-		private readonly projectDetails: ProjectDetailRules
+		private readonly projectDetails: ProjectDetailRules,
+		private readonly noteCreationRules: NoteCreationRules,
+		private readonly noteTrashRules: NoteTrashRules,
+		private readonly noteEditingRules: NoteEditingRules
 	) {}
 	async prepare(
 		command: PreparedWorkspaceCommand,
@@ -269,7 +274,10 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 				(intent.command.kind === 'createProject' && intent.command.id === projectId) ||
 				(intent.command.kind === 'createFolder' && intent.command.id === newParentId)
 		);
-		if (workspaceCommandNeedsInventory(command, observed, workspace.records) && !knownNewScope)
+		if (
+			workspaceCommandNeedsInventory(this.noteTrashRules, command, observed, workspace.records) &&
+			!knownNewScope
+		)
 			await workspace.requireCollections();
 		return this.apply(command, observed, {
 			userId: workspace.accountId as UserId,
@@ -285,7 +293,7 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 		context: WorkspaceCommandContext
 	): WriteContent<WorkspaceCommand, WorkspaceRecord> {
 		if (
-			workspaceCommandNeedsInventory(command, observed, context.records) &&
+			workspaceCommandNeedsInventory(this.noteTrashRules, command, observed, context.records) &&
 			context.inventory !== 'complete'
 		)
 			throw new Error(
@@ -323,6 +331,7 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 				const project = records.get(projectKey(command.projectId));
 				if (project?.type !== 'projects') throw new Error('The project is unavailable');
 				const note = newNote(
+					this.noteCreationRules,
 					command.id,
 					project.value,
 					command.kind === 'createNote' ? command.title : command.name,
@@ -375,7 +384,7 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 				return content(
 					{
 						type: 'notes',
-						value: applyNoteDraftEdit(note, command, now)
+						value: this.noteEditingRules.edit(note, command, now)
 					},
 					[],
 					'document'
@@ -391,6 +400,7 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 			case 'archiveNote':
 			case 'restoreNote':
 				return noteTrashWrite(
+					this.noteTrashRules,
 					value('notes'),
 					command.kind === 'archiveNote' ? 'archive' : 'restore',
 					notes(),

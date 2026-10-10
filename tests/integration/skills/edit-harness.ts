@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { vi } from 'vitest';
 import postgres from 'postgres';
 import type { Database } from '$lib/server/db';
@@ -31,6 +33,8 @@ export const skillController = (database: Database, transactionRunner: Transacti
 	const sync = createSyncCapability({ db: database });
 	return new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
 			selectionOrigins: new SelectionOrigins(notes, new SourceAnchorRecords(database), provenance),
 			syncMutations: sync.mutations,

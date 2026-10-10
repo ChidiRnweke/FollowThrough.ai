@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { noteTrashChange } from './trash';
+import { NoteLifecycleService } from './lifecycle';
+const lifecycle = new NoteLifecycleService();
 import { noteBuilder, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
 it('restores a note with a deleted parent at the root without changing its publication', () => {
@@ -15,7 +16,7 @@ it('restores a note with a deleted parent at the root without changing its publi
 	void parentId;
 	void archivedAt;
 	expect(
-		noteTrashChange(note, { kind: 'restore', parent: null, rootSiblingCount: 2 }, testNow)
+		lifecycle.changeTrash(note, { kind: 'restore', parent: null, rootSiblingCount: 2 }, testNow)
 	).toEqual({
 		kind: 'change',
 		note: { ...restored, position: 2, updatedAt: testNow }

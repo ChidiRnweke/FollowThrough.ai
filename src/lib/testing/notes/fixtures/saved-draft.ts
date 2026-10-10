@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { ActorContext } from '$lib/models/identity';
@@ -19,6 +21,10 @@ export async function saveNoteDraft(
 	const effects = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,

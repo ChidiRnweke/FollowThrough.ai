@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NotePresentationService } from '$lib/services/notes/presentation';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { ProjectDetailService } from '$lib/services/projects/details';
@@ -37,6 +39,7 @@ it('keeps a folder at the project root after reloading a completed move', async 
 	});
 	const controller = new Projects(
 		capabilityDependencies<ProjectsDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
 			details: new ProjectDetailService(),
 			presentation: new ProjectTreePresentationService(),
 			placement: catalog.placement,
@@ -71,6 +74,10 @@ it('restores a note at the root when its previous folder is archived', async () 
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			noteTrash: catalog.trash,

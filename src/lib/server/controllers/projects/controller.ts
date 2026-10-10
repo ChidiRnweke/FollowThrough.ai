@@ -1,6 +1,6 @@
+import type { NoteCreationRules } from '$lib/services/notes/lifecycle';
 import type { ProjectPlacement } from '$lib/services/projects/placement';
 import type { NoteCreator } from '$lib/server/services/notes/catalog';
-import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
 import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
 import type { ProjectDetailRules } from '$lib/services/projects/details';
@@ -70,6 +70,7 @@ export interface ProjectsController {
 }
 
 export interface ProjectsDependencies {
+	readonly noteCreationRules: NoteCreationRules;
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
 	syncRetry: 'database-only' | 'never';
 	projectCreator: ProjectCreator;
@@ -190,7 +191,7 @@ export class Projects implements ProjectsController {
 	): Promise<CreateFolderOutput<Note>> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
-			const decision = decideNoteCreation(
+			const decision = this.dependencies.noteCreationRules.decideCreation(
 				{
 					id: input.id ?? (crypto.randomUUID() as NoteId),
 					title: input.name,

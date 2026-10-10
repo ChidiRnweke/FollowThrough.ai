@@ -1,7 +1,7 @@
+import type { NoteEditingRules } from '$lib/services/notes/editing';
+import type { NoteCreationRules } from '$lib/services/notes/lifecycle';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
-import { prepareNoteSave, sameNoteDraft } from '$lib/services/notes/editing';
 import type { NoteCreator } from '$lib/server/services/notes/catalog';
-import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
@@ -97,6 +97,8 @@ export interface SkillsController {
 }
 /** Everything the {@link SkillsController} needs, injected so it can be built and tested without real stores. */
 export interface SkillsDependencies {
+	readonly noteEditingRules: NoteEditingRules;
+	readonly noteCreationRules: NoteCreationRules;
 	builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
 	syncRetry: 'database-only' | 'never';
@@ -185,7 +187,7 @@ export class Skills implements SkillsController {
 	}
 	private async createSkillNote(actor: ActorContext, input: CreateNoteInput): Promise<Note> {
 		const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
-		const decision = decideNoteCreation(
+		const decision = this.dependencies.noteCreationRules.decideCreation(
 			{
 				id: input.id ?? (crypto.randomUUID() as NoteId),
 				title: input.title,
@@ -315,7 +317,7 @@ export class Skills implements SkillsController {
 				if (
 					input.content &&
 					input.content.baseRevision !== current.note.currentRevision &&
-					!sameNoteDraft(current.note, prepared.skill.note)
+					!this.dependencies.noteEditingRules.sameDraft(current.note, prepared.skill.note)
 				)
 					throw new StaleRevisionError('The skill document has changed since it was loaded');
 			}
@@ -329,7 +331,11 @@ export class Skills implements SkillsController {
 	}
 	private async saveDocument(actor: ActorContext, candidate: Note): Promise<Note> {
 		const current = await this.dependencies.noteEditor.getForEdit(actor, candidate);
-		const decision = prepareNoteSave(current, candidate, new Date().toISOString() as DateTime);
+		const decision = this.dependencies.noteEditingRules.prepareSave(
+			current,
+			candidate,
+			new Date().toISOString() as DateTime
+		);
 		const note =
 			decision.kind === 'unchanged'
 				? decision.note

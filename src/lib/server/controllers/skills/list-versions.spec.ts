@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { SkillLibrary } from '$lib/server/services/skills/library';
@@ -46,6 +48,8 @@ const setup = async () => {
 	const catalog = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			skillFinder: library,
 			revisionReader: catalog.revisionReader
 		})

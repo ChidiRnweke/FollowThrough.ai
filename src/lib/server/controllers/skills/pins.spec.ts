@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { SkillPins } from '$lib/server/services/skills/pins';
@@ -35,6 +37,8 @@ const setup = () => {
 	];
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			skillPinWriter: new SkillPins(projects, notes, skills),
 			transactionRunner: new InMemoryTransactionRunner([projects, notes, skills])
 		})

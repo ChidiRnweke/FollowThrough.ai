@@ -525,6 +525,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		skills: {
+			noteCreationRules: noteCapability.creationRules,
+			noteEditingRules: noteCapability.editingRules,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
@@ -565,6 +567,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoContextReader: todos
 		},
 		notes: {
+			noteCreationRules: noteCapability.creationRules,
+			noteTrashRules: noteCapability.trashRules,
+			notePublicationRules: noteCapability.publicationRules,
+			noteEditingRules: noteCapability.editingRules,
 			notePresentation: noteCapability.presentation,
 			suggestionPresentation: suggestionCapability.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
@@ -644,6 +650,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		projects: {
+			noteCreationRules: noteCapability.creationRules,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			placement: projects.placement,

@@ -1,3 +1,4 @@
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { ProjectDetailService } from '$lib/services/projects/details';
 import { describe, expect, it } from 'vitest';
@@ -13,6 +14,7 @@ const setup = () => {
 	const catalog = createProjectServices(repository, repository);
 	const controller = new Projects(
 		capabilityDependencies<ProjectsDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
 			details: new ProjectDetailService(),
 			presentation: new ProjectTreePresentationService(),
 			placement: catalog.placement,

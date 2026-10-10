@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import type { Database } from '$lib/server/db';
@@ -28,6 +30,8 @@ const controller = (
 	const library = new SkillLibrary(skills, notes, new ProvenanceRecords(database));
 	return new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
 			builtInSkills: new BuiltInSkills(projects, notes, skills, definitions),
 			skillFinder: library,

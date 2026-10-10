@@ -1,3 +1,13 @@
+import {
+	NoteLifecycleService as SharedNoteLifecycleService,
+	type NoteCreationRules,
+	type NoteTrashRules,
+	type NotePublicationRules
+} from '$lib/services/notes/lifecycle';
+import {
+	NoteEditingService as SharedNoteEditingService,
+	type NoteEditingRules
+} from '$lib/services/notes/editing';
 import { NotePresentationService, type NotePresentation } from '$lib/services/notes/presentation';
 import {
 	noteContentFromMarkdown,
@@ -49,6 +59,10 @@ export interface NotesCapabilityInput {
 }
 
 export interface NotesCapability {
+	readonly creationRules: NoteCreationRules;
+	readonly trashRules: NoteTrashRules;
+	readonly publicationRules: NotePublicationRules;
+	readonly editingRules: NoteEditingRules;
 	readonly presentation: NotePresentation;
 	readonly markdown: NoteMarkdown;
 	readonly repository: NoteRepository;
@@ -63,9 +77,14 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 	const repository = new NoteRecords(input.db);
 	const anchors = new SourceAnchorRecords(input.db);
 	const provenanceRepository = new ProvenanceRecords(input.db);
+	const lifecycleRules = new SharedNoteLifecycleService();
 	const services = createNoteServices(repository, anchors, input.projects);
 	return {
 		presentation: new NotePresentationService(),
+		creationRules: lifecycleRules,
+		trashRules: lifecycleRules,
+		publicationRules: lifecycleRules,
+		editingRules: new SharedNoteEditingService(),
 		markdown: { read: noteContentFromMarkdown, write: noteMarkdownFromContent },
 		repository,
 		anchors,

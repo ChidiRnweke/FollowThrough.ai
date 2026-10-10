@@ -1,3 +1,5 @@
+import { NoteLifecycleService } from '$lib/services/notes/lifecycle';
+import { NoteEditingService } from '$lib/services/notes/editing';
 import { ProjectDetailService } from '$lib/services/projects/details';
 import { MemoryEditingService } from '$lib/services/memory/edits';
 import {
@@ -11,5 +13,8 @@ export const createWorkspaceCommands = (): WorkspaceCommandController =>
 		createWidgetEditingController(),
 		new WidgetLifecycleService(),
 		new MemoryEditingService(),
-		new ProjectDetailService()
+		new ProjectDetailService(),
+		new NoteLifecycleService(),
+		new NoteLifecycleService(),
+		new NoteEditingService()
 	);

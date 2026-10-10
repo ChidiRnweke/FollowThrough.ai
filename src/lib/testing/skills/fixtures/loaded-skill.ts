@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import type { AgentRunId } from '$lib/models/agent';
 import { SkillLibrary } from '$lib/server/services/skills/library';
@@ -51,6 +53,8 @@ export const loadedSkillFixture = (body = 'Number every finding.') => {
 	const library = new SkillLibrary(skills, notes, provenance);
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			skillFinder: library,
 			skillUsageRecorder: library,
 			skillUsageLister: library,

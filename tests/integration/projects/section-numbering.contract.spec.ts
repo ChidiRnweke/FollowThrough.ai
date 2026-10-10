@@ -1,3 +1,4 @@
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { ProjectDetailService } from '$lib/services/projects/details';
 import { expect, it } from 'vitest';
@@ -13,6 +14,7 @@ const setup = async (suffix: string) => {
 	const project = await repository.insert(owner, { name: 'Numbering contract' });
 	const controller = new Projects(
 		capabilityDependencies<ProjectsDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
 			details: new ProjectDetailService(),
 			presentation: new ProjectTreePresentationService(),
 			projectEditor: createProjectServices(repository, repository).editor

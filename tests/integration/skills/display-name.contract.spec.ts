@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { syncEtag } from '$lib/models/sync';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
@@ -33,6 +35,8 @@ const setup = async (suffix: string) => {
 	const content = new InMemoryNoteContent();
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
 			skillEditor: library,
 			skillFinder: library,

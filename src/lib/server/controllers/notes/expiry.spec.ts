@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it } from 'vitest';
@@ -11,6 +13,10 @@ it('reports expiry failure before presenting a note’s pending proposals', asyn
 	proposals.expiryFailure = new Error('Expiry storage is unavailable');
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionExpirer: proposals

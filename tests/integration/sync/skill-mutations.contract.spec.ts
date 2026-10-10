@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
@@ -33,6 +35,8 @@ const setup = async (suffix: string) => {
 	});
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			skillEditor: library,

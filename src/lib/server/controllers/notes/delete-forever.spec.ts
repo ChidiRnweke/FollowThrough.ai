@@ -1,3 +1,5 @@
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
@@ -25,6 +27,10 @@ const setup = () => {
 	const service = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			noteDeletion: service.deletion,
