@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import type { SyncCacheRepository } from '$lib/client/sync/contracts';
-import { syncCursorSchema, syncEtag, type ResourceState } from '$lib/models/sync';
+import { syncCursorSchema, type ResourceState } from '$lib/models/sync';
+import { syncEtag } from '$lib/services/sync/versions';
 
 const body = (version: bigint, value: string): ResourceState<string> => ({
 	kind: 'present',

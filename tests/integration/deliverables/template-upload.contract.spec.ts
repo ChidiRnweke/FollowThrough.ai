@@ -1,3 +1,5 @@
+import { eq } from 'drizzle-orm';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { Document, Packer, Paragraph } from 'docx';
@@ -117,5 +119,27 @@ describe('durable template upload lifecycle', () => {
 			code: 'NOT_FOUND',
 			message: 'Template upload not found. Upload the file again.'
 		});
+	});
+});
+
+it('hides a reserved template after its project is archived and retains cleanup access', async () => {
+	const { repository, owner, project, upload } = await setup('32821');
+	await new ProjectRecords(context.db).archive(owner, project.id);
+	const hidden = await repository.findUpload(owner, upload.templateId);
+	await repository.deleteUpload(owner, upload.templateId);
+	expect({
+		hidden,
+		rows: await context.db
+			.select({ id: schema.templateUploads.id })
+			.from(schema.templateUploads)
+			.where(eq(schema.templateUploads.id, upload.templateId))
+	}).toEqual({ hidden: undefined, rows: [] });
+});
+
+it('rejects new template reservations in archived projects', async () => {
+	const { controller, owner, project, input } = await setup('32822');
+	await new ProjectRecords(context.db).archive(owner, project.id);
+	await expect(controller.initiateTemplateUpload(owner, input)).rejects.toMatchObject({
+		code: 'NOT_FOUND'
 	});
 });

@@ -2,12 +2,8 @@ import { cacheRepositoryContract } from '$lib/testing/sync/contracts/cache-contr
 import { WorkspaceDatabase } from './database';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import {
-	syncEtag,
-	initialSyncCursor,
-	syncCursorSchema,
-	type ResourceState
-} from '$lib/models/sync';
+import { initialSyncCursor, syncCursorSchema, type ResourceState } from '$lib/models/sync';
+import { syncEtag } from '$lib/services/sync/versions';
 import { IndexedDbSyncCache } from './indexeddb-cache';
 
 const databases: string[] = [];

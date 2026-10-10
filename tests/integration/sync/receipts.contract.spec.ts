@@ -1,3 +1,4 @@
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { WorkspaceSyncReceipts } from '$lib/server/repositories/workspace/sync-receipts';
@@ -11,7 +12,7 @@ const savedReceipt = async (suffix: string) => {
 	const identity = { type: 'notes' as const, id: [note.id] as [string] };
 	const request = JSON.stringify({ kind: 'renameNote', noteId: note.id, title: 'Renamed' });
 	const receipt = await context.db.transaction(async (transaction) => {
-		const receipts = new WorkspaceSyncReceipts(transaction);
+		const receipts = new WorkspaceSyncReceipts(transaction, workspaceResourceKey);
 		await receipts.lockOperation(owner, operationId);
 		await receipts.lockResource(owner, identity);
 		await transaction.execute(sql`update notes set title = 'Renamed' where id = ${note.id}`);
@@ -28,7 +29,11 @@ describe('durable synchronization operation receipts', () => {
 	it('returns only permanent version proof for identical input', async () => {
 		const { owner, request, receipt } = await savedReceipt('8901');
 		expect(
-			await new WorkspaceSyncReceipts(context.db).find(owner, receipt.operationId, request)
+			await new WorkspaceSyncReceipts(context.db, workspaceResourceKey).find(
+				owner,
+				receipt.operationId,
+				request
+			)
 		).toEqual({
 			kind: 'proven',
 			proof: {
@@ -44,7 +49,11 @@ describe('durable synchronization operation receipts', () => {
 		const { owner, note, receipt } = await savedReceipt('8902');
 		const reordered = JSON.stringify({ title: 'Renamed', noteId: note.id, kind: 'renameNote' });
 		expect(
-			await new WorkspaceSyncReceipts(context.db).find(owner, receipt.operationId, reordered)
+			await new WorkspaceSyncReceipts(context.db, workspaceResourceKey).find(
+				owner,
+				receipt.operationId,
+				reordered
+			)
 		).toEqual({
 			kind: 'proven',
 			proof: {
@@ -60,7 +69,11 @@ describe('durable synchronization operation receipts', () => {
 		const { owner, note, receipt } = await savedReceipt('8903');
 		const changed = JSON.stringify({ kind: 'renameNote', noteId: note.id, title: 'Different' });
 		expect(
-			await new WorkspaceSyncReceipts(context.db).find(owner, receipt.operationId, changed)
+			await new WorkspaceSyncReceipts(context.db, workspaceResourceKey).find(
+				owner,
+				receipt.operationId,
+				changed
+			)
 		).toEqual({ kind: 'reused' });
 	});
 
@@ -68,7 +81,11 @@ describe('durable synchronization operation receipts', () => {
 		const { owner: other } = await seedNote('8904');
 		const { request, receipt } = await savedReceipt('8905');
 		expect(
-			await new WorkspaceSyncReceipts(context.db).find(other, receipt.operationId, request)
+			await new WorkspaceSyncReceipts(context.db, workspaceResourceKey).find(
+				other,
+				receipt.operationId,
+				request
+			)
 		).toEqual({ kind: 'missing' });
 	});
 
@@ -78,7 +95,7 @@ describe('durable synchronization operation receipts', () => {
 		const request = JSON.stringify({ kind: 'renameNote', noteId: note.id, title: 'Rejected' });
 		await context.db
 			.transaction(async (transaction) => {
-				const receipts = new WorkspaceSyncReceipts(transaction);
+				const receipts = new WorkspaceSyncReceipts(transaction, workspaceResourceKey);
 				const identity = { type: 'notes' as const, id: [note.id] as [string] };
 				await receipts.lockOperation(owner, operationId);
 				await receipts.lockResource(owner, identity);
@@ -91,7 +108,11 @@ describe('durable synchronization operation receipts', () => {
 			.catch(() => {
 				return { kind: 'failure' };
 			});
-		const receipt = await new WorkspaceSyncReceipts(context.db).find(owner, operationId, request);
+		const receipt = await new WorkspaceSyncReceipts(context.db, workspaceResourceKey).find(
+			owner,
+			operationId,
+			request
+		);
 		const rows = await context.client<
 			{ title: string }[]
 		>`select title from notes where id = ${note.id}`;
@@ -104,7 +125,7 @@ describe('durable synchronization operation receipts', () => {
 
 it('retains the original proof after later resource edits', async () => {
 	const { owner, request, receipt, note } = await savedReceipt('8910');
-	const receipts = new WorkspaceSyncReceipts(context.db);
+	const receipts = new WorkspaceSyncReceipts(context.db, workspaceResourceKey);
 	await context.client`update notes set title = 'Later edit' where id = ${note.id}`;
 	const resource = receipt.resource;
 	expect(await receipts.find(owner, receipt.operationId, request)).toEqual({
@@ -120,11 +141,11 @@ it('retains cancellation proof without a receipt body', async () => {
 	const { owner } = await seedNote('8911');
 	const operationId = crypto.randomUUID();
 	await context.db.transaction(async (transaction) => {
-		const receipts = new WorkspaceSyncReceipts(transaction);
+		const receipts = new WorkspaceSyncReceipts(transaction, workspaceResourceKey);
 		await receipts.lockOperation(owner, operationId);
 		await receipts.cancel(owner, operationId, '{"command":"cancelled"}');
 	});
-	const receipts = new WorkspaceSyncReceipts(context.db);
+	const receipts = new WorkspaceSyncReceipts(context.db, workspaceResourceKey);
 	expect(await receipts.find(owner, operationId, '{"command":"cancelled"}')).toEqual({
 		kind: 'cancelled'
 	});

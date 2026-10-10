@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { diagramEtag, type DiagramWriteOutcome } from '$lib/models/diagrams';
+import { type DiagramWriteOutcome } from '$lib/models/diagrams';
+import { diagramEtag } from '$lib/services/diagrams/editing';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { diagramRevisionFixture } from '$lib/testing/diagrams/fixtures/revision-editing';

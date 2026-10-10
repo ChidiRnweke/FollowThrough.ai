@@ -1,4 +1,8 @@
-import { decideMemoryCreation, decideMemoryEdit } from '$lib/services/memory/edits';
+import {
+	sharedMemoryEntries,
+	decideMemoryCreation,
+	decideMemoryEdit
+} from '$lib/services/memory/edits';
 import { ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
@@ -140,7 +144,7 @@ export class Memory implements MemoryController {
 			projectId: input.projectId
 		});
 		return {
-			entries: input.sharedOnly ? entries.filter((entry) => entry.shareWithAgents) : entries
+			entries: input.sharedOnly ? sharedMemoryEntries(entries) : entries
 		};
 	}
 

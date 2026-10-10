@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TOOL_CATALOG } from '$lib/models/agent/tool-catalog';
+import { TOOL_CATALOG } from '$lib/services/agent/tool-catalog';
 import { TOOL_RETRIEVAL_GOALS } from '../cases/tool-retrieval';
 import { ALL_EVAL_CASES, SMOKE_CASE_IDS, selectEvalCases } from './case-catalog';
 

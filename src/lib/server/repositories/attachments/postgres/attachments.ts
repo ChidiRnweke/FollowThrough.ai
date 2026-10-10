@@ -329,10 +329,41 @@ export class AttachmentRecords implements AttachmentRepository {
 			);
 	}
 
-	async removeById(actor: ActorContext, id: Attachment['id']): Promise<void> {
+	async listPendingObjectRemovals(): Promise<readonly string[]> {
+		return (
+			await this.database
+				.select({ objectKey: schema.attachmentObjectRemovals.objectKey })
+				.from(schema.attachmentObjectRemovals)
+				.orderBy(
+					asc(schema.attachmentObjectRemovals.createdAt),
+					asc(schema.attachmentObjectRemovals.objectKey)
+				)
+		).map((row) => row.objectKey);
+	}
+	async completeObjectRemoval(objectKey: string): Promise<void> {
 		await this.database
-			.delete(schema.attachments)
-			.where(and(eq(schema.attachments.id, id), eq(schema.attachments.userId, actor.userId)));
+			.delete(schema.attachmentObjectRemovals)
+			.where(eq(schema.attachmentObjectRemovals.objectKey, objectKey));
+	}
+	async removeById(actor: ActorContext, id: Attachment['id']): Promise<void> {
+		await this.database.transaction(async (transaction) => {
+			const [attachment] = await transaction
+				.select({ id: schema.attachments.id })
+				.from(schema.attachments)
+				.where(and(eq(schema.attachments.id, id), eq(schema.attachments.userId, actor.userId)))
+				.for('update');
+			if (!attachment) throw new NotFoundError('Attachment was not found');
+			const versions = await transaction
+				.select({ objectKey: schema.attachmentVersions.objectKey })
+				.from(schema.attachmentVersions)
+				.where(eq(schema.attachmentVersions.attachmentId, id));
+			if (versions.length)
+				await transaction
+					.insert(schema.attachmentObjectRemovals)
+					.values(versions)
+					.onConflictDoNothing();
+			await transaction.delete(schema.attachments).where(eq(schema.attachments.id, id));
+		});
 	}
 
 	async updateVersion(actor: ActorContext, version: AttachmentVersion): Promise<AttachmentView> {

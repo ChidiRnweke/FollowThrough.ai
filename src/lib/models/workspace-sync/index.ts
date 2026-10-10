@@ -83,7 +83,3 @@ export const workspaceResourceIdentitySchema = z.discriminatedUnion('type', [
 	})
 ]);
 export type WorkspaceResourceIdentity = z.infer<typeof workspaceResourceIdentitySchema>;
-
-/** Tuple encoding avoids delimiter collisions in composite identities such as tool names. */
-export const workspaceResourceKey = (identity: WorkspaceResourceIdentity): string =>
-	JSON.stringify([identity.type, ...identity.id]);

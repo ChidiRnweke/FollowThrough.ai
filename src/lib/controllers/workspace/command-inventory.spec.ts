@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { prepareWorkspaceCommand } from '$lib/controllers/workspace/commands';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import {
 	noteBuilder,
 	projectBuilder,

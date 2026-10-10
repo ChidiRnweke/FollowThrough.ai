@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { formulaSourceSchema, parseFormula } from '$lib/models/widget-formulas';
+import { formulaSourceSchema } from '$lib/models/widget-formulas';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -147,128 +147,20 @@ const derivedNameSchema = z
 	.string()
 	.regex(/^[A-Za-z][A-Za-z0-9_]{0,59}$/, 'Derived names start with a letter: letters, digits, _');
 
-/** The names a formula reads under one computed root. `@/derived/total/0` reads `total`. */
-const rootReads = (root: string, references: readonly string[]): readonly string[] =>
-	references.flatMap((pointer) =>
-		pointer.startsWith(`/${root}/`) ? [pointer.slice(root.length + 2).split('/')[0]!] : []
-	);
-
-/** The first chain of derived values that reads itself, if any. */
-const derivedCycle = (
-	reads: ReadonlyMap<string, readonly string[]>
-): readonly string[] | undefined => {
-	const visit = (name: string, path: readonly string[]): readonly string[] | undefined => {
-		if (path.includes(name)) return [...path.slice(path.indexOf(name)), name];
-		for (const next of reads.get(name) ?? []) {
-			const cycle = visit(next, [...path, name]);
-			if (cycle) return cycle;
-		}
-		return undefined;
-	};
-	for (const name of reads.keys()) {
-		const cycle = visit(name, []);
-		if (cycle) return cycle;
-	}
-	return undefined;
-};
-
-/** A pointer into a computed root, which a control must not write. */
-const isComputedPointer = (pointer: string) =>
-	widgetComputedRoots.some((root) => pointer === `/${root}` || pointer.startsWith(`/${root}/`));
-
 /** The structure of a widget: the json-render spec without its `state`, plus its formulas. */
-export const widgetLayoutSchema = z
-	.strictObject({
-		root: elementKeySchema,
-		elements: z.record(elementKeySchema, widgetElementSchema),
-		/** Named formulas. Each result is read at `/derived/<name>`. */
-		derived: z.record(derivedNameSchema, formulaSourceSchema).optional(),
-		/** Named lists of the user's own work. Each is read at `/sources/<name>`. */
-		sources: z.record(derivedNameSchema, widgetSourceSchema).optional()
-	})
-	.superRefine((layout, context) => {
-		const derived = layout.derived ?? {};
-		const sources = layout.sources ?? {};
-		const references = new Map(
-			Object.entries(derived).map(([name, source]) => {
-				const parsed = parseFormula(source);
-				return [name, parsed.kind === 'parsed' ? parsed.references : []];
-			})
-		);
-		const reads = new Map(
-			[...references].map(([name, pointers]) => [name, rootReads('derived', pointers)])
-		);
-		for (const [name, pointers] of references)
-			for (const [root, defined] of [
-				['derived', derived],
-				['sources', sources]
-			] as const)
-				for (const missing of rootReads(root, pointers).filter(
-					(read) => !Object.hasOwn(defined, read)
-				))
-					context.addIssue({
-						code: 'custom',
-						path: ['derived', name],
-						message: `@/${root}/${missing} is not defined`
-					});
-		const cycle = derivedCycle(reads);
-		if (cycle)
-			context.addIssue({
-				code: 'custom',
-				path: ['derived', cycle[0]!],
-				message: `These formulas read each other: ${cycle.join(' → ')}`
-			});
-		for (const [key, element] of Object.entries(layout.elements))
-			for (const [prop, value] of Object.entries(element.props))
-				if (
-					typeof value === 'object' &&
-					value !== null &&
-					!Array.isArray(value) &&
-					typeof value.$bindState === 'string' &&
-					isComputedPointer(value.$bindState)
-				)
-					context.addIssue({
-						code: 'custom',
-						path: ['elements', key, 'props', prop],
-						message: 'A computed value can be read with $state but not bound'
-					});
-		for (const [key, element] of Object.entries(layout.elements))
-			for (const [event, bound] of Object.entries(element.on ?? {}))
-				for (const [index, binding] of (Array.isArray(bound) ? bound : [bound]).entries())
-					for (const param of ['statePath', 'clearStatePath'])
-						if (
-							typeof binding.params?.[param] === 'string' &&
-							isComputedPointer(binding.params[param])
-						)
-							context.addIssue({
-								code: 'custom',
-								path: [
-									'elements',
-									key,
-									'on',
-									event,
-									...(Array.isArray(bound) ? [index] : []),
-									'params',
-									param
-								],
-								message: 'An action cannot write a computed value'
-							});
-	});
+export const widgetLayoutSchema = z.strictObject({
+	root: elementKeySchema,
+	elements: z.record(elementKeySchema, widgetElementSchema),
+	/** Named formulas. Each result is read at `/derived/<name>`. */
+	derived: z.record(derivedNameSchema, formulaSourceSchema).optional(),
+	/** Named lists of the user's own work. Each is read at `/sources/<name>`. */
+	sources: z.record(derivedNameSchema, widgetSourceSchema).optional()
+});
 
 export type WidgetLayout = z.infer<typeof widgetLayoutSchema>;
 
 /** The data of a widget: the json-render state, always an object at the top. */
-export const widgetDataSchema = z
-	.record(z.string(), jsonValueSchema)
-	.superRefine((data, context) => {
-		for (const root of widgetComputedRoots)
-			if (Object.hasOwn(data, root))
-				context.addIssue({
-					code: 'custom',
-					path: [root],
-					message: `"${root}" is reserved for computed values`
-				});
-	});
+export const widgetDataSchema = z.record(z.string(), jsonValueSchema);
 
 export type WidgetData = z.infer<typeof widgetDataSchema>;
 

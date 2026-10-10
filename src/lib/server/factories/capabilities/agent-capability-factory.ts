@@ -1,3 +1,5 @@
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { getEncoding } from 'js-tiktoken';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
@@ -6,11 +8,8 @@ import type { DateTime } from '$lib/models/workspace';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { OpenRouter } from '@openrouter/sdk';
-import {
-	normalizeLanguageModelId,
-	CHAT_WEB_SEARCH_DEFAULTS,
-	type WebResearchSettings
-} from '$lib/models/agent';
+import { CHAT_WEB_SEARCH_DEFAULTS, type WebResearchSettings } from '$lib/models/agent';
+import { normalizeLanguageModelId } from '$lib/services/agent/model-selection';
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
 import { resolveWebResearch } from '$lib/services/agent/web-research';
 import type { Database } from '$lib/server/db';
@@ -89,7 +88,9 @@ export interface AgentCapability {
 export const createAgentCapability = (input: AgentCapabilityInput): AgentCapability => {
 	const conversationRepository = new ConversationRecords(input.db);
 	const conversations = new ConversationArchive(conversationRepository);
-	const preferences = new AgentPreferenceCatalog(new AgentPreferenceRecords(input.db));
+	const preferences = new AgentPreferenceCatalog(
+		new AgentPreferenceRecords(input.db, workspaceResourceKey)
+	);
 	const models =
 		input.modelCatalog ??
 		new AgentModels(
@@ -120,7 +121,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 				repository,
 				actor,
 				conversationId,
-				new AgentReplayVirtualizer(input.files)
+				new AgentReplayVirtualizer(input.files, countTokens)
 			),
 		traceAgentTurn
 	);
@@ -153,3 +154,6 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		eventBus
 	};
 };
+
+const tokenEncoder = getEncoding('cl100k_base');
+const countTokens = (text: string): number => tokenEncoder.encode(text).length;

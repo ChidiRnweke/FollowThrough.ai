@@ -1,3 +1,7 @@
+import {
+	pendingMemorySuggestions,
+	newestMemoryViews
+} from '$lib/services/suggestions/presentation';
 import { assembleTodoView } from '$lib/services/todos/presentation';
 import { assembleProjectTree } from '$lib/services/projects/presentation';
 import { assembleNoteView } from '$lib/services/notes/presentation';
@@ -21,11 +25,11 @@ import type { AttachmentView } from '$lib/models/attachments';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { MemorySuggestionView } from '$lib/models/suggestions';
 import {
-	isWorkspaceRecord,
 	type WorkspaceRecord,
 	type WorkspaceValues,
 	type WorkspaceRecordOf
 } from '$lib/models/workspace-records';
+import { isWorkspaceRecord } from '$lib/services/workspace/commands';
 import type { LocalDate } from '$lib/models/workspace';
 import type { Todo, TodoListFilter, TodoView } from '$lib/models/todos';
 import type { ProjectId, ProjectView } from '$lib/models/projects';
@@ -168,9 +172,8 @@ export class WorkspaceViews {
 	}
 	memorySuggestions(projectId?: ProjectId): readonly MemorySuggestionView[] {
 		if (projectId && !this.isActiveProject(projectId)) return [];
-		return this.pendingSuggestions
-			.flatMap((suggestion) => {
-				if (suggestion.kind !== 'memory' || suggestion.payload.projectId !== projectId) return [];
+		return newestMemoryViews(
+			pendingMemorySuggestions(this.pendingSuggestions, projectId).flatMap((suggestion) => {
 				const provenance = suggestion.provenanceId
 					? this.get('provenance', suggestion.provenanceId)
 					: undefined;
@@ -185,7 +188,7 @@ export class WorkspaceViews {
 					})
 				];
 			})
-			.sort((a, b) => b.suggestion.createdAt.localeCompare(a.suggestion.createdAt));
+		);
 	}
 	attachments(owner: { kind: 'project' | 'note'; id: string }): readonly AttachmentView[] {
 		return this.all('attachments')

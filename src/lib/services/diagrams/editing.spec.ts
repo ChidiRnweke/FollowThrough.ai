@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { diagramEtag } from '$lib/models/diagrams';
+import { diagramEtag } from '$lib/services/diagrams/editing';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { decideDiagramRevision, prepareDiagramWrite } from './editing';

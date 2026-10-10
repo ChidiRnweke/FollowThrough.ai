@@ -8,13 +8,9 @@ import type {
 	UserContentPart,
 	UserMessageSessionItem
 } from '$lib/models/agent';
-import {
-	parseSessionItem,
-	readSessionJsonObject,
-	sessionOutputText,
-	toStoredSessionItem
-} from '$lib/models/agent';
-import { readToolFailure } from '$lib/models/agent/tool-failure';
+import { persistedSessionItemSchema, sessionJsonObjectSchema } from '$lib/models/agent';
+import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
+import { readToolFailure } from '$lib/server/repositories/agent/tool-failure';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 
 /**
@@ -23,7 +19,7 @@ import type { AgentSessionRepository } from '$lib/server/repositories/agent';
  *
  * Both directions go through the model's own functions rather than an
  * assertion. `toStoredSessionItem` puts an arm back into the spelling the
- * provider uses and `parseSessionItem` reads that spelling, so mapping an item
+ * provider uses and `persistedSessionItemSchema` reads that spelling, so mapping an item
  * to the SDK is the same operation as writing it to the column and the two
  * cannot drift.
  *
@@ -38,7 +34,8 @@ export const toAgentInputItem = (item: PersistedSessionItem): AgentInputItem =>
 	toStoredSessionItem(item) as AgentInputItem;
 
 /** An SDK item on its way to storage, checked rather than asserted. */
-const fromAgentInputItem = (item: AgentInputItem): PersistedSessionItem => parseSessionItem(item);
+const fromAgentInputItem = (item: AgentInputItem): PersistedSessionItem =>
+	persistedSessionItemSchema.parse(item);
 
 export interface ReplayVirtualizer {
 	virtualize(
@@ -115,7 +112,7 @@ const DIAGRAM_SOURCE_PLACEHOLDER =
  */
 const withElidedSource = (json: string): string => {
 	const decoded: unknown = JSON.parse(json);
-	const parsed = readSessionJsonObject(decoded);
+	const parsed = sessionJsonObjectSchema.safeParse(decoded).data;
 	if (!parsed || typeof parsed.source !== 'string') return json;
 	return JSON.stringify({ ...parsed, source: DIAGRAM_SOURCE_PLACEHOLDER });
 };
@@ -237,3 +234,17 @@ export class ConversationBuffer implements Session {
 		return this.items;
 	}
 }
+
+/**
+ * The text a tool result carries, whichever of the three shapes it arrived in.
+ *
+ * `'type' in output` rather than `!Array.isArray(output)`: `Array.isArray`
+ * narrows to `any[]`, which a `readonly` array member is not assignable to, so
+ * the array would survive into the object branch. The key test discriminates the
+ * union the compiler can actually check.
+ */
+export const sessionOutputText = (item: FunctionCallResultSessionItem): string | undefined => {
+	const { output } = item;
+	if (typeof output === 'string') return output;
+	return 'type' in output ? output.text : undefined;
+};

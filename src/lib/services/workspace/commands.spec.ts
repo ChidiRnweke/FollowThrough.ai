@@ -2,8 +2,8 @@ import { expect, it } from 'vitest';
 import { projectBuilder, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { WriteDraft } from '$lib/models/outbox';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
-import { syncEtag } from '$lib/models/sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { syncEtag } from '$lib/services/sync/versions';
 import { assertWorkspaceWriteIdentity } from '$lib/services/workspace/commands';
 import { type WorkspaceCommand } from '$lib/models/workspace-mutations';
 

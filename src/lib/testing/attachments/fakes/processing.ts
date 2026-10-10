@@ -67,6 +67,7 @@ export const view = (mediaType: string, path = 'doc.pdf'): AttachmentView => ({
 export class InMemoryAttachmentRepository implements AttachmentRepository {
 	readonly updates: AttachmentVersion[] = [];
 	readonly removed: string[] = [];
+	readonly pendingObjectRemovals = new Set<string>();
 	found?: AttachmentView;
 	/** Set by the tests that drive `complete()`; the rest never look one up. */
 	upload?: AttachmentUpload;
@@ -123,7 +124,14 @@ export class InMemoryAttachmentRepository implements AttachmentRepository {
 		this.removed.push(path);
 		this.found = undefined;
 	}
+	async listPendingObjectRemovals(): Promise<readonly string[]> {
+		return [...this.pendingObjectRemovals];
+	}
+	async completeObjectRemoval(objectKey: string): Promise<void> {
+		this.pendingObjectRemovals.delete(objectKey);
+	}
 	async removeById(): Promise<void> {
+		if (this.found) this.pendingObjectRemovals.add(this.found.version.objectKey);
 		this.found = undefined;
 	}
 	async updateVersion(_actor: ActorContext, version: AttachmentVersion): Promise<AttachmentView> {
@@ -146,9 +154,12 @@ export class InMemoryAttachmentRepository implements AttachmentRepository {
 		return this.found;
 	}
 	snapshot() {
+		const pending = [...this.pendingObjectRemovals];
 		const found = structuredClone(this.found);
 		const updates = structuredClone(this.updates);
 		return () => {
+			this.pendingObjectRemovals.clear();
+			for (const key of pending) this.pendingObjectRemovals.add(key);
 			this.found = found;
 			this.updates.splice(0, this.updates.length, ...updates);
 		};
@@ -157,6 +168,7 @@ export class InMemoryAttachmentRepository implements AttachmentRepository {
 
 export class InMemoryStorage implements IAttachmentStorage {
 	readonly objects = new Set(['objects/doc']);
+	readonly removalFailures = new Set<string>();
 	createUploadUrl(): Promise<string> {
 		throw new Error('not used');
 	}
@@ -174,6 +186,7 @@ export class InMemoryStorage implements IAttachmentStorage {
 	}
 	async promote(): Promise<void> {}
 	async remove(objectKey: string): Promise<void> {
+		if (this.removalFailures.has(objectKey)) throw new Error('Object removal failed');
 		this.objects.delete(objectKey);
 	}
 }

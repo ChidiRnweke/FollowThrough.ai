@@ -5,7 +5,7 @@ import type { Diagram, DiagramRevision } from '$lib/models/diagrams';
 import type { ExternalReference, Url } from '$lib/models/references';
 import type { MemoryEntry } from '$lib/models/memory';
 import {
-	readProseMirrorDocument,
+	storedDocumentReadSchema,
 	type Note,
 	type NoteRelationship,
 	type NoteRevision
@@ -75,7 +75,7 @@ export const toNote = (row: typeof schema.notes.$inferSelect): Note =>
 		parentId: row.parentId ?? undefined,
 		builtInKey: row.builtInKey ?? undefined,
 		sectionNumbering: row.sectionNumbering ?? undefined,
-		document: readProseMirrorDocument(row.document),
+		document: storedDocumentReadSchema.parse(row.document),
 		publishedRevision: row.publishedRevision,
 		publishedAt: row.publishedAt ? instant(row.publishedAt) : undefined,
 		archivedAt: row.archivedAt ? instant(row.archivedAt) : undefined,
@@ -86,7 +86,7 @@ export const toNote = (row: typeof schema.notes.$inferSelect): Note =>
 export const toRevision = (row: typeof schema.noteRevisions.$inferSelect): NoteRevision =>
 	domain<NoteRevision>({
 		...row,
-		document: readProseMirrorDocument(row.document),
+		document: storedDocumentReadSchema.parse(row.document),
 		provenanceId: row.provenanceId ?? undefined,
 		createdAt: instant(row.createdAt)
 	});

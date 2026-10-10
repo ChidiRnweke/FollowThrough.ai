@@ -1,3 +1,4 @@
+import { getEncoding } from 'js-tiktoken';
 import { afterAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -193,6 +194,7 @@ it('preserves successful empty extraction when the version is read back', async 
 	});
 	const files = new AgentVirtualFiles(
 		capabilityDependencies<AgentVirtualFilesDependencies>({
+			countTokens: (text) => getEncoding('cl100k_base').encode(text).length,
 			attachments: records,
 			stored: new InMemoryAgentFiles()
 		})

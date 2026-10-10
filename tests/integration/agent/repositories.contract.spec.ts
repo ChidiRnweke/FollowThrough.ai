@@ -1,3 +1,4 @@
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
 import { testDiagramId } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -217,7 +218,7 @@ describe('Postgres agent settings repository invariants', () => {
 	it('persists the actor default model and execution mode', async () => {
 		const owner = actor('72');
 		await new UserRecords(context.db).ensureLocal(owner);
-		const repository = new AgentPreferenceRecords(context.db);
+		const repository = new AgentPreferenceRecords(context.db, workspaceResourceKey);
 		const preferences = await repository.upsert(owner, {
 			userId: owner.userId,
 			defaultModel: 'anthropic/claude-test',
@@ -659,7 +660,7 @@ describe('Postgres agent session repository invariants', () => {
 			item: 'not an item' as unknown as StoredSessionItem
 		});
 		await expect(new AgentSessionRecords(context.db).list(owner, conversationId)).rejects.toThrow(
-			/must be a JSON object/
+			'Invalid input'
 		);
 	});
 });

@@ -8,6 +8,8 @@ import ts from 'typescript';
  * points at the wrong file.
  */
 const RULES = [
+	'model-procedure',
+	'model-state',
 	'tool-boundary',
 	'shape-cast',
 	'silent-catch',
@@ -32,6 +34,83 @@ const unwrap = (value: ts.Expression): ts.Expression => {
 	while (ts.isParenthesizedExpression(current)) current = current.expression;
 	return current;
 };
+/** Model callables construct schemas or records; calculations belong to services. */
+const schemaExpression = (expression: ts.Expression): boolean => {
+	let value = unwrap(expression);
+	while (ts.isCallExpression(value) || ts.isPropertyAccessExpression(value)) {
+		if (ts.isCallExpression(value)) {
+			if (
+				ts.isPropertyAccessExpression(value.expression) &&
+				['parse', 'safeParse', 'parseAsync', 'safeParseAsync'].includes(value.expression.name.text)
+			)
+				return false;
+			value = value.expression;
+		} else value = value.expression;
+	}
+	return ts.isIdentifier(value) && value.text === 'z';
+};
+const dataExpression = (expression: ts.Expression): boolean => {
+	const value = unwrap(expression);
+	if (
+		ts.isIdentifier(value) ||
+		ts.isLiteralExpression(value) ||
+		value.kind === ts.SyntaxKind.TrueKeyword ||
+		value.kind === ts.SyntaxKind.FalseKeyword ||
+		value.kind === ts.SyntaxKind.NullKeyword
+	)
+		return true;
+	if (!ts.isObjectLiteralExpression(value)) return false;
+	return value.properties.every(
+		(property) =>
+			ts.isShorthandPropertyAssignment(property) ||
+			(ts.isPropertyAssignment(property) &&
+				!ts.isComputedPropertyName(property.name) &&
+				dataExpression(property.initializer))
+	);
+};
+const modelProcedure = (node: ts.Node): boolean => {
+	let callable: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression;
+	if (ts.isFunctionDeclaration(node) && ts.isSourceFile(node.parent)) callable = node;
+	else if (
+		ts.isVariableDeclaration(node) &&
+		node.initializer &&
+		(ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer)) &&
+		ts.isVariableDeclarationList(node.parent) &&
+		ts.isVariableStatement(node.parent.parent) &&
+		ts.isSourceFile(node.parent.parent.parent)
+	)
+		callable = node.initializer;
+	else return false;
+	const body = callable.body;
+	if (!body) return false;
+	let expression: ts.Expression | undefined;
+	if (ts.isBlock(body)) {
+		const last = body.statements.at(-1);
+		const schemaLocals = body.statements
+			.slice(0, -1)
+			.every(
+				(statement) =>
+					ts.isVariableStatement(statement) &&
+					(statement.declarationList.flags & ts.NodeFlags.Const) !== 0 &&
+					statement.declarationList.declarations.every(
+						(declaration) => declaration.initializer && schemaExpression(declaration.initializer)
+					)
+			);
+		if (schemaLocals && last && ts.isReturnStatement(last)) expression = last.expression;
+	} else expression = body;
+	return (
+		!expression ||
+		!(
+			schemaExpression(expression) ||
+			(ts.isObjectLiteralExpression(unwrap(expression)) && dataExpression(expression))
+		)
+	);
+};
+const modelState = (node: ts.Node): boolean =>
+	ts.isClassDeclaration(node) ||
+	(ts.isVariableStatement(node) &&
+		ts.isSourceFile(node.parent) &&
+		(node.declarationList.flags & ts.NodeFlags.Const) === 0);
 const shapeCast = (node: ts.Node): node is ts.AsExpression | ts.TypeAssertion =>
 	(ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) &&
 	node.type.getText() !== 'const' &&
@@ -397,6 +476,16 @@ export const analyzeSource = (
 		return false;
 	};
 	const visit = (node: ts.Node): void => {
+		if (fileName.startsWith('src/lib/models/')) {
+			if (modelProcedure(node))
+				report(
+					'model-procedure',
+					node,
+					'implements a procedure instead of constructing data or a Zod schema'
+				);
+			if (modelState(node))
+				report('model-state', node, 'declares runtime state or a class in a model');
+		}
 		if (toolBoundaryImport(node))
 			report(
 				'tool-boundary',

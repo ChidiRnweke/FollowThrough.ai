@@ -151,9 +151,6 @@ export interface DiagramRevisionSummary {
 	readonly isPublished: boolean;
 }
 
-export const diagramEtag = (diagram: Pick<DrawioDiagram, 'id' | 'currentRevision'>): DiagramEtag =>
-	`diagram:${diagram.id}:r${diagram.currentRevision}` as DiagramEtag;
-
 export interface GenerateMermaidDiagramInput {
 	readonly selection: TextSelection;
 	readonly instruction?: string;

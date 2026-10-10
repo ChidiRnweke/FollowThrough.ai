@@ -1,11 +1,8 @@
 import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import { expect, it } from 'vitest';
-import {
-	resourceDataSchemas,
-	workspaceRecordIdentity,
-	type WorkspaceRecord
-} from '$lib/models/workspace-records';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
+import { workspaceRecordIdentity } from '$lib/services/workspace/commands';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import {
 	memorySuggestionBuilder,
 	testDiagramId,

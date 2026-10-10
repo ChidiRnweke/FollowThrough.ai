@@ -195,7 +195,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		projects: projectRepository,
 		notes: noteRepository
 	});
-	const widgets = createWidgetsCapability({ db, projects: projectRepository }).library;
+	const widgets = createWidgetsCapability({
+		db,
+		projects: projectRepository,
+		notes: noteRepository
+	}).library;
 	const memory = createMemoryCapability({
 		db,
 		projects: projectRepository,
@@ -665,6 +669,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		backgroundTasks: [
 			knowledgeSearch.maintenance,
 			attachmentCapability.retention,
+			attachmentCapability.objectRemoval,
 			attachmentCapability.processing
 		],
 		eventBus,

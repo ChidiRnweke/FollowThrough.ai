@@ -10,14 +10,14 @@ import {
 	type ProviderToolOutput
 } from '$lib/models/agent';
 import {
-	readAgentPayload,
-	readAgentPayloadObject,
+	agentPayloadResultSchema,
+	agentPayloadObjectResultSchema,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
 
 const providerToolOutput = (value: unknown): ProviderToolOutput => {
 	if (value === undefined || value === null) return { kind: 'none' };
-	const read = readAgentPayload(value);
+	const read = agentPayloadResultSchema.parse(value);
 	return read.kind === 'valid'
 		? { kind: 'value', value: read.value }
 		: { kind: 'corrupt', message: read.message };
@@ -45,7 +45,7 @@ const providerArguments = (value: unknown): AgentPayloadObject => {
 			);
 		}
 	}
-	const read = readAgentPayloadObject(candidate);
+	const read = agentPayloadObjectResultSchema.parse(candidate);
 	if (read.kind === 'corrupt')
 		throw new AgentProviderFailure(
 			'The provider returned tool arguments that were not an object',

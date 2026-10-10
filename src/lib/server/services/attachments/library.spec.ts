@@ -121,12 +121,15 @@ describe('removing an attachment without breaking its containing note', () => {
 		expect(storage.objects.has('objects/doc')).toBe(true);
 	});
 
-	it('deletes project attachment bytes', async () => {
+	it('queues project attachment bytes for removal after commit', async () => {
 		const { service, repository, storage } = setup();
 		repository.found = view('image/png');
 
 		await service.removeById(testActor(), ATTACHMENT_ID);
 
-		expect(storage.objects.has('objects/doc')).toBe(false);
+		expect({
+			bytes: storage.objects.has('objects/doc'),
+			pending: await repository.listPendingObjectRemovals()
+		}).toEqual({ bytes: true, pending: ['objects/doc'] });
 	});
 });

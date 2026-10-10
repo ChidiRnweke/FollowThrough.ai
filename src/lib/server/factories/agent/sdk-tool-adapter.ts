@@ -3,7 +3,7 @@ import { tool, ModelBehaviorError, type Tool } from '@openai/agents';
 import { z } from 'zod';
 import { toolFailure } from '$lib/models/agent/tool-failure';
 import { DOMAIN_ERROR_ADVICE } from '$lib/errors';
-import { readAgentPayload, type AgentPayload } from '$lib/models/agent/payload';
+import { agentPayloadResultSchema, type AgentPayload } from '$lib/models/agent/payload';
 import {
 	jsonObjectSchema,
 	executeToolAction,
@@ -78,7 +78,7 @@ export const createSdkTool = (options: SdkToolOptions): Tool<unknown> => {
 	const calls = new Map<string, { input: string; preparation: Promise<ToolPreparation> }>();
 	const prepare = (input: unknown, callId: string | undefined, phase: 'approval' | 'execute') => {
 		options.signal.throwIfAborted();
-		const payload = readAgentPayload(input);
+		const payload = agentPayloadResultSchema.parse(input);
 		if (payload.kind === 'corrupt') throw new ToolLifecycleError(payload.message);
 		const normalized = normalizeInput(payload.value, schema);
 		const serialized = JSON.stringify(normalized);

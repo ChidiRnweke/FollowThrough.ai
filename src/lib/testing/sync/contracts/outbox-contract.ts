@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import type { OutboxRepository } from '$lib/client/sync/outbox-contracts';
 import type { WriteDraft } from '$lib/models/outbox';
-import { syncEtag } from '$lib/models/sync';
+import { syncEtag } from '$lib/services/sync/versions';
 
 const draft = (command: string): WriteDraft<string, string> => ({
 	operationId: crypto.randomUUID(),

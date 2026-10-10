@@ -7,7 +7,8 @@ import type {
 	ConversationId,
 	PersistedSessionItem
 } from '$lib/models/agent';
-import { parseSessionItem, sessionJsonObjectSchema, toStoredSessionItem } from '$lib/models/agent';
+import { persistedSessionItemSchema, sessionJsonObjectSchema } from '$lib/models/agent';
+import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type {
 	RestoreSnapshot,
@@ -109,7 +110,7 @@ export class InMemoryAgentSessionRepository implements AgentSessionRepository, S
 		return () => {
 			this.items = restoredItemsSchema
 				.parse(stored)
-				.map((row) => ({ ...row, item: parseSessionItem(row.item) }));
+				.map((row) => ({ ...row, item: persistedSessionItemSchema.parse(row.item) }));
 		};
 	}
 }

@@ -21,12 +21,6 @@ export const syncEtagSchema = z
 	.regex(/^sync-v1-[1-9][0-9]*$/)
 	.transform((value) => value as SyncEtag);
 
-/** Database sequence values are transported without JavaScript number rounding. */
-export const syncEtag = (version: bigint): SyncEtag => {
-	if (version <= 0n) throw new Error('A synchronization version must be positive');
-	return `sync-v1-${version}` as SyncEtag;
-};
-
 export const resourceChangeSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('upsert'), key: z.string().min(1), etag: syncEtagSchema }),
 	z.object({ kind: z.literal('delete'), key: z.string().min(1), etag: syncEtagSchema })

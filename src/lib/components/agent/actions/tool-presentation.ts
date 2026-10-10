@@ -2,7 +2,8 @@ import type { ShellContext } from '$lib/client/shell/views';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 
 import { toolFailure, toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
-import { isAgentPayloadObject, type AgentPayloadObject } from '$lib/models/agent/payload';
+import { type AgentPayloadObject } from '$lib/models/agent/payload';
+import { isAgentPayloadObject } from '$lib/services/agent/payload';
 import { argumentLabel, isIdentifierArgument } from '../../chat/actions/tool-approval-fields';
 import { mechanismTools, quietTools, type RenderedTool } from './rendered-tools';
 import { friendlyToolLabel, completedToolLabel, isCatalogTool } from './tool-labels';

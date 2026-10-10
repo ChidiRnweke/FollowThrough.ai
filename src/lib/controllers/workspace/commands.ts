@@ -25,12 +25,9 @@ import type { DateTime } from '$lib/models/workspace';
 import { type Note, type NoteId } from '$lib/models/notes';
 import { applyNoteDraftEdit } from '$lib/services/notes/editing';
 import type { WriteContent } from '$lib/models/outbox';
-import {
-	isWorkspaceRecord,
-	type WorkspaceRecord,
-	type WorkspaceValues
-} from '$lib/models/workspace-records';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { type WorkspaceRecord, type WorkspaceValues } from '$lib/models/workspace-records';
+import { isWorkspaceRecord } from '$lib/services/workspace/commands';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import type {
 	WorkspaceCommand,
 	PreparedWorkspaceCommand,

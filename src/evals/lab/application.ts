@@ -19,7 +19,7 @@ import { createPGliteDatabase } from './pglite-database';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import { ToolDiscovery } from '$lib/server/controllers/tool-discovery/controller';
 import { ToolCatalogIndex, toolEmbeddingText } from '$lib/server/services/agent/tools/tool-index';
-import { TOOL_CATALOG } from '$lib/models/agent/tool-catalog';
+import { TOOL_CATALOG } from '$lib/services/agent/tool-catalog';
 
 const CACHE_PATH = fileURLToPath(new URL('../fixtures/auxiliary-cache.json', import.meta.url));
 

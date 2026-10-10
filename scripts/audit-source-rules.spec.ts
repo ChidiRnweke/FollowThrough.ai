@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { analyzeSource } from './audit-source-rules';
 const violations = (source: string) => analyzeSource('example.ts', source);
 /** A path inside one of the three layers ADR 0037 keeps total. */
-const strict = (source: string) => analyzeSource('src/lib/models/notes/example.ts', source);
+const strict = (source: string) =>
+	analyzeSource('src/lib/server/services/notes/example.ts', source);
+const model = (source: string) => analyzeSource('src/lib/models/notes/example.ts', source);
 describe('source audit rules', () => {
 	it('rejects an asserted object shape', () => {
 		expect(violations('const value = ({ id: maybe }) as never')).toHaveLength(1);
@@ -382,5 +384,32 @@ describe('tool lifecycle ownership', () => {
 				"import { tool } from '@openai/agents';"
 			)
 		).toEqual([]);
+	});
+});
+
+describe('data-only models', () => {
+	it.each([
+		'export const total = (prices: number[]) => prices.reduce((sum, price) => sum + price, 0)',
+		'export function lookup(value: string) { return table.get(value); }',
+		'export const parseValue = (value: string) => schema.parse(value)',
+		'const query = (value: string) => value.length > 0',
+		'export const computed = (id: string) => ({ id: id.trim() })'
+	])('rejects model procedure: %s', (source) => {
+		expect(model(source).map((item) => item.rule)).toEqual(['model-procedure']);
+	});
+	it.each(['let encoder: Encoder;', 'export class Workflow {}'])(
+		'rejects model runtime state: %s',
+		(source) => {
+			expect(model(source).map((item) => item.rule)).toEqual(['model-state']);
+		}
+	);
+	it.each([
+		'export const schema = z.string().transform(value => value.trim())',
+		'const arraySchema = <T>(item: z.ZodType<T>) => z.array(item)',
+		'function schema<T>(item: z.ZodType<T>) { return z.object({ item }); }',
+		"const create = (id: string) => ({ kind: 'record', id })",
+		'interface Record { readonly id: string }'
+	])('allows schema construction and data: %s', (source) => {
+		expect(model(source)).toEqual([]);
 	});
 });

@@ -132,3 +132,7 @@ export const inlineProjectCandidates = (
 export const inlineProjectPassages = (
 	matches: readonly SearchMatch[]
 ): readonly InlineCompletionPassage[] => matches.slice(0, PROJECT_PASSAGE_LIMIT).map(passageOf);
+
+/** Preserve cheap eligibility gates before retrieval and completion. */
+export const eligibleInlinePrefix = (prefix: string): boolean => prefix.trim().length >= 12;
+export const eligibleInlineNote = (note: Note): boolean => !note.archivedAt;

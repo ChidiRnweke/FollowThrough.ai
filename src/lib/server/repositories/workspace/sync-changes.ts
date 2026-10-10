@@ -1,3 +1,4 @@
+import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { sql } from 'drizzle-orm';
 import { WorkspaceSyncObjects } from './sync-objects';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
@@ -5,8 +6,9 @@ import type { SyncPage } from '$lib/models/sync';
 import { z } from 'zod';
 import type { Database } from '$lib/server/db';
 import type { ActorContext } from '$lib/models/identity';
-import { syncCursorSchema, syncEtag, type SyncCursor } from '$lib/models/sync';
-import { workspaceResourceIdentitySchema, workspaceResourceKey } from '$lib/models/workspace-sync';
+import { syncCursorSchema, type SyncCursor } from '$lib/models/sync';
+import type { SyncEtag } from '$lib/models/sync';
+import { workspaceResourceIdentitySchema } from '$lib/models/workspace-sync';
 import { syncChangePageSize, type SyncChangePage } from '$lib/models/sync';
 
 export interface SyncChangesRepository {
@@ -26,11 +28,19 @@ const batchSchema = z.object({
 });
 
 export class WorkspaceSyncChanges implements SyncChangesRepository {
-	constructor(private readonly db: Database) {}
+	constructor(
+		private readonly db: Database,
+		private readonly resourceKey: (identity: WorkspaceResourceIdentity) => string,
+		private readonly versionEtag: (version: bigint) => SyncEtag
+	) {}
 	async pullPage(actor: ActorContext, since: SyncCursor): Promise<SyncPage<WorkspaceRecord>> {
 		return this.db.transaction(
 			async (transaction) => {
-				const page = await new WorkspaceSyncChanges(transaction).readPage(actor, since);
+				const page = await new WorkspaceSyncChanges(
+					transaction,
+					this.resourceKey,
+					this.versionEtag
+				).readPage(actor, since);
 				const objects = new WorkspaceSyncObjects(transaction);
 				const records: SyncPage<WorkspaceRecord>['records'][number][] = [];
 				for (const change of page.changes) {
@@ -77,8 +87,8 @@ export class WorkspaceSyncChanges implements SyncChangesRepository {
 			hasMore: batch.more,
 			changes: batch.changes.map((change) => ({
 				kind: change.operation === 'delete' ? ('delete' as const) : ('upsert' as const),
-				key: workspaceResourceKey(workspaceResourceIdentitySchema.parse(change)),
-				etag: syncEtag(BigInt(change.version))
+				key: this.resourceKey(workspaceResourceIdentitySchema.parse(change)),
+				etag: this.versionEtag(BigInt(change.version))
 			}))
 		};
 	}

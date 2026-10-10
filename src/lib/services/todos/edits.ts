@@ -28,3 +28,6 @@ export function applyTodoEdit(
 		? { ...fields, status, completedAt: todo.status === 'done' ? todo.completedAt : timestamp }
 		: { ...fields, status, completedAt: undefined };
 }
+
+export const hasTodoEdits = (input: UpdateTodoInput): boolean =>
+	Object.keys(input).some((key) => key !== 'todoId');

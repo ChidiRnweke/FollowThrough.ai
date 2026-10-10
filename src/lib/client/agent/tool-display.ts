@@ -1,4 +1,5 @@
-import { isAgentPayloadObject, type AgentPayload } from '$lib/models/agent/payload';
+import { type AgentPayload } from '$lib/models/agent/payload';
+import { isAgentPayloadObject } from '$lib/services/agent/payload';
 import { toolResultFieldsSchema, type ToolResultFields } from '$lib/models/tool-display';
 
 /** Read recorded controller envelopes; do not confuse their source with their subject. */

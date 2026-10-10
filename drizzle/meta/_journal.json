@@ -435,6 +435,13 @@
       "when": 1791111053148,
       "tag": "0061_widget_search_chunks",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1791618967033,
+      "tag": "0062_attachment_object_removals",
+      "breakpoints": true
     }
   ]
 }

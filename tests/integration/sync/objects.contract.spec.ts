@@ -1,9 +1,10 @@
+import { syncEtag } from '$lib/services/sync/versions';
 import { describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
 import { initialSyncCursor } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { actor, context, seedNote } from '../database-harness';
 
 describe('conditional normalized object reads', () => {
@@ -18,7 +19,11 @@ describe('conditional normalized object reads', () => {
 	it('returns a normalized note and the version of that same database snapshot', async () => {
 		const { note, owner } = await seedNote('8701');
 		const identity = { type: 'notes' as const, id: [note.id] as [string] };
-		const batch = await new WorkspaceSyncChanges(context.db).pullPage(owner, initialSyncCursor);
+		const batch = await new WorkspaceSyncChanges(
+			context.db,
+			workspaceResourceKey,
+			syncEtag
+		).pullPage(owner, initialSyncCursor);
 		const entry = batch.records.find((entry) => entry.key === workspaceResourceKey(identity));
 		if (entry?.resource.kind !== 'found')
 			throw new Error('Seeded note is missing from the journal');
@@ -146,7 +151,10 @@ it('normalizes PostgreSQL provenance timestamps in complete pages', async () => 
 	const runId = crypto.randomUUID();
 	await context.client`insert into provenance (id, user_id, producer_kind, producer_name, pipeline, run_id, model, created_at)
  values (${id}, ${owner.userId}, 'agent', 'FollowThrough Workbench Agent', 'agent', ${runId}, 'contract-model', '2026-09-14T10:30:45.123+02:00')`;
-	const page = await new WorkspaceSyncChanges(context.db).pullPage(owner, initialSyncCursor);
+	const page = await new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag).pullPage(
+		owner,
+		initialSyncCursor
+	);
 	expect(
 		page.records.find(
 			(entry) => entry.key === workspaceResourceKey({ type: 'provenance', id: [id] })

@@ -1,6 +1,6 @@
 import type { WidgetExport } from '$lib/models/widgets';
 import { z } from 'zod';
-import type { ProseMirrorDocument } from '$lib/models/notes';
+import type { ProseMirrorDocument, ProseMirrorNode } from '$lib/models/notes';
 
 export interface ExportInput extends DiagramRenders {
 	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
@@ -32,10 +32,23 @@ export interface ExportHeadingSpacing {
 	readonly after: number;
 }
 
+export interface ExportNodePresentation {
+	readonly children: readonly ProseMirrorNode[];
+	readonly text: string;
+	readonly marks: {
+		readonly bold: boolean;
+		readonly italic: boolean;
+		readonly code: boolean;
+		readonly href?: string;
+	};
+	readonly columnShares: readonly number[] | undefined;
+}
+
 export interface PreparedExport extends Omit<
 	ExportInput,
 	'settings' | 'images' | 'widgets' | keyof DiagramRenders
 > {
+	readonly nodes: ReadonlyMap<ProseMirrorNode, ExportNodePresentation>;
 	readonly settings: ExportSettings;
 	readonly images: ReadonlyMap<string, string>;
 	readonly widgets: ReadonlyMap<string, WidgetExport>;
@@ -214,59 +227,6 @@ export interface DiagramSize {
 	readonly width: number;
 	readonly height: number;
 }
-
-/**
- * Natural size of an SVG, from its viewBox.
- *
- * Lives here rather than beside either generator because both sides of the export need it:
- * the browser reads it off its own render to send `diagramSizes`, and the server falls back
- * to it for any caller that still ships the full markup.
- */
-export function svgViewBoxSize(svg: string): DiagramSize | undefined {
-	const attribute = /(?:^|\s)viewBox\s*=\s*(["'])([^"']*)\1/.exec(svg)?.[2];
-	if (attribute === undefined) return undefined;
-	const values = attribute.trim().split(/\s*,\s*|\s+/);
-	const number = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
-	if (values.length !== 4 || !values.every((value) => number.test(value))) return undefined;
-	const viewBox = values.map(Number);
-	if (!viewBox.every(Number.isFinite) || viewBox[2]! <= 0 || viewBox[3]! <= 0) return undefined;
-	return { width: viewBox[2]!, height: viewBox[3]! };
-}
-
-/**
- * Each column's share of the table width, or nothing when the document does not
- * declare a usable width for every column.
- *
- * One value rather than two, because "every column has a width" and "there is a
- * total to divide by" are the same fact. Both renderers used to hold them apart
- * — a `colwidths` array of `number | undefined` beside a `totalWidth` that was
- * `undefined` in exactly the same cases — and both then re-asserted the fact
- * their own guard had already proved, with `(w as number) / totalWidth` inside
- * a `map` the `every` narrowing does not reach.
- *
- * Shares rather than widths, because a PDF divides the content width in points
- * and a DOCX divides it in twips. Sharing the arithmetic is also the point:
- * this ran twice, and a fix to one copy would not have reached the other.
- */
-export const columnShares = (
-	colwidths: readonly (readonly number[] | null | undefined)[],
-	columnCount: number
-): readonly number[] | undefined => {
-	if (colwidths.length !== columnCount) return undefined;
-	const widths: number[] = [];
-	for (const declared of colwidths) {
-		const width = declared?.[0];
-		if (width === undefined || !Number.isFinite(width) || width <= 0) return undefined;
-		widths.push(width);
-	}
-	const total = widths.reduce((sum, width) => sum + width, 0);
-	if (Number.isFinite(total)) return widths.map((width) => width / total);
-	// Scaling first preserves finite ratios when adding valid widths overflows.
-	const maximum = widths.reduce((largest, width) => Math.max(largest, width), 0);
-	const scaled = widths.map((width) => width / maximum);
-	const scaledTotal = scaled.reduce((sum, width) => sum + width, 0);
-	return scaled.map((width) => width / scaledTotal);
-};
 
 /**
  * Browser-rendered diagrams travelling with an export request, keyed by SHA-256 of the

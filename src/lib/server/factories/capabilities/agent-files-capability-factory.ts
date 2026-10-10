@@ -1,3 +1,4 @@
+import { getEncoding } from 'js-tiktoken';
 import type { Database } from '$lib/server/db';
 import { AgentFileRecords } from '$lib/server/repositories/agent-files/postgres/agent-files';
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
@@ -25,6 +26,7 @@ export const createAgentFilesCapability = (
 	return {
 		repository,
 		reader: new AgentVirtualFiles({
+			countTokens,
 			projects: input.projects,
 			notes: input.notes,
 			attachments: new AttachmentRecords(input.db),
@@ -34,3 +36,6 @@ export const createAgentFilesCapability = (
 		})
 	};
 };
+
+const tokenEncoder = getEncoding('cl100k_base');
+const countTokens = (text: string): number => tokenEncoder.encode(text).length;

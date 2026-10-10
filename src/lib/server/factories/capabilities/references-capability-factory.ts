@@ -1,4 +1,5 @@
-import { openRouterWebSearchTool, REFERENCE_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
+import { REFERENCE_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
+import { openRouterWebSearchTool } from '$lib/server/services/agent/runs/reasoning';
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
 import { resolveWebResearch } from '$lib/services/agent/web-research';
 import type { Database } from '$lib/server/db';
@@ -14,7 +15,7 @@ import { ReferenceResearch } from '$lib/server/repositories/references/web-resea
 import { ReferenceRanking } from '$lib/server/services/references/ranking';
 import type { ReferenceFinder } from '$lib/server/services/references/contracts';
 import { operationObserver } from '$lib/server/services/telemetry';
-import { normalizeLanguageModelId } from '$lib/models/agent';
+import { normalizeLanguageModelId } from '$lib/services/agent/model-selection';
 
 export interface ReferencesCapabilityInput {
 	readonly db: Database;

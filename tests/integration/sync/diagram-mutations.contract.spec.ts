@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DiagramId } from '$lib/models/diagrams';
-import { diagramEtag } from '$lib/models/diagrams';
+import { diagramEtag } from '$lib/services/diagrams/editing';
 import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';

@@ -85,7 +85,7 @@ produce.
         heading carries `id` / `data-toc-id`, and media `width` / `height` accept a number as well
         as a string — the corpus found that one, stored by the paste path.
   - [x] `ProseMirrorUnknownNode`: a fallback arm at _block_ granularity, and
-        `readProseMirrorDocument`, a total reader the DB mappers use. An arm on `Note.document`
+        `storedDocumentReadSchema`, the total schema the DB mappers invoke. An arm on `Note.document`
         would have handed every consumer a case it cannot act on; `pdf.ts` and `docx.ts` already
         had `default:` arms, so the blast radius was zero. Write boundaries keep the strict tree —
         `findProseMirrorDocumentIssue` still rejects an unmodelled block, and two existing specs
@@ -189,8 +189,8 @@ produce.
         with it.
   - [x] A tool result is `ProviderToolOutput` — `none`, `value`, or `corrupt` — rather than an
         optional payload. An unreadable result settles the row as `failed`, never as a `succeeded`
-        row carrying nothing (ADR 0015). `readAgentPayload` classifies it rather than a zod schema,
-        because `z.record` accepts a `Date` and parses it to `{}`.
+        row carrying nothing (ADR 0015). `agentPayloadResultSchema` classifies it. The schema rejects class instances and
+        preserves all own JSON keys, including `__proto__`.
   - [x] `services/diagrams/authoring.ts` was the second consumer and its port read
         `map(event: unknown)` — the loosest signature in the repository, loose only because
         `ToolStreamEvent` was never exported. It takes `ProviderStreamEvent` now.
@@ -520,7 +520,7 @@ DiagramIcon` predicate. A shape miss raises `ExternalServiceError` rather than a
         reach a log. Behaviour change worth knowing: an entry whose `secretValue` is not a string
         used to be dropped silently and surface later as an unset environment variable. It now
         fails the fetch.
-  - [x] The eval aux cache parses with `readAgentPayloadObject` and quarantines an unreadable file
+  - [x] The eval aux cache parses with `agentPayloadObjectResultSchema.parse` and quarantines an unreadable file
         to `<path>.corrupt-<ts>`, following `result-log.ts`. Not an empty-cache fallback: an empty
         cache silently re-bills a real provider, so the message names that consequence.
   - [x] The migration journal was typed by annotation over `JSON.parse`'s `any`, which checks
@@ -598,7 +598,7 @@ DiagramIcon` predicate. A shape miss raises `ExternalServiceError` rather than a
         an empty report: the import ran, and an empty report would claim it imported nothing.
   - [x] The two eval sites needed no schema at all. `run-case.ts` cast only because `filter` answers
         a boolean and throws away the narrowing it proved; folding the test into the `map` deletes
-        it. `multi-step.ts` reads its tool output through `readAgentPayload` /
+        it. `multi-step.ts` reads its tool output through `agentPayloadResultSchema.parse` /
         `isAgentPayloadObject`, which its three sibling case files already do — it was the one TN-50
         did not reach. A corrupt output now names itself in the Phoenix explanation instead of
         scoring as evidence the model missed.
@@ -745,10 +745,11 @@ guarantee into runtime hope, and everything after it still probes. This codebase
 of it, and two already disagreed about arrays.
 
 **Remedy:** a zod schema at the reader. Exemplar: `readToolFailure`
-(`src/lib/models/agent/tool-failure.ts`) — `safeParse` at the point of use, typed result out.
+(`src/lib/server/repositories/agent/tool-failure.ts`) invokes the shared schema at the protocol
+reader and returns a typed result.
 
 Where the value is foreign JSON that many surfaces read, name the wire first and project from it:
-`readAgentPayload` (`src/lib/models/agent/payload.ts`) turns `unknown` into a closed
+`agentPayloadResultSchema.parse` (`src/lib/models/agent/payload.ts`) turns `unknown` into a closed
 `AgentPayload` union that narrows under a plain `typeof`, and `toolResultFields`
 (`src/lib/components/agent/actions/tool-result-fields.ts`) reads the named fields off it. The rule
 is detected by signature, so renaming the guard does not evade it. A predicate that narrows

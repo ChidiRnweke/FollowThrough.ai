@@ -10,7 +10,7 @@ import type {
 import { defaultExportSettings } from '$lib/models/deliverables';
 import AdmZip from 'adm-zip';
 import { generateDocx } from './docx';
-import { prepareExport } from './export-preparation';
+import { prepareExport } from '$lib/services/deliverables/export-preparation';
 import type { ExportInput } from '$lib/models/deliverables';
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 

@@ -1,4 +1,18 @@
-import { and, asc, count, desc, eq, ilike, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { projects } from '$lib/server/db/schema/notes';
+import {
+	inArray,
+	isNull as projectIsNull,
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	ilike,
+	isNotNull,
+	isNull,
+	or,
+	sql
+} from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
@@ -20,11 +34,25 @@ import { toDiagram, toDiagramRevision } from '$lib/server/db/mappers';
 
 export class DiagramRecords implements DiagramRepository {
 	constructor(private readonly database: Database) {}
+	private activeProjectIds(actor: ActorContext) {
+		return this.database
+			.select({ id: projects.id })
+			.from(projects)
+			.where(and(eq(projects.userId, actor.userId), projectIsNull(projects.archivedAt)));
+	}
 	async findForWrite(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.diagrams)
-			.where(and(eq(schema.diagrams.id, id), eq(schema.diagrams.userId, actor.userId)))
+			.where(
+				and(
+					eq(schema.diagrams.id, id),
+					and(
+						eq(schema.diagrams.userId, actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+					)
+				)
+			)
 			.for('update');
 		return row ? toDiagram(row) : undefined;
 	}
@@ -32,7 +60,15 @@ export class DiagramRecords implements DiagramRepository {
 		const [row] = await this.database
 			.select()
 			.from(schema.diagrams)
-			.where(and(eq(schema.diagrams.id, id), eq(schema.diagrams.userId, actor.userId)));
+			.where(
+				and(
+					eq(schema.diagrams.id, id),
+					and(
+						eq(schema.diagrams.userId, actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+					)
+				)
+			);
 		return row ? toDiagram(row) : undefined;
 	}
 	async findByConversation(
@@ -45,7 +81,10 @@ export class DiagramRecords implements DiagramRepository {
 			.where(
 				and(
 					eq(schema.diagrams.conversationId, conversationId),
-					eq(schema.diagrams.userId, actor.userId),
+					and(
+						eq(schema.diagrams.userId, actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+					),
 					// A conversation whose diagram is in the trash has none as far as the
 					// studio is concerned: refusing a new one by naming a diagram the user
 					// threw away would be worse than the guess it replaced.
@@ -77,7 +116,10 @@ export class DiagramRecords implements DiagramRepository {
 				.from(schema.diagrams)
 				.where(
 					and(
-						eq(schema.diagrams.userId, actor.userId),
+						and(
+							eq(schema.diagrams.userId, actor.userId),
+							inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+						),
 						eq(schema.diagrams.sourceNoteId, noteId),
 						// A note renders a trashed diagram as unavailable, which is what the
 						// gallery's own confirmation promises before it moves one.
@@ -103,7 +145,10 @@ export class DiagramRecords implements DiagramRepository {
 			: undefined;
 		return and(
 			eq(schema.diagrams.projectId, projectId),
-			eq(schema.diagrams.userId, actor.userId),
+			and(
+				eq(schema.diagrams.userId, actor.userId),
+				inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+			),
 			// The gallery and its count both build from here, so one filter keeps the
 			// number and the grid telling the same story about what is in the project.
 			isNull(schema.diagrams.archivedAt),
@@ -205,7 +250,10 @@ export class DiagramRecords implements DiagramRepository {
 			.where(
 				and(
 					eq(schema.diagrams.id, write.diagramId),
-					eq(schema.diagrams.userId, actor.userId),
+					and(
+						eq(schema.diagrams.userId, actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+					),
 					eq(schema.diagrams.kind, write.kind),
 					isNull(schema.diagrams.archivedAt),
 					eq(schema.diagrams.updatedAt, new Date(write.expectedUpdatedAt)),
@@ -241,7 +289,10 @@ export class DiagramRecords implements DiagramRepository {
 			.where(
 				and(
 					eq(schema.diagrams.id, diagram.id),
-					eq(schema.diagrams.userId, actor.userId),
+					and(
+						eq(schema.diagrams.userId, actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+					),
 					eq(schema.diagrams.currentRevision, expected),
 					eq(schema.diagrams.publishedRevision, expectedPublishedRevision),
 					isNull(schema.diagrams.archivedAt)
@@ -311,7 +362,15 @@ export class DiagramRecords implements DiagramRepository {
 				archivedAt: diagram.archivedAt ? new Date(diagram.archivedAt) : null,
 				updatedAt: new Date(diagram.updatedAt)
 			})
-			.where(and(eq(schema.diagrams.id, diagram.id), eq(schema.diagrams.userId, actor.userId)))
+			.where(
+				and(
+					eq(schema.diagrams.id, diagram.id),
+					and(
+						eq(schema.diagrams.userId, actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+					)
+				)
+			)
 			.returning();
 		if (!row) throw new NotFoundError('Diagram was not found', { diagramId: diagram.id });
 		return toDiagram(row);
@@ -319,8 +378,17 @@ export class DiagramRecords implements DiagramRepository {
 
 	async listArchived(actor: ActorContext, projectId?: ProjectId): Promise<readonly Diagram[]> {
 		const scope = projectId
-			? and(eq(schema.diagrams.userId, actor.userId), eq(schema.diagrams.projectId, projectId))
-			: eq(schema.diagrams.userId, actor.userId);
+			? and(
+					and(
+						eq(schema.diagrams.userId, actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+					),
+					eq(schema.diagrams.projectId, projectId)
+				)
+			: and(
+					eq(schema.diagrams.userId, actor.userId),
+					inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+				);
 		return (
 			await this.database
 				.select()
@@ -336,7 +404,10 @@ export class DiagramRecords implements DiagramRepository {
 			.where(
 				and(
 					eq(schema.diagrams.id, id),
-					eq(schema.diagrams.userId, actor.userId),
+					and(
+						eq(schema.diagrams.userId, actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+					),
 					isNotNull(schema.diagrams.archivedAt)
 				)
 			)

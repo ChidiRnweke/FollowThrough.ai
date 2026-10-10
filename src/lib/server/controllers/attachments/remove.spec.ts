@@ -27,3 +27,54 @@ describe('attachment search removal', () => {
 		});
 	});
 });
+
+it('keeps attachment bytes when index removal rolls back', async () => {
+	const { service, repository, search, storage, process } = setupAttachments();
+	await process(view('application/pdf'));
+	const controller = new Attachments(
+		capabilityDependencies<AttachmentsDependencies>({
+			attachments: service,
+			attachmentIndexer: capabilityDependencies<AttachmentsDependencies['attachmentIndexer']>({
+				remove: async () => {
+					throw new Error('Index unavailable');
+				}
+			}),
+			transactionRunner: new InMemoryTransactionRunner([repository, search])
+		})
+	);
+	const result = await controller
+		.removeById(testActor(), view('application/pdf').attachment.id)
+		.then(
+			() => 'removed',
+			() => 'failed'
+		);
+	expect({
+		result,
+		attachment: repository.found?.attachment.id,
+		bytes: storage.objects.has('objects/doc'),
+		queued: [...repository.pendingObjectRemovals]
+	}).toEqual({
+		result: 'failed',
+		attachment: view('application/pdf').attachment.id,
+		bytes: true,
+		queued: []
+	});
+});
+
+it('commits physical cleanup intent without deleting bytes inside the transaction', async () => {
+	const { service, repository, search, storage, process } = setupAttachments();
+	await process(view('application/pdf'));
+	const controller = new Attachments(
+		capabilityDependencies<AttachmentsDependencies>({
+			attachments: service,
+			attachmentIndexer: new ContentIndex(search, new InMemoryEmbeddingClient().model).attachments,
+			transactionRunner: new InMemoryTransactionRunner([repository, search])
+		})
+	);
+	await controller.removeById(testActor(), view('application/pdf').attachment.id);
+	expect({
+		attachment: repository.found,
+		bytes: storage.objects.has('objects/doc'),
+		queued: [...repository.pendingObjectRemovals]
+	}).toEqual({ attachment: undefined, bytes: true, queued: ['objects/doc'] });
+});

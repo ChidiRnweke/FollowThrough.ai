@@ -36,12 +36,12 @@ Parsing happens only in named parse zones:
 
 - the remote functions (`src/lib/remote/`), for request data;
 - the database mappers and repository read paths, for stored rows and JSON columns;
-- model-local parser functions, for schemas that several zones share;
 - co-located external-provider adapters and event mappers, for provider responses and LLM stream
   items;
 - the client event and storage readers, for server events and persisted browser state.
 
-A schema lives next to the type it produces in `src/lib/models/`, with no I/O. A
+A schema lives next to the type it produces in `src/lib/models/`, with no I/O. Boundaries
+call that schema directly. Models do not export parser wrappers or procedural readers. A
 service or controller never parses: it receives narrow values from the remote functions above it
 and from repositories or provider adapters below it.
 
@@ -93,8 +93,8 @@ allowance rather than weakening the rule.
 - `src/lib/models/notes/index.ts` declared document content as `Record<string, unknown>[]`, the
   first untyped producer. `src/lib/server/services/agent/runs/contracts.ts` returned the agent
   run context as `Readonly<Record<string, unknown>>`, the second.
-- `parseSuggestionPayload`, `parseRunAgentInput`, and `readToolFailure` in `src/lib/models/` show
-  the schema-in-models pattern in use.
+- `persistedSessionItemSchema` and `agentPayloadSchema` in `src/lib/models/agent/` define
+  shared shapes. Repository and client readers invoke those schemas at their boundaries.
 - `PersistedSessionItem` (`src/lib/models/agent/session-item.ts`) shows the third-party fallback
   arm: its `unrecognised` member keeps rows written by a newer SDK readable and lossless.
 - `StoredSuggestion` shows the list-read fallback arm: the inbox drops unreadable rows and warns

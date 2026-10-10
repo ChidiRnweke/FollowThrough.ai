@@ -1,7 +1,8 @@
+import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { Widget, WidgetId } from '$lib/models/widgets';
-import { NotFoundError, OwnershipError } from '$lib/errors';
+import { NotFoundError, OwnershipError, ValidationError } from '$lib/errors';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import type { WidgetRepository, WidgetRevisions } from '$lib/server/repositories/widgets';
 
@@ -9,7 +10,8 @@ import type { WidgetRepository, WidgetRevisions } from '$lib/server/repositories
 export class WidgetLibrary {
 	constructor(
 		private readonly widgets: WidgetRepository,
-		private readonly projects: ProjectRepository
+		private readonly projects: ProjectRepository,
+		private readonly notes: Pick<NoteRepository, 'findById'>
 	) {}
 
 	async get(actor: ActorContext, widgetId: WidgetId): Promise<Widget> {
@@ -33,6 +35,12 @@ export class WidgetLibrary {
 		if (widget.userId !== actor.userId)
 			throw new OwnershipError('Cannot create another user’s widget');
 		await this.requireProject(actor, widget.projectId);
+		if (widget.sourceNoteId) {
+			const note = await this.notes.findById(actor, widget.sourceNoteId);
+			if (!note) throw new NotFoundError('Widget source note was not found');
+			if (note.projectId !== widget.projectId)
+				throw new ValidationError('Widget source note must belong to its project');
+		}
 		return this.widgets.insert(actor, widget);
 	}
 

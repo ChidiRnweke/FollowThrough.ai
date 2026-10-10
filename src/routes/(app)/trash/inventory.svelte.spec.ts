@@ -9,8 +9,8 @@ import {
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
-import { syncEtag } from '$lib/models/sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { syncEtag } from '$lib/services/sync/versions';
 
 const sessions: ReturnType<typeof workspaceResourcesFixture>[] = [];
 afterEach(() => {

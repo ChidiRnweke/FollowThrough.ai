@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { AgentPreferenceRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
@@ -16,7 +16,7 @@ it.each([false, true])(
 	'retains concurrent independent preference edits (existing row: %s)',
 	async (existing) => {
 		const { owner } = await seedNote(existing ? '16901' : '16902');
-		const records = new AgentPreferenceRecords(context.db);
+		const records = new AgentPreferenceRecords(context.db, workspaceResourceKey);
 		if (existing)
 			await records.upsert(owner, {
 				userId: owner.userId,
@@ -32,7 +32,9 @@ it.each([false, true])(
 			const { database, transactionRunner } = createTransactionContext(connection.db);
 			return new AgentSettings(
 				capabilityDependencies<AgentSettingsDependencies>({
-					preferences: new AgentPreferenceCatalog(new AgentPreferenceRecords(database)),
+					preferences: new AgentPreferenceCatalog(
+						new AgentPreferenceRecords(database, workspaceResourceKey)
+					),
 					transactionRunner,
 					now: () => now
 				})

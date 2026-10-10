@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { widgetTemplates, type WidgetData, type WidgetLayout } from '$lib/models/widgets';
-import { resolveWidgetState, widgetDataOf } from './formulas';
+import { resolveWidgetState, widgetDataOf } from './edits';
 
 const layoutWith = (derived: Record<string, string>): WidgetLayout => ({
 	root: 'text',

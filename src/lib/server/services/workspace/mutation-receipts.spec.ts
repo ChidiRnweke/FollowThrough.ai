@@ -11,7 +11,7 @@ import {
 	testActor,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { syncEtag } from '$lib/models/sync';
+import { syncEtag } from '$lib/services/sync/versions';
 import type { NoteMutationRequest } from '$lib/models/workspace-mutations';
 
 const input: NoteMutationRequest = {

@@ -7,7 +7,8 @@ import { personaWorkspace } from '../fixtures/workspaces/profile';
 import { conflictingScopeWorkspace } from '../fixtures/workspaces/engineering';
 import { findCall, scoreToolCalling, scoreToolDiscovery } from '../assertions/tool-calls';
 import { ARCHETYPES, type EvalCase } from './types';
-import { isAgentPayloadObject, type AgentPayloadObject } from '$lib/models/agent/payload';
+import { type AgentPayloadObject } from '$lib/models/agent/payload';
+import { isAgentPayloadObject } from '$lib/services/agent/payload';
 
 /**
  * The agent-level half of tool coverage.

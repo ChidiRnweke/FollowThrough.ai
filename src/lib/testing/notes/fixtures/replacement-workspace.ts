@@ -10,8 +10,8 @@ import { MutationQueue } from '$lib/client/sync/mutation-queue';
 import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
-import { syncEtag } from '$lib/models/sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { syncEtag } from '$lib/services/sync/versions';
 import {
 	noteBuilder,
 	projectBuilder,

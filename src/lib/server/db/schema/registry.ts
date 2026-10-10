@@ -1332,3 +1332,9 @@ export type ProjectTemplate = typeof projectTemplates.$inferSelect;
 export type ToolPreferenceRow = typeof toolPreferences.$inferSelect;
 export type ProjectToolOverrideRow = typeof projectToolOverrides.$inferSelect;
 export type UserPreferencesRow = typeof userPreferences.$inferSelect;
+
+/** Durable physical deletion, independent of attachment/user rows that may already be gone. */
+export const attachmentObjectRemovals = pgTable('attachment_object_removals', {
+	objectKey: text('object_key').primaryKey(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});

@@ -1,6 +1,6 @@
 import { NotFoundError } from '$lib/errors';
 import { projects } from '$lib/server/db/schema/notes';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type { ExportSettings } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
@@ -18,6 +18,7 @@ export class ExportSettingsRecords implements ExportSettingsRepository {
 	constructor(private readonly database: Database) {}
 
 	async find(actor: ActorContext, projectId: ProjectId): Promise<ExportSettings | undefined> {
+		await this.requireProject(actor, projectId);
 		const [row] = await this.database
 			.select()
 			.from(schema.exportSettings)
@@ -35,11 +36,7 @@ export class ExportSettingsRecords implements ExportSettingsRepository {
 		projectId: ProjectId,
 		settings: ExportSettings
 	): Promise<ExportSettings> {
-		const [project] = await this.database
-			.select({ id: projects.id })
-			.from(projects)
-			.where(and(eq(projects.id, projectId), eq(projects.userId, actor.userId)));
-		if (!project) throw new NotFoundError('Project was not found');
+		await this.requireProject(actor, projectId);
 		const [row] = await this.database
 			.insert(schema.exportSettings)
 			.values({ userId: actor.userId, projectId, settings: { ...settings } })
@@ -49,5 +46,18 @@ export class ExportSettingsRecords implements ExportSettingsRepository {
 			})
 			.returning();
 		return toSettings(row!.settings);
+	}
+	private async requireProject(actor: ActorContext, projectId: ProjectId): Promise<void> {
+		const [project] = await this.database
+			.select({ id: projects.id })
+			.from(projects)
+			.where(
+				and(
+					eq(projects.id, projectId),
+					eq(projects.userId, actor.userId),
+					isNull(projects.archivedAt)
+				)
+			);
+		if (!project) throw new NotFoundError('Project was not found');
 	}
 }

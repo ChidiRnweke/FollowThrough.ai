@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
 import type { ActorContext, UserId } from '$lib/models/identity';
-import { FIRST_CLASS_TOOL_SET, type ToolName } from '$lib/models/agent/tool-catalog';
+import { type ToolName } from '$lib/models/agent/tool-catalog';
+import { FIRST_CLASS_TOOL_SET } from '$lib/services/agent/tool-catalog';
 import { rankToolsForGoal } from '../lab/tool-catalog';
 import { ARCHETYPES, type EvalCase } from './types';
 

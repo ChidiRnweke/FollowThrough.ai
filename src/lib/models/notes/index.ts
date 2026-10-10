@@ -1144,30 +1144,8 @@ export const storedDocumentSchema: z.ZodType<ProseMirrorDocument> = z
 	})
 	.strict();
 
-/**
- * Parse a document at a *write* boundary. Throws a zod error naming the first bad
- * path.
- *
- * Strict at write, resilient at read (ADR 0037). A request body that does not
- * parse is input the caller can fix, so rejecting it loudly is the whole point.
- * Data already sitting in a column is not — see {@link readProseMirrorDocument}.
- */
-// audit-allow: no-unknown-type — The strict write-side parse for a stored or imported document.
-export const parseProseMirrorDocument = (value: unknown): ProseMirrorDocument =>
-	proseMirrorDocumentSchema.parse(value);
-
-/**
- * Read a document out of storage. Total: it never throws.
- *
- * Individual nodes already degrade to {@link ProseMirrorUnknownNode} on their
- * own, so this only catches a column that is not a `doc` at all — genuine
- * corruption. Even then it answers with a document, because the caller is a
- * mapper inside a list: `toNote` runs over every row of `listActive`, and a
- * throw from one row is what took `/today` down. A reported failure the renderer
- * shows beats an exception the page cannot survive (ADR 0015).
- */
-// audit-allow: no-unknown-type — The total read the DB mappers use for a stored document.
-export const readProseMirrorDocument = (value: unknown): ProseMirrorDocument => {
+/** Stored corruption becomes an explicit unknown block that the renderer displays. */
+export const storedDocumentReadSchema = z.preprocess((value) => {
 	const parsed = storedDocumentSchema.safeParse(value);
 	if (parsed.success) return parsed.data;
 	const raw = attrValueSchema.safeParse(value);
@@ -1181,45 +1159,7 @@ export const readProseMirrorDocument = (value: unknown): ProseMirrorDocument => 
 			}
 		]
 	};
-};
-
-/** Every block that failed to parse, for the corpus spec and `check:boundaries`. */
-export const unknownProseMirrorNodes = (
-	document: ProseMirrorDocument
-): readonly ProseMirrorUnknownNode[] =>
-	(document.content ?? []).filter((node) => node.type === 'unknown');
-
-// ---------------------------------------------------------------------------
-// Validation (import boundary reports issues rather than throwing)
-// ---------------------------------------------------------------------------
-
-export interface ProseMirrorValidationIssue {
-	readonly path: string;
-	readonly message: string;
-}
-
-const issuePath = (path: readonly PropertyKey[]): string =>
-	path.reduce<string>(
-		(acc, segment) =>
-			typeof segment === 'number' ? `${acc}[${segment}]` : `${acc}.${String(segment)}`,
-		'$'
-	);
-
-/**
- * The first thing wrong with a document, or `undefined` when it parses clean.
- * The importer reports this instead of throwing so one bad note fails without
- * rejecting the files that imported fine (ADR 0014, ADR 0015).
- */
-export const findProseMirrorDocumentIssue = (
-	// audit-allow: no-unknown-type — Reports why a candidate document is unmodelled, so it has to accept one.
-	document: unknown
-): ProseMirrorValidationIssue | undefined => {
-	const result = proseMirrorDocumentSchema.safeParse(document);
-	if (result.success) return undefined;
-	const issue = result.error.issues[0];
-	if (!issue) return { path: '$', message: 'document is invalid' };
-	return { path: issuePath(issue.path), message: issue.message };
-};
+}, storedDocumentSchema);
 
 export * from './note-patch';
 
@@ -1338,33 +1278,6 @@ export interface NotePublicationWrite {
 	readonly publishedRevision: number;
 	readonly publishedAt: DateTime;
 	readonly updatedAt: DateTime;
-}
-
-/** Direct children and inline text use the editor's existing document representation. */
-export const documentNodeContent = (node: ProseMirrorNode): readonly ProseMirrorNode[] =>
-	'content' in node ? (node.content ?? []) : [];
-export function documentInlineText(node: ProseMirrorNode): string {
-	return node.type === 'text'
-		? node.text
-		: documentNodeContent(node).map(documentInlineText).join('');
-}
-export function documentTextMarks(node: ProseMirrorTextNode): {
-	bold: boolean;
-	italic: boolean;
-	code: boolean;
-	href?: string;
-} {
-	let bold = false,
-		italic = false,
-		code = false;
-	let href: string | undefined;
-	for (const mark of node.marks ?? []) {
-		if (mark.type === 'bold') bold = true;
-		if (mark.type === 'italic') italic = true;
-		if (mark.type === 'code') code = true;
-		if (mark.type === 'link' && typeof mark.attrs?.href === 'string') href = mark.attrs.href;
-	}
-	return { bold, italic, code, ...(href !== undefined ? { href } : {}) };
 }
 
 /** Resolved built-in lifecycle and placement repair; authored content is not part of this write. */

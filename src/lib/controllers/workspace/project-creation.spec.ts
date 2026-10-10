@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { prepareWorkspaceCommand } from './commands';
 import { WorkspaceViews } from './views';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import {
 	testActor,
 	testNow,

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import type { UpdateTodoInput } from '$lib/models/todos';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
-import { syncEtag } from '$lib/models/sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { syncEtag } from '$lib/services/sync/versions';
 import { testNow, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
 import {

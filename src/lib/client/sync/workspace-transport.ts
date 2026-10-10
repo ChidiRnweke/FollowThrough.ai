@@ -2,13 +2,14 @@ import { z } from 'zod';
 import { workspaceBootstrapSchema } from '$lib/models/workspace-bootstrap';
 import { readWorkspaceBootstrap } from '$lib/remote/workspace/bootstrap.remote';
 import { syncPageSchema } from '$lib/models/sync';
-import { workspaceResourceIdentitySchema, workspaceResourceKey } from '$lib/models/workspace-sync';
+import { workspaceResourceIdentitySchema } from '$lib/models/workspace-sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import {
 	workspaceObjectReadSchema,
 	workspaceRecordSchema,
-	workspaceRecordIdentity,
 	type WorkspaceRecord
 } from '$lib/models/workspace-records';
+import { workspaceRecordIdentity } from '$lib/services/workspace/commands';
 import { pullWorkspaceChangePage, readWorkspaceResource } from '$lib/remote/workspace/sync.remote';
 import {
 	workspaceMutationResultSchema,

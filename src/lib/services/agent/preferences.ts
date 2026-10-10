@@ -1,3 +1,5 @@
+import { ValidationError } from '$lib/errors';
+import { webSearchEngines } from '$lib/models/agent';
 import type { AgentPreferences, UpdateAgentPreferencesInput } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 
@@ -32,3 +34,27 @@ export const applyAgentPreferenceUpdate = (
 		? { inlineSuggestionsEnabled: input.inlineSuggestionsEnabled }
 		: {})
 });
+
+/**
+ * Rejected rather than clamped: a caller that asks for 500 search results has
+ * misunderstood the setting, and silently storing 50 would tell them they got
+ * what they asked for.
+ */
+const assertRange = (
+	label: string,
+	value: number | null | undefined,
+	minimum: number,
+	maximum: number
+): void => {
+	if (value === undefined || value === null) return;
+	if (!Number.isInteger(value) || value < minimum || value > maximum)
+		throw new ValidationError(`${label} must be a whole number between ${minimum} and ${maximum}`);
+};
+
+export const validateAgentPreferenceUpdate = (input: UpdateAgentPreferencesInput): void => {
+	if (input.webSearchEngine && !webSearchEngines.includes(input.webSearchEngine))
+		throw new ValidationError(`Web search engine must be one of: ${webSearchEngines.join(', ')}`);
+	assertRange('Web search results', input.webSearchMaxResults, 1, 50);
+	assertRange('Total web search results', input.webSearchMaxTotalResults, 1, 100);
+	assertRange('Agent turn limit', input.agentMaxTurns, 1, 50);
+};

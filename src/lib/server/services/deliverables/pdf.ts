@@ -1,10 +1,5 @@
 import type { WidgetExportBlock } from '$lib/models/widgets';
 import type { PreparedExport, PreparedDiagram } from '$lib/models/deliverables';
-import {
-	documentNodeContent as nodeContent,
-	documentInlineText as collectText,
-	documentTextMarks
-} from '$lib/models/notes';
 import { resolve, sep } from 'node:path';
 import { openSync as openFontSync } from 'fontkit';
 import type { Font } from 'fontkit';
@@ -24,7 +19,6 @@ import type {
 	ProseMirrorNode,
 	ProseMirrorTextNode
 } from '$lib/models/notes';
-import { columnShares } from '$lib/models/deliverables';
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 
 // pdf.spec.ts imports the hash from here; keep the re-export.
@@ -177,9 +171,9 @@ interface InlineRun {
 	font?: string;
 }
 
-function textRunFromNode(node: ProseMirrorTextNode): InlineRun {
+function textRunFromNode(node: ProseMirrorTextNode, context: ConversionContext): InlineRun {
 	const text = node.text;
-	const marks = documentTextMarks(node);
+	const marks = presentation(node, context).marks;
 	const run: InlineRun = { text };
 	if (marks.bold) run.bold = true;
 	if (marks.italic) run.italics = true;
@@ -198,6 +192,7 @@ interface ConversionContext {
 	readonly images: ReadonlyMap<string, string>;
 	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
 	readonly widgets: PreparedExport['widgets'];
+	readonly nodes: PreparedExport['nodes'];
 	readonly headingSpacing: PreparedExport['headingSpacing'];
 	/** Resolved pdfmake family for body text; the base font for fallback splitting. */
 	readonly bodyFont: string;
@@ -336,10 +331,8 @@ function tableBlock(
 	const firstRowCells = (rows[0]?.content ?? []).filter(
 		(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
 	);
-	const shares = columnShares(
-		firstRowCells.map((cell) => cell.attrs?.colwidth),
-		columnCount
-	);
+	const preparedShares = presentation(node, context).columnShares;
+	const shares = preparedShares?.length === columnCount ? preparedShares : undefined;
 	const widths: (number | '*')[] = shares
 		? shares.map((share) => share * context.contentWidth)
 		: Array.from({ length: columnCount }, () => '*');
@@ -461,7 +454,7 @@ function widgetBlock(block: WidgetExportBlock, context: ConversionContext): PdfC
 
 function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfContent | PdfContent[] {
 	const type = node.type;
-	const content = nodeContent(node);
+	const content = presentation(node, context).children;
 
 	switch (type) {
 		case 'heading': {
@@ -469,7 +462,7 @@ function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfCont
 			const sizes = [18, 16, 14, 13, 12, 11];
 			const spacing = context.headingSpacing.get(level);
 			return {
-				text: withFontRuns({ text: collectText(node) }, context.bodyFont),
+				text: withFontRuns({ text: presentation(node, context).text }, context.bodyFont),
 				fontSize: sizes[level - 1],
 				bold: true,
 				// A title is double-spaced from the body, mirroring the editor;
@@ -481,7 +474,7 @@ function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfCont
 			const children: (string | PdfContent)[] = [];
 			for (const child of content) {
 				if (child.type === 'text') {
-					children.push(...withFontRuns(textRunFromNode(child), context.bodyFont));
+					children.push(...withFontRuns(textRunFromNode(child, context), context.bodyFont));
 				} else if (child.type === 'hardBreak') {
 					if (children.length > 0) children.push('\n');
 				}
@@ -492,7 +485,7 @@ function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfCont
 		case 'orderedList': {
 			return {
 				[type === 'bulletList' ? 'ul' : 'ol']: content.map((item) => {
-					const itemContent = nodeContent(item);
+					const itemContent = presentation(item, context).children;
 					const converted = itemContent.map((c) => convertNode(c, context)).flat();
 					if (converted.length === 0) return { text: '' };
 					// An item holding block content (a nested list, diagram, image, code
@@ -516,10 +509,10 @@ function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfCont
 			});
 		}
 		case 'codeBlock': {
-			return codePanel(collectText(node));
+			return codePanel(presentation(node, context).text);
 		}
 		case 'mermaid': {
-			const source = collectText(node);
+			const source = presentation(node, context).text;
 			// Without a browser render the diagram source is still worth keeping.
 			return diagramContent(mermaidSourceHash(source), context) ?? codePanel(source);
 		}
@@ -575,7 +568,7 @@ function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfCont
 			return tableBlock(node, context);
 		}
 		case 'text': {
-			return textRunFromNode(node);
+			return textRunFromNode(node, context);
 		}
 		case 'hardBreak': {
 			return '\n';
@@ -630,6 +623,7 @@ export async function generatePdf(input: PreparedExport): Promise<Buffer> {
 		images,
 		diagrams,
 		widgets: input.widgets,
+		nodes: input.nodes,
 		headingSpacing: input.headingSpacing,
 		bodyFont
 	};
@@ -673,4 +667,10 @@ export async function generatePdf(input: PreparedExport): Promise<Buffer> {
 	};
 
 	return printer.createPdf(docDefinition).getBuffer();
+}
+
+function presentation(node: ProseMirrorNode, context: ConversionContext) {
+	const value = context.nodes.get(node);
+	if (!value) throw new Error('Export node was not prepared');
+	return value;
 }

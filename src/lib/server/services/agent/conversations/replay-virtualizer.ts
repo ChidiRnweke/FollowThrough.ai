@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { tokenEncoding } from '$lib/models/tokenization/token-encoding';
 import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
@@ -14,7 +13,10 @@ const safeSegment = (value: string): string => {
 };
 
 export class AgentReplayVirtualizer {
-	constructor(private readonly files: AgentFileRepository) {}
+	constructor(
+		private readonly files: AgentFileRepository,
+		private readonly countTokens: (text: string) => number
+	) {}
 
 	async virtualize(
 		actor: ActorContext,
@@ -68,7 +70,7 @@ export class AgentReplayVirtualizer {
 		location: string
 	): Promise<T> {
 		if (typeof value === 'string') {
-			if (tokenEncoding().encode(value).length <= REPLAY_FILE_THRESHOLD_TOKENS) return value;
+			if (this.countTokens(value) <= REPLAY_FILE_THRESHOLD_TOKENS) return value;
 			const checksum = createHash('sha256').update(value).digest('hex');
 			const category = location.startsWith('message.') ? 'history' : 'tool-results';
 			const path = `/conversations/${conversationId}/${category}/${callId}/${safeSegment(location)}-${checksum.slice(0, 12)}.txt`;

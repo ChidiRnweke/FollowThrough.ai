@@ -127,6 +127,7 @@ export interface ConversationRecorder {
 }
 
 export interface ConversationJournal extends ConversationRecorder {
+	getForWrite(actor: ActorContext, id: ConversationId): Promise<Conversation>;
 	listConversations(
 		actor: ActorContext,
 		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }

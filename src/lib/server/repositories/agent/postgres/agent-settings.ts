@@ -1,4 +1,4 @@
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { readCanvasSessionResult } from '../canvas-results';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
@@ -22,7 +22,8 @@ import type {
 	ResolvedAgentRun,
 	WorkflowAgentRun
 } from '$lib/models/agent';
-import { parseSessionItem, workflowRunContextSchema, toStoredSessionItem } from '$lib/models/agent';
+import { persistedSessionItemSchema, workflowRunContextSchema } from '$lib/models/agent';
+import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
 import {
 	parseAgentRunContextSnapshot,
 	parseRunAgentInput,
@@ -129,7 +130,10 @@ type PendingDecisionRows = NonNullable<(typeof schema.agentRuns.$inferInsert)['p
 const toPendingDecisionRows = (run: AgentRun): PendingDecisionRows => run.pendingDecisions;
 
 export class AgentPreferenceRecords implements AgentPreferencesRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly database: Database,
+		private readonly resourceKey: (identity: WorkspaceResourceIdentity) => string
+	) {}
 
 	async get(actor: ActorContext): Promise<AgentPreferences | undefined> {
 		const [row] = await this.database
@@ -141,8 +145,7 @@ export class AgentPreferenceRecords implements AgentPreferencesRepository {
 
 	async getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined> {
 		// The same resource lock as synchronized writes also covers an absent preference row.
-		const key =
-			'resource:' + workspaceResourceKey({ type: 'agent_preferences', id: [actor.userId] });
+		const key = 'resource:' + this.resourceKey({ type: 'agent_preferences', id: [actor.userId] });
 		await this.database.execute(
 			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${key}))`
 		);
@@ -558,7 +561,7 @@ const toSessionItem = (row: typeof schema.agentSessionItems.$inferSelect): Agent
 	id: row.id as AgentSessionItem['id'],
 	conversationId: row.conversationId as AgentSessionItem['conversationId'],
 	position: row.position,
-	item: parseSessionItem(row.item),
+	item: persistedSessionItemSchema.parse(row.item),
 	createdAt: row.createdAt.toISOString() as AgentSessionItem['createdAt']
 });
 

@@ -6,7 +6,8 @@ import { architectureWorkspace } from '../fixtures/workspaces/architecture';
 import { todosWorkspace } from '../fixtures/workspaces/todos';
 import { personaWorkspace } from '../fixtures/workspaces/profile';
 import { findCall, scoreToolCalling, scoreToolDiscovery } from '../assertions/tool-calls';
-import { isAgentPayloadObject, readAgentPayload } from '$lib/models/agent/payload';
+import { agentPayloadResultSchema } from '$lib/models/agent/payload';
+import { isAgentPayloadObject } from '$lib/services/agent/payload';
 import { ARCHETYPES, type EvalCase } from './types';
 import { expectSuggestionPending } from '../assertions/effects';
 
@@ -65,7 +66,7 @@ export const multiStepCases: readonly EvalCase[] = [
 			// probing it three times. A corrupt output is not a miss: it is a tool
 			// this eval could not read, so it is named in the explanation below
 			// instead of scoring as evidence the model failed.
-			const searchOutput = readAgentPayload(authoritativeSearch?.output);
+			const searchOutput = agentPayloadResultSchema.parse(authoritativeSearch?.output);
 			const searchResults =
 				searchOutput.kind === 'valid' && Array.isArray(searchOutput.value)
 					? searchOutput.value

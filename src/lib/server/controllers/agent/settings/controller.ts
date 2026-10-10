@@ -7,7 +7,10 @@ import {
 	resolveDefaultAgentModel,
 	resolveDefaultVisionModel
 } from '$lib/services/agent/model-selection';
-import { applyAgentPreferenceUpdate } from '$lib/services/agent/preferences';
+import {
+	validateAgentPreferenceUpdate,
+	applyAgentPreferenceUpdate
+} from '$lib/services/agent/preferences';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
 import type {
@@ -17,29 +20,12 @@ import type {
 import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentModel, AgentPreferences, UpdateAgentPreferencesInput } from '$lib/models/agent';
-import { webSearchEngines } from '$lib/models/agent';
 import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 import { ValidationError } from '$lib/errors';
 import type {
 	AgentModelCatalog,
 	AgentPreferenceCatalog
 } from '$lib/server/services/agent/runs/preferences';
-
-/**
- * Rejected rather than clamped: a caller that asks for 500 search results has
- * misunderstood the setting, and silently storing 50 would tell them they got
- * what they asked for.
- */
-const assertRange = (
-	label: string,
-	value: number | null | undefined,
-	minimum: number,
-	maximum: number
-): void => {
-	if (value === undefined || value === null) return;
-	if (!Number.isInteger(value) || value < minimum || value > maximum)
-		throw new ValidationError(`${label} must be a whole number between ${minimum} and ${maximum}`);
-};
 
 /**
  * Application boundary for agent preferences: reading and updating the user's defaults,
@@ -152,13 +138,7 @@ export class AgentSettings implements AgentSettingsController {
 				if (issue) throw new ValidationError(issue);
 			}
 		}
-		// Both the settings form and the agent's own `update_agent_preferences`
-		// land here, so this is the one place the limits have to hold.
-		if (input.webSearchEngine && !webSearchEngines.includes(input.webSearchEngine))
-			throw new ValidationError(`Web search engine must be one of: ${webSearchEngines.join(', ')}`);
-		assertRange('Web search results', input.webSearchMaxResults, 1, 50);
-		assertRange('Total web search results', input.webSearchMaxTotalResults, 1, 100);
-		assertRange('Agent turn limit', input.agentMaxTurns, 1, 50);
+		validateAgentPreferenceUpdate(input);
 		return this.dependencies.transactionRunner.run(async () => {
 			const stored = await this.dependencies.preferences.getForWrite(actor);
 			const timestamp = this.dependencies.now();

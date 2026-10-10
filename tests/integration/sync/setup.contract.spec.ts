@@ -1,3 +1,5 @@
+import { syncEtag } from '$lib/services/sync/versions';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { WorkspaceSyncReceipts } from '$lib/server/repositories/workspace/sync-receipts';
 import { expect, it } from 'vitest';
 import { initialSyncCursor } from '$lib/models/sync';
@@ -6,7 +8,7 @@ import { installWorkspaceSync } from '../../../scripts/setup-workspace-sync';
 import { context, seedNote } from '../database-harness';
 it('can reinstall development sync SQL without advancing existing account checkpoints', async () => {
 	const { owner } = await seedNote('8822');
-	const journal = new WorkspaceSyncChanges(context.db);
+	const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 	const before = await journal.pullPage(owner, initialSyncCursor);
 	await installWorkspaceSync(context.client);
 	await installWorkspaceSync(context.client);
@@ -22,7 +24,10 @@ it('seeds an existing source record that has no sync metadata', async () => {
 	await context.client`delete from workspace_sync_versions where resource_type = 'notes' and resource_id = jsonb_build_array(${note.id}::text)`;
 	await context.client`delete from workspace_sync_changes where account_id = ${owner.userId} and resource_type = 'notes' and resource_id = jsonb_build_array(${note.id}::text)`;
 	await installWorkspaceSync(context.client);
-	const page = await new WorkspaceSyncChanges(context.db).pullPage(owner, initialSyncCursor);
+	const page = await new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag).pullPage(
+		owner,
+		initialSyncCursor
+	);
 	expect(
 		page.records.some(
 			(record) =>
@@ -36,10 +41,10 @@ it('seeds an existing source record that has no sync metadata', async () => {
 it('preserves tombstones and cancellation proofs during reinstallation', async () => {
 	const { owner, note } = await seedNote('8824');
 	const operationId = '90000000-0000-4000-8000-000000008824';
-	const receipts = new WorkspaceSyncReceipts(context.db);
+	const receipts = new WorkspaceSyncReceipts(context.db, workspaceResourceKey);
 	await receipts.cancel(owner, operationId, '{}');
 	await context.client`delete from notes where id = ${note.id}`;
-	const journal = new WorkspaceSyncChanges(context.db);
+	const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 	const before = await journal.pullPage(owner, initialSyncCursor);
 	await installWorkspaceSync(context.client);
 	expect({

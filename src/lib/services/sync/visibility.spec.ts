@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { syncEtag, type ResourceState } from '$lib/models/sync';
+import { type ResourceState } from '$lib/models/sync';
+import { syncEtag } from '$lib/services/sync/versions';
 import { type WriteDraft } from '$lib/models/outbox';
 import { appendWrite, localResource, visibleResources } from '$lib/services/sync/state';
 

@@ -6,7 +6,7 @@ import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { seedUser, replaceNoteFixture, actor, context, now, seedNote } from '../database-harness';
 import corpusDocuments from '../../corpus/note-documents.json' with { type: 'json' };
-import { parseProseMirrorDocument } from '$lib/models/notes';
+import { proseMirrorDocumentSchema } from '$lib/models/notes';
 
 /**
  * A real document, not `{ type: 'doc', content: [] }`.
@@ -18,7 +18,7 @@ import { parseProseMirrorDocument } from '$lib/models/notes';
  * document in the corpus exercises headings, tables, lists and marks on the way
  * through the column and back.
  */
-const richDocument = parseProseMirrorDocument(
+const richDocument = proseMirrorDocumentSchema.parse(
 	corpusDocuments.reduce((largest, candidate) =>
 		JSON.stringify(candidate).length > JSON.stringify(largest).length ? candidate : largest
 	)

@@ -46,3 +46,6 @@ export function decideMemoryEdit(
 		}
 	};
 }
+
+export const sharedMemoryEntries = (entries: readonly MemoryEntry[]): readonly MemoryEntry[] =>
+	entries.filter((entry) => entry.shareWithAgents);

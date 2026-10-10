@@ -19,6 +19,8 @@ export type UploadRetentionCursor = Pick<AttachmentUpload, 'expiresAt' | 'id'>;
 
 /** `finalize` is the only path that makes an attachment visible: nothing before it is observable to any reader but the uploader. */
 export interface AttachmentRepository {
+	listPendingObjectRemovals(): Promise<readonly string[]>;
+	completeObjectRemoval(objectKey: string): Promise<void>;
 	createUpload(actor: ActorContext, upload: AttachmentUpload): Promise<AttachmentUpload>;
 	findUpload(
 		actor: ActorContext,

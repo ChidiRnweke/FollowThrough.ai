@@ -35,7 +35,7 @@ export class TrustPolicyRecords implements TrustPolicyRepository {
 				userId: actor.userId,
 				pipeline: policy.pipeline,
 				autoAcceptEnabled: policy.autoAcceptEnabled,
-				minimumConfidence: policy.minimumConfidence,
+				minimumConfidence: policy.minimumConfidence ?? null,
 				createdAt: new Date(policy.createdAt),
 				updatedAt: new Date(policy.updatedAt)
 			})
@@ -43,7 +43,7 @@ export class TrustPolicyRecords implements TrustPolicyRepository {
 				target: [schema.trustPolicies.userId, schema.trustPolicies.pipeline],
 				set: {
 					autoAcceptEnabled: policy.autoAcceptEnabled,
-					minimumConfidence: policy.minimumConfidence,
+					minimumConfidence: policy.minimumConfidence ?? null,
 					updatedAt: new Date(policy.updatedAt)
 				}
 			})

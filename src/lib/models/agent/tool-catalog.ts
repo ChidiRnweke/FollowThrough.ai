@@ -581,16 +581,6 @@ export type FirstClassToolName = (typeof FIRST_CLASS_TOOL_NAMES)[number];
 export type LongTailToolName = Exclude<ToolName, FirstClassToolName>;
 
 /**
- * Membership for callers holding a {@link ToolName}. The const tuple above
- * carries literals so {@link FirstClassToolName} can exist, which also means
- * its own `includes` rejects any name outside the first-class set — the
- * question every caller is actually asking.
- */
-export const FIRST_CLASS_TOOL_SET: ReadonlySet<ToolName> = new Set<ToolName>(
-	FIRST_CLASS_TOOL_NAMES
-);
-
-/**
  * Every tool name the agent surface can produce, catalog or not.
  *
  * `search_tools` is the one name that is not a {@link ToolName}: it is assembled
@@ -605,63 +595,6 @@ export const FIRST_CLASS_TOOL_SET: ReadonlySet<ToolName> = new Set<ToolName>(
  * `tests/unit/corpus.spec.ts` holds that at zero exceptions.
  */
 export type AgentToolName = ToolName | 'search_tools';
-
-/**
- * The {@link AgentToolName} values, as a list `z.enum` can be built from. The
- * schema itself lives in the domain barrel so this module stays import-free for
- * the startup scripts that read the catalog.
- */
-export const AGENT_TOOL_NAME_VALUES = [
-	...TOOL_DESCRIPTIONS.map((entry) => entry.name),
-	'search_tools'
-] as const;
-
-/** The {@link ToolName} values, for the same reason as {@link AGENT_TOOL_NAME_VALUES}. */
-export const TOOL_NAME_VALUES: readonly ToolName[] = TOOL_DESCRIPTIONS.map((entry) => entry.name);
-
-const AGENT_TOOL_NAMES: ReadonlySet<string> = new Set<string>(AGENT_TOOL_NAME_VALUES);
-
-/** Reads a foreign tool name into the agent surface, or reports that it is not one. */
-export const readAgentToolName = (value: string): AgentToolName | undefined =>
-	AGENT_TOOL_NAMES.has(value) ? (value as AgentToolName) : undefined;
-
-const TOOL_NAMES: ReadonlySet<string> = new Set<string>(TOOL_NAME_VALUES);
-
-/**
- * Reads a foreign name into the catalog, or reports that it is not one.
- *
- * Narrower than {@link readAgentToolName} by exactly `search_tools`, for
- * callers that need a tool bound to a controller method — an approval park, for
- * one: `search_tools` is a read and never parks.
- */
-export const readToolName = (value: string): ToolName | undefined =>
-	TOOL_NAMES.has(value) ? (value as ToolName) : undefined;
-
-/**
- * The on-demand catalog surfaced through search_tools: everything but
- * first-class tools.
- *
- * The `name: ToolName` intersection is what keeps the literal names the const
- * assertion above earned. A plain `readonly ToolCatalogEntry[]` annotation
- * widened every entry's name back to `string`, so a caller could not test one
- * against the catalog without widening its own type to match.
- * {@link ToolCatalogEntry} itself cannot declare `name: ToolName`, because
- * {@link ToolName} is derived from the descriptions that satisfy it.
- *
- * Its element type stays {@link ToolName} rather than {@link LongTailToolName}:
- * `filter` cannot prove the partition, so narrowing it would take a
- * hand-written type predicate — an unchecked claim, which is the thing this
- * effort removes. `tool-catalog.spec.ts` holds the partition at runtime.
- */
-export const TOOL_CATALOG: readonly (ToolCatalogEntry & { readonly name: ToolName })[] =
-	TOOL_DESCRIPTIONS.filter((entry) => !FIRST_CLASS_TOOL_SET.has(entry.name));
-
-/** Looks up a tool description; throws if the catalog and definitions drift apart. */
-export const toolDescription = (name: string): string => {
-	const entry = TOOL_DESCRIPTIONS.find((candidate) => candidate.name === name);
-	if (!entry) throw new Error(`Tool description missing from catalog: ${name}`);
-	return entry.description;
-};
 
 export const LOCKED_TOOL_NAMES = [
 	'get_workspace_context',

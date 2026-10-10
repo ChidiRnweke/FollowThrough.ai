@@ -7,7 +7,7 @@ import {
 	noteContentFromMarkdown as editorContentFromMarkdown,
 	noteMarkdownFromContent
 } from '$lib/components/edra/commands/note-markdown';
-import { parseProseMirrorDocument, type ProseMirrorDocument } from '$lib/models/notes';
+import { proseMirrorDocumentSchema, type ProseMirrorDocument } from '$lib/models/notes';
 
 export interface NoteMarkdownContent {
 	readonly document: ProseMirrorDocument;
@@ -16,7 +16,7 @@ export interface NoteMarkdownContent {
 
 export const noteContentFromMarkdown = (source: string): NoteMarkdownContent => {
 	const content = editorContentFromMarkdown(source);
-	return { ...content, document: parseProseMirrorDocument(content.document) };
+	return { ...content, document: proseMirrorDocumentSchema.parse(content.document) };
 };
 
 export { noteMarkdownFromContent };

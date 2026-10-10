@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { syncEtag } from '$lib/models/sync';
+import { syncEtag } from '$lib/services/sync/versions';
 import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import { ResourceCache } from './resource-cache';
 

@@ -1,6 +1,6 @@
 import { mode } from 'mode-watcher';
 import type { DiagramSize, ExportSettings } from '$lib/models/deliverables';
-import { svgViewBoxSize } from '$lib/models/deliverables';
+import { svgViewBoxSize } from '$lib/services/deliverables/export-preparation';
 import { rasterizeSvg } from '$lib/client/images/rasterize';
 import { initializeMermaid, sanitizeMermaidSvg } from '$lib/client/diagrams/mermaid-rendering';
 import type { ProseMirrorDocument, ProseMirrorNode } from '$lib/models/notes';

@@ -6,11 +6,12 @@ import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import {
-	workspaceResourceKey,
 	type WorkspaceResourceIdentity,
 	type WorkspaceResourceType
 } from '$lib/models/workspace-sync';
-import { syncEtag, initialSyncCursor } from '$lib/models/sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { initialSyncCursor } from '$lib/models/sync';
+import { syncEtag } from '$lib/services/sync/versions';
 import {
 	InMemorySyncCache,
 	InMemorySyncTransport,

@@ -1,3 +1,4 @@
+import { getEncoding } from 'js-tiktoken';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { prepareRunImages } from './images';
 import { describe, expect, it } from 'vitest';
@@ -79,7 +80,7 @@ const setup = (fetch: typeof globalThis.fetch, prepare = async () => {}) => {
 				repository,
 				actor,
 				id,
-				new AgentReplayVirtualizer(new InMemoryAgentFiles())
+				new AgentReplayVirtualizer(new InMemoryAgentFiles(), countTokens)
 			),
 		undefined,
 		() => provider
@@ -252,3 +253,6 @@ describe('agent image preparation', () => {
 		expect(JSON.stringify(model.requests[0]?.input)).toContain('Image 1: A diagram render.');
 	});
 });
+
+const tokenEncoder = getEncoding('cl100k_base');
+const countTokens = (text: string): number => tokenEncoder.encode(text).length;

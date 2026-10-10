@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, ilike, inArray } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type { Conversation, Message, StoredMessage } from '$lib/models/agent';
-import { readAgentPayloadObject } from '$lib/models/agent/payload';
+import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
 import { ExternalServiceError, NotFoundError } from '$lib/errors';
 import type {
 	ConversationListOptions,
@@ -52,7 +52,7 @@ const messageColumns = (row: typeof schema.messages.$inferSelect): Omit<Message,
  * conversation — one unreadable row used to be one dead transcript.
  */
 const toStoredMessage = (row: typeof schema.messages.$inferSelect): StoredMessage => {
-	const content = readAgentPayloadObject(row.content);
+	const content = agentPayloadObjectResultSchema.parse(row.content);
 	return content.kind === 'valid'
 		? { ...messageColumns(row), kind: 'readable', content: content.value }
 		: { ...messageColumns(row), kind: 'unreadable', reason: content.message };
@@ -66,7 +66,7 @@ const toStoredMessage = (row: typeof schema.messages.$inferSelect): StoredMessag
  * `readAgentEvent` and `append` already follow.
  */
 const toMessage = (row: typeof schema.messages.$inferSelect): Message => {
-	const content = readAgentPayloadObject(row.content);
+	const content = agentPayloadObjectResultSchema.parse(row.content);
 	if (content.kind !== 'valid')
 		throw new ExternalServiceError(`Stored message content could not be read: ${content.message}`);
 	return { ...messageColumns(row), content: content.value };
@@ -102,6 +102,18 @@ export class ConversationRecords implements ConversationRepository {
 		return row ? toConversation(row) : undefined;
 	}
 
+	async findForWrite(
+		actor: ActorContext,
+		id: Conversation['id']
+	): Promise<Conversation | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.conversations)
+			.where(and(eq(schema.conversations.id, id), eq(schema.conversations.userId, actor.userId)))
+			.for('update');
+		return row ? toConversation(row) : undefined;
+	}
+
 	async insert(actor: ActorContext, conversation: Conversation): Promise<Conversation> {
 		const [row] = await this.database
 			.insert(schema.conversations)
@@ -109,12 +121,12 @@ export class ConversationRecords implements ConversationRepository {
 				id: conversation.id,
 				userId: actor.userId,
 				kind: conversation.kind,
-				contextNoteId: conversation.contextNoteId,
-				contextProjectId: conversation.contextProjectId,
-				title: conversation.title,
-				modelOverride: conversation.modelOverride,
-				visionModelOverride: conversation.visionModelOverride,
-				executionModeOverride: conversation.executionModeOverride,
+				contextNoteId: conversation.contextNoteId ?? null,
+				contextProjectId: conversation.contextProjectId ?? null,
+				title: conversation.title ?? null,
+				modelOverride: conversation.modelOverride ?? null,
+				visionModelOverride: conversation.visionModelOverride ?? null,
+				executionModeOverride: conversation.executionModeOverride ?? null,
 				createdAt: new Date(conversation.createdAt),
 				updatedAt: new Date(conversation.updatedAt)
 			})
@@ -126,12 +138,12 @@ export class ConversationRecords implements ConversationRepository {
 		const [row] = await this.database
 			.update(schema.conversations)
 			.set({
-				contextProjectId: conversation.contextProjectId,
-				contextNoteId: conversation.contextNoteId,
-				title: conversation.title,
-				modelOverride: conversation.modelOverride,
-				visionModelOverride: conversation.visionModelOverride,
-				executionModeOverride: conversation.executionModeOverride,
+				contextProjectId: conversation.contextProjectId ?? null,
+				contextNoteId: conversation.contextNoteId ?? null,
+				title: conversation.title ?? null,
+				modelOverride: conversation.modelOverride ?? null,
+				visionModelOverride: conversation.visionModelOverride ?? null,
+				executionModeOverride: conversation.executionModeOverride ?? null,
 				updatedAt: new Date(conversation.updatedAt)
 			})
 			.where(

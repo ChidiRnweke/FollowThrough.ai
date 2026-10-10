@@ -1,3 +1,4 @@
+import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { describe, expect, it } from 'vitest';
 import { widgetTemplates, type WidgetId } from '$lib/models/widgets';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
@@ -17,7 +18,8 @@ const setup = async (suffix: string) => {
 	const sync = createSyncCapability({ db: database });
 	const { library } = createWidgetsCapability({
 		db: database,
-		projects: new ProjectRecords(database)
+		projects: new ProjectRecords(database),
+		notes: new NoteRecords(database)
 	});
 	// Deferred, as production is: chunks land without vectors and the worker embeds them (ADR 0021).
 	const index = new ContentIndex(new KnowledgeIndexRecords(database), 'contract', undefined, true);

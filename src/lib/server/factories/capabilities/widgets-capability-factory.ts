@@ -1,9 +1,11 @@
+import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { Database } from '$lib/server/db';
 import type { ProjectRepository } from '$lib/server/repositories/projects';
 import { WidgetRecords } from '$lib/server/repositories/widgets/postgres/widgets';
 import { WidgetLibrary } from '$lib/server/services/widgets/library';
 
 export interface WidgetsCapabilityInput {
+	readonly notes: NoteRepository;
 	readonly db: Database;
 	readonly projects: ProjectRepository;
 }
@@ -13,5 +15,5 @@ export interface WidgetsCapability {
 }
 
 export const createWidgetsCapability = (input: WidgetsCapabilityInput): WidgetsCapability => ({
-	library: new WidgetLibrary(new WidgetRecords(input.db), input.projects)
+	library: new WidgetLibrary(new WidgetRecords(input.db), input.projects, input.notes)
 });

@@ -15,7 +15,7 @@
 	import type { Diagram, DiagramId } from '$lib/models/diagrams';
 	import { inlineSuggestionSchema, type AgentRunId } from '$lib/models/agent';
 	import {
-		parseProseMirrorDocument,
+		proseMirrorDocumentSchema,
 		type NoteId,
 		type NoteLinkTarget,
 		type OutlineHeading,
@@ -1075,7 +1075,9 @@
 	}
 
 	export function getDocument(): ProseMirrorDocument {
-		return parseProseMirrorDocument(editor?.state.doc.toJSON() ?? { type: 'doc', content: [] });
+		return proseMirrorDocumentSchema.parse(
+			editor?.state.doc.toJSON() ?? { type: 'doc', content: [] }
+		);
 	}
 
 	export function getEditor(): Editor | undefined {

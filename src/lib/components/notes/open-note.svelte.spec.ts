@@ -3,8 +3,7 @@ import { render } from 'vitest-browser-svelte';
 import NoteEditor from './note-editor.svelte';
 import '../../../routes/layout.css';
 import {
-	findProseMirrorDocumentIssue,
-	parseProseMirrorDocument,
+	proseMirrorDocumentSchema,
 	type NoteId,
 	type ProseMirrorDocument,
 	type ProseMirrorNode
@@ -36,7 +35,7 @@ const PROJECT_ID = '00000000-0000-4000-8000-000000000004' as ProjectId;
 
 /** The richest document in the corpus: headings, tables, lists, marks, images. */
 const storedDocument = (): ProseMirrorDocument =>
-	parseProseMirrorDocument(
+	proseMirrorDocumentSchema.parse(
 		corpusDocuments.reduce((largest, candidate) =>
 			JSON.stringify(candidate).length > JSON.stringify(largest).length ? candidate : largest
 		)
@@ -88,7 +87,9 @@ describe('opening a stored note', () => {
 
 		expect(screen.container.querySelector('[contenteditable="true"]')?.textContent).not.toBe('');
 
-		expect(findProseMirrorDocumentIssue(screen.component.getDocument())).toBeUndefined();
+		expect(
+			proseMirrorDocumentSchema.safeParse(screen.component.getDocument()).error?.issues[0]
+		).toBeUndefined();
 
 		const textIn = (node: ProseMirrorNode): string[] => {
 			if (node.type === 'text') return node.text ? [node.text] : [];

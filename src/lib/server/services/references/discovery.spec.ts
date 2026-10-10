@@ -1,4 +1,5 @@
-import { openRouterWebSearchTool, REFERENCE_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
+import { REFERENCE_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
+import { openRouterWebSearchTool } from '$lib/server/services/agent/runs/reasoning';
 import { describe, expect, it } from 'vitest';
 import type { TextSelection } from '$lib/models/notes';
 import type { Url } from '$lib/models/references';
