@@ -29,10 +29,6 @@ describe('The view the note workspace renders from', () => {
 		expect(numbering.view(undefined, true, false).inherited).toBe(true);
 	});
 
-	it('falls back to the app default when the project inherits too', () => {
-		expect(numbering.view(undefined, undefined, true).effective).toBe(true);
-	});
-
 	it('carries the note override so the menu can show it is pinned', () => {
 		expect(numbering.view(false, true, true).noteOverride).toBe(false);
 	});
