@@ -62,7 +62,8 @@
 		"db:studio": "drizzle-kit studio",
 		"test:sync:pwa": "node scripts/test-sync-pwa.mjs",
 		"db:sync:setup": "node --experimental-strip-types --env-file-if-exists=.env scripts/setup-workspace-sync.ts",
-		"test:architecture:semantic": "node --experimental-strip-types scripts/audit-architecture.ts"
+		"test:architecture:semantic": "node --experimental-strip-types scripts/audit-architecture.ts",
+		"test:coverage": "NODE_OPTIONS='--max-old-space-size=2048' vitest run --project node-fast --coverage"
 	},
 	"devDependencies": {
 		"@arizeai/phoenix-client": "^6.14.0",
@@ -87,6 +88,7 @@
 		"@types/jsdom": "^28.0.3",
 		"@types/node": "^22",
 		"@vitest/browser-playwright": "^4.1.8",
+		"@vitest/coverage-v8": "4.1.10",
 		"bits-ui": "^2.18.1",
 		"clsx": "^2.1.1",
 		"drizzle-kit": "^0.31.10",
