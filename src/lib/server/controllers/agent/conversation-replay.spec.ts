@@ -1,10 +1,13 @@
 import type { AgentInputItem } from '@openai/agents';
-import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
 import type { BufferedConversationSession } from '$lib/server/adapters/agent/conversation';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, expect, it } from 'vitest';
 import type { ActorContext } from '$lib/models/identity';
-import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
+import {
+	storedSessionItemSchema,
+	type ConversationId,
+	type PersistedSessionItem
+} from '$lib/models/agent';
 import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
 import { createReplayVirtualizer } from '$lib/server/factories/agent/conversation-factory';
 import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
@@ -40,7 +43,7 @@ const bufferWith = async (
 	items: readonly PersistedSessionItem[]
 ): Promise<BufferedConversationSession> => {
 	const buffer = bufferOver([]);
-	await buffer.addItems(items.map((item) => toStoredSessionItem(item) as AgentInputItem));
+	await buffer.addItems(items.map((item) => storedSessionItemSchema.parse(item) as AgentInputItem));
 	return buffer;
 };
 
