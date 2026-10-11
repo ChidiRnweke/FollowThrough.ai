@@ -1,12 +1,12 @@
 import { MermaidThemeService } from '$lib/services/diagrams/mermaid-theme';
 import { describe, expect, it } from 'vitest';
 import AdmZip from 'adm-zip';
-import { createDiagramExportRenderer } from '$lib/server/factories/capabilities/diagram-rendering-factory';
+import { DiagramRenderingService } from '$lib/server/services/deliverables/diagram-rendering';
 import { DocxDocumentService } from '$lib/server/services/deliverables/docx';
 const docxRendering = new DocxDocumentService();
 const generateDocx = docxRendering.render.bind(docxRendering);
-import { createPdfRendering } from '$lib/server/factories/capabilities/pdf-rendering-factory';
-const pdfRendering = createPdfRendering();
+import { PdfDocumentService } from '$lib/server/services/deliverables/pdf';
+const pdfRendering = new PdfDocumentService();
 
 import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/export-controller';
 import {
@@ -58,7 +58,7 @@ describe('current diagram images in document exports', () => {
 	});
 	it('regenerates DOCX images from changed Mermaid source without browser renders', async () => {
 		const { service, notes, storage } = exportControllerFixture({
-			diagramRenderer: createDiagramExportRenderer(),
+			diagramRenderer: new DiagramRenderingService(),
 			mermaidThemes: new MermaidThemeService(),
 			docxGenerator: generateDocx
 		});
@@ -78,7 +78,7 @@ describe('current diagram images in document exports', () => {
 	}, 30_000);
 	it('embeds a generated diagram image in a PDF preview', async () => {
 		const { service, notes } = exportControllerFixture({
-			diagramRenderer: createDiagramExportRenderer(),
+			diagramRenderer: new DiagramRenderingService(),
 			mermaidThemes: new MermaidThemeService(),
 			pdfRendering
 		});
@@ -96,7 +96,7 @@ describe('current diagram images in document exports', () => {
 		diagrams.diagrams = [diagram];
 		const { service, notes, storage } = exportControllerFixture({
 			diagramReader: diagrams,
-			diagramRenderer: createDiagramExportRenderer(),
+			diagramRenderer: new DiagramRenderingService(),
 			mermaidThemes: new MermaidThemeService(),
 			docxGenerator: generateDocx
 		});

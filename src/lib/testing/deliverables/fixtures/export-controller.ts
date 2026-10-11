@@ -2,8 +2,7 @@ import { WidgetExportService } from '$lib/services/widgets/export-blocks';
 import { WidgetSourceService } from '$lib/services/widgets/sources';
 import { WidgetEvaluationService } from '$lib/services/widgets/edits';
 import type { PreparedExport } from '$lib/models/deliverables';
-import { createPdfRendering } from '$lib/server/factories/capabilities/pdf-rendering-factory';
-import { InMemoryPdfDocument } from '$lib/testing/deliverables/fakes/pdf-document';
+import { InMemoryPdfRendering } from '$lib/testing/deliverables/fakes/pdf-document';
 import {
 	Deliverables,
 	type DeliverablesDependencies
@@ -48,7 +47,6 @@ export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 		pdfRendering,
 		...dependencies
 	} = overrides;
-	const pdf = new InMemoryPdfDocument(pdfGenerator);
 	const artifacts = new InMemoryArtifactRepository();
 	const storage = new InMemoryAttachmentStorage();
 	const notes = new InMemoryNoteContent();
@@ -87,7 +85,7 @@ export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 			noteLister: notes,
 			fetchImage: fetchRemoteDataUrl,
 			docxGenerator: new InMemoryDocumentRenderer(docxGenerator),
-			pdfGenerator: pdfRendering ?? { ...createPdfRendering(), preparation: pdf, writer: pdf },
+			pdfGenerator: pdfRendering ?? new InMemoryPdfRendering(pdfGenerator),
 			zipPacker: new DocumentBundleService(),
 			transactionRunner: new InMemoryTransactionRunner([artifacts, provenance]),
 			...dependencies

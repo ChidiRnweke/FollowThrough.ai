@@ -1,11 +1,11 @@
 import AdmZip from 'adm-zip';
 import { createHash } from 'node:crypto';
 import { ValidationError } from '$lib/errors';
-import type {
-	TemplateStyleReader,
-	TemplateUploadProof
-} from '$lib/server/controllers/deliverables/controller';
-import type { ExtractedTemplateStyles } from '$lib/models/deliverables';
+import type { ExtractedTemplateStyles, TemplateUploadProof } from '$lib/models/deliverables';
+
+export interface TemplateStyleReader {
+	read(upload: TemplateUploadProof, bytes: Uint8Array): Promise<ExtractedTemplateStyles>;
+}
 
 async function verifiedTemplateStyles(
 	upload: TemplateUploadProof,
@@ -193,7 +193,7 @@ async function extractTemplateStyles(docxBuffer: Buffer): Promise<ExtractedTempl
 	};
 }
 
-/** Verify the uploaded package and decode DOCX metadata at the file boundary. */
+/** Verifies an uploaded DOCX package against its reservation and reads its styles. */
 export class DocxTemplateStyleReader implements TemplateStyleReader {
 	read(upload: TemplateUploadProof, bytes: Uint8Array): Promise<ExtractedTemplateStyles> {
 		return verifiedTemplateStyles(upload, bytes);

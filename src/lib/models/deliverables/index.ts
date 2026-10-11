@@ -314,11 +314,6 @@ export interface RegenerateArtifactOutput {
 }
 
 /** Immutable local assets supplied to a disposable rendering browser. */
-export interface DiagramRenderResources {
-	readonly mermaidScript: string;
-	readonly fontData: string;
-}
-
 export interface ArtifactFile {
 	readonly name: string;
 	readonly mediaType: string;
@@ -328,12 +323,6 @@ export interface BundleFile {
 	/** Folder-relative, extension included. Sanitized here, so callers may pass note titles. */
 	readonly path: string;
 	readonly bytes: Uint8Array;
-}
-
-export interface PdfFontResources {
-	readonly directory: string;
-	readonly files: Readonly<Record<string, Readonly<Record<string, string>>>>;
-	readonly coverage: ReadonlyMap<string, ReadonlySet<number>>;
 }
 
 export type ExportImageReference =
@@ -358,3 +347,9 @@ export type ExportSettingsLoad =
 	| { readonly kind: 'ready'; readonly settings: ExportSettings }
 	| { readonly kind: 'failure'; readonly message: string }
 	| { readonly kind: 'superseded' };
+
+/** The size and checksum an upload reservation recorded for a template. */
+export interface TemplateUploadProof {
+	readonly byteSize: number;
+	readonly checksumSha256: string;
+}

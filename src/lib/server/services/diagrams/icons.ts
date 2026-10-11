@@ -1,5 +1,9 @@
-import type { IconSearchPages } from '$lib/server/repositories/diagrams/icon-search';
-import type { DiagramIcon } from '$lib/models/diagrams';
+import { z } from 'zod';
+import {
+	iconSearchResponseSchema,
+	type DiagramIcon,
+	type IconSearchPage
+} from '$lib/models/diagrams';
 import { ExternalServiceError, ValidationError } from '$lib/errors';
 
 /**
@@ -13,6 +17,9 @@ import { ExternalServiceError, ValidationError } from '$lib/errors';
  * permits. No key, no account.
  */
 const ICON_ORIGIN = 'https://api.iconify.design';
+const REQUEST_TIMEOUT_MS = 8000;
+// Provider request bounds: https://iconify.design/docs/api/search.html
+const PROVIDER_MIN_LIMIT = 32;
 // Product contract: icon search returns a small candidate set for diagram selection.
 const MAX_ICON_RESULTS = 12;
 
@@ -29,7 +36,7 @@ const iconUrl = (name: string): string | undefined => {
 };
 
 export class IconifyIconSearch implements IconSearch {
-	constructor(private readonly pages: IconSearchPages) {}
+	constructor(private readonly provider: typeof fetch) {}
 
 	async search(query: string, limit = 8): Promise<readonly DiagramIcon[]> {
 		const term = query.trim();
@@ -41,7 +48,7 @@ export class IconifyIconSearch implements IconSearch {
 		const icons: DiagramIcon[] = [];
 		let start = 0;
 		while (icons.length < limit) {
-			const page = await this.pages.page(term, start);
+			const page = await this.page(term, start);
 			if (page.start !== start || page.total !== page.icons.length)
 				throw new ExternalServiceError('The icon library returned inconsistent pagination.');
 			for (const name of page.icons) {
@@ -53,5 +60,32 @@ export class IconifyIconSearch implements IconSearch {
 			start += page.total;
 		}
 		return icons;
+	}
+
+	private async page(term: string, start: number): Promise<IconSearchPage> {
+		const url = new URL('/search', ICON_ORIGIN);
+		url.searchParams.set('query', term);
+		url.searchParams.set('start', String(start));
+		url.searchParams.set('limit', String(PROVIDER_MIN_LIMIT));
+		const response = await this.provider(url, {
+			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+		}).catch((cause) => {
+			throw new ExternalServiceError('The icon library could not be reached.', {
+				cause: cause instanceof Error ? cause.message : String(cause)
+			});
+		});
+		if (!response.ok)
+			throw new ExternalServiceError(`The icon library answered ${response.status}.`);
+		const body = await response.json().catch((cause) => {
+			throw new ExternalServiceError('The icon library returned something unreadable.', {
+				cause: cause instanceof Error ? cause.message : String(cause)
+			});
+		});
+		const result = iconSearchResponseSchema.safeParse(body);
+		if (!result.success)
+			throw new ExternalServiceError('The icon library returned an unexpected search result.', {
+				cause: z.prettifyError(result.error)
+			});
+		return result.data;
 	}
 }

@@ -1,5 +1,5 @@
 import type { TemplateId } from '$lib/models/deliverables';
-import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
+import { DocxTemplateStyleReader } from '$lib/server/services/deliverables/template-styles';
 import {
 	Deliverables,
 	type DeliverablesDependencies

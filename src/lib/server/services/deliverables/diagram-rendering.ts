@@ -1,12 +1,11 @@
-import type { DiagramRasterRendering } from '$lib/server/controllers/deliverables/controller';
+import { createRequire } from 'node:module';
+import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import type { Mermaid } from 'mermaid';
 import type { MermaidRenderConfig } from '$lib/models/diagrams/mermaid-theme';
-import type {
-	DiagramRenderResources,
-	ExportDiagramSource,
-	ExportDiagramRaster
-} from '$lib/models/deliverables';
+import type { ExportDiagramSource, ExportDiagramRaster } from '$lib/models/deliverables';
+
+const require = createRequire(import.meta.url);
 
 declare global {
 	interface Window {
@@ -14,12 +13,18 @@ declare global {
 	}
 }
 
-/** Render local diagram sources in a disposable browser with no account session or network. */
-export class BrowserDiagramRasterizer implements DiagramRasterRendering {
+export interface DiagramRasterization {
+	render(
+		sources: readonly ExportDiagramSource[],
+		config: MermaidRenderConfig
+	): Promise<ReadonlyMap<string, ExportDiagramRaster>>;
+}
+
+/** Renders local diagram sources in a disposable browser with no account session or network. */
+export class DiagramRenderingService implements DiagramRasterization {
 	async render(
 		sources: readonly ExportDiagramSource[],
-		config: MermaidRenderConfig,
-		resources: DiagramRenderResources
+		config: MermaidRenderConfig
 	): Promise<ReadonlyMap<string, ExportDiagramRaster>> {
 		const result = new Map<string, ExportDiagramRaster>();
 		if (!sources.length) return result;
@@ -29,6 +34,11 @@ export class BrowserDiagramRasterizer implements DiagramRasterRendering {
 		});
 		const timeout = AbortSignal.timeout(30_000);
 		try {
+			const fontData = (
+				await readFile(
+					require.resolve('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2')
+				)
+			).toString('base64');
 			const page = await browser.newPage({ deviceScaleFactor: 2, serviceWorkers: 'block' });
 			await page.route('**/*', (route) => route.abort('blockedbyclient'));
 			await page.setContent(
@@ -36,11 +46,11 @@ export class BrowserDiagramRasterizer implements DiagramRasterRendering {
 			);
 
 			await page.addStyleTag({
-				content: `@font-face {font-family: 'Inter Variable'; font-style: normal; font-weight: 100 900; src: url(data:font/woff2;base64,${resources.fontData}) format('woff2');}`
+				content: `@font-face {font-family: 'Inter Variable'; font-style: normal; font-weight: 100 900; src: url(data:font/woff2;base64,${fontData}) format('woff2');}`
 			});
 			await page.evaluate(() => document.fonts.load('14px "Inter Variable"'));
 			if (sources.some((source) => source.kind === 'mermaid')) {
-				await page.addScriptTag({ path: resources.mermaidScript });
+				await page.addScriptTag({ path: require.resolve('mermaid/dist/mermaid.js') });
 				await page.evaluate((configuration) => window.mermaid.initialize(configuration), config);
 			}
 			const render = async () => {

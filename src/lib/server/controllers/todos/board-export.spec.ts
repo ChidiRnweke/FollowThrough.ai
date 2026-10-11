@@ -4,8 +4,7 @@ import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import { InMemoryPdfDocument } from '$lib/testing/deliverables/fakes/pdf-document';
-import { createPdfRendering } from '$lib/server/factories/capabilities/pdf-rendering-factory';
+import { InMemoryPdfRendering } from '$lib/testing/deliverables/fakes/pdf-document';
 import type { PreparedExport } from '$lib/models/deliverables';
 import { InMemoryNoteMarkdownReader } from '$lib/testing/notes/fakes/markdown-reader';
 import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
@@ -38,7 +37,6 @@ const setup = () => {
 		pdfInputs.push(input);
 		return Buffer.from('pdf-bytes');
 	};
-	const pdf = new InMemoryPdfDocument(pdfGenerator);
 	const service = new Todos(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
@@ -52,7 +50,7 @@ const setup = () => {
 			projectLister: projects,
 			markdownToContent: new InMemoryNoteMarkdownReader(markdownToDocument),
 			exportPreparer: preparation,
-			pdfGenerator: { ...createPdfRendering(), preparation: pdf, writer: pdf }
+			pdfGenerator: new InMemoryPdfRendering(pdfGenerator)
 		})
 	);
 	return { todos, projects, markdownSources, pdfInputs, service };

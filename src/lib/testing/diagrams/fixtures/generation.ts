@@ -1,7 +1,7 @@
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { DiagramGenerationStore } from '$lib/server/stores/diagrams/generation';
 import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
-import { InMemoryMermaidSyntaxReader } from '$lib/testing/diagrams/fakes/mermaid-syntax';
+import { InMemoryMermaidValidator } from '$lib/testing/diagrams/fakes/mermaid-validator';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import type { DiagramAgentDependencies } from '$lib/server/controllers/diagrams/controller';
@@ -12,7 +12,6 @@ import { ConversationArchive } from '$lib/server/services/agent/conversations/ar
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 
-import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
 import { InMemoryAgentPreferencesRepository } from '$lib/testing/agent/fakes/in-memory-inline-completion';
@@ -72,7 +71,7 @@ export const diagramGenerationFixture = () => {
 		conversations,
 		provenance,
 		notes,
-		mermaidValidator: new MermaidSubmissionValidator(new InMemoryMermaidSyntaxReader()),
+		mermaidValidator: new InMemoryMermaidValidator(),
 		now: () => testNow
 	};
 };

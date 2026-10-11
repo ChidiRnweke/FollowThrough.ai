@@ -9,12 +9,10 @@ import {
 	DiagramLifecycleService as DiagramLifecycleRuleService,
 	type DiagramLifecycleRules
 } from '$lib/services/diagrams/trash';
-import { IconifySearchPages } from '$lib/server/adapters/diagrams/iconify';
 import {
 	DiagramGenerationRuleService,
 	type DiagramGenerationRules
 } from '$lib/server/services/diagrams/generation-rules';
-import { NodeMermaidSyntaxReader } from '$lib/server/adapters/diagrams/mermaid-parser';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import type { Database } from '$lib/server/db';
@@ -150,12 +148,12 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 		renderer: new DiagramContent(),
 		textExtractor: new DiagramContent(),
 		xmlValidator: new DrawioXmlValidator(),
-		iconSearch: new IconifyIconSearch(new IconifySearchPages()),
+		iconSearch: new IconifyIconSearch(globalThis.fetch),
 		canvasSource: new PresentedCanvasSource(input.sessions),
 		svgSanitizer: new DrawioSvgSanitizer(),
 		labels: new DrawioLabelReader(),
 		labelPresentation: new DiagramLabelPresentationService(),
-		mermaidValidator: new MermaidSubmissionValidator(new NodeMermaidSyntaxReader()),
+		mermaidValidator: new MermaidSubmissionValidator(),
 		generationRules: new DiagramGenerationRuleService(),
 		now: () => new Date().toISOString() as DateTime,
 		generation: {

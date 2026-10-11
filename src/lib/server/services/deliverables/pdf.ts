@@ -1,4 +1,6 @@
-import type { PdfFontResources } from '$lib/models/deliverables';
+import pdfmake from 'pdfmake';
+import { openSync } from 'fontkit';
+import { resolve, sep } from 'node:path';
 import type { WidgetExportBlock } from '$lib/models/widgets';
 import type { PreparedExport, PreparedDiagram } from '$lib/models/deliverables';
 import { ExternalServiceError } from '$lib/errors';
@@ -17,13 +19,85 @@ import type {
 	ProseMirrorTextNode
 } from '$lib/models/notes';
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
-export interface PdfDocumentPreparation {
-	prepare(input: PreparedExport, resources: PdfFontResources): PdfDocumentDefinition;
+export interface PdfRendering {
+	render(input: PreparedExport): Promise<Buffer>;
 }
-export class PdfDocumentService implements PdfDocumentPreparation {
-	prepare(input: PreparedExport, resources: PdfFontResources): PdfDocumentDefinition {
-		return preparePdfDocument(input, resources);
+/** Renders a prepared export with the repository's bundled Noto fonts, read on every render. */
+export class PdfDocumentService implements PdfRendering {
+	async render(input: PreparedExport): Promise<Buffer> {
+		const resources = readFonts();
+		pdfmake.addFonts(resources.files);
+		pdfmake.setLocalAccessPolicy((path) => resolve(path).startsWith(resources.directory + sep));
+		return pdfmake.createPdf(preparePdfDocument(input, resources)).getBuffer();
 	}
+}
+interface PdfFontResources {
+	readonly directory: string;
+	readonly files: Readonly<Record<string, Readonly<Record<string, string>>>>;
+	readonly coverage: ReadonlyMap<string, ReadonlySet<number>>;
+}
+// Repo-shipped Noto TTFs retain the existing emoji, symbol and math fallback faces.
+const FONT_FILES: Record<string, Record<string, string>> = {
+	NotoSans: {
+		normal: 'NotoSans-Regular.ttf',
+		bold: 'NotoSans-Bold.ttf',
+		italics: 'NotoSans-Italic.ttf',
+		bolditalics: 'NotoSans-BoldItalic.ttf'
+	},
+	NotoSerif: {
+		normal: 'NotoSerif-Regular.ttf',
+		bold: 'NotoSerif-Bold.ttf',
+		italics: 'NotoSerif-Italic.ttf',
+		bolditalics: 'NotoSerif-BoldItalic.ttf'
+	},
+	// Mono has no italic cuts; alias them to the upright styles.
+	NotoSansMono: {
+		normal: 'NotoSansMono-Regular.ttf',
+		bold: 'NotoSansMono-Bold.ttf',
+		italics: 'NotoSansMono-Regular.ttf',
+		bolditalics: 'NotoSansMono-Bold.ttf'
+	},
+	// Fallback-only families, single cut each.
+	NotoEmoji: {
+		normal: 'NotoEmoji.ttf',
+		bold: 'NotoEmoji.ttf',
+		italics: 'NotoEmoji.ttf',
+		bolditalics: 'NotoEmoji.ttf'
+	},
+	NotoSansSymbols2: {
+		normal: 'NotoSansSymbols2-Regular.ttf',
+		bold: 'NotoSansSymbols2-Regular.ttf',
+		italics: 'NotoSansSymbols2-Regular.ttf',
+		bolditalics: 'NotoSansSymbols2-Regular.ttf'
+	},
+	NotoSansMath: {
+		normal: 'NotoSansMath-Regular.ttf',
+		bold: 'NotoSansMath-Regular.ttf',
+		italics: 'NotoSansMath-Regular.ttf',
+		bolditalics: 'NotoSansMath-Regular.ttf'
+	}
+};
+function readFonts(): PdfFontResources {
+	const directory = resolve(process.cwd(), 'assets/fonts');
+	const files = Object.fromEntries(
+		Object.entries(FONT_FILES).map(([family, styles]) => [
+			family,
+			Object.fromEntries(
+				Object.entries(styles).map(([style, file]) => [style, resolve(directory, file)])
+			)
+		])
+	);
+	const coverage = new Map<string, ReadonlySet<number>>();
+	for (const [family, styles] of Object.entries(files)) {
+		const face = openSync(styles.normal!);
+		if ('fonts' in face)
+			throw new ExternalServiceError(`The bundled font ${family} is a collection, not a face.`);
+		coverage.set(
+			family,
+			new Set(face.characterSet.filter((codepoint) => face.hasGlyphForCodePoint(codepoint)))
+		);
+	}
+	return { directory, files, coverage };
 }
 function preparePdfDocument(
 	input: PreparedExport,

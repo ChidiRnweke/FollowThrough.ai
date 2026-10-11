@@ -145,8 +145,12 @@ describe('Diagram generation run settlement', () => {
 	});
 
 	it('rejects Mermaid click handlers before offering an inline revision', async () => {
-		const { controller, provider } = setup();
+		const { controller, provider, mermaidValidator } = setup();
 		provider.mermaidSource = 'flowchart LR\nA --> B\nclick A "https://example.com"';
+		mermaidValidator.rejections.set(
+			provider.mermaidSource,
+			'Links and click handlers are not allowed in Mermaid diagrams.'
+		);
 		await expect(controller.reviseInlineMermaid(testActor(), revision)).rejects.toThrow(
 			'did not submit a valid diagram'
 		);

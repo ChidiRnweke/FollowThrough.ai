@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDiagramExportRenderer } from '$lib/server/factories/capabilities/diagram-rendering-factory';
+import { DiagramRenderingService } from './diagram-rendering';
 import { MermaidThemeService } from '$lib/services/diagrams/mermaid-theme';
 const themes = new MermaidThemeService();
 import { createServer } from 'node:http';
@@ -74,10 +74,9 @@ describe('server diagram rasterization', () => {
 	}, 30_000);
 });
 
-async function rasterize(
+function rasterize(
 	sources: readonly import('$lib/models/deliverables').ExportDiagramSource[],
 	config: import('$lib/models/diagrams/mermaid-theme').MermaidRenderConfig
 ) {
-	const capability = createDiagramExportRenderer();
-	return capability.renderer.render(sources, config, await capability.reader.read());
+	return new DiagramRenderingService().render(sources, config);
 }

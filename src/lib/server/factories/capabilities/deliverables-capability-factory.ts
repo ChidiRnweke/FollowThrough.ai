@@ -8,24 +8,17 @@ import {
 	type IWidgetEvaluationService
 } from '$lib/services/widgets/edits';
 import type { NoteMarkdownReader } from '$lib/models/note-markdown';
-import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
+import {
+	DocxTemplateStyleReader,
+	type TemplateStyleReader
+} from '$lib/server/services/deliverables/template-styles';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-import type { TemplateStyleReader } from '$lib/server/controllers/deliverables/controller';
-import type {
-	DiagramRenderResourceReader,
-	DiagramRasterRendering
-} from '$lib/server/controllers/deliverables/controller';
-import type { DiagramRenderCache } from '$lib/server/stores/deliverables/diagram-resources';
-
-import type {
-	PdfFontReader,
-	PdfDocumentWriter
-} from '$lib/server/controllers/deliverables/controller';
-import type { PdfFontCache } from '$lib/server/stores/deliverables/pdf-fonts';
-import type { PdfDocumentPreparation } from '$lib/server/services/deliverables/pdf';
-
+import { PdfDocumentService, type PdfRendering } from '$lib/server/services/deliverables/pdf';
+import {
+	DiagramRenderingService,
+	type DiagramRasterization
+} from '$lib/server/services/deliverables/diagram-rendering';
 import type { Database } from '$lib/server/db';
-import { createDiagramExportRenderer } from '$lib/server/factories/capabilities/diagram-rendering-factory';
 import type { IAttachmentStorage } from '$lib/server/repositories/attachments/object-storage';
 import { fetchRemoteDataUrl } from '$lib/server/repositories/deliverables/export-images';
 import { ArtifactRecords } from '$lib/server/repositories/deliverables/postgres/artifacts';
@@ -52,7 +45,6 @@ import {
 	type ArtifactServices,
 	type TemplateServices
 } from './deliverable-storage-factory';
-import { createPdfRendering } from './pdf-rendering-factory';
 
 export interface DeliverablesCapabilityInput {
 	readonly db: Database;
@@ -69,22 +61,13 @@ export interface DeliverablesCapability {
 	readonly artifactStorage: IAttachmentStorage;
 	readonly fetchImage: typeof fetchRemoteDataUrl;
 	readonly prepareExport: ExportPreparation;
-	readonly diagramRenderer: {
-		state: DiagramRenderCache;
-		reader: DiagramRenderResourceReader;
-		renderer: DiagramRasterRendering;
-	};
+	readonly diagramRenderer: DiagramRasterization;
 	readonly mermaidThemes: MermaidThemeRules;
 	readonly widgetExports: IWidgetExportService;
 	readonly widgetSources: IWidgetSourceService;
 	readonly widgetEvaluation: IWidgetEvaluationService;
 	readonly docxGenerator: DocxRenderer;
-	readonly pdfGenerator: {
-		state: PdfFontCache;
-		fonts: PdfFontReader;
-		preparation: PdfDocumentPreparation;
-		writer: PdfDocumentWriter;
-	};
+	readonly pdfGenerator: PdfRendering;
 	readonly zipPacker: DocumentBundlePacker;
 	readonly markdownToContent: NoteMarkdownReader;
 }
@@ -103,13 +86,13 @@ export const createDeliverablesCapability = (
 	artifactStorage: input.storage,
 	fetchImage: fetchRemoteDataUrl,
 	prepareExport: new ExportPreparationService(),
-	diagramRenderer: createDiagramExportRenderer(),
+	diagramRenderer: new DiagramRenderingService(),
 	mermaidThemes: new MermaidThemeService(),
 	widgetExports: new WidgetExportService(),
 	widgetSources: new WidgetSourceService(),
 	widgetEvaluation: new WidgetEvaluationService(),
 	docxGenerator: new DocxDocumentService(),
-	pdfGenerator: createPdfRendering(),
+	pdfGenerator: new PdfDocumentService(),
 	zipPacker: new DocumentBundleService(),
 	markdownToContent: new NodeNoteMarkdown()
 });

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Diagrams } from './controller';
-import { InMemoryMermaidSyntaxReader } from '$lib/testing/diagrams/fakes/mermaid-syntax';
-import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
+import { InMemoryMermaidValidator } from '$lib/testing/diagrams/fakes/mermaid-validator';
 import {
 	durableDiagramFixture,
 	diagramSelection
@@ -9,15 +8,17 @@ import {
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { DiagramSubmission } from '$lib/models/diagrams/generation';
 const draft: DiagramSubmission = { kind: 'mermaid', source: 'flowchart LR\nA --> B' };
+const fenced: DiagramSubmission = { kind: 'mermaid', source: '```mermaid\ninvalid\n```' };
 const setup = (candidates = [draft]) => {
 	const fixture = durableDiagramFixture();
 	const provider = fixture.provider;
 	provider.submissions = candidates;
 	if (!candidates.length) provider.failure = new Error('No diagram candidates remain.');
-	const syntax = new InMemoryMermaidSyntaxReader();
+	const syntax = new InMemoryMermaidValidator();
+	syntax.rejections.set(fenced.source, 'Submit Mermaid source without code fences.');
 	const controller = new Diagrams({
 		...fixture.dependencies,
-		mermaidValidator: new MermaidSubmissionValidator(syntax),
+		mermaidValidator: syntax,
 		generation: {
 			...fixture.generation,
 			generator: provider
@@ -37,7 +38,7 @@ describe('Diagram provider submission through its owning operation', () => {
 		});
 	});
 	it('allows a correction after the controller rejects a submission', async () => {
-		const fixture = setup([{ kind: 'mermaid', source: '```mermaid\ninvalid\n```' }, draft]);
+		const fixture = setup([fenced, draft]);
 		const result = await fixture.run();
 		expect(result.suggestion.payload).toMatchObject(draft);
 	});

@@ -1,4 +1,4 @@
-import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
+import { DocxTemplateStyleReader } from '$lib/server/services/deliverables/template-styles';
 import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';

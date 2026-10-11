@@ -1,4 +1,3 @@
-import { IconifySearchPages } from '$lib/server/adapters/diagrams/iconify';
 import { describe, expect, it } from 'vitest';
 import { IconifyIconSearch } from './icons';
 
@@ -9,7 +8,7 @@ const respondWith = (body: string, status = 200) => {
 		calls.push(String(url));
 		return new Response(body, { status });
 	};
-	return { calls, search: new IconifyIconSearch(new IconifySearchPages(fetchImpl)) };
+	return { calls, search: new IconifyIconSearch(fetchImpl) };
 };
 
 const icons = (...names: string[]) =>

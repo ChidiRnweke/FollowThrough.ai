@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { inflateSync } from 'node:zlib';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
-import { createPdfRendering } from '$lib/server/factories/capabilities/pdf-rendering-factory';
-const pdfRendering = createPdfRendering();
-const generatePdf = async (input: import('$lib/models/deliverables').PreparedExport) => {
-	const resources = await pdfRendering.fonts.read();
-	return pdfRendering.writer.write(pdfRendering.preparation.prepare(input, resources), resources);
-};
+import { PdfDocumentService } from './pdf';
+const pdfRendering = new PdfDocumentService();
+const generatePdf = (input: import('$lib/models/deliverables').PreparedExport) =>
+	pdfRendering.render(input);
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 import { ExportPreparationService } from '$lib/services/deliverables/export-preparation';
 const preparation = new ExportPreparationService();

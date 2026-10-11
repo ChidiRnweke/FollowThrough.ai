@@ -1,11 +1,9 @@
-import type { DiagramRenderResources } from '$lib/models/deliverables';
-import type { MermaidRenderConfig } from '$lib/models/diagrams/mermaid-theme';
-import type { PdfFontResources } from '$lib/models/deliverables';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
 import type { AgentPayload } from '$lib/models/agent/payload';
-import type { PdfFontCache } from '$lib/server/stores/deliverables/pdf-fonts';
-import type { PdfDocumentPreparation } from '$lib/server/services/deliverables/pdf';
+import type { TemplateStyleReader } from '$lib/server/services/deliverables/template-styles';
+import type { PdfRendering } from '$lib/server/services/deliverables/pdf';
+import type { DiagramRasterization } from '$lib/server/services/deliverables/diagram-rendering';
 
 import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type { DocumentBundlePacker } from '$lib/server/services/deliverables/bundle';
@@ -27,7 +25,6 @@ import type {
 	ExportDiagramRaster,
 	ExportDiagramSource,
 	ExportSettings,
-	ExtractedTemplateStyles,
 	GenerateBundleInput,
 	GenerateBundleOutput,
 	GenerateDocumentInput,
@@ -73,15 +70,7 @@ import type { ExportPreparation } from '$lib/services/deliverables/export-prepar
 import type { ExportSettingsRules } from '$lib/services/deliverables/settings';
 import type { MermaidThemeRules } from '$lib/services/diagrams/mermaid-theme';
 import { createHash, randomUUID } from 'node:crypto';
-import type { DiagramRenderCache } from '$lib/server/stores/deliverables/diagram-resources';
 
-export interface TemplateUploadProof {
-	readonly byteSize: number;
-	readonly checksumSha256: string;
-}
-export interface TemplateStyleReader {
-	read(upload: TemplateUploadProof, bytes: Uint8Array): Promise<ExtractedTemplateStyles>;
-}
 export interface ExportObjectStorage {
 	createUploadUrl(input: {
 		objectKey: string;
@@ -260,22 +249,13 @@ export interface DeliverablesDependencies {
 		list(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSummary[]>;
 	};
 	diagramReader: { get(actor: ActorContext, id: DiagramId): Promise<Diagram> };
-	diagramRenderer: {
-		state: DiagramRenderCache;
-		reader: DiagramRenderResourceReader;
-		renderer: DiagramRasterRendering;
-	};
+	diagramRenderer: DiagramRasterization;
 	readonly mermaidThemes: MermaidThemeRules;
 	readonly widgetExports: IWidgetExportService;
 	readonly widgetSources: IWidgetSourceService;
 	readonly widgetEvaluation: IWidgetEvaluationService;
 	docxGenerator: DocxRenderer;
-	pdfGenerator: {
-		state: PdfFontCache;
-		fonts: PdfFontReader;
-		preparation: PdfDocumentPreparation;
-		writer: PdfDocumentWriter;
-	};
+	pdfGenerator: PdfRendering;
 	zipPacker: DocumentBundlePacker;
 	exportSettingsReader: ExportSettingsReader;
 	exportSettingsWriter: ExportSettingsWriter;
@@ -515,7 +495,7 @@ export class Deliverables implements DeliverablesController {
 			}
 		}
 		const renderedDiagrams = pendingDiagrams.size
-			? await this.renderDiagrams(
+			? await this.dependencies.diagramRenderer.render(
 					[...pendingDiagrams.values()],
 					this.dependencies.mermaidThemes.resolve({
 						base: settings.diagramTheme?.base ?? 'light',
@@ -579,7 +559,9 @@ export class Deliverables implements DeliverablesController {
 	}
 
 	private renderDocument(format: 'pdf' | 'docx', input: PreparedExport): Promise<Buffer> {
-		return format === 'pdf' ? this.renderPdf(input) : this.dependencies.docxGenerator.render(input);
+		return format === 'pdf'
+			? this.dependencies.pdfGenerator.render(input)
+			: this.dependencies.docxGenerator.render(input);
 	}
 
 	async generateBundle(
@@ -623,7 +605,9 @@ export class Deliverables implements DeliverablesController {
 		actor: ActorContext,
 		input: PreviewDocumentInput
 	): Promise<PreviewDocumentOutput> {
-		const buffer = await this.renderPdf(await this.prepareDocument(actor, input));
+		const buffer = await this.dependencies.pdfGenerator.render(
+			await this.prepareDocument(actor, input)
+		);
 		return { data: buffer.toString('base64') };
 	}
 
@@ -838,72 +822,4 @@ export class Deliverables implements DeliverablesController {
 			this.dependencies.toolResults.arguments(input)
 		);
 	}
-	private async renderPdf(input: PreparedExport): Promise<Buffer> {
-		const resources = await this.pdfResources();
-		const document = this.dependencies.pdfGenerator.preparation.prepare(input, resources);
-		return this.dependencies.pdfGenerator.writer.write(document, resources);
-	}
-	private async pdfResources(): Promise<PdfFontResources> {
-		const state = this.dependencies.pdfGenerator.state.current;
-		if (state.kind === 'ready') return state.resources;
-		if (state.kind === 'loading') return state.pending;
-		const pending = this.dependencies.pdfGenerator.fonts.read().then(
-			(resources) => {
-				this.dependencies.pdfGenerator.state.setReady(resources);
-				return resources;
-			},
-			(error) => {
-				this.dependencies.pdfGenerator.state.clear();
-				throw error;
-			}
-		);
-		this.dependencies.pdfGenerator.state.setLoading(pending);
-		return pending;
-	}
-	private async renderDiagrams(
-		sources: readonly ExportDiagramSource[],
-		config: MermaidRenderConfig
-	): Promise<ReadonlyMap<string, ExportDiagramRaster>> {
-		if (!sources.length) return new Map();
-		const resources = await this.diagramResources();
-		return this.dependencies.diagramRenderer.renderer.render(sources, config, resources);
-	}
-	private async diagramResources(): Promise<DiagramRenderResources> {
-		const state = this.dependencies.diagramRenderer.state.current;
-		if (state.kind === 'ready') return state.resources;
-		if (state.kind === 'loading') return state.pending;
-		const pending = this.dependencies.diagramRenderer.reader.read().then(
-			(resources) => {
-				this.dependencies.diagramRenderer.state.setReady(resources);
-				return resources;
-			},
-			(error) => {
-				this.dependencies.diagramRenderer.state.clear();
-				throw new Error('A diagram could not be rendered for export', { cause: error });
-			}
-		);
-		this.dependencies.diagramRenderer.state.setLoading(pending);
-		return pending;
-	}
-}
-
-/** Low-level adapter contract; the owning controller coordinates the application operation. */
-export interface PdfFontReader {
-	read(): Promise<PdfFontResources>;
-}
-export interface PdfDocumentWriter {
-	write(
-		document: import('pdfmake').PdfDocumentDefinition,
-		resources: PdfFontResources
-	): Promise<Buffer>;
-}
-export interface DiagramRenderResourceReader {
-	read(): Promise<DiagramRenderResources>;
-}
-export interface DiagramRasterRendering {
-	render(
-		sources: readonly ExportDiagramSource[],
-		config: MermaidRenderConfig,
-		resources: DiagramRenderResources
-	): Promise<ReadonlyMap<string, ExportDiagramRaster>>;
 }
