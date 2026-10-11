@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.1.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v4.1.0...v4.1.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **server:** wire the context usage dashboard to the grouped services ([#427](https://github.com/ChidiRnweke/FollowThrough.ai/issues/427)) ([2365bd3](https://github.com/ChidiRnweke/FollowThrough.ai/commit/2365bd34352991691939afb7e8a61a580fdb480c))
+
 ## [4.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v4.0.1...v4.1.0) (2026-10-11)
 
 
