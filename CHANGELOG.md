@@ -1,5 +1,16 @@
 # Changelog
 
+## [4.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.2.1...v4.0.0) (2026-10-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* **architecture:** the inline suggestion endpoint no longer answers 'busy'.
+
+### Code Refactoring
+
+* **architecture:** complete adr 0007 across server and browser ([#401](https://github.com/ChidiRnweke/FollowThrough.ai/issues/401)) ([6132c01](https://github.com/ChidiRnweke/FollowThrough.ai/commit/6132c01b4d653091bcebfaf1621aa30fd424ea82))
+
 ## [3.2.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.2.0...v3.2.1) (2026-10-10)
 
 
