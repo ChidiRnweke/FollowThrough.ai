@@ -171,8 +171,10 @@ A new controller method needs all of these, or `svelte-check` / the audits fail:
    capability factory (e.g. `src/lib/server/factories/capabilities/deliverables-capability-factory.ts`).
 3. UI access goes through a zod-validated `query`/`command` in `src/lib/remote/<domain>/`.
 4. Classify the method in the `AgentToolCoverage` map in
-   `src/lib/server/factories/agent/agent-tool-factory.ts`. The map is total over each controller's
-   methods; a missing entry is a type error.
+   `src/lib/server/factories/agent/tool-coverage.ts`. The map is total over each controller's
+   methods; a missing entry is a type error. If the agent may call the method, define the tool in
+   `src/lib/server/factories/agent/tools/definitions.ts`: it calls this one operation and projects
+   its result. Never add an agent-specific method to the controller.
 5. Register the public method in `src/lib/server/factories/controller-surfaces.ts`. This map is
    total over controller interfaces. Boundary instrumentation uses it to start tracing before
    execution and to leave internal helpers untouched.

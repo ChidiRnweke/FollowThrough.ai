@@ -29,8 +29,20 @@ the result into its output. A tool does not sequence operations, and it does not
 repositories. Controllers and services do not know that a tool calls them.
 
 Each `AgentTool` carries metadata: its name, description, classification (`read`, `mutation`, and
-so on) and parameter schema. A tool can also carry a review. A review prepares a proposed change
-for the user to accept or reject before the tool applies it. The harness reads only this metadata.
+so on) and parameter schema. The harness reads only this metadata. A tool has one of two kinds:
+
+- A **direct** tool runs one operation. Its output is the operation's result, projected to the
+  fields the model reads, checked to be JSON, and narrowed to any creation-time range the call
+  asked for.
+- A **reviewed** tool changes a note or a skill. Its review prepares the exact change with
+  `notes.prepareChange`, the user accepts or rejects that change, and the accepted change is
+  applied with `notes.applyReviewedChange`. These are two entry points separated by the user's
+  decision, not one tool sequencing two operations. An MCP host approves its own calls, so the MCP
+  server applies a prepared change at once.
+
+An operation that needs a project fails with `ProjectChoiceRequiredError` when the caller names
+none, and lists the projects to choose from. The tool turns that error into text that tells the
+model how to choose, or to create a project first.
 
 The semantic checker enforces the rule. The `tool-factory` layer covers
 `server/factories/agent/tools/`, and the `tool-operation` rule rejects a tool that reaches service
