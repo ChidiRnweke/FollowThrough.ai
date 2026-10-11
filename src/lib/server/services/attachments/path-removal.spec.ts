@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
 import { view, ATTACHMENT_ID } from '$lib/testing/attachments/fakes/processing';
-import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = (embedded = false) => {
 	const dependencies = setupAttachments();
@@ -23,23 +23,23 @@ const setup = (embedded = false) => {
 };
 
 it('preserves file bytes needed by retained note revisions after path removal', async () => {
-	const { service, storage, note, attachment } = setup();
-	await service.remove(testActor(), note.id, attachment.attachment.path);
+	const { lifecycle, storage, note, attachment } = setup();
+	await lifecycle.remove(note.id, attachment.attachment.path);
 	expect(storage.objects.has(attachment.version.objectKey)).toBe(true);
 });
 
 it('refuses path removal while the current note still embeds the attachment', async () => {
-	const { service, note, attachment } = setup(true);
-	await expect(service.remove(testActor(), note.id, attachment.attachment.path)).rejects.toThrow(
+	const { lifecycle, note, attachment } = setup(true);
+	await expect(lifecycle.remove(note.id, attachment.attachment.path)).rejects.toThrow(
 		'still embeds'
 	);
 });
 
 it('removes an unreferenced attachment from the current note and returns its indexing identity', async () => {
-	const { service, repository, note, attachment } = setup();
-	const removed = await service.remove(testActor(), note.id, attachment.attachment.path);
+	const { lifecycle, repository, note, attachment } = setup();
+	const removed = await lifecycle.remove(note.id, attachment.attachment.path);
 	expect({
 		removed,
-		current: await repository.findByPath(testActor(), note.id, attachment.attachment.path)
+		current: await repository.findByPath(note.id, attachment.attachment.path)
 	}).toEqual({ removed: attachment.attachment.id, current: undefined });
 });

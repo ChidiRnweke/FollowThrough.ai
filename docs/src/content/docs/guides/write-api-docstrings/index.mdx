@@ -49,7 +49,7 @@ Each of these is quoted from the codebase and is what the reference renders toda
  * a usage record linking the skill to the note it was applied against, which is what
  * makes "which skills actually get used" observable later.
  */
-loadForAgent(actor: ActorContext, input: LoadSkillInput): Promise<SkillView>;
+loadForAgent(input: LoadSkillInput): Promise<SkillView>;
 ```
 
 A caller who reached for this instead of `get` by name alone would write usage records unintentionally. The docstring exists to prevent exactly that mistake.
@@ -68,7 +68,7 @@ A caller who reached for this instead of `get` by name alone would write usage r
  * @throws ValidationError if the run is not awaiting approval or any call id is not
  * pending.
  */
-decideMany(actor: ActorContext, input: DecideAgentRunBatchInput): Promise<AgentRunSnapshot>;
+decideMany(input: DecideAgentRunBatchInput): Promise<AgentRunSnapshot>;
 ```
 
 The signature says the method batches decisions. Only the docstring tells you the batch is atomic, _why_ it must be, and what throws when it is not.

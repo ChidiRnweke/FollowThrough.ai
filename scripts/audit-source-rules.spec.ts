@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeSource } from './audit-source-rules';
 const violations = (source: string) => analyzeSource('example.ts', source);
-/** A path inside one of the three layers ADR 0037 keeps total. */
-const strict = (source: string) => analyzeSource('src/lib/models/notes/example.ts', source);
+/** A path inside one of the layers ADR 0037 keeps total. */
+const strict = (source: string) =>
+	analyzeSource('src/lib/server/services/notes/example.ts', source);
+const model = (source: string) => analyzeSource('src/lib/models/notes/example.ts', source);
 describe('source audit rules', () => {
 	it('rejects an asserted object shape', () => {
 		expect(violations('const value = ({ id: maybe }) as never')).toHaveLength(1);
@@ -360,7 +362,7 @@ describe('tool lifecycle ownership', () => {
 	it('allows SDK construction in its designated adapter', () => {
 		expect(
 			analyzeSource(
-				'src/lib/server/repositories/agent/sdk-tool.ts',
+				'src/lib/server/infrastructure/agents/sdk-tool.ts',
 				"import { tool } from '@openai/agents';"
 			)
 		).toEqual([]);
@@ -368,7 +370,7 @@ describe('tool lifecycle ownership', () => {
 	it('allows MCP construction in its designated adapter', () => {
 		expect(
 			analyzeSource(
-				'src/lib/server/factories/agent/mcp-tool-factory.ts',
+				'src/lib/server/factories/agent/tools/mcp.ts',
 				"import { Server } from '@modelcontextprotocol/sdk/server/index.js';"
 			)
 		).toEqual([]);
@@ -389,4 +391,81 @@ describe('tool lifecycle ownership', () => {
 			).map((item) => item.rule)
 		).toEqual(['tool-boundary']);
 	});
+});
+
+describe('data-only models', () => {
+	it('allows a value constructor with empty collections and nested data', () => {
+		expect(
+			model(
+				'export const history = (text: string) => ({ past: [], present: { text, references: [] }, future: [] })'
+			)
+		).toEqual([]);
+	});
+
+	it.each([
+		'export const total = (prices: number[]) => prices.reduce((sum, price) => sum + price, 0)',
+		'export function lookup(value: string) { return table.get(value); }',
+		'export const parseValue = (value: string) => schema.parse(value)',
+		'const query = (value: string) => value.length > 0',
+		'export const computed = (id: string) => ({ id: id.trim() })',
+		'export const computed = (id: string) => ({ values: [id.trim()] })'
+	])('rejects model procedure: %s', (source) => {
+		expect(model(source).map((item) => item.rule)).toEqual(['model-procedure']);
+	});
+	it('allows a scalar constructor with a local validity guard', () => {
+		expect(
+			model(
+				"type Version = string & { readonly __brand: 'Version' }; export const version = (value: bigint): Version => { if (value <= 0n) throw new Error('positive required'); return `v-${value}` as Version; }"
+			)
+		).toEqual([]);
+	});
+	it('rejects a branded constructor that consults mutable external state', () => {
+		expect(
+			model(
+				"type Id = string & { readonly __brand: 'Id' }; const create = (value: string): Id => registry.get(value) as Id"
+			).map((item) => item.rule)
+		).toEqual(['model-procedure']);
+	});
+	it.each([
+		'const id = (value: string = registry.next()): Id => value as Id',
+		'const id = (value: string): Id => (value += "suffix") as Id',
+		'const id = (value: string): Id => { let saved = value; return saved as Id; }'
+	])('rejects side effects or mutable state in a scalar constructor: %s', (source) => {
+		expect(
+			model("type Id = string & { readonly __brand: 'Id' }; " + source).map((item) => item.rule)
+		).toEqual(['model-procedure']);
+	});
+	it('rejects an unbranded calculation', () => {
+		expect(
+			model('const total = (value: number): number => value * 2').map((item) => item.rule)
+		).toEqual(['model-procedure']);
+	});
+	it.each(['let encoder: Encoder;', 'export class Workflow {}'])(
+		'rejects model runtime state: %s',
+		(source) => {
+			expect(model(source).map((item) => item.rule)).toEqual(['model-state']);
+		}
+	);
+	it.each([
+		'export const schema = z.string().transform(value => value.trim())',
+		'const arraySchema = <T>(item: z.ZodType<T>) => z.array(item)',
+		'function schema<T>(item: z.ZodType<T>) { return z.object({ item }); }',
+		"const create = (id: string) => ({ kind: 'record', id })",
+		'interface Record { readonly id: string }'
+	])('allows schema construction and data: %s', (source) => {
+		expect(model(source)).toEqual([]);
+	});
+});
+
+describe('shared strict layers', () => {
+	it.each(['src/lib/services/notes/edits.ts', 'src/lib/controllers/notes/editing.ts'])(
+		'rejects unknown inputs in %s',
+		(file) => {
+			expect(
+				analyzeSource(file, 'export interface Editing { edit(input: unknown): void }').map(
+					(violation) => violation.rule
+				)
+			).toEqual(['no-unknown-type']);
+		}
+	);
 });

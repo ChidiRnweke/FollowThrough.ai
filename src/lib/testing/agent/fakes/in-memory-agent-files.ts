@@ -7,23 +7,31 @@ import type { AgentFileRepository } from '$lib/server/repositories/agent-files/a
 const encoding = getEncoding('cl100k_base');
 
 export class InMemoryAgentFiles implements AgentFileRepository {
-	files: StoredAgentFile[] = [];
-	private readonly owners = new Map<AgentFileId, ActorContext['userId']>();
+	/** Pass another instance as `table` to see its files as a different user. */
+	constructor(
+		private readonly actor: ActorContext,
+		table?: InMemoryAgentFiles
+	) {
+		this.files = table?.files ?? [];
+		this.owners = table?.owners ?? new Map();
+	}
+	files: StoredAgentFile[];
+	private readonly owners: Map<AgentFileId, ActorContext['userId']>;
 
-	async list(actor: ActorContext): Promise<readonly StoredAgentFile[]> {
-		return this.files.filter((file) => this.owners.get(file.metadata.id) === actor.userId);
+	async list(): Promise<readonly StoredAgentFile[]> {
+		return this.files.filter((file) => this.owners.get(file.metadata.id) === this.actor.userId);
 	}
 
-	async findByPath(actor: ActorContext, path: string): Promise<StoredAgentFile | undefined> {
-		return (await this.list(actor)).find((file) => file.metadata.path === path);
+	async findByPath(path: string): Promise<StoredAgentFile | undefined> {
+		return (await this.list()).find((file) => file.metadata.path === path);
 	}
 
-	async store(_actor: ActorContext, input: StoreAgentFileInput): Promise<StoredAgentFile> {
+	async store(input: StoreAgentFileInput): Promise<StoredAgentFile> {
 		const existing = this.files.find(
 			(file) =>
 				file.conversationId === input.conversationId &&
 				file.metadata.path === input.path &&
-				this.owners.get(file.metadata.id) === _actor.userId
+				this.owners.get(file.metadata.id) === this.actor.userId
 		);
 		const file: StoredAgentFile = {
 			conversationId: input.conversationId,
@@ -39,7 +47,7 @@ export class InMemoryAgentFiles implements AgentFileRepository {
 			},
 			content: input.content
 		};
-		this.owners.set(file.metadata.id, _actor.userId);
+		this.owners.set(file.metadata.id, this.actor.userId);
 		this.files = [...this.files.filter((candidate) => candidate !== existing), file];
 		return file;
 	}

@@ -1,3 +1,4 @@
+import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import { expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { todos } from '$lib/server/db/schema/todos';
@@ -11,9 +12,8 @@ it.each([
 	{ status: 'open' as const, completedAt: new Date(now) }
 ])('refuses an inconsistent stored completion state: $status', async (corrupt) => {
 	const { owner, project } = await seedNote(corrupt.status === 'done' ? '20601' : '20602');
-	const records = new TodoRecords(context.db);
+	const records = new TodoRecords(owner, context.db);
 	const task = await records.insert(
-		owner,
 		todoBuilder({
 			id: testTodoId(corrupt.status === 'done' ? 20601 : 20602),
 			userId: owner.userId,
@@ -22,7 +22,7 @@ it.each([
 	);
 	// Negative boundary fixture: bypass domain writers to represent corrupt external storage.
 	await context.db.update(todos).set(corrupt).where(eq(todos.id, task.id));
-	await expect(records.findById(owner, task.id)).rejects.toThrow();
+	await expect(records.findById(task.id)).rejects.toThrow();
 });
 
 it.each(['done', 'open'] as const)(
@@ -30,9 +30,8 @@ it.each(['done', 'open'] as const)(
 	async (status) => {
 		const suffix = status === 'done' ? '20603' : '20604';
 		const { owner, project } = await seedNote(suffix);
-		const records = new TodoRecords(context.db);
+		const records = new TodoRecords(owner, context.db);
 		const before = await records.insert(
-			owner,
 			todoBuilder({
 				id: testTodoId(Number(suffix)),
 				userId: owner.userId,
@@ -41,17 +40,20 @@ it.each(['done', 'open'] as const)(
 			})
 		);
 		const after = await records.update(
-			owner,
 			status === 'done'
 				? { ...before, status: 'open', completedAt: undefined }
 				: { ...before, status: 'done', completedAt: now }
 		);
-		await new SuggestionEffectRecords(context.db).restore(owner, {
+		await new SuggestionEffectRecords(
+			owner,
+			context.db,
+			new WorkspaceSyncObjects(owner, context.db)
+		).restore({
 			kind: 'modified',
 			before: { type: 'todos', value: before },
 			after: { type: 'todos', value: after }
 		});
-		const restored = await records.findById(owner, before.id);
+		const restored = await records.findById(before.id);
 		expect({ status: restored?.status, completedAt: restored?.completedAt }).toEqual({
 			status: before.status,
 			completedAt: before.completedAt

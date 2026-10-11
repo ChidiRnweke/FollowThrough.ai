@@ -1,34 +1,69 @@
-import { expect, it, vi } from 'vitest';
-import postgres from 'postgres';
 import { DomainError } from '$lib/errors';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
+import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { replaceNoteFixture, context, seedNote } from '../database-harness';
+import postgres from 'postgres';
+import { expect, it, vi } from 'vitest';
+import { context, replaceNoteFixture, seedNote } from '../database-harness';
 
 it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 	const seeded = await seedNote('18503');
 	const { owner } = seeded;
-	const records = new NoteRecords(context.db);
+	const records = new NoteRecords(owner, context.db);
 	const note = await replaceNoteFixture({
 		...seeded.note,
 		title: 'Publication rollback contract'
 	});
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability(owner, {
 		db: database,
-		projects: new ProjectRecords(database)
+		projects: new ProjectRecords(owner, database)
 	});
 	const controller = new Notes(
+		owner,
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
+			...agentToolResultsFixture(),
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
-			notePublisher: catalog,
-			revisionRecorder: catalog
+			notePublisher: catalog.publisher,
+			revisionRecorder: catalog.revisionRecorder
 		})
 	);
 	await context.client`create function reject_contract_note_publication() returns trigger language plpgsql as $$
@@ -41,11 +76,11 @@ it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 	await context.client`create trigger reject_contract_note_publication before update on notes for each row execute function reject_contract_note_publication()`;
 	try {
 		await controller
-			.publish(owner, { noteId: note.id, baseEtag: noteEtag(note) })
+			.publish({ noteId: note.id, baseEtag: noteEtag(note.id, note.currentRevision) })
 			.catch(() => ({ kind: 'failure' }));
 		expect({
-			note: await records.findById(owner, note.id),
-			snapshots: await records.listRevisions(owner, note.id)
+			note: await records.findById(note.id),
+			snapshots: await records.listRevisions(note.id)
 		}).toEqual({ note, snapshots: [] });
 	} finally {
 		await context.client`drop trigger reject_contract_note_publication on notes`;
@@ -63,15 +98,34 @@ it.each([
 		const writer = connectPostgresTestDatabase(context.url);
 		const blocker = postgres(context.url, { max: 2 });
 		const { database, transactionRunner } = createTransactionContext(writer.db);
-		const { catalog } = createNotesCapability({
+		const { services: catalog } = createNotesCapability(owner, {
 			db: database,
-			projects: new ProjectRecords(database)
+			projects: new ProjectRecords(owner, database)
 		});
 		const controller = new Notes(
+			owner,
+			new BacklinkPresentationService(),
+			new ReferencePresentationService(),
+			new WorkspaceCommandRulesService(),
+			new ProvenancePresentationService(),
 			capabilityDependencies<NotesDependencies>({
+				...agentToolResultsFixture(),
+				archiveImport: new NoteArchiveImportService(),
+				patchPreparation: new NotePatchPreparationService(),
+				revisionComparison: new NoteRevisionComparisonService(),
+				todoPresentation: new TodoPresentationService(),
+				textSearch: new NoteTextSearchService(),
+				noteReferences: new NoteReferenceService(),
+				sections: new NoteSectionNumberingService(),
+				noteCreationRules: new NoteLifecycleRulesService(),
+				noteTrashRules: new NoteLifecycleRulesService(),
+				notePublicationRules: new NoteLifecycleRulesService(),
+				noteEditingRules: new NoteEditingRulesService(),
+				notePresentation: new NotePresentationService(),
+				suggestionPresentation: new SuggestionPresentationService(),
 				transactionRunner,
-				notePublisher: catalog,
-				revisionRecorder: catalog
+				notePublisher: catalog.publisher,
+				revisionRecorder: catalog.revisionRecorder
 			})
 		);
 		const locked = Promise.withResolvers<void>();
@@ -88,7 +142,7 @@ it.each([
 			await locked.promise;
 			const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
 			const publishing = controller
-				.publish(owner, { noteId: note.id, baseEtag: noteEtag(note) })
+				.publish({ noteId: note.id, baseEtag: noteEtag(note.id, note.currentRevision) })
 				.then(
 					() => ({ kind: 'published' }),
 					(error) => {
@@ -105,15 +159,15 @@ it.each([
 			release.resolve();
 			await peer;
 			const result = await publishing;
-			const records = new NoteRecords(context.db);
-			const saved = await records.findById(owner, note.id);
+			const records = new NoteRecords(owner, context.db);
+			const saved = await records.findById(note.id);
 			expect({
 				result,
 				title: saved?.title,
 				revision: saved?.currentRevision,
 				published: saved?.publishedRevision,
 				archived: Boolean(saved?.archivedAt),
-				snapshots: await records.listRevisions(owner, note.id)
+				snapshots: await records.listRevisions(note.id)
 			}).toEqual({
 				result: { kind: 'failure', code },
 				title: change === 'edit' ? 'Peer title' : note.title,

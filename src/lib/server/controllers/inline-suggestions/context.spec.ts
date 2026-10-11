@@ -1,9 +1,8 @@
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { describe, expect, it } from 'vitest';
-import type { InlineSuggestionRequest } from '$lib/models/agent';
+import type { InlineCompletionContext, InlineSuggestionRequest } from '$lib/models/agent';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { SearchDocumentId, SearchMatch } from '$lib/models/knowledge-search';
-import type { Reranker } from '$lib/server/services/knowledge-search/contracts';
-import { InMemoryReranker } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { inlineSuggestionFixture } from '$lib/testing/inline-suggestions/fixtures/context';
 import {
 	memoryEntryBuilder,
@@ -13,10 +12,9 @@ import {
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import {
-	inlineContextTraceOutput,
-	vectorSearchTraceOutput
-} from '$lib/server/services/inline-suggestions/inline-context';
+import { InlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+const rules = new InlineContextService(testTokenizer);
 
 const actor = testActor();
 const note = noteBuilder({
@@ -52,33 +50,33 @@ const match = (content: string, overrides: Partial<SearchMatch['document']> = {}
 	score: 0.9
 });
 
-const relevantReranker = () => {
-	const reranker = new InMemoryReranker();
-	reranker.order = 'relevant-first';
-	return reranker;
+type RerankBehaviour = (provider: InMemoryRetrievalProvider) => void;
+const relevantReranker = (): RerankBehaviour => (provider) => {
+	provider.rerankOrder = 'relevant-first';
 };
-const failingReranker = () => {
-	const reranker = new InMemoryReranker();
-	reranker.failure = new Error('reranker unavailable');
-	return reranker;
+const failingReranker = (): RerankBehaviour => (provider) => {
+	provider.rerankFailure = new Error('reranker unavailable');
 };
 const build = async (
 	projectMatches: readonly SearchMatch[] = [],
 	memories: readonly MemoryEntry[] = [],
-	reranker: Reranker = relevantReranker()
+	reranker: RerankBehaviour = relevantReranker()
 ) => {
-	const fixture = inlineSuggestionFixture({ reranker });
+	const fixture = inlineSuggestionFixture();
+	reranker(fixture.provider);
 	fixture.notes.notes = [note];
 	fixture.memory.entries = [...memories];
 	fixture.search.documents = projectMatches.map((match) => ({
 		userId: actor.userId,
 		document: { ...match.document, embedding: [1, 0, 0], embeddingModel: 'fake' }
 	}));
-	await fixture.controller.suggest(actor, request, new AbortController().signal);
-	const context = fixture.generator.contexts[0];
+	await fixture.controller.suggest(request, new AbortController().signal);
+	const context = fixture.generator.requests[0]?.context;
 	if (!context) throw new Error('Completion received no context');
 	return context;
 };
+const passages = (context: InlineCompletionContext) =>
+	context.projectPassages.map((passage) => passage.content);
 
 const userMemory = (index: number, content = `memory ${index}`): MemoryEntry =>
 	memoryEntryBuilder({
@@ -98,11 +96,9 @@ describe('inline completion context', () => {
 
 	it('keeps source titles and contents in project passages', async () => {
 		const context = await build([match('Greek epic content')]);
-		expect(context.projectPassages[0]).toEqual({
-			sourceTitle: 'The Odyssey',
-			sourceType: 'note',
-			content: 'Greek epic content'
-		});
+		expect(context.projectPassages).toEqual([
+			{ sourceType: 'note', sourceTitle: 'The Odyssey', content: 'Greek epic content' }
+		]);
 	});
 
 	it('does not duplicate the current note through project retrieval', async () => {
@@ -115,15 +111,13 @@ describe('inline completion context', () => {
 			match(`current ${index}`, { noteId: note.id })
 		);
 		const context = await build([...current, match('other project note')]);
-		expect(context.projectPassages.map((passage) => passage.content)).toEqual([
-			'other project note'
-		]);
+		expect(passages(context)).toEqual(['other project note']);
 	});
 
 	it('falls back to vector order when project reranking fails', async () => {
 		const matches = Array.from({ length: 10 }, (_, index) => match(`project ${index}`));
 		const context = await build(matches, [], failingReranker());
-		expect(context.projectPassages.map((passage) => passage.content)).toEqual(
+		expect(passages(context)).toEqual(
 			matches.slice(0, 8).map((candidate) => candidate.document.content)
 		);
 	});
@@ -133,13 +127,13 @@ describe('inline completion context', () => {
 			match('earlier vector result'),
 			match('relevant current decision')
 		]);
-		expect(context.projectPassages[0]?.content).toBe('relevant current decision');
+		expect(passages(context)[0]).toBe('relevant current decision');
 	});
 
 	it('injects every shared user memory at or below the threshold', async () => {
 		const memories = Array.from({ length: 20 }, (_, index) => userMemory(index));
 		const context = await build([], memories);
-		expect(context.userMemory).toHaveLength(20);
+		expect(context.userMemory).toEqual(memories.map((m) => m.content));
 	});
 
 	it('excludes unshared user memory', async () => {
@@ -152,34 +146,23 @@ describe('inline completion context', () => {
 			userMemory(index, index === 20 ? 'relevant owner is Ana' : `memory ${index}`)
 		);
 		const context = await build([], memories);
-		expect({ count: context.userMemory.length, first: context.userMemory[0] }).toEqual({
-			count: 8,
-			first: 'relevant owner is Ana'
-		});
+		expect(context.userMemory).toEqual([
+			'relevant owner is Ana',
+			...memories.slice(0, 7).map((m) => m.content)
+		]);
 	});
 
 	it('falls back to recent bounded memory when reranking fails', async () => {
 		const memories = Array.from({ length: 21 }, (_, index) => userMemory(index));
 		const context = await build([], memories, failingReranker());
-		expect(context.userMemory).toEqual(memories.slice(0, 8).map((entry) => entry.content));
+		expect(context.userMemory).toEqual(memories.slice(0, 8).map((m) => m.content));
 	});
 });
 
 describe('trace output payloads', () => {
-	it('serializes the actual memories and passages, never counts', async () => {
-		const context = await build([match('Greek epic content')], [userMemory(0)]);
-		expect(JSON.parse(inlineContextTraceOutput(context))).toEqual({
-			noteTitle: 'Architecture',
-			userMemory: ['memory 0'],
-			projectPassages: [
-				{ sourceTitle: 'The Odyssey', sourceType: 'note', content: 'Greek epic content' }
-			]
-		});
-	});
-
 	it('serializes actual vector-search matches with scores and content', () => {
 		const results = [match('Greek epic content')];
-		expect(JSON.parse(vectorSearchTraceOutput(results))).toEqual([
+		expect(JSON.parse(rules.vectorSearchTraceOutput(results))).toEqual([
 			{
 				id: results[0].document.id,
 				sourceTitle: 'The Odyssey',

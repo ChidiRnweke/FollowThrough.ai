@@ -1,10 +1,9 @@
 import { expect, it } from 'vitest';
-import {
-	resourceDataSchemas,
-	workspaceRecordIdentity,
-	type WorkspaceRecord
-} from '$lib/models/workspace-records';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceRecordIdentity } = new WorkspaceCommandRulesService();
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import type { LocalDate } from '$lib/models/workspace';
 import {
 	memorySuggestionBuilder,
@@ -14,7 +13,7 @@ import {
 	testNow,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 
 const source = noteBuilder();
 const suggestion = memorySuggestionBuilder({ noteId: source.id });
@@ -44,7 +43,7 @@ const setup = (archived: boolean, proposal = suggestion) => {
 		{ type: 'suggestions', value: proposal },
 		{ type: 'provenance', value: provenance }
 	];
-	return new WorkspaceViews(
+	return createWorkspaceViews(
 		new Map(
 			records.map((record) => [workspaceResourceKey(workspaceRecordIdentity(record)), record])
 		)

@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { Projects, type ProjectsDependencies } from './controller';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
@@ -11,18 +14,27 @@ import {
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Projects, type ProjectsDependencies } from './controller';
 
 const setup = () => {
-	const projects = new InMemoryProjectRepository();
-	const catalog = new ProjectCatalog(projects, projects);
+	const projects = new InMemoryProjectRepository(testActor());
+	const catalog = createProjectServices(testActor(), projects, projects);
 	const controller = new Projects(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
-			projectCreator: catalog,
-			projectReader: catalog,
-			projectLister: catalog,
-			projectEditor: catalog,
-			projectTreeReader: catalog,
-			entryWriter: catalog,
+			...agentToolResultsFixture(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			details: new ProjectDetailService(),
+			presentation: new ProjectTreePresentationService(),
+			placement: catalog.placement,
+			projectLifecycle: catalog.lifecycle,
+			projectCreator: catalog.creator,
+			projectReader: catalog.reader,
+			projectLister: catalog.lister,
+			projectEditor: catalog.editor,
+			projectTreeReader: catalog.treeReader,
+			entryWriter: catalog.treeWriter,
 			transactionRunner: new InMemoryTransactionRunner([])
 		})
 	);
@@ -32,7 +44,7 @@ const setup = () => {
 describe('Project naming invariants', () => {
 	it('rejects an empty project name', async () => {
 		const { controller } = setup();
-		await expect(controller.create(testActor(), { name: '   ' })).rejects.toMatchObject({
+		await expect(controller.create({ name: '   ' })).rejects.toMatchObject({
 			code: 'VALIDATION'
 		});
 	});
@@ -46,7 +58,7 @@ describe('Project filesystem invariants', () => {
 			noteBuilder({ id: testNoteId(), kind: 'folder', title: 'Discovery' }),
 			noteBuilder({ id: testNoteId(2), parentId: testNoteId(), title: 'Workshop' })
 		];
-		const result = await controller.get(testActor(), { projectId: testProjectId() });
+		const result = await controller.get({ projectId: testProjectId() });
 		expect(result.tree[0]?.children[0]?.entry.id).toBe(testNoteId(2));
 	});
 
@@ -57,7 +69,7 @@ describe('Project filesystem invariants', () => {
 			noteBuilder({ id: testNoteId(), position: 1, updatedAt: '2030-01-01T00:00:00Z' as never }),
 			noteBuilder({ id: testNoteId(2), position: 0 })
 		];
-		const result = await controller.get(testActor(), { projectId: testProjectId() });
+		const result = await controller.get({ projectId: testProjectId() });
 		expect(result.tree.map((node) => node.entry.id)).toEqual([testNoteId(2), testNoteId()]);
 	});
 
@@ -69,7 +81,7 @@ describe('Project filesystem invariants', () => {
 			noteBuilder({ id: testNoteId(2), kind: 'folder', parentId: testNoteId() })
 		];
 		await expect(
-			controller.move(testActor(), {
+			controller.move({
 				projectId: testProjectId(),
 				entryId: testNoteId(),
 				parentId: testNoteId(2),
@@ -86,7 +98,7 @@ describe('Project filesystem invariants', () => {
 			noteBuilder({ id: testNoteId(2), projectId: testProjectId(2), kind: 'folder' })
 		];
 		await expect(
-			controller.move(testActor(), {
+			controller.move({
 				projectId: testProjectId(),
 				entryId: testNoteId(),
 				parentId: testNoteId(2),
@@ -103,12 +115,12 @@ describe('Project filesystem invariants', () => {
 			noteBuilder({ id: testNoteId(2), position: 1 }),
 			noteBuilder({ id: testNoteId(3), position: 2 })
 		];
-		await controller.move(testActor(), {
+		await controller.move({
 			projectId: testProjectId(),
 			entryId: testNoteId(3),
 			position: 0
 		});
-		const result = await controller.get(testActor(), { projectId: testProjectId() });
+		const result = await controller.get({ projectId: testProjectId() });
 		expect(result.tree.map((node) => node.entry.id)).toEqual([
 			testNoteId(3),
 			testNoteId(),

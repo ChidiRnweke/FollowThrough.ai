@@ -1,38 +1,41 @@
-import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import { describe, expect, it } from 'vitest';
-import { Suggestions, type SuggestionsDependencies } from './controller';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
+import {
+	DrawioLabelReader,
+	DrawioSvgSanitizer,
+	DrawioXmlValidator
+} from '$lib/server/services/diagrams/drawio';
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
+	memoryEntryBuilder,
+	memorySuggestionBuilder,
+	noteBuilder,
 	testActor,
-	testSuggestionId,
-	testProvenanceId,
+	testMemoryEntryId,
 	testNoteId,
 	testNow,
-	memoryEntryBuilder,
-	testMemoryEntryId,
-	memorySuggestionBuilder,
-	noteBuilder
+	testProvenanceId,
+	testSuggestionId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
-import {
-	DrawioXmlValidator,
-	DrawioSvgSanitizer,
-	DrawioLabelReader
-} from '$lib/server/services/diagrams/drawio';
-import {
-	InMemorySearchRepository,
-	InMemoryEmbeddingClient
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { describe, expect, it } from 'vitest';
+import { Suggestions, type SuggestionsDependencies } from './controller';
 
 describe('Proposal effect coordination', () => {
 	it('records the final reviewed diagram instead of the generated preview', async () => {
-		const suggestions = new InMemorySuggestions();
+		const suggestions = new InMemorySuggestions(testActor());
 		const effects = new InMemorySuggestionEffects();
 		const proposal: DiagramSuggestion = {
 			id: testSuggestionId(),
@@ -52,11 +55,16 @@ describe('Proposal effect coordination', () => {
 			renderedSvg: '<svg xmlns="http://www.w3.org/2000/svg"><text>Reviewed</text></svg>',
 			searchableText: 'Reviewed'
 		};
-		const diagrams = new InMemoryDiagrams();
-		const notes = new InMemoryNoteContent();
+		const diagrams = new InMemoryDiagrams(testActor());
+		const notes = new InMemoryNoteContent(testActor());
 		notes.notes = [noteBuilder()];
 		const controller = new Suggestions(
+			testActor(),
+			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
+				...agentToolResultsFixture(),
+				todoCreationRules: new TodoEditingRulesService(),
+				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionFinder: suggestions,
 				suggestionAccepter: suggestions,
 				suggestionEffects: effects,
@@ -64,13 +72,14 @@ describe('Proposal effect coordination', () => {
 				diagramWriter: diagrams,
 				drawioXmlValidator: new DrawioXmlValidator(),
 				drawioSvgSanitizer: new DrawioSvgSanitizer(),
+				diagramLabelPresentation: new DiagramLabelPresentationService(),
 				drawioLabels: new DrawioLabelReader(),
 				now: () => testNow,
 				diagramIndexer: diagrams,
 				transactionRunner: new InMemoryTransactionRunner([suggestions, effects, diagrams])
 			})
 		);
-		await controller.acceptReviewed(testActor(), {
+		await controller.acceptReviewed({
 			suggestionId: proposal.id,
 			drawioReview: {
 				noteId: testNoteId(),
@@ -84,16 +93,16 @@ describe('Proposal effect coordination', () => {
 		});
 	});
 	it('reindexes the restored memory and removes the replacement from search', async () => {
-		const suggestions = new InMemorySuggestions();
+		const suggestions = new InMemorySuggestions(testActor());
 		const effects = new InMemorySuggestionEffects();
-		const search = new InMemorySearchRepository();
-		const indexWriter = new ContentIndex(
+		const search = new InMemorySearchRepository(testActor());
+		const indexWriter = createContentIndex(
 			search,
-			new InMemoryEmbeddingClient().model,
+			new InMemoryRetrievalProvider().model,
 			undefined,
 			true
 		);
-		const indexer = indexWriter.memories;
+		const indexer = indexWriter;
 		const before = memoryEntryBuilder();
 		const deleted = { ...before, deletedAt: testNow };
 		const replacement = memoryEntryBuilder({
@@ -107,7 +116,7 @@ describe('Proposal effect coordination', () => {
 			decidedAt: testNow
 		});
 		suggestions.suggestions = [proposal];
-		await effects.record(testActor(), proposal.id, [
+		await effects.record(proposal.id, [
 			{
 				kind: 'modified',
 				before: { type: 'memory_entries', value: before },
@@ -115,9 +124,14 @@ describe('Proposal effect coordination', () => {
 			},
 			{ kind: 'created', after: { type: 'memory_entries', value: replacement } }
 		]);
-		await indexer.index(testActor(), replacement);
+		await indexer.indexMemory(replacement);
 		const controller = new Suggestions(
+			testActor(),
+			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
+				...agentToolResultsFixture(),
+				todoCreationRules: new TodoEditingRulesService(),
+				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionFinder: suggestions,
 				suggestionReverter: suggestions,
 				suggestionEffects: effects,
@@ -125,7 +139,7 @@ describe('Proposal effect coordination', () => {
 				transactionRunner: new InMemoryTransactionRunner([suggestions, effects])
 			})
 		);
-		await controller.revert(testActor(), { suggestionId: proposal.id });
+		await controller.revert({ suggestionId: proposal.id });
 		expect(search.documents.map((item) => item.document.memoryEntryId)).toEqual([before.id]);
 	});
 });

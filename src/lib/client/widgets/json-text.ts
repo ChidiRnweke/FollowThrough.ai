@@ -1,3 +1,5 @@
+import { widgetLayoutSchema, widgetDataSchema } from '$lib/models/widgets';
+import type { WidgetEditorReader, WidgetEditorRead } from '$lib/models/widgets';
 import type { z } from 'zod';
 import type { WidgetIssue } from '$lib/models/widgets';
 
@@ -30,3 +32,19 @@ export const readJsonText = <T>(
 		return { kind: 'failure', issues: [{ path: `/${part}`, message: error.message }] };
 	}
 };
+
+export class JsonWidgetEditorReader implements WidgetEditorReader {
+	read(title: string, layoutText: string, dataText: string): WidgetEditorRead {
+		const layout = readJsonText(layoutText, widgetLayoutSchema, 'layout');
+		const data = readJsonText(dataText, widgetDataSchema, 'data');
+		if (layout.kind === 'failure' || data.kind === 'failure')
+			return {
+				kind: 'invalid',
+				issues: [
+					...(layout.kind === 'failure' ? layout.issues : []),
+					...(data.kind === 'failure' ? data.issues : [])
+				]
+			};
+		return { kind: 'read', content: { title, layout: layout.value, data: data.value } };
+	}
+}

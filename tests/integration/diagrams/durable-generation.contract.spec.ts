@@ -1,32 +1,42 @@
-import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
-import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
-import { afterAll, expect, it, vi } from 'vitest';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
+import { type AgentRunId, type DiagramActionInput } from '$lib/models/agent';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
+import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import {
-	AgentRunEventRecords,
-	AgentRunDecisionRecords
+	AgentRunDecisionRecords,
+	AgentRunEventRecords
 } from '$lib/server/repositories/agent/postgres/agent-runs';
+import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
-import { type AgentRunId, type DiagramActionInput } from '$lib/models/agent';
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { context, seedNote } from '../database-harness';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { afterAll, expect, it, vi } from 'vitest';
+import { context, seedNote, notifications } from '../database-harness';
+const runStatus = new AgentRunStatusService();
 
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
@@ -38,15 +48,18 @@ const setup = async (suffix: string) => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const notes = createNotesCapability({ db: database, projects: new ProjectRecords(database) });
-	const suggestions = createSuggestionsCapability({
+	const notes = createNotesCapability(seeded.owner, {
+		db: database,
+		projects: new ProjectRecords(seeded.owner, database)
+	});
+	const suggestions = createSuggestionsCapability(seeded.owner, {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
 	const text = 'Service A calls Service B';
-	const note = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
+	const note = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
@@ -59,51 +72,57 @@ const setup = async (suffix: string) => {
 		text
 	};
 	const fixture = diagramGenerationFixture();
-	const runs = new AgentRunRecords(database);
-	const events = new AgentRunEventRecords(database);
-	const conversations = new ConversationRecords(database);
-	const requests = new NoteActionRequests(runs, events, conversations);
+	const runs = new AgentRunRecords(seeded.owner, database);
+	const events = new AgentRunEventRecords(seeded.owner, database);
+	const conversations = new ConversationRecords(seeded.owner, database);
+	const requests = new NoteActionRequests(seeded.owner, runs, events, conversations);
 	const settlements = new RunSettlements(runs, events);
 	const dependencies = capabilityDependencies<DiagramsDependencies>({
+		...agentToolResultsFixture(),
+		generationRules: new DiagramGenerationRuleService(),
 		...fixture,
 		generation: {
 			...fixture.generation,
-			contextNotes: notes.catalog,
-			conversations: new ConversationArchive(conversations),
-			runs: new AgentRunLedger(runs),
+			contextNotes: notes.services.reader,
+			conversations: new ConversationArchive(seeded.owner, conversations),
+			conversationMessages: new ConversationArchive(seeded.owner, conversations),
+			runs: new AgentRunLedger(seeded.owner, runs),
 			runContext: new DiagramRunContext(runs),
 			provenance: notes.provenance
 		},
 		transactionRunner,
 		selectionOrigins: notes.selectionOrigins,
 		drawioXmlValidator: new DrawioXmlValidator(),
-		suggestionCreator: suggestions.inbox,
+		suggestionCreator: suggestions.creator,
 		noteActionRequests: requests,
 		runSettlements: settlements,
-		runEvents: { notify: () => {} }
+		runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 	});
-	const agent = new Agent(
-		capabilityDependencies<AgentDependencies>({
+	const agent = new AgentSdkHarness(
+		seeded.owner,
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<AgentHarnessDependencies>({
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
-			decisions: new AgentRunDecisionRecords(database),
+			decisions: new AgentRunDecisionRecords(seeded.owner, database),
 			settlements,
 			transactionRunner,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
 	const prepare = (input: DiagramActionInput = { operation: 'generate', selection }) =>
 		transactionRunner.run(() =>
-			requests.prepare(seeded.owner, {
+			requests.prepare({
 				requestId: crypto.randomUUID(),
 				context: { kind: 'diagram_action', model: 'test/model', input }
 			})
 		);
 	const finished = async (runId: AgentRunId) => {
 		await vi.waitFor(async () => {
-			const run = await runs.findById(seeded.owner, runId);
-			if (!run || !isTerminalAgentRunStatus(run.status)) throw new Error('Diagram has not settled');
+			const run = await runs.findById(runId);
+			if (!run || !runStatus.isTerminal(run.status)) throw new Error('Diagram has not settled');
 		});
 	};
 	return {
@@ -118,7 +137,7 @@ const setup = async (suffix: string) => {
 		finished,
 		provider: fixture.provider,
 		models: fixture.models,
-		controller: new Diagrams(dependencies)
+		controller: new Diagrams(seeded.owner, dependencies)
 	};
 };
 
@@ -126,12 +145,12 @@ it('creates one diagram run and proposal for concurrent duplicate submissions', 
 	const state = await setup('13201');
 	const input = { requestId: crypto.randomUUID(), selection: state.selection };
 	const receipts = await Promise.all([
-		state.controller.startGenerateMermaid(state.owner, input),
-		state.controller.startGenerateMermaid(state.owner, input)
+		state.controller.startGenerateMermaid(input),
+		state.controller.startGenerateMermaid(input)
 	]);
 	await state.finished(receipts[0].runId);
 	state.models.failure = new Error('Model catalog is offline');
-	const repeated = await state.controller.startGenerateMermaid(state.owner, input);
+	const repeated = await state.controller.startGenerateMermaid(input);
 	const [counts] =
 		await context.client`select (select count(*)::int from agent_runs where user_id = ${state.owner.userId}) as runs, (select count(*)::int from conversations where user_id = ${state.owner.userId}) as conversations, (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions`;
 	expect({
@@ -150,10 +169,10 @@ it('saves no diagram proposal after cancellation during provider execution', asy
 	const receipt = await state.prepare();
 	const gate = Promise.withResolvers<void>();
 	state.provider.completion = gate.promise;
-	const execution = state.controller.executeDiagramRun(state.owner, receipt.runId);
+	const execution = state.controller.executeDiagramRun(receipt.runId);
 	try {
 		await state.provider.started.promise;
-		await state.agent.cancel(state.owner, receipt.runId);
+		await state.agent.cancel(receipt.runId);
 	} finally {
 		gate.resolve();
 	}
@@ -161,7 +180,7 @@ it('saves no diagram proposal after cancellation during provider execution', asy
 	const [counts] =
 		await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 	expect({
-		status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+		status: (await state.runs.findById(receipt.runId))?.status,
 		counts
 	}).toEqual({ status: 'cancelled', counts: { suggestions: 0, anchors: 0 } });
 });
@@ -171,11 +190,11 @@ it('rolls back the generated diagram when result-event storage fails', async () 
 	const receipt = await state.prepare();
 	await context.client`alter table agent_run_events add constraint diagram_result_failure check (not (event->>'type' = 'workflow_result' and event->>'action' = 'diagram')) not valid`;
 	try {
-		await state.controller.executeDiagramRun(state.owner, receipt.runId);
+		await state.controller.executeDiagramRun(receipt.runId);
 		const [counts] =
 			await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 		expect({
-			status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+			status: (await state.runs.findById(receipt.runId))?.status,
 			counts
 		}).toEqual({ status: 'failed', counts: { suggestions: 0, anchors: 0 } });
 	} finally {
@@ -190,12 +209,12 @@ it('resumes a queued draw.io conversion from its persisted source after reconstr
 		noteId: state.note.id,
 		source: 'flowchart LR\nA --> B'
 	});
-	await new Diagrams(state.dependencies).recoverQueuedDiagramRuns();
+	await new Diagrams(state.owner, state.dependencies).resumeQueuedDiagramRun(receipt.runId);
 	await state.finished(receipt.runId);
 	const rows =
 		await context.client`select payload->>'kind' as kind from suggestions where user_id = ${state.owner.userId}`;
 	expect({
-		status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+		status: (await state.runs.findById(receipt.runId))?.status,
 		proposals: rows.map((row) => row.kind)
 	}).toEqual({ status: 'completed', proposals: ['drawio'] });
 });

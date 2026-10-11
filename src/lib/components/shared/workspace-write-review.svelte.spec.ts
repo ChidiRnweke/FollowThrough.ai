@@ -1,97 +1,66 @@
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
-import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
-import { expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { syncEtag } from '$lib/models/sync';
+import type { WriteOutcome } from '$lib/models/outbox';
+import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import type { WorkspaceController } from '$lib/controllers/workspace/workspace';
 import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
-import {
-	InMemoryOutbox,
-	InMemoryAccountWriterLock
-} from '$lib/testing/sync/fakes/in-memory-outbox';
-import { ResourceCache } from '$lib/client/sync/resource-cache';
-import { MutationQueue } from '$lib/client/sync/mutation-queue';
-import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+import { offlineWorkspace } from '$lib/testing/workspace/fixtures/workspace';
 import WorkspaceWriteReview from './workspace-write-review.svelte';
 
+const started: WorkspaceController[] = [];
+afterEach(() => {
+	for (const workspace of started.splice(0)) workspace.stop();
+});
+
+/**
+ * One local change to "My project": a creation still queued offline, or a rename the server
+ * rejected or answered with a conflict.
+ */
 const setup = async (
 	status: 'queued' | 'rejected' | 'conflict' = 'queued',
 	remote: 'found' | 'deleted' = 'found'
 ) => {
 	const project = projectBuilder({ name: 'My project' });
-	const record: WorkspaceRecord = { type: 'projects', value: project };
 	const identity: WorkspaceResourceIdentity = { type: 'projects', id: [project.id] };
-	const key = workspaceResourceKey(identity);
-	const repository = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(rebaseWorkspaceRecord);
-	const cache = new ResourceCache(project.userId, {
-		repository: repository.projectedCache,
-		transport: new InMemorySyncTransport<WorkspaceRecord>()
-	});
-	const writes = new MutationQueue(project.userId, {
-		repository,
-		scheduler: new InMemorySyncScheduler(),
-		writerLock: new InMemoryAccountWriterLock(),
-		transport: {
-			send: async () => {
-				throw new Error('This review stays offline');
-			}
-		},
-		pull: () => cache.refresh()
-	});
-	const resources = new WorkspaceResources(project.userId, {
-		repository: repository,
-		cache,
-		writes
-	});
-	repository.observe(project.userId, (state) => resources.applyLocal(state));
-	resources.setOnline(false);
-	const operationId = await resources.append({
-		operationId: crypto.randomUUID(),
-		key,
-		command:
-			status === 'queued'
-				? { kind: 'createProject', id: project.id, name: project.name }
-				: { kind: 'renameProject', projectId: project.id, name: project.name },
-		base:
-			status === 'queued'
-				? null
-				: {
-						etag: syncEtag(1n),
-						value: { type: 'projects', value: { ...project, name: 'Original' } }
-					},
-		basedOn: null,
-		local: record,
-		coalesce: null,
-		references: []
-	});
-	if (status !== 'queued') {
-		const sent = await repository.take(project.userId);
-		if (!sent) throw new Error('The edit was not queued');
-		await repository.settle(
-			project.userId,
-			sent,
-			status === 'rejected'
-				? { kind: 'rejected', message: 'The project is archived' }
-				: {
-						kind: 'conflict',
-						remote:
-							remote === 'deleted'
-								? { kind: 'deleted', etag: syncEtag(2n) }
-								: {
-										kind: 'found',
-										snapshot: {
-											etag: syncEtag(2n),
-											value: { type: 'projects', value: { ...project, name: 'Server project' } }
-										}
-									}
-					}
-		);
-		await writes.reload();
+	const fixture = await offlineWorkspace(project.userId);
+	started.push(fixture.workspace);
+	const { resources } = fixture;
+	if (status === 'queued') {
+		await resources.create({ kind: 'createProject', id: project.id, name: project.name });
+		return { resources, project, identity };
 	}
-	return { resources, project, identity, key, operationId };
+	await fixture.store({ type: 'projects', value: { ...project, name: 'Original' } });
+	const draft = resources.draft({ type: 'projects', id: [project.id] });
+	await draft.read();
+	await draft.stage({ kind: 'renameProject', projectId: project.id, name: project.name });
+	const answer: WriteOutcome<WorkspaceRecord> =
+		status === 'rejected'
+			? { kind: 'rejected', message: 'The project is archived' }
+			: {
+					kind: 'conflict',
+					remote:
+						remote === 'deleted'
+							? { kind: 'deleted', etag: syncEtag(2n) }
+							: {
+									kind: 'found',
+									snapshot: {
+										etag: syncEtag(2n),
+										value: { type: 'projects', value: { ...project, name: 'Server project' } }
+									}
+								}
+				};
+	fixture.transport.sendWrite = async () => answer;
+	fixture.environment.online = true;
+	resources.setOnline(true);
+	await resources.synchronize();
+	await vi.waitFor(() => {
+		if (resources.pending[0]?.delivery.kind !== status)
+			throw new Error('The server has not answered yet');
+	});
+	resources.setOnline(false);
+	return { resources, project, identity };
 };
 
 it('discards an explicitly reviewed new local project', async () => {
@@ -126,20 +95,12 @@ it('compares the authoritative conflict value before keeping a change', async ()
 });
 
 it('refuses to discard dependent input added after review started', async () => {
-	const { resources, project, key, identity, operationId } = await setup();
+	const { resources, project, identity } = await setup();
 	const screen = render(WorkspaceWriteReview, { resources, open: true });
 	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
-	const observed = resources.editBase(identity);
-	await resources.append({
-		operationId: crypto.randomUUID(),
-		key,
-		command: { kind: 'renameProject', projectId: project.id, name: 'Later edit' },
-		base: observed.base,
-		basedOn: operationId,
-		local: { type: 'projects', value: { ...project, name: 'Later edit' } },
-		coalesce: null,
-		references: []
-	});
+	const draft = resources.draft(identity);
+	await draft.read();
+	await draft.stage({ kind: 'renameProject', projectId: project.id, name: 'Later edit' });
 	await screen.getByRole('button', { name: 'Discard…', exact: true }).click();
 	await screen.getByRole('button', { name: 'Discard change', exact: true }).click();
 	await expect
@@ -151,7 +112,7 @@ it('closes retained change details when the account session stops', async () => 
 	const { resources } = await setup();
 	const screen = render(WorkspaceWriteReview, { resources, open: true });
 	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
-	resources.stop();
+	started.forEach((workspace) => workspace.stop());
 	await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument();
 });
 

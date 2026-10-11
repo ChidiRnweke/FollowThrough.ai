@@ -1,22 +1,27 @@
-import { expect, it, vi } from 'vitest';
-import postgres from 'postgres';
 import type { DiagramId } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/models/diagrams';
-import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
-import { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import {
 	DiagramStudio,
 	type DiagramStudioDependencies
 } from '$lib/server/controllers/diagram-studio/controller';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
+import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	drawioBuilder,
 	InMemoryDiagrams
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import postgres from 'postgres';
+import { expect, it, vi } from 'vitest';
 import { actor, context, now, seedNote } from '../database-harness';
 
 it.each([
@@ -26,9 +31,8 @@ it.each([
 	'refuses $operation after a concurrent archive commits',
 	async ({ operation, suffix, message }) => {
 		const { owner, project } = await seedNote(suffix);
-		const records = new DiagramRecords(context.db);
+		const records = new DiagramRecords(owner, context.db);
 		const diagram = await records.insert(
-			owner,
 			drawioBuilder({
 				id: crypto.randomUUID() as DiagramId,
 				userId: owner.userId,
@@ -40,22 +44,29 @@ it.each([
 		if (diagram.kind !== 'drawio') throw new Error('Expected a draw.io diagram');
 		const blocker = postgres(context.url, { max: 2 });
 		const { database, transactionRunner } = createTransactionContext(writer.db);
-		const projects = new ProjectRecords(database);
-		const notes = createNotesCapability({ db: database, projects });
-		const library = new DiagramLibrary(
-			new DiagramRecords(database),
+		const projects = new ProjectRecords(owner, database);
+		const notes = createNotesCapability(owner, { db: database, projects });
+		const library = createDiagramServices(
+			owner,
+			new DiagramRecords(owner, database),
 			notes.repository,
 			notes.anchors,
 			notes.provenanceRepository,
 			projects
 		);
 		const controller = new DiagramStudio(
+			owner,
+			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
-				diagramTrash: library,
-				diagramDraftWriter: library,
+				...agentToolResultsFixture(),
+				diagramEditing: new DiagramEditingService(),
+				diagramLifecycle: new DiagramLifecycleService(),
+				diagramTrash: library.lifecycle,
+				diagramDraftWriter: library.draftWriter,
 				drawioXmlValidator: { validate: (source) => source },
+				diagramLabelPresentation: new DiagramLabelPresentationService(),
 				drawioLabels: { read: () => [diagram.searchableText] },
-				diagramIndexer: new InMemoryDiagrams(),
+				diagramIndexer: new InMemoryDiagrams(owner),
 				transactionRunner,
 				now: () => now
 			})
@@ -72,11 +83,11 @@ it.each([
 			const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
 			const action =
 				operation === 'archive'
-					? controller.archiveProjectDiagram(owner, { diagramId: diagram.id })
-					: controller.saveProjectDiagramDraft(owner, {
+					? controller.archiveProjectDiagram({ diagramId: diagram.id })
+					: controller.saveProjectDiagramDraft({
 							diagramId: diagram.id,
 							source: diagram.source,
-							baseEtag: diagramEtag(diagram)
+							baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 						});
 			const rejected = expect(action).rejects.toThrow(message);
 			await vi.waitFor(async () => {
@@ -98,8 +109,7 @@ it.each([
 
 it('does not expose another actor’s diagram through a locking read', async () => {
 	const { owner, project } = await seedNote('16802');
-	const diagram = await new DiagramRecords(context.db).insert(
-		owner,
+	const diagram = await new DiagramRecords(owner, context.db).insert(
 		drawioBuilder({
 			id: crypto.randomUUID() as DiagramId,
 			userId: owner.userId,
@@ -110,7 +120,7 @@ it('does not expose another actor’s diagram through a locking read', async () 
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	expect(
 		await transactionRunner.run(() =>
-			new DiagramRecords(database).findForWrite(actor('16803'), diagram.id)
+			new DiagramRecords(actor('16803'), database).findForWrite(diagram.id)
 		)
 	).toBeUndefined();
 });

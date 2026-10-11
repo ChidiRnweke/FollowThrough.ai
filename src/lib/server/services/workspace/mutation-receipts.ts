@@ -1,7 +1,9 @@
 import { workspaceWriteRejection } from '$lib/server/repositories/workspace/write-failure';
 import { DomainError, ValidationError } from '$lib/errors';
-import type { ActorContext } from '$lib/models/identity';
-import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import type {
+	WorkspaceResourceIdentity,
+	ResolvedWorkspaceResource
+} from '$lib/models/workspace-sync';
 import {
 	type WorkspaceMutationRequest,
 	type WorkspaceMutationResult,
@@ -14,21 +16,33 @@ import type { SyncObjectRepository } from '$lib/server/repositories/workspace/sy
 import type { SyncReceiptRepository } from '$lib/server/repositories/workspace/sync-receipts';
 
 export interface WorkspaceMutationReceiptDependencies {
-	mutationReceipts: SyncReceiptRepository;
-	syncObjects: SyncObjectRepository;
+	readonly mutationReceipts: SyncReceiptRepository;
+	readonly syncObjects: SyncObjectRepository;
 }
 
+export interface WorkspaceMutationGuard {
+	prepare(
+		input: WorkspaceMutationRequest,
+		resource: ResolvedWorkspaceResource
+	): Promise<WorkspaceMutationPreparation>;
+	complete(
+		input: WorkspaceMutationRequest,
+		identity: WorkspaceResourceIdentity
+	): Promise<WorkspaceMutationResult>;
+	reject(error: Error): WorkspaceMutationResult;
+}
+export interface WorkspaceWriteRecoveryService {
+	cancel(input: WorkspaceWriteCancellation): Promise<WorkspaceWriteRecovery>;
+}
 /** Version guards and durable receipts. The calling controller owns the enclosing transaction. */
-export class WorkspaceMutationReceipts {
+export class WorkspaceMutationReceipts
+	implements WorkspaceMutationGuard, WorkspaceWriteRecoveryService
+{
 	constructor(private readonly dependencies: WorkspaceMutationReceiptDependencies) {}
 
-	async cancel(
-		actor: ActorContext,
-		input: WorkspaceWriteCancellation
-	): Promise<WorkspaceWriteRecovery> {
-		await this.dependencies.mutationReceipts.lockOperation(actor, input.operationId);
+	async cancel(input: WorkspaceWriteCancellation): Promise<WorkspaceWriteRecovery> {
+		await this.dependencies.mutationReceipts.lockOperation(input.operationId);
 		const previous = await this.dependencies.mutationReceipts.find(
-			actor,
 			input.operationId,
 			input.request
 		);
@@ -36,18 +50,17 @@ export class WorkspaceMutationReceipts {
 			throw new ValidationError('The operation ID was already used for different input');
 		if (previous.kind === 'proven') return previous;
 		if (previous.kind === 'missing')
-			await this.dependencies.mutationReceipts.cancel(actor, input.operationId, input.request);
+			await this.dependencies.mutationReceipts.cancel(input.operationId, input.request);
 		return { kind: 'cancelled' };
 	}
 
 	async prepare(
-		actor: ActorContext,
 		input: WorkspaceMutationRequest,
-		identity: WorkspaceResourceIdentity
+		resource: ResolvedWorkspaceResource
 	): Promise<WorkspaceMutationPreparation> {
-		await this.dependencies.mutationReceipts.lockOperation(actor, input.operationId);
+		const { identity } = resource;
+		await this.dependencies.mutationReceipts.lockOperation(input.operationId);
 		const previous = await this.dependencies.mutationReceipts.find(
-			actor,
 			input.operationId,
 			JSON.stringify(input)
 		);
@@ -59,7 +72,7 @@ export class WorkspaceMutationReceipts {
 				result: { kind: 'rejected', message: 'This edit was cancelled on this device.' }
 			};
 		if (previous.kind === 'proven') {
-			const resource = await this.dependencies.syncObjects.read(actor, identity, null);
+			const resource = await this.dependencies.syncObjects.read(identity, null);
 			const etag =
 				resource.kind === 'found'
 					? resource.snapshot.etag
@@ -76,8 +89,8 @@ export class WorkspaceMutationReceipts {
 						: previous
 			};
 		}
-		await this.dependencies.mutationReceipts.lockResource(actor, identity);
-		const current = await this.dependencies.syncObjects.read(actor, identity, null);
+		await this.dependencies.mutationReceipts.lockResource(resource);
+		const current = await this.dependencies.syncObjects.read(identity, null);
 		if (current.kind === 'unchanged')
 			throw new Error('An unconditional resource read returned no body');
 		const matches =
@@ -90,16 +103,15 @@ export class WorkspaceMutationReceipts {
 	}
 
 	async complete(
-		actor: ActorContext,
 		input: WorkspaceMutationRequest,
 		identity: WorkspaceResourceIdentity
 	): Promise<WorkspaceMutationResult> {
 		await this.dependencies.mutationReceipts.publishChanges();
-		const resource = await this.dependencies.syncObjects.read(actor, identity, null);
+		const resource = await this.dependencies.syncObjects.read(identity, null);
 		if (resource.kind !== 'found' && resource.kind !== 'deleted')
 			throw new Error('The mutation produced no authoritative resource');
 		const receipt: WorkspaceWriteReceipt = { operationId: input.operationId, resource };
-		await this.dependencies.mutationReceipts.save(actor, JSON.stringify(input), receipt);
+		await this.dependencies.mutationReceipts.save(JSON.stringify(input), receipt);
 		return { kind: 'applied', receipt };
 	}
 

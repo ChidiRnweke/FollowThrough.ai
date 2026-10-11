@@ -1,8 +1,8 @@
 <script lang="ts">
-	import type { NoteHistoryReadState } from '$lib/stores/notes/history.svelte';
+	import type { NoteHistoryReadState } from '$lib/models/notes';
 	import type { Note, NoteId, NoteRevision, NoteRevisionSummary } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
-	import { countNoteDiff, diffNoteDocuments, withTitleBlock } from '$lib/services/notes/note-diff';
+	import { noteComparison } from '$lib/factories/notes/comparison';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Badge } from '$lib/components/ui/badge';
@@ -53,12 +53,10 @@
 	// once, in that row, rather than repeated above the panes.
 	const counts = $derived(
 		selected
-			? countNoteDiff(
-					diffNoteDocuments(
-						withTitleBlock(selected.document, selected.title),
-						withTitleBlock(note.document, note.title)
-					)
-				)
+			? noteComparison.compare(selected.document, note.document, {
+					focus: false,
+					titles: { base: selected.title, candidate: note.title }
+				}).counts
 			: undefined
 	);
 

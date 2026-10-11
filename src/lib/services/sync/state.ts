@@ -1,7 +1,6 @@
 import type {
 	OutboxEntry,
 	WriteDraft,
-	WriteRebase,
 	WriteReceipt,
 	WriteOutcome,
 	WriteBaseResolution,
@@ -16,20 +15,20 @@ import type {
 	TransferState
 } from '$lib/models/sync';
 
-export const compareSyncEtags = (left: SyncEtag, right: SyncEtag): number => {
+const compareSyncEtags = (left: SyncEtag, right: SyncEtag): number => {
 	const a = BigInt(left.slice(8));
 	const b = BigInt(right.slice(8));
 	return a < b ? -1 : a > b ? 1 : 0;
 };
 
-export const resourceVersion = <T>(state: ResourceState<T> | undefined): SyncEtag | null =>
+const resourceVersion = <T>(state: ResourceState<T> | undefined): SyncEtag | null =>
 	state?.kind === 'present' ? state.snapshot.etag : (state?.etag ?? null);
-export const cachedSnapshot = <T>(state: ResourceState<T> | undefined): SyncSnapshot<T> | null =>
+const cachedSnapshot = <T>(state: ResourceState<T> | undefined): SyncSnapshot<T> | null =>
 	state?.kind === 'present' ? state.snapshot : null;
-export const resourceCurrent = <T>(state: ResourceState<T> | undefined): boolean =>
+const resourceCurrent = <T>(state: ResourceState<T> | undefined): boolean =>
 	state?.kind === 'present';
 /** Page replication, targeted reads and write receipts all use the same monotonic merge. */
-export const mergeResourceStates = <T>(
+const mergeResourceStates = <T>(
 	current: ResourceState<T> | undefined,
 	incoming: ResourceState<T>
 ): ResourceState<T> => {
@@ -39,7 +38,7 @@ export const mergeResourceStates = <T>(
 	const order = compareSyncEtags(after, before);
 	return order > 0 || (order === 0 && incoming.kind === 'deleted') ? incoming : current;
 };
-export const receiveResource = <T>(
+const receiveResource = <T>(
 	state: ResourceState<T> | undefined,
 	received: SyncSnapshot<T> | ResourceDeletion
 ): ResourceState<T> =>
@@ -48,7 +47,7 @@ export const receiveResource = <T>(
 		'kind' in received ? received : { kind: 'present', snapshot: received }
 	);
 
-export const accessCache = <T>(
+const accessCache = <T>(
 	state: ResourceState<T> | undefined,
 	online: boolean,
 	transfer?: TransferState
@@ -62,7 +61,7 @@ export const accessCache = <T>(
 };
 
 /** One wording for each state a surface cannot render, named for the resource it concerns. */
-export const accessMessage = <T>(
+const accessMessage = <T>(
 	access: Exclude<CacheAccess<T>, { kind: 'ready' }>,
 	name: string
 ): string => {
@@ -71,7 +70,7 @@ export const accessMessage = <T>(
 	return `This ${name} is not available on this device. Reconnect to download it.`;
 };
 
-export const retainWriteReceipt = <T>(
+const retainWriteReceipt = <T>(
 	previous: WriteReceipt<T> | null,
 	received: WriteReceipt<T>
 ): WriteReceipt<T> => {
@@ -83,7 +82,7 @@ export const retainWriteReceipt = <T>(
 };
 
 /** Append in one storage transaction so another tab cannot bypass a preceding local write. */
-export const appendWrite = <C, T>(
+const appendWrite = <C, T>(
 	entries: readonly OutboxEntry<C, T>[],
 	draft: WriteDraft<C, T>,
 	sequence: number,
@@ -157,49 +156,7 @@ export const appendWrite = <C, T>(
 	];
 };
 
-/**
- * The durable queue, not the caller's in-memory copy, decides what a new edit is based on.
- * A caller may have computed its edit from a version that an earlier local edit to the same
- * resource has already superseded, for example when two quick edits start before the first is
- * visible to the second. Those edits are this device's own history and precede the new edit, so
- * the new edit's changed fields are replayed onto the latest local version and the edit is
- * stacked on it. It then inherits that version's server base once the earlier edit is applied.
- */
-export const rebaseDraft = <C, T>(
-	entries: readonly OutboxEntry<C, T>[],
-	draft: WriteDraft<C, T>,
-	receipt: WriteReceipt<T> | null,
-	rebase: WriteRebase<T>
-): WriteDraft<C, T> => {
-	const latest = entries.findLast((entry) => entry.intent.key === draft.key);
-	if (latest?.intent.operationId === draft.basedOn) return draft;
-	const onto = latest
-		? { base: latest.intent.base, basedOn: latest.intent.operationId, value: latest.intent.local }
-		: receipt?.resource.kind === 'found' &&
-			  draft.basedOn === null &&
-			  draft.base !== null &&
-			  compareSyncEtags(receipt.resource.snapshot.etag, draft.base.etag) > 0
-			? { base: receipt.resource.snapshot, basedOn: null, value: receipt.resource.snapshot.value }
-			: null;
-	if (!onto) return draft;
-	if (draft.local === null) return { ...draft, base: onto.base, basedOn: onto.basedOn };
-	const parent = entries.find((entry) => entry.intent.operationId === draft.basedOn);
-	const observed =
-		draft.basedOn === null
-			? (draft.base?.value ?? null)
-			: parent
-				? parent.intent.local
-				: receipt?.operationId === draft.basedOn && receipt.resource.kind === 'found'
-					? receipt.resource.snapshot.value
-					: null;
-	if (observed === null || onto.value === null) return draft;
-	const rebased = rebase(observed, draft.local, onto.value);
-	return rebased
-		? { ...draft, base: onto.base, basedOn: onto.basedOn, local: rebased.value }
-		: draft;
-};
-
-export const nextWrite = <C, T>(
+const nextWrite = <C, T>(
 	entries: readonly OutboxEntry<C, T>[],
 	excluded: ReadonlySet<string> = new Set()
 ): OutboxEntry<C, T> | null =>
@@ -210,7 +167,7 @@ export const nextWrite = <C, T>(
 			entry.intent.dependencies.length === 0
 	) ?? null;
 
-export const beginWrite = <C, T>(entry: OutboxEntry<C, T>): OutboxEntry<C, T> => {
+const beginWrite = <C, T>(entry: OutboxEntry<C, T>): OutboxEntry<C, T> => {
 	if (
 		(entry.delivery.kind !== 'queued' && entry.delivery.kind !== 'retry') ||
 		entry.intent.dependencies.length
@@ -219,11 +176,11 @@ export const beginWrite = <C, T>(entry: OutboxEntry<C, T>): OutboxEntry<C, T> =>
 	return { ...entry, delivery: { kind: 'sending' } };
 };
 
-export const failWrite = <C, T>(entry: OutboxEntry<C, T>, message: string): OutboxEntry<C, T> =>
+const failWrite = <C, T>(entry: OutboxEntry<C, T>, message: string): OutboxEntry<C, T> =>
 	entry.delivery.kind === 'sending' ? { ...entry, delivery: { kind: 'retry', message } } : entry;
 
 /** Only successful acknowledgement unblocks descendants and changes their server base. */
-export const acknowledgeWrite = <C, T>(
+const acknowledgeWrite = <C, T>(
 	entries: readonly OutboxEntry<C, T>[],
 	receipt: WriteReceipt<T>
 ): readonly OutboxEntry<C, T>[] => {
@@ -256,7 +213,7 @@ export const acknowledgeWrite = <C, T>(
 		});
 };
 
-export const settleWrite = <C, T>(
+const settleWrite = <C, T>(
 	entries: readonly OutboxEntry<C, T>[],
 	operationId: string,
 	outcome: WriteOutcome<T>
@@ -295,7 +252,7 @@ export const settleWrite = <C, T>(
 };
 
 /** Lists and detail reads share retained content while replication runs. */
-export const visibleResources = <C, T>(
+const visibleResources = <C, T>(
 	records: ReadonlyMap<string, ResourceState<T>>,
 	pending: readonly OutboxEntry<C, T>[]
 ): ReadonlyMap<string, T> => {
@@ -312,7 +269,7 @@ export const visibleResources = <C, T>(
 };
 
 /** A local edit remains usable even while its server base is refreshing or conflicted. */
-export const localResource = <C, T>(
+const localResource = <C, T>(
 	pending: readonly OutboxEntry<C, T>[],
 	key: string
 ): CacheAccess<T> | null => {
@@ -324,7 +281,7 @@ export const localResource = <C, T>(
 };
 
 /** Explicitly retaining a conflicting edit starts a new version-guarded operation. */
-export const retryConflictedWrite = <C, T>(
+const retryConflictedWrite = <C, T>(
 	entries: readonly OutboxEntry<C, T>[],
 	operationId: string,
 	replacementId: string
@@ -362,50 +319,8 @@ export const retryConflictedWrite = <C, T>(
 	);
 };
 
-/**
- * A version conflict is a question only when the server changed a field this edit also changed.
- * Otherwise the edit is replayed onto the server version and queued again, and later local edits
- * to the same resource are replayed onto the result. The operation keeps its identity: the server
- * records nothing for an operation it answered with a conflict, so the attempt is concluded and
- * drafts, receipts and dependents that name the operation stay valid. Deletions, creations and
- * overlapping fields stay for review.
- */
-export const rebaseConflictedWrite = <C, T>(
-	entries: readonly OutboxEntry<C, T>[],
-	operationId: string,
-	rebase: WriteRebase<T>
-): readonly OutboxEntry<C, T>[] => {
-	const conflict = entries.find((entry) => entry.intent.operationId === operationId);
-	if (
-		conflict?.delivery.kind !== 'conflict' ||
-		conflict.delivery.remote.kind !== 'found' ||
-		conflict.intent.base === null ||
-		conflict.intent.local === null
-	)
-		return entries;
-	const remote = conflict.delivery.remote.snapshot;
-	const rebased = rebase(conflict.intent.base.value, conflict.intent.local, remote.value);
-	if (!rebased || rebased.overlaps) return entries;
-	let previous = { from: conflict.intent.local, to: rebased.value };
-	return entries.map((entry): OutboxEntry<C, T> => {
-		if (entry === conflict)
-			return {
-				...entry,
-				intent: { ...entry.intent, base: remote, basedOn: null, local: rebased.value },
-				delivery: { kind: 'queued' }
-			};
-		const local = entry.intent.local;
-		if (entry.intent.key !== conflict.intent.key || entry.sequence < conflict.sequence || !local)
-			return entry;
-		const replayed = rebase(previous.from, local, previous.to);
-		if (!replayed) return entry;
-		previous = { from: local, to: replayed.value };
-		return { ...entry, intent: { ...entry.intent, local: replayed.value } };
-	});
-};
-
 /** Refresh only the server side of a conflict; keep the observed base and local edit. */
-export const resolveWriteBase = <C, T>(
+const resolveWriteBase = <C, T>(
 	entries: readonly OutboxEntry<C, T>[],
 	operationId: string,
 	resolution: WriteBaseResolution<T>
@@ -417,7 +332,7 @@ export const resolveWriteBase = <C, T>(
 	);
 
 /** Include every descendant so a review cannot hide edits that depend on the selected base. */
-export const dependentWrites = <C, T>(
+const dependentWrites = <C, T>(
 	entries: readonly OutboxEntry<C, T>[],
 	operationId: string
 ): readonly OutboxEntry<C, T>[] => {
@@ -440,7 +355,7 @@ export const dependentWrites = <C, T>(
 };
 
 /** Discard exactly the reviewed set. Unknown outcomes and unselected dependents must be resolved first. */
-export const discardWrites = <C, T>(
+const discardWrites = <C, T>(
 	entries: readonly OutboxEntry<C, T>[],
 	operationIds: readonly string[]
 ): readonly OutboxEntry<C, T>[] => {
@@ -460,7 +375,7 @@ export const discardWrites = <C, T>(
 	return entries.filter((entry) => !selected.has(entry.intent.operationId));
 };
 
-export const authoritativeWriteResource = <T>(
+const authoritativeWriteResource = <T>(
 	outcome: WriteOutcome<T>
 ): WriteReceipt<T>['resource'] | null => {
 	const resource =
@@ -471,3 +386,182 @@ export const authoritativeWriteResource = <T>(
 				: null;
 	return resource?.kind === 'unavailable' ? null : resource;
 };
+
+export interface IOutboxEditingService {
+	append<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		draft: WriteDraft<C, T>,
+		sequence: number,
+		receipt?: WriteReceipt<T> | null,
+		observed?: ServerResource<T>
+	): readonly OutboxEntry<C, T>[];
+	keepLocal<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		operationId: string,
+		replacementId: string
+	): readonly OutboxEntry<C, T>[];
+	resolveBase<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		operationId: string,
+		resolution: WriteBaseResolution<T>
+	): readonly OutboxEntry<C, T>[];
+	dependents<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		operationId: string
+	): readonly OutboxEntry<C, T>[];
+	discard<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		operationIds: readonly string[]
+	): readonly OutboxEntry<C, T>[];
+}
+export class OutboxEditingService implements IOutboxEditingService {
+	append<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		draft: WriteDraft<C, T>,
+		sequence: number,
+		receipt: WriteReceipt<T> | null = null,
+		observed: ServerResource<T> = { kind: 'unavailable' }
+	): readonly OutboxEntry<C, T>[] {
+		return appendWrite(entries, draft, sequence, receipt, observed);
+	}
+	keepLocal<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		operationId: string,
+		replacementId: string
+	): readonly OutboxEntry<C, T>[] {
+		return retryConflictedWrite(entries, operationId, replacementId);
+	}
+	resolveBase<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		operationId: string,
+		resolution: WriteBaseResolution<T>
+	): readonly OutboxEntry<C, T>[] {
+		return resolveWriteBase(entries, operationId, resolution);
+	}
+	dependents<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		operationId: string
+	): readonly OutboxEntry<C, T>[] {
+		return dependentWrites(entries, operationId);
+	}
+	discard<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		operationIds: readonly string[]
+	): readonly OutboxEntry<C, T>[] {
+		return discardWrites(entries, operationIds);
+	}
+}
+
+export interface IOutboxDeliveryService {
+	next<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		excluded?: ReadonlySet<string>
+	): OutboxEntry<C, T> | null;
+	begin<C, T>(entry: OutboxEntry<C, T>): OutboxEntry<C, T>;
+	fail<C, T>(entry: OutboxEntry<C, T>, message: string): OutboxEntry<C, T>;
+	settle<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		operationId: string,
+		outcome: WriteOutcome<T>
+	): readonly OutboxEntry<C, T>[];
+	retainReceipt<T>(previous: WriteReceipt<T> | null, received: WriteReceipt<T>): WriteReceipt<T>;
+	authoritativeResource<T>(outcome: WriteOutcome<T>): WriteReceipt<T>['resource'] | null;
+}
+export class OutboxDeliveryService implements IOutboxDeliveryService {
+	next<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		excluded: ReadonlySet<string> = new Set()
+	): OutboxEntry<C, T> | null {
+		return nextWrite(entries, excluded);
+	}
+	begin<C, T>(entry: OutboxEntry<C, T>): OutboxEntry<C, T> {
+		return beginWrite(entry);
+	}
+	fail<C, T>(entry: OutboxEntry<C, T>, message: string): OutboxEntry<C, T> {
+		return failWrite(entry, message);
+	}
+	settle<C, T>(
+		entries: readonly OutboxEntry<C, T>[],
+		operationId: string,
+		outcome: WriteOutcome<T>
+	): readonly OutboxEntry<C, T>[] {
+		return settleWrite(entries, operationId, outcome);
+	}
+	retainReceipt<T>(previous: WriteReceipt<T> | null, received: WriteReceipt<T>): WriteReceipt<T> {
+		return retainWriteReceipt(previous, received);
+	}
+	authoritativeResource<T>(outcome: WriteOutcome<T>): WriteReceipt<T>['resource'] | null {
+		return authoritativeWriteResource(outcome);
+	}
+}
+
+export interface SyncResourceRules {
+	compareSyncEtags(left: SyncEtag, right: SyncEtag): number;
+	resourceVersion<T>(state: ResourceState<T> | undefined): SyncEtag | null;
+	cachedSnapshot<T>(state: ResourceState<T> | undefined): SyncSnapshot<T> | null;
+	resourceCurrent<T>(state: ResourceState<T> | undefined): boolean;
+	mergeResourceStates<T>(
+		current: ResourceState<T> | undefined,
+		incoming: ResourceState<T>
+	): ResourceState<T>;
+	receiveResource<T>(
+		state: ResourceState<T> | undefined,
+		received: SyncSnapshot<T> | ResourceDeletion
+	): ResourceState<T>;
+	accessCache<T>(
+		state: ResourceState<T> | undefined,
+		online: boolean,
+		transfer?: TransferState
+	): CacheAccess<T>;
+	accessMessage<T>(access: Exclude<CacheAccess<T>, { kind: 'ready' }>, name: string): string;
+	visibleResources<C, T>(
+		records: ReadonlyMap<string, ResourceState<T>>,
+		pending: readonly OutboxEntry<C, T>[]
+	): ReadonlyMap<string, T>;
+	localResource<C, T>(pending: readonly OutboxEntry<C, T>[], key: string): CacheAccess<T> | null;
+}
+export class SyncResourceRulesService implements SyncResourceRules {
+	compareSyncEtags(left: SyncEtag, right: SyncEtag): number {
+		return compareSyncEtags(left, right);
+	}
+	resourceVersion<T>(state: ResourceState<T> | undefined): SyncEtag | null {
+		return resourceVersion(state);
+	}
+	cachedSnapshot<T>(state: ResourceState<T> | undefined): SyncSnapshot<T> | null {
+		return cachedSnapshot(state);
+	}
+	resourceCurrent<T>(state: ResourceState<T> | undefined): boolean {
+		return resourceCurrent(state);
+	}
+	mergeResourceStates<T>(
+		current: ResourceState<T> | undefined,
+		incoming: ResourceState<T>
+	): ResourceState<T> {
+		return mergeResourceStates(current, incoming);
+	}
+	receiveResource<T>(
+		state: ResourceState<T> | undefined,
+		received: SyncSnapshot<T> | ResourceDeletion
+	): ResourceState<T> {
+		return receiveResource(state, received);
+	}
+	accessCache<T>(
+		state: ResourceState<T> | undefined,
+		online: boolean,
+		transfer?: TransferState
+	): CacheAccess<T> {
+		return accessCache(state, online, transfer);
+	}
+	accessMessage<T>(access: Exclude<CacheAccess<T>, { kind: 'ready' }>, name: string): string {
+		return accessMessage(access, name);
+	}
+	visibleResources<C, T>(
+		records: ReadonlyMap<string, ResourceState<T>>,
+		pending: readonly OutboxEntry<C, T>[]
+	): ReadonlyMap<string, T> {
+		return visibleResources(records, pending);
+	}
+	localResource<C, T>(pending: readonly OutboxEntry<C, T>[], key: string): CacheAccess<T> | null {
+		return localResource(pending, key);
+	}
+}

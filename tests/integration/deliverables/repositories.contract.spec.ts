@@ -4,33 +4,33 @@ import * as schema from '$lib/server/db/schema';
 import { ArtifactRecords } from '$lib/server/repositories/deliverables/postgres/artifacts';
 import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { seedUser, actor, context, seedArtifact, seedNote } from '../database-harness';
+import { actor, seedUser, context, seedArtifact, seedNote } from '../database-harness';
 describe('Postgres artifact repository listing invariants', () => {
 	it('matches artifact titles with a case-insensitive substring', async () => {
 		const owner = await seedUser('301');
-		const project = await new ProjectRecords(context.db).insert(owner, {
+		const project = await new ProjectRecords(owner, context.db).insert({
 			name: 'Artifact search title'
 		});
 		await seedArtifact(owner, project.id, '301', { title: 'Quarterly Strategy Review' });
-		const result = await new ArtifactRecords(context.db).listByProject(owner, project.id, {
+		const result = await new ArtifactRecords(owner, context.db).listByProject(project.id, {
 			query: 'STRATEGY'
 		});
 		expect(result.total).toBe(1);
 	});
 	it('matches artifact formats with a case-insensitive substring', async () => {
 		const owner = await seedUser('302');
-		const project = await new ProjectRecords(context.db).insert(owner, {
+		const project = await new ProjectRecords(owner, context.db).insert({
 			name: 'Artifact search format'
 		});
 		await seedArtifact(owner, project.id, '302', { format: 'docx' });
-		const result = await new ArtifactRecords(context.db).listByProject(owner, project.id, {
+		const result = await new ArtifactRecords(owner, context.db).listByProject(project.id, {
 			query: 'OCX'
 		});
 		expect(result.total).toBe(1);
 	});
 	it('matches template names with a case-insensitive substring', async () => {
 		const owner = await seedUser('303');
-		const project = await new ProjectRecords(context.db).insert(owner, {
+		const project = await new ProjectRecords(owner, context.db).insert({
 			name: 'Artifact search template'
 		});
 		const templateId = '80000000-0000-4000-8000-000000000303' as TemplateId;
@@ -44,18 +44,18 @@ describe('Postgres artifact repository listing invariants', () => {
 			byteSize: 100
 		});
 		await seedArtifact(owner, project.id, '303', { templateId });
-		const result = await new ArtifactRecords(context.db).listByProject(owner, project.id, {
+		const result = await new ArtifactRecords(owner, context.db).listByProject(project.id, {
 			query: 'brief'
 		});
 		expect(result.total).toBe(1);
 	});
 	it('does not match a null template for an unrelated search', async () => {
 		const owner = await seedUser('304');
-		const project = await new ProjectRecords(context.db).insert(owner, {
+		const project = await new ProjectRecords(owner, context.db).insert({
 			name: 'Artifact null template'
 		});
 		await seedArtifact(owner, project.id, '304');
-		const result = await new ArtifactRecords(context.db).listByProject(owner, project.id, {
+		const result = await new ArtifactRecords(owner, context.db).listByProject(project.id, {
 			query: 'missing'
 		});
 		expect(result.artifacts).toEqual([]);
@@ -63,26 +63,26 @@ describe('Postgres artifact repository listing invariants', () => {
 	it('keeps artifact listings scoped to the actor and project', async () => {
 		const owner = await seedUser('305');
 		const other = await seedUser('306');
-		const project = await new ProjectRecords(context.db).insert(owner, {
+		const project = await new ProjectRecords(owner, context.db).insert({
 			name: 'Owned artifacts'
 		});
-		const otherProject = await new ProjectRecords(context.db).insert(other, {
+		const otherProject = await new ProjectRecords(other, context.db).insert({
 			name: 'Other artifacts'
 		});
 		await seedArtifact(owner, project.id, '305');
 		await seedArtifact(other, otherProject.id, '306');
-		const result = await new ArtifactRecords(context.db).listByProject(other, project.id);
+		const result = await new ArtifactRecords(other, context.db).listByProject(project.id);
 		expect(result.total).toBe(0);
 	});
 	it('counts all filtered artifacts before pagination', async () => {
 		const owner = await seedUser('307');
-		const project = await new ProjectRecords(context.db).insert(owner, {
+		const project = await new ProjectRecords(owner, context.db).insert({
 			name: 'Artifact count'
 		});
 		for (let index = 0; index < 12; index += 1) {
 			await seedArtifact(owner, project.id, String(30700 + index), { title: `Match ${index}` });
 		}
-		const result = await new ArtifactRecords(context.db).listByProject(owner, project.id, {
+		const result = await new ArtifactRecords(owner, context.db).listByProject(project.id, {
 			query: 'match',
 			limit: 10
 		});
@@ -90,15 +90,15 @@ describe('Postgres artifact repository listing invariants', () => {
 	});
 	it('returns non-overlapping deterministic pages', async () => {
 		const owner = await seedUser('308');
-		const project = await new ProjectRecords(context.db).insert(owner, {
+		const project = await new ProjectRecords(owner, context.db).insert({
 			name: 'Artifact pages'
 		});
 		for (let index = 0; index < 20; index += 1) {
 			await seedArtifact(owner, project.id, String(30800 + index));
 		}
-		const repository = new ArtifactRecords(context.db);
-		const first = await repository.listByProject(owner, project.id, { limit: 10, offset: 0 });
-		const second = await repository.listByProject(owner, project.id, { limit: 10, offset: 10 });
+		const repository = new ArtifactRecords(owner, context.db);
+		const first = await repository.listByProject(project.id, { limit: 10, offset: 0 });
+		const second = await repository.listByProject(project.id, { limit: 10, offset: 10 });
 		expect([...first.artifacts, ...second.artifacts].map((artifact) => artifact.id)).toEqual(
 			Array.from(
 				{ length: 20 },
@@ -108,28 +108,28 @@ describe('Postgres artifact repository listing invariants', () => {
 	});
 	it('keeps omitted listing parameters unbounded', async () => {
 		const owner = await seedUser('309');
-		const project = await new ProjectRecords(context.db).insert(owner, {
+		const project = await new ProjectRecords(owner, context.db).insert({
 			name: 'Unbounded artifacts'
 		});
 		for (let index = 0; index < 11; index += 1) {
 			await seedArtifact(owner, project.id, String(30900 + index));
 		}
-		const result = await new ArtifactRecords(context.db).listByProject(owner, project.id);
+		const result = await new ArtifactRecords(owner, context.db).listByProject(project.id);
 		expect(result.artifacts).toHaveLength(11);
 	});
 });
 describe('Postgres export-settings repository invariants', () => {
 	it('returns nothing before settings are saved', async () => {
 		const { owner, project } = await seedNote('80');
-		const repository = new ExportSettingsRecords(context.db);
-		expect(await repository.find(owner, project.id)).toBeUndefined();
+		const repository = new ExportSettingsRecords(owner, context.db);
+		expect(await repository.find(project.id)).toBeUndefined();
 	});
 	it('round-trips upserted settings', async () => {
 		const { owner, project } = await seedNote('81');
-		const repository = new ExportSettingsRecords(context.db);
+		const repository = new ExportSettingsRecords(owner, context.db);
 		const settings = { fontFamily: 'times', fontSize: 12, lineHeight: 1.6, margin: 54 } as const;
-		await repository.upsert(owner, project.id, settings);
-		expect(await repository.find(owner, project.id)).toEqual({
+		await repository.upsert(project.id, settings);
+		expect(await repository.find(project.id)).toEqual({
 			...settings,
 			diagramTheme: { base: 'light' },
 			includeTitle: false
@@ -137,30 +137,34 @@ describe('Postgres export-settings repository invariants', () => {
 	});
 	it('replaces settings on repeated upsert', async () => {
 		const { owner, project } = await seedNote('82');
-		const repository = new ExportSettingsRecords(context.db);
-		await repository.upsert(owner, project.id, {
+		const repository = new ExportSettingsRecords(owner, context.db);
+		await repository.upsert(project.id, {
 			fontFamily: 'courier',
 			fontSize: 10,
 			lineHeight: 1.2,
 			margin: 36
 		});
-		await repository.upsert(owner, project.id, {
+		await repository.upsert(project.id, {
 			fontFamily: 'helvetica',
 			fontSize: 11,
 			lineHeight: 1.35,
 			margin: 72
 		});
-		expect((await repository.find(owner, project.id))?.fontFamily).toBe('helvetica');
+		expect((await repository.find(project.id))?.fontFamily).toBe('helvetica');
 	});
 	it('does not reveal settings to another actor', async () => {
 		const { owner, project } = await seedNote('83');
-		const repository = new ExportSettingsRecords(context.db);
-		await repository.upsert(owner, project.id, {
+		const repository = new ExportSettingsRecords(owner, context.db);
+		await repository.upsert(project.id, {
 			fontFamily: 'times',
 			fontSize: 12,
 			lineHeight: 1.5,
 			margin: 60
 		});
-		expect(await repository.find(actor('84'), project.id)).toBeUndefined();
+		await expect(
+			new ExportSettingsRecords(actor('84'), context.db).find(project.id)
+		).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
 	});
 });

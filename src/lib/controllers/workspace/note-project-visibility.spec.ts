@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import {
 	noteRecordSchema,
 	projectRecordSchema,
@@ -22,12 +22,12 @@ const records = (archived: boolean) =>
 		]
 	]);
 it('hides an archived project note while preserving its stored child lifecycle', () => {
-	const views = new WorkspaceViews(records(true));
+	const views = createWorkspaceViews(records(true));
 	expect({ visible: views.note(note.id), stored: views.get('notes', note.id) }).toEqual({
 		visible: null,
 		stored: note
 	});
 });
 it('opens the same cached note when its project is active again', () => {
-	expect(new WorkspaceViews(records(false)).note(note.id)?.view.note).toEqual(note);
+	expect(createWorkspaceViews(records(false)).note(note.id)?.view.note).toEqual(note);
 });

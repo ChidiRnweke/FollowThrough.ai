@@ -1,32 +1,34 @@
-import { expect, it } from 'vitest';
-import type { ActorContext } from '$lib/models/identity';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { UpdateTrustPolicyInput } from '$lib/models/agent';
-import { Memory, type MemoryDependencies } from './controller';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
-import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
+import type { ActorContext } from '$lib/models/identity';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { InMemoryTrustPolicyRepository } from '$lib/testing/agent/fakes/in-memory-trust-policy-repository';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
+import {
+	InMemoryAnchorRepository,
+	InMemoryNoteRepository
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
 import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
-import {
-	InMemoryNoteRepository,
-	InMemoryAnchorRepository
-} from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { InMemoryTrustPolicyRepository } from '$lib/testing/agent/fakes/in-memory-trust-policy-repository';
-import {
-	InMemorySearchRepository,
-	InMemoryEmbeddingClient
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	testActor,
 	testNow,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { Memory, type MemoryDependencies } from './controller';
 
 interface Scenario {
 	name: string;
@@ -69,7 +71,7 @@ const scenarios: readonly Scenario[] = [
 
 it.each(scenarios)('persists the memory policy outcome for $name', async (scenario) => {
 	const actor = testActor();
-	const provenance = new InMemoryProvenanceRepository();
+	const provenance = new InMemoryProvenanceRepository(actor);
 	provenance.provenance = [
 		{
 			id: testProvenanceId(),
@@ -81,48 +83,63 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 			createdAt: testNow
 		}
 	];
-	const entries = new InMemoryMemoryEntryRepository();
-	const library = new MemoryLibrary(entries, new InMemoryProjectRepository(), provenance);
-	const records = new InMemorySuggestionRepository();
-	const inbox = new SuggestionInbox(
-		records,
-		new InMemoryNoteRepository(),
-		provenance,
-		new InMemoryAnchorRepository()
+	const entries = new InMemoryMemoryEntryRepository(actor);
+	const library = createMemoryServices(
+		actor,
+		entries,
+		new InMemoryProjectRepository(actor),
+		provenance
 	);
-	const trust = new ToolTrust(new InMemoryTrustPolicyRepository());
-	if (scenario.policy) await trust.upsert(scenario.policy.actor, scenario.policy.input);
+	const records = new InMemorySuggestionRepository(actor);
+	const inbox = createSuggestionServices(
+		actor,
+		records,
+		new InMemoryNoteRepository(actor),
+		provenance,
+		new InMemoryAnchorRepository(actor)
+	);
+	const policies = new InMemoryTrustPolicyRepository(actor);
+	const trust = new ToolTrust(actor, policies);
+	if (scenario.policy) {
+		// The scenario's account writes its policy; the policy table is shared by every account.
+		const written = new InMemoryTrustPolicyRepository(scenario.policy.actor);
+		await new ToolTrust(scenario.policy.actor, written).upsert(scenario.policy.input);
+		policies.policies = written.policies;
+	}
 	const effects = new InMemorySuggestionEffects();
-	const search = new InMemorySearchRepository();
-	const embeddings = new InMemoryEmbeddingClient();
-	const index = new ContentIndex(search, embeddings.model);
+	const search = new InMemorySearchRepository(actor);
+	const embeddings = new InMemoryRetrievalProvider();
+	const index = createContentIndex(search, undefined, undefined, false, embeddings);
 	const controller = new Memory(
+		actor,
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
-			memoryChanges: library,
-			suggestionCreator: inbox,
-			suggestionAccepter: inbox,
+			...agentToolResultsFixture(),
+			editing: new MemoryEditingService(),
+			presentation: new MemoryPresentationService(),
+			memoryChanges: library.changes,
+			suggestionCreator: inbox.creator,
+			suggestionAccepter: inbox.accepter,
 			trustPolicyEvaluator: trust,
 			suggestionEffects: effects,
-			memoryIndexer: index.memories,
-			indexWriter: index,
-			indexEmbeddings: embeddings,
+			memoryIndexer: index,
 			transactionRunner: new InMemoryTransactionRunner([entries, effects, search])
 		})
 	);
-	const result = await controller.propose(actor, {
+	const result = await controller.propose({
 		scope: 'user',
 		operation: 'add',
 		content: 'Prefer concise replies.',
 		provenanceId: testProvenanceId(),
 		confidence: scenario.confidence
 	});
-	const stored = await records.findById(actor, result.suggestion.id);
+	const stored = await records.findById(result.suggestion.id);
 	expect({
 		returned: result.suggestion,
 		status: stored?.status,
 		autoAccepted: stored?.isAutoAccepted,
 		applied: result.appliedEntry,
-		entries: await library.list(actor, {}),
+		entries: await library.lister.list({}),
 		effectCount: effects.repository.effects.size
 	}).toEqual({
 		returned: stored,

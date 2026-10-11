@@ -33,7 +33,7 @@ export async function expectTodoCreated(
 	titleFragment: string,
 	projectId?: ProjectId
 ): Promise<EffectVerdict> {
-	const { todos } = await lab.controllers.todos().list(actor, {});
+	const { todos } = await lab.forActor(actor).controllers.todos().list({});
 	const matchingTitles = todos.filter((view) => matches(view.todo.title, titleFragment));
 	const hit = matchingTitles.find(
 		(view) => projectId === undefined || view.todo.projectId === projectId
@@ -53,7 +53,7 @@ export async function expectProjectCreated(
 	actor: ActorContext,
 	nameFragment: string
 ): Promise<EffectVerdict> {
-	const { projects } = await lab.controllers.projects().list(actor);
+	const { projects } = await lab.forActor(actor).controllers.projects().list();
 	const names = projects.map((project) => project.name);
 	const hit = names.find((name) => matches(name, nameFragment));
 	return {
@@ -70,7 +70,7 @@ export async function expectNoteCreated(
 	titleFragment: string,
 	projectId?: ProjectId
 ): Promise<EffectVerdict> {
-	const shell = await lab.controllers.workspace().getShellContext(actor);
+	const shell = await lab.forActor(actor).controllers.workspace().getShellContext();
 	const matchingTitles = shell.noteTree.filter((note) => matches(note.title, titleFragment));
 	const hit = matchingTitles.find(
 		(note) => projectId === undefined || note.projectId === projectId
@@ -96,7 +96,10 @@ export async function expectSuggestionPending(
 	kind: SuggestionKind,
 	matchesMemoryContent?: (content: string) => boolean
 ): Promise<EffectVerdict> {
-	const { groups } = await lab.controllers.suggestions().list(actor, { status: 'proposed' });
+	const { groups } = await lab
+		.forActor(actor)
+		.controllers.suggestions()
+		.list({ status: 'proposed' });
 	const suggestions = groups.flatMap((group) => group.suggestions.map((view) => view.suggestion));
 	const matchingKind = suggestions.filter((suggestion) => suggestion.kind === kind);
 	const hit = matchesMemoryContent
@@ -120,7 +123,10 @@ export async function expectTodoProposed(
 	actor: ActorContext,
 	titleFragment: string
 ): Promise<EffectVerdict> {
-	const { groups } = await lab.controllers.suggestions().list(actor, { status: 'proposed' });
+	const { groups } = await lab
+		.forActor(actor)
+		.controllers.suggestions()
+		.list({ status: 'proposed' });
 	const titles = groups.flatMap((group) =>
 		group.suggestions.flatMap((view) =>
 			view.suggestion.kind === 'todo' ? [view.suggestion.payload.title] : []
@@ -140,7 +146,10 @@ export async function expectMemoryProposed(
 	actor: ActorContext,
 	contentFragment: string
 ): Promise<EffectVerdict> {
-	const { groups } = await lab.controllers.suggestions().list(actor, { status: 'proposed' });
+	const { groups } = await lab
+		.forActor(actor)
+		.controllers.suggestions()
+		.list({ status: 'proposed' });
 	const payloads = groups.flatMap((group) =>
 		group.suggestions.flatMap((view) =>
 			view.suggestion.kind === 'memory' ? [JSON.stringify(view.suggestion.payload)] : []
@@ -160,7 +169,7 @@ export async function expectMemoryAbsent(
 	actor: ActorContext,
 	contentFragment: string
 ): Promise<EffectVerdict> {
-	const { entries } = await lab.controllers.memory().list(actor, {});
+	const { entries } = await lab.forActor(actor).controllers.memory().list({});
 	const hit = entries.find((entry) => matches(entry.content, contentFragment));
 	return {
 		passed: !hit,
@@ -176,7 +185,7 @@ export async function expectTodoStatus(
 	titleFragment: string,
 	status: string
 ): Promise<EffectVerdict> {
-	const { todos } = await lab.controllers.todos().list(actor, {});
+	const { todos } = await lab.forActor(actor).controllers.todos().list({});
 	const hit = todos.find((view) => matches(view.todo.title, titleFragment));
 	if (!hit)
 		return { passed: false, explanation: `no todo matching "${titleFragment}" to check status on` };

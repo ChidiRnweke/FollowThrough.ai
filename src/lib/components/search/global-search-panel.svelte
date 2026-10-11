@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { NoteSearchContentMatch, NoteSearchHit, NoteTextMatch } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
+	import type { NoteId } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import * as Select from '$lib/components/ui/select';
@@ -12,16 +13,23 @@
 	import * as Scene from '$lib/components/icons/scenes';
 	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
-	import { globalSearch } from '$lib/stores/search/global-search.svelte';
+	import { globalSearch as defaultSearch } from '$lib/factories/search/global-search';
+	import { workspaceApplication, type WorkspaceGraph } from '$lib/factories/workspace/session';
+	import type { GlobalSearchController } from '$lib/controllers/search/global-search';
 	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 
 	let {
+		globalSearch = defaultSearch,
+		graph = workspaceApplication,
 		projects = [],
 		onMoveToCanvas,
 		onOpenMatch
 	}: {
+		globalSearch?: GlobalSearchController;
+		/** The workspace and its views; a test supplies its own. */
+		graph?: WorkspaceGraph;
 		projects?: readonly Project[];
 		/** Offered by the right panel only; in the workbench the search is already on the canvas. */
 		onMoveToCanvas?: () => void;
@@ -54,8 +62,21 @@
 	// contract, so newlines flatten to a space, matching how VS Code renders its hits.
 	const inline = (text: string): string => text.replace(/\n+/g, ' ');
 
+	const notes = $derived(graph.views.notes);
+	const hits = $derived(globalSearch.hits(notes));
+	const totalMatches = $derived(
+		hits.reduce((count, hit) => count + hit.titleMatches.length + hit.matches.length, 0)
+	);
+	/** Rewrite the planned notes on this device, then report how far the replacement got. */
+	async function replace(noteId?: NoteId): Promise<void> {
+		const plan = globalSearch.plan(notes, noteId);
+		const outcome = await graph.workspace.editAll(
+			plan.map(({ noteId, command }) => ({ identity: { type: 'notes', id: [noteId] }, command }))
+		);
+		globalSearch.replaced(plan, outcome);
+	}
 	const projectFilter = $derived(globalSearch.projectId ?? 'all');
-	const replaceableNotes = $derived(globalSearch.hits.filter((hit) => hit.matches.length > 0));
+	const replaceableNotes = $derived(hits.filter((hit) => hit.matches.length > 0));
 	const replaceableMatches = $derived(
 		replaceableNotes.reduce((count, hit) => count + hit.matches.length, 0)
 	);
@@ -65,7 +86,7 @@
 	);
 
 	const pickProject = (value: string): void => {
-		globalSearch.projectId = value === 'all' ? undefined : (value as ProjectId);
+		globalSearch.edit({ projectId: value === 'all' ? undefined : (value as ProjectId) });
 		void globalSearch.search();
 	};
 
@@ -109,8 +130,7 @@
 				aria-label="Search all notes"
 				class="h-11 pr-14 sm:h-8"
 				oninput={(event) => {
-					globalSearch.query = event.currentTarget.value;
-					globalSearch.scheduleSearch();
+					globalSearch.edit({ query: event.currentTarget.value });
 				}}
 				onkeydown={(event) => {
 					if (event.key === 'Enter') void globalSearch.search();
@@ -123,8 +143,7 @@
 					class="h-6 min-w-6 rounded px-1 font-mono text-xs aria-pressed:bg-accent aria-pressed:text-primary"
 					pressed={globalSearch.caseSensitive}
 					onPressedChange={(pressed) => {
-						globalSearch.caseSensitive = pressed;
-						globalSearch.scheduleSearch();
+						globalSearch.edit({ caseSensitive: pressed });
 					}}
 					aria-label="Match case"
 				>
@@ -136,8 +155,7 @@
 					class="h-6 min-w-6 rounded px-1 font-mono text-xs aria-pressed:bg-accent aria-pressed:text-primary"
 					pressed={globalSearch.regex}
 					onPressedChange={(pressed) => {
-						globalSearch.regex = pressed;
-						globalSearch.scheduleSearch();
+						globalSearch.edit({ regex: pressed });
 					}}
 					aria-label="Use regular expression"
 				>
@@ -188,7 +206,7 @@
 				placeholder="Replace with..."
 				aria-label="Replace with"
 				class="h-11 min-w-0 flex-1 sm:h-8"
-				oninput={(event) => (globalSearch.replacement = event.currentTarget.value)}
+				oninput={(event) => globalSearch.setReplacement(event.currentTarget.value)}
 			/>
 			<ConfirmDelete
 				title={replaceTitle}
@@ -196,7 +214,7 @@
 				confirmLabel="Replace all"
 				confirmVariant="default"
 				onconfirm={async () => {
-					await globalSearch.replaceAll();
+					await replace();
 				}}
 			>
 				{#snippet trigger(props)}
@@ -206,7 +224,7 @@
 				{/snippet}
 			</ConfirmDelete>
 		</div>
-		{#if globalSearch.partial}
+		{#if graph.workspace.current?.resources.availability !== 'complete'}
 			<p class="text-xs text-muted-foreground" role="status">
 				Search includes only notes saved on this device. Some workspace content is unavailable.
 			</p>
@@ -234,11 +252,11 @@
 				size="large"
 				label="Search"
 			/>
-		{:else if globalSearch.hits.length === 0 && globalSearch.searching}
+		{:else if hits.length === 0 && globalSearch.searching}
 			<div class="flex items-center gap-2 text-xs text-muted-foreground">
 				<Spinner class="size-3.5" /> Searching…
 			</div>
-		{:else if globalSearch.hits.length === 0 && !globalSearch.searchError}
+		{:else if hits.length === 0 && !globalSearch.searchError}
 			<EmptyState
 				scene={Scene.Search}
 				title="No results for “{globalSearch.query}”."
@@ -255,10 +273,10 @@
 						<Spinner class="size-3.5" /> Searching…
 					</span>
 				{:else}
-					{globalSearch.totalMatches}
-					{globalSearch.totalMatches === 1 ? 'result' : 'results'} in
-					{globalSearch.hits.length}
-					{globalSearch.hits.length === 1 ? 'note' : 'notes'}
+					{totalMatches}
+					{totalMatches === 1 ? 'result' : 'results'} in
+					{hits.length}
+					{hits.length === 1 ? 'note' : 'notes'}
 				{/if}
 			</p>
 			<!-- The dim lives on a wrapper so its micro-duration transition and the list's
@@ -268,7 +286,7 @@
 					? 'opacity-50'
 					: 'opacity-100'}"
 			>
-				{#key globalSearch.hits}
+				{#key hits}
 					<!-- New results arrive as a 4px rise and fade at the disclosure budget; CSS,
 					     so the reduced-motion guard collapses it to 1ms. -->
 					<!-- The gap between documents is the grouping signal: clearly wider than the
@@ -276,7 +294,7 @@
 					<ul
 						class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200 ease-(--ease-standard) mt-1 flex flex-col gap-3"
 					>
-						{#each globalSearch.hits as hit (hit.noteId)}
+						{#each hits as hit (hit.noteId)}
 							{@const collapsed = globalSearch.collapsedNoteIds.has(hit.noteId)}
 							{@const count = hit.titleMatches.length + hit.matches.length}
 							<li>
@@ -329,7 +347,7 @@
 													size="sm"
 													class="ml-auto h-6 shrink-0 px-1.5 text-xs"
 													aria-label="Replace in {hit.title}"
-													onclick={() => void globalSearch.replaceInNote(hit.noteId)}
+													onclick={() => void replace(hit.noteId)}
 												>
 													Replace
 												</Button>

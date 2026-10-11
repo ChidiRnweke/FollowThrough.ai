@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { noteBuilder, projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { hasReviewContent, visibleReviewFields } from './write-review';
+import { WriteReviewPresentationService } from '$lib/services/workspace/write-review';
+const { hasReviewContent, visibleReviewFields } = new WriteReviewPresentationService();
 
 it('omits project identity, storage role and timestamps from the comparison', () => {
 	const project = projectBuilder();

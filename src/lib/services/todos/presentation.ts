@@ -1,7 +1,7 @@
 import type { Todo, TodoView, TodoContext } from '$lib/models/todos';
 
 /** A linked note supplies the task's display source; its extraction origin stays visible separately. */
-export function assembleTodoView(todo: Todo, facts: Omit<TodoContext, 'todo'>): TodoView {
+function assembleTodoView(todo: Todo, facts: Omit<TodoContext, 'todo'>): TodoView {
 	const source = facts.linked ?? facts.origin;
 	return {
 		todo,
@@ -10,4 +10,13 @@ export function assembleTodoView(todo: Todo, facts: Omit<TodoContext, 'todo'>): 
 		...(facts.anchor ? { anchor: facts.anchor } : {}),
 		...(facts.provenance ? { provenance: facts.provenance } : {})
 	};
+}
+
+export interface TodoPresentation {
+	view(todo: Todo, facts: Omit<TodoContext, 'todo'>): TodoView;
+}
+export class TodoPresentationService implements TodoPresentation {
+	view(todo: Todo, facts: Omit<TodoContext, 'todo'>): TodoView {
+		return assembleTodoView(todo, facts);
+	}
 }

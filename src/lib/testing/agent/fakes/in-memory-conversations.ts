@@ -14,16 +14,16 @@ export class InMemoryConversationRepository implements ConversationRepository, S
 	conversations: Conversation[] = [];
 	messages: Message[] = [];
 
-	constructor(private readonly runExists?: (runId: string) => boolean) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly runExists?: (runId: string) => boolean
+	) {}
 
-	async list(
-		actor: ActorContext,
-		options: ConversationListOptions = {}
-	): Promise<readonly Conversation[]> {
+	async list(options: ConversationListOptions = {}): Promise<readonly Conversation[]> {
 		const listed = this.conversations
 			.filter(
 				(conversation) =>
-					conversation.userId === actor.userId &&
+					conversation.userId === this.actor.userId &&
 					(options.kind === undefined || conversation.kind === options.kind) &&
 					(!options.query ||
 						conversation.title?.toLowerCase().includes(options.query.toLowerCase()))
@@ -35,20 +35,23 @@ export class InMemoryConversationRepository implements ConversationRepository, S
 		);
 	}
 
-	async findById(actor: ActorContext, id: ConversationId): Promise<Conversation | undefined> {
+	findForWrite(id: ConversationId): Promise<Conversation | undefined> {
+		return this.findById(id);
+	}
+	async findById(id: ConversationId): Promise<Conversation | undefined> {
 		return this.conversations.find(
-			(conversation) => conversation.id === id && conversation.userId === actor.userId
+			(conversation) => conversation.id === id && conversation.userId === this.actor.userId
 		);
 	}
 
-	async insert(actor: ActorContext, conversation: Conversation): Promise<Conversation> {
-		const owned = { ...conversation, userId: actor.userId };
+	async insert(conversation: Conversation): Promise<Conversation> {
+		const owned = { ...conversation, userId: this.actor.userId };
 		this.conversations.push(owned);
 		return owned;
 	}
 
-	async update(actor: ActorContext, conversation: Conversation): Promise<Conversation> {
-		if (!(await this.findById(actor, conversation.id)))
+	async update(conversation: Conversation): Promise<Conversation> {
+		if (!(await this.findById(conversation.id)))
 			throw new NotFoundError('Conversation was not found');
 		this.conversations = this.conversations.map((item) =>
 			item.id === conversation.id ? conversation : item
@@ -56,14 +59,14 @@ export class InMemoryConversationRepository implements ConversationRepository, S
 		return conversation;
 	}
 
-	async delete(actor: ActorContext, id: ConversationId): Promise<void> {
-		if (!(await this.findById(actor, id))) throw new NotFoundError('Conversation was not found');
+	async delete(id: ConversationId): Promise<void> {
+		if (!(await this.findById(id))) throw new NotFoundError('Conversation was not found');
 		this.conversations = this.conversations.filter((conversation) => conversation.id !== id);
 		this.messages = this.messages.filter((message) => message.conversationId !== id);
 	}
 
-	async appendMessage(actor: ActorContext, message: Message): Promise<Message> {
-		if (!(await this.findById(actor, message.conversationId)))
+	async appendMessage(message: Message): Promise<Message> {
+		if (!(await this.findById(message.conversationId)))
 			throw new NotFoundError('Conversation was not found');
 		if (message.runId && this.runExists && !this.runExists(message.runId))
 			throw new NotFoundError(`Agent run ${message.runId} was not found`);
@@ -77,19 +80,15 @@ export class InMemoryConversationRepository implements ConversationRepository, S
 	 * `unreadable` would be inventing a state its own writes cannot reach; the
 	 * repository contract spec covers that arm against real Postgres.
 	 */
-	async listMessages(actor: ActorContext, id: ConversationId): Promise<readonly StoredMessage[]> {
-		if (!(await this.findById(actor, id))) throw new NotFoundError('Conversation was not found');
+	async listMessages(id: ConversationId): Promise<readonly StoredMessage[]> {
+		if (!(await this.findById(id))) throw new NotFoundError('Conversation was not found');
 		return this.messages
 			.filter((message) => message.conversationId === id)
 			.map((message) => ({ ...message, kind: 'readable' as const }));
 	}
 
-	async deleteMessages(
-		actor: ActorContext,
-		id: ConversationId,
-		messageIds: readonly Message['id'][]
-	): Promise<void> {
-		if (!(await this.findById(actor, id))) throw new NotFoundError('Conversation was not found');
+	async deleteMessages(id: ConversationId, messageIds: readonly Message['id'][]): Promise<void> {
+		if (!(await this.findById(id))) throw new NotFoundError('Conversation was not found');
 		this.messages = this.messages.filter(
 			(message) => message.conversationId !== id || !messageIds.includes(message.id)
 		);

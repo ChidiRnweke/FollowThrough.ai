@@ -1,58 +1,71 @@
-import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
-import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
-import { createSkillsCapability } from '$lib/server/factories/capabilities/skills-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createSkillsCapability } from '$lib/server/factories/capabilities/skills-capability-factory';
+import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { describe, expect, it } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const source = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const notes = createNotesCapability({ db: database, projects: new ProjectRecords(database) });
-	const note = await storedNote(notes.catalog, source.owner, {
+	const notes = createNotesCapability(source.owner, {
+		db: database,
+		projects: new ProjectRecords(source.owner, database)
+	});
+	const note = await storedNote(notes.services.creator, source.owner, {
 		projectId: source.note.projectId,
 		title: 'Writing',
 		kind: 'skill'
 	});
 	const seeded = { ...source, note };
-	const sync = createSyncCapability({ db: database });
-	const { library } = createSkillsCapability({
+	const sync = createSyncCapability(seeded.owner, { db: database });
+	const { services: library } = createSkillsCapability(seeded.owner, {
 		db: database,
-		projects: new ProjectRecords(database),
+		projects: new ProjectRecords(seeded.owner, database),
 		notes: notes.repository,
 		provenance: notes.provenanceRepository
 	});
-	await library.create(seeded.owner, seeded.note, {
+	await library.creator.create(seeded.note, {
 		name: 'Writing',
 		description: 'Write clearly',
 		triggerHints: []
 	});
 	const controller = new Skills(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
+			...agentToolResultsFixture(),
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
-			skillEditor: library,
-			skillFinder: library,
-			skillUsageLister: library,
+			skillEditor: library.editor,
+			skillFinder: library.finder,
+			skillUsageLister: library.usageLister,
 			transactionRunner
 		})
 	);
-	const base = await sync.objects.read(
-		seeded.owner,
-		{ type: 'skills', id: [seeded.note.id] },
-		null
-	);
+	const base = await sync.objects.read({ type: 'skills', id: [seeded.note.id] }, null);
 	if (base.kind !== 'found') throw new Error('The skill metadata must exist');
 	return { ...seeded, controller, base: base.snapshot.etag };
 };
 
 describe('guarded skill metadata writes', () => {
 	it('replays a description write without changing its note body version', async () => {
-		const { owner, note, controller, base } = await setup('9381');
+		const { note, controller, base } = await setup('9381');
 		const before =
 			await context.client`select document, current_revision from notes where id = ${note.id}`;
 		const input = {
@@ -60,8 +73,8 @@ describe('guarded skill metadata writes', () => {
 			baseEtag: base,
 			command: { kind: 'updateSkill' as const, noteId: note.id, description: 'Offline description' }
 		};
-		await controller.synchronize(owner, input);
-		await controller.synchronize(owner, input);
+		await controller.synchronize(input);
+		await controller.synchronize(input);
 		expect({
 			notes:
 				await context.client`select document, current_revision from notes where id = ${note.id}`,
@@ -69,9 +82,9 @@ describe('guarded skill metadata writes', () => {
 		}).toEqual({ notes: before, skills: [{ description: 'Offline description' }] });
 	});
 	it('preserves a concurrent description instead of overwriting it with a stale toggle', async () => {
-		const { owner, note, controller, base } = await setup('9382');
+		const { note, controller, base } = await setup('9382');
 		await context.client`update skills set description = 'Other client' where note_id = ${note.id}`;
-		const result = await controller.synchronize(owner, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: base,
 			command: { kind: 'updateSkill', noteId: note.id, isEnabled: false }

@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { readAgentPayload } from '$lib/models/agent/payload';
+import { agentPayloadResultSchema } from '$lib/models/agent/payload';
 import type { AgentEvent } from '$lib/models/agent';
 import type { NoteActionResult } from './agent-runs';
 
 /** The storage boundary serializes the resolved domain result into the event protocol. */
 export const noteActionEvent = (result: NoteActionResult): AgentEvent => {
-	const parsed = readAgentPayload(result.result);
+	const parsed = agentPayloadResultSchema.parse(result.result);
 	if (parsed.kind === 'corrupt')
 		throw new Error(`Note action result cannot be stored: ${parsed.message}`);
 	return { type: 'workflow_result', action: result.action, result: parsed.value };
@@ -36,7 +36,7 @@ const readCallId = (row: unknown): string | undefined =>
  * still has to be readable so the user can cancel the run, and a resume that
  * lands on none of its interruptions already fails loudly with "The pending
  * approval could not be resumed". The dropped call ids come back so the caller
- * can warn with them, which is what `SuggestionInbox.listByStatus` does with
+ * can warn with them, which is what `SuggestionReadingService.listByStatus` does with
  * unreadable suggestion rows.
  *
  * Legacy decisions without a review remain readable and rejectable. Note tooling

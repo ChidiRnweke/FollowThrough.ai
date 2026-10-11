@@ -1,46 +1,65 @@
-import { describe, it, expect } from 'vitest';
-import { RunContext } from '@openai/agents';
-import { AgentTools } from './agent-tool-factory';
-import { type PendingAgentDecision, type AgentExecutionMode } from '$lib/models/agent';
-import { readPendingDecisions } from '$lib/server/repositories/agent/stored-values';
+import { type AgentExecutionMode, type PendingAgentDecision } from '$lib/models/agent';
 import { noteChangeReviewSchema } from '$lib/models/notes';
-import { readToolOutput } from '$lib/models/agent/tool-failure';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+import { readToolOutput } from '$lib/server/repositories/agent/tool-failure';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { readPendingDecisions } from '$lib/server/repositories/agent/stored-values';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { RunContext } from '@openai/agents';
+import { describe, expect, it } from 'vitest';
 import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
+	createAgentToolSurface,
+	type AgentToolSurface
+} from '$lib/testing/agent/fixtures/tool-surface';
+const noteMarkdown = new NoteMarkdownCodec();
+
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {
 	noteBuilder,
 	testActor,
-	testProvenanceId,
-	testConversationId
+	testConversationId,
+	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const context = () => new RunContext();
 const setup = () => {
-	const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.'), title: 'Release' });
+	const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.'), title: 'Release' });
 	const fixture = reviewedNoteFixture(note);
 	const registry = (
 		pending: readonly PendingAgentDecision[] = [],
 		mode: AgentExecutionMode = 'approval_required'
 	) =>
-		new AgentTools(
+		createAgentToolSurface(
+			testTokenizer,
 			fixture.factory,
-			testActor(),
 			mode,
 			{
 				provenanceId: testProvenanceId(),
 				input: { conversationId: testConversationId(), prompt: 'Change launch day' },
 				model: 'test-model'
 			},
-			{ execute: (_call, action) => action() },
+			{ completed: async () => {} },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
 			pending
@@ -50,12 +69,12 @@ const setup = () => {
 		toolName: 'edit_note',
 		arguments: { noteId: note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] }
 	};
-	const select = (tools: AgentTools, name = call.toolName) => {
+	const select = (tools: AgentToolSurface, name = call.toolName) => {
 		const tool = tools.tools().find((item) => item.name === name);
 		if (!tool || tool.type !== 'function') throw new Error('Expected note function tool');
 		return tool;
 	};
-	const invoke = (tools: AgentTools, pending = call) =>
+	const invoke = (tools: AgentToolSurface, pending = call) =>
 		select(tools, pending.toolName).invoke(context(), JSON.stringify(pending.arguments), {
 			toolCall: {
 				type: 'function_call',
@@ -106,7 +125,7 @@ describe('Revision-bound note tool approvals', () => {
 		fixture.content.notes = [
 			{
 				...fixture.note,
-				...noteContentFromMarkdown('Launch Monday. Include a second launch.'),
+				...noteMarkdown.read('Launch Monday. Include a second launch.'),
 				currentRevision: 2
 			}
 		];
@@ -118,7 +137,7 @@ describe('Revision-bound note tool approvals', () => {
 		const fixture = setup();
 		const pending = await fixture.prepare();
 		fixture.content.notes = [
-			{ ...fixture.note, ...noteContentFromMarkdown('Launch Friday.'), currentRevision: 2 }
+			{ ...fixture.note, ...noteMarkdown.read('Launch Friday.'), currentRevision: 2 }
 		];
 		const resumed = fixture.registry([pending]);
 		await fixture
@@ -174,7 +193,7 @@ describe('Revision-bound note tool approvals', () => {
 		};
 		await fixture.select(tools).needsApproval(context(), call.arguments, call.callId);
 		fixture.content.notes = [
-			{ ...fixture.note, ...noteContentFromMarkdown('Launch Friday.'), currentRevision: 2 }
+			{ ...fixture.note, ...noteMarkdown.read('Launch Friday.'), currentRevision: 2 }
 		];
 		expect(await fixture.invoke(tools, call)).toMatchObject({
 			kind: 'failure',
@@ -192,7 +211,7 @@ describe('Revision-bound note tool approvals', () => {
 		await fixture.select(tools, 'save_note').needsApproval(context(), call.arguments, call.callId);
 		const pending = tools.reviewDecision(call);
 		fixture.content.notes = [
-			{ ...fixture.note, ...noteContentFromMarkdown('Launch Friday.'), currentRevision: 2 }
+			{ ...fixture.note, ...noteMarkdown.read('Launch Friday.'), currentRevision: 2 }
 		];
 		expect(await fixture.invoke(fixture.registry([pending]), call)).toMatchObject({
 			code: 'STALE_REVIEW'
@@ -210,16 +229,35 @@ describe('Revision-bound note tool approvals', () => {
  */
 describe('A note change that fails while it is being prepared', () => {
 	const faulty = () => {
-		const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.'), title: 'Release' });
-		const content = new InMemoryNoteContent();
+		const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.'), title: 'Release' });
+		const content = new InMemoryNoteContent(testActor());
 		content.notes = [note];
 		const controller = new Notes(
+			testActor(),
+			new BacklinkPresentationService(),
+			new ReferencePresentationService(),
+			new WorkspaceCommandRulesService(),
+			new ProvenancePresentationService(),
 			capabilityDependencies<NotesDependencies>({
+				...agentToolResultsFixture(),
+				archiveImport: new NoteArchiveImportService(),
+				patchPreparation: new NotePatchPreparationService(),
+				revisionComparison: new NoteRevisionComparisonService(),
+				todoPresentation: new TodoPresentationService(),
+				textSearch: new NoteTextSearchService(),
+				noteReferences: new NoteReferenceService(),
+				sections: new NoteSectionNumberingService(),
+				noteCreationRules: new NoteLifecycleRulesService(),
+				noteTrashRules: new NoteLifecycleRulesService(),
+				notePublicationRules: new NoteLifecycleRulesService(),
+				noteEditingRules: new NoteEditingRulesService(),
+				notePresentation: new NotePresentationService(),
+				suggestionPresentation: new SuggestionPresentationService(),
 				markdown: {
 					read: () => {
 						throw new TypeError('document.content[12] is not writable');
 					},
-					write: noteMarkdownFromContent
+					write: noteMarkdown.write
 				},
 				noteReader: content,
 				noteEditor: content,
@@ -229,16 +267,16 @@ describe('A note change that fails while it is being prepared', () => {
 				transactionRunner: new InMemoryTransactionRunner([content])
 			})
 		);
-		const tools = new AgentTools(
+		const tools = createAgentToolSurface(
+			testTokenizer,
 			capabilityDependencies<ControllerFactory>({ notes: () => controller }),
-			testActor(),
 			'approval_required',
 			{
 				provenanceId: testProvenanceId(),
 				input: { conversationId: testConversationId(), prompt: 'Rewrite the note' },
 				model: 'test-model'
 			},
-			{ execute: (_call, action) => action() },
+			{ completed: async () => {} },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
 			[]

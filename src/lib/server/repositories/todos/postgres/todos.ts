@@ -9,19 +9,22 @@ import * as schema from '$lib/server/db/schema/todos';
 import { toTodo } from '$lib/server/db/mappers';
 
 export class TodoRecords implements TodoRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async findById(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
-		const [row] = await this.activeTask(actor, id);
+	async findById(id: TodoId): Promise<Todo | undefined> {
+		const [row] = await this.activeTask(id);
 		return row ? toTodo(row.todo) : undefined;
 	}
 
-	async findForUpdate(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
-		const [row] = await this.activeTask(actor, id).for('update', { of: schema.todos });
+	async findForUpdate(id: TodoId): Promise<Todo | undefined> {
+		const [row] = await this.activeTask(id).for('update', { of: schema.todos });
 		return row ? toTodo(row.todo) : undefined;
 	}
 
-	private activeTask(actor: ActorContext, id: TodoId) {
+	private activeTask(id: TodoId) {
 		return this.database
 			.select({ todo: schema.todos })
 			.from(schema.todos)
@@ -29,7 +32,7 @@ export class TodoRecords implements TodoRepository {
 			.where(
 				and(
 					eq(schema.todos.id, id),
-					eq(schema.todos.userId, actor.userId),
+					eq(schema.todos.userId, this.actor.userId),
 					isNull(schema.todos.deletedAt),
 					isNull(schema.projects.archivedAt)
 				)
@@ -41,12 +44,9 @@ export class TodoRecords implements TodoRepository {
 	 * cannot match anything — a note with no source anchors — so callers skip the
 	 * second query entirely.
 	 */
-	private async conditionsFor(
-		actor: ActorContext,
-		filter: TodoListFilter
-	): Promise<SQL[] | undefined> {
+	private async conditionsFor(filter: TodoListFilter): Promise<SQL[] | undefined> {
 		const conditions = [
-			eq(schema.todos.userId, actor.userId),
+			eq(schema.todos.userId, this.actor.userId),
 			isNull(schema.todos.deletedAt),
 			isNull(schema.projects.archivedAt)
 		];
@@ -62,7 +62,10 @@ export class TodoRecords implements TodoRepository {
 				.from(schema.sourceAnchors)
 				.innerJoin(schema.notes, eq(schema.notes.id, schema.sourceAnchors.noteId))
 				.where(
-					and(eq(schema.sourceAnchors.noteId, filter.noteId), eq(schema.notes.userId, actor.userId))
+					and(
+						eq(schema.sourceAnchors.noteId, filter.noteId),
+						eq(schema.notes.userId, this.actor.userId)
+					)
 				);
 			if (anchors.length === 0) return undefined;
 			conditions.push(
@@ -75,8 +78,8 @@ export class TodoRecords implements TodoRepository {
 		return conditions;
 	}
 
-	async list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> {
-		const conditions = await this.conditionsFor(actor, filter);
+	async list(filter: TodoListFilter): Promise<readonly Todo[]> {
+		const conditions = await this.conditionsFor(filter);
 		if (!conditions) return [];
 		return (
 			await this.database
@@ -88,8 +91,8 @@ export class TodoRecords implements TodoRepository {
 		).map((row) => toTodo(row.todo));
 	}
 
-	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
-		const conditions = await this.conditionsFor(actor, filter);
+	async count(filter: TodoListFilter): Promise<number> {
+		const conditions = await this.conditionsFor(filter);
 		if (!conditions) return 0;
 		const [row] = await this.database
 			.select({ total: count() })
@@ -99,14 +102,14 @@ export class TodoRecords implements TodoRepository {
 		return row?.total ?? 0;
 	}
 
-	async listCategories(actor: ActorContext): Promise<readonly string[]> {
+	async listCategories(): Promise<readonly string[]> {
 		const rows = await this.database
 			.selectDistinct({ category: schema.todos.category })
 			.from(schema.todos)
 			.innerJoin(schema.projects, eq(schema.projects.id, schema.todos.projectId))
 			.where(
 				and(
-					eq(schema.todos.userId, actor.userId),
+					eq(schema.todos.userId, this.actor.userId),
 					isNull(schema.todos.deletedAt),
 					isNull(schema.projects.archivedAt),
 					isNotNull(schema.todos.category)
@@ -116,12 +119,12 @@ export class TodoRecords implements TodoRepository {
 		return rows.map((row) => row.category!);
 	}
 
-	async insert(actor: ActorContext, todo: Todo): Promise<Todo> {
+	async insert(todo: Todo): Promise<Todo> {
 		const [row] = await this.database
 			.insert(schema.todos)
 			.values({
 				id: todo.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				projectId: todo.projectId,
 				title: todo.title,
 				description: todo.description,
@@ -145,7 +148,7 @@ export class TodoRecords implements TodoRepository {
 		return toTodo(row!);
 	}
 
-	async update(actor: ActorContext, todo: Todo): Promise<Todo> {
+	async update(todo: Todo): Promise<Todo> {
 		const [row] = await this.database
 			.update(schema.todos)
 			.set({
@@ -169,7 +172,7 @@ export class TodoRecords implements TodoRepository {
 			.where(
 				and(
 					eq(schema.todos.id, todo.id),
-					eq(schema.todos.userId, actor.userId),
+					eq(schema.todos.userId, this.actor.userId),
 					isNull(schema.todos.deletedAt)
 				)
 			)
@@ -178,11 +181,11 @@ export class TodoRecords implements TodoRepository {
 		return toTodo(row);
 	}
 
-	async softDelete(actor: ActorContext, id: TodoId, deletedAt: DateTime): Promise<void> {
+	async softDelete(id: TodoId, deletedAt: DateTime): Promise<void> {
 		const [row] = await this.database
 			.update(schema.todos)
 			.set({ deletedAt: new Date(deletedAt) })
-			.where(and(eq(schema.todos.id, id), eq(schema.todos.userId, actor.userId)))
+			.where(and(eq(schema.todos.id, id), eq(schema.todos.userId, this.actor.userId)))
 			.returning({ id: schema.todos.id });
 		if (!row) throw new NotFoundError('Todo was not found');
 	}

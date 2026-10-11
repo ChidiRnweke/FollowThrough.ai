@@ -1,7 +1,6 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { FeedbackReport } from '$lib/models/feedback';
 interface FeedbackWriter {
-	create(actor: ActorContext, report: FeedbackReport): Promise<void>;
+	create(report: FeedbackReport): Promise<void>;
 }
 
 /**
@@ -11,7 +10,7 @@ interface FeedbackWriter {
  */
 export interface FeedbackController {
 	/** Persist a feedback report for later triage. */
-	submit(actor: ActorContext, report: FeedbackReport): Promise<void>;
+	submit(report: FeedbackReport): Promise<void>;
 }
 
 /** Everything the {@link FeedbackController} needs, injected so it can be built and tested without real stores. */
@@ -22,7 +21,7 @@ export interface FeedbackDependencies {
 export class Feedback implements FeedbackController {
 	constructor(private readonly dependencies: FeedbackDependencies) {}
 
-	submit(actor: ActorContext, report: FeedbackReport): Promise<void> {
-		return this.dependencies.reports.create(actor, report);
+	submit(report: FeedbackReport): Promise<void> {
+		return this.dependencies.reports.create(report);
 	}
 }

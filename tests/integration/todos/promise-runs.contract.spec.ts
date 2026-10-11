@@ -1,32 +1,44 @@
-import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
-import { afterAll, expect, it, vi } from 'vitest';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
+import { type AgentRunId } from '$lib/models/agent';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
+import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { createTodosCapability } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import { createTodosCapability } from '$lib/server/factories/capabilities/todos-capability-factory';
 import {
-	AgentRunEventRecords,
-	AgentRunDecisionRecords
+	AgentRunDecisionRecords,
+	AgentRunEventRecords
 } from '$lib/server/repositories/agent/postgres/agent-runs';
+import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { type AgentRunId } from '$lib/models/agent';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import {
 	InMemoryPromiseExtractor,
 	InMemoryTrustPolicyEvaluator
 } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { context, seedNote } from '../database-harness';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { afterAll, expect, it, vi } from 'vitest';
+import { context, seedNote, notifications } from '../database-harness';
+const runStatus = new AgentRunStatusService();
 
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
@@ -38,22 +50,22 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const projects = new ProjectRecords(database);
-	const notes = createNotesCapability({ db: database, projects });
-	const todo = createTodosCapability({
+	const projects = new ProjectRecords(seeded.owner, database);
+	const notes = createNotesCapability(seeded.owner, { db: database, projects });
+	const todo = createTodosCapability(seeded.owner, {
 		db: database,
 		projects,
 		notes: notes.repository,
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
-	const suggestions = createSuggestionsCapability({
+	const suggestions = createSuggestionsCapability(seeded.owner, {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
-	const note = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
+	const note = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
@@ -65,9 +77,14 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		to: text.length,
 		text
 	};
-	const runs = new AgentRunRecords(database);
-	const events = new AgentRunEventRecords(database);
-	const requests = new NoteActionRequests(runs, events, new ConversationRecords(database));
+	const runs = new AgentRunRecords(seeded.owner, database);
+	const events = new AgentRunEventRecords(seeded.owner, database);
+	const requests = new NoteActionRequests(
+		seeded.owner,
+		runs,
+		events,
+		new ConversationRecords(seeded.owner, database)
+	);
 	const settlements = new RunSettlements(runs, events);
 	const extractor = new InMemoryPromiseExtractor();
 	extractor.candidates = [
@@ -76,36 +93,44 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 	const trust = new InMemoryTrustPolicyEvaluator();
 	trust.autoAccept = true;
 	const dependencies = capabilityDependencies<TodosDependencies>({
+		...agentToolResultsFixture(),
+		boardExport: new TodoBoardExportService(),
+		todoPresentation: new TodoPresentationService(),
+		todoEditingRules: new TodoEditingRulesService(),
+		todoCreationRules: new TodoEditingRulesService(),
 		transactionRunner,
 		noteActionRequests: requests,
 		promiseExtractor: extractor,
 		promiseRules: todo.promiseRules,
 		promiseGeneration: { kind: 'model', model: 'test/model' },
 		runSettlements: settlements,
-		runEvents: { notify: () => {} },
+		runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs),
 		selectionOrigins: notes.selectionOrigins,
-		suggestionCreator: suggestions.inbox,
-		suggestionAccepter: suggestions.inbox,
+		suggestionCreator: suggestions.creator,
+		suggestionAccepter: suggestions.accepter,
 		suggestionEffects: suggestions.effects,
-		todoCreator: todo.catalog,
+		todoCreator: todo.services.creator,
 		trustPolicyEvaluator: trust
 	});
-	const agent = new Agent(
-		capabilityDependencies<AgentDependencies>({
+	const agent = new AgentSdkHarness(
+		seeded.owner,
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<AgentHarnessDependencies>({
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
-			decisions: new AgentRunDecisionRecords(database),
+			decisions: new AgentRunDecisionRecords(seeded.owner, database),
 			settlements,
 			transactionRunner,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
-	const controller = new Todos(dependencies);
+	const controller = new Todos(seeded.owner, new WorkspaceCommandRulesService(), dependencies);
 	const input = { requestId: crypto.randomUUID(), selection };
 	const prepare = () =>
 		transactionRunner.run(() =>
-			requests.prepare(seeded.owner, {
+			requests.prepare({
 				requestId: input.requestId,
 				context: {
 					kind: 'promise_extraction',
@@ -116,8 +141,8 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		);
 	const finished = async (runId: AgentRunId) => {
 		await vi.waitFor(async () => {
-			const run = await runs.findById(seeded.owner, runId);
-			if (!run || !isTerminalAgentRunStatus(run.status)) throw new Error('Run has not settled');
+			const run = await runs.findById(runId);
+			if (!run || !runStatus.isTerminal(run.status)) throw new Error('Run has not settled');
 		});
 	};
 	return {
@@ -154,10 +179,10 @@ it.each([
 			}
 		];
 		state.trust.autoAccept = autoAccept;
-		const receipt = await state.controller.startExtractPromises(state.owner, state.input);
+		const receipt = await state.controller.startExtractPromises(state.input);
 		await state.finished(receipt.runId);
 		expect({
-			run: (await state.runs.findById(state.owner, receipt.runId))?.status,
+			run: (await state.runs.findById(receipt.runId))?.status,
 			proposals:
 				await context.client`select status, payload->>'waitingOn' as waiting_on from suggestions where user_id = ${state.owner.userId}`,
 			tasks:
@@ -173,8 +198,8 @@ it.each([
 it('commits one extraction for simultaneous duplicate submissions on separate connections', async () => {
 	const state = await setup('12501');
 	const [first, second] = await Promise.all([
-		state.controller.startExtractPromises(state.owner, state.input),
-		state.controller.startExtractPromises(state.owner, state.input)
+		state.controller.startExtractPromises(state.input),
+		state.controller.startExtractPromises(state.input)
 	]);
 	await state.finished(first.runId);
 	const [counts] =
@@ -190,10 +215,10 @@ it('keeps the database free of proposals when cancellation beats the extractor r
 	const receipt = await state.prepare();
 	const gate = Promise.withResolvers<void>();
 	state.extractor.completion = gate.promise;
-	const execution = state.controller.executePromiseRun(state.owner, receipt.runId);
+	const execution = state.controller.executePromiseRun(receipt.runId);
 	try {
 		await state.extractor.started.promise;
-		await state.agent.cancel(state.owner, receipt.runId);
+		await state.agent.cancel(receipt.runId);
 	} finally {
 		gate.resolve();
 	}
@@ -201,7 +226,7 @@ it('keeps the database free of proposals when cancellation beats the extractor r
 	const [counts] =
 		await context.client`select (select count(*)::int from todos where user_id = ${state.owner.userId}) as todos, (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 	expect({
-		status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+		status: (await state.runs.findById(receipt.runId))?.status,
 		counts
 	}).toEqual({ status: 'cancelled', counts: { todos: 0, suggestions: 0, anchors: 0 } });
 });
@@ -211,13 +236,13 @@ it('rolls back accepted tasks when the database refuses the extraction result ev
 	const receipt = await state.prepare();
 	await context.client`alter table agent_run_events add constraint promise_result_failure check (event->>'type' <> 'workflow_result') not valid`;
 	try {
-		await state.controller.executePromiseRun(state.owner, receipt.runId);
+		await state.controller.executePromiseRun(receipt.runId);
 		const [counts] =
 			await context.client`select (select count(*)::int from todos where user_id = ${state.owner.userId}) as todos, (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions`;
 		expect({
-			status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+			status: (await state.runs.findById(receipt.runId))?.status,
 			counts,
-			events: (await state.events.replay(state.owner, receipt.runId, '0')).map((record) =>
+			events: (await state.events.replay(receipt.runId, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			)
 		}).toEqual({
@@ -233,10 +258,14 @@ it('rolls back accepted tasks when the database refuses the extraction result ev
 it('reconstructs a queued extraction after the submitting controller has been discarded', async () => {
 	const state = await setup('12504');
 	const receipt = await state.prepare();
-	await new Todos(state.dependencies).recoverQueuedPromiseRuns();
+	await new Todos(
+		state.owner,
+		new WorkspaceCommandRulesService(),
+		state.dependencies
+	).resumeQueuedPromiseRun(receipt.runId);
 	await state.finished(receipt.runId);
 	expect(
-		(await state.events.replay(state.owner, receipt.runId, '0')).flatMap((record) =>
+		(await state.events.replay(receipt.runId, '0')).flatMap((record) =>
 			record.kind === 'readable' && record.event.type === 'workflow_result'
 				? [record.event.action]
 				: []

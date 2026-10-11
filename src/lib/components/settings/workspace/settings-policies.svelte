@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { TrustPolicy, UpdateTrustPolicyInput } from '$lib/models/agent';
 	import { PROPOSAL_AUTO_ACCEPT_PIPELINES } from '$lib/models/agent';
 	import { toast } from 'svelte-sonner';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { DateTime } from '$lib/models/workspace';
 	import type { WorkspaceRecord } from '$lib/models/workspace-records';
 	import TrustPolicyControl from '../trust-policy-control.svelte';
@@ -13,13 +14,13 @@
 	const session = current;
 	const policies = $derived(
 		PROPOSAL_AUTO_ACCEPT_PIPELINES.map((pipeline): TrustPolicy => {
-			const stored = session.resources.views
+			const stored = workspaceViews
 				.all('trust_policies')
 				.find((policy) => policy.pipeline === pipeline);
 			const timestamp = new Date().toISOString() as DateTime;
 			return (
 				stored ?? {
-					userId: session.shell.user.id,
+					userId: workspaceViews.currentShell.user.id,
 					pipeline,
 					autoAcceptEnabled: false,
 					createdAt: timestamp,

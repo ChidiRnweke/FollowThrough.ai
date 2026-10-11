@@ -1,9 +1,9 @@
-import {
-	agentPayloadItems,
-	isAgentPayloadObject,
-	type AgentPayloadObject,
-	type AgentPayload
-} from '$lib/models/agent/payload';
+import { type AgentPayloadObject, type AgentPayload } from '$lib/models/agent/payload';
+import { agentPayloadOperations } from '$lib/factories/agent/payload';
+const { agentPayloadItems } = agentPayloadOperations;
+
+const { isAgentPayloadObject } = agentPayloadOperations;
+
 import { argumentLabel, isIdentifierArgument } from '../../chat/actions/tool-approval-fields';
 
 /**

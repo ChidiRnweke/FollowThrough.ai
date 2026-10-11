@@ -1,11 +1,12 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { AgentPreferenceValues } from '$lib/models/agent';
 
 	import { legacyNoteReview, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
-	import { readDrawioLabels } from '$lib/client/diagrams/drawio/labels';
+	import { createDiagramReviews } from '$lib/factories/diagrams/reviews';
+	const diagramReviews = createDiagramReviews();
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -18,7 +19,10 @@
 	import { approvalPreview, isNoteBodyTool, type ApprovalBaseline } from './tool-approval-preview';
 	import { approvalFields, argumentLabel } from './tool-approval-fields';
 	import { WidgetView } from '$lib/components/widgets';
-	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
+	import type { Widget } from '$lib/models/widgets';
+	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
+	import { todayLocalDate } from '$lib/client/todos/local-date';
+	const widgetSources = (widget: Widget) => sourceViews.widgetSources(widget, todayLocalDate());
 
 	let {
 		tool,
@@ -86,7 +90,7 @@
 	const diagramBaseline = $derived.by((): ApprovalBaseline => {
 		if (diagram?.state.kind !== 'ready') return { kind: 'none' };
 		const { source, title } = diagram.state.value;
-		const read = readDrawioLabels(source);
+		const read = diagramReviews.read(source);
 		return read.kind === 'labels'
 			? { kind: 'diagram', labels: read.labels, title: title ?? 'Untitled diagram' }
 			: { kind: 'none' };

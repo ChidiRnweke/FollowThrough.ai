@@ -17,11 +17,6 @@ import type {
 	RetrievalIndexRepository,
 	SearchFilter
 } from '$lib/server/repositories/knowledge-search';
-import type {
-	EmbeddingBatch,
-	EmbeddingClient,
-	Reranker
-} from '$lib/server/services/knowledge-search/contracts';
 
 interface OwnedSearchDocument {
 	userId: UserId;
@@ -72,6 +67,7 @@ const sourceKey = (source: IndexSource): string =>
 	}`;
 
 export class InMemorySearchRepository implements RetrievalIndexRepository, SnapshotParticipant {
+	constructor(private readonly actor: ActorContext) {}
 	documents: OwnedSearchDocument[] = [];
 	stageFailure?: Error;
 
@@ -82,40 +78,38 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 		};
 	}
 
-	async listForAttachment(
-		actor: ActorContext,
-		attachmentId: AttachmentId
-	): Promise<readonly SearchDocument[]> {
+	async listForAttachment(attachmentId: AttachmentId): Promise<readonly SearchDocument[]> {
 		return this.documents
-			.filter((item) => item.userId === actor.userId && item.document.attachmentId === attachmentId)
+			.filter(
+				(item) => item.userId === this.actor.userId && item.document.attachmentId === attachmentId
+			)
 			.map((item) => item.document)
 			.sort((a, b) => a.chunkIndex - b.chunkIndex);
 	}
 
 	async replaceForAttachment(
-		actor: ActorContext,
 		attachmentId: AttachmentId,
 		documents: readonly SearchDocument[]
 	): Promise<void> {
 		this.documents = [
 			...this.documents.filter(
-				(item) => item.userId !== actor.userId || item.document.attachmentId !== attachmentId
+				(item) => item.userId !== this.actor.userId || item.document.attachmentId !== attachmentId
 			),
-			...documents.map((document) => ({ userId: actor.userId, document }))
+			...documents.map((document) => ({ userId: this.actor.userId, document }))
 		];
 	}
 
-	async deleteForAttachment(actor: ActorContext, attachmentId: AttachmentId): Promise<void> {
+	async deleteForAttachment(attachmentId: AttachmentId): Promise<void> {
 		this.documents = this.documents.filter(
-			(item) => item.userId !== actor.userId || item.document.attachmentId !== attachmentId
+			(item) => item.userId !== this.actor.userId || item.document.attachmentId !== attachmentId
 		);
 	}
 
-	async listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly SearchDocument[]> {
+	async listForNote(noteId: NoteId): Promise<readonly SearchDocument[]> {
 		return this.documents
 			.filter(
 				(item) =>
-					item.userId === actor.userId &&
+					item.userId === this.actor.userId &&
 					item.document.noteId === noteId &&
 					item.document.diagramId === undefined
 			)
@@ -123,72 +117,59 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 			.sort((a, b) => a.chunkIndex - b.chunkIndex);
 	}
 
-	async listForDiagram(
-		actor: ActorContext,
-		diagramId: DiagramId
-	): Promise<readonly SearchDocument[]> {
+	async listForDiagram(diagramId: DiagramId): Promise<readonly SearchDocument[]> {
 		return this.documents
-			.filter((item) => item.userId === actor.userId && item.document.diagramId === diagramId)
+			.filter((item) => item.userId === this.actor.userId && item.document.diagramId === diagramId)
 			.map((item) => item.document)
 			.sort((a, b) => a.chunkIndex - b.chunkIndex);
 	}
 
-	async listForMemoryEntry(
-		actor: ActorContext,
-		memoryEntryId: MemoryEntryId
-	): Promise<readonly SearchDocument[]> {
+	async listForMemoryEntry(memoryEntryId: MemoryEntryId): Promise<readonly SearchDocument[]> {
 		return this.documents
 			.filter(
-				(item) => item.userId === actor.userId && item.document.memoryEntryId === memoryEntryId
+				(item) => item.userId === this.actor.userId && item.document.memoryEntryId === memoryEntryId
 			)
 			.map((item) => item.document)
 			.sort((a, b) => a.chunkIndex - b.chunkIndex);
 	}
 
-	async replaceForNote(
-		actor: ActorContext,
-		noteId: NoteId,
-		documents: readonly SearchDocument[]
-	): Promise<void> {
+	async replaceForNote(noteId: NoteId, documents: readonly SearchDocument[]): Promise<void> {
 		this.documents = [
 			...this.documents.filter(
 				(item) =>
-					item.userId !== actor.userId ||
+					item.userId !== this.actor.userId ||
 					item.document.noteId !== noteId ||
 					item.document.diagramId !== undefined
 			),
-			...documents.map((document) => ({ userId: actor.userId, document }))
+			...documents.map((document) => ({ userId: this.actor.userId, document }))
 		];
 	}
 
 	async replaceForDiagram(
-		actor: ActorContext,
 		diagramId: DiagramId,
 		documents: readonly SearchDocument[]
 	): Promise<void> {
 		this.documents = [
 			...this.documents.filter(
-				(item) => item.userId !== actor.userId || item.document.diagramId !== diagramId
+				(item) => item.userId !== this.actor.userId || item.document.diagramId !== diagramId
 			),
-			...documents.map((document) => ({ userId: actor.userId, document }))
+			...documents.map((document) => ({ userId: this.actor.userId, document }))
 		];
 	}
 
 	async replaceForMemoryEntry(
-		actor: ActorContext,
 		memoryEntryId: MemoryEntryId,
 		documents: readonly SearchDocument[]
 	): Promise<void> {
 		this.documents = [
 			...this.documents.filter(
-				(item) => item.userId !== actor.userId || item.document.memoryEntryId !== memoryEntryId
+				(item) => item.userId !== this.actor.userId || item.document.memoryEntryId !== memoryEntryId
 			),
-			...documents.map((document) => ({ userId: actor.userId, document }))
+			...documents.map((document) => ({ userId: this.actor.userId, document }))
 		];
 	}
 
 	async search(
-		actor: ActorContext,
 		query: string,
 		limit: number,
 		projectId?: ProjectId
@@ -196,7 +177,7 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 		return this.documents
 			.filter(
 				(item) =>
-					item.userId === actor.userId &&
+					item.userId === this.actor.userId &&
 					!item.document.supersededAt &&
 					(projectId === undefined || item.document.projectId === projectId) &&
 					item.document.content.toLowerCase().includes(query.toLowerCase())
@@ -206,7 +187,6 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 	}
 
 	async searchByEmbedding(
-		actor: ActorContext,
 		_embedding: readonly number[],
 		limit: number,
 		projectId?: ProjectId,
@@ -215,7 +195,7 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 		return this.documents
 			.filter(
 				(item) =>
-					item.userId === actor.userId &&
+					item.userId === this.actor.userId &&
 					item.document.embedding !== undefined &&
 					(projectId === undefined || item.document.projectId === projectId) &&
 					(filter?.noteId === undefined || item.document.noteId === filter.noteId)
@@ -224,46 +204,42 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 			.map(({ document }) => ({ document, score: 1 }));
 	}
 
-	async deleteForNote(actor: ActorContext, noteId: NoteId): Promise<void> {
+	async deleteForNote(noteId: NoteId): Promise<void> {
 		this.documents = this.documents.filter(
 			(item) =>
-				item.userId !== actor.userId ||
+				item.userId !== this.actor.userId ||
 				item.document.noteId !== noteId ||
 				item.document.diagramId !== undefined
 		);
 	}
 
-	async deleteForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<void> {
+	async deleteForDiagram(diagramId: DiagramId): Promise<void> {
 		this.documents = this.documents.filter(
-			(item) => item.userId !== actor.userId || item.document.diagramId !== diagramId
+			(item) => item.userId !== this.actor.userId || item.document.diagramId !== diagramId
 		);
 	}
 
-	async listForWidget(actor: ActorContext, widgetId: WidgetId): Promise<readonly SearchDocument[]> {
+	async listForWidget(widgetId: WidgetId): Promise<readonly SearchDocument[]> {
 		return this.documents
-			.filter(inScope(actor, { kind: 'widget', widgetId }))
+			.filter(inScope(this.actor, { kind: 'widget', widgetId }))
 			.map((item) => item.document);
 	}
 
-	async deleteForWidget(actor: ActorContext, widgetId: WidgetId): Promise<void> {
+	async deleteForWidget(widgetId: WidgetId): Promise<void> {
 		this.documents = this.documents.filter(
-			(item) => !inScope(actor, { kind: 'widget', widgetId })(item)
+			(item) => !inScope(this.actor, { kind: 'widget', widgetId })(item)
 		);
 	}
 
-	async deleteForMemoryEntry(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<void> {
+	async deleteForMemoryEntry(memoryEntryId: MemoryEntryId): Promise<void> {
 		this.documents = this.documents.filter(
-			(item) => item.userId !== actor.userId || item.document.memoryEntryId !== memoryEntryId
+			(item) => item.userId !== this.actor.userId || item.document.memoryEntryId !== memoryEntryId
 		);
 	}
 
-	async stage(
-		actor: ActorContext,
-		source: IndexSource,
-		documents: readonly SearchDocument[]
-	): Promise<void> {
+	async stage(source: IndexSource, documents: readonly SearchDocument[]): Promise<void> {
 		if (this.stageFailure) throw this.stageFailure;
-		const scoped = inScope(actor, source);
+		const scoped = inScope(this.actor, source);
 		const existing = this.documents.filter(scoped);
 		const desired = new Set(documents.map((document) => document.id));
 		const awaitingVectors = documents.some((document) => !document.embedding);
@@ -280,7 +256,7 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 			...documents.map((document) => {
 				const { supersededAt, ...live } = document;
 				void supersededAt;
-				return { userId: actor.userId, document: live };
+				return { userId: this.actor.userId, document: live };
 			})
 		];
 	}
@@ -299,21 +275,20 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 			.slice(0, limit);
 	}
 
-	async listPending(actor: ActorContext, source: IndexSource): Promise<readonly SearchDocument[]> {
+	async listPending(source: IndexSource): Promise<readonly SearchDocument[]> {
 		return this.documents
-			.filter(inScope(actor, source))
+			.filter(inScope(this.actor, source))
 			.filter((item) => !item.document.embedding)
 			.map((item) => item.document)
 			.sort((a, b) => a.chunkIndex - b.chunkIndex);
 	}
 
 	async completePending(
-		actor: ActorContext,
 		source: IndexSource,
 		embedded: readonly EmbeddedChunk[],
 		embeddingModel: string
 	): Promise<void> {
-		const scoped = inScope(actor, source);
+		const scoped = inScope(this.actor, source);
 		const vectors = new Map(embedded.map((chunk) => [chunk.id, chunk.embedding]));
 		this.documents = this.documents.map((item) => {
 			const vector = scoped(item) ? vectors.get(item.document.id) : undefined;
@@ -325,50 +300,5 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 		const stillPending = this.documents.some((item) => scoped(item) && !item.document.embedding);
 		if (stillPending) return;
 		this.documents = this.documents.filter((item) => !(scoped(item) && item.document.supersededAt));
-	}
-}
-
-export class InMemoryEmbeddingClient implements EmbeddingClient {
-	failure?: Error;
-	readonly vectorsByContent = new Map<string, readonly number[]>();
-	model = 'fake-embedding-v1';
-	generation = 1;
-	returnWrongCount = false;
-	rejectedContents = new Set<string>();
-
-	async embed(contents: readonly string[]): Promise<EmbeddingBatch> {
-		if (this.failure) throw this.failure;
-		if (contents.some((content) => this.rejectedContents.has(content)))
-			throw new Error('Embedding rejected this content');
-		const vectors = contents.map(
-			(content, index) =>
-				this.vectorsByContent.get(content) ?? [this.generation, index, content.length]
-		);
-		this.generation += 1;
-		return {
-			model: this.model,
-			vectors: this.returnWrongCount ? vectors.slice(1) : vectors
-		};
-	}
-}
-
-export class InMemoryReranker implements Reranker {
-	order: 'input' | 'reverse' | 'relevant-first' = 'input';
-	failure?: Error;
-	async rerank(
-		_query: string,
-		matches: readonly SearchMatch[],
-		topN: number
-	): Promise<readonly SearchMatch[]> {
-		if (this.failure) throw this.failure;
-		const ordered = [...matches];
-		if (this.order === 'reverse') ordered.reverse();
-		if (this.order === 'relevant-first')
-			ordered.sort(
-				(left, right) =>
-					Number(right.document.content.includes('relevant')) -
-					Number(left.document.content.includes('relevant'))
-			);
-		return ordered.slice(0, topN);
 	}
 }

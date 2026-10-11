@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProseMirrorDocument, ProseMirrorNode, ProseMirrorTextNode } from '$lib/models/notes';
-import { collectNoteLinkTargets, drawioReferencesIn } from './references';
+import { NoteReferenceService } from '$lib/services/notes/references';
+const noteReferences = new NoteReferenceService();
 
 const linked = (noteId: string, text = 'the decision'): ProseMirrorTextNode => ({
 	type: 'text',
@@ -12,9 +13,7 @@ const doc = (...content: ProseMirrorNode[]): ProseMirrorDocument => ({ type: 'do
 
 describe('Finding the notes a document links to', () => {
 	it('finds a link in a paragraph', () => {
-		expect(collectNoteLinkTargets(doc({ type: 'paragraph', content: [linked('a')] }))).toEqual([
-			'a'
-		]);
+		expect(noteReferences.links(doc({ type: 'paragraph', content: [linked('a')] }))).toEqual(['a']);
 	});
 
 	it('finds a link nested inside a list', () => {
@@ -27,18 +26,18 @@ describe('Finding the notes a document links to', () => {
 				}
 			]
 		});
-		expect(collectNoteLinkTargets(document)).toEqual(['deep']);
+		expect(noteReferences.links(document)).toEqual(['deep']);
 	});
 
 	/** Two links to the same note are one relationship, not two rows. */
 	it('reports a repeated target once', () => {
 		const document = doc({ type: 'paragraph', content: [linked('a'), linked('a', 'again')] });
-		expect(collectNoteLinkTargets(document)).toEqual(['a']);
+		expect(noteReferences.links(document)).toEqual(['a']);
 	});
 
 	it('keeps distinct targets in document order', () => {
 		const document = doc({ type: 'paragraph', content: [linked('first'), linked('second')] });
-		expect(collectNoteLinkTargets(document)).toEqual(['first', 'second']);
+		expect(noteReferences.links(document)).toEqual(['first', 'second']);
 	});
 
 	it('ignores an external link', () => {
@@ -48,7 +47,7 @@ describe('Finding the notes a document links to', () => {
 				{ type: 'text', marks: [{ type: 'link', attrs: { href: 'https://x.com' } }], text: 'x' }
 			]
 		});
-		expect(collectNoteLinkTargets(document)).toEqual([]);
+		expect(noteReferences.links(document)).toEqual([]);
 	});
 
 	it('ignores a link mark with no target', () => {
@@ -56,18 +55,18 @@ describe('Finding the notes a document links to', () => {
 			type: 'paragraph',
 			content: [{ type: 'text', marks: [{ type: 'noteLink', attrs: {} }], text: 'x' }]
 		});
-		expect(collectNoteLinkTargets(document)).toEqual([]);
+		expect(noteReferences.links(document)).toEqual([]);
 	});
 
 	it('finds nothing in an empty document', () => {
-		expect(collectNoteLinkTargets(doc())).toEqual([]);
+		expect(noteReferences.links(doc())).toEqual([]);
 	});
 });
 
 describe('note diagram references', () => {
 	it('finds nested diagram references in document order', () => {
 		expect(
-			drawioReferencesIn([
+			noteReferences.diagrams([
 				{
 					document: {
 						type: 'doc',
@@ -82,7 +81,7 @@ describe('note diagram references', () => {
 	});
 	it('counts a repeated diagram once across the selected documents', () => {
 		expect(
-			drawioReferencesIn([
+			noteReferences.diagrams([
 				{ document: { type: 'doc', content: [{ type: 'drawio', attrs: { diagramId: 'same' } }] } },
 				{ document: { type: 'doc', content: [{ type: 'drawio', attrs: { diagramId: 'same' } }] } }
 			])
@@ -90,7 +89,7 @@ describe('note diagram references', () => {
 	});
 	it('ignores empty references retained in a document', () => {
 		expect(
-			drawioReferencesIn([
+			noteReferences.diagrams([
 				{
 					document: {
 						type: 'doc',

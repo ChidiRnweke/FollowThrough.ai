@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import {
 	AgentSettings,
 	type AgentSettingsDependencies
@@ -7,22 +6,35 @@ import {
 	UserSettings,
 	type UserSettingsDependencies
 } from '$lib/server/controllers/user-settings/controller';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { AgentPreferenceRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { UserPreferencesRecords } from '$lib/server/repositories/identity/postgres/user-preferences';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { UserPreferenceStore } from '$lib/server/services/identity/user-preferences';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
+import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { context, seedNote, now } from '../database-harness';
+import { describe, expect, it } from 'vitest';
+import { context, now, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const { owner } = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database });
-	const preferences = new AgentPreferenceCatalog(new AgentPreferenceRecords(database));
+	const sync = createSyncCapability(owner, { db: database });
+	const preferences = new AgentPreferenceCatalog(
+		owner,
+		new AgentPreferenceRecords(owner, database)
+	);
 	const agent = new AgentSettings(
+		owner,
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentSettingsDependencies>({
+			...agentToolResultsFixture(),
+			preferenceEditing: new AgentPreferenceEditingService(),
+			...agentRulesFixture(),
 			preferences,
 			now: () => now,
 			syncMutations: sync.mutations,
@@ -31,8 +43,10 @@ const setup = async (suffix: string) => {
 		})
 	);
 	const user = new UserSettings(
+		owner,
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<UserSettingsDependencies>({
-			preferences: new UserPreferenceStore(new UserPreferencesRecords(database)),
+			preferences: new UserPreferenceStore(new UserPreferencesRecords(owner, database)),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			transactionRunner
@@ -53,24 +67,20 @@ describe('guarded account preferences', () => {
 				sectionNumberingDefault: true
 			}
 		};
-		await user.synchronize(owner, input);
-		await user.synchronize(owner, input);
-		expect(await user.getPreferences(owner)).toEqual({ sectionNumberingDefault: true });
+		await user.synchronize(input);
+		await user.synchronize(input);
+		expect(await user.getPreferences()).toEqual({ sectionNumberingDefault: true });
 	});
 	it('clears a model override while retaining settings from another tab', async () => {
 		const { owner, preferences, sync, agent } = await setup('9402');
-		await preferences.persist(owner, {
-			...(await preferences.get(owner)),
+		await preferences.persist({
+			...(await preferences.get()),
 			defaultModel: 'retired/model',
 			webSearchMaxResults: 12
 		});
-		const base = await sync.objects.read(
-			owner,
-			{ type: 'agent_preferences', id: [owner.userId] },
-			null
-		);
+		const base = await sync.objects.read({ type: 'agent_preferences', id: [owner.userId] }, null);
 		if (base.kind !== 'found') throw new Error('Preferences must exist');
-		const result = await agent.synchronize(owner, {
+		const result = await agent.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: base.snapshot.etag,
 			command: {
@@ -79,7 +89,7 @@ describe('guarded account preferences', () => {
 				patch: { defaultModel: null }
 			}
 		});
-		const saved = await preferences.get(owner);
+		const saved = await preferences.get();
 		expect({
 			kind: result.kind,
 			model: saved.defaultModel,
@@ -88,15 +98,11 @@ describe('guarded account preferences', () => {
 	});
 	it('rejects stale preference writes instead of silently rebasing a second form', async () => {
 		const { owner, preferences, sync, agent } = await setup('9403');
-		await agent.updatePreferences(owner, { webSearchMaxResults: 12 });
-		const base = await sync.objects.read(
-			owner,
-			{ type: 'agent_preferences', id: [owner.userId] },
-			null
-		);
+		await agent.updatePreferences({ webSearchMaxResults: 12 });
+		const base = await sync.objects.read({ type: 'agent_preferences', id: [owner.userId] }, null);
 		if (base.kind !== 'found') throw new Error('Preferences must exist');
-		await agent.updatePreferences(owner, { webSearchMaxResults: 15 });
-		const result = await agent.synchronize(owner, {
+		await agent.updatePreferences({ webSearchMaxResults: 15 });
+		const result = await agent.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: base.snapshot.etag,
 			command: {
@@ -105,7 +111,7 @@ describe('guarded account preferences', () => {
 				patch: { inlineSuggestionsEnabled: false }
 			}
 		});
-		const saved = await preferences.get(owner);
+		const saved = await preferences.get();
 		expect({
 			kind: result.kind,
 			suggestions: saved.inlineSuggestionsEnabled,
@@ -114,7 +120,7 @@ describe('guarded account preferences', () => {
 	});
 	it('keeps validation failures out of the persisted preferences', async () => {
 		const { owner, sync, agent } = await setup('9404');
-		const result = await agent.synchronize(owner, {
+		const result = await agent.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: null,
 			command: {
@@ -123,11 +129,7 @@ describe('guarded account preferences', () => {
 				patch: { webSearchMaxResults: 500 }
 			}
 		});
-		const stored = await sync.objects.read(
-			owner,
-			{ type: 'agent_preferences', id: [owner.userId] },
-			null
-		);
+		const stored = await sync.objects.read({ type: 'agent_preferences', id: [owner.userId] }, null);
 		expect({ kind: result.kind, stored: stored.kind }).toEqual({
 			kind: 'rejected',
 			stored: 'unavailable'

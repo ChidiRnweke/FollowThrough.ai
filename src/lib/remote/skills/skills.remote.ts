@@ -10,9 +10,9 @@ const noteId = z.string().uuid();
 export const importSkillMarkdown = command(
 	z.object({ noteId, raw: z.string(), baseRevision: z.number().int().positive() }),
 	async (input) => {
-		await AppFactory.controllers()
+		await AppFactory.forActor(requestActor())
 			.skills()
-			.update(requestActor(), {
+			.update({
 				noteId: input.noteId as NoteId,
 				content: {
 					kind: 'manifest',

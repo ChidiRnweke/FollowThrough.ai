@@ -1,20 +1,30 @@
-import { describe, expect, it } from 'vitest';
-import { Projects, type ProjectsDependencies } from './controller';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	projectBuilder,
 	testActor,
-	testProjectId,
-	testNow
+	testNow,
+	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Projects, type ProjectsDependencies } from './controller';
 
 const setup = () => {
-	const projects = new InMemoryProjectRepository();
+	const projects = new InMemoryProjectRepository(testActor());
 	const controller = new Projects(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
-			projectEditor: new ProjectCatalog(projects, projects)
+			...agentToolResultsFixture(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			details: new ProjectDetailService(),
+			presentation: new ProjectTreePresentationService(),
+			projectEditor: createProjectServices(testActor(), projects, projects).editor
 		})
 	);
 	return { projects, controller };
@@ -24,7 +34,7 @@ describe('Project section-numbering default', () => {
 	it.each([true, false])('stores the explicit %s default', async (enabled) => {
 		const { projects, controller } = setup();
 		projects.projects = [projectBuilder()];
-		const output = await controller.setSectionNumberingDefault(testActor(), {
+		const output = await controller.setSectionNumberingDefault({
 			projectId: testProjectId(),
 			enabled
 		});
@@ -34,7 +44,7 @@ describe('Project section-numbering default', () => {
 	it('clears back to inheriting the app default', async () => {
 		const { projects, controller } = setup();
 		projects.projects = [projectBuilder({ sectionNumberingDefault: false })];
-		const output = await controller.setSectionNumberingDefault(testActor(), {
+		const output = await controller.setSectionNumberingDefault({
 			projectId: testProjectId()
 		});
 		expect(output.project.sectionNumberingDefault).toBeUndefined();
@@ -44,7 +54,7 @@ describe('Project section-numbering default', () => {
 		const { projects, controller } = setup();
 		projects.projects = [projectBuilder({ userId: testActor(2).userId })];
 		await expect(
-			controller.setSectionNumberingDefault(testActor(), {
+			controller.setSectionNumberingDefault({
 				projectId: testProjectId(),
 				enabled: true
 			})
@@ -56,7 +66,7 @@ it('rejects changing the default of an archived project', async () => {
 	const { projects, controller } = setup();
 	projects.projects = [projectBuilder({ archivedAt: testNow })];
 	await expect(
-		controller.setSectionNumberingDefault(testActor(), {
+		controller.setSectionNumberingDefault({
 			projectId: testProjectId(),
 			enabled: true
 		})

@@ -5,7 +5,7 @@ import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/
 import { RunSettlements } from './settlement';
 
 const setup = (status: AgentRunStatus = 'running', kind: 'agent' | 'workflow' = 'agent') => {
-	const runs = new InMemoryAgentRunPersistence();
+	const runs = new InMemoryAgentRunPersistence(testActor());
 	const run: AgentRun = {
 		id: '30000000-0000-4000-8000-000000000001' as AgentRunId,
 		conversationId: '30000000-0000-4000-8000-000000000002' as ConversationId,

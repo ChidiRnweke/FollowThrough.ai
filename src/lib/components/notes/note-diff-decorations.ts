@@ -16,13 +16,9 @@ import type {
 	FocusedSideBlock,
 	InnerChange,
 	SourceLine
-} from '$lib/models/notes/note-diff';
-import {
-	INLINE_ATOM,
-	alignRenderedBlocks,
-	isDiffTextblock,
-	textblocks
-} from '$lib/services/notes/note-diff';
+} from '$lib/models/note-comparison';
+import { INLINE_ATOM, DIFF_TEXTBLOCK_TYPES } from '$lib/models/note-comparison';
+import { noteComparison } from '$lib/factories/notes/comparison';
 
 export type DiffPaint =
 	| { readonly kind: 'painted'; readonly decorations: readonly Decoration[] }
@@ -60,10 +56,10 @@ interface RenderedTextblock {
 }
 
 const renderedTextblocks = (block: ProseMirrorEditorNode, offset: number): RenderedTextblock[] => {
-	if (isDiffTextblock(block.type.name)) return [{ node: block, pos: offset }];
+	if (DIFF_TEXTBLOCK_TYPES.includes(block.type.name)) return [{ node: block, pos: offset }];
 	const found: RenderedTextblock[] = [];
 	block.descendants((node, pos) => {
-		if (!isDiffTextblock(node.type.name)) return true;
+		if (!DIFF_TEXTBLOCK_TYPES.includes(node.type.name)) return true;
 		found.push({ node, pos: offset + 1 + pos });
 		return false;
 	});
@@ -99,7 +95,7 @@ const innerDecorations = (
 	tone: DiffTone,
 	changes: readonly InnerChange[]
 ): Decoration[] | undefined => {
-	const expected = textblocks(stored);
+	const expected = noteComparison.textblocks(stored);
 	const rendered = renderedTextblocks(block, offset);
 	if (
 		rendered.length !== expected.length ||
@@ -147,7 +143,7 @@ export const paintDiff = (input: DiffPaintInput): DiffPaint => {
 			empty: node.type.name === 'paragraph' && node.childCount === 0
 		});
 	});
-	const alignment = alignRenderedBlocks(stored, rendered);
+	const alignment = noteComparison.align(stored, rendered);
 	if (alignment.kind === 'failure') return { kind: 'failure' };
 	const decorations: Decoration[] = [];
 	doc.forEach((node, offset, index) => {

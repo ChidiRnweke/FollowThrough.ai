@@ -56,6 +56,19 @@ export class ValidationError extends DomainError {
 		super('VALIDATION', message, details);
 	}
 }
+/** An operation that needs a project was called without one; `projects` are the choices. */
+export class ProjectChoiceRequiredError extends ValidationError {
+	constructor(
+		readonly action: string,
+		readonly projects: readonly { readonly id: string; readonly name: string }[]
+	) {
+		super(
+			projects.length
+				? `A project is required to ${action}.`
+				: `A project is required to ${action}, and this workspace has no projects yet.`
+		);
+	}
+}
 export class NotFoundError extends DomainError {
 	constructor(message: string, details: DomainErrorDetailsByCode['NOT_FOUND'] = {}) {
 		super('NOT_FOUND', message, details);
@@ -243,5 +256,17 @@ export class AgentProviderFailure extends Error {
 	) {
 		super(message, options);
 		this.name = 'AgentProviderFailure';
+	}
+}
+
+/** The server authenticated a different account during an outbox request. */
+export class OutboxAccountChangedError extends Error {}
+
+/** The controller rolls back its conversation when another submission wins the request ID. */
+export class DuplicateNoteActionRequest extends Error {}
+
+export class RunPreparationCancelled extends Error {
+	constructor() {
+		super('The run was cancelled during preparation');
 	}
 }

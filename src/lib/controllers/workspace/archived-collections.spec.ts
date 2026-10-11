@@ -1,11 +1,11 @@
+import type { WorkspaceViewsController } from './views';
 import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import { expect, it } from 'vitest';
-import {
-	resourceDataSchemas,
-	workspaceRecordIdentity,
-	type WorkspaceRecord
-} from '$lib/models/workspace-records';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceRecordIdentity } = new WorkspaceCommandRulesService();
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import {
 	memorySuggestionBuilder,
 	testDiagramId,
@@ -16,7 +16,7 @@ import {
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 
 const diagram = drawioBuilder({ sourceNoteId: undefined });
 const artifact = resourceDataSchemas.artifacts.parse({
@@ -94,7 +94,7 @@ const views = (archived: boolean) => {
 		{ type: 'attachment_versions', value: version },
 		{ type: 'memory_entries', value: memoryEntryBuilder({ projectId: testProjectId() }) }
 	];
-	return new WorkspaceViews(
+	return createWorkspaceViews(
 		new Map(
 			records.map((record) => [workspaceResourceKey(workspaceRecordIdentity(record)), record])
 		)
@@ -103,18 +103,31 @@ const views = (archived: boolean) => {
 const collections = [
 	{
 		name: 'project memory suggestions',
-		read: (data: WorkspaceViews) => data.memorySuggestions(testProjectId())
+		read: (data: WorkspaceViewsController) => data.memorySuggestions(testProjectId())
 	},
-	{ name: 'diagram gallery', read: (data: WorkspaceViews) => data.diagrams(testProjectId()) },
-	{ name: 'widget gallery', read: (data: WorkspaceViews) => data.widgets(testProjectId()) },
-	{ name: 'diagram trash', read: (data: WorkspaceViews) => data.trashedDiagrams() },
-	{ name: 'widget trash', read: (data: WorkspaceViews) => data.trashedWidgets() },
-	{ name: 'artifact gallery', read: (data: WorkspaceViews) => data.artifacts(testProjectId()) },
+	{
+		name: 'diagram gallery',
+		read: (data: WorkspaceViewsController) => data.diagrams(testProjectId())
+	},
+	{
+		name: 'widget gallery',
+		read: (data: WorkspaceViewsController) => data.widgets(testProjectId())
+	},
+	{ name: 'diagram trash', read: (data: WorkspaceViewsController) => data.trashedDiagrams() },
+	{ name: 'widget trash', read: (data: WorkspaceViewsController) => data.trashedWidgets() },
+	{
+		name: 'artifact gallery',
+		read: (data: WorkspaceViewsController) => data.artifacts(testProjectId())
+	},
 	{
 		name: 'project files',
-		read: (data: WorkspaceViews) => data.attachments({ kind: 'project', id: testProjectId() })
+		read: (data: WorkspaceViewsController) =>
+			data.attachments({ kind: 'project', id: testProjectId() })
 	},
-	{ name: 'project memory', read: (data: WorkspaceViews) => data.memories(testProjectId()) }
+	{
+		name: 'project memory',
+		read: (data: WorkspaceViewsController) => data.memories(testProjectId())
+	}
 ];
 it.each(collections)('hides archived-project content from $name', ({ read }) => {
 	expect(read(views(true))).toEqual([]);

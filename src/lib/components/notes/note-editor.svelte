@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import type { DiagramSuggestion } from '$lib/models/suggestions';
 
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
@@ -15,7 +16,7 @@
 	import type { Diagram, DiagramId } from '$lib/models/diagrams';
 	import { inlineSuggestionSchema, type AgentRunId } from '$lib/models/agent';
 	import {
-		parseProseMirrorDocument,
+		proseMirrorDocumentSchema,
 		type NoteId,
 		type NoteLinkTarget,
 		type OutlineHeading,
@@ -23,23 +24,20 @@
 		type ProseMirrorDocument,
 		type TextSelection
 	} from '$lib/models/notes';
-	import { activeHeadingAt, outlineFrom } from '$lib/services/notes/outline';
 	import type { ProjectId } from '$lib/models/projects';
 	import { ProjectDiagramPicker, MermaidNodeView } from '$lib/components/diagrams';
 	import { revealHeading } from '$lib/components/edra/commands/HeadingLinkSuggestion.js';
-	import { changedTopLevelBlockIndices } from '$lib/services/notes/note-shimmer';
 	import type { ReferenceView } from '$lib/models/references';
 	import type { SkillSummary } from '$lib/models/skills';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
-	import { toEditorContent } from './editor-document';
 	import { completePendingConversion } from '$lib/components/edra/commands/diagram-references.js';
 	import { rankNoteLinkTargets } from '$lib/components/edra/commands/NoteLinkSuggestion.js';
 	import type { InlineSuggestionRequestInput } from '$lib/components/edra/commands/InlineSuggestion.js';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
 	import { WidgetInserter, WidgetNode } from '$lib/components/edra/commands/BuiltinExtensions.js';
 	import { WidgetNodeView, WidgetPicker, type WidgetPick } from '$lib/components/widgets';
-	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
+	import { widgetEdits } from '$lib/components/widgets';
 	import type { Editor } from '$lib/components/edra/commands/CoreEditor.js';
 	import type { Editor as TiptapEditor } from '@tiptap/core';
 	import type { PerNoteEditorSlot } from './editor-context';
@@ -91,18 +89,19 @@
 		selectionPlainText,
 		type SelectedRange
 	} from '$lib/components/edra/commands/clipboard-payload';
-	import { noteClipboard } from '$lib/stores/notes/clipboard';
+	import { noteClipboard } from '$lib/factories/notes/clipboard';
+	import type { ClipboardSource, ClipboardTransferReport } from '$lib/models/clipboard';
 	import NoteReadingStats from './note-reading-stats.svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import ActionProgress from '$lib/components/shared/action-progress.svelte';
-	import { uploadNoteAttachment } from './attachment-upload';
+	import { attachmentsController } from '$lib/factories/attachments/capability';
 	import { plainTextRangeToPm } from '$lib/components/edra/commands/plain-text-range';
 	import {
 		proofreadSelection,
 		type ProofreadSelection
 	} from '$lib/components/edra/commands/Proofread.js';
-	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
-	import { dictionaryWordFor } from '$lib/services/proofreading/rules';
+	import { proofreading } from '$lib/factories/notes/proofreading';
+	const { dictionaryWordFor } = proofreading;
 	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
 	import type { NoteRevealMatch } from '$lib/stores/notes/note-reveal.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
@@ -146,6 +145,27 @@
 			offset = fullText.indexOf(selectedText, offset + 1);
 		}
 		return nearest;
+	}
+
+	/** Copy, then say what did not make it onto the clipboard. */
+	async function copySelection(source: ClipboardSource): Promise<ClipboardTransferReport> {
+		const report = await noteClipboard.copy(source);
+		if (report.kind === 'failure')
+			toast.error('The selection could not be copied.', { description: report.message });
+		if (report.kind === 'degraded') {
+			const textOnly = report.issues.some((issue) => issue.kind === 'formatting');
+			toast.warning(
+				textOnly
+					? 'Copied text only. Formatting could not be copied.'
+					: `Copied with ${report.issues.length} unavailable ${report.issues.length === 1 ? 'image or diagram' : 'images or diagrams'}.`,
+				{
+					description: textOnly
+						? 'Only the selection’s text is on the clipboard.'
+						: 'Missing media is marked in the copied content.'
+				}
+			);
+		}
+		return report;
 	}
 
 	let {
@@ -324,7 +344,10 @@
 	function reportActiveHeading(): void {
 		const viewport = paneViewport();
 		if (!viewport) return;
-		const active = activeHeadingAt(headingOffsets, viewport.scrollTop + activationLine());
+		const active = noteDocuments.activeHeading(
+			headingOffsets,
+			viewport.scrollTop + activationLine()
+		);
 		if (active === lastActiveHeading) return;
 		lastActiveHeading = active;
 		onactiveheading?.(active);
@@ -405,7 +428,7 @@
 			ariaLabel: 'Note body',
 			mermaidView: MermaidNodeView,
 			onCut: async (selection) => {
-				const report = await noteClipboard.copy(selection);
+				const report = await copySelection(selection);
 				if (report.kind !== 'complete')
 					toast.warning(
 						'The selection was kept in the note because it could not be copied completely.'
@@ -417,10 +440,10 @@
 					'Copied the selection, but kept it in the note because the note changed during copying.'
 				),
 			onCopy: (selection) => {
-				void noteClipboard.copy(selection);
+				void copySelection(selection);
 			},
 			onTocUpdate: (headings) => {
-				onoutline?.(outlineFrom(headings));
+				onoutline?.(noteDocuments.outline(headings));
 				queueMeasure();
 			},
 			onReviseMermaid: (source, instruction) => onreviseMermaid(source, instruction),
@@ -454,7 +477,7 @@
 			// upload URL itself.
 			onFileUpload: async (file) => {
 				try {
-					return await uploadNoteAttachment(noteId, file);
+					return await attachmentsController.uploadInline(noteId, file);
 				} catch (error) {
 					toast.error(error instanceof Error ? error.message : 'Image upload failed');
 					throw error;
@@ -465,7 +488,7 @@
 			// own copy only takes effect on the next pass, and the block the caret sits
 			// in is not re-linted until the writer stops typing — so a word they just
 			// added would stay underlined until they paused.
-			proofread: async (text) => proofreading.accepted(await proofreading.linter().lint(text)),
+			proofread: (text) => proofreading.proofread(text),
 			proofreadEnabled: proofreading.enabled,
 			findLinkableNotes: (query) => rankNoteLinkTargets(linkableNotes, query),
 			// Read through the prop inside the closure: `createEditor` runs once, so
@@ -661,7 +684,7 @@
 		// A direct call, not a `copy` event, so it misses the editor's own handler —
 		// it shares the payload builder instead, and pastes the same pictures.
 		try {
-			await noteClipboard.copy(clipboardSource(state));
+			await copySelection(clipboardSource(state));
 			// audit-allow: silent-catch — formatted clipboard write failure is reported while the selection remains intact.
 		} catch {
 			toast.error('The clipboard could not be written');
@@ -786,7 +809,7 @@
 		if (!editor) return;
 
 		// Initial content only; the page remounts per note via {#key}.
-		editor.commands.setContent(toEditorContent(untrack(() => document)));
+		editor.commands.setContent(noteDocuments.editorContent(untrack(() => document)));
 		initialized = true;
 		editor.registerPlugin(
 			createSuggestionAnchorPlugin({
@@ -1002,7 +1025,7 @@
 		nextDocument: ProseMirrorDocument
 	): void {
 		if (!editor) return;
-		const indices = changedTopLevelBlockIndices(previousDocument, nextDocument);
+		const indices = noteDocuments.changedBlocks(previousDocument, nextDocument);
 		if (indices.length === 0) return;
 		const positions: number[] = [];
 		editor.state.doc.forEach((_node, offset, index) => {
@@ -1090,7 +1113,9 @@
 	}
 
 	export function getDocument(): ProseMirrorDocument {
-		return parseProseMirrorDocument(editor?.state.doc.toJSON() ?? { type: 'doc', content: [] });
+		return proseMirrorDocumentSchema.parse(
+			editor?.state.doc.toJSON() ?? { type: 'doc', content: [] }
+		);
 	}
 
 	export function getEditor(): Editor | undefined {
@@ -1107,7 +1132,7 @@
 	): void {
 		if (!editor) return;
 		initialized = false;
-		editor.commands.setContent(toEditorContent(nextDocument));
+		editor.commands.setContent(noteDocuments.editorContent(nextDocument));
 		initialized = true;
 		if (previousDocument) shimmerChangedBlocks(previousDocument, nextDocument);
 	}

@@ -11,7 +11,7 @@ import {
 } from '$lib/models/proposal-effects';
 import { resourceDataSchemas, todoRecordFields } from '$lib/models/workspace-records';
 import type { ApplicationEffectRepository, AppliedRecord } from '../application-effects';
-import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
+import type { SyncObjectRepository } from '$lib/server/repositories/workspace/sync-objects';
 import { InvalidTransitionError } from '$lib/errors';
 
 const recordSchema = z.discriminatedUnion('type', [
@@ -54,21 +54,19 @@ const effectSchema = applicationEffectSchema(recordSchema).superRefine((effect, 
 const column = (key: string) => key.replace(/[A-Z]/g, (letter) => '_' + letter.toLowerCase());
 
 export class SuggestionEffectRecords implements ApplicationEffectRepository {
-	private readonly objects: WorkspaceSyncObjects;
-	constructor(private readonly db: Database) {
-		this.objects = new WorkspaceSyncObjects(db);
-	}
-	async lock(actor: ActorContext, id: SuggestionId): Promise<void> {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly db: Database,
+		private readonly objects: SyncObjectRepository
+	) {}
+	async lock(id: SuggestionId): Promise<void> {
 		await this.db.execute(
-			sql`select id from suggestions where id=${id} and user_id=${actor.userId} for update`
+			sql`select id from suggestions where id=${id} and user_id=${this.actor.userId} for update`
 		);
 	}
-	async find(
-		actor: ActorContext,
-		id: SuggestionId
-	): Promise<ApplicationEffect<AppliedRecord> | null> {
+	async find(id: SuggestionId): Promise<ApplicationEffect<AppliedRecord> | null> {
 		const result = await this.db.execute(
-			sql`select effect from suggestion_application_effects where suggestion_id=${id} and user_id=${actor.userId}`
+			sql`select effect from suggestion_application_effects where suggestion_id=${id} and user_id=${this.actor.userId}`
 		);
 		const rows = z.array(z.object({ effect: effectSchema }));
 		const parsed = z
@@ -77,28 +75,19 @@ export class SuggestionEffectRecords implements ApplicationEffectRepository {
 			.parse(result);
 		return parsed[0]?.effect ?? null;
 	}
-	async lockVersion(actor: ActorContext, record: AppliedRecord): Promise<string | null> {
+	async lockVersion(record: AppliedRecord): Promise<string | null> {
 		await this.db.execute(
-			sql`select id from ${sql.identifier(record.type)} where id=${record.value.id} and user_id=${actor.userId} for update`
+			sql`select id from ${sql.identifier(record.type)} where id=${record.value.id} and user_id=${this.actor.userId} for update`
 		);
-		const current = await this.objects.read(
-			actor,
-			{ type: record.type, id: [record.value.id] },
-			null
-		);
+		const current = await this.objects.read({ type: record.type, id: [record.value.id] }, null);
 		return current.kind === 'found' ? current.snapshot.etag : null;
 	}
-	async record(
-		actor: ActorContext,
-		id: SuggestionId,
-		changes: readonly AppliedChange<AppliedRecord>[]
-	): Promise<void> {
+	async record(id: SuggestionId, changes: readonly AppliedChange<AppliedRecord>[]): Promise<void> {
 		await this.db.execute(sql`SET CONSTRAINTS workspace_sync_journal IMMEDIATE`);
 		await this.db.execute(sql`SET CONSTRAINTS workspace_sync_journal DEFERRED`);
 		const recorded: RecordedChange<AppliedRecord>[] = [];
 		for (const change of changes) {
 			const current = await this.objects.read(
-				actor,
 				{ type: change.after.type, id: [change.after.value.id] },
 				null
 			);
@@ -113,24 +102,24 @@ export class SuggestionEffectRecords implements ApplicationEffectRepository {
 		}
 		const effect = effectSchema.parse({ changes: recorded });
 		await this.db.execute(
-			sql`insert into suggestion_application_effects (suggestion_id,user_id,effect) values (${id},${actor.userId},${JSON.stringify(effect)}::jsonb)`
+			sql`insert into suggestion_application_effects (suggestion_id,user_id,effect) values (${id},${this.actor.userId},${JSON.stringify(effect)}::jsonb)`
 		);
 	}
-	async restore(actor: ActorContext, change: AppliedChange<AppliedRecord>): Promise<AppliedRecord> {
+	async restore(change: AppliedChange<AppliedRecord>): Promise<AppliedRecord> {
 		if (change.kind === 'unchanged') return change.after;
 		const record = change.kind === 'modified' ? change.before : change.after;
 		if (change.kind === 'created') {
 			if (record.type === 'todos' || record.type === 'memory_entries') {
 				await this.db.execute(
-					sql`update ${sql.identifier(record.type)} set deleted_at=now(),updated_at=now() where id=${record.value.id} and user_id=${actor.userId}`
+					sql`update ${sql.identifier(record.type)} set deleted_at=now(),updated_at=now() where id=${record.value.id} and user_id=${this.actor.userId}`
 				);
 			} else if (record.type === 'diagrams') {
 				await this.db.execute(
-					sql`update diagrams set archived_at=now(),updated_at=now() where id=${record.value.id} and user_id=${actor.userId}`
+					sql`update diagrams set archived_at=now(),updated_at=now() where id=${record.value.id} and user_id=${this.actor.userId}`
 				);
 			} else {
 				await this.db.execute(
-					sql`delete from ${sql.identifier(record.type)} where id=${record.value.id} and user_id=${actor.userId}`
+					sql`delete from ${sql.identifier(record.type)} where id=${record.value.id} and user_id=${this.actor.userId}`
 				);
 				return record;
 			}
@@ -162,14 +151,10 @@ export class SuggestionEffectRecords implements ApplicationEffectRepository {
 				sql`, `
 			);
 			await this.db.execute(
-				sql`update ${sql.identifier(record.type)} set (${names})=(select ${selected} from jsonb_populate_record(null::${sql.identifier(record.type)},${JSON.stringify(payload)}::jsonb) p) where id=${record.value.id} and user_id=${actor.userId}`
+				sql`update ${sql.identifier(record.type)} set (${names})=(select ${selected} from jsonb_populate_record(null::${sql.identifier(record.type)},${JSON.stringify(payload)}::jsonb) p) where id=${record.value.id} and user_id=${this.actor.userId}`
 			);
 		}
-		const current = await this.objects.read(
-			actor,
-			{ type: record.type, id: [record.value.id] },
-			null
-		);
+		const current = await this.objects.read({ type: record.type, id: [record.value.id] }, null);
 		if (current.kind !== 'found')
 			throw new InvalidTransitionError('A restored proposal participant is unavailable');
 		return recordSchema.parse(current.snapshot.value);

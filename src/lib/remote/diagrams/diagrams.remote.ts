@@ -7,13 +7,12 @@ import { requestActor } from '$lib/server/factories/request-actor-factory';
 const diagramIdSchema = z.uuid().transform((value) => value as DiagramId);
 const revisionIdSchema = z.uuid().transform((value) => value as DiagramRevisionId);
 export const listDiagramRevisions = command(diagramIdSchema, async (diagramId) =>
-	AppFactory.controllers().diagramStudio().listDiagramRevisions(requestActor(), { diagramId })
+	AppFactory.forActor(requestActor()).diagramStudio().listDiagramRevisions({ diagramId })
 );
 
 export const getDiagramRevision = query(
 	z.object({ diagramId: diagramIdSchema, revisionId: revisionIdSchema }),
-	async (input) =>
-		AppFactory.controllers().diagramStudio().getDiagramRevision(requestActor(), input)
+	async (input) => AppFactory.forActor(requestActor()).diagramStudio().getDiagramRevision(input)
 );
 
 export const restoreDiagramRevision = command(
@@ -25,6 +24,5 @@ export const restoreDiagramRevision = command(
 			.min(1)
 			.transform((value) => value as DiagramEtag)
 	}),
-	async (input) =>
-		AppFactory.controllers().diagramStudio().restoreDiagramRevision(requestActor(), input)
+	async (input) => AppFactory.forActor(requestActor()).diagramStudio().restoreDiagramRevision(input)
 );

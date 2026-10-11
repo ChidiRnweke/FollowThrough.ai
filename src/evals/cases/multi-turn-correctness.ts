@@ -6,7 +6,9 @@ import { disambiguationWorkspace } from '../fixtures/workspaces/disambiguation';
 import { findCall } from '../assertions/tool-calls';
 import { expectMemoryAbsent, expectMemoryProposed } from '../assertions/effects';
 import { ARCHETYPES, type EvalCase } from './types';
-import { isAgentPayloadObject, type AgentPayload } from '$lib/models/agent/payload';
+import { type AgentPayload } from '$lib/models/agent/payload';
+import { AgentPayloadInspectionService } from '$lib/services/agent/payload';
+const { isAgentPayloadObject } = new AgentPayloadInspectionService();
 
 /**
  * The note id a call targeted, at the top level or as `note.id` (which
@@ -46,7 +48,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			const workspace = await seedWorkspace(lab, disambiguationWorkspace);
 			const projectId = workspace.projectIds.get('Backend')!;
 			const expectedNoteId = workspace.noteIds.get('API documentation|Backend')!;
-			const before = await lab.controllers.notes().get(workspace.actor, {
+			const before = await lab.forActor(workspace.actor).controllers.notes().get({
 				noteId: expectedNoteId
 			});
 
@@ -71,7 +73,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			const call = findCall(turn2, 'edit_note') ?? findCall(turn2, 'save_note');
 			const targetedId = targetedNoteId(call);
 			const gotCorrect = targetedId === expectedNoteId;
-			const after = await lab.controllers.notes().get(workspace.actor, {
+			const after = await lab.forActor(workspace.actor).controllers.notes().get({
 				noteId: expectedNoteId
 			});
 			const persisted =
@@ -129,10 +131,10 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			const mobileProjectId = workspace.projectIds.get('Mobile')!;
 			const backendNoteId = workspace.noteIds.get('API documentation|Backend')!;
 			const mobileNoteId = workspace.noteIds.get('API documentation|Mobile')!;
-			const backendBefore = await lab.controllers.notes().get(workspace.actor, {
+			const backendBefore = await lab.forActor(workspace.actor).controllers.notes().get({
 				noteId: backendNoteId
 			});
-			const mobileBefore = await lab.controllers.notes().get(workspace.actor, {
+			const mobileBefore = await lab.forActor(workspace.actor).controllers.notes().get({
 				noteId: mobileNoteId
 			});
 
@@ -168,10 +170,10 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			const targetedId = targetedNoteId(call);
 			const gotCorrect = targetedId === backendNoteId;
 			const gotWrong = targetedId === mobileNoteId;
-			const backendAfter = await lab.controllers.notes().get(workspace.actor, {
+			const backendAfter = await lab.forActor(workspace.actor).controllers.notes().get({
 				noteId: backendNoteId
 			});
-			const mobileAfter = await lab.controllers.notes().get(workspace.actor, {
+			const mobileAfter = await lab.forActor(workspace.actor).controllers.notes().get({
 				noteId: mobileNoteId
 			});
 			const intendedPersisted =

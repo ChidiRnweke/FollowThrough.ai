@@ -1,62 +1,34 @@
-export type SuggestionAdmission =
-	| { readonly allowed: true }
-	| {
-			readonly allowed: false;
-			readonly reason: 'busy' | 'rate_limited';
-			readonly retryAfterMs: number;
-	  };
+import type { InlineSuggestionAdmission } from '$lib/models/agent';
+import type { UserId } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
+import type { InlineAttemptRepository } from '$lib/server/repositories/inline-suggestions/attempts';
 
-export interface IInlineSuggestionAdmission {
-	admit(userId: string): SuggestionAdmission;
-	consume(userId: string): SuggestionAdmission;
-	release(userId: string): void;
+const WINDOW_MS = 60_000;
+
+export interface InlineAdmission {
+	/** Spends one completion from the user's per-minute budget, or says when one frees up. */
+	consume(userId: UserId, now: number): Promise<InlineSuggestionAdmission>;
 }
 
-const DEFAULT_REQUESTS_PER_MINUTE = 40;
-const MINUTE_MS = 60_000;
+/** Proactive completions are capped per user per rolling minute, across every server process. */
+export class InlineAdmissionService implements InlineAdmission {
+	constructor(
+		private readonly attempts: InlineAttemptRepository,
+		private readonly requestsPerMinute = 40
+	) {}
 
-export interface InlineSuggestionThrottleOptions {
-	readonly requestsPerMinute?: number;
-	readonly now?: () => number;
-}
-
-/** Process-local concurrency and spend guard for proactive completions. */
-export class InlineSuggestionAdmission implements IInlineSuggestionAdmission {
-	private readonly inFlight = new Set<string>();
-	private readonly recent = new Map<string, number[]>();
-	private readonly limit: number;
-	private readonly now: () => number;
-
-	constructor(options: InlineSuggestionThrottleOptions = {}) {
-		this.limit = options.requestsPerMinute ?? DEFAULT_REQUESTS_PER_MINUTE;
-		this.now = options.now ?? Date.now;
-	}
-
-	admit(userId: string) {
-		if (this.inFlight.has(userId))
-			return { allowed: false as const, reason: 'busy' as const, retryAfterMs: 250 };
-		this.inFlight.add(userId);
-		return { allowed: true as const };
-	}
-
-	consume(userId: string) {
-		const now = this.now();
-		const window = (this.recent.get(userId) ?? []).filter(
-			(timestamp) => now - timestamp < MINUTE_MS
+	async consume(userId: UserId, now: number): Promise<InlineSuggestionAdmission> {
+		const reservation = await this.attempts.reserve(
+			userId,
+			new Date(now).toISOString() as DateTime,
+			new Date(now - WINDOW_MS).toISOString() as DateTime,
+			this.requestsPerMinute
 		);
-		if (window.length >= this.limit) {
-			this.recent.set(userId, window);
-			return {
-				allowed: false as const,
-				reason: 'rate_limited' as const,
-				retryAfterMs: Math.max(1, MINUTE_MS - (now - (window[0] ?? now)))
-			};
-		}
-		this.recent.set(userId, [...window, now]);
-		return { allowed: true as const };
-	}
-
-	release(userId: string): void {
-		this.inFlight.delete(userId);
+		if (reservation.kind === 'reserved') return { allowed: true };
+		return {
+			allowed: false,
+			reason: 'rate_limited',
+			retryAfterMs: Math.max(1, WINDOW_MS - (now - Date.parse(reservation.oldest)))
+		};
 	}
 }

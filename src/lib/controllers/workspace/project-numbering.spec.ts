@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { prepareWorkspaceCommand } from './commands';
-import { WorkspaceViews } from './views';
+import { prepareWorkspaceCommand } from '$lib/testing/workspace/fixtures/commands';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import {
 	noteBuilder,
@@ -8,7 +8,6 @@ import {
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
 it.each([
 	{ enabled: false, noteOverride: undefined, expected: false },
 	{ enabled: true, noteOverride: undefined, expected: true },
@@ -16,10 +15,10 @@ it.each([
 	{ enabled: true, noteOverride: false, expected: false }
 ])(
 	'projects numbering choice $enabled into a note with override $noteOverride',
-	({ enabled, noteOverride, expected }) => {
+	async ({ enabled, noteOverride, expected }) => {
 		const project = projectBuilder({ sectionNumberingDefault: false });
 		const note = noteBuilder({ sectionNumbering: noteOverride });
-		const result = prepareWorkspaceCommand(
+		const result = await prepareWorkspaceCommand(
 			{ kind: 'projectNumbering', projectId: project.id, enabled },
 			{ type: 'projects', value: project },
 			{ userId: testActor().userId, now: testNow, records: new Map(), inventory: 'complete' }
@@ -41,7 +40,7 @@ it.each([
 				}
 			]
 		]);
-		expect(new WorkspaceViews(records).note(note.id)?.view.sectionNumbering.effective).toBe(
+		expect(createWorkspaceViews(records).note(note.id)?.view.sectionNumbering.effective).toBe(
 			expected
 		);
 	}

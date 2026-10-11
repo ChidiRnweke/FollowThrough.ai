@@ -1,12 +1,16 @@
-import { expect, it } from 'vitest';
-import { AgentTools } from './agent-tool-factory';
-import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	memoryEntryBuilder,
@@ -18,10 +22,12 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { createAgentToolSurface } from '$lib/testing/agent/fixtures/tool-surface';
 
 const setup = (scope: 'user' | 'project') => {
 	const projectId = scope === 'project' ? testProjectId() : undefined;
-	const entries = new InMemoryMemoryEntryRepository();
+	const entries = new InMemoryMemoryEntryRepository(testActor());
 	const shared = memoryEntryBuilder({
 		id: testMemoryEntryId(1),
 		projectId,
@@ -53,23 +59,35 @@ const setup = (scope: 'user' | 'project') => {
 			content: 'Another actor'
 		})
 	];
-	const projects = new InMemoryProjectRepository();
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const library = new MemoryLibrary(entries, projects, new InMemoryProvenanceRepository());
+	const library = createMemoryServices(
+		testActor(),
+		entries,
+		projects,
+		new InMemoryProvenanceRepository(testActor())
+	);
 	const controller = new Memory(
-		capabilityDependencies<MemoryDependencies>({ memoryLister: library })
+		testActor(),
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<MemoryDependencies>({
+			...agentToolResultsFixture(),
+			editing: new MemoryEditingService(),
+			presentation: new MemoryPresentationService(),
+			memoryLister: library.lister
+		})
 	);
 	const factory = capabilityDependencies<ControllerFactory>({ memory: () => controller });
-	const tools = new AgentTools(
+	const tools = createAgentToolSurface(
+		testTokenizer,
 		factory,
-		testActor(),
 		'auto_accept',
 		{
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Read memory' },
 			model: 'test/model'
 		},
-		{ execute: (_input, action) => action() },
+		{ completed: async () => {} },
 		new InMemoryToolRetriever(),
 		{ isEnabled: () => true }
 	);
@@ -86,7 +104,9 @@ it.each(['user', 'project'] as const)(
 	'lists only shared active %s memory through the agent tool',
 	async (scope) => {
 		const { tool, shared, projectId } = setup(scope);
-		const result = await tool.prepare(projectId ? { projectId } : {}).execute();
+		const result = await directTool(tool)
+			.prepare(projectId ? { projectId } : {})
+			.execute();
 		expect(result).toEqual({
 			entries: [
 				{
@@ -101,8 +121,8 @@ it.each(['user', 'project'] as const)(
 );
 it('refuses an archived project through the agent memory tool', async () => {
 	const { tool, projects } = setup('project');
-	await projects.archive(testActor(), testProjectId());
-	await expect(tool.prepare({ projectId: testProjectId() }).execute()).rejects.toThrow(
+	await projects.archive(testProjectId());
+	await expect(directTool(tool).prepare({ projectId: testProjectId() }).execute()).rejects.toThrow(
 		'Memory project was not found'
 	);
 });

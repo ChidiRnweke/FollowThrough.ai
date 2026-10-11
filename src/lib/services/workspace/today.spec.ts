@@ -6,7 +6,8 @@ import {
 	testNoteId,
 	testTodoId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { assembleToday } from './today';
+import { TodayPresentationService } from '$lib/services/workspace/today';
+const { assembleToday } = new TodayPresentationService();
 
 const today = '2026-09-16' as LocalDate;
 describe('Today grouping from resolved facts', () => {

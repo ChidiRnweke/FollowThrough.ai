@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 	import type { GetProjectOutput, ProjectExportEntry, ProjectTreeNode } from '$lib/models/projects';
-	import { projectExportEntries } from '$lib/services/projects/export-entries';
+	import { projectTreeController } from '$lib/factories/projects/tree';
 	import type { NoteId, NoteSummary, TrashedNote } from '$lib/models/notes';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -12,17 +12,18 @@
 		noteTrashEntry,
 		type TrashEntry
 	} from '$lib/components/shared/trash-entry';
-	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
+	import { changeDiagramTrash } from '$lib/components/diagrams';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import type { Diagram } from '$lib/models/diagrams';
 	import type { Widget } from '$lib/models/widgets';
-	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
+	import { widgetEdits } from '$lib/components/widgets';
 	import { toast } from 'svelte-sonner';
 	import * as Icon from '$lib/components/icons';
 	import * as Scene from '$lib/components/icons/scenes';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
+	import { deleteNoteForever, emptyNoteTrash } from '$lib/remote/projects/projects.remote';
 	import EmptyState from '../../shared/empty-state.svelte';
 	import NameDialog from '../name-dialog.svelte';
 	import ResourceRow from '../resource-row.svelte';
@@ -77,7 +78,12 @@
 	const now = $derived(Date.parse(renderedAt));
 
 	const project = $derived(view.project);
-	let renameEntry = $state<{ draft: WorkspaceDraft<'notes'>; title: string } | null>(null);
+	let renameEntry = $state<{
+		id: NoteId;
+		draft: WorkspaceDraftController<'notes'> | null;
+		title: string;
+	} | null>(null);
+	let renaming = $state(false);
 
 	function countEntries(nodes: readonly ProjectTreeNode[]): number {
 		return nodes.reduce((total, node) => total + 1 + countEntries(node.children), 0);
@@ -135,19 +141,26 @@
 	}
 
 	function startRename(id: NoteId, title: string): void {
-		renameEntry = { draft: projectActions.editor('notes', id), title };
+		renameEntry = { id, draft: workspaceSession.capture({ type: 'notes', id: [id] }), title };
 	}
 
 	async function renameEntrySubmit(title: string): Promise<boolean> {
 		if (!renameEntry) return false;
-		const output = await projectActions.renameNote(renameEntry.draft, title);
-		if (!output) toast.error('Could not rename. Try again.');
-		return Boolean(output);
+		const { id, draft } = renameEntry;
+		if (!draft) return false;
+		renaming = true;
+		const renamed = await draft.stage({ kind: 'renameNote', noteId: id, title });
+		renaming = false;
+		if (renamed.kind === 'failure') toast.error('Could not rename. Try again.');
+		return renamed.kind === 'saved';
 	}
 
 	async function archiveEntry(id: NoteId): Promise<void> {
-		const output = await projectActions.archiveNote(id);
-		if (!output) toast.error(projectActions.lastError ?? 'Could not delete. Try again.');
+		const archived = await workspaceSession.edit(
+			{ type: 'notes', id: [id] },
+			{ kind: 'archiveNote', noteId: id }
+		);
+		if (archived.kind === 'failure') toast.error(archived.message);
 		else toast.success('Moved to trash');
 	}
 
@@ -171,8 +184,11 @@
 			return;
 		}
 		const id = entry.id;
-		const output = await projectActions.restoreNote(id);
-		if (!output) toast.error(projectActions.lastError ?? 'Could not restore. Try again.');
+		const restored = await workspaceSession.edit(
+			{ type: 'notes', id: [id] },
+			{ kind: 'restoreNote', noteId: id }
+		);
+		if (restored.kind === 'failure') toast.error(restored.message);
 		else toast.success('Restored');
 	}
 
@@ -188,8 +204,8 @@
 			return;
 		}
 		const id = entry.id;
-		const output = await projectActions.deleteNoteForever(id);
-		if (!output) toast.error(projectActions.lastError ?? 'Could not delete. Try again.');
+		const deleted = await workspaceSession.serverChange(deleteNoteForever({ noteId: id }));
+		if (deleted.kind === 'failure') toast.error(deleted.message);
 		else toast.success('Deleted permanently');
 	}
 
@@ -198,8 +214,8 @@
 		// emptying from here must not reach into another one.
 		for (const diagram of trashedDiagrams) await changeDiagramTrash(diagram.id, 'delete');
 		for (const widget of trashedWidgets) await widgetEdits.changeTrash(widget.id, 'delete');
-		const output = await projectActions.emptyNoteTrash(project.id);
-		if (!output) toast.error(projectActions.lastError ?? 'Could not empty the trash. Try again.');
+		const emptied = await workspaceSession.serverChange(emptyNoteTrash({ projectId: project.id }));
+		if (emptied.kind === 'failure') toast.error(emptied.message);
 		else toast.success('Trash emptied');
 	}
 </script>
@@ -338,9 +354,10 @@
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
-					{#if isFolder && projectExportEntries(node.children).length > 0}
+					{#if isFolder && projectTreeController.exportEntries(node.children).length > 0}
 						<DropdownMenu.Item
-							onclick={() => onexport?.(node.entry.title, projectExportEntries(node.children))}
+							onclick={() =>
+								onexport?.(node.entry.title, projectTreeController.exportEntries(node.children))}
 						>
 							Export…
 						</DropdownMenu.Item>
@@ -482,6 +499,6 @@
 	title="Rename"
 	label="Name"
 	initialValue={renameEntry?.title ?? ''}
-	busy={projectActions.busy}
+	busy={renaming}
 	onsubmit={renameEntrySubmit}
 />

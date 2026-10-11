@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
 import { view } from '$lib/testing/attachments/fakes/processing';
-import { TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 describe('repairing historical truncated attachment indexes', () => {
 	it('keeps saved extraction eligible for repair when indexing fails', async () => {
-		const { repository, search, worker } = setupAttachments(new TokenAwareChunker(30, 5));
+		const { repository, search, worker } = setupAttachments({ targetTokens: 30, overlapTokens: 5 });
 		const original = view('text/plain');
 		const text = Array.from(
 			{ length: 60 },
@@ -22,18 +20,21 @@ describe('repairing historical truncated attachment indexes', () => {
 			}
 		};
 		search.stageFailure = new Error('Index unavailable');
-		await worker.process(testActor(), original.version.id);
+		await worker.process(original.version.id);
+		const afterFailure = repository.found.version;
+		search.stageFailure = undefined;
+		await worker.process(original.version.id);
 		expect({
-			version: repository.found.version,
-			pending: await repository.listPendingVersions()
+			afterFailure,
+			afterRepair: repository.found.version.processingStatus
 		}).toEqual({
-			version: {
+			afterFailure: {
 				...original.version,
 				processingStatus: 'partial',
 				parserKind: 'text',
 				extractedText: text
 			},
-			pending: [{ ...testActor(), versionId: original.version.id }]
+			afterRepair: 'ready'
 		});
 	});
 
@@ -51,7 +52,7 @@ describe('repairing historical truncated attachment indexes', () => {
 			}
 		};
 		const before = structuredClone(repository.found);
-		await worker.run();
+		await worker.process(repository.found.version.id);
 		expect(repository.found).toEqual(before);
 	});
 });

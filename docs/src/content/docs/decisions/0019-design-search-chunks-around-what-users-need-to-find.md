@@ -36,7 +36,7 @@ ADR when the user-facing search contract stays the same.
 
 ## Evidence
 
-- `TokenAwareChunker` preserves paragraphs and uses overlap.
+- `ContentIndex` keeps chunking private, preserves paragraphs and uses overlap.
 - Indexers add source titles and paths to embedding input.
 - Indexing tests protect chunk and context behavior.
 - `docs/architecture/attachment-search.md` records removal of the attachment cutoff and repair

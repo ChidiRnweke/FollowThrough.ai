@@ -1,7 +1,5 @@
-import type { LocalDate } from '$lib/models/workspace';
-import type { ProjectId } from '$lib/models/projects';
-import type { NoteSummary } from '$lib/models/notes';
-import type { Todo, TodoStatus } from '$lib/models/todos';
+import type { WidgetSourceRecords } from '$lib/models/widgets';
+import type { TodoStatus } from '$lib/models/todos';
 import type {
 	JsonValue,
 	WidgetLayout,
@@ -10,26 +8,6 @@ import type {
 } from '$lib/models/widgets';
 
 /** The records a widget's sources are worked out from: one project's todos and notes, and today. */
-export interface WidgetSourceRecords {
-	readonly projectId: ProjectId;
-	readonly today: LocalDate;
-	readonly todos: readonly Pick<
-		Todo,
-		| 'id'
-		| 'projectId'
-		| 'title'
-		| 'status'
-		| 'responsibility'
-		| 'priority'
-		| 'category'
-		| 'dueDate'
-		| 'deletedAt'
-	>[];
-	readonly notes: readonly Pick<
-		NoteSummary,
-		'id' | 'projectId' | 'title' | 'kind' | 'isPinned' | 'archivedAt' | 'updatedAt'
-	>[];
-}
 
 const STATUS_LABELS: Record<TodoStatus, string> = {
 	backlog: 'Backlog',
@@ -85,10 +63,25 @@ const ROWS: Record<WidgetSourceKind, (records: WidgetSourceRecords) => JsonValue
  * The rows each source of a layout reads (ADR 0043). The browser calls this with synced records
  * and export with repository reads, so a dashboard shows the same rows wherever it is shown.
  */
-export const widgetSourceRows = (
+const widgetSourceRows = (
 	sources: NonNullable<WidgetLayout['sources']>,
 	records: WidgetSourceRecords
 ): WidgetSourceRows =>
 	Object.fromEntries(
 		Object.entries(sources).map(([name, source]) => [name, ROWS[source.kind](records)])
 	);
+
+export interface IWidgetSourceService {
+	rows(
+		sources: NonNullable<WidgetLayout['sources']>,
+		records: WidgetSourceRecords
+	): WidgetSourceRows;
+}
+export class WidgetSourceService implements IWidgetSourceService {
+	rows(
+		sources: NonNullable<WidgetLayout['sources']>,
+		records: WidgetSourceRecords
+	): WidgetSourceRows {
+		return widgetSourceRows(sources, records);
+	}
+}

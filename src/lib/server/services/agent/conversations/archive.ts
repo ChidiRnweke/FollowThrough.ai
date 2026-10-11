@@ -45,12 +45,74 @@ const toolActivityOutput = (activity: ToolActivity): AgentPayload => {
 	return activity.status === 'succeeded' && activity.output !== undefined ? activity.output : null;
 };
 
-export class ConversationArchive {
-	constructor(private readonly repository: ConversationRepository) {}
+export interface ConversationSessions {
+	getOrCreate(input: StagedAgentRunInput): Promise<Conversation>;
+	getForWrite(id: ConversationId): Promise<Conversation>;
+	listConversations(options?: {
+		readonly limit?: number;
+		readonly offset?: number;
+		readonly query?: string;
+	}): Promise<readonly Conversation[]>;
+	rename(conversationId: ConversationId, title: string): Promise<Conversation>;
+	remove(conversationId: ConversationId): Promise<void>;
+	createWorkflow(input: {
+		title: string;
+		contextProjectId?: ProjectId;
+		contextNoteId?: NoteId;
+	}): Promise<Conversation>;
+	get(conversationId: ConversationId): Promise<Conversation>;
+}
+export interface ConversationMessages {
+	listMessages(conversationId: ConversationId): Promise<readonly StoredMessage[]>;
+	truncateFromUserMessage(conversationId: ConversationId, ordinal: number): Promise<void>;
+	recordUserPrompt(
+		conversationId: ConversationId,
+		prompt: string,
+		runId?: AgentRunId,
+		images?: readonly ConversationImageInput[]
+	): Promise<void>;
+	recordAssistantText(
+		conversationId: ConversationId,
+		text: string,
+		model?: string,
+		provenance?: {
+			readonly runId: AgentRunId;
+			readonly eventCursor?: string;
+		}
+	): Promise<void>;
+	recordAssistantReasoning(
+		conversationId: ConversationId,
+		text: string,
+		model?: string,
+		provenance?: {
+			readonly runId: AgentRunId;
+			readonly eventCursor?: string;
+		}
+	): Promise<void>;
+	recordToolActivity(
+		conversationId: ConversationId,
+		activity: ToolActivity,
+		provenance?: {
+			readonly runId: AgentRunId;
+			readonly eventCursor?: string;
+		}
+	): Promise<void>;
+}
+export class ConversationArchive implements ConversationSessions, ConversationMessages {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly repository: ConversationRepository
+	) {}
 
-	async getOrCreate(actor: ActorContext, input: StagedAgentRunInput): Promise<Conversation> {
+	async getForWrite(id: ConversationId): Promise<Conversation> {
+		const conversation = await this.repository.findForWrite(id);
+		if (!conversation) throw new NotFoundError('Conversation was not found');
+		return conversation;
+	}
+
+	async getOrCreate(input: StagedAgentRunInput): Promise<Conversation> {
 		if (input.conversationId) {
-			const existing = await this.repository.findById(actor, input.conversationId);
+			const existing = await this.repository.findForWrite(input.conversationId);
 			if (!existing) throw new NotFoundError('Conversation was not found');
 			if (
 				input.modelOverride === undefined &&
@@ -58,7 +120,7 @@ export class ConversationArchive {
 				input.executionModeOverride === undefined
 			)
 				return existing;
-			return this.repository.update(actor, {
+			return this.repository.update({
 				...existing,
 				...(input.modelOverride === null
 					? { modelOverride: undefined }
@@ -79,9 +141,9 @@ export class ConversationArchive {
 			});
 		}
 		const timestamp = now();
-		return this.repository.insert(actor, {
+		return this.repository.insert({
 			id: crypto.randomUUID() as ConversationId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			kind: 'chat',
 			contextProjectId: input.projectId,
 			contextNoteId: input.noteId,
@@ -97,41 +159,33 @@ export class ConversationArchive {
 	}
 
 	listConversations(
-		actor: ActorContext,
 		options: { readonly limit?: number; readonly offset?: number; readonly query?: string } = {}
 	): Promise<readonly Conversation[]> {
-		return this.repository.list(actor, { kind: 'chat', ...options });
+		return this.repository.list({ kind: 'chat', ...options });
 	}
 
-	async rename(
-		actor: ActorContext,
-		conversationId: ConversationId,
-		title: string
-	): Promise<Conversation> {
-		const conversation = await this.get(actor, conversationId);
-		return this.repository.update(actor, {
+	async rename(conversationId: ConversationId, title: string): Promise<Conversation> {
+		const conversation = await this.get(conversationId);
+		return this.repository.update({
 			...conversation,
 			title: title.trim(),
 			updatedAt: now()
 		});
 	}
 
-	remove(actor: ActorContext, conversationId: ConversationId): Promise<void> {
-		return this.repository.delete(actor, conversationId);
+	remove(conversationId: ConversationId): Promise<void> {
+		return this.repository.delete(conversationId);
 	}
 
-	createWorkflow(
-		actor: ActorContext,
-		input: {
-			title: string;
-			contextProjectId?: ProjectId;
-			contextNoteId?: NoteId;
-		}
-	): Promise<Conversation> {
+	createWorkflow(input: {
+		title: string;
+		contextProjectId?: ProjectId;
+		contextNoteId?: NoteId;
+	}): Promise<Conversation> {
 		const timestamp = now();
-		return this.repository.insert(actor, {
+		return this.repository.insert({
 			id: crypto.randomUUID() as ConversationId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			kind: 'workflow',
 			contextProjectId: input.contextProjectId,
 			contextNoteId: input.contextNoteId,
@@ -141,17 +195,14 @@ export class ConversationArchive {
 		});
 	}
 
-	async get(actor: ActorContext, conversationId: ConversationId): Promise<Conversation> {
-		const conversation = await this.repository.findById(actor, conversationId);
+	async get(conversationId: ConversationId): Promise<Conversation> {
+		const conversation = await this.repository.findById(conversationId);
 		if (!conversation) throw new NotFoundError('Conversation was not found');
 		return conversation;
 	}
 
-	listMessages(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<readonly StoredMessage[]> {
-		return this.repository.listMessages(actor, conversationId);
+	listMessages(conversationId: ConversationId): Promise<readonly StoredMessage[]> {
+		return this.repository.listMessages(conversationId);
 	}
 
 	/**
@@ -159,25 +210,19 @@ export class ConversationArchive {
 	 * messages only. Tolerates an ordinal past the end: the caller derives it from
 	 * a client transcript that may have moved on.
 	 */
-	async truncateFromUserMessage(
-		actor: ActorContext,
-		conversationId: ConversationId,
-		ordinal: number
-	): Promise<void> {
+	async truncateFromUserMessage(conversationId: ConversationId, ordinal: number): Promise<void> {
 		if (ordinal < 1) return;
-		const messages = await this.repository.listMessages(actor, conversationId);
+		const messages = await this.repository.listMessages(conversationId);
 		const anchor = messages.filter((message) => message.role === 'user')[ordinal - 1];
 		if (!anchor) return;
 		const from = messages.indexOf(anchor);
 		await this.repository.deleteMessages(
-			actor,
 			conversationId,
 			messages.slice(from).map((message) => message.id)
 		);
 	}
 
 	async recordUserPrompt(
-		actor: ActorContext,
 		conversationId: ConversationId,
 		prompt: string,
 		runId?: AgentRunId,
@@ -189,13 +234,12 @@ export class ConversationArchive {
 			images && images.length > 0
 				? { type: 'text', text: prompt, images: imagePayloads(images) }
 				: { type: 'text', text: prompt };
-		await this.append(actor, conversationId, 'user', content, undefined, {
+		await this.append(conversationId, 'user', content, undefined, {
 			runId
 		});
 	}
 
 	async recordAssistantText(
-		actor: ActorContext,
 		conversationId: ConversationId,
 		text: string,
 		model?: string,
@@ -204,14 +248,7 @@ export class ConversationArchive {
 			readonly eventCursor?: string;
 		}
 	): Promise<void> {
-		await this.append(
-			actor,
-			conversationId,
-			'assistant',
-			{ type: 'text', text },
-			model,
-			provenance
-		);
+		await this.append(conversationId, 'assistant', { type: 'text', text }, model, provenance);
 	}
 
 	/**
@@ -220,7 +257,6 @@ export class ConversationArchive {
 	 * conclusions with the working erased.
 	 */
 	async recordAssistantReasoning(
-		actor: ActorContext,
 		conversationId: ConversationId,
 		text: string,
 		model?: string,
@@ -229,14 +265,7 @@ export class ConversationArchive {
 			readonly eventCursor?: string;
 		}
 	): Promise<void> {
-		await this.append(
-			actor,
-			conversationId,
-			'assistant',
-			{ type: 'reasoning', text },
-			model,
-			provenance
-		);
+		await this.append(conversationId, 'assistant', { type: 'reasoning', text }, model, provenance);
 	}
 
 	/**
@@ -244,7 +273,6 @@ export class ConversationArchive {
 	 * and `failure` from the arm of the activity that can carry them.
 	 */
 	async recordToolActivity(
-		actor: ActorContext,
 		conversationId: ConversationId,
 		activity: ToolActivity,
 		provenance?: {
@@ -278,11 +306,10 @@ export class ConversationArchive {
 					: null,
 			status: activity.status
 		};
-		await this.append(actor, conversationId, 'tool', content, undefined, provenance);
+		await this.append(conversationId, 'tool', content, undefined, provenance);
 	}
 
 	private async append(
-		actor: ActorContext,
 		conversationId: ConversationId,
 		role: Message['role'],
 		content: AgentPayloadObject,
@@ -292,7 +319,7 @@ export class ConversationArchive {
 			readonly eventCursor?: string;
 		}
 	): Promise<void> {
-		await this.repository.appendMessage(actor, {
+		await this.repository.appendMessage({
 			id: crypto.randomUUID() as MessageId,
 			conversationId,
 			role,

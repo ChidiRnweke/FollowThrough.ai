@@ -1,255 +1,80 @@
-# SvelteKit Frontend Patterns & Examples
+# Stateless services and complete controller operations
 
-## Table of Contents
+These examples show ownership, not a new feature template. Follow the capability's actual model,
+repository and transport contracts. ADR 0007 takes precedence over older examples.
 
-- [hooks.server.ts — auth only](#hooksserverts--auth-only)
-- [+page.server.ts — load and actions](#pageserverts--load-and-actions)
-- [Service — interface + implementation](#service--interface--implementation)
-- [Controller — orchestration with DI](#controller--orchestration-with-di)
-- [Factory — concrete assembly](#factory--concrete-assembly)
-- [Store — client-side reactive singleton](#store--client-side-reactive-singleton)
-- [Models — shared interfaces](#models--shared-interfaces)
-
-## hooks.server.ts — auth only
+A shared service takes resolved facts and returns a domain decision. Its collaborators and
+configuration are immutable; intermediate state exists only for the operation.
 
 ```typescript
-// src/hooks.server.ts
-import type { Handle } from "@sveltejs/kit";
-import { AppFactory } from "$lib/factories/AppFactory";
+export interface ITitleEditingService {
+  decide(current: NoteTitle, requested: string): TitleDecision;
+}
 
-export const handle: Handle = async ({ event, resolve }) => {
-  const sessionToken = event.cookies.get("session");
-
-  if (sessionToken) {
-    const authService = AppFactory.getAuthService();
-    const user = await authService.getUserFromToken(sessionToken);
-    event.locals.user = user ?? undefined;
+export class TitleEditingService implements ITitleEditingService {
+  decide(current: NoteTitle, requested: string): TitleDecision {
+    const title = requested.trim();
+    if (!title) return { kind: 'invalid', message: 'A title is required' };
+    return { kind: 'edit', value: { ...current, title } };
   }
-
-  return resolve(event);
-};
-```
-
-**Never:** redirect, fetch business data, or apply route guards here. Guards belong in the loader.
-
----
-
-## +page.server.ts — load and actions
-
-```typescript
-// src/routes/recipes/+page.server.ts
-import type { PageServerLoad, Actions } from "./$types";
-import { error, redirect } from "@sveltejs/kit";
-import { AppFactory } from "$lib/factories/AppFactory";
-
-export const load: PageServerLoad = async ({ locals }) => {
-  if (!locals.user) throw redirect(302, "/login");
-
-  const controller = AppFactory.getRecipeController();
-
-  return {
-    recipes: controller.getRecipesForUser(locals.user.id), // streamable promise
-  };
-};
-
-export const actions: Actions = {
-  create: async ({ request, locals }) => {
-    if (!locals.user) throw error(401, "Unauthorised");
-
-    const data = await request.formData();
-    const controller = AppFactory.getRecipeController();
-
-    // Validate input — use a zod schema or lib/validation.ts
-    const result = await controller.createRecipe(locals.user.id, {
-      title: String(data.get("title")),
-    });
-
-    return { success: true, recipe: result };
-  },
-};
-```
-
-**Never:** put `if (name.length < 3)` or any domain logic here. Validate shape, delegate everything else.
-
----
-
-## Service — interface + implementation
-
-```typescript
-// src/lib/services/IRecipeService.ts
-import type { Recipe, CreateRecipeInput } from "$lib/models";
-
-export interface IRecipeService {
-  getByUserId(userId: string): Promise<Recipe[]>;
-  create(input: CreateRecipeInput): Promise<Recipe>;
 }
 ```
 
+A controller owns the read, rule and write within the transaction. It exposes the complete
+operation. The component cannot read the repository or call the rule separately.
+
 ```typescript
-// src/lib/services/RecipeService.ts
-import type { IRecipeService } from './IRecipeService';
-import type { Recipe, CreateRecipeInput } from '$lib/models';
-import type { ApiClient } from '$lib/api/client';
-import { ServiceError } from '$lib/models/errors';
-
-export class RecipeService implements IRecipeService {
-  constructor(private readonly client: ApiClient) {}
-
-  async getByUserId(userId: string): Promise<Recipe[]> {
-    const { data, error } = await this.client.GET('/recipes', {
-      params: { query: { userId } }
-    });
-
-    if (error) throw new ServiceError('Failed to fetch recipes', error);
-    return data.recipes.map(mapToRecipe); // always map to domain model
-  }
-
-  async create(input: CreateRecipeInput): Promise<Recipe> {
-    const { data, error } = await this.client.POST('/recipes', {
-      body: input
-    });
-
-    if (error) throw new ServiceError('Failed to create recipe', error);
-    return mapToRecipe(data);
-  }
+export interface NoteTitleController {
+  rename(id: NoteId, title: string): Promise<NoteTitle>;
 }
 
-// Keep mappers private to the service file
-function mapToRecipe(raw: components['schemas']['Recipe']): Recipe { ... }
-```
-
----
-
-## Controller — orchestration with DI
-
-```typescript
-// src/lib/controllers/RecipeController.ts
-import type { IRecipeService } from "$lib/services/IRecipeService";
-import type { IPantryService } from "$lib/services/IPantryService";
-import type { Recipe } from "$lib/models";
-
-export class RecipeController {
+export class NoteTitles implements NoteTitleController {
   constructor(
-    private readonly recipeService: IRecipeService,
-    private readonly pantryService: IPantryService,
+    private readonly records: NoteTitleRepository,
+    private readonly editing: ITitleEditingService,
+    private readonly transaction: AtomicOperation
   ) {}
 
-  async getRecipesForUser(userId: string): Promise<Recipe[]> {
-    // Orchestrate: get recipes + filter by what's in the pantry
-    const [recipes, pantryItems] = await Promise.all([
-      this.recipeService.getByUserId(userId),
-      this.pantryService.getByUserId(userId),
-    ]);
-
-    return recipes.filter((r) => isCompatible(r, pantryItems));
+  rename(id: NoteId, title: string): Promise<NoteTitle> {
+    return this.transaction.run(async () => {
+      const current = await this.records.getForEdit(id);
+      const decision = this.editing.decide(current, title);
+      if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+      return this.records.save(decision.value);
+    });
   }
 }
 ```
 
-Controller takes **interfaces**, not concrete classes. This is the only layer with DI.
+Factories instantiate and connect these dependencies. Their result is `NoteTitleController`, not
+`NoteTitles`, the repository, or an object exposing every collaborator. Server capabilities keep
+construction inside their capability factory. Browser capabilities expose controllers and readonly
+state with a defined lifetime.
 
----
-
-## Factory — concrete assembly
-
-```typescript
-// src/lib/factories/AppFactory.ts
-import { createApiClient } from "$lib/api/client";
-import { RecipeService } from "$lib/services/RecipeService";
-import { PantryService } from "$lib/services/PantryService";
-import { RecipeController } from "$lib/controllers/RecipeController";
-
-export class AppFactory {
-  static getRecipeController(): RecipeController {
-    const client = createApiClient();
-    return new RecipeController(
-      new RecipeService(client),
-      new PantryService(client),
-    );
-  }
-
-  static getAuthService() {
-    return new AuthService(createApiClient());
-  }
-}
-```
-
-No interfaces here — concrete types only. No logic. Just assembly.
-
----
-
-## Store — client-side reactive singleton
+A store retains state and applies controlled updates. It does not fetch its own records, interpret
+an edit, enqueue a write or start a retry. A controller performs those operations and updates it.
 
 ```typescript
-// src/lib/stores/recipeStore.ts
-import type { Recipe } from "$lib/models";
-
-function createRecipeStore() {
-  let recipes = $state<Recipe[]>([]);
-  let selected = $state<Recipe | null>(null);
-
-  return {
-    get recipes() {
-      return recipes;
-    },
-    get selected() {
-      return selected;
-    },
-
-    setRecipes(data: Recipe[]) {
-      recipes = data;
-    },
-    select(recipe: Recipe) {
-      selected = recipe;
-    },
-    clear() {
-      recipes = [];
-      selected = null;
-    },
-  };
+export interface NoteTitleState {
+  readonly current: NoteTitle | undefined;
 }
 
-export const recipeStore = createRecipeStore();
-```
-
-```svelte
-<!-- +page.svelte -->
-<script lang="ts">
-	import { recipeStore } from '$lib/stores/recipeStore';
-	let { data } = $props();
-
-	// Populate store from loader data
-	$effect(() => {
-		recipeStore.setRecipes(data.recipes);
-	});
-</script>
-
-{#each recipeStore.recipes as recipe}
-	<RecipeCard {recipe} />
-{/each}
-```
-
-Stores are populated from loader data via `$effect`, never fetched directly.
-
----
-
-## Models — shared interfaces
-
-```typescript
-// src/lib/models/Recipe.ts
-export interface Recipe {
-  id: string;
-  title: string;
-  cuisine: string;
-  servings: number;
-  createdAt: Date;
-}
-
-export interface CreateRecipeInput {
-  title: string;
-  cuisine?: string;
-  servings?: number;
+export class NoteTitleStore implements NoteTitleState {
+  private value = $state<NoteTitle>();
+  get current(): NoteTitle | undefined { return this.value; }
+  replace(value: NoteTitle): void { this.value = value; }
+  clear(): void { this.value = undefined; }
 }
 ```
 
-Models are plain interfaces — no classes, no methods, no ORM decorators. If an OpenAPI type and a domain model differ, map at the service layer. Never leak `components['schemas']['X']` types past the service.
+Only the controller gets the mutable store. Components observe `NoteTitleState` and keep transient
+form fields locally. Their submit handler calls `controller.rename(id, title)`.
+
+Boundary readers own parsing. For JSON patch editing, the controller asks a patch service for a
+candidate, passes it to an injected candidate reader, then calls the semantic editing service.
+Creation skips patch preparation. Both paths return the same complete result or structured failure.
+No service parses a candidate or calls another service through a callback.
+
+Behavior tests construct services directly or inject shared in-memory repositories into controllers.
+Assert the resulting value, error or persisted state. Do not expose a private helper to preserve a
+test or assert which collaborator was called.

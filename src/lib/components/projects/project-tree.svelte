@@ -11,7 +11,7 @@
 </script>
 
 <script lang="ts">
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 	import type { NoteSummary } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import { goto } from '$app/navigation';
@@ -19,9 +19,10 @@
 	import { toast } from 'svelte-sonner';
 	import { onMount, tick } from 'svelte';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
-	import { ancestorFolderIds, isWithinSubtree } from '$lib/services/projects/tree-expansion';
+	import { projectTreeController } from '$lib/factories/projects/tree';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
+	import { createSkill, moveEntry as moveOnServer } from '$lib/remote/projects/projects.remote';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import NameDialog from './name-dialog.svelte';
 	import ProjectTreeView from './project-tree-view.svelte';
@@ -40,9 +41,30 @@
 		activePath: string;
 	} = $props();
 
-	// The store keeps the server's explanation when there was one (e.g. a name
-	// already in use); anything unexpected falls back to the generic copy.
-	const failureMessage = (fallback: string): string => projectActions.lastError ?? fallback;
+	// An action in flight disables the name dialogs, so a second Enter cannot submit twice.
+	let busy = $state(0);
+	async function action<T>(work: () => Promise<T>): Promise<T> {
+		busy += 1;
+		try {
+			return await work();
+		} finally {
+			busy -= 1;
+		}
+	}
+	/** Move on the server, then show the result: the tree reads the refreshed workspace. */
+	const move = (
+		projectId: ProjectId,
+		entryId: NoteId,
+		parentId: NoteId | undefined,
+		position: number
+	) =>
+		action(() =>
+			workspaceSession.serverChange(moveOnServer({ projectId, entryId, parentId, position }))
+		);
+	const missingWorkspace = {
+		kind: 'failure',
+		message: 'Open the workspace before editing'
+	} as const;
 
 	const STORAGE_KEY = 'workbench.tree.expanded';
 
@@ -151,7 +173,7 @@
 		const node = byId.get(activeNoteId);
 		if (!node) return;
 		toggled.delete(`project:${node.projectId}`);
-		for (const parentId of ancestorFolderIds(node, byId)) toggled.add(parentId);
+		for (const parentId of projectTreeController.revealPath(node, byId)) toggled.add(parentId);
 		revealedNoteId = activeNoteId;
 	});
 
@@ -215,7 +237,7 @@
 			awaitingServer.add(key);
 		}
 		void move.finally(() => {
-			// Server truth has landed (moveEntry synchronizes); on failure the tree
+			// Server truth has landed (the move refreshes the workspace); on failure the tree
 			// should snap back to it rather than keep showing the dropped order.
 			for (const key of overrides.keys()) {
 				awaitingServer.delete(key);
@@ -242,7 +264,7 @@
 	function isDropBlocked(folderId: NoteId): boolean {
 		if (draggingId === undefined) return false;
 		const folder = byId.get(folderId);
-		return folder !== undefined && isWithinSubtree(folder, draggingId, byId);
+		return folder !== undefined && projectTreeController.contains(folder, draggingId, byId);
 	}
 
 	function handleDndConsider(
@@ -272,11 +294,11 @@
 			original !== undefined &&
 			((original.parentId ?? undefined) !== parentId || original.position !== index);
 		if (moved) {
-			const move = projectActions.moveEntry(projectId, draggedId, parentId, index);
-			void move.then((output) => {
-				if (!output) toast.error(failureMessage('Could not move it. Try again.'));
+			const moving = move(projectId, draggedId, parentId, index);
+			void moving.then((moved) => {
+				if (moved.kind === 'failure') toast.error(moved.message);
 			});
-			holdUntilServer(new Map([[key, event.detail.items]]), move);
+			holdUntilServer(new Map([[key, event.detail.items]]), moving);
 		}
 		// Anything else already matches the rendered order, or nothing will arrive
 		// to supersede it.
@@ -350,9 +372,9 @@
 		const dropped = event.detail.items.some((item) => item.id === draggedId);
 		if (dragged && dropped && (dragged.parentId ?? undefined) !== folder.id) {
 			const target = entriesUnder(folder.projectId, folder.id);
-			const move = projectActions.moveEntry(folder.projectId, dragged.id, folder.id, target.length);
-			void move.then((output) => {
-				if (!output) toast.error(failureMessage('Could not move it. Try again.'));
+			const moving = move(folder.projectId, dragged.id, folder.id, target.length);
+			void moving.then((moved) => {
+				if (moved.kind === 'failure') toast.error(moved.message);
 			});
 			// Show the drop at once: the entry leaves its list and ends the folder's,
 			// which opens so the result is visible.
@@ -366,7 +388,7 @@
 					],
 					[zoneKey(folder.projectId, folder.id), [...target, dragged]]
 				]),
-				move
+				moving
 			);
 			expandTo(folder.projectId, folder.id);
 		}
@@ -377,7 +399,12 @@
 
 	type InlineEdit =
 		| { mode: 'create'; kind: 'note' | 'folder' | 'skill'; projectId: ProjectId; parentId?: NoteId }
-		| { mode: 'rename'; entryId: NoteId; current: string; draft: WorkspaceDraft<'notes'> };
+		| {
+				mode: 'rename';
+				entryId: NoteId;
+				current: string;
+				draft: WorkspaceDraftController<'notes'> | null;
+		  };
 
 	let inlineEdit = $state<InlineEdit | null>(null);
 	let inlineCreateValue = $state('');
@@ -398,7 +425,7 @@
 		if (event.key === 'Enter') {
 			event.preventDefault();
 			const trimmed = inlineCreateValue.trim();
-			if (!trimmed || projectActions.busy) return;
+			if (!trimmed || busy) return;
 			inlineCreateSubmitted = true;
 			void submitInline(trimmed);
 		} else if (event.key === 'Escape') {
@@ -408,7 +435,7 @@
 	}
 
 	function handleInlineCreateBlur(): void {
-		if (!inlineCreateSubmitted && !projectActions.busy) inlineEdit = null;
+		if (!inlineCreateSubmitted && !busy) inlineEdit = null;
 	}
 
 	function isCreatingIn(projectId: ProjectId, parentId?: NoteId): boolean {
@@ -423,37 +450,63 @@
 		if (!inlineEdit) return;
 		const pending = inlineEdit;
 		if (pending.mode === 'rename') {
-			const output = await projectActions.renameNote(pending.draft, value);
-			if (!output) {
-				toast.error(failureMessage('Could not rename it. Try again.'));
+			const draft = pending.draft;
+			const renamed = await action(() =>
+				draft
+					? draft.stage({ kind: 'renameNote', noteId: pending.entryId, title: value })
+					: Promise.resolve(missingWorkspace)
+			);
+			if (renamed.kind === 'failure') {
+				toast.error(renamed.message);
 				return;
 			}
 			inlineEdit = null;
 			return;
 		}
 		if (pending.kind === 'note') {
-			const output = await projectActions.createNote(value, pending.projectId, pending.parentId);
-			if (!output) {
-				toast.error(failureMessage('Could not create the note. Try again.'));
+			const id = crypto.randomUUID() as NoteId;
+			const created = await action(() =>
+				workspaceSession.create({
+					kind: 'createNote',
+					id,
+					projectId: pending.projectId,
+					parentId: pending.parentId,
+					title: value
+				})
+			);
+			if (created.kind === 'failure') {
+				toast.error(created.message);
 				return;
 			}
 			inlineEdit = null;
-			await workbench.openTab(output.note.id);
+			await workbench.openTab(id);
 		} else if (pending.kind === 'folder') {
-			const output = await projectActions.createFolder(pending.projectId, value, pending.parentId);
-			if (!output) {
-				toast.error(failureMessage('Could not create the folder. Try again.'));
+			const created = await action(() =>
+				workspaceSession.create({
+					kind: 'createFolder',
+					id: crypto.randomUUID() as NoteId,
+					projectId: pending.projectId,
+					parentId: pending.parentId,
+					name: value
+				})
+			);
+			if (created.kind === 'failure') {
+				toast.error(created.message);
 				return;
 			}
 			inlineEdit = null;
 		} else {
-			const output = await projectActions.createSkill(value, pending.projectId, pending.parentId);
-			if (!output) {
-				toast.error(failureMessage('Could not create the skill. Try again.'));
+			const created = await action(() =>
+				workspaceSession.serverChange(
+					createSkill({ name: value, projectId: pending.projectId, parentId: pending.parentId })
+				)
+			);
+			if (created.kind === 'failure') {
+				toast.error(created.message);
 				return;
 			}
 			inlineEdit = null;
-			await workbench.openTab(output.skill.note.id);
+			await workbench.openTab(created.value.skill.note.id);
 		}
 	}
 
@@ -461,7 +514,12 @@
 
 	type ProjectDialog =
 		| { kind: 'new-project' }
-		| { kind: 'rename-project'; draft: WorkspaceDraft<'projects'>; current: string };
+		| {
+				kind: 'rename-project';
+				projectId: ProjectId;
+				draft: WorkspaceDraftController<'projects'> | null;
+				current: string;
+		  };
 
 	let dialog = $state<ProjectDialog | null>(null);
 
@@ -471,32 +529,39 @@
 		if (!dialog) return true;
 		const pending = dialog;
 		if (pending.kind === 'new-project') {
-			const output = await projectActions.createProject(value);
-			if (!output) {
-				toast.error(failureMessage('Could not create the project. Try again.'));
+			const id = crypto.randomUUID() as ProjectId;
+			const created = await action(() =>
+				workspaceSession.create({ kind: 'createProject', id, name: value })
+			);
+			if (created.kind === 'failure') {
+				toast.error(created.message);
 				return false;
 			}
-			await goto(`/projects/${output.project.id}`);
+			await goto(`/projects/${id}`);
 			return true;
 		}
-		const output = await projectActions.renameProject(pending.draft, value);
-		if (!output) {
-			toast.error(failureMessage('Could not rename the project. Try again.'));
+		const draft = pending.draft;
+		const renamed = await action(() =>
+			draft
+				? draft.stage({ kind: 'renameProject', projectId: pending.projectId, name: value })
+				: Promise.resolve(missingWorkspace)
+		);
+		if (renamed.kind === 'failure') {
+			toast.error(renamed.message);
 			return false;
 		}
 		return true;
 	}
 
 	async function archiveEntry(entry: NoteSummary): Promise<void> {
-		const output = await projectActions.archiveNote(entry.id);
-		if (!output) {
-			toast.error(
-				failureMessage(
-					entry.kind === 'folder'
-						? 'Could not delete the folder. Empty it first.'
-						: 'Could not delete it. Try again.'
-				)
-			);
+		const archived = await action(() =>
+			workspaceSession.edit(
+				{ type: 'notes', id: [entry.id] },
+				{ kind: 'archiveNote', noteId: entry.id }
+			)
+		);
+		if (archived.kind === 'failure') {
+			toast.error(archived.message);
 			return;
 		}
 		toast.success('Moved to trash');
@@ -504,9 +569,14 @@
 	}
 
 	async function archiveProject(project: Project): Promise<void> {
-		const output = await projectActions.archiveProject(project.id);
-		if (!output) {
-			toast.error(failureMessage('Could not archive the project. Try again.'));
+		const archived = await action(() =>
+			workspaceSession.edit(
+				{ type: 'projects', id: [project.id] },
+				{ kind: 'archiveProject', projectId: project.id }
+			)
+		);
+		if (archived.kind === 'failure') {
+			toast.error(archived.message);
 			return;
 		}
 		if (activePath.startsWith(`/projects/${project.id}`)) await goto('/today');
@@ -515,8 +585,8 @@
 	async function moveEntry(entry: NoteSummary, parentId?: NoteId): Promise<void> {
 		if ((entry.parentId ?? undefined) === parentId) return;
 		const position = entriesUnder(entry.projectId, parentId).length;
-		const output = await projectActions.moveEntry(entry.projectId, entry.id, parentId, position);
-		if (!output) toast.error(failureMessage('Could not move it. Try again.'));
+		const moved = await move(entry.projectId, entry.id, parentId, position);
+		if (moved.kind === 'failure') toast.error(moved.message);
 		else if (parentId && !isFolderOpen(parentId)) toggled.add(parentId);
 	}
 
@@ -540,7 +610,7 @@
 	{transitionsReady}
 	bind:inlineEdit
 	bind:inlineCreateValue
-	busy={projectActions.busy}
+	busy={busy > 0}
 	{zoneItems}
 	{isProjectOpen}
 	{isFolderOpen}
@@ -568,7 +638,8 @@
 	onrenameproject={(project) =>
 		(dialog = {
 			kind: 'rename-project',
-			draft: projectActions.editor('projects', project.id),
+			projectId: project.id,
+			draft: workspaceSession.capture({ type: 'projects', id: [project.id] }),
 			current: project.name
 		})}
 />
@@ -584,6 +655,6 @@
 	label="Project name"
 	submitLabel={dialog?.kind === 'new-project' ? 'Create' : 'Rename'}
 	initialValue={dialog?.kind === 'rename-project' ? dialog.current : ''}
-	busy={projectActions.busy}
+	busy={busy > 0}
 	onsubmit={submitDialog}
 />

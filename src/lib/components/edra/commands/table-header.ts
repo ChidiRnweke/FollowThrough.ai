@@ -1,36 +1,11 @@
-import { TableHeader as TiptapTableHeader } from '@tiptap/extension-table';
+import { NoteTableHeader } from '$lib/infrastructure/notes/schema/tables';
 import { Plugin } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import strings from './strings.js';
 
 import { getCellsInRow, isColumnSelected, selectColumn } from './utils.js';
 
-export const TableHeader = TiptapTableHeader.extend({
-	addAttributes() {
-		return {
-			colspan: {
-				default: 1
-			},
-			rowspan: {
-				default: 1
-			},
-			colwidth: {
-				default: null,
-				parseHTML: (element) => {
-					const colwidth = element.getAttribute('colwidth');
-					const value = colwidth
-						? colwidth.split(',').map((item) => Number.parseInt(item, 10))
-						: null;
-
-					return value;
-				}
-			},
-			style: {
-				default: null
-			}
-		};
-	},
-
+export const TableHeader = NoteTableHeader.extend({
 	addProseMirrorPlugins() {
 		const { isEditable } = this.editor;
 

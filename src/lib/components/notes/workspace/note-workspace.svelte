@@ -1,50 +1,48 @@
 <script lang="ts">
-	import { NoteHistory } from '$lib/stores/notes/history.svelte';
-	import type { DiagramSuggestion, Suggestion } from '$lib/models/suggestions';
+	import { decideSuggestion } from '$lib/components/suggestions';
+	import { createNoteHistory } from '$lib/factories/notes/history';
+	import type { DiagramSuggestion } from '$lib/models/suggestions';
 
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
-	import type { NoteView } from '$lib/client/notes/view';
+	import type { NoteView } from '$lib/models/workspace-views';
 
-	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
-	import { noteCommand, noteHasUnpublishedChanges } from '$lib/services/workspace/commands';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { createEditorSession } from '$lib/factories/workspace/editor-session';
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { noteHasUnpublishedChanges } = workspacePresentation;
+
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
-	import type {
-		ConvertInlineMermaidOutput,
-		DrawioDiagram,
-		GenerateMermaidDiagramOutput,
-		ReviseInlineMermaidOutput
-	} from '$lib/models/diagrams';
-	import type { ExtractPromisesOutput } from '$lib/models/todos';
-	import type { FindReferencesOutput } from '$lib/models/references';
-	import type { RelateSelectionOutput } from '$lib/models/relationships';
-	import type {
-		NoteId,
-		NoteRevisionId,
-		SectionNumberingLevel,
-		TextSelection
+	import type { DrawioDiagram } from '$lib/models/diagrams';
+	import {
+		sectionNumberingSettings,
+		type NoteDraftInput,
+		type NoteDraftSave,
+		type NoteId,
+		type NoteRevisionId,
+		type SectionNumberingLevel,
+		type TextSelection
 	} from '$lib/models/notes';
+	import type { PreparedWorkspaceCommand } from '$lib/models/workspace-mutations';
 
 	import type { SuggestionId } from '$lib/models/suggestions';
-	import { sectionNumberingOverrideFor } from '$lib/services/notes/section-numbering';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
 	import { askAgent } from '$lib/client/shell/responsive-surfaces';
 	import { agentActions } from '$lib/components/agent';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { noteActions } from '$lib/stores/notes/note-actions.svelte';
-	import {
-		noteActionRunsFor,
-		type NoteActionContext
-	} from '$lib/stores/notes/note-action-runs.svelte';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { noteSubmissions } from '$lib/factories/notes/submissions';
+	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
+	import { noteActionTracking } from '$lib/factories/notes/action-runs';
+	import type { NoteActionContext } from '$lib/models/agent';
+	import type { DiagramActionInput } from '$lib/models/diagrams';
+	import { moveEntry as moveOnServer } from '$lib/remote/projects/projects.remote';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import type { PerNoteEditorSlot } from '../editor-context';
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
-	import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
+	import type { EditorSelectionState } from '$lib/stores/notes/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
 	import NoteOutlineRail from '../note-outline-rail.svelte';
@@ -68,8 +66,8 @@
 	}: {
 		view: NoteView;
 		shell: ShellContext;
-		draft: WorkspaceDraft<'notes'>;
-		editorSelection: EditorSelectionStore;
+		draft: WorkspaceDraftController<'notes'>;
+		editorSelection: EditorSelectionState;
 		inlineSuggestionsEnabled?: boolean;
 		onCloseSplit?: () => void;
 	} = $props();
@@ -83,14 +81,7 @@
 
 	let exportOpen = $state(false);
 	let historyOpen = $state(false);
-	const history = untrack(
-		() =>
-			new NoteHistory(
-				view.note.id,
-				async (noteId) => (await listNoteRevisions(noteId)).revisions,
-				async (noteId, revisionId) => (await getNoteRevision({ noteId, revisionId })).revision
-			)
-	);
+	const history = untrack(() => createNoteHistory(view.note.id));
 	$effect(() => {
 		if (!historyOpen) history.cancel();
 	});
@@ -104,12 +95,38 @@
 	let outline = $state<readonly OutlineHeading[]>([]);
 	let activeHeading = $state<string | undefined>(undefined);
 	let utilityHeaderHeight = $state(0);
-	const editorSession = untrack(() => new EditorSession(() => draft.active));
+	const editorSession = untrack(() => createEditorSession(() => draft.active));
 	const dirty = $derived(editorSession.dirty);
 	const saveFailed = $derived(editorSession.failure !== null);
 	// Keyed by note id rather than shared: in a split, the sibling pane's work must
 	// not show up as this note's.
-	const actionRuns = noteActionRunsFor(untrack(() => view.note.id));
+	/** Stage one edit of this note against the editor's captured base. */
+	async function stage(
+		command: Extract<PreparedWorkspaceCommand, { kind: 'saveNote' | 'noteNumbering' }>
+	): Promise<NoteDraftSave> {
+		if (!draft.active) return { kind: 'failure', message: 'The note editor is no longer active' };
+		const result = await draft.stage(command);
+		if (!draft.active) return { kind: 'failure', message: 'The note editor is no longer active' };
+		if (result.kind === 'failure') return result;
+		return result.value
+			? { kind: 'saved', value: result.value }
+			: { kind: 'failure', message: 'The note no longer exists' };
+	}
+	const saveNote = (input: NoteDraftInput) =>
+		stage({
+			kind: 'saveNote',
+			noteId: input.id,
+			document: input.document,
+			plainText: input.plainText,
+			title: input.title,
+			isPinned: input.isPinned
+		});
+	const editorAccount = untrack(() => workspaceSession.current?.bootstrap.accountId);
+	if (!editorAccount) throw new Error('Open the workspace before mounting an editor');
+	const actionRuns = noteActionTracking.open(
+		untrack(() => view.note.id),
+		editorAccount
+	);
 	const activeAction = $derived(
 		actionRuns.activeSelectionAction?.action as NoteAiAction | undefined
 	);
@@ -123,10 +140,13 @@
 	const sectionNumbering = $derived(view.sectionNumbering);
 
 	async function changeSectionNumbering(level: SectionNumberingLevel): Promise<void> {
-		const enabled = sectionNumberingOverrideFor(level);
-		const result = await draft.stage({ kind: 'noteNumbering', noteId: note.id, enabled });
+		const result = await stage({
+			kind: 'noteNumbering',
+			noteId: note.id,
+			enabled: sectionNumberingSettings[level]
+		});
 		if (result.kind === 'failure') toast.error(result.message);
-		else note = { ...note, sectionNumbering: enabled };
+		else note = { ...note, sectionNumbering: result.value.sectionNumbering };
 	}
 
 	/**
@@ -254,18 +274,12 @@
 			.save(
 				async () => {
 					if (!editorRef) return { kind: 'failure', message: 'The editor is unavailable' };
-					const result = await draft.stage(
-						noteCommand({
-							...note,
-							title: note.title.trim(),
-							document: editorRef.getDocument(),
-							plainText: editorRef.getPlainText()
-						})
-					);
-					if (result.kind === 'failure') return result;
-					return result.value
-						? { kind: 'saved', value: result.value }
-						: { kind: 'failure', message: 'The note no longer exists' };
+					return saveNote({
+						...note,
+						title: note.title.trim(),
+						document: editorRef.getDocument(),
+						plainText: editorRef.getPlainText()
+					});
 				},
 				(value, unchanged) => {
 					note = unchanged
@@ -295,14 +309,12 @@
 			if (dirty) return;
 		}
 		const isCurrent = editorSession.checkpoint();
-		const toggled = { ...note, isPinned: !note.isPinned };
-		const record = await draft.stage(
-			noteCommand({
-				...toggled,
-				document: editorRef.getDocument(),
-				plainText: editorRef.getPlainText()
-			})
-		);
+		const record = await saveNote({
+			...note,
+			isPinned: !note.isPinned,
+			document: editorRef.getDocument(),
+			plainText: editorRef.getPlainText()
+		});
 		if (record.kind === 'saved' && record.value) {
 			if (!isCurrent()) return;
 			note = { ...record.value };
@@ -324,14 +336,21 @@
 				(entry.parentId ?? undefined) === parentId &&
 				!entry.archivedAt
 		);
-		const output = await projectActions.moveEntry(
-			note.projectId,
-			note.id,
-			parentId,
-			siblings.length
+		const moved = await workspaceSession.serverChange(
+			moveOnServer({
+				projectId: note.projectId,
+				entryId: note.id,
+				parentId,
+				position: siblings.length
+			})
 		);
-		if (!output) toast.error('Could not move the note. Try again.');
-		else note = { ...note, parentId: output.entry.parentId, position: output.entry.position };
+		if (moved.kind === 'failure') toast.error('Could not move the note. Try again.');
+		else
+			note = {
+				...note,
+				parentId: moved.value.entry.parentId,
+				position: moved.value.entry.position
+			};
 	}
 
 	async function archive(): Promise<void> {
@@ -340,8 +359,11 @@
 			toast.error('Save or resolve the note before moving it to trash.');
 			return;
 		}
-		const output = await projectActions.archiveNote(note.id);
-		if (!output) {
+		const archived = await workspaceSession.edit(
+			{ type: 'notes', id: [note.id] },
+			{ kind: 'archiveNote', noteId: note.id }
+		);
+		if (archived.kind === 'failure') {
 			toast.error('Could not delete the note. Try again.');
 			return;
 		}
@@ -362,27 +384,29 @@
 			toast.error('Select some text first.');
 			return;
 		}
-		if (!(await ensureSynchronized('Sync the note before running an agent action.'))) return;
+		if (!(await ensureSynchronized('Sync the note before running an AI action.'))) return;
 		// The editor's copy keeps the revision it observed; the server advanced it on
 		// the last acknowledged save, and the action is checked against the server.
 		const confirmed = draft.confirmed;
 		if (!confirmed) {
-			toast.error('Sync the note before running an agent action.');
+			toast.error('Sync the note before running an AI action.');
 			return;
 		}
 		const selection = { ...capturedSelection, revision: confirmed.currentRevision };
-		const receipt =
-			action === 'promises'
-				? await noteActions.extractPromises(selection)
-				: action === 'relate'
-					? await noteActions.relate(selection)
-					: action === 'reference'
-						? await noteActions.findReferences(selection)
-						: await noteActions.generateDiagram(selection);
-		if (!receipt) {
-			toast.error(noteActions.lastError ?? 'The action could not be started. Try again.');
+		const accountId = workspaceSession.current?.bootstrap.accountId;
+		if (!accountId) {
+			toast.error('The workspace is not ready. Try again.');
 			return;
 		}
+		const started =
+			action === 'diagram'
+				? await noteSubmissions.diagram(accountId, { operation: 'generate', selection })
+				: await noteSubmissions.selection(accountId, action, selection);
+		if (started.kind === 'failure') {
+			toast.error(started.message);
+			return;
+		}
+		const receipt = started.receipt;
 		// The insertion point is captured now: the selection may move or clear
 		// while the diagram is generated, and a refresh loses it entirely. The
 		// editor holds it and maps it through every edit the author makes in
@@ -404,8 +428,12 @@
 	 * still has to land in the same place.
 	 */
 	function registerActionHandlers(): void {
+		actionRuns.refreshWith(async () => {
+			await workspaceSession.synchronize();
+		});
 		actionRuns.on('promises', async (result) => {
-			const output = result as ExtractPromisesOutput<Suggestion>;
+			if (result.action !== 'promises') throw new Error('Unexpected note action result');
+			const output = result.output;
 			if (output.createdTodos.length > 0) {
 				toast.success(`${output.createdTodos.length} todo(s) created from explicit promises`);
 				await workspaceSession.synchronize();
@@ -413,11 +441,13 @@
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('relate', (result) => {
-			const output = result as RelateSelectionOutput<Suggestion>;
+			if (result.action !== 'relate') throw new Error('Unexpected note action result');
+			const output = result.output;
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('reference', async (result) => {
-			const output = result as FindReferencesOutput<Suggestion>;
+			if (result.action !== 'reference') throw new Error('Unexpected note action result');
+			const output = result.output;
 			if (output.outcome === 'nothing_relevant') {
 				toast.info('Nothing sufficiently relevant found.');
 				return;
@@ -426,7 +456,8 @@
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('diagram', async (result, context, runId) => {
-			const output = result as GenerateMermaidDiagramOutput<Suggestion>;
+			if (result.action !== 'diagram') throw new Error('Unexpected note action result');
+			const output = result.output;
 			if (output.suggestion.kind !== 'diagram') return;
 			const live = editorRef?.consumeInsertionPoint(runId);
 			// The live mapped point wins; a refresh leaves no plugin state behind, so
@@ -443,17 +474,19 @@
 				return;
 			}
 			markDirty();
-			await suggestionActions.decide(output.suggestion.id, 'accept');
+			await decideSuggestion(output.suggestion.id, 'accept');
 			toast.success('Diagram inserted — undo with Ctrl+Z');
 		});
 		actionRuns.on('convert', (result) => {
-			const output = result as ConvertInlineMermaidOutput<Suggestion>;
+			if (result.action !== 'convert') throw new Error('Unexpected note action result');
+			const output = result.output;
 			if (output.suggestion.kind !== 'diagram' || output.suggestion.payload.kind !== 'drawio')
 				return;
 			toast.success('draw.io conversion ready to review');
 		});
 		actionRuns.on('revise', (result, context) => {
-			const output = result as ReviseInlineMermaidOutput;
+			if (result.action !== 'revise') throw new Error('Unexpected note action result');
+			const output = result.output;
 			const previous = typeof context.source === 'string' ? context.source : undefined;
 			// On the live path the Mermaid node view applies this itself from the
 			// promise; this branch is the one a refresh leaves behind.
@@ -480,13 +513,15 @@
 	): Promise<{ readonly source: string; readonly title?: string }> {
 		if (!(await ensureSynchronized('Sync the note before revising its diagram.')))
 			throw new Error('Sync the note before revising its diagram.');
-		const receipt = await noteActions.reviseDiagram(
-			note.id,
+		const started = await submitDiagram({
+			operation: 'revise',
+			noteId: note.id,
 			source,
 			instruction,
 			renderedPngDataUrl
-		);
-		if (!receipt) throw new Error(noteActions.lastError ?? 'Diagram revision failed. Try again.');
+		});
+		if (started.kind === 'failure') throw new Error(started.message);
+		const receipt = started.receipt;
 		// `source` travels as context so a refresh can still find the node this
 		// revision belongs to and apply it there.
 		const outcome = await actionRuns.track(receipt, { action: 'revise', context: { source } });
@@ -494,19 +529,28 @@
 		if (outcome.status !== 'completed')
 			throw new Error(outcome.message ?? 'Diagram revision failed. Try again.');
 		toast.success('Diagram revised — undo with Ctrl+Z');
-		return outcome.result as ReviseInlineMermaidOutput;
+		if (outcome.result.action !== 'revise') throw new Error('Unexpected diagram revision result');
+		return outcome.result.output;
 	}
 
 	async function convertMermaid(source: string, instruction?: string): Promise<DiagramSuggestion> {
 		if (!(await ensureSynchronized('Sync the note before converting its diagram.')))
 			throw new Error('Sync the note before converting its diagram.');
-		const receipt = await noteActions.convertDiagram(note.id, source, instruction);
-		if (!receipt) throw new Error(noteActions.lastError ?? 'Diagram conversion failed. Try again.');
+		const started = await submitDiagram({
+			operation: 'convert',
+			noteId: note.id,
+			source,
+			instruction
+		});
+		if (started.kind === 'failure') throw new Error(started.message);
+		const receipt = started.receipt;
 		const outcome = await actionRuns.track(receipt, { action: 'convert', context: { source } });
 		if (outcome.status === 'cancelled') throw new Error('Diagram conversion cancelled.');
 		if (outcome.status !== 'completed')
 			throw new Error(outcome.message ?? 'Diagram conversion failed. Try again.');
-		const output = outcome.result as ConvertInlineMermaidOutput<Suggestion>;
+		if (outcome.result.action !== 'convert')
+			throw new Error('Unexpected diagram conversion result');
+		const output = outcome.result.output;
 		if (output.suggestion.kind !== 'diagram' || output.suggestion.payload.kind !== 'drawio')
 			throw new Error('Diagram conversion failed. Try again.');
 		return output.suggestion;
@@ -519,19 +563,39 @@
 	): Promise<DrawioDiagram> {
 		if (!(await ensureSynchronized('Sync the note before accepting its diagram.')))
 			throw new Error('Sync the note before accepting its diagram.');
-		const diagram = await noteActions.acceptDrawio(note.id, suggestionId, source, renderedSvg);
-		if (!diagram) throw new Error(noteActions.lastError ?? 'The diagram could not be accepted.');
-		await workspaceSession.synchronize();
+		const accepted = await workspaceSession.serverChange(
+			acceptSuggestion({
+				suggestionId,
+				drawioReview: { noteId: note.id, source, renderedSvg }
+			})
+		);
+		if (accepted.kind === 'failure') throw new Error(accepted.message);
+		const diagram = accepted.value.artifact;
+		if (
+			accepted.value.suggestion.kind !== 'diagram' ||
+			accepted.value.suggestion.payload.kind !== 'drawio' ||
+			!('kind' in diagram) ||
+			diagram.kind !== 'drawio'
+		)
+			throw new Error('The accepted suggestion did not create the expected draw.io diagram.');
 		toast.success('draw.io diagram accepted');
 		return diagram;
 	}
 
 	async function rejectDrawio(suggestionId: SuggestionId): Promise<void> {
-		const rejected = await noteActions.rejectDrawio(suggestionId);
-		if (!rejected)
-			throw new Error(noteActions.lastError ?? 'The conversion could not be dismissed.');
-		await workspaceSession.synchronize();
+		const rejected = await workspaceSession.serverChange(rejectSuggestion({ suggestionId }));
+		if (rejected.kind === 'failure') throw new Error(rejected.message);
 		toast.success('draw.io conversion dismissed');
+	}
+
+	function submitDiagram(input: DiagramActionInput) {
+		const accountId = workspaceSession.current?.bootstrap.accountId;
+		return accountId
+			? noteSubmissions.diagram(accountId, input)
+			: Promise.resolve({
+					kind: 'failure',
+					message: 'The workspace is not ready. Try again.'
+				} as const);
 	}
 
 	function runSkill(skillName: string): void {

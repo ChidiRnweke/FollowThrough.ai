@@ -1,3 +1,5 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { expect, it } from 'vitest';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
@@ -13,7 +15,10 @@ import {
 } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
@@ -24,22 +29,25 @@ import { InMemoryGatedMemoryEntries } from '$lib/testing/memory/fakes/in-memory-
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { actor, context, now, seedProvenance } from '../database-harness';
 
-const setup = async (suffix: string, memory = new InMemoryMemoryEntryRepository()) => {
+const setup = async (
+	suffix: string,
+	memory: InMemoryMemoryEntryRepository = new InMemoryMemoryEntryRepository(actor(suffix))
+) => {
 	const owner = actor(suffix);
-	await new UserRecords(context.db).ensureLocal(owner);
+	await new UserRecords(owner, context.db).ensureLocal();
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const conversations = new ConversationRecords(database);
-	const conversation = await conversations.insert(owner, {
+	const conversations = new ConversationRecords(owner, database);
+	const conversation = await conversations.insert({
 		id: crypto.randomUUID() as ConversationId,
 		userId: owner.userId,
 		kind: 'chat',
 		createdAt: now,
 		updatedAt: now
 	});
-	const runs = new AgentRunRecords(database);
-	const events = new AgentRunEventRecords(database);
+	const runs = new AgentRunRecords(owner, database);
+	const events = new AgentRunEventRecords(owner, database);
 	const provenance = await seedProvenance(owner, suffix);
-	const run = await runs.insert(owner, {
+	const run = await runs.insert({
 		kind: 'agent',
 		id: crypto.randomUUID() as AgentRunId,
 		userId: owner.userId,
@@ -55,8 +63,11 @@ const setup = async (suffix: string, memory = new InMemoryMemoryEntryRepository(
 		updatedAt: now
 	});
 	const fixture = agentContextFixture();
-	const controller = new Agent(
-		capabilityDependencies<AgentDependencies>({
+	const controller = new AgentSdkHarness(
+		owner,
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<AgentHarnessDependencies>({
+			...agentRulesFixture(),
 			...fixture.dependencies,
 			runs,
 			events,
@@ -66,10 +77,10 @@ const setup = async (suffix: string, memory = new InMemoryMemoryEntryRepository(
 			checkpoints: new RunCheckpoints(runs),
 			cancellations: new RunCancellation(runs),
 			settlements: new RunSettlements(runs, events),
-			decisions: new AgentRunDecisionRecords(database),
-			sessions: new AgentSessionRecords(database),
-			conversationJournal: new ConversationArchive(conversations),
-			contextConversations: new ConversationArchive(conversations)
+			decisions: new AgentRunDecisionRecords(owner, database),
+			sessions: new AgentSessionRecords(owner, database),
+			conversationMessages: new ConversationArchive(owner, conversations),
+			conversationSessions: new ConversationArchive(owner, conversations)
 		})
 	);
 	return { owner, run, runs, events, controller };
@@ -93,8 +104,8 @@ it('rolls back prepared context with a rejected start event before recording fai
 				await state.controller.failRun(state.run.id, error);
 				return { kind: 'failure' as const };
 			});
-		const run = await state.runs.findById(state.owner, state.run.id);
-		const events = await state.events.replay(state.owner, state.run.id, '0');
+		const run = await state.runs.findById(state.run.id);
+		const events = await state.events.replay(state.run.id, '0');
 		expect({
 			status: run?.status,
 			context: run?.contextSnapshot,
@@ -107,18 +118,18 @@ it('rolls back prepared context with a rejected start event before recording fai
 });
 
 it('does not start a run cancelled by another execution while its context was loading', async () => {
-	const memory = new InMemoryGatedMemoryEntries();
+	const memory = new InMemoryGatedMemoryEntries(actor('17502'));
 	const state = await setup('17502', memory);
 	const execution = state.controller.execute(state.run.id, new AbortController().signal);
 	try {
 		await memory.started;
-		await state.controller.cancel(state.owner, state.run.id);
+		await state.controller.cancel(state.run.id);
 	} finally {
 		memory.release();
 	}
 	const outcome = await execution;
-	const run = await state.runs.findById(state.owner, state.run.id);
-	const events = await state.events.replay(state.owner, state.run.id, '0');
+	const run = await state.runs.findById(state.run.id);
+	const events = await state.events.replay(state.run.id, '0');
 	expect({
 		outcome,
 		status: run?.status,

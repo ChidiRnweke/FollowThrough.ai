@@ -1,4 +1,5 @@
 <script lang="ts" module>
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { WidgetId, WidgetTemplateName } from '$lib/models/widgets';
 
 	/** What the user chose: a new widget from a template, or one this project already has. */
@@ -13,15 +14,18 @@
 	import type { UserId } from '$lib/models/identity';
 	import type { DateTime } from '$lib/models/workspace';
 	import { widgetCatalog, widgetTemplates, type Widget } from '$lib/models/widgets';
-	import { createWidget } from '$lib/services/widgets/edits';
+	import { createWidgetEditingController } from '$lib/factories/widgets/editing';
+	const widgetEditing = createWidgetEditingController();
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import * as Icon from '$lib/components/icons';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import WidgetView from './widget-view.svelte';
-	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
+	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
+	import { todayLocalDate } from '$lib/client/todos/local-date';
+	const widgetSources = (widget: Widget) => sourceViews.widgetSources(widget, todayLocalDate());
 
 	let {
 		open = $bindable(false),
@@ -31,12 +35,12 @@
 
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before choosing a widget');
-	const existing = $derived(session.resources.views.widgets(projectId));
+	const existing = $derived(workspaceViews.widgets(projectId));
 
 	// A preview is the template as `createWidget` would save it, so what is shown is what is made.
 	const previews = (Object.keys(widgetTemplates) as WidgetTemplateName[]).flatMap(
 		(template, index) => {
-			const result = createWidget(
+			const result = widgetEditing.createWidget(
 				widgetTemplates[template],
 				{
 					id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}` as WidgetId,

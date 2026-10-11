@@ -1,4 +1,4 @@
-import type { ShellContext } from '$lib/client/shell/views';
+import type { ShellContext } from '$lib/models/workspace-views';
 import type { EntityRef } from '$lib/models/tool-display';
 export type { EntityKind, EntityRef } from '$lib/models/tool-display';
 import { toolPresentationKind, type ToolFamily } from './tool-catalog-presentation';
@@ -8,11 +8,11 @@ import { argumentLabel, isIdentifierArgument } from '../../chat/actions/tool-app
 import { explainToolFailure } from './tool-result';
 import { entityFrom, toolEntity, fileEntity } from './tool-entities';
 import { toolCollection } from './tool-collections';
-import {
-	agentPayloadItems,
-	isAgentPayloadObject,
-	type AgentPayload
-} from '$lib/models/agent/payload';
+import { type AgentPayload } from '$lib/models/agent/payload';
+import { agentPayloadOperations } from '$lib/factories/agent/payload';
+const { agentPayloadItems } = agentPayloadOperations;
+
+const { isAgentPayloadObject } = agentPayloadOperations;
 
 /** The result detail for a call. Targets and concise outcomes render before any expansion. */
 

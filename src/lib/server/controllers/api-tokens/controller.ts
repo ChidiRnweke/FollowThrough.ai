@@ -1,4 +1,4 @@
-import type { ActorContext, ApiToken, ApiTokenId } from '$lib/models/identity';
+import type { ApiToken, ApiTokenId } from '$lib/models/identity';
 import type { IAccessTokens } from '$lib/server/services/identity/api-tokens';
 
 /**
@@ -9,9 +9,9 @@ import type { IAccessTokens } from '$lib/server/services/identity/api-tokens';
  */
 export interface ApiTokensController {
 	/** List the user's API tokens, with secrets masked. */
-	list(actor: ActorContext): Promise<readonly ApiToken[]>;
+	list(): Promise<readonly ApiToken[]>;
 	/** Permanently revoke a token; authenticated requests carrying it stop working from that point. */
-	revoke(actor: ActorContext, id: ApiTokenId): Promise<Pick<ApiToken, 'id' | 'name'>>;
+	revoke(id: ApiTokenId): Promise<Pick<ApiToken, 'id' | 'name'>>;
 }
 
 export interface ApiTokensDependencies {
@@ -21,11 +21,11 @@ export interface ApiTokensDependencies {
 export class ApiTokens implements ApiTokensController {
 	constructor(private readonly dependencies: ApiTokensDependencies) {}
 
-	list(actor: ActorContext): Promise<readonly ApiToken[]> {
-		return this.dependencies.tokens.list(actor);
+	list(): Promise<readonly ApiToken[]> {
+		return this.dependencies.tokens.list();
 	}
 
-	revoke(actor: ActorContext, id: ApiTokenId): Promise<Pick<ApiToken, 'id' | 'name'>> {
-		return this.dependencies.tokens.revoke(actor, id);
+	revoke(id: ApiTokenId): Promise<Pick<ApiToken, 'id' | 'name'>> {
+		return this.dependencies.tokens.revoke(id);
 	}
 }

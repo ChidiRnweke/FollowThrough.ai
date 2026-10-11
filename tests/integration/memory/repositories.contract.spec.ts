@@ -6,16 +6,16 @@ import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
-import { seedUser, actor, context, now, seedProvenance } from '../database-harness';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
+import { actor, seedUser, context, now, seedProvenance } from '../database-harness';
 describe('Postgres memory-entry repository invariants', () => {
 	const seedEntry = async (suffix: string) => {
 		const owner = await seedUser(suffix);
-		const project = await new ProjectRecords(context.db).insert(owner, {
+		const project = await new ProjectRecords(owner, context.db).insert({
 			name: `Memory project ${suffix}`
 		});
-		const repository = new MemoryRecords(context.db);
-		const entry = await repository.insert(owner, {
+		const repository = new MemoryRecords(owner, context.db);
+		const entry = await repository.insert({
 			id: `80000000-0000-4000-8000-${suffix.padStart(12, '0')}` as MemoryEntryId,
 			userId: owner.userId,
 			projectId: project.id,
@@ -27,20 +27,20 @@ describe('Postgres memory-entry repository invariants', () => {
 		return { owner, project, repository, entry };
 	};
 	it('round-trips an inserted entry', async () => {
-		const { owner, repository, entry } = await seedEntry('60');
-		expect(await repository.findById(owner, entry.id)).toEqual(entry);
+		const { repository, entry } = await seedEntry('60');
+		expect(await repository.findById(entry.id)).toEqual(entry);
 	});
 	it('preserves project memory when a profile replacement names its id', async () => {
 		const { owner, repository, entry } = await seedEntry('9813');
 		const provenance = await seedProvenance(owner, '9813');
-		const service = new MemoryLibrary(
+		const service = createMemoryServices(
+			owner,
 			repository,
-			new ProjectRecords(context.db),
-			new ProvenanceRecords(context.db)
+			new ProjectRecords(owner, context.db),
+			new ProvenanceRecords(owner, context.db)
 		);
-		const outcome = await service
+		const outcome = await service.changes
 			.apply(
-				owner,
 				{ scope: 'user', operation: 'update', memoryEntryId: entry.id, content: 'Wrong scope' },
 				provenance.id
 			)
@@ -48,7 +48,7 @@ describe('Postgres memory-entry repository invariants', () => {
 				() => 'unexpected success',
 				(error: Error) => error.message
 			);
-		expect({ outcome, entry: await repository.findById(owner, entry.id) }).toEqual({
+		expect({ outcome, entry: await repository.findById(entry.id) }).toEqual({
 			outcome: 'Memory target does not belong to the requested scope',
 			entry
 		});
@@ -58,33 +58,33 @@ describe('Postgres memory-entry repository invariants', () => {
 	// services/memory/library.spec.ts; this file keeps the SQL facts only a real
 	// database can prove (scoping, soft-delete, constraints, cascade).
 	it('does not reveal an entry to another actor', async () => {
-		const { repository, entry } = await seedEntry('61');
-		expect(await repository.findById(actor('62'), entry.id)).toBeUndefined();
+		const { entry } = await seedEntry('61');
+		expect(await new MemoryRecords(actor('62'), context.db).findById(entry.id)).toBeUndefined();
 	});
 	it('excludes soft-deleted entries from the default list', async () => {
-		const { owner, project, repository, entry } = await seedEntry('63');
-		await repository.update(owner, { ...entry, deletedAt: now });
-		expect(await repository.list(owner, { projectId: project.id })).toEqual([]);
+		const { project, repository, entry } = await seedEntry('63');
+		await repository.update({ ...entry, deletedAt: now });
+		expect(await repository.list({ projectId: project.id })).toEqual([]);
 	});
 	it('includes soft-deleted entries when requested', async () => {
-		const { owner, project, repository, entry } = await seedEntry('64');
-		await repository.update(owner, { ...entry, deletedAt: now });
+		const { project, repository, entry } = await seedEntry('64');
+		await repository.update({ ...entry, deletedAt: now });
 		expect(
-			(await repository.list(owner, { projectId: project.id, includeDeleted: true })).map(
+			(await repository.list({ projectId: project.id, includeDeleted: true })).map(
 				(item) => item.id
 			)
 		).toEqual([entry.id]);
 	});
 	it('clears the deletion marker on restore', async () => {
-		const { owner, repository, entry } = await seedEntry('65');
-		await repository.update(owner, { ...entry, deletedAt: now });
-		await repository.update(owner, { ...entry, deletedAt: undefined });
-		expect((await repository.findById(owner, entry.id))?.deletedAt).toBeUndefined();
+		const { repository, entry } = await seedEntry('65');
+		await repository.update({ ...entry, deletedAt: now });
+		await repository.update({ ...entry, deletedAt: undefined });
+		expect((await repository.findById(entry.id))?.deletedAt).toBeUndefined();
 	});
 	it('stores memory-sourced search chunks without a note', async () => {
 		const { owner, project, entry } = await seedEntry('66');
-		const search = new KnowledgeIndexRecords(context.db);
-		await search.replaceForMemoryEntry(owner, entry.id, [
+		const search = new KnowledgeIndexRecords(owner, context.db);
+		await search.replaceForMemoryEntry(entry.id, [
 			{
 				id: '50000000-0000-4000-8000-000000000066' as SearchDocumentId,
 				projectId: project.id,
@@ -95,7 +95,7 @@ describe('Postgres memory-entry repository invariants', () => {
 				chunkIndex: 0
 			}
 		]);
-		expect((await search.listForMemoryEntry(owner, entry.id))[0]?.noteId).toBeUndefined();
+		expect((await search.listForMemoryEntry(entry.id))[0]?.noteId).toBeUndefined();
 	});
 	it('rejects a search chunk without any source', async () => {
 		const { owner, project } = await seedEntry('67');
@@ -113,8 +113,8 @@ describe('Postgres memory-entry repository invariants', () => {
 	});
 	it('deletes memory chunks with their entry', async () => {
 		const { owner, project, entry } = await seedEntry('68');
-		const search = new KnowledgeIndexRecords(context.db);
-		await search.replaceForMemoryEntry(owner, entry.id, [
+		const search = new KnowledgeIndexRecords(owner, context.db);
+		await search.replaceForMemoryEntry(entry.id, [
 			{
 				id: '50000000-0000-4000-8000-000000000068' as SearchDocumentId,
 				projectId: project.id,
@@ -125,7 +125,7 @@ describe('Postgres memory-entry repository invariants', () => {
 				chunkIndex: 0
 			}
 		]);
-		await search.deleteForMemoryEntry(owner, entry.id);
-		expect(await search.listForMemoryEntry(owner, entry.id)).toEqual([]);
+		await search.deleteForMemoryEntry(entry.id);
+		expect(await search.listForMemoryEntry(entry.id)).toEqual([]);
 	});
 });

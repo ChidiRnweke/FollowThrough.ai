@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import { workspaceViews } from '$lib/factories/workspace/session';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import type { ProjectId } from '$lib/models/projects';
 
@@ -15,7 +16,6 @@
 	} from '$lib/client/workbench/tab-drag';
 	import { isChatTab, noteIdOf, parseTabId, type TabId } from '$lib/stores/workbench/tab-ref';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type { Conversation } from '$lib/models/agent';
 	import { cubicOut } from 'svelte/easing';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
@@ -49,12 +49,9 @@
 			case 'search':
 				return 'Search notes';
 			case 'diagram':
-				return (
-					workspaceSession.current?.resources.views.diagram(ref.diagramId)?.title ??
-					'Untitled diagram'
-				);
+				return workspaceViews.diagram(ref.diagramId)?.title ?? 'Untitled diagram';
 			case 'widget':
-				return workspaceSession.current?.resources.views.widget(ref.widgetId)?.title ?? 'Widget';
+				return workspaceViews.widget(ref.widgetId)?.title ?? 'Widget';
 			case 'chat': {
 				const conversationId = chatRegistry.peek(ref.sessionKey)?.conversationId;
 				return sessions.find((entry) => entry.id === conversationId)?.title ?? 'New chat';

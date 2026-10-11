@@ -7,7 +7,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Icon from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from '../todo-updates';
 
 	let {
 		todoId,

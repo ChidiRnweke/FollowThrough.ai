@@ -1,62 +1,55 @@
-import { searchableDrawioText } from '$lib/services/diagrams/labels';
-import { decideTodoCreation } from '$lib/services/todos/creation';
-import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import {
-	diagramIndexNoteId,
-	type ContentIndex
-} from '$lib/server/services/knowledge-search/indexing';
+import type { DiagramIndexing } from '$lib/server/services/knowledge-search/retrieval';
+import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/retrieval';
+import type { DiagramIndexContext } from '$lib/models/knowledge-search';
 import type {
-	DiagramWriter,
-	DrawioXmlContentValidator,
-	DrawioSvgPreviewSanitizer
-} from '$lib/server/services/diagrams/contracts';
-import type { AppliedRecord } from '$lib/server/services/suggestions/contracts';
-import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
-import { provenanceOrigin } from '$lib/services/provenance/presentation';
-import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
+	DrawioSvgPreviewSanitizer,
+	DrawioXmlContentValidator
+} from '$lib/server/services/diagrams/drawio';
+import type { DiagramWriter } from '$lib/server/services/diagrams/library';
+import type { AppliedRecord } from '$lib/server/services/suggestions/inbox';
+import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
+import type { ProvenancePresentation } from '$lib/services/provenance/presentation';
+import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import type { TodoCreationRules } from '$lib/services/todos/edits';
+
 import type { AppliedChange } from '$lib/models/proposal-effects';
-import { mapAppliedChange } from '$lib/server/services/suggestions/effects';
-import type { Todo, TodoId, CreateTodoInput } from '$lib/models/todos';
-import type { ExternalReference } from '$lib/models/references';
-import type { NoteRelationship } from '$lib/models/notes';
-import type { MemoryEntry } from '$lib/models/memory';
-import type { TodoCreator } from '$lib/server/services/todos/contracts';
-import type { RelationshipCreator } from '$lib/server/services/relationships/contracts';
-import type { ReferenceCreator } from '$lib/server/services/references/contracts';
-import type { MemoryChanges } from '$lib/server/services/memory/contracts';
-import type { NoteReader } from '$lib/server/services/notes/contracts';
-import type { DrawioLabelReader } from '$lib/server/services/diagrams/drawio';
-import type { ActorContext } from '$lib/models/identity';
+import type { CreateTodoInput, Todo, TodoId } from '$lib/models/todos';
+import type { MemoryChanges } from '$lib/server/services/memory/library';
+import type { NoteReader } from '$lib/server/services/notes/catalog';
+import type { ReferenceCreator } from '$lib/server/services/references/library';
+import type { RelationshipCreator } from '$lib/server/services/relationships/graph';
+import type { TodoCreator } from '$lib/server/services/todos/catalog';
+
+import { InvalidTransitionError, ValidationError } from '$lib/errors';
 import type { Diagram } from '$lib/models/diagrams';
+import type { ActorContext } from '$lib/models/identity';
+import type { ListPendingMemoryInput } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';
 import type {
 	AcceptSuggestionInput,
 	AcceptSuggestionOutput,
+	ListPendingMemoryOutput,
 	ListSuggestionsInput,
 	ListSuggestionsOutput,
-	SuggestionGroup,
-	SuggestionView,
 	RejectSuggestionInput,
 	RevertSuggestionInput,
-	Suggestion
+	Suggestion,
+	SuggestionView
 } from '$lib/models/suggestions';
-import type { ListPendingMemoryInput } from '$lib/models/memory';
-import type { ListPendingMemoryOutput, MemorySuggestionView } from '$lib/models/suggestions';
-import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
-import { InvalidTransitionError, ValidationError } from '$lib/errors';
+import type { DateTime, AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { DrawioLabels } from '$lib/server/services/diagrams/drawio';
+import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type {
-	SuggestionEffectService,
 	SuggestionAccepter,
+	SuggestionContextReader,
+	SuggestionExpirer,
 	SuggestionFinder,
 	SuggestionLister,
-	SuggestionExpirer,
 	SuggestionRejecter,
-	SuggestionReverter,
-	SuggestionContextReader
-} from '$lib/server/services/suggestions/contracts';
+	SuggestionReverter
+} from '$lib/server/services/suggestions/inbox';
 
-type SuggestionArtifact = Todo | NoteRelationship | ExternalReference | Diagram | MemoryEntry;
+import type { SuggestionArtifact } from '$lib/models/suggestions';
 interface SuggestionApplicationResult {
 	readonly artifact: SuggestionArtifact;
 	readonly changes: readonly AppliedChange<AppliedRecord>[];
@@ -84,24 +77,18 @@ export interface SuggestionsController {
 	 * to so the UI can present a per-note review surface. Suggestions not tied to a note
 	 * form their own group.
 	 */
-	list(actor: ActorContext, input: ListSuggestionsInput): Promise<ListSuggestionsOutput>;
+	list(input: ListSuggestionsInput): Promise<ListSuggestionsOutput>;
 	/**
 	 * List the proposed memory suggestions for a project, newest first. Used to surface
 	 * candidate memories for a project's memory pane before any acceptance decision.
 	 */
-	listPendingMemory(
-		actor: ActorContext,
-		input: ListPendingMemoryInput
-	): Promise<ListPendingMemoryOutput>;
+	listPendingMemory(input: ListPendingMemoryInput): Promise<ListPendingMemoryOutput>;
 	/**
 	 * Apply a pending suggestion's edit and mark it accepted, atomically. `autoAccepted`
 	 * records whether the user explicitly confirmed the suggestion or let it through
 	 * automatically.
 	 */
-	accept(
-		actor: ActorContext,
-		input: AcceptSuggestionInput
-	): Promise<AcceptSuggestionOutput<SuggestionArtifact>>;
+	accept(input: AcceptSuggestionInput): Promise<AcceptSuggestionOutput<SuggestionArtifact>>;
 	/**
 	 * Accept a suggestion and, when the client submits a reviewed draw.io diagram, persist
 	 * that reviewed version over the generated one.
@@ -110,19 +97,20 @@ export interface SuggestionsController {
 	 * draw.io diagram, or draw.io review is unavailable in this deployment.
 	 */
 	acceptReviewed(
-		actor: ActorContext,
 		input: AcceptReviewedSuggestionInput
 	): Promise<AcceptSuggestionOutput<SuggestionArtifact>>;
 	/** Reject a pending suggestion, marking it so it no longer appears in the proposed set. */
-	reject(actor: ActorContext, input: RejectSuggestionInput): Promise<Suggestion>;
+	reject(input: RejectSuggestionInput): Promise<Suggestion>;
 	/**
 	 * Undo a previously accepted suggestion and mark it reverted in one transaction. Reverting is only possible while the accepted artifact still matches
 	 * what was applied.
 	 */
-	revert(actor: ActorContext, input: RevertSuggestionInput): Promise<Suggestion>;
+	revert(input: RevertSuggestionInput): Promise<Suggestion>;
 }
 /** Everything the {@link SuggestionsController} needs, injected so it can be built and tested without real stores. */
 export interface SuggestionsDependencies {
+	readonly todoCreationRules: TodoCreationRules;
+	readonly suggestionPresentation: ISuggestionPresentationService;
 	suggestionLister: SuggestionLister;
 	suggestionExpirer: SuggestionExpirer;
 	suggestionContextReader: SuggestionContextReader;
@@ -131,98 +119,70 @@ export interface SuggestionsDependencies {
 	suggestionRejecter: SuggestionRejecter;
 	suggestionReverter: SuggestionReverter;
 	todoCreator: TodoCreator;
-	relationshipCreator: Pick<RelationshipCreator, 'createWithChange'>;
+	relationshipCreator: RelationshipCreator;
 	referenceCreator: ReferenceCreator;
 	memoryChanges: MemoryChanges;
 	sourceNotes: NoteReader;
 	suggestionEffects: SuggestionEffectService;
-	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
 	memoryIndexer: MemoryIndexer;
-	diagramIndexer: {
-		index(
-			actor: ActorContext,
-			diagram: Diagram,
-			context: DiagramIndexContext
-		): Promise<IndexingResult>;
-	};
+	diagramIndexer: DiagramIndexing;
 	diagramWriter: DiagramWriter;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
-	drawioLabels: Pick<DrawioLabelReader, 'read'>;
+	drawioLabels: DrawioLabels;
+	readonly diagramLabelPresentation: DiagramLabelPresentation;
 	now: () => DateTime;
 	transactionRunner: TransactionRunner;
 }
 export class Suggestions implements SuggestionsController {
-	constructor(private readonly dependencies: SuggestionsDependencies) {}
-	async list(actor: ActorContext, input: ListSuggestionsInput): Promise<ListSuggestionsOutput> {
-		await this.dependencies.suggestionExpirer.expire(actor);
-		const suggestions = await this.dependencies.suggestionLister.listByStatus(actor, input.status);
-		const views = await this.readViews(actor, suggestions);
-		const ordered = [...views].sort((a, b) =>
-			a.suggestion.createdAt.localeCompare(b.suggestion.createdAt)
-		);
-		const groups = new Map<string, { note?: SuggestionView['note']; views: SuggestionView[] }>();
-		for (const view of ordered) {
-			const key = view.note?.id ?? '';
-			const group = groups.get(key) ?? { note: view.note, views: [] };
-			group.views.push(view);
-			groups.set(key, group);
-		}
-		const result: SuggestionGroup[] = [...groups.values()].map((group) =>
-			group.note ? { note: group.note, suggestions: group.views } : { suggestions: group.views }
-		);
-		return { groups: result };
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly provenancePresentation: ProvenancePresentation,
+		private readonly dependencies: SuggestionsDependencies
+	) {}
+	async list(input: ListSuggestionsInput): Promise<ListSuggestionsOutput> {
+		await this.dependencies.suggestionExpirer.expire();
+		const suggestions = await this.dependencies.suggestionLister.listByStatus(input.status);
+		const views = await this.readViews(suggestions);
+		return { groups: this.dependencies.suggestionPresentation.groupSuggestionViews(views) };
 	}
-	async listPendingMemory(
-		actor: ActorContext,
-		input: ListPendingMemoryInput
-	): Promise<ListPendingMemoryOutput> {
-		await this.dependencies.suggestionExpirer.expire(actor);
-		const pending = await this.dependencies.suggestionLister.listByStatus(actor, 'proposed');
-		const memory = pending.filter(
-			(suggestion) =>
-				suggestion.kind === 'memory' && suggestion.payload.projectId === input.projectId
+	async listPendingMemory(input: ListPendingMemoryInput): Promise<ListPendingMemoryOutput> {
+		await this.dependencies.suggestionExpirer.expire();
+		const pending = await this.dependencies.suggestionLister.listByStatus('proposed');
+		const memory = this.dependencies.suggestionPresentation.pendingMemorySuggestions(
+			pending,
+			input.projectId
 		);
-		const views = await this.readViews(actor, memory);
+		const views = await this.readViews(memory);
 		return {
-			suggestions: views
-				.filter((view): view is MemorySuggestionView => view.suggestion.kind === 'memory')
-				.sort((a, b) => b.suggestion.createdAt.localeCompare(a.suggestion.createdAt))
+			suggestions: this.dependencies.suggestionPresentation.newestMemoryViews(views)
 		};
 	}
-	private async readViews(
-		actor: ActorContext,
-		suggestions: readonly Suggestion[]
-	): Promise<readonly SuggestionView[]> {
-		const contexts = await this.dependencies.suggestionContextReader.readContexts(
-			actor,
-			suggestions
-		);
+	private async readViews(suggestions: readonly Suggestion[]): Promise<readonly SuggestionView[]> {
+		const contexts = await this.dependencies.suggestionContextReader.readContexts(suggestions);
 		return contexts.map(({ suggestion, note, anchor, provenance }) =>
-			assembleSuggestionView(suggestion, { note, anchor, origin: provenanceOrigin(provenance) })
+			this.dependencies.suggestionPresentation.assembleSuggestionView(suggestion, {
+				note,
+				anchor,
+				origin: this.provenancePresentation.provenanceOrigin(provenance)
+			})
 		);
 	}
-	accept(
-		actor: ActorContext,
-		input: AcceptSuggestionInput
-	): Promise<AcceptSuggestionOutput<SuggestionArtifact>> {
-		return this.acceptInTransaction(actor, input);
+	accept(input: AcceptSuggestionInput): Promise<AcceptSuggestionOutput<SuggestionArtifact>> {
+		return this.acceptInTransaction(input);
 	}
 	acceptReviewed(
-		actor: ActorContext,
 		input: AcceptReviewedSuggestionInput
 	): Promise<AcceptSuggestionOutput<SuggestionArtifact>> {
-		return this.acceptInTransaction(actor, input, true);
+		return this.acceptInTransaction(input, true);
 	}
 	private acceptInTransaction(
-		actor: ActorContext,
 		input: AcceptReviewedSuggestionInput,
 		requireReview = false
 	): Promise<AcceptSuggestionOutput<SuggestionArtifact>> {
 		return this.dependencies.transactionRunner.run(async () => {
-			await this.dependencies.suggestionEffects.lock(actor, input.suggestionId);
-			const pending = await this.dependencies.suggestionFinder.get(actor, input.suggestionId);
+			await this.dependencies.suggestionEffects.lock(input.suggestionId);
+			const pending = await this.dependencies.suggestionFinder.get(input.suggestionId);
 			if (pending.status !== 'proposed')
 				throw new InvalidTransitionError('Only a pending suggestion can be accepted');
 			if (
@@ -234,7 +194,7 @@ export class Suggestions implements SuggestionsController {
 				throw new ValidationError('A draw.io diagram must be accepted through its review.');
 			if (input.drawioReview && (pending.kind !== 'diagram' || pending.payload.kind !== 'drawio'))
 				throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
-			const applied = await this.applySuggestion(actor, pending);
+			const applied = await this.applySuggestion(pending);
 			let artifact = applied.artifact;
 			let changes = applied.changes;
 			if (input.drawioReview) {
@@ -247,8 +207,10 @@ export class Suggestions implements SuggestionsController {
 				const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(
 					input.drawioReview.renderedSvg
 				);
-				const searchableText = searchableDrawioText(this.dependencies.drawioLabels.read(source));
-				const diagram = await this.dependencies.diagramWriter.persistContent(actor, {
+				const searchableText = this.dependencies.diagramLabelPresentation.searchText(
+					this.dependencies.drawioLabels.read(source)
+				);
+				const diagram = await this.dependencies.diagramWriter.persistContent({
 					kind: 'drawio',
 					diagramId: created.after.value.id,
 					expectedUpdatedAt: created.after.value.updatedAt,
@@ -262,13 +224,9 @@ export class Suggestions implements SuggestionsController {
 				artifact = diagram;
 				changes = [{ kind: 'created', after: { type: 'diagrams', value: diagram } }];
 			}
-			await this.indexRecords(
-				actor,
-				changes.map((change) => change.after)
-			);
-			await this.dependencies.suggestionEffects.record(actor, pending.id, changes);
+			await this.indexRecords(changes.map((change) => change.after));
+			await this.dependencies.suggestionEffects.record(pending.id, changes);
 			const suggestion = await this.dependencies.suggestionAccepter.accept(
-				actor,
 				pending,
 				artifact.id,
 				input.autoAccepted ?? false
@@ -277,40 +235,36 @@ export class Suggestions implements SuggestionsController {
 		});
 	}
 
-	reject(actor: ActorContext, input: RejectSuggestionInput): Promise<Suggestion> {
+	reject(input: RejectSuggestionInput): Promise<Suggestion> {
 		return this.dependencies.transactionRunner.run(async () =>
 			this.dependencies.suggestionRejecter.reject(
-				actor,
-				await this.dependencies.suggestionFinder.get(actor, input.suggestionId)
+				await this.dependencies.suggestionFinder.get(input.suggestionId)
 			)
 		);
 	}
-	revert(actor: ActorContext, input: RevertSuggestionInput): Promise<Suggestion> {
+	revert(input: RevertSuggestionInput): Promise<Suggestion> {
 		return this.dependencies.transactionRunner.run(async () => {
-			await this.dependencies.suggestionEffects.lock(actor, input.suggestionId);
-			const accepted = await this.dependencies.suggestionFinder.get(actor, input.suggestionId);
-			const restored = await this.dependencies.suggestionEffects.restore(actor, accepted);
-			await this.indexRecords(actor, restored);
-			return this.dependencies.suggestionReverter.revert(actor, accepted);
+			await this.dependencies.suggestionEffects.lock(input.suggestionId);
+			const accepted = await this.dependencies.suggestionFinder.get(input.suggestionId);
+			const restored = await this.dependencies.suggestionEffects.restore(accepted);
+			await this.indexRecords(restored);
+			return this.dependencies.suggestionReverter.revert(accepted);
 		});
 	}
-	private async createTodo(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
-		const decision = decideTodoCreation(input, {
+	private async createTodo(input: CreateTodoInput): Promise<Todo> {
+		const decision = this.dependencies.todoCreationRules.create(input, {
 			id: input.id ?? (crypto.randomUUID() as TodoId),
-			userId: actor.userId,
+			userId: this.actor.userId,
 			timestamp: this.dependencies.now()
 		});
 		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		return this.dependencies.todoCreator.create(actor, decision.todo);
+		return this.dependencies.todoCreator.create(decision.todo);
 	}
 
-	private async applySuggestion(
-		actor: ActorContext,
-		suggestion: Suggestion
-	): Promise<SuggestionApplicationResult> {
+	private async applySuggestion(suggestion: Suggestion): Promise<SuggestionApplicationResult> {
 		switch (suggestion.kind) {
 			case 'todo': {
-				const artifact = await this.createTodo(actor, suggestion.payload);
+				const artifact = await this.createTodo(suggestion.payload);
 				return {
 					artifact,
 					changes: [{ kind: 'created', after: { type: 'todos', value: artifact } }]
@@ -318,7 +272,6 @@ export class Suggestions implements SuggestionsController {
 			}
 			case 'backlink': {
 				const change = await this.dependencies.relationshipCreator.createWithChange(
-					actor,
 					suggestion.payload
 				);
 				return {
@@ -329,17 +282,16 @@ export class Suggestions implements SuggestionsController {
 				};
 			}
 			case 'reference': {
-				const artifact = await this.dependencies.referenceCreator.create(actor, suggestion.payload);
+				const artifact = await this.dependencies.referenceCreator.create(suggestion.payload);
 				return {
 					artifact,
 					changes: [{ kind: 'created', after: { type: 'references', value: artifact } }]
 				};
 			}
 			case 'diagram':
-				return this.applyDiagram(actor, suggestion);
+				return this.applyDiagram(suggestion);
 			case 'memory': {
 				const result = await this.dependencies.memoryChanges.apply(
-					actor,
 					suggestion.payload,
 					suggestion.provenanceId
 				);
@@ -353,25 +305,26 @@ export class Suggestions implements SuggestionsController {
 		}
 	}
 	private async applyDiagram(
-		actor: ActorContext,
 		suggestion: Extract<Suggestion, { kind: 'diagram' }>
 	): Promise<SuggestionApplicationResult> {
 		const source =
 			suggestion.payload.kind === 'drawio'
 				? this.dependencies.drawioXmlValidator.validate(suggestion.payload.source)
 				: suggestion.payload.source;
-		const note = await this.dependencies.sourceNotes.get(actor, suggestion.payload.noteId);
+		const note = await this.dependencies.sourceNotes.get(suggestion.payload.noteId);
 		const now = this.dependencies.now();
 		const base = {
 			id: crypto.randomUUID() as Diagram['id'],
-			userId: actor.userId,
+			userId: this.actor.userId,
 			projectId: note.projectId,
 			sourceNoteId: suggestion.payload.noteId,
 			title: suggestion.payload.title,
 			source,
 			searchableText:
 				suggestion.payload.kind === 'drawio'
-					? searchableDrawioText(this.dependencies.drawioLabels.read(source))
+					? this.dependencies.diagramLabelPresentation.searchText(
+							this.dependencies.drawioLabels.read(source)
+						)
 					: source,
 			sourceAnchorId: suggestion.sourceAnchorId,
 			provenanceId: suggestion.provenanceId,
@@ -382,42 +335,42 @@ export class Suggestions implements SuggestionsController {
 			suggestion.payload.kind === 'mermaid'
 				? { ...base, kind: 'mermaid' }
 				: { ...base, kind: 'drawio', currentRevision: 1, publishedRevision: 0 };
-		const artifact = await this.dependencies.diagramWriter.create(actor, diagram);
+		const artifact = await this.dependencies.diagramWriter.create(diagram);
 		return {
 			artifact,
 			changes: [{ kind: 'created', after: { type: 'diagrams', value: artifact } }]
 		};
 	}
-	private async indexRecords(
-		actor: ActorContext,
-		records: readonly AppliedRecord[]
-	): Promise<void> {
+	private async indexRecords(records: readonly AppliedRecord[]): Promise<void> {
 		for (const record of records) {
 			if (record.type === 'memory_entries')
-				await this.finishIndex(
-					actor,
-					await this.dependencies.memoryIndexer.index(actor, record.value)
-				);
-			if (record.type === 'diagrams') await this.indexDiagram(actor, record.value);
+				await this.dependencies.memoryIndexer.indexMemory(record.value);
+			if (record.type === 'diagrams') await this.indexDiagram(record.value);
 		}
 	}
-	private async indexDiagram(actor: ActorContext, diagram: Diagram): Promise<void> {
-		const noteId = diagramIndexNoteId(diagram);
+	private async indexDiagram(diagram: Diagram): Promise<void> {
+		const requirement = this.dependencies.diagramIndexer.diagramContextRequirement(diagram);
 		const context: DiagramIndexContext =
-			noteId === undefined
+			requirement.kind === 'standalone'
 				? { kind: 'standalone' }
-				: { kind: 'note', title: (await this.dependencies.sourceNotes.get(actor, noteId)).title };
-		await this.finishIndex(
-			actor,
-			await this.dependencies.diagramIndexer.index(actor, diagram, context)
-		);
+				: {
+						kind: 'note',
+						title: (await this.dependencies.sourceNotes.get(requirement.noteId)).title
+					};
+		await this.dependencies.diagramIndexer.indexDiagram(diagram, context);
 	}
+}
 
-	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
-		if (result.kind === 'stored') return;
-		const batch = await this.dependencies.indexEmbeddings.embed(
-			result.missing.map((chunk) => chunk.input)
-		);
-		await this.dependencies.indexWriter.complete(actor, result, batch);
+function mapAppliedChange<Input, Output>(
+	change: AppliedChange<Input>,
+	map: (record: Input) => Output
+): AppliedChange<Output> {
+	switch (change.kind) {
+		case 'created':
+			return { kind: 'created', after: map(change.after) };
+		case 'modified':
+			return { kind: 'modified', before: map(change.before), after: map(change.after) };
+		case 'unchanged':
+			return { kind: 'unchanged', after: map(change.after) };
 	}
 }

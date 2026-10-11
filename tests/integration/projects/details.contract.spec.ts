@@ -1,9 +1,14 @@
-import { expect, it } from 'vitest';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { seedUser, context } from '../database-harness';
+import { expect, it } from 'vitest';
+import { context, seedUser } from '../database-harness';
 
 it.each([
 	{
@@ -26,17 +31,26 @@ it.each([
 	}
 ])('$case', async ({ suffix, description, expected }) => {
 	const owner = await seedUser(suffix);
-	const repository = new ProjectRecords(context.db);
-	const project = await repository.insert(owner, {
+	const repository = new ProjectRecords(owner, context.db);
+	const project = await repository.insert({
 		name: 'Project details',
 		description: 'Keep this context'
 	});
-	const catalog = new ProjectCatalog(repository, repository);
+	const catalog = createProjectServices(owner, repository, repository);
 	const controller = new Projects(
-		capabilityDependencies<ProjectsDependencies>({ projectEditor: catalog })
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<ProjectsDependencies>({
+			...agentToolResultsFixture(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			details: new ProjectDetailService(),
+			presentation: new ProjectTreePresentationService(),
+			placement: catalog.placement,
+			projectLifecycle: catalog.lifecycle,
+			projectEditor: catalog.editor
+		})
 	);
-	await controller.rename(owner, { projectId: project.id, name: ' Renamed ', description });
-	const saved = await repository.findById(owner, project.id);
+	await controller.rename({ projectId: project.id, name: ' Renamed ', description });
+	const saved = await repository.findById(project.id);
 	expect({ name: saved?.name, description: saved?.description }).toEqual({
 		name: 'Renamed',
 		description: expected

@@ -28,6 +28,12 @@ const match = {
 	},
 	score: 0.93
 };
+// The document text knowledge search sends to the reranker for this match.
+const rerankDocument = {
+	id: match.document.id,
+	content:
+		'Title: "Telemetry validation"\nSection: "Reranking"\nContent: |-\n  Phoenix should receive structured reranker documents.'
+};
 
 const assertInvariant = (condition, message) => {
 	if (!condition) throw new Error(`[Phoenix validation] ${message}`);
@@ -42,9 +48,10 @@ process.stdout.write(
 );
 
 const { shutdownTelemetry } = await import('./otel-instrumentation.js');
-const { traceOperation, traceWorkflow } = await import('../src/lib/server/services/telemetry.ts');
+const { traceOperation, traceWorkflow } =
+	await import('../src/lib/server/infrastructure/telemetry/tracing.ts');
 const { rerankerInputTraceAttributes, rerankerOutputTraceAttributes } =
-	await import('../src/lib/server/services/knowledge-search/ranking.ts');
+	await import('../src/lib/server/infrastructure/telemetry/rerank.ts');
 
 await traceWorkflow(
 	'inline.suggestion',
@@ -81,7 +88,12 @@ await traceWorkflow(
 					inputMimeType: MimeType.JSON,
 					outputMimeType: MimeType.JSON,
 					kind: OpenInferenceSpanKind.RERANKER,
-					attributes: rerankerInputTraceAttributes(query, [match], 'validation-reranker', 1)
+					attributes: rerankerInputTraceAttributes(
+						query,
+						[rerankDocument],
+						'validation-reranker',
+						1
+					)
 				},
 				async () => [match],
 				(results) =>
@@ -91,7 +103,10 @@ await traceWorkflow(
 							score: result.score
 						}))
 					}),
-				rerankerOutputTraceAttributes
+				(results) =>
+					rerankerOutputTraceAttributes(
+						results.map((result) => ({ ...rerankDocument, score: result.score }))
+					)
 			);
 		});
 

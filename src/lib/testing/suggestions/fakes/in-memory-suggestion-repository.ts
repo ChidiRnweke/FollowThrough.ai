@@ -13,6 +13,7 @@ import type {
 } from '$lib/server/repositories/suggestions/suggestions';
 
 export class InMemorySuggestionRepository implements SuggestionRepository {
+	constructor(private readonly actor: ActorContext) {}
 	suggestions: Suggestion[] = [];
 	/**
 	 * Rows whose payload no longer matches their kind, held apart from
@@ -21,45 +22,45 @@ export class InMemorySuggestionRepository implements SuggestionRepository {
 	 * state production cannot reach.
 	 */
 	unreadable: StoredSuggestion[] = [];
-	async findById(actor: ActorContext, id: SuggestionId): Promise<Suggestion | undefined> {
-		return this.suggestions.find((item) => item.id === id && item.userId === actor.userId);
+	async findById(id: SuggestionId): Promise<Suggestion | undefined> {
+		return this.suggestions.find((item) => item.id === id && item.userId === this.actor.userId);
 	}
-	async list(
-		actor: ActorContext,
-		filter: { noteId?: Suggestion['noteId']; status?: SuggestionStatus }
-	): Promise<readonly StoredSuggestion[]> {
+	async list(filter: {
+		noteId?: Suggestion['noteId'];
+		status?: SuggestionStatus;
+	}): Promise<readonly StoredSuggestion[]> {
 		const readable: readonly StoredSuggestion[] = this.suggestions
 			.filter(
 				(item) =>
-					item.userId === actor.userId &&
+					item.userId === this.actor.userId &&
 					(filter.noteId === undefined || item.noteId === filter.noteId) &&
 					(filter.status === undefined || item.status === filter.status)
 			)
 			.map((suggestion) => ({ status: 'readable', suggestion }));
 		return [...readable, ...this.unreadable];
 	}
-	async insert(_actor: ActorContext, suggestion: Suggestion): Promise<Suggestion> {
+	async insert(suggestion: Suggestion): Promise<Suggestion> {
 		this.suggestions.push(suggestion);
 		return suggestion;
 	}
 	async transition(
-		actor: ActorContext,
 		id: SuggestionId,
 		expectedStatus: SuggestionStatus,
 		patch: SuggestionTransition
 	): Promise<Suggestion | undefined> {
 		const current = this.suggestions.find(
-			(item) => item.id === id && item.userId === actor.userId && item.status === expectedStatus
+			(item) =>
+				item.id === id && item.userId === this.actor.userId && item.status === expectedStatus
 		);
 		if (!current) return undefined;
 		const updated = suggestionSchema.parse({ ...current, ...patch });
 		this.suggestions = this.suggestions.map((item) => (item.id === id ? updated : item));
 		return updated;
 	}
-	async expireProposedThrough(actor: ActorContext, through: DateTime): Promise<number> {
+	async expireProposedThrough(through: DateTime): Promise<number> {
 		const eligible = this.suggestions.filter(
 			(item) =>
-				item.userId === actor.userId &&
+				item.userId === this.actor.userId &&
 				item.status === 'proposed' &&
 				item.expiresAt !== undefined &&
 				item.expiresAt <= through

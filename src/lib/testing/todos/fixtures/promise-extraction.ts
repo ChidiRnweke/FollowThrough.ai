@@ -1,23 +1,34 @@
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { DeterministicPromiseExtractor } from '$lib/server/services/todos/promise-rules';
-import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
-import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
+import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
+import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import {
 	InMemoryPromiseExtractor,
 	InMemoryProvenanceRecorder,
 	InMemoryTrustPolicyEvaluator
 } from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
-import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
+import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 export const promiseSelection = {
@@ -29,16 +40,16 @@ export const promiseSelection = {
 };
 
 export const promiseExtractionFixture = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	content.notes = [noteBuilder({ plainText: promiseSelection.text })];
 	const extractor = new InMemoryPromiseExtractor();
-	const provenance = new InMemoryProvenanceRecorder();
-	const suggestions = new InMemorySuggestions();
+	const provenance = new InMemoryProvenanceRecorder(testActor());
+	const suggestions = new InMemorySuggestions(testActor());
 	const effects = new InMemorySuggestionEffects();
 	const trust = new InMemoryTrustPolicyEvaluator();
-	const todos = new InMemoryTodos();
-	const runs = new InMemoryAgentRunPersistence();
-	const conversations = new InMemoryConversationRepository();
+	const todos = new InMemoryTodos(testActor());
+	const runs = new InMemoryAgentRunPersistence(testActor());
+	const conversations = new InMemoryConversationRepository(testActor());
 	const transactions = new InMemoryTransactionRunner([
 		content,
 		provenance,
@@ -49,15 +60,20 @@ export const promiseExtractionFixture = () => {
 		conversations
 	]);
 	const settlements = new RunSettlements(runs, runs);
-	const requests = new NoteActionRequests(runs, runs, conversations);
+	const requests = new NoteActionRequests(testActor(), runs, runs, conversations);
 	const dependencies = capabilityDependencies<TodosDependencies>({
+		...agentToolResultsFixture(),
+		boardExport: new TodoBoardExportService(),
+		todoPresentation: new TodoPresentationService(),
+		todoEditingRules: new TodoEditingRulesService(),
+		todoCreationRules: new TodoEditingRulesService(),
 		selectionOrigins: new InMemorySelectionOrigins(content, provenance),
 		promiseExtractor: extractor,
 		promiseRules: new DeterministicPromiseExtractor(),
 		promiseGeneration: { kind: 'model', model: 'test/model' },
 		noteActionRequests: requests,
 		runSettlements: settlements,
-		runEvents: { notify: () => {} },
+		runSignals: new RunSignalService(runs, runs),
 		suggestionCreator: suggestions,
 		trustPolicyEvaluator: trust,
 		todoCreator: todos,
@@ -65,15 +81,18 @@ export const promiseExtractionFixture = () => {
 		suggestionEffects: effects,
 		transactionRunner: transactions
 	});
-	const agent = new Agent(
-		capabilityDependencies<AgentDependencies>({
+	const agent = new AgentSdkHarness(
+		testActor(),
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<AgentHarnessDependencies>({
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events: runs,
 			decisions: runs,
 			settlements,
 			transactionRunner: transactions,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(runs, runs)
 		})
 	);
 	return {
@@ -90,6 +109,6 @@ export const promiseExtractionFixture = () => {
 		transactions,
 		dependencies,
 		agent,
-		controller: new Todos(dependencies)
+		controller: new Todos(testActor(), new WorkspaceCommandRulesService(), dependencies)
 	};
 };

@@ -1,67 +1,97 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { WidgetExportService } from '$lib/services/widgets/export-blocks';
+import { WidgetSourceService } from '$lib/services/widgets/sources';
+import { WidgetEvaluationService } from '$lib/services/widgets/edits';
+import type { PreparedExport } from '$lib/models/deliverables';
+import { InMemoryPdfRendering } from '$lib/testing/deliverables/fakes/pdf-document';
 import {
 	Deliverables,
 	type DeliverablesDependencies
 } from '$lib/server/controllers/deliverables/controller';
-import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
-import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
 import {
-	prepareExport,
-	exportImageSources,
-	exportDiagramReferences,
-	exportWidgetReferences
-} from '$lib/server/services/deliverables/export-preparation';
+	createArtifactServices,
+	createTemplateServices
+} from '$lib/server/factories/capabilities/deliverable-storage-factory';
 import { fetchRemoteDataUrl } from '$lib/server/repositories/deliverables/export-images';
-import { packZip } from '$lib/server/services/deliverables/bundle';
+import { DocumentBundleService } from '$lib/server/services/deliverables/bundle';
+import { WidgetLibrary } from '$lib/server/services/widgets/library';
+import { ArtifactFileService } from '$lib/services/deliverables/artifact-files';
+import { ExportPreparationService } from '$lib/services/deliverables/export-preparation';
+import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryArtifactRepository,
 	InMemoryAttachmentStorage,
 	InMemoryTemplateRepository
 } from '$lib/testing/attachments/fakes/in-memory-deliverables';
+import { InMemoryDocumentRenderer } from '$lib/testing/deliverables/fakes/document-renderer';
 import { InMemoryExportSettingsRepository } from '$lib/testing/deliverables/fakes/in-memory-export-settings-repository';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { WidgetLibrary } from '$lib/server/services/widgets/library';
-import { InMemoryWidgetRepository } from '$lib/testing/widgets/fakes/in-memory-widget-repository';
+import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
+import { InMemoryWidgetRepository } from '$lib/testing/widgets/fakes/in-memory-widget-repository';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
-export const exportControllerFixture = (overrides: Partial<DeliverablesDependencies> = {}) => {
-	const artifacts = new InMemoryArtifactRepository();
+type ExportOverrides = Omit<Partial<DeliverablesDependencies>, 'docxGenerator' | 'pdfGenerator'> & {
+	docxGenerator?: DeliverablesDependencies['docxGenerator']['render'];
+	pdfGenerator?: (input: PreparedExport) => Promise<Buffer>;
+	pdfRendering?: DeliverablesDependencies['pdfGenerator'];
+};
+export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
+	const {
+		docxGenerator = async () => Buffer.from('docx'),
+		pdfGenerator = async () => Buffer.from('pdf'),
+		pdfRendering,
+		...dependencies
+	} = overrides;
+	const artifacts = new InMemoryArtifactRepository(testActor());
 	const storage = new InMemoryAttachmentStorage();
-	const notes = new InMemoryNoteContent();
-	const templates = new InMemoryTemplateRepository();
-	const exportSettings = new InMemoryExportSettingsRepository();
-	const provenance = new InMemoryProvenanceRecorder();
-	const library = new ArtifactLibrary(artifacts, exportSettings);
-	const widgets = new InMemoryWidgetRepository();
-	const todos = new InMemoryTodoRepository();
+	const notes = new InMemoryNoteContent(testActor());
+	const templates = new InMemoryTemplateRepository(testActor());
+	const exportSettings = new InMemoryExportSettingsRepository(testActor());
+	const provenance = new InMemoryProvenanceRecorder(testActor());
+	const library = createArtifactServices(testActor(), artifacts, exportSettings);
+	const widgets = new InMemoryWidgetRepository(testActor());
+	const todos = new InMemoryTodoRepository(testActor());
 	const service = new Deliverables(
+		testActor(),
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
-			templates: new DocumentTemplates(templates),
+			...agentToolResultsFixture(),
+			exportSettingsRules: new ExportSettingsRuleService(),
+			artifactFiles: new ArtifactFileService(),
+			...createTemplateServices(testActor(), templates),
 			artifactStorage: storage,
-			artifactWriter: library,
-			artifactReader: library,
-			artifactLister: library,
-			artifactDeleter: library,
-			exportSettingsReader: library,
-			exportSettingsWriter: library,
+			artifactWriter: library.artifactWriter,
+			artifactReader: library.artifactReader,
+			artifactLister: library.artifactLister,
+			artifactDeleter: library.artifactDeleter,
+			exportSettingsReader: library.exportSettingsReader,
+			exportSettingsWriter: library.exportSettingsWriter,
 			noteReader: notes,
 			provenanceRecorder: provenance,
-			prepareExport,
-			exportImageSources,
-			exportDiagramReferences,
-			exportWidgetReferences,
-			widgetReader: new WidgetLibrary(widgets, new InMemoryProjectRepository()),
+			prepareExport: new ExportPreparationService(),
+			widgetExports: new WidgetExportService(),
+			widgetSources: new WidgetSourceService(),
+			widgetEvaluation: new WidgetEvaluationService(),
+			widgetReader: new WidgetLibrary(
+				testActor(),
+				widgets,
+				new InMemoryProjectRepository(testActor()),
+				new InMemoryNoteRepository(testActor())
+			),
 			todoLister: todos,
 			noteLister: notes,
 			fetchImage: fetchRemoteDataUrl,
-			docxGenerator: async () => Buffer.from('docx'),
-			pdfGenerator: async () => Buffer.from('pdf'),
-			zipPacker: packZip,
+			docxGenerator: new InMemoryDocumentRenderer(docxGenerator),
+			pdfGenerator: pdfRendering ?? new InMemoryPdfRendering(pdfGenerator),
+			zipPacker: new DocumentBundleService(),
 			transactionRunner: new InMemoryTransactionRunner([artifacts, provenance]),
-			...overrides
+			...dependencies
 		})
 	);
 	return {

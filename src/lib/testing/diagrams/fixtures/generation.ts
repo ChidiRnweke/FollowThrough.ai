@@ -1,14 +1,19 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
+import { AgentStreamPresentationService } from '$lib/server/services/agent/runs/stream-presentation';
+import { InMemoryMermaidValidator } from '$lib/testing/diagrams/fakes/mermaid-validator';
+import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import type { DiagramAgentDependencies } from '$lib/server/controllers/diagrams/controller';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
-import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
-import { resolveAgentModel } from '$lib/services/agent/model-selection';
-import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
-import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
+import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
+
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
 import { InMemoryAgentPreferencesRepository } from '$lib/testing/agent/fakes/in-memory-inline-completion';
@@ -19,13 +24,13 @@ import { InMemoryDiagramGeneration } from '$lib/testing/diagrams/fakes/in-memory
 import { noteBuilder, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
 export const diagramGenerationFixture = () => {
-	const persistence = new InMemoryAgentRunPersistence();
-	const conversations = new InMemoryConversationRepository();
-	const notes = new InMemoryNoteContent();
+	const persistence = new InMemoryAgentRunPersistence(testActor());
+	const conversations = new InMemoryConversationRepository(testActor());
+	const notes = new InMemoryNoteContent(testActor());
 	notes.notes = [noteBuilder()];
 	const skills = builtInSkillsFixture();
 	const provider = new InMemoryDiagramGeneration();
-	const provenance = new InMemoryProvenanceRecorder();
+	const provenance = new InMemoryProvenanceRecorder(testActor());
 	const models = new InMemoryModelCatalog();
 	models.models = [
 		{
@@ -39,21 +44,26 @@ export const diagramGenerationFixture = () => {
 		}
 	];
 	const generation: DiagramAgentDependencies = {
-		contextFormatter: new AgentContext(),
+		contextFormatter: createAgentContext(),
 		contextNotes: notes,
 		contextSkills: skills.skillFinder,
-		contextMemory: new InMemoryMemoryEntryRepository(),
-		conversations: new ConversationArchive(conversations),
-		preferences: new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository()),
+		contextMemory: new InMemoryMemoryEntryRepository(testActor()),
+		conversations: new ConversationArchive(testActor(), conversations),
+		conversationMessages: new ConversationArchive(testActor(), conversations),
+		toolActivity: new ToolActivityProjection(),
+		preferences: new AgentPreferenceCatalog(
+			testActor(),
+			new InMemoryAgentPreferencesRepository(testActor())
+		),
 		models,
-		runs: new AgentRunLedger(persistence),
+		runs: new AgentRunLedger(testActor(), persistence),
 		runContext: new DiagramRunContext(persistence),
 		provenance,
 		builtInSkills: skills.builtInSkills,
 		defaultModel: 'test/model',
 		defaultVisionModel: 'test/vision',
-		resolveModel: resolveAgentModel,
-		createToolEventMapper: () => new AgentToolEventMapper(),
+		modelSelection: new AgentModelSelectionService(),
+		streamPresentation: new AgentStreamPresentationService(),
 		observeWorkflow: (_name, _context, operation) => operation(),
 		generator: provider
 	};
@@ -65,7 +75,9 @@ export const diagramGenerationFixture = () => {
 		conversations,
 		provenance,
 		notes,
-		mermaidValidator: new MermaidSubmissionValidator(async () => {}),
+		mermaidValidator: new InMemoryMermaidValidator(),
+		runSignals: new RunSignalService(persistence, persistence),
+		runSettlements: new RunSettlements(persistence, persistence),
 		now: () => testNow
 	};
 };

@@ -1,13 +1,11 @@
 import { createHash } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
-import { getEncoding } from 'js-tiktoken';
+import type { TokenCounter } from '$lib/models/tokenization';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentFileId, StoredAgentFile, StoreAgentFileInput } from '$lib/models/agent-files';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/agent';
-
-const encoding = getEncoding('cl100k_base');
 
 const toStoredFile = (row: typeof schema.agentFiles.$inferSelect): StoredAgentFile => ({
 	conversationId: row.conversationId as StoredAgentFile['conversationId'],
@@ -25,34 +23,40 @@ const toStoredFile = (row: typeof schema.agentFiles.$inferSelect): StoredAgentFi
 });
 
 export class AgentFileRecords implements AgentFileRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database,
+		private readonly tokens: TokenCounter
+	) {}
 
-	async list(actor: ActorContext): Promise<readonly StoredAgentFile[]> {
+	async list(): Promise<readonly StoredAgentFile[]> {
 		return (
 			await this.database
 				.select()
 				.from(schema.agentFiles)
-				.where(eq(schema.agentFiles.userId, actor.userId))
+				.where(eq(schema.agentFiles.userId, this.actor.userId))
 		).map(toStoredFile);
 	}
 
-	async findByPath(actor: ActorContext, path: string): Promise<StoredAgentFile | undefined> {
+	async findByPath(path: string): Promise<StoredAgentFile | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.agentFiles)
-			.where(and(eq(schema.agentFiles.userId, actor.userId), eq(schema.agentFiles.path, path)));
+			.where(
+				and(eq(schema.agentFiles.userId, this.actor.userId), eq(schema.agentFiles.path, path))
+			);
 		return row ? toStoredFile(row) : undefined;
 	}
 
-	async store(actor: ActorContext, input: StoreAgentFileInput): Promise<StoredAgentFile> {
+	async store(input: StoreAgentFileInput): Promise<StoredAgentFile> {
 		const values = {
-			userId: actor.userId,
+			userId: this.actor.userId,
 			conversationId: input.conversationId,
 			path: input.path,
 			mediaType: input.mediaType,
 			content: input.content,
 			byteSize: Buffer.byteLength(input.content, 'utf8'),
-			tokenCount: encoding.encode(input.content).length,
+			tokenCount: this.tokens.count(input.content),
 			lineCount: input.content.length === 0 ? 0 : input.content.split('\n').length,
 			checksumSha256: createHash('sha256').update(input.content).digest('hex'),
 			updatedAt: new Date()

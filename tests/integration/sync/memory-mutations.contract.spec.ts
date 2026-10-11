@@ -1,41 +1,50 @@
-import { describe, expect, it } from 'vitest';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { MemoryEntryId } from '$lib/models/memory';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { createMemoryCapability } from '$lib/server/factories/capabilities/memory-capability-factory';
+import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { describe, expect, it } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
+	const actor = seeded.owner;
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database });
-	const { library } = createMemoryCapability({
+	const sync = createSyncCapability(actor, { db: database });
+	const memory = createMemoryCapability(actor, {
 		db: database,
-		projects: new ProjectRecords(database),
-		provenance: new ProvenanceRecords(database)
+		projects: new ProjectRecords(actor, database),
+		provenance: new ProvenanceRecords(actor, database)
 	});
-	const indexEmbeddings = new InMemoryEmbeddingClient();
-	const indexWriter = new ContentIndex(new InMemorySearchRepository(), indexEmbeddings.model);
+	const indexEmbeddings = new InMemoryRetrievalProvider();
+	const indexWriter = createContentIndex(
+		new InMemorySearchRepository(actor),
+		indexEmbeddings.model
+	);
 	const controller = new Memory(
+		actor,
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
+			...agentToolResultsFixture(),
+			editing: new MemoryEditingService(),
+			presentation: new MemoryPresentationService(),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
-			memoryCreator: library,
-			memoryEditor: library,
-			memoryDeleter: library,
+			memoryCreator: memory.creator,
+			memoryEditor: memory.editor,
+			memoryDeleter: memory.deleter,
 			transactionRunner,
-			memoryIndexer: indexWriter.memories,
-			indexEmbeddings,
-			indexWriter
+			memoryIndexer: indexWriter
 		})
 	);
 	return { ...seeded, controller, sync };
@@ -43,7 +52,7 @@ const setup = async (suffix: string) => {
 
 describe('guarded memory mutations', () => {
 	it('creates a stable local identity only once after a lost response', async () => {
-		const { owner, controller } = await setup('9371');
+		const { controller } = await setup('9371');
 		const id = crypto.randomUUID() as MemoryEntryId;
 		const input = {
 			operationId: crypto.randomUUID(),
@@ -55,19 +64,19 @@ describe('guarded memory mutations', () => {
 				shareWithAgents: true
 			}
 		};
-		await controller.synchronize(owner, input);
-		await controller.synchronize(owner, input);
+		await controller.synchronize(input);
+		await controller.synchronize(input);
 		expect(await context.client`select id, content from memory_entries where id = ${id}`).toEqual([
 			{ id, content: 'Offline memory' }
 		]);
 	});
 	it('retains a competing edit when the submitted base is stale', async () => {
-		const { owner, controller, sync } = await setup('9372');
-		const { entry } = await controller.create(owner, { content: 'Original' });
-		const base = await sync.objects.read(owner, { type: 'memory_entries', id: [entry.id] }, null);
+		const { controller, sync } = await setup('9372');
+		const { entry } = await controller.create({ content: 'Original' });
+		const base = await sync.objects.read({ type: 'memory_entries', id: [entry.id] }, null);
 		if (base.kind !== 'found') throw new Error('The created memory must exist');
 		await context.client`update memory_entries set content = 'Other client' where id = ${entry.id}`;
-		const result = await controller.synchronize(owner, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: base.snapshot.etag,
 			command: { kind: 'updateMemory', memoryEntryId: entry.id, content: 'Offline edit' }
@@ -78,11 +87,11 @@ describe('guarded memory mutations', () => {
 		}).toEqual({ kind: 'conflict', rows: [{ content: 'Other client' }] });
 	});
 	it('keeps the domain’s soft deletion in the authoritative resource', async () => {
-		const { owner, controller, sync } = await setup('9373');
-		const { entry } = await controller.create(owner, { content: 'Remove me' });
-		const base = await sync.objects.read(owner, { type: 'memory_entries', id: [entry.id] }, null);
+		const { controller, sync } = await setup('9373');
+		const { entry } = await controller.create({ content: 'Remove me' });
+		const base = await sync.objects.read({ type: 'memory_entries', id: [entry.id] }, null);
 		if (base.kind !== 'found') throw new Error('The created memory must exist');
-		const result = await controller.synchronize(owner, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: base.snapshot.etag,
 			command: { kind: 'deleteMemory', memoryEntryId: entry.id }

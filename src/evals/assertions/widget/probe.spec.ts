@@ -3,7 +3,7 @@ import { widgetTemplates, type WidgetDraft } from '$lib/models/widgets';
 import type { LocalDate } from '$lib/models/workspace';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import { testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { WidgetSourceRecords } from '$lib/services/widgets/sources';
+import type { WidgetSourceRecords } from '$lib/models/widgets';
 import { decisionLog, decisionMatrix, statusBoard } from '../../fixtures/widgets/records';
 import {
 	gradeCalculator,

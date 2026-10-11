@@ -1,32 +1,44 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { ActorContext, User, UserId } from '$lib/models/identity';
-import type { CreateUserData, UserRepository } from '$lib/server/repositories/identity';
+import type {
+	CreateUserData,
+	UserAccountRepository,
+	UserRepository
+} from '$lib/server/repositories/identity';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/identity';
 import { toUser } from '$lib/server/db/mappers';
 
 export class UserRecords implements UserRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async findById(actor: ActorContext, id: UserId): Promise<User | undefined> {
+	async findCurrent(): Promise<User | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.users)
-			.where(and(eq(schema.users.id, id), eq(schema.users.id, actor.userId)));
+			.where(eq(schema.users.id, this.actor.userId));
 		return row ? toUser(row) : undefined;
 	}
 
-	async ensureLocal(actor: ActorContext): Promise<void> {
+	async ensureLocal(): Promise<void> {
 		await this.database
 			.insert(schema.users)
 			.values({
-				id: actor.userId,
-				email: `${actor.userId}@local.invalid`,
+				id: this.actor.userId,
+				email: `${this.actor.userId}@local.invalid`,
 				displayName: 'Architect',
 				role: 'ADMIN'
 			})
 			.onConflictDoNothing();
 	}
+}
+
+/** Accounts looked up and created by sign-in, before any user is known. */
+export class UserAccountRecords implements UserAccountRepository {
+	constructor(private readonly database: Database) {}
 
 	async findByEmail(email: string): Promise<User | undefined> {
 		const [row] = await this.database
@@ -35,7 +47,6 @@ export class UserRecords implements UserRepository {
 			.where(eq(sql`lower(${schema.users.email})`, email.toLowerCase()));
 		return row ? toUser(row) : undefined;
 	}
-
 	async findByAuthProviderId(providerId: string): Promise<User | undefined> {
 		const [row] = await this.database
 			.select()
@@ -43,14 +54,12 @@ export class UserRecords implements UserRepository {
 			.where(eq(schema.users.authProviderId, providerId));
 		return row ? toUser(row) : undefined;
 	}
-
 	async updateAuthProvider(userId: UserId, provider: string, providerId: string): Promise<void> {
 		await this.database
 			.update(schema.users)
 			.set({ authProvider: provider, authProviderId: providerId })
 			.where(eq(schema.users.id, userId));
 	}
-
 	async create(data: CreateUserData): Promise<User> {
 		const [row] = await this.database
 			.insert(schema.users)

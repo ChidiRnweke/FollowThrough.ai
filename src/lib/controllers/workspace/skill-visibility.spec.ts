@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import {
 	noteRecordSchema,
 	projectRecordSchema,
@@ -40,7 +40,7 @@ it('hides a cached skill after its project is archived', () => {
 		type: 'projects',
 		value: { ...project, archivedAt: testNow }
 	});
-	expect(new WorkspaceViews(records).skill(note.id)).toBeNull();
+	expect(createWorkspaceViews(records).skill(note.id)).toBeNull();
 });
 it('hides an individually archived skill from its editing detail', () => {
 	const { records, note } = setup();
@@ -48,12 +48,12 @@ it('hides an individually archived skill from its editing detail', () => {
 		type: 'notes',
 		value: { ...note, archivedAt: testNow }
 	});
-	expect(new WorkspaceViews(records).skill(note.id)).toBeNull();
+	expect(createWorkspaceViews(records).skill(note.id)).toBeNull();
 });
 it('does not expose cached instructions before their project is available', () => {
 	const { records, project, note } = setup();
 	records.delete(JSON.stringify(['projects', project.id]));
-	expect(new WorkspaceViews(records).skill(note.id)).toBeNull();
+	expect(createWorkspaceViews(records).skill(note.id)).toBeNull();
 });
 it('keeps a disabled skill available for deliberate editing in an active project', () => {
 	const { records, skill, note } = setup();
@@ -61,7 +61,7 @@ it('keeps a disabled skill available for deliberate editing in an active project
 		type: 'skills',
 		value: { ...skill, isEnabled: false }
 	});
-	expect(new WorkspaceViews(records).skill(note.id)).toMatchObject({
+	expect(createWorkspaceViews(records).skill(note.id)).toMatchObject({
 		isEnabled: false,
 		note: { id: note.id }
 	});

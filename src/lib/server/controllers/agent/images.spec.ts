@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import type { ConversationImageInput } from '$lib/models/agent';
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+const runStatus = new AgentRunStatusService();
 import { agentSubmissionFixture } from '$lib/testing/agent/fixtures/submission';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const image: ConversationImageInput = {
 	id: '40000000-0000-4000-8000-000000018001',
@@ -19,10 +19,10 @@ const setup = (configuration: Parameters<typeof agentSubmissionFixture>[1] = {})
 };
 afterEach(async () => {
 	for (const fixture of active.splice(0)) {
-		for (const run of fixture.runs.runs) await fixture.controller.cancel(testActor(), run.id);
+		for (const run of fixture.runs.runs) await fixture.controller.cancel(run.id);
 		fixture.release();
 		await vi.waitFor(() => {
-			if (fixture.runs.runs.some((run) => !isTerminalAgentRunStatus(run.status)))
+			if (fixture.runs.runs.some((run) => !runStatus.isTerminal(run.status)))
 				throw new Error('Run did not settle');
 		});
 	}
@@ -30,7 +30,7 @@ afterEach(async () => {
 
 it('uses native vision when the same trusted deployment model fills both roles', async () => {
 	const fixture = setup({ defaultModel: 'test/multimodal', defaultVisionModel: 'test/multimodal' });
-	await fixture.controller.submit(testActor(), {
+	await fixture.controller.submit({
 		requestId: crypto.randomUUID(),
 		input: 'Read this',
 		contextImages: [image]
@@ -42,7 +42,7 @@ it('uses native vision when the same trusted deployment model fills both roles',
 
 it('retains the configured reader for a text-only chat model', async () => {
 	const fixture = setup();
-	await fixture.controller.submit(testActor(), {
+	await fixture.controller.submit({
 		requestId: crypto.randomUUID(),
 		input: 'Read this',
 		contextImages: [image]
@@ -65,7 +65,7 @@ it('keeps provider capabilities authoritative over configured roles', async () =
 			capabilities: []
 		}
 	];
-	await fixture.controller.submit(testActor(), {
+	await fixture.controller.submit({
 		requestId: crypto.randomUUID(),
 		input: 'Read this',
 		images: [image]
@@ -79,7 +79,7 @@ it('does not leave a conversation or run when the image model catalog fails', as
 	const fixture = setup();
 	fixture.models.failure = new Error('Catalog unavailable');
 	const outcome = await fixture.controller
-		.submit(testActor(), { requestId: crypto.randomUUID(), input: 'Read this', images: [image] })
+		.submit({ requestId: crypto.randomUUID(), input: 'Read this', images: [image] })
 		.then(
 			() => 'unexpected success',
 			(error) => {
@@ -97,7 +97,7 @@ it('does not leave a conversation or run when the image model catalog fails', as
 it('does not fetch image capabilities for a turn without images', async () => {
 	const fixture = setup();
 	fixture.models.failure = new Error('Image catalog must not be read');
-	await fixture.controller.submit(testActor(), { requestId: crypto.randomUUID(), input: 'Hello' });
+	await fixture.controller.submit({ requestId: crypto.randomUUID(), input: 'Hello' });
 	expect(fixture.runs.runs[0]?.status).toBe('queued');
 });
 
@@ -105,7 +105,7 @@ it('queues a turn with more than four images across both channels', async () => 
 	const fixture = setup();
 	const images = Array.from({ length: 3 }, () => ({ ...image, id: crypto.randomUUID() }));
 	const contextImages = Array.from({ length: 2 }, () => ({ ...image, id: crypto.randomUUID() }));
-	await fixture.controller.submit(testActor(), {
+	await fixture.controller.submit({
 		requestId: crypto.randomUUID(),
 		input: 'Read these',
 		images,

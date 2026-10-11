@@ -1,382 +1,90 @@
-# Layer Guide
-
-## Table of Contents
-
-- [hooks.server.ts](#hooksserverts)
-- [+layout.server.ts](#layoutserverts)
-- [+page.server.ts](#pageserverts)
-  - [Streaming](#streaming)
-  - [Form actions](#form-actions)
-- [Services](#services)
-  - [Interface first](#interface-first)
-  - [Implementation](#implementation)
-- [Controllers](#controllers)
-- [Factory](#factory)
-- [Stores](#stores)
-  - [Populating from loader](#populating-from-loader)
-  - [Optimistic updates with actions](#optimistic-updates-with-actions)
-- [+page.svelte](#pagesvelte)
-
-Deep dive on each layer's responsibilities, patterns, and anti-patterns.
-
----
-
-## hooks.server.ts
-
-**Job:** Attach `locals.user` from session token. Nothing else.
-
-```typescript
-import type { Handle } from '@sveltejs/kit';
-import { AppFactory } from '$lib/factories/AppFactory';
-
-export const handle: Handle = async ({ event, resolve }) => {
-  const token = event.cookies.get('session');
-
-  if (token) {
-    const authService = AppFactory.getAuthService();
-    event.locals.user = await authService.getUserFromToken(token) ?? undefined;
-  }
-
-  return resolve(event);
-};
-```
-
-**Anti-patterns:**
-- ❌ Route guards (`if (url.pathname.startsWith('/admin'))`) — do this in layouts
-- ❌ Fetching any data beyond session validation
-- ❌ Setting any locals other than `locals.user`
-
----
-
-## +layout.server.ts
-
-Use for data needed across the entire route tree — navigation state, user preferences, feature flags.
-
-```typescript
-export const load: LayoutServerLoad = async ({ locals }) => {
-  // Available to all child routes via $page.data or parent()
-  return {
-    user: locals.user ?? null,
-  };
-};
-```
-
-Child routes call `await parent()` to access layout data without re-fetching:
-
-```typescript
-// +page.server.ts
-export const load: PageServerLoad = async ({ locals, parent }) => {
-  const { user } = await parent();
-  if (!user) throw redirect(302, '/login');
-  // ...
-};
-```
-
----
-
-## +page.server.ts
-
-**Job:** Auth guard, delegate to controller/service, return plain serialisable data.
-
-### Streaming
-
-Return promises directly for slow data — SvelteKit streams them:
-
-```typescript
-export const load: PageServerLoad = async ({ locals }) => {
-  if (!locals.user) throw redirect(302, '/login');
-  const controller = AppFactory.getRecipeController();
-
-  return {
-    user: locals.user,                                    // resolved immediately
-    recipes: controller.getRecipesForUser(locals.user.id), // streamed
-  };
-};
-```
-
-In the component:
-
-```svelte
-{#await data.recipes}
-  <RecipeSkeleton />
-{:then recipes}
-  <RecipeList {recipes} />
-{:catch}
-  <ErrorState message="Failed to load recipes" />
-{/await}
-```
-
-### Form actions
-
-```typescript
-export const actions: Actions = {
-  // Named action — called via action="?/create"
-  create: async ({ request, locals }) => {
-    if (!locals.user) throw error(401);
-
-    const formData = await request.formData();
-
-    // Shape validation only — no domain logic
-    const title = formData.get('title');
-    if (!title || typeof title !== 'string') {
-      return fail(400, { title: 'Title is required' });
-    }
-
-    try {
-      const controller = AppFactory.getRecipeController();
-      const recipe = await controller.createRecipe(locals.user.id, { title });
-      return { success: true, id: recipe.id };
-    } catch (e) {
-      if (e instanceof ServiceError) return fail(400, { error: e.message });
-      throw error(500);
-    }
-  }
-};
-```
-
----
-
-## Services
-
-**Job:** One concern. Wraps the API client. Returns domain models.
-
-### Interface first
-
-```typescript
-// IRecipeService.ts — always define the interface
-export interface IRecipeService {
-  getByUserId(userId: string): Promise<Recipe[]>;
-  getById(id: string): Promise<Recipe>;
-  create(input: CreateRecipeInput): Promise<Recipe>;
-  delete(id: string): Promise<void>;
-}
-```
-
-Every service has a corresponding interface. This makes the controller testable — inject a mock `IRecipeService` in tests.
-
-### Implementation
-
-```typescript
-// RecipeService.ts
-export class RecipeService implements IRecipeService {
-  constructor(private readonly client: ApiClient) {}
-
-  async getByUserId(userId: string): Promise<Recipe[]> {
-    const { data, error } = await this.client.GET('/users/{userId}/recipes', {
-      params: { path: { userId } }
-    });
-    if (error) throw new ServiceError('Failed to fetch', { cause: error });
-    return data.items.map(mapToRecipe);
-  }
-
-  // etc.
-}
-
-// Private mapper — never exported
-function mapToRecipe(raw: components['schemas']['Recipe']): Recipe {
-  return {
-    id: raw.id,
-    title: raw.title,
-    createdAt: new Date(raw.created_at),
-  };
-}
-```
-
-**Anti-patterns:**
-- ❌ Calling multiple unrelated API endpoints in one service method
-- ❌ Exporting raw `components['schemas']` types
-- ❌ Catching errors and returning `null` silently — throw domain errors
-- ❌ Putting conditional business logic in the service (`if (user.isPremium)`) — that's controller territory
-
----
-
-## Controllers
-
-**Job:** Orchestrate multiple services. Return a shape ready for the loader.
-
-```typescript
-export class RecipeController {
-  constructor(
-    private readonly recipeService: IRecipeService,   // interface
-    private readonly pantryService: IPantryService,   // interface
-    private readonly tasteService: ITasteProfileService, // interface
-  ) {}
-
-  async getRecipesForUser(userId: string): Promise<Recipe[]> {
-    const [recipes, pantry, profile] = await Promise.all([
-      this.recipeService.getByUserId(userId),
-      this.pantryService.getByUserId(userId),
-      this.tasteService.getProfileForUser(userId),
-    ]);
-
-    return recipes
-      .filter(r => isCompatibleWithPantry(r, pantry))
-      .sort((a, b) => scoreByTasteProfile(a, profile) - scoreByTasteProfile(b, profile));
-  }
-}
-```
-
-**Only the controller** should call `Promise.all` across multiple services. If you're doing it in a loader, extract it to a controller.
-
-**Anti-patterns:**
-- ❌ Direct API calls or `fetch()` in a controller
-- ❌ Importing `createApiClient()` in a controller
-- ❌ Single-service controllers with no orchestration — just use the service directly in the loader
-
----
-
-## Factory
-
-**Job:** Wire concrete types. No logic.
-
-```typescript
-// AppFactory.ts
-import { createApiClient } from '$lib/api/client';
-import { RecipeService } from '$lib/services/RecipeService';
-import { PantryService } from '$lib/services/PantryService';
-import { TasteProfileService } from '$lib/services/TasteProfileService';
-import { RecipeController } from '$lib/controllers/RecipeController';
-import { AuthService } from '$lib/services/AuthService';
-
-export class AppFactory {
-  static getRecipeController(): RecipeController {
-    const client = createApiClient();
-    return new RecipeController(
-      new RecipeService(client),
-      new PantryService(client),
-      new TasteProfileService(client),
-    );
-  }
-
-  static getAuthService(): AuthService {
-    return new AuthService(createApiClient());
-  }
-}
-```
-
-One factory file. Static methods. Concrete types only. If a controller doesn't exist yet, call the service directly from the factory and the loader — don't create a controller just to wrap a single service call.
-
----
-
-## Stores
-
-**Job:** Client-side reactive state. Populated from loader data. Never fetches.
-
-```typescript
-// src/lib/stores/recipeStore.ts
-import type { Recipe } from '$lib/models';
-
-function createRecipeStore() {
-  let items = $state<Recipe[]>([]);
-  let activeId = $state<string | null>(null);
-
-  // Derived
-  let active = $derived(items.find(r => r.id === activeId) ?? null);
-
-  return {
-    // Getters
-    get items() { return items; },
-    get active() { return active; },
-
-    // Mutations
-    setItems(data: Recipe[]) { items = data; },
-    setActive(id: string | null) { activeId = id; },
-    remove(id: string) { items = items.filter(r => r.id !== id); },
-
-    // Optimistic updates
-    add(recipe: Recipe) { items = [...items, recipe]; },
-  };
-}
-
-export const recipeStore = createRecipeStore();
-```
-
-### Populating from loader
-
-```svelte
-<script lang="ts">
-  import { recipeStore } from '$lib/stores/recipeStore';
-  let { data } = $props();
-
-  // Sync server data into store on load
-  $effect(() => {
-    if (data.recipes) recipeStore.setItems(data.recipes);
-  });
-</script>
-```
-
-### Optimistic updates with actions
-
-```svelte
-<script lang="ts">
-  import { enhance } from '$app/forms';
-  import { recipeStore } from '$lib/stores/recipeStore';
-
-  function handleSubmit({ formData, cancel }) {
-    const title = String(formData.get('title'));
-
-    // Optimistic add
-    const temp = { id: crypto.randomUUID(), title, createdAt: new Date() };
-    recipeStore.add(temp);
-
-    return async ({ result, update }) => {
-      if (result.type === 'failure') {
-        // Roll back
-        recipeStore.remove(temp.id);
-      }
-      await update();
-    };
-  }
-</script>
-
-<form method="POST" action="?/create" use:enhance={handleSubmit}>
-  ...
-</form>
-```
-
-**Anti-patterns:**
-- ❌ `fetch()` inside a store
-- ❌ Importing services into a store
-- ❌ Complex derived logic that belongs in the controller
-- ❌ Using `writable()` from old Svelte 4 stores — use `$state` runes
-
----
-
-## +page.svelte
-
-**Job:** Render. Read `$props`. Write to stores. Use `enhance` for forms. That's it.
-
-```svelte
-<script lang="ts">
-  import { recipeStore } from '$lib/stores/recipeStore';
-  import { enhance } from '$app/forms';
-  import RecipeCard from '$lib/components/domain/RecipeCard.svelte';
-  import { Button } from '$lib/components/primitives/Button.svelte';
-
-  let { data } = $props();
-
-  // Populate store
-  $effect(() => { recipeStore.setItems(data.recipes ?? []); });
-</script>
-
-<!-- Stream pending state -->
-{#await data.recipes}
-  <RecipeSkeleton count={3} />
-{:then}
-  {#each recipeStore.items as recipe (recipe.id)}
-    <RecipeCard {recipe} />
-  {/each}
-{/await}
-
-<!-- Form stays simple -->
-<form method="POST" action="?/create" use:enhance>
-  <Input name="title" placeholder="Recipe name" />
-  <Button type="submit">Add Recipe</Button>
-</form>
-```
-
-**Anti-patterns:**
-- ❌ `import { RecipeService }` in a page component
-- ❌ `onMount(() => fetch('/api/...'))`
-- ❌ Complex conditional logic — move to a component or derived store field
-- ❌ Prop drilling more than 2 levels — use a store instead
+# Application layers
+
+Read the accepted ADRs before changing a capability. ADR 0007 defines the public service form,
+state ownership and controller boundary. ADRs 0037 and 0041 define parsing and shared rules.
+
+| Layer | Owns | Does not own |
+| --- | --- | --- |
+| `models/<domain>/` | Data types, schemas, values and value constructors | Business rules or mutable runtime state |
+| `services/<domain>/` | Shared pure rules in stateless classes with explicit interfaces | I/O, other services, workflows or retained mutable state |
+| `server/services/<domain>/` | Server domain capabilities against narrow repository contracts, including the external providers they own | Other services, application orchestration or retained mutable state |
+| `server/repositories/<domain>/` | Database persistence; domain types in and out, parsing the rows they read | Business rules, provider calls or orchestration |
+| `client/services/<area>/` (browser) | The workspace's IndexedDB storage and the parsing of its sync transport | Other services, orchestration or retained mutable state |
+| `client/repositories/<area>/` (browser) | IndexedDB persistence; domain types in and out | Business rules, remote calls or orchestration |
+| `controllers/<domain>/` | Real local sequencing: the workspace replica and outbox, uploads, exports, chat, editor sessions | Wrapping a remote function, repository access, calling other controllers or exposing mutable collaborators |
+| `server/controllers/<domain>/` | Complete server operations, transactions and sequencing over services | Parsing external data, repository access or leaking services through the public API |
+| `stores/<domain>/` (browser only) | Reactive state with an explicit lifetime and controlled updates | Transport, retries, business decisions or workflows |
+| `factories/`, `server/factories/` | Construction and dependency wiring with interface-typed results | Running application operations |
+| Entry points: remote functions, API routes, form actions, hooks, the worker | Parsing incoming data into models and calling controller operations | Service, repository or store access |
+| Components and adjacent TypeScript | Rendering, focus, DOM interaction, local form state; calling controllers and server-only remote functions | Service or repository access |
+
+A remote function is the server controller behind boundary parsing, so a component calls it
+directly; a browser controller exists only where the browser sequences work itself. The actor is
+bound when the request's factory is built (`AppFactory.forActor`); no method takes an actor.
+
+Browser components may obtain interface-typed capabilities from browser factories. Server factories
+remain server-only. Controllers receive service capabilities through factory injection. They must not import or call
+other controller operations, including through type-only contracts, getters, bound methods or
+injected callbacks. Shared data contracts belong in models. Same-implementation private methods
+may share orchestration; forwarding classes and renamed ports do not establish a new boundary.
+The layer list is closed. Do not add a layer to satisfy a checker: if a service needs another
+service, cut the capability differently.
+
+Components invoke controllers for local and remote behavior and observe readonly application state.
+An upload operation includes reservation, transfer and completion. Do not make a component assemble
+those steps. Presentation controllers should return useful feature results; do not make one
+controller per formatter.
+
+A service names a cohesive capability. It explicitly implements the interface production callers
+need. Private helpers may remain ordinary functions. Do not publish a helper for its test, create a
+class per helper, or expose a broad implementation through `Pick<ConcreteClass, ...>`.
+
+Readonly injected collaborators and immutable configuration are valid service fields. A readonly
+Map is still mutable state if operations retain its contents. Temporary arrays, maps and evaluators
+created and discarded within one operation are valid. The server is stateless: a value
+one service produces for another stays local to the operation, and anything that outlives an
+operation is a database record. Browser cross-call caches, subscriptions and generations belong in
+a store scoped to their account or editor; caches the client needs from the server go through sync.
+
+Services never call other services, including through injected function ports. A controller resolves
+facts, calls shared decisions and coordinates consequences. Factories expose collaborator interfaces
+needed by composition; they do not hand components raw resources, queues or transports.
+
+Parse external values at a named boundary: the caller of a controller (remote function, API
+route, form action, hook, worker), an agent tool for model-sent arguments, a repository for the rows it
+reads, the service that owns a provider for that provider's responses, or browser event/storage readers. Schemas live in models. Services and controllers
+receive narrow values and do not invoke Zod, except a service parsing its own provider's responses.
+
+For IndexedDB operations, preserve transaction-local read → controller decision → write. Moving the
+decision outside the transaction loses cross-tab ordering. Keep record/outbox/receipt settlement
+atomic. An account stop must prevent late results from repopulating its stores.
+
+SvelteKit hooks and transports authenticate, validate at the boundary and invoke controllers.
+Workspace routes use the browser shell and remote commands. Do not introduce a parallel loader or
+REST contract for an operation already exposed through the controller/remote boundary.
+
+Use colocated specs, shared `InMemory*` fakes and one expect per test. Run the type checker, lint,
+architecture audits and relevant behavior tests. Current checker permissions are not an exception
+to an accepted ADR; record unresolved violations and correct the implementation and checker.
+
+## Checking indirect dependencies
+
+Entry points parse input and call controller operations; they may sequence several when the
+request needs that order. The agent controller is a harness over an injected tool list and knows
+no specific tool. A tool is an entry point: an agent tool factory turns one public controller
+operation into a tool that parses its arguments, calls the operation and converts the result. It
+never sequences operations or calls services; controllers and services do not know they back a tool.
+
+Run `pnpm test:architecture:semantic` as well as Chisel. It follows symbol aliases, re-exports,
+callable objects and statically connected callback ports. A service calling another service
+through an injected function still violates ADR 0007. A factory callback that calls a controller
+still owns a workflow. Construct the controller and expose its operation interface instead.
+
+Readonly state views are valid operation results. Service instances, transports, queues and mutable
+store APIs are collaborators, not results. An interface or utility type based on a concrete class
+does not repair a dependency boundary. Declare the actual contract and annotate factory results.
+
+Private evaluators created inside one operation and immutable configuration are valid. Retained
+mutable fields, module caches and captured cross-call state are not allowed on the server. Test both sides of
+each distinction. See `docs/architecture/semantic-enforcement.md` for analysis limits; do not infer
+whole-application compliance from a passing check. Record unresolved findings without suppressions.

@@ -1,4 +1,5 @@
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+const runStatus = new AgentRunStatusService();
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type PendingAgentDecision } from '$lib/models/agent';
 import { agentSubmissionFixture } from '$lib/testing/agent/fixtures/submission';
@@ -20,11 +21,12 @@ const setup = (phase: Parameters<typeof agentSubmissionFixture>[0] = 'queued') =
 };
 afterEach(async () => {
 	for (const fixture of activeFixtures.splice(0)) {
-		for (const run of fixture.runs.runs)
-			await fixture.controller.cancel({ userId: run.userId }, run.id);
+		// Only the fixture's own runs: a run another account owns is not this controller's to settle.
+		const owned = () => fixture.runs.runs.filter((run) => run.userId === testActor().userId);
+		for (const run of owned()) await fixture.controller.cancel(run.id);
 		fixture.release();
 		await vi.waitFor(() => {
-			if (fixture.runs.runs.some((run) => !isTerminalAgentRunStatus(run.status)))
+			if (owned().some((run) => !runStatus.isTerminal(run.status)))
 				throw new Error('Run did not settle after fixture cleanup');
 		});
 	}
@@ -32,13 +34,13 @@ afterEach(async () => {
 
 const awaitingApproval = async (pendingDecisions: readonly PendingAgentDecision[]) => {
 	const fixture = setup('approval');
-	fixture.runner.outcome = {
+	fixture.turns.outcome = {
 		type: 'approval_checkpoint',
 		serializedState: 'provider-checkpoint',
 		sessionItems: [],
 		pendingDecisions: [...pendingDecisions]
 	};
-	const receipt = await fixture.controller.submit(testActor(), {
+	const receipt = await fixture.controller.submit({
 		requestId: crypto.randomUUID(),
 		input: 'Review these changes'
 	});
@@ -53,12 +55,12 @@ const awaitingApproval = async (pendingDecisions: readonly PendingAgentDecision[
 describe('durable agent submission', () => {
 	it('records queued cancellation once when the request is repeated', async () => {
 		const { controller, runs } = setup();
-		const receipt = await controller.submit(testActor(), {
+		const receipt = await controller.submit({
 			requestId: crypto.randomUUID(),
 			input: 'Wait for cancellation'
 		});
-		const cancelled = await controller.cancel(testActor(), receipt.runId);
-		await controller.cancel(testActor(), receipt.runId);
+		const cancelled = await controller.cancel(receipt.runId);
+		await controller.cancel(receipt.runId);
 		expect({
 			status: cancelled.run.status,
 			cancelEvents: runs.events.filter((record) => record.event.type === 'cancelled').length
@@ -66,7 +68,7 @@ describe('durable agent submission', () => {
 	});
 	it('returns a queued receipt before provider execution', async () => {
 		const { controller } = setup();
-		const receipt = await controller.submit(testActor(), {
+		const receipt = await controller.submit({
 			requestId: '10000000-0000-4000-8000-000000000001',
 			input: 'Help me decide',
 			model: 'openai/test-model'
@@ -80,7 +82,7 @@ describe('durable agent submission', () => {
 	// the database as `where id = ''` and failed the whole turn.
 	it('names the conversation in the snapshot when the request carried no id', async () => {
 		const { controller, runs } = setup();
-		const receipt = await controller.submit(testActor(), {
+		const receipt = await controller.submit({
 			requestId: '10000000-0000-4000-8000-00000000000a',
 			input: 'Draw me the ingest pipeline'
 		});
@@ -92,14 +94,14 @@ describe('durable agent submission', () => {
 	it('keeps the conversation the request named', async () => {
 		const { controller, runs, conversations } = setup();
 		const existing = '20000000-0000-4000-8000-00000000000b' as ConversationId;
-		await conversations.insert(testActor(), {
+		await conversations.insert({
 			id: existing,
 			userId: testActor().userId,
 			kind: 'chat',
 			createdAt: '2026-01-01T00:00:00.000Z' as DateTime,
 			updatedAt: '2026-01-01T00:00:00.000Z' as DateTime
-		} as Parameters<typeof conversations.insert>[1]);
-		const receipt = await controller.submit(testActor(), {
+		} as Parameters<typeof conversations.insert>[0]);
+		const receipt = await controller.submit({
 			requestId: '10000000-0000-4000-8000-00000000000c',
 			conversationId: existing,
 			input: 'Carry on'
@@ -111,7 +113,7 @@ describe('durable agent submission', () => {
 
 	it('records the user prompt against the persisted run', async () => {
 		const { controller, conversations } = setup();
-		const receipt = await controller.submit(testActor(), {
+		const receipt = await controller.submit({
 			requestId: '10000000-0000-4000-8000-000000000009',
 			input: 'Help me decide'
 		});
@@ -126,8 +128,8 @@ describe('durable agent submission', () => {
 			requestId: '10000000-0000-4000-8000-000000000002',
 			input: 'Compare the options'
 		};
-		const first = await controller.submit(testActor(), input);
-		const second = await controller.submit(testActor(), input);
+		const first = await controller.submit(input);
+		const second = await controller.submit(input);
 		expect({
 			prompts: conversations.messages.filter((message) => message.role === 'user').length,
 			runIds: [first.runId, second.runId]
@@ -136,12 +138,12 @@ describe('durable agent submission', () => {
 
 	it('rejects another active run in the same conversation', async () => {
 		const { controller } = setup();
-		const first = await controller.submit(testActor(), {
+		const first = await controller.submit({
 			requestId: '10000000-0000-4000-8000-000000000004',
 			input: 'First'
 		});
 		await expect(
-			controller.submit(testActor(), {
+			controller.submit({
 				requestId: '10000000-0000-4000-8000-000000000005',
 				conversationId: first.conversationId,
 				input: 'Second'
@@ -154,7 +156,7 @@ describe('scope staged before the user moved screens', () => {
 	/** Staged on project 2; by send time the user is looking at project 1. */
 	const moved = async () => {
 		const context = setup();
-		await context.controller.submit(testActor(), {
+		await context.controller.submit({
 			requestId: '30000000-0000-4000-8000-000000000001',
 			input: 'Summarise this',
 			projectId: testProjectId(2),
@@ -179,7 +181,7 @@ describe('scope staged before the user moved screens', () => {
 
 	it('leaves the staged scope out when nothing was overridden', async () => {
 		const { controller, runs } = setup();
-		await controller.submit(testActor(), {
+		await controller.submit({
 			requestId: '30000000-0000-4000-8000-000000000002',
 			input: 'Summarise this',
 			projectId: testProjectId(),
@@ -192,7 +194,7 @@ describe('scope staged before the user moved screens', () => {
 describe('skills a studio run needs', () => {
 	const submitted = async (kind: 'diagram_studio' | 'chat') => {
 		const context = setup();
-		await context.controller.submit(testActor(), {
+		await context.controller.submit({
 			requestId: '30000000-0000-4000-8000-000000000003',
 			input: 'Draw the ingestion pipeline',
 			appContext: appContextBuilder({ surface: { kind, presentation: 'full_page' } })
@@ -213,7 +215,7 @@ describe('resubmitting an edited question', () => {
 	/** A conversation with one answered question and no run in flight. */
 	const settled = async (input: { requestId: string; input: string }) => {
 		const context = setup();
-		const receipt = await context.controller.submit(testActor(), input);
+		const receipt = await context.controller.submit(input);
 		await land(context);
 		return { ...context, receipt };
 	};
@@ -233,11 +235,11 @@ describe('resubmitting an edited question', () => {
 			requestId: '20000000-0000-4000-8000-000000000001',
 			input: 'Summarise this'
 		});
-		await sessions.append(testActor(), receipt.conversationId, [
+		await sessions.append(receipt.conversationId, [
 			userItem('Summarise this'),
 			assistantItem('Here you go')
 		]);
-		await controller.submit(testActor(), {
+		await controller.submit({
 			requestId: '20000000-0000-4000-8000-000000000002',
 			conversationId: receipt.conversationId,
 			input: 'Summarise this in one line',
@@ -245,7 +247,7 @@ describe('resubmitting an edited question', () => {
 		});
 		expect({
 			transcript: conversations.messages.map((message) => message.content.text),
-			providerItems: await sessions.list(testActor(), receipt.conversationId),
+			providerItems: await sessions.list(receipt.conversationId),
 			retryHasControlOrdinal: 'retryUserOrdinal' in (runs.runs.at(-1)?.inputSnapshot ?? {})
 		}).toEqual({
 			transcript: ['Summarise this in one line'],
@@ -260,13 +262,13 @@ describe('resubmitting an edited question', () => {
 			input: 'First'
 		});
 		const { controller, conversations, receipt } = context;
-		await controller.submit(testActor(), {
+		await controller.submit({
 			requestId: '20000000-0000-4000-8000-000000000006',
 			conversationId: receipt.conversationId,
 			input: 'Second'
 		});
 		await land(context);
-		await controller.submit(testActor(), {
+		await controller.submit({
 			requestId: '20000000-0000-4000-8000-000000000007',
 			conversationId: receipt.conversationId,
 			input: 'Second, rephrased',
@@ -280,12 +282,12 @@ describe('resubmitting an edited question', () => {
 
 	it('refuses to rewind a conversation with a run in flight', async () => {
 		const { controller } = setup();
-		const receipt = await controller.submit(testActor(), {
+		const receipt = await controller.submit({
 			requestId: '20000000-0000-4000-8000-000000000008',
 			input: 'First'
 		});
 		await expect(
-			controller.submit(testActor(), {
+			controller.submit({
 				requestId: '20000000-0000-4000-8000-000000000009',
 				conversationId: receipt.conversationId,
 				input: 'Edited',
@@ -297,23 +299,27 @@ describe('resubmitting an edited question', () => {
 
 describe('durable agent lifecycle commands', () => {
 	it('does not let another actor cancel a queued run', async () => {
-		const { controller } = setup();
-		const receipt = await controller.submit(testActor(), {
+		const { controller, runs } = setup();
+		const receipt = await controller.submit({
 			requestId: crypto.randomUUID(),
 			input: 'Private request'
 		});
-		await expect(controller.cancel(testActor(2), receipt.runId)).rejects.toThrow('not found');
+		// The same queued run, as another account submitted it.
+		runs.runs = runs.runs.map((run) =>
+			run.id === receipt.runId ? { ...run, userId: testActor(2).userId } : run
+		);
+		await expect(controller.cancel(receipt.runId)).rejects.toThrow('not found');
 	});
 
 	it('rolls back queued cancellation when its event cannot be stored', async () => {
 		const { controller, runs } = setup();
-		const receipt = await controller.submit(testActor(), {
+		const receipt = await controller.submit({
 			requestId: crypto.randomUUID(),
 			input: 'Cancel atomically'
 		});
 		runs.failedEvent = 'cancelled';
 		try {
-			await controller.cancel(testActor(), receipt.runId).catch((error: Error) => {
+			await controller.cancel(receipt.runId).catch((error: Error) => {
 				if (error.message !== 'Event storage unavailable') throw error;
 				return { kind: 'failure' as const };
 			});
@@ -324,14 +330,14 @@ describe('durable agent lifecycle commands', () => {
 	});
 
 	it('marks a running run as cancelling and aborts its in-flight execution', async () => {
-		const { controller, runner } = setup('running');
-		const receipt = await controller.submit(testActor(), {
+		const { controller, turns } = setup('running');
+		const receipt = await controller.submit({
 			requestId: '10000000-0000-4000-8000-00000000000c',
 			input: 'Stop mid-stream'
 		});
-		await runner.started.promise;
-		const snapshot = await controller.cancel(testActor(), receipt.runId);
-		expect({ status: snapshot.run.status, aborted: runner.signals.at(-1)?.aborted }).toEqual({
+		await turns.started.promise;
+		const snapshot = await controller.cancel(receipt.runId);
+		expect({ status: snapshot.run.status, aborted: turns.signals.at(-1)?.aborted }).toEqual({
 			status: 'cancelling',
 			aborted: true
 		});
@@ -339,14 +345,14 @@ describe('durable agent lifecycle commands', () => {
 
 	it('cancels a run parked on an approval with nothing left to abort', async () => {
 		const { controller, runs } = setup('approval');
-		const receipt = await controller.submit(testActor(), {
+		const receipt = await controller.submit({
 			requestId: '10000000-0000-4000-8000-00000000000e',
 			input: 'Park then stop'
 		});
 		await vi.waitFor(() => {
 			if (runs.runs[0]?.status !== 'awaiting_approval') throw new Error('Approval not parked');
 		});
-		const snapshot = await controller.cancel(testActor(), receipt.runId);
+		const snapshot = await controller.cancel(receipt.runId);
 		expect(snapshot.run.status).toBe('cancelled');
 	});
 
@@ -354,7 +360,7 @@ describe('durable agent lifecycle commands', () => {
 		const { controller, receipt } = await awaitingApproval([
 			{ callId: 'call-cleared', toolName: 'archive_note', arguments: { noteId: testNoteId() } }
 		]);
-		const snapshot = await controller.cancel(testActor(), receipt.runId);
+		const snapshot = await controller.cancel(receipt.runId);
 		expect({ run: snapshot.run.pendingDecisions, cards: snapshot.pendingDecisions }).toEqual({
 			run: [],
 			cards: []
@@ -365,12 +371,12 @@ describe('durable agent lifecycle commands', () => {
 		const { controller, receipt } = await awaitingApproval([
 			{ callId: 'call-reviewed', toolName: 'archive_note', arguments: { noteId: testNoteId() } }
 		]);
-		await controller.decide(testActor(), {
+		await controller.decide({
 			runId: receipt.runId,
 			callId: 'call-reviewed',
 			decision: 'approve'
 		});
-		const snapshot = await controller.cancel(testActor(), receipt.runId);
+		const snapshot = await controller.cancel(receipt.runId);
 		expect({ run: snapshot.run.pendingDecisions, cards: snapshot.pendingDecisions }).toEqual({
 			run: [],
 			cards: []
@@ -381,13 +387,13 @@ describe('durable agent lifecycle commands', () => {
 		it('settles the run when the executor never unwinds', async () => {
 			vi.useFakeTimers();
 			try {
-				const { controller, runs, runner } = setup('running');
-				const receipt = await controller.submit(testActor(), {
+				const { controller, runs, turns } = setup('running');
+				const receipt = await controller.submit({
 					requestId: '10000000-0000-4000-8000-00000000000f',
 					input: 'Hang forever'
 				});
-				await runner.started.promise;
-				await controller.cancel(testActor(), receipt.runId);
+				await turns.started.promise;
+				await controller.cancel(receipt.runId);
 				await vi.advanceTimersByTimeAsync(10_000);
 				expect(runs.runs.find((run) => run.id === receipt.runId)?.status).toBe('cancelled');
 			} finally {
@@ -398,13 +404,13 @@ describe('durable agent lifecycle commands', () => {
 		it('appends exactly one cancelled event when the executor beats the backstop', async () => {
 			vi.useFakeTimers();
 			try {
-				const { controller, runs, runner } = setup('abortable');
-				const receipt = await controller.submit(testActor(), {
+				const { controller, runs, turns } = setup('abortable');
+				const receipt = await controller.submit({
 					requestId: '10000000-0000-4000-8000-000000000010',
 					input: 'Settle promptly'
 				});
-				await runner.started.promise;
-				await controller.cancel(testActor(), receipt.runId);
+				await turns.started.promise;
+				await controller.cancel(receipt.runId);
 				await vi.advanceTimersByTimeAsync(10_000);
 				expect(
 					runs.events.filter(
@@ -421,7 +427,7 @@ describe('durable agent lifecycle commands', () => {
 		const { controller, receipt } = await awaitingApproval([
 			{ callId: 'call-1', toolName: 'archive_note', arguments: {} }
 		]);
-		const snapshot = await controller.decide(testActor(), {
+		const snapshot = await controller.decide({
 			runId: receipt.runId,
 			callId: 'call-1',
 			decision: 'approve'
@@ -434,7 +440,7 @@ describe('durable agent lifecycle commands', () => {
 			{ callId: 'call-a', toolName: 'create_todo', arguments: {} },
 			{ callId: 'call-b', toolName: 'archive_note', arguments: {} }
 		]);
-		await controller.decideMany(testActor(), {
+		await controller.decideMany({
 			runId: receipt.runId,
 			callIds: ['call-a', 'call-b'],
 			decision: 'approve'
@@ -447,12 +453,12 @@ describe('durable agent lifecycle commands', () => {
 			{ callId: 'call-a', toolName: 'create_todo', arguments: {} },
 			{ callId: 'call-b', toolName: 'archive_note', arguments: {} }
 		]);
-		await controller.decide(testActor(), {
+		await controller.decide({
 			runId: receipt.runId,
 			callId: 'call-a',
 			decision: 'approve'
 		});
-		await controller.decide(testActor(), {
+		await controller.decide({
 			runId: receipt.runId,
 			callId: 'call-b',
 			decision: 'reject'
@@ -471,7 +477,7 @@ describe('durable agent lifecycle commands', () => {
 		runs.failedEvent = 'run_queued';
 		try {
 			await controller
-				.decide(testActor(), { runId: receipt.runId, callId: 'call-a', decision: 'approve' })
+				.decide({ runId: receipt.runId, callId: 'call-a', decision: 'approve' })
 				.catch((error) => {
 					if (!(error instanceof Error) || error.message !== 'Event storage unavailable')
 						throw error;
@@ -492,7 +498,7 @@ describe('durable agent lifecycle commands', () => {
 		] satisfies PendingAgentDecision[];
 		const { controller, runs, receipt } = await awaitingApproval(pending);
 		const failure = await controller
-			.decideMany(testActor(), {
+			.decideMany({
 				runId: receipt.runId,
 				callIds: ['call-a', 'call-missing'],
 				decision: 'approve'
@@ -526,13 +532,13 @@ describe('durable agent lifecycle commands', () => {
 		const { controller, receipt } = await awaitingApproval([
 			{ callId: 'call-2', toolName: 'archive_note', arguments: {} }
 		]);
-		await controller.decide(testActor(), {
+		await controller.decide({
 			runId: receipt.runId,
 			callId: 'call-2',
 			decision: 'approve'
 		});
 		await expect(
-			controller.decide(testActor(), {
+			controller.decide({
 				runId: receipt.runId,
 				callId: 'call-2',
 				decision: 'reject'
@@ -541,18 +547,14 @@ describe('durable agent lifecycle commands', () => {
 	});
 
 	it('manual retry creates ancestry without another prompt', async () => {
-		const { controller, conversations, runner, runs } = setup('running');
-		const receipt = await controller.submit(testActor(), {
+		const { controller, conversations, turns, runs } = setup('running');
+		const receipt = await controller.submit({
 			requestId: '10000000-0000-4000-8000-000000000009',
 			input: 'Try this once'
 		});
-		await runner.started.promise;
+		await turns.started.promise;
 		await controller.failRun(receipt.runId, new Error('Provider unavailable'));
-		const retried = await controller.retry(
-			testActor(),
-			receipt.runId,
-			'10000000-0000-4000-8000-000000000012'
-		);
+		const retried = await controller.retry(receipt.runId, '10000000-0000-4000-8000-000000000012');
 		const child = runs.runs.find((run) => run.id === retried.runId);
 		expect({
 			userPrompts: conversations.messages.filter((message) => message.role === 'user').length,

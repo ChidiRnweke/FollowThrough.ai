@@ -7,11 +7,12 @@ import {
 	testNow,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { RunPreparation, RunPreparationCancelled } from './preparation';
+import { RunPreparation } from './preparation';
+import { RunPreparationCancelled } from '$lib/errors';
 
 const context = { contextNotes: [], contextResources: [], skills: { items: [] } };
 const setup = async (status: 'queued' | 'running' | 'cancelling' | 'cancelled' = 'running') => {
-	const runs = new InMemoryAgentRunPersistence();
+	const runs = new InMemoryAgentRunPersistence(testActor());
 	const run: ResolvedAgentRun = {
 		kind: 'agent',
 		id: crypto.randomUUID() as AgentRunId,
@@ -29,7 +30,7 @@ const setup = async (status: 'queued' | 'running' | 'cancelling' | 'cancelled' =
 		createdAt: testNow,
 		updatedAt: testNow
 	};
-	await runs.insert(testActor(), run);
+	await runs.insert(run);
 	return { runs, run, preparation: new RunPreparation(runs) };
 };
 
@@ -56,26 +57,26 @@ it.each(['cancelling', 'cancelled'] as const)(
 	'reports %s before writing preparation',
 	async (status) => {
 		const { run, preparation } = await setup(status);
-		await expect(preparation.getForWrite(testActor(), run.id)).rejects.toBeInstanceOf(
-			RunPreparationCancelled
-		);
+		await expect(preparation.getForWrite(run.id)).rejects.toBeInstanceOf(RunPreparationCancelled);
 	}
 );
 
 it('does not expose another actor’s chat run', async () => {
-	const { run, preparation } = await setup();
-	await expect(preparation.getForWrite(testActor(2), run.id)).rejects.toThrow('not found');
+	const { run, runs, preparation } = await setup();
+	// The same run, as another account owns it.
+	runs.runs = runs.runs.map((stored) => ({ ...stored, userId: testActor(2).userId }));
+	await expect(preparation.getForWrite(run.id)).rejects.toThrow('not found');
 });
 
 it('retains authoritative provenance when preparation already recorded it', () => {
-	const preparation = new RunPreparation(new InMemoryAgentRunPersistence());
+	const preparation = new RunPreparation(new InMemoryAgentRunPersistence(testActor()));
 	expect(
 		preparation.provenance({ provenanceId: testProvenanceId() }, testProvenanceId(2), testNow)
 	).toEqual({ provenanceId: testProvenanceId(), updatedAt: testNow });
 });
 
 it('records new provenance for an unprepared run', () => {
-	const preparation = new RunPreparation(new InMemoryAgentRunPersistence());
+	const preparation = new RunPreparation(new InMemoryAgentRunPersistence(testActor()));
 	expect(preparation.provenance({}, testProvenanceId(), testNow)).toEqual({
 		provenanceId: testProvenanceId(),
 		updatedAt: testNow
@@ -83,7 +84,7 @@ it('records new provenance for an unprepared run', () => {
 });
 
 it('keeps frozen context when later configuration differs', () => {
-	const preparation = new RunPreparation(new InMemoryAgentRunPersistence());
+	const preparation = new RunPreparation(new InMemoryAgentRunPersistence(testActor()));
 	expect(
 		preparation.context(
 			{ contextSnapshot: context },
@@ -94,7 +95,7 @@ it('keeps frozen context when later configuration differs', () => {
 });
 
 it('records newly built context for an unprepared run', () => {
-	const preparation = new RunPreparation(new InMemoryAgentRunPersistence());
+	const preparation = new RunPreparation(new InMemoryAgentRunPersistence(testActor()));
 	expect(preparation.context({}, context, testNow)).toEqual({
 		contextSnapshot: context,
 		updatedAt: testNow

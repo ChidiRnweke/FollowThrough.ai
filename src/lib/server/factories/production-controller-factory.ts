@@ -1,5 +1,14 @@
+import type { AttachmentProcessingController } from '$lib/server/controllers/attachment-processing/controller';
+import type { KnowledgeIndexingController } from '$lib/server/controllers/knowledge-indexing/controller';
+import type { ActorContext } from '$lib/models/identity';
+import { TodayPresentationService } from '$lib/services/workspace/today';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { RelationshipCandidatesService } from '$lib/services/relationships/candidates';
 import { controllerSurfaces } from './controller-surfaces';
-import { Agent, type AgentDependencies } from '../controllers/agent/controller';
+import { AgentSdkHarness, type AgentHarnessDependencies } from '../controllers/agent/controller';
 import { AgentFiles, type AgentFilesDependencies } from '../controllers/agent-files/controller';
 import {
 	AgentSettings,
@@ -48,7 +57,7 @@ import {
 } from '../controllers/user-settings/controller';
 import { Workspace, type WorkspaceDependencies } from '../controllers/workspace/controller';
 import type { ControllerFactory } from './controller-factory';
-import { instrumentedController } from '../controllers/instrumentation';
+import { instrumentedController } from './controller-instrumentation';
 
 export interface ProductionControllerDependencies {
 	agentFiles: AgentFilesDependencies;
@@ -62,7 +71,7 @@ export interface ProductionControllerDependencies {
 	diagramStudio: DiagramStudioDependencies;
 	suggestions: SuggestionsDependencies;
 	skills: SkillsDependencies;
-	agent: AgentDependencies;
+	agentHarness: AgentHarnessDependencies;
 	agentSettings: AgentSettingsDependencies;
 	userSettings: UserSettingsDependencies;
 	apiTokens: ApiTokensDependencies;
@@ -75,178 +84,236 @@ export interface ProductionControllerDependencies {
 	retrieval: RetrievalDependencies;
 	inlineSuggestions: InlineSuggestionsDependencies;
 	feedback: FeedbackDependencies;
+	attachmentProcessing: AttachmentProcessingController;
+	knowledgeIndexing: KnowledgeIndexingController;
 }
 
 export class ProductionControllerFactory implements ControllerFactory {
-	constructor(private readonly dependencies: ProductionControllerDependencies) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly dependencies: ProductionControllerDependencies
+	) {}
 	// Every controller is wrapped at construction: one `domain.method` span plus
 	// info/debug/error logs per call, covering UI, MCP and agent-tool callers.
-	agentFiles() {
+	agentFiles(): ReturnType<ControllerFactory['agentFiles']> {
 		return instrumentedController(
 			'agentFiles',
 			new AgentFiles(this.dependencies.agentFiles),
 			controllerSurfaces.agentFiles
 		);
 	}
-	workspace() {
+	workspace(): ReturnType<ControllerFactory['workspace']> {
 		return instrumentedController(
 			'workspace',
-			new Workspace(this.dependencies.workspace),
+			new Workspace(new TodayPresentationService(), this.dependencies.workspace),
 			controllerSurfaces.workspace
 		);
 	}
-	projects() {
+	projects(): ReturnType<ControllerFactory['projects']> {
 		return instrumentedController(
 			'projects',
-			new Projects(this.dependencies.projects),
+			new Projects(new WorkspaceCommandRulesService(), this.dependencies.projects),
 			controllerSurfaces.projects
 		);
 	}
-	notes() {
+	notes(): ReturnType<ControllerFactory['notes']> {
 		return instrumentedController(
 			'notes',
-			new Notes(this.dependencies.notes),
+			new Notes(
+				this.actor,
+				new BacklinkPresentationService(),
+				new ReferencePresentationService(),
+				new WorkspaceCommandRulesService(),
+				new ProvenancePresentationService(),
+				this.dependencies.notes
+			),
 			controllerSurfaces.notes
 		);
 	}
-	todos() {
+	todos(): ReturnType<ControllerFactory['todos']> {
 		return instrumentedController(
 			'todos',
-			new Todos(this.dependencies.todos),
+			new Todos(this.actor, new WorkspaceCommandRulesService(), this.dependencies.todos),
 			controllerSurfaces.todos
 		);
 	}
-	relationships() {
+	relationships(): ReturnType<ControllerFactory['relationships']> {
 		return instrumentedController(
 			'relationships',
-			new Relationships(this.dependencies.relationships),
+			new Relationships(new RelationshipCandidatesService(), this.dependencies.relationships),
 			controllerSurfaces.relationships
 		);
 	}
-	references() {
+	references(): ReturnType<ControllerFactory['references']> {
 		return instrumentedController(
 			'references',
 			new References(this.dependencies.references),
 			controllerSurfaces.references
 		);
 	}
-	diagrams() {
+	diagrams(): ReturnType<ControllerFactory['diagrams']> {
 		return instrumentedController(
 			'diagrams',
-			new Diagrams(this.dependencies.diagrams),
+			new Diagrams(this.actor, this.dependencies.diagrams),
 			controllerSurfaces.diagrams
 		);
 	}
-	diagramStudio() {
+	diagramStudio(): ReturnType<ControllerFactory['diagramStudio']> {
 		return instrumentedController(
 			'diagramStudio',
-			new DiagramStudio(this.dependencies.diagramStudio),
+			new DiagramStudio(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.diagramStudio
+			),
 			controllerSurfaces.diagramStudio
 		);
 	}
-	suggestions() {
+	suggestions(): ReturnType<ControllerFactory['suggestions']> {
 		return instrumentedController(
 			'suggestions',
-			new Suggestions(this.dependencies.suggestions),
+			new Suggestions(
+				this.actor,
+				new ProvenancePresentationService(),
+				this.dependencies.suggestions
+			),
 			controllerSurfaces.suggestions
 		);
 	}
-	skills() {
+	skills(): ReturnType<ControllerFactory['skills']> {
 		return instrumentedController(
 			'skills',
-			new Skills(this.dependencies.skills),
+			new Skills(new WorkspaceCommandRulesService(), this.dependencies.skills),
 			controllerSurfaces.skills
 		);
 	}
-	agent() {
+	agentHarness(): ReturnType<ControllerFactory['agentHarness']> {
 		return instrumentedController(
-			'agent',
-			new Agent(this.dependencies.agent),
-			controllerSurfaces.agent
+			'agentHarness',
+			new AgentSdkHarness(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.agentHarness
+			),
+			controllerSurfaces.agentHarness
 		);
 	}
-	agentSettings() {
+	agentSettings(): ReturnType<ControllerFactory['agentSettings']> {
 		return instrumentedController(
 			'agentSettings',
-			new AgentSettings(this.dependencies.agentSettings),
+			new AgentSettings(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.agentSettings
+			),
 			controllerSurfaces.agentSettings
 		);
 	}
-	userSettings() {
+	userSettings(): ReturnType<ControllerFactory['userSettings']> {
 		return instrumentedController(
 			'userSettings',
-			new UserSettings(this.dependencies.userSettings),
+			new UserSettings(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.userSettings
+			),
 			controllerSurfaces.userSettings
 		);
 	}
-	apiTokens() {
+	apiTokens(): ReturnType<ControllerFactory['apiTokens']> {
 		return instrumentedController(
 			'apiTokens',
 			new ApiTokens(this.dependencies.apiTokens),
 			controllerSurfaces.apiTokens
 		);
 	}
-	toolPreferences() {
+	toolPreferences(): ReturnType<ControllerFactory['toolPreferences']> {
 		return instrumentedController(
 			'toolPreferences',
-			new ToolPreferences(this.dependencies.toolPreferences),
+			new ToolPreferences(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.toolPreferences
+			),
 			controllerSurfaces.toolPreferences
 		);
 	}
-	attachments() {
+	attachments(): ReturnType<ControllerFactory['attachments']> {
 		return instrumentedController(
 			'attachments',
 			new Attachments(this.dependencies.attachments),
 			controllerSurfaces.attachments
 		);
 	}
-	deliverables() {
+	deliverables(): ReturnType<ControllerFactory['deliverables']> {
 		return instrumentedController(
 			'deliverables',
-			new Deliverables(this.dependencies.deliverables),
+			new Deliverables(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.deliverables
+			),
 			controllerSurfaces.deliverables
 		);
 	}
-	trustPolicies() {
+	trustPolicies(): ReturnType<ControllerFactory['trustPolicies']> {
 		return instrumentedController(
 			'trustPolicies',
-			new TrustPolicies(this.dependencies.trustPolicies),
+			new TrustPolicies(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.trustPolicies
+			),
 			controllerSurfaces.trustPolicies
 		);
 	}
-	memory() {
+	memory(): ReturnType<ControllerFactory['memory']> {
 		return instrumentedController(
 			'memory',
-			new Memory(this.dependencies.memory),
+			new Memory(this.actor, new WorkspaceCommandRulesService(), this.dependencies.memory),
 			controllerSurfaces.memory
 		);
 	}
-	widgets() {
+	widgets(): ReturnType<ControllerFactory['widgets']> {
 		return instrumentedController(
 			'widgets',
-			new Widgets(this.dependencies.widgets),
+			new Widgets(this.actor, new WorkspaceCommandRulesService(), this.dependencies.widgets),
 			controllerSurfaces.widgets
 		);
 	}
-	retrieval() {
+	retrieval(): ReturnType<ControllerFactory['retrieval']> {
 		return instrumentedController(
 			'retrieval',
 			new Retrieval(this.dependencies.retrieval),
 			controllerSurfaces.retrieval
 		);
 	}
-	inlineSuggestions() {
+	inlineSuggestions(): ReturnType<ControllerFactory['inlineSuggestions']> {
 		return instrumentedController(
 			'inlineSuggestions',
-			new InlineSuggestions(this.dependencies.inlineSuggestions),
+			new InlineSuggestions(this.actor, this.dependencies.inlineSuggestions),
 			controllerSurfaces.inlineSuggestions
 		);
 	}
-	feedback() {
+	feedback(): ReturnType<ControllerFactory['feedback']> {
 		return instrumentedController(
 			'feedback',
 			new Feedback(this.dependencies.feedback),
 			controllerSurfaces.feedback
+		);
+	}
+	attachmentProcessing(): ReturnType<ControllerFactory['attachmentProcessing']> {
+		return instrumentedController(
+			'attachmentProcessing',
+			this.dependencies.attachmentProcessing,
+			controllerSurfaces.attachmentProcessing
+		);
+	}
+	knowledgeIndexing(): ReturnType<ControllerFactory['knowledgeIndexing']> {
+		return instrumentedController(
+			'knowledgeIndexing',
+			this.dependencies.knowledgeIndexing,
+			controllerSurfaces.knowledgeIndexing
 		);
 	}
 }

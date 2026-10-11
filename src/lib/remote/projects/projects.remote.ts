@@ -28,24 +28,24 @@ export const moveEntry = command(
 		position: z.number().int().nonnegative()
 	}),
 	async (input) => {
-		return AppFactory.controllers()
+		return AppFactory.forActor(requestActor())
 			.projects()
-			.move(requestActor(), input as MoveProjectEntryInput);
+			.move(input as MoveProjectEntryInput);
 	}
 );
 
 export const deleteNoteForever = command(z.object({ noteId: z.string().uuid() }), async (input) => {
-	return AppFactory.controllers()
+	return AppFactory.forActor(requestActor())
 		.notes()
-		.deleteForever(requestActor(), input as DeleteNoteForeverInput);
+		.deleteForever(input as DeleteNoteForeverInput);
 });
 
 export const emptyNoteTrash = command(
 	z.object({ projectId: z.string().uuid().optional() }),
 	async (input) => {
-		return AppFactory.controllers()
+		return AppFactory.forActor(requestActor())
 			.notes()
-			.emptyTrash(requestActor(), input as EmptyNoteTrashInput);
+			.emptyTrash(input as EmptyNoteTrashInput);
 	}
 );
 
@@ -68,9 +68,9 @@ export const createSkill = command(
 		// Built field by field rather than spread and asserted: `{ ...input } as
 		// CreateSkillInput` turns off exactly the checking that catches a field
 		// arriving in the wrong shape.
-		AppFactory.controllers()
+		AppFactory.forActor(requestActor())
 			.skills()
-			.create(requestActor(), {
+			.create({
 				name: input.name,
 				projectId: input.projectId,
 				...(input.description === undefined ? {} : { description: input.description }),

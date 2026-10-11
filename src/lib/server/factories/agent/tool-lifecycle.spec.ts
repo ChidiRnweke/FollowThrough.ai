@@ -1,51 +1,51 @@
-import { describe, it, expect } from 'vitest';
-import { Agent, Runner, RunState } from '@openai/agents';
-import { AgentTools } from './agent-tool-factory';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+import { streamExecutionFixture } from '$lib/testing/agent/fixtures/stream-execution';
+import type { ProviderStreamEvent } from '$lib/models/agent';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
-import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { Agent, Runner, RunState } from '@openai/agents';
+import { describe, expect, it } from 'vitest';
+import { createAgentToolSurface } from '$lib/testing/agent/fixtures/tool-surface';
+const noteMarkdown = new NoteMarkdownCodec();
+
+import type { NotesDependencies } from '$lib/server/controllers/notes/controller';
+import type { ToolCompletionRecorder } from '$lib/testing/agent/fixtures/tool-surface';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {
-	InMemoryToolCallingModel,
-	InMemoryToolBatchModel
+	InMemoryToolBatchModel,
+	InMemoryToolCallingModel
 } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
-import type { NotesDependencies } from '$lib/server/controllers/notes/controller';
-import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
-import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
-import { parseProviderStreamEvent } from '$lib/server/repositories/agent/provider-events';
-import type { AgentEvent } from '$lib/models/agent';
+
+import type { AgentEvent, AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
+import { parseProviderStreamEvent } from '$lib/server/infrastructure/agents/provider-events';
 import {
 	noteBuilder,
-	testActor,
-	testProvenanceId,
-	testConversationId
+	testConversationId,
+	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
 
 const scenario = (
 	count: number,
 	mode: AgentExecutionMode,
 	options: {
-		executor?: AgentToolExecutor;
+		executor?: ToolCompletionRecorder;
 		signal?: AbortSignal;
 		markdown?: NotesDependencies['markdown'];
 	} = {}
 ) => {
-	const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.'), title: 'Release' });
+	const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.'), title: 'Release' });
 	const fixture = reviewedNoteFixture(note, options.markdown);
 	const createRegistry = (pending: readonly PendingAgentDecision[] = []) =>
-		new AgentTools(
+		createAgentToolSurface(
+			testTokenizer,
 			fixture.factory,
-			testActor(),
 			mode,
 			{
 				provenanceId: testProvenanceId(),
 				input: { conversationId: testConversationId(), prompt: 'Change launch day' },
 				model: 'test-model'
 			},
-			options.executor ?? { execute: (_call, action) => action() },
+			options.executor ?? { completed: async () => {} },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
 			pending,
@@ -72,12 +72,12 @@ const run = async (agent: Agent, state?: RunState<unknown, Agent>, events: Agent
 		state ?? 'Change launch day',
 		{ stream: true, maxTurns: 4 }
 	);
-	const mapper = new AgentToolEventMapper();
+	const transcript: ProviderStreamEvent[] = [];
 	for await (const event of stream) {
-		const mapped = mapper.map(parseProviderStreamEvent(event));
-		if (mapped) events.push(mapped);
+		transcript.push(parseProviderStreamEvent(event));
 	}
 	await stream.completed;
+	events.push(...(await streamExecutionFixture(transcript).collect()));
 	return stream;
 };
 
@@ -139,7 +139,7 @@ describe('Reviewed tool recovery and terminal boundaries', () => {
 		const fixture = scenario(0, 'approval_required');
 		const resumed = await resume(fixture);
 		fixture.content.notes = [
-			{ ...fixture.note, ...noteContentFromMarkdown('Launch Friday.'), currentRevision: 2 }
+			{ ...fixture.note, ...noteMarkdown.read('Launch Friday.'), currentRevision: 2 }
 		];
 		const events: AgentEvent[] = [];
 		await run(resumed.agent, resumed.state, events);
@@ -182,7 +182,7 @@ describe('Reviewed tool recovery and terminal boundaries', () => {
 			new Agent({ name: 'Fresh review', model, tools: fixture.registry.tools() })
 		);
 		fixture.content.notes = [
-			{ ...fixture.note, ...noteContentFromMarkdown('Launch Friday.'), currentRevision: 2 }
+			{ ...fixture.note, ...noteMarkdown.read('Launch Friday.'), currentRevision: 2 }
 		];
 		const stale = await approveAndRun(fixture.registry, first, {
 			callId: 'call-invalid',
@@ -220,8 +220,7 @@ describe('Reviewed tool recovery and terminal boundaries', () => {
 	it('reports a persistence failure after a write as feedback without writing twice', async () => {
 		const fixture = scenario(0, 'auto_accept', {
 			executor: {
-				execute: async (_call, action) => {
-					await action();
+				completed: async () => {
 					throw new Error('journal unavailable');
 				}
 			}
@@ -245,9 +244,9 @@ describe('Reviewed tool recovery and terminal boundaries', () => {
 		const fixture = scenario(0, 'auto_accept', {
 			signal: cancellation.signal,
 			executor: {
-				execute: async (_call, action) => {
+				completed: async () => {
 					cancellation.abort(new Error('cancelled by user'));
-					return action();
+					cancellation.signal.throwIfAborted();
 				}
 			}
 		});
@@ -307,7 +306,7 @@ it('delivers an internal preparation fault to the model without exposing interna
 			read: () => {
 				throw new TypeError('private converter implementation');
 			},
-			write: noteMarkdownFromContent
+			write: noteMarkdown.write
 		}
 	});
 	const events: AgentEvent[] = [];

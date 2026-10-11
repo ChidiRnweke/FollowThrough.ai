@@ -6,11 +6,12 @@ import { createNotesCapability } from '$lib/server/factories/capabilities/notes-
 import { context, seedNote } from '../database-harness';
 const seedSkillNote = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
-	const { catalog } = createNotesCapability({
+	const actor = seeded.owner;
+	const { services: catalog } = createNotesCapability(actor, {
 		db: context.db,
-		projects: new ProjectRecords(context.db)
+		projects: new ProjectRecords(actor, context.db)
 	});
-	const note = await storedNote(catalog, seeded.owner, {
+	const note = await storedNote(catalog.creator, seeded.owner, {
 		kind: 'skill',
 		projectId: seeded.project.id,
 		title: 'Contract skill'
@@ -20,8 +21,8 @@ const seedSkillNote = async (suffix: string) => {
 describe('Postgres skill repository invariants', () => {
 	it('hides enabled skills from an archived project', async () => {
 		const { owner, note, project } = await seedSkillNote('49');
-		const repository = new SkillRecords(context.db);
-		await repository.insert(owner, {
+		const repository = new SkillRecords(owner, context.db);
+		await repository.insert({
 			note,
 			description: 'Contract',
 			triggerHints: ['contract'],
@@ -30,7 +31,7 @@ describe('Postgres skill repository invariants', () => {
 			allowImplicitInvocation: true,
 			isEnabled: true
 		});
-		await new ProjectRecords(context.db).archive(owner, project.id);
-		expect(await repository.listEnabled(owner)).toEqual([]);
+		await new ProjectRecords(owner, context.db).archive(project.id);
+		expect(await repository.listEnabled()).toEqual([]);
 	});
 });

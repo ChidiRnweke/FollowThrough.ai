@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceViews } from '$lib/factories/workspace/session';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import * as Field from '$lib/components/ui/field';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Icon from '$lib/components/icons';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from '../todo-updates';
 	import TodoTextField from '../fields/todo-text-field.svelte';
 	import TodoDescriptionField from '../fields/todo-description-field.svelte';
 	import TodoStatusField from '../fields/todo-status-field.svelte';
@@ -18,7 +19,8 @@
 	import { toast } from 'svelte-sonner';
 	import type { NoteSummary } from '$lib/models/notes';
 	import type { TodoId } from '$lib/models/todos';
-	import { accessMessage } from '$lib/services/sync/state';
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { accessMessage } = workspacePresentation;
 
 	let {
 		todoId,
@@ -38,7 +40,7 @@
 	);
 	const view = $derived(
 		state?.kind === 'ready' && todo?.state.kind === 'ready'
-			? resources?.views.todo(todo.state.value)
+			? workspaceViews.todo(todo.state.value)
 			: undefined
 	);
 

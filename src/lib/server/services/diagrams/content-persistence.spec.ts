@@ -1,5 +1,6 @@
+import type { ActorContext } from '$lib/models/identity';
 import { expect, it } from 'vitest';
-import { DiagramLibrary } from './library';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import type { DiagramContentWrite } from '$lib/models/diagrams';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
@@ -15,8 +16,8 @@ import {
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 
-const setup = () => {
-	const diagrams = new InMemoryDiagramRepository();
+const setup = (viewer: ActorContext = testActor()) => {
+	const diagrams = new InMemoryDiagramRepository(viewer);
 	const current = drawioBuilder({
 		provenanceId: testProvenanceId(),
 		source: VALID_DRAWIO_XML.replace('API &amp; worker', 'Before'),
@@ -25,12 +26,13 @@ const setup = () => {
 		publishedAt: undefined
 	});
 	diagrams.diagrams = [current];
-	const library = new DiagramLibrary(
+	const library = createDiagramServices(
+		viewer,
 		diagrams,
-		new InMemoryNoteRepository(),
-		new InMemoryAnchorRepository(),
-		new InMemoryProvenanceRepository(),
-		new InMemoryProjectRepository()
+		new InMemoryNoteRepository(viewer),
+		new InMemoryAnchorRepository(viewer),
+		new InMemoryProvenanceRepository(viewer),
+		new InMemoryProjectRepository(viewer)
 	);
 	const write: DiagramContentWrite = {
 		kind: 'drawio',
@@ -48,7 +50,7 @@ const setup = () => {
 
 it('preserves placement, provenance and publication state when storing reviewed content', async () => {
 	const { current, library, write } = setup();
-	expect(await library.persistContent(testActor(), write)).toEqual({
+	expect(await library.writer.persistContent(write)).toEqual({
 		...current,
 		source: write.source,
 		renderedSvg: write.renderedSvg,
@@ -57,8 +59,8 @@ it('preserves placement, provenance and publication state when storing reviewed 
 });
 
 it('refuses content writes for another actor', async () => {
-	const { library, write } = setup();
-	await expect(library.persistContent(testActor(2), write)).rejects.toMatchObject({
+	const { library, write } = setup(testActor(2));
+	await expect(library.writer.persistContent(write)).rejects.toMatchObject({
 		code: 'STALE_REVISION'
 	});
 });
@@ -73,7 +75,7 @@ it('refuses content writes after publication state changes', async () => {
 			currentRevision: current.currentRevision + 1
 		}
 	];
-	await expect(library.persistContent(testActor(), write)).rejects.toMatchObject({
+	await expect(library.writer.persistContent(write)).rejects.toMatchObject({
 		code: 'STALE_REVISION'
 	});
 });
@@ -82,7 +84,7 @@ it('refuses Mermaid content without owned provenance', async () => {
 	const { current, library, write, diagrams } = setup();
 	diagrams.diagrams = [mermaidBuilder({ id: current.id })];
 	await expect(
-		library.persistContent(testActor(), {
+		library.writer.persistContent({
 			kind: 'mermaid',
 			diagramId: current.id,
 			source: 'flowchart LR\nA --> C',

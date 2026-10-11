@@ -1,12 +1,13 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { TodosWorkspace } from '$lib/components/todos';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 
 	let { data } = $props();
-	const project = $derived(data.session.resources.views.get('projects', data.projectId));
-	const todos = $derived(data.session.resources.views.todos(data.filter));
-	const categories = $derived(data.session.resources.views.categories);
+	const project = $derived(workspaceViews.get('projects', data.projectId));
+	const todos = $derived(workspaceViews.todos(data.filter));
+	const categories = $derived(workspaceViews.categories);
 </script>
 
 {#if project}
@@ -33,7 +34,7 @@
 			view={data.view}
 			basePath="/projects/{project.id}/todos"
 			projectId={project.id}
-			notes={data.session.shell.noteTree}
+			notes={workspaceViews.currentShell.noteTree}
 			{categories}
 		/>
 	</PageShell>

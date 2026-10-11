@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { createMermaidDiagrams } from '$lib/factories/diagrams/mermaid';
+	const mermaidDiagrams = createMermaidDiagrams();
+
 	import { onMount, onDestroy, tick } from 'svelte';
 	import type { NodeViewProps } from '@tiptap/core';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -8,17 +11,13 @@
 	import * as Icon from '$lib/components/icons';
 	import ActionProgress from '$lib/components/shared/action-progress.svelte';
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
-	import {
-		initializeMermaid,
-		renderMermaidOffscreen,
-		sanitizeMermaidSvg
-	} from '$lib/client/diagrams/mermaid-rendering';
+
 	import MermaidExportMenu from './mermaid-export-menu.svelte';
 	import { mode as colorMode } from 'mode-watcher';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { setPendingConversionReference } from '$lib/components/edra/commands/diagram-references.js';
 	import { createMediaResize } from '$lib/components/edra/media-resize.svelte.js';
-	import { mermaidPngBlob } from '$lib/client/diagrams/mermaid-export';
+
 	import { toast } from 'svelte-sonner';
 
 	const { node, editor, getPos, extension, updateAttributes }: NodeViewProps = $props();
@@ -167,11 +166,11 @@
 		const id = `mermaid-${crypto.randomUUID().slice(0, 8)}`;
 		try {
 			// Re-apply the config each render so diagrams always use the current theme.
-			initializeMermaid(colorMode.current === 'dark');
-			const svg = await renderMermaidOffscreen(id, source);
+
+			const svg = await mermaidDiagrams.render(id, source, colorMode.current === 'dark');
 			// Stale check — discard if a newer render was triggered
 			if (thisRender !== renderCounter) return;
-			target.innerHTML = sanitizeMermaidSvg(svg);
+			target.innerHTML = svg;
 			error = null;
 			// audit-allow: silent-catch — the diagram node renders the parser error and removes any partial SVG.
 		} catch (err) {
@@ -294,7 +293,7 @@
 		revisionError = null;
 		try {
 			let renderedPngDataUrl: string | undefined;
-			const blob = await mermaidPngBlob(editCode, {
+			const blob = await mermaidDiagrams.png(editCode, {
 				base: colorMode.current === 'dark' ? 'dark' : 'light'
 			});
 			renderedPngDataUrl = await new Promise<string>((resolve, reject) => {
@@ -414,7 +413,7 @@
 		try {
 			// Handed over unresolved: `write` has to be reached while the click's user
 			// activation is still live, and rendering the diagram outlasts it.
-			const png = mermaidPngBlob(source, {
+			const png = mermaidDiagrams.png(source, {
 				base: colorMode.current === 'dark' ? 'dark' : 'light'
 			});
 			// audit-allow: silent-catch — a rejected lazy image promise is reported while clipboard fallback continues below.

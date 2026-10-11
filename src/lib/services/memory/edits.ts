@@ -7,7 +7,7 @@ import type {
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 
-export function decideMemoryCreation(
+function decideMemoryCreation(
 	input: CreateMemoryEntryInput,
 	context: { readonly id: MemoryEntryId; readonly userId: UserId; readonly timestamp: DateTime }
 ): { kind: 'invalid'; message: string } | { kind: 'create'; entry: MemoryEntry } {
@@ -28,7 +28,7 @@ export function decideMemoryCreation(
 	};
 }
 
-export function decideMemoryEdit(
+function decideMemoryEdit(
 	current: MemoryEntry,
 	input: Omit<UpdateMemoryEntryInput, 'memoryEntryId'>,
 	timestamp: DateTime
@@ -45,4 +45,31 @@ export function decideMemoryEdit(
 			updatedAt: timestamp
 		}
 	};
+}
+
+export interface IMemoryEditingService {
+	create(
+		input: CreateMemoryEntryInput,
+		context: { readonly id: MemoryEntryId; readonly userId: UserId; readonly timestamp: DateTime }
+	): { kind: 'invalid'; message: string } | { kind: 'create'; entry: MemoryEntry };
+	edit(
+		current: MemoryEntry,
+		input: Omit<UpdateMemoryEntryInput, 'memoryEntryId'>,
+		timestamp: DateTime
+	): { kind: 'invalid'; message: string } | { kind: 'edit'; entry: MemoryEntry };
+}
+export class MemoryEditingService implements IMemoryEditingService {
+	create(
+		input: CreateMemoryEntryInput,
+		context: { readonly id: MemoryEntryId; readonly userId: UserId; readonly timestamp: DateTime }
+	): { kind: 'invalid'; message: string } | { kind: 'create'; entry: MemoryEntry } {
+		return decideMemoryCreation(input, context);
+	}
+	edit(
+		current: MemoryEntry,
+		input: Omit<UpdateMemoryEntryInput, 'memoryEntryId'>,
+		timestamp: DateTime
+	): { kind: 'invalid'; message: string } | { kind: 'edit'; entry: MemoryEntry } {
+		return decideMemoryEdit(current, input, timestamp);
+	}
 }

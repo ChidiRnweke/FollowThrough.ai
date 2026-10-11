@@ -1,12 +1,26 @@
-import { describe, expect, it } from 'vitest';
-import { Notes, type NotesDependencies } from './controller';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	noteBuilder,
@@ -16,17 +30,43 @@ import {
 	testNow,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository();
+	const notes = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const service = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
-	const indexer = new InMemoryNoteContent();
+	const service = createNoteServices(
+		testActor(),
+		notes,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
+	const indexer = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
-			noteTrash: service,
-			noteTrashReader: service,
+			...agentToolResultsFixture(),
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
+			noteTrash: service.trash,
+			noteTrashReader: service.trashReader,
 			noteIndexer: indexer,
 			transactionRunner: { run: <T>(work: () => Promise<T>): Promise<T> => work() }
 		})
@@ -42,7 +82,7 @@ describe('Note trash listing invariants', () => {
 			noteBuilder({ id: testNoteId(2), archivedAt: testNow, plainText: 'Secret body' }),
 			noteBuilder({ id: testNoteId(3), kind: 'skill', archivedAt: testNow })
 		];
-		const result = await controller.listTrash(testActor(), {});
+		const result = await controller.listTrash({});
 		expect(result.notes).toEqual([
 			expect.objectContaining({ id: testNoteId(2), projectName: 'Project Alpha' })
 		]);
@@ -52,7 +92,7 @@ describe('Note trash listing invariants', () => {
 	it('scopes the listing to one project when asked', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		const result = await controller.listTrash(testActor(), { projectId: testProjectId(2) });
+		const result = await controller.listTrash({ projectId: testProjectId(2) });
 		expect(result.notes).toEqual([]);
 	});
 });

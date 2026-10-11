@@ -1,9 +1,6 @@
 import { storedNoteActionRunSchema, type StoredNoteActionRun } from '$lib/models/agent';
 
-export interface NoteActionRunStorage {
-	load(): readonly StoredNoteActionRun[];
-	save(runs: readonly StoredNoteActionRun[]): void;
-}
+import type { NoteActionRunStorage } from '$lib/controllers/notes/action-runs';
 
 /** Browser storage boundary for the note actions a tab can reconnect to. */
 export class SessionRunStorage implements NoteActionRunStorage {

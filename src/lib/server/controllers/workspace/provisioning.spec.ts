@@ -1,31 +1,44 @@
-import { expect, it } from 'vitest';
-import { Workspace, type WorkspaceDependencies } from './controller';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
+import { UserDirectory } from '$lib/server/services/identity/users';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodayPresentationService } from '$lib/services/workspace/today';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemoryUserRepository } from '$lib/testing/identity/fakes/in-memory-users';
+import { InMemoryAnchorRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
+import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { UserDirectory } from '$lib/server/services/identity/users';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
-import { InMemoryAnchorRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { InMemoryUserRepository } from '$lib/testing/identity/fakes/in-memory-users';
-import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { expect, it } from 'vitest';
+import { Workspace, type WorkspaceDependencies } from './controller';
 
 it('returns the newly provisioned Inbox together with its skills on the first shell read', async () => {
 	const state = builtInSkillsFixture();
-	const users = new InMemoryUserRepository();
-	await users.ensureLocal(testActor());
-	const suggestions = new InMemorySuggestionReader();
+	const users = new InMemoryUserRepository(testActor());
+	await users.ensureLocal();
+	const suggestions = new InMemorySuggestionReader(testActor());
 	const workspace = new Workspace(
+		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
+			...agentToolResultsFixture(),
+			todoPresentation: new TodoPresentationService(),
+			memoryPresentation: new MemoryPresentationService(),
 			...state,
 			userReader: new UserDirectory(users),
-			projectLister: new ProjectCatalog(state.projects, state.projects),
-			noteTreeReader: new NoteCatalog(state.notes, new InMemoryAnchorRepository(), state.projects),
+			projectLister: createProjectServices(testActor(), state.projects, state.projects).lister,
+			noteTreeReader: createNoteServices(
+				testActor(),
+				state.notes,
+				new InMemoryAnchorRepository(testActor()),
+				state.projects
+			).treeReader,
 			suggestionExpirer: suggestions,
 			suggestionLister: suggestions
 		})
 	);
-	const shell = await workspace.getShellContext(testActor());
+	const shell = await workspace.getShellContext();
 	expect({
 		projects: shell.projects.map((project) => project.role),
 		skills: shell.skills.map((skill) => skill.name)

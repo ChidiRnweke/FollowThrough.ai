@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { describe, expect, it } from 'vitest';
 import type { NoteId } from '$lib/models/notes';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -5,27 +6,31 @@ import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-contex
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';
-import { RelationshipGraph } from '$lib/server/services/relationships/graph';
+import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
 import { context, seedNote } from '../database-harness';
 
-const graphFor = (connection: ReturnType<typeof connectPostgresTestDatabase>) => {
+const graphFor = (
+	actor: ActorContext,
+	connection: ReturnType<typeof connectPostgresTestDatabase>
+) => {
 	const { database, transactionRunner } = createTransactionContext(connection.db);
-	const records = new RelationshipRecords(database);
+	const records = new RelationshipRecords(actor, database);
 	return {
 		transactionRunner,
 		records,
-		graph: new RelationshipGraph(
+		graph: createRelationshipServices(
+			actor,
 			records,
-			new NoteRecords(database),
-			new SourceAnchorRecords(database),
-			new ProvenanceRecords(database)
+			new NoteRecords(actor, database),
+			new SourceAnchorRecords(actor, database),
+			new ProvenanceRecords(actor, database)
 		)
 	};
 };
 
 const setup = async (suffix: string) => {
 	const { owner, note } = await seedNote(suffix);
-	const target = await new NoteRecords(context.db).insert(owner, {
+	const target = await new NoteRecords(owner, context.db).insert({
 		...note,
 		id: crypto.randomUUID() as NoteId,
 		position: 1
@@ -42,15 +47,15 @@ describe('Stored relationship decisions', () => {
 		const first = connectPostgresTestDatabase(context.url);
 		const second = connectPostgresTestDatabase(context.url);
 		try {
-			const left = graphFor(first);
-			const right = graphFor(second);
+			const left = graphFor(owner, first);
+			const right = graphFor(owner, second);
 			const changes = await Promise.all([
-				left.transactionRunner.run(() => left.graph.createWithChange(owner, input)),
-				right.transactionRunner.run(() => right.graph.createWithChange(owner, input))
+				left.transactionRunner.run(() => left.graph.creator.createWithChange(input)),
+				right.transactionRunner.run(() => right.graph.creator.createWithChange(input))
 			]);
 			expect({
 				kinds: changes.map((change) => change.kind).sort(),
-				stored: await left.records.listForNote(owner, input.sourceNoteId)
+				stored: await left.records.listForNote(input.sourceNoteId)
 			}).toEqual({
 				kinds: ['created', 'unchanged'],
 				stored: [changes[0]!.after]
@@ -61,12 +66,14 @@ describe('Stored relationship decisions', () => {
 	});
 	it('clears an explanation without replacing the original relationship identity', async () => {
 		const { owner, input } = await setup('16002');
-		const { graph, transactionRunner, records } = graphFor(context);
+		const { graph, transactionRunner, records } = graphFor(owner, context);
 		const original = await transactionRunner.run(() =>
-			graph.create(owner, { ...input, justification: 'Original' })
+			graph.creator
+				.createWithChange({ ...input, justification: 'Original' })
+				.then((change) => change.after)
 		);
-		const change = await transactionRunner.run(() => graph.createWithChange(owner, input));
-		expect({ kind: change.kind, stored: await records.findById(owner, original.id) }).toEqual({
+		const change = await transactionRunner.run(() => graph.creator.createWithChange(input));
+		expect({ kind: change.kind, stored: await records.findById(original.id) }).toEqual({
 			kind: 'modified',
 			stored: { ...original, justification: undefined, updatedAt: change.after.updatedAt }
 		});

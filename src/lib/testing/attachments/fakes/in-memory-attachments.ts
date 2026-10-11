@@ -1,14 +1,18 @@
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	AttachmentId,
 	AttachmentUpload,
 	AttachmentVersion,
 	AttachmentView,
-	RemoveAttachmentResult
+	RemoveAttachmentResult,
+	StoredObjectInfo
 } from '$lib/models/attachments';
 import type { NoteId } from '$lib/models/notes';
 import type { TodoId } from '$lib/models/todos';
-import type { AttachmentManager } from '$lib/server/services/attachments/contracts';
+import type {
+	AttachmentLifecycle,
+	AttachmentReader,
+	AttachmentUploads
+} from '$lib/server/services/attachments/library';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant
@@ -52,9 +56,10 @@ export const attachmentViewBuilder = (
  * actually crosses are implemented; the rest throw so an unexpected call is a
  * loud failure rather than a silent success.
  */
-export class InMemoryAttachments implements AttachmentManager, SnapshotParticipant {
-	downloadUrls = new Map<string, string>();
-	/** Upload reservations `complete` can finalize, keyed by upload id. */
+export class InMemoryAttachments
+	implements AttachmentUploads, AttachmentReader, AttachmentLifecycle, SnapshotParticipant
+{
+	/** Upload reservations that can be finalized, keyed by upload id. */
 	uploads = new Map<string, AttachmentView>();
 	finalized: AttachmentView[] = [];
 	todoLinks: TodoAttachmentLink[] = [];
@@ -71,18 +76,39 @@ export class InMemoryAttachments implements AttachmentManager, SnapshotParticipa
 		};
 	}
 
-	initiate(): Promise<{
-		upload: AttachmentUpload;
-		uploadUrl: string;
-		requiredHeaders: Record<string, string>;
-	}> {
+	initiate(): Promise<{ upload: AttachmentUpload; requiredHeaders: Record<string, string> }> {
 		throw new Error('not used');
 	}
-	async complete(_actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentView> {
+	async pending(uploadId: AttachmentUpload['id']): Promise<AttachmentUpload> {
 		const reserved = this.uploads.get(uploadId);
+		if (!reserved) throw new NotFoundError('Attachment upload was not found');
+		return {
+			id: uploadId,
+			projectId: reserved.attachment.projectId,
+			path: reserved.attachment.path,
+			objectKey: `staging/${uploadId}`,
+			mediaType: reserved.version.mediaType,
+			byteSize: reserved.version.byteSize,
+			checksumSha256: reserved.version.checksumSha256,
+			expiresAt: testNow,
+			createdAt: testNow
+		};
+	}
+	planVersion(upload: AttachmentUpload, _stored: StoredObjectInfo): AttachmentVersion {
+		const reserved = this.uploads.get(upload.id);
+		if (!reserved) throw new NotFoundError('Attachment upload was not found');
+		return reserved.version;
+	}
+	async finalize(upload: AttachmentUpload, _version: AttachmentVersion): Promise<AttachmentView> {
+		const reserved = this.uploads.get(upload.id);
 		if (!reserved) throw new NotFoundError('Attachment upload was not found');
 		this.finalized = [...this.finalized, reserved];
 		return reserved;
+	}
+	async get(id: AttachmentId): Promise<AttachmentView> {
+		const found = this.finalized.find((view) => view.attachment.id === id);
+		if (!found) throw new NotFoundError('Attachment was not found');
+		return found;
 	}
 	list(): Promise<readonly AttachmentView[]> {
 		throw new Error('not used');
@@ -90,23 +116,14 @@ export class InMemoryAttachments implements AttachmentManager, SnapshotParticipa
 	listForProject(): Promise<readonly AttachmentView[]> {
 		throw new Error('not used');
 	}
-	async linkToTodo(
-		_actor: ActorContext,
-		attachmentId: AttachmentId,
-		todoId: TodoId
-	): Promise<void> {
+	async linkToTodo(attachmentId: AttachmentId, todoId: TodoId): Promise<void> {
 		if (this.linkFails) throw new NotFoundError('Attachment was not found');
 		this.todoLinks = [...this.todoLinks, { attachmentId, todoId }];
 	}
-	async listForTodo(_actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]> {
+	async listForTodo(todoId: TodoId): Promise<readonly AttachmentView[]> {
 		return this.todoLinks
 			.filter((link) => link.todoId === todoId)
 			.flatMap((link) => this.finalized.filter((view) => view.attachment.id === link.attachmentId));
-	}
-	async downloadById(actor: ActorContext, id: AttachmentId): Promise<{ url: string }> {
-		const url = this.downloadUrls.get(`${actor.userId}/${id}`);
-		if (!url) throw new NotFoundError('Attachment was not found');
-		return { url };
 	}
 	retry(): Promise<AttachmentView> {
 		throw new Error('not used');
@@ -114,18 +131,18 @@ export class InMemoryAttachments implements AttachmentManager, SnapshotParticipa
 	removeById(): Promise<RemoveAttachmentResult> {
 		throw new Error('not used');
 	}
-	download(): Promise<{ url: string }> {
+	locate(): Promise<AttachmentView> {
 		throw new Error('not used');
 	}
 	read(): Promise<{ text: string; offset: number; nextOffset?: number; parserKind: string }> {
 		throw new Error('not used');
 	}
-	remove(_actor: ActorContext, _noteId: NoteId, _path: string): Promise<AttachmentId | undefined> {
+	remove(_noteId: NoteId, _path: string): Promise<AttachmentId | undefined> {
 		throw new Error('not used');
 	}
 }
 
-/** An upload reservation keyed the way {@link InMemoryAttachments.complete} expects. */
+/** An upload reservation keyed the way {@link InMemoryAttachments.pending} expects. */
 export const reserveUpload = (
 	attachments: InMemoryAttachments,
 	uploadId: string,

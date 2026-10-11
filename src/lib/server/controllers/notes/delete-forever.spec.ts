@@ -1,13 +1,27 @@
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { describe, expect, it } from 'vitest';
-import { Notes, type NotesDependencies } from './controller';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	projectBuilder,
@@ -15,15 +29,41 @@ import {
 	testNoteId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository();
+	const notes = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const service = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
+	const service = createNoteServices(
+		testActor(),
+		notes,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
 	const controller = new Notes(
+		testActor(),
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
-			noteDeletion: service,
+			...agentToolResultsFixture(),
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
+			noteDeletion: service.deletion,
 			transactionRunner: new InMemoryTransactionRunner([notes, projects])
 		})
 	);
@@ -34,14 +74,14 @@ describe('Permanent note deletion invariants', () => {
 	it('removes the trashed note from the store', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		await controller.deleteForever(testActor(), { noteId: testNoteId() });
+		await controller.deleteForever({ noteId: testNoteId() });
 		expect(notes.notes).toEqual([]);
 	});
 
 	it('reports the note it destroyed', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		const result = await controller.deleteForever(testActor(), { noteId: testNoteId() });
+		const result = await controller.deleteForever({ noteId: testNoteId() });
 		expect(result.deletedNoteIds).toEqual([testNoteId()]);
 	});
 
@@ -53,7 +93,7 @@ describe('Permanent note deletion invariants', () => {
 			noteBuilder({ kind: 'folder', archivedAt: testNow }),
 			noteBuilder({ id: testNoteId(2), parentId: testNoteId(), archivedAt: testNow })
 		];
-		await controller.deleteForever(testActor(), { noteId: testNoteId() });
+		await controller.deleteForever({ noteId: testNoteId() });
 		expect(notes.notes).toEqual([]);
 	});
 
@@ -69,7 +109,7 @@ describe('Permanent note deletion invariants', () => {
 			}),
 			noteBuilder({ id: testNoteId(3), parentId: testNoteId(2), archivedAt: testNow })
 		];
-		const result = await controller.deleteForever(testActor(), { noteId: testNoteId() });
+		const result = await controller.deleteForever({ noteId: testNoteId() });
 		expect(result.deletedNoteIds).toEqual([testNoteId(3), testNoteId(2), testNoteId()]);
 	});
 
@@ -80,7 +120,7 @@ describe('Permanent note deletion invariants', () => {
 			noteBuilder({ kind: 'folder', archivedAt: testNow }),
 			noteBuilder({ id: testNoteId(2), parentId: testNoteId() })
 		];
-		await controller.deleteForever(testActor(), { noteId: testNoteId() });
+		await controller.deleteForever({ noteId: testNoteId() });
 		expect(notes.notes.map((note) => ({ id: note.id, parentId: note.parentId }))).toEqual([
 			{ id: testNoteId(2), parentId: undefined }
 		]);
@@ -89,9 +129,9 @@ describe('Permanent note deletion invariants', () => {
 	it('rejects deleting a note that is not in the trash', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder()];
-		await expect(
-			controller.deleteForever(testActor(), { noteId: testNoteId() })
-		).rejects.toMatchObject({ code: 'VALIDATION' });
+		await expect(controller.deleteForever({ noteId: testNoteId() })).rejects.toMatchObject({
+			code: 'VALIDATION'
+		});
 	});
 
 	it('restores deleted children when deleting their folder fails', async () => {
@@ -101,7 +141,7 @@ describe('Permanent note deletion invariants', () => {
 			noteBuilder({ id: testNoteId(2), parentId: testNoteId(), archivedAt: testNow })
 		];
 		notes.deleteFailures.add(testNoteId());
-		await controller.deleteForever(testActor(), { noteId: testNoteId() }).catch(() => undefined);
+		await controller.deleteForever({ noteId: testNoteId() }).catch(() => undefined);
 		expect(notes.notes.map((note) => ({ id: note.id, parentId: note.parentId }))).toEqual([
 			{ id: testNoteId(), parentId: undefined },
 			{ id: testNoteId(2), parentId: testNoteId() }
@@ -111,23 +151,23 @@ describe('Permanent note deletion invariants', () => {
 	it('rejects deleting a skill, which the trash never showed', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ kind: 'skill', archivedAt: testNow })];
-		await expect(
-			controller.deleteForever(testActor(), { noteId: testNoteId() })
-		).rejects.toMatchObject({ code: 'VALIDATION' });
+		await expect(controller.deleteForever({ noteId: testNoteId() })).rejects.toMatchObject({
+			code: 'VALIDATION'
+		});
 	});
 
 	it('does not destroy another user’s trashed note', async () => {
 		const { notes, controller } = setup();
-		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		await expect(
-			controller.deleteForever(testActor(2), { noteId: testNoteId() })
-		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+		notes.notes = [noteBuilder({ archivedAt: testNow, userId: testActor(2).userId })];
+		await expect(controller.deleteForever({ noteId: testNoteId() })).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
 	});
 
 	it('drops the revisions the note carried', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		await notes.insertRevision(testActor(), {
+		await notes.insertRevision({
 			id: testNoteId(9) as never,
 			noteId: testNoteId(),
 			revision: 1,
@@ -136,7 +176,7 @@ describe('Permanent note deletion invariants', () => {
 			plainText: '',
 			createdAt: testNow
 		});
-		await controller.deleteForever(testActor(), { noteId: testNoteId() });
+		await controller.deleteForever({ noteId: testNoteId() });
 		expect(notes.revisions).toEqual([]);
 	});
 });

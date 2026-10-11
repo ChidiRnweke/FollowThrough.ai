@@ -1,49 +1,85 @@
-import { describe, expect, it } from 'vitest';
-import { sql } from 'drizzle-orm';
-import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
-import { workspaceMutationRequestSchema } from '$lib/models/workspace-mutations';
 import type { NoteId } from '$lib/models/notes';
+import { workspaceMutationRequestSchema } from '$lib/models/workspace-mutations';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import {
 	Workspace,
 	type WorkspaceDependencies
 } from '$lib/server/controllers/workspace/controller';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { TodayPresentationService } from '$lib/services/workspace/today';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { sql } from 'drizzle-orm';
+import { describe, expect, it } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const synchronization = createSyncCapability({ db: database });
-	const { catalog } = createNotesCapability({
+	const synchronization = createSyncCapability(seeded.owner, { db: database });
+	const { services: catalog } = createNotesCapability(seeded.owner, {
 		db: database,
-		projects: new ProjectRecords(database)
+		projects: new ProjectRecords(seeded.owner, database)
 	});
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(seeded.owner);
 	const controller = new Notes(
+		seeded.owner,
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
+			...agentToolResultsFixture(),
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner,
-			noteReader: catalog,
-			noteTrash: catalog,
-			noteEditor: catalog,
-			noteSectionNumbering: catalog,
-			noteCreation: catalog,
-			notePublisher: catalog,
-			revisionRecorder: catalog,
+			noteReader: catalog.reader,
+			noteTrash: catalog.trash,
+			noteEditor: catalog.editor,
+			noteSectionNumbering: catalog.sectionNumbering,
+			noteCreation: catalog.creator,
+			notePublisher: catalog.publisher,
+			revisionRecorder: catalog.revisionRecorder,
 			noteIndexer: content,
 			anchorRepairer: content,
 			noteLinkReconciler: content
 		})
 	);
 	const resource = await synchronization.objects.read(
-		seeded.owner,
 		{ type: 'notes', id: [seeded.note.id] },
 		null
 	);
@@ -51,7 +87,11 @@ const setup = async (suffix: string) => {
 	return {
 		...seeded,
 		workspace: new Workspace(
+			new TodayPresentationService(),
 			capabilityDependencies<WorkspaceDependencies>({
+				...agentToolResultsFixture(),
+				todoPresentation: new TodoPresentationService(),
+				memoryPresentation: new MemoryPresentationService(),
 				writeRecovery: synchronization.mutations,
 				transactionRunner
 			})
@@ -67,14 +107,14 @@ const setup = async (suffix: string) => {
 
 describe('synchronized domain mutations on PostgreSQL', () => {
 	it('does not apply a retried rename twice', async () => {
-		const { owner, note, controller, baseEtag } = await setup('9101');
+		const { note, controller, baseEtag } = await setup('9101');
 		const request = {
 			operationId: crypto.randomUUID(),
 			baseEtag,
 			command: { kind: 'renameNote' as const, noteId: note.id, title: 'Renamed once' }
 		};
-		await controller.synchronize(owner, request);
-		await controller.synchronize(owner, request);
+		await controller.synchronize(request);
+		await controller.synchronize(request);
 		const rows = await context.client<
 			{ revision: number }[]
 		>`select current_revision as revision from notes where id = ${note.id}`;
@@ -82,9 +122,9 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 	});
 
 	it('rejects a stale base without overwriting another client’s edit', async () => {
-		const { owner, note, controller, baseEtag } = await setup('9102');
+		const { note, controller, baseEtag } = await setup('9102');
 		await context.client`update notes set title = 'Other device' where id = ${note.id}`;
-		const outcome = await controller.synchronize(owner, {
+		const outcome = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag,
 			command: { kind: 'renameNote', noteId: note.id, title: 'Stale rename' }
@@ -99,9 +139,9 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 	});
 
 	it('creates a new note using its stable local identity with no server base', async () => {
-		const { owner, project, controller } = await setup('9103');
+		const { project, controller } = await setup('9103');
 		const id = crypto.randomUUID() as NoteId;
-		const outcome = await controller.synchronize(owner, {
+		const outcome = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: null,
 			command: { kind: 'createNote', id, projectId: project.id, title: 'Offline creation' }
@@ -111,8 +151,8 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 	});
 
 	it('publishes the guarded current note using the domain’s document revision check', async () => {
-		const { owner, note, controller, baseEtag } = await setup('9104');
-		await controller.synchronize(owner, {
+		const { note, controller, baseEtag } = await setup('9104');
+		await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag,
 			command: { kind: 'publishNote', noteId: note.id }
@@ -126,8 +166,8 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 
 describe('imported note metadata', () => {
 	it('preserves explicitly edited metadata across a later document-only save', async () => {
-		const { owner, note, controller, synchronization, baseEtag } = await setup('9105');
-		const outcome = await controller.synchronize(owner, {
+		const { note, controller, synchronization, baseEtag } = await setup('9105');
+		const outcome = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag,
 			command: {
@@ -140,13 +180,9 @@ describe('imported note metadata', () => {
 				sectionNumbering: true
 			}
 		});
-		const resource = await synchronization.objects.read(
-			owner,
-			{ type: 'notes', id: [note.id] },
-			null
-		);
+		const resource = await synchronization.objects.read({ type: 'notes', id: [note.id] }, null);
 		if (resource.kind !== 'found') throw new Error('Updated note was not readable');
-		const omittedOutcome = await controller.synchronize(owner, {
+		const omittedOutcome = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: resource.snapshot.etag,
 			command: {
@@ -169,30 +205,26 @@ describe('imported note metadata', () => {
 
 describe('guarded note trash actions', () => {
 	it('archives a note once even after a lost acknowledgement', async () => {
-		const { owner, note, controller, baseEtag } = await setup('9107');
+		const { note, controller, baseEtag } = await setup('9107');
 		const request = {
 			operationId: crypto.randomUUID(),
 			baseEtag,
 			command: { kind: 'archiveNote' as const, noteId: note.id }
 		};
-		const first = await controller.synchronize(owner, request);
-		expect(await controller.synchronize(owner, request)).toEqual(first);
+		const first = await controller.synchronize(request);
+		expect(await controller.synchronize(request)).toEqual(first);
 	});
 	it('restores the guarded note through the owning trash rules', async () => {
-		const { owner, note, controller, synchronization, catalog } = await setup('9108');
-		await controller.archive(owner, { noteId: note.id });
-		const current = await synchronization.objects.read(
-			owner,
-			{ type: 'notes', id: [note.id] },
-			null
-		);
+		const { note, controller, synchronization, catalog } = await setup('9108');
+		await controller.archive({ noteId: note.id });
+		const current = await synchronization.objects.read({ type: 'notes', id: [note.id] }, null);
 		if (current.kind !== 'found') throw new Error('The archived note must exist');
-		const result = await controller.synchronize(owner, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: current.snapshot.etag,
 			command: { kind: 'restoreNote', noteId: note.id }
 		});
-		const restored = await catalog.get(owner, note.id);
+		const restored = await catalog.reader.get(note.id);
 		expect({ result: result.kind, archivedAt: restored.archivedAt }).toEqual({
 			result: 'applied',
 			archivedAt: undefined
@@ -231,15 +263,15 @@ it('does not disguise a non-sync database failure as a domain decision', async (
 	).rejects.toMatchObject({ cause: { code: '23502' } });
 });
 it('matches cancellation to normalized input after an applied response is lost', async () => {
-	const { owner, note, controller, workspace, baseEtag } = await setup('9183');
+	const { note, controller, workspace, baseEtag } = await setup('9183');
 	const input = workspaceMutationRequestSchema.parse({
 		operationId: crypto.randomUUID(),
 		baseEtag,
 		command: { kind: 'renameNote', noteId: note.id, title: 'Plan ' }
 	});
 	if (input.command.kind !== 'renameNote') throw new Error('Expected a note rename');
-	const applied = await controller.synchronize(owner, { ...input, command: input.command });
-	const recovered = await workspace.cancelMutation(owner, {
+	const applied = await controller.synchronize({ ...input, command: input.command });
+	const recovered = await workspace.cancelMutation({
 		operationId: input.operationId,
 		request: JSON.stringify(input)
 	});
@@ -256,13 +288,13 @@ it('matches cancellation to normalized input after an applied response is lost',
 });
 
 it('recovers a completed write while another transaction locks its resource', async () => {
-	const { owner, note, controller, baseEtag, database, transactionRunner } = await setup('9111');
+	const { note, controller, baseEtag, database, transactionRunner } = await setup('9111');
 	const request = {
 		operationId: crypto.randomUUID(),
 		baseEtag,
 		command: { kind: 'renameNote' as const, noteId: note.id, title: 'Completed rename' }
 	};
-	const applied = await controller.synchronize(owner, request);
+	const applied = await controller.synchronize(request);
 	const other = connectPostgresTestDatabase(context.url);
 	try {
 		const replayed = await other.db.transaction(async (transaction) => {
@@ -270,7 +302,7 @@ it('recovers a completed write while another transaction locks its resource', as
 			return transactionRunner.run(async () => {
 				// Fail promptly if receipt recovery starts waiting for the busy source row.
 				await database.execute(sql`set local lock_timeout = '1s'`);
-				return controller.synchronize(owner, request);
+				return controller.synchronize(request);
 			});
 		});
 		expect(replayed).toEqual(applied);

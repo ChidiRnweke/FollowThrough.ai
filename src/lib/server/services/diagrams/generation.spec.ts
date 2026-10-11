@@ -1,66 +1,59 @@
-import { describe, expect, it } from 'vitest';
-import { DiagramProviderSession } from './generation';
+import { expect, it } from 'vitest';
+import { DiagramGenerationService } from './generation';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
-import {
-	InMemoryDiagramModel,
-	type DiagramCandidate
-} from '$lib/testing/diagrams/fakes/in-memory-diagram-model';
-import type { DiagramGenerationRequest, DiagramSubmission } from '$lib/models/diagrams/generation';
+import { InMemoryDiagramModel } from '$lib/testing/diagrams/fakes/in-memory-diagram-model';
+import type { DiagramSubmission, DiagramSubmissionDecision } from '$lib/models/diagrams/generation';
 
-const request: DiagramGenerationRequest = {
-	model: 'test/model',
-	operation: 'generate',
-	prompt: 'Draw a queue',
-	instructions: 'Submit a Mermaid diagram.'
-};
 const draft: DiagramSubmission = { kind: 'mermaid', source: 'flowchart LR\nA --> B' };
-const setup = (candidates: readonly DiagramCandidate[] = [draft]) => {
-	const provider = new InMemoryModelProvider(new InMemoryDiagramModel(candidates));
-	return { provider, session: new DiagramProviderSession(provider, request) };
-};
 
-describe('Diagram provider submission protocol', () => {
-	it('returns the draft accepted by the controller', async () => {
-		const { session } = setup();
-		try {
-			for await (const event of session.events) {
-				if (event.kind === 'submission')
-					session.respond(event.id, { kind: 'accepted', draft: event.draft });
-			}
-			expect(await session.result()).toEqual(draft);
-		} finally {
-			await session.close();
+it('returns a corrected submission after the caller rejects the first draft, and releases the provider', async () => {
+	const lease = new InMemoryModelProvider(
+		new InMemoryDiagramModel([{ kind: 'mermaid', source: 'invalid' }, draft])
+	);
+	const generation = new DiagramGenerationService({
+		available: true,
+		models: () => lease
+	}).generate(
+		{
+			model: 'test/model',
+			operation: 'generate',
+			prompt: 'Draw a queue',
+			instructions: 'Submit Mermaid'
+		},
+		new AbortController().signal
+	);
+	const submissions: DiagramSubmission[] = [];
+	let decision: DiagramSubmissionDecision | undefined;
+	let step = await generation.next();
+	while (!step.done) {
+		decision = undefined;
+		if (step.value.kind === 'submission') {
+			const submitted = step.value.draft;
+			submissions.push(submitted);
+			decision =
+				submitted.source === 'invalid'
+					? { kind: 'rejected', message: 'Invalid syntax' }
+					: { kind: 'accepted', draft: submitted };
 		}
+		step = await generation.next(decision);
+	}
+	expect({ result: step.value, submissions, released: lease.closed }).toEqual({
+		result: draft,
+		submissions: [{ kind: 'mermaid', source: 'invalid' }, draft],
+		released: true
 	});
+});
 
-	it('allows another provider turn after the controller rejects a submission', async () => {
-		const { session } = setup([{ kind: 'mermaid', source: 'invalid' }, draft]);
-		try {
-			for await (const event of session.events) {
-				if (event.kind === 'submission')
-					session.respond(
-						event.id,
-						event.draft.source === 'invalid'
-							? { kind: 'rejected', message: 'Invalid Mermaid syntax' }
-							: { kind: 'accepted', draft: event.draft }
-					);
-			}
-			expect(await session.result()).toEqual(draft);
-		} finally {
-			await session.close();
-		}
-	});
-
-	it('releases the provider when closed while a submission awaits validation', async () => {
-		const { session, provider } = setup();
-		try {
-			for await (const event of session.events) {
-				if (event.kind === 'submission') break;
-			}
-			await session.close();
-			expect(provider.closed).toBe(true);
-		} finally {
-			await session.close();
-		}
-	});
+it('releases the provider when the caller stops the generation early', async () => {
+	const lease = new InMemoryModelProvider(new InMemoryDiagramModel([draft]));
+	const generation = new DiagramGenerationService({
+		available: true,
+		models: () => lease
+	}).generate(
+		{ model: 'test/model', operation: 'generate', prompt: 'Draw a queue', instructions: 'Submit' },
+		new AbortController().signal
+	);
+	await generation.next();
+	await generation.return(undefined);
+	expect(lease.closed).toBe(true);
 });

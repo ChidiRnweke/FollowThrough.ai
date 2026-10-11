@@ -1,5 +1,6 @@
 export {
 	attachments,
+	attachmentObjectRemovals,
 	attachmentUploads,
 	attachmentVersions,
 	noteRevisionAttachments,

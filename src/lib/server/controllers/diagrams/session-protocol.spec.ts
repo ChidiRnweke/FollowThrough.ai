@@ -1,0 +1,128 @@
+import { describe, expect, it } from 'vitest';
+import { Diagrams } from './controller';
+import { InMemoryMermaidValidator } from '$lib/testing/diagrams/fakes/mermaid-validator';
+import {
+	durableDiagramFixture,
+	diagramSelection
+} from '$lib/testing/diagrams/fixtures/durable-generation';
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { DiagramSubmission } from '$lib/models/diagrams/generation';
+const draft: DiagramSubmission = { kind: 'mermaid', source: 'flowchart LR\nA --> B' };
+const fenced: DiagramSubmission = { kind: 'mermaid', source: '```mermaid\ninvalid\n```' };
+const setup = (candidates = [draft]) => {
+	const fixture = durableDiagramFixture();
+	const provider = fixture.provider;
+	provider.submissions = candidates;
+	if (!candidates.length) provider.failure = new Error('No diagram candidates remain.');
+	const syntax = new InMemoryMermaidValidator();
+	syntax.rejections.set(fenced.source, 'Submit Mermaid source without code fences.');
+	const controller = new Diagrams(testActor(), {
+		...fixture.dependencies,
+		mermaidValidator: syntax,
+		generation: {
+			...fixture.generation,
+			generator: provider
+		}
+	});
+	const run = (signal?: AbortSignal) =>
+		controller.generateMermaid({ selection: diagramSelection }, signal);
+	return { ...fixture, provider, syntax, run };
+};
+describe('Diagram provider submission through its owning operation', () => {
+	it('publishes the accepted draft and releases its provider', async () => {
+		const fixture = setup();
+		const result = await fixture.run();
+		expect({ draft: result.suggestion.payload, closed: fixture.provider.closed }).toMatchObject({
+			draft,
+			closed: true
+		});
+	});
+	it('allows a correction after the controller rejects a submission', async () => {
+		const fixture = setup([fenced, draft]);
+		const result = await fixture.run();
+		expect(result.suggestion.payload).toMatchObject(draft);
+	});
+	it('releases the provider and publishes nothing when cancelled during validation', async () => {
+		const fixture = setup();
+		const abort = new AbortController();
+		const gate = Promise.withResolvers<void>();
+		fixture.syntax.gate = gate.promise;
+		const execution = fixture.run(abort.signal).then(
+			() => ({ kind: 'completed' }),
+			(error: Error) => ({ kind: 'failure', message: error.message })
+		);
+		await fixture.syntax.started.promise;
+		abort.abort(new Error('Cancelled during validation'));
+		gate.resolve();
+		const result = await execution;
+		expect({
+			result: result.kind,
+			closed: fixture.provider.closed,
+			suggestions: fixture.suggestions.suggestions
+		}).toEqual({ result: 'failure', closed: true, suggestions: [] });
+	});
+	it('reports a provider failure and releases its lease', async () => {
+		const fixture = setup([]);
+		const outcome = await fixture.run().then(
+			() => 'unexpected success',
+			(error: Error) => error.message
+		);
+		expect({ outcome, closed: fixture.provider.closed }).toEqual({
+			outcome: 'No diagram candidates remain.',
+			closed: true
+		});
+	});
+	it('cancels one pending validation without closing another generation', async () => {
+		const left = setup();
+		const right = setup();
+		const abort = new AbortController();
+		const gate = Promise.withResolvers<void>();
+		left.syntax.gate = gate.promise;
+		const cancelled = left.run(abort.signal).then(
+			() => 'completed',
+			() => 'cancelled'
+		);
+		await left.syntax.started.promise;
+		const completed = right.run();
+		abort.abort(new Error('Stop left'));
+		gate.resolve();
+		const [outcome, result] = await Promise.all([cancelled, completed]);
+		expect({
+			outcome,
+			result: result.suggestion.payload,
+			closed: [left.provider.closed, right.provider.closed]
+		}).toMatchObject({ outcome: 'cancelled', result: draft, closed: [true, true] });
+	});
+});
+
+/**
+ * The submission tools are agent tool names, so the shared mapper records the Diagram Agent's
+ * calls instead of rejecting them and the generation completes.
+ */
+it('records the Diagram Agent submission tool and completes the generation', async () => {
+	const { DiagramGenerationService } = await import('$lib/server/services/diagrams/generation');
+	const { InMemoryModelProvider } =
+		await import('$lib/testing/agent/fakes/in-memory-model-provider');
+	const { InMemoryDiagramModel } =
+		await import('$lib/testing/diagrams/fakes/in-memory-diagram-model');
+	const fixture = durableDiagramFixture();
+	const provider = new InMemoryModelProvider(new InMemoryDiagramModel([draft]));
+	const controller = new Diagrams(testActor(), {
+		...fixture.dependencies,
+		generation: {
+			...fixture.generation,
+			generator: new DiagramGenerationService({ available: true, models: () => provider })
+		}
+	});
+	const result = await controller.generateMermaid({ selection: diagramSelection }).then(
+		() => ({ kind: 'completed' }),
+		(error: Error) => ({ kind: 'failure', message: error.message })
+	);
+	expect({
+		result,
+		closed: provider.closed,
+		sources: fixture.suggestions.suggestions.map((suggestion) =>
+			suggestion.kind === 'diagram' ? suggestion.payload.source : undefined
+		)
+	}).toEqual({ result: { kind: 'completed' }, closed: true, sources: [draft.source] });
+});

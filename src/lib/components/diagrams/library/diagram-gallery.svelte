@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { goto } from '$app/navigation';
-	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
+	import { changeDiagramTrash } from '../trash-actions';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { Diagram } from '$lib/models/diagrams';
 	import type { Project, ProjectId } from '$lib/models/projects';
@@ -18,8 +19,8 @@
 	import * as Icon from '$lib/components/icons';
 	import * as Scene from '$lib/components/icons/scenes';
 	import { formatDateTime } from '$lib/components/shared/labels';
-	import { drawioReferencesIn } from '$lib/services/notes/references';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab, diagramTab } from '$lib/stores/workbench/tab-ref';
@@ -48,8 +49,9 @@
 		const resources = workspaceSession.current?.resources;
 		if (!resources || resources.availability !== 'complete') return null;
 		const id = removeTarget.id;
-		return resources.views.all('notes').filter((note) => drawioReferencesIn([note]).includes(id))
-			.length;
+		return workspaceViews
+			.all('notes')
+			.filter((note) => noteDocuments.diagramReferences([note]).includes(id)).length;
 	});
 
 	// Mirrors the loader's canonical URL exactly. A mismatch would make every

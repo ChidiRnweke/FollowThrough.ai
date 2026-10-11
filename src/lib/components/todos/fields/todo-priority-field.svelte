@@ -2,7 +2,7 @@
 	import type { TodoId, TodoPriority } from '$lib/models/todos';
 	import * as Select from '$lib/components/ui/select';
 	import { toast } from 'svelte-sonner';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from '../todo-updates';
 	import { todoPriorityLabels, todoPriorityStyle } from '../../shared/labels';
 
 	let {

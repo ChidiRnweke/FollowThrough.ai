@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import {
-	readAgentPayloadObject,
-	readAgentPayload,
+	agentPayloadObjectResultSchema,
+	agentPayloadResultSchema,
 	type AgentPayload
 } from '$lib/models/agent/payload';
 
@@ -41,7 +41,7 @@ const readCacheFile = async (path: string): Promise<CacheContents> => {
 	} catch (error) {
 		return { kind: 'corrupt', reason: error instanceof Error ? error.message : String(error) };
 	}
-	const read = readAgentPayloadObject(parsed);
+	const read = agentPayloadObjectResultSchema.parse(parsed);
 	return read.kind === 'corrupt'
 		? { kind: 'corrupt', reason: read.message }
 		: { kind: 'entries', entries: { ...read.value } };
@@ -71,7 +71,7 @@ const quarantine = async (path: string, reason: string): Promise<void> => {
  * cannot carry is refused loudly instead of stored and corrupted at replay.
  */
 const cacheValueOf = (value: unknown): AgentPayload => {
-	const read = readAgentPayload(value);
+	const read = agentPayloadResultSchema.parse(value);
 	if (read.kind === 'corrupt')
 		throw new Error(`Eval aux response is not JSON and cannot be cached: ${read.message}`);
 	return read.value;
@@ -118,18 +118,14 @@ export class DiskCache {
 		return `${namespace}:${hash.slice(0, 32)}`;
 	}
 
-	async resolve<T>(
+	async lookup(
 		key: string,
-		produce: () => Promise<T>,
 		options: { deterministic?: boolean } = {}
-	): Promise<T> {
+	): Promise<{ readonly kind: 'hit'; readonly value: AgentPayload } | { readonly kind: 'miss' }> {
 		const entries = await this.load();
 		if (!DiskCache.recording() && key in entries) {
 			this.counters.hits += 1;
-			// The entry survived a JSON round trip in this cache's own file, so a
-			// value that satisfies the caller's `T` needs no further shape check.
-			// audit-allow: shape-cast — `T` is the caller's declared payload type, and no static check can re-verify a JSON round trip here.
-			return entries[key] as unknown as T;
+			return { kind: 'hit', value: entries[key] };
 		}
 		this.counters.misses += 1;
 		if (!DiskCache.recording()) {
@@ -142,9 +138,28 @@ export class DiskCache {
 			);
 		}
 		this.counters.live += 1;
-		const value = await produce();
-		entries[key] = cacheValueOf(value);
+		return { kind: 'miss' };
+	}
+
+	async store(key: string, value: AgentPayload): Promise<void> {
+		const entries = await this.load();
+		entries[key] = value;
 		this.dirty = true;
+	}
+
+	async resolve<T>(
+		key: string,
+		produce: () => Promise<T>,
+		options: { deterministic?: boolean } = {}
+	): Promise<T> {
+		const entry = await this.lookup(key, options);
+		if (entry.kind === 'hit') {
+			// The entry survived a JSON round trip in this cache's own file.
+			// audit-allow: shape-cast — `T` is the caller's declared payload type, and no static check can re-verify a JSON round trip here.
+			return entry.value as unknown as T;
+		}
+		const value = await produce();
+		await this.store(key, cacheValueOf(value));
 		return value;
 	}
 

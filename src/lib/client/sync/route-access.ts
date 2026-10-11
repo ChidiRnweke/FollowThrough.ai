@@ -1,7 +1,7 @@
 import { error, isHttpError, isRedirect } from '@sveltejs/kit';
 import type { z } from 'zod';
 import { type CacheAccess } from '$lib/models/sync';
-import { accessMessage } from '$lib/services/sync/state';
+import type { WorkspacePresentationController } from '$lib/controllers/workspace/presentation';
 
 export const routeResourceId = <T>(schema: z.ZodType<T>, value: string): T => {
 	const parsed = schema.safeParse(value);
@@ -10,13 +10,14 @@ export const routeResourceId = <T>(schema: z.ZodType<T>, value: string): T => {
 };
 
 export const requireRouteResource = <T>(
+	presentation: WorkspacePresentationController,
 	access: CacheAccess<T>,
 	online: boolean,
 	name: string
 ): T => {
 	if (access.kind === 'ready') return access.value;
 	if (access.kind === 'unavailable' && online) error(404, `This ${name} was not found`);
-	error(access.kind === 'deleted' ? 410 : 503, accessMessage(access, name));
+	error(access.kind === 'deleted' ? 410 : 503, presentation.accessMessage(access, name));
 };
 
 export type RouteReadiness =

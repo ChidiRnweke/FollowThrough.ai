@@ -5,11 +5,13 @@ description: Prevent browser and server implementations from making different de
 
 ## Status
 
-Accepted. Revised on 2026-09-19.
+Accepted. Revised on 2026-09-19 and 2026-10-11.
 
 The first version placed each shared rule in a model as a pure function. The revision moves shared
 rules into shared services. Models now hold only values, types, schemas and constructors. The
-guarantees of this decision are unchanged.
+guarantees of this decision are unchanged. The second revision gives the browser the same layers as the
+server: shared services stay pure, and the browser's own services own its local storage and server
+interactions (ADR 0007).
 
 ## Context
 
@@ -49,6 +51,13 @@ Server services perform storage work around these rules. Controllers continue to
 across features and own their transactions, as described in ADR 0007. The durable queue and conflict
 review retain the synchronization contract in ADR 0040.
 
+Shared services stay pure in both places. In the browser, the workspace controller applies these
+rules to local edits before they enter the durable outbox; its browser services under
+`src/lib/client/services/<area>/` own IndexedDB through browser repositories under
+`src/lib/client/repositories/<area>/` and parse the server's synchronization answers. Operations
+only the server performs are remote functions that components call directly (ADR 0007); no browser
+controller wraps them.
+
 This decision covers rules whose meaning is the same in both paths. It does not require shared code
 for different behavior, such as PDF and DOCX layout, or make server-only actions available offline.
 
@@ -70,6 +79,6 @@ for different behavior, such as PDF and DOCX layout, or make server-only actions
   Skills controllers and browser command preparation all use it.
 - `src/lib/services/todos/edits.ts` defines `applyTodoEdit`, which is reused by browser command
   preparation and the task controller.
-- `src/lib/controllers/workspace/commands.ts` prepares optimistic commands from cached records.
+- Browser command preparation prepares optimistic commands from cached records.
 - `src/lib/server/services/notes/catalog.ts` checks current records for note lifecycle operations.
 - ADR 0040 defines the durable command queue and review of conflicting edits.

@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
-import { receiveResource } from '$lib/services/sync/state';
+import { SyncResourceRulesService } from '$lib/services/sync/state';
+const { receiveResource } = new SyncResourceRulesService();
 const first = { etag: syncEtag(1n), value: 'Original' };
 it('ignores a response older than a retained version', () => {
 	const newest = receiveResource(undefined, { etag: syncEtag(3n), value: 'Newest' });

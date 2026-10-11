@@ -351,7 +351,7 @@ export const memoryCases: readonly EvalCase[] = [
 				proposal: findCall(result, 'propose_memory_change')?.arguments
 			});
 
-			const note = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const note = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const taskApplied = referenceArchitectureUpdateApplied(note.note.plainText);
 			const verdict = await expectSuggestionPending(
 				lab,
@@ -415,7 +415,7 @@ export const memoryCases: readonly EvalCase[] = [
 			});
 
 			const noteId = workspace.noteIds.get('Background')!;
-			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const view = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const body = view.note.plainText.toLowerCase();
 			const british = ['organisation', 'behaviour', 'colour'].filter((word) => body.includes(word));
 			const american = ['organization', 'behavior', 'color'].filter((word) => body.includes(word));
@@ -493,7 +493,7 @@ export const memoryCases: readonly EvalCase[] = [
 			});
 
 			const noteId = workspace.noteIds.get('Release Note')!;
-			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const view = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const haystack = `${result.finalResponse}\n${view.note.plainText}`.toLowerCase();
 			const keywords = ['given', 'when', 'then'].filter((word) => haystack.includes(word));
 			const followed = keywords.length === 3;
@@ -533,13 +533,13 @@ export const memoryCases: readonly EvalCase[] = [
 				mode: 'auto_accept',
 				projectId
 			});
-			const shell = await lab.controllers.workspace().getShellContext(workspace.actor);
+			const shell = await lab.forActor(workspace.actor).controllers.workspace().getShellContext();
 			const created = shell.noteTree.find(
 				(note) => note.projectId === projectId && note.kind === 'note'
 			);
 			const body = created
 				? (
-						await lab.controllers.notes().get(workspace.actor, { noteId: created.id })
+						await lab.forActor(workspace.actor).controllers.notes().get({ noteId: created.id })
 					).note.plainText.toLowerCase()
 				: '';
 			const queued = await expectSuggestionPending(
@@ -609,7 +609,7 @@ export const memoryCases: readonly EvalCase[] = [
 				projectId,
 				noteId
 			});
-			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const view = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const applied = (this.expected.markers as string[]).every((marker) =>
 				view.note.plainText.includes(marker)
 			);

@@ -1,9 +1,11 @@
-import { expect, it } from 'vitest';
-import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
-import { Workspace, type WorkspaceDependencies } from './controller';
 import type { LocalDate } from '$lib/models/workspace';
-import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodayPresentationService } from '$lib/services/workspace/today';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
+import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
@@ -11,37 +13,44 @@ import {
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { Workspace, type WorkspaceDependencies } from './controller';
 
 it('counts pending proposals after expiry when assembling Today', async () => {
-	const proposals = new InMemorySuggestionReader();
+	const proposals = new InMemorySuggestionReader(testActor());
 	proposals.suggestions = [memorySuggestionBuilder({ expiresAt: testNow })];
-	const tasks = new InMemoryTodos();
+	const tasks = new InMemoryTodos(testActor());
 	const controller = new Workspace(
+		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
+			...agentToolResultsFixture(),
+			todoPresentation: new TodoPresentationService(),
+			memoryPresentation: new MemoryPresentationService(),
 			suggestionExpirer: proposals,
 			suggestionLister: proposals,
-			noteTreeReader: new InMemoryNoteContent(),
+			noteTreeReader: new InMemoryNoteContent(testActor()),
 			todoLister: tasks,
 			waitingOnFinder: tasks,
 			todoContextReader: tasks
 		})
 	);
 	expect(
-		(await controller.getTodayView(testActor(), { today: '2026-07-11' as LocalDate }))
-			.pendingSuggestionCount
+		(await controller.getTodayView({ today: '2026-07-11' as LocalDate })).pendingSuggestionCount
 	).toBe(0);
 });
 
 it('reports expiry failure before returning shell attention', async () => {
-	const proposals = new InMemorySuggestionReader();
+	const proposals = new InMemorySuggestionReader(testActor());
 	proposals.expiryFailure = new Error('Expiry storage is unavailable');
 	const controller = new Workspace(
+		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
+			...agentToolResultsFixture(),
+			todoPresentation: new TodoPresentationService(),
+			memoryPresentation: new MemoryPresentationService(),
 			...builtInSkillsFixture(),
 			suggestionExpirer: proposals
 		})
 	);
-	await expect(controller.getShellContext(testActor())).rejects.toThrow(
-		'Expiry storage is unavailable'
-	);
+	await expect(controller.getShellContext()).rejects.toThrow('Expiry storage is unavailable');
 });

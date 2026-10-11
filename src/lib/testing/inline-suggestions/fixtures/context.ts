@@ -1,43 +1,53 @@
+import type { ActorContext } from '$lib/models/identity';
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { InlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
 import {
 	InlineSuggestions,
 	type InlineSuggestionsDependencies
 } from '$lib/server/controllers/inline-suggestions/controller';
-import { InlineSuggestionAdmission } from '$lib/server/services/inline-suggestions/inline-admission';
+import { InlineAdmissionService } from '$lib/server/services/inline-suggestions/inline-admission';
+import { InMemoryInlineAttempts } from '$lib/testing/inline-suggestions/fakes/inline-attempts';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
-import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import {
 	InMemoryAgentPreferencesRepository,
 	InMemoryInlineCompletion
 } from '$lib/testing/agent/fakes/in-memory-inline-completion';
-import {
-	InMemoryEmbeddingClient,
-	InMemoryReranker,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
-export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDependencies> = {}) => {
-	const notes = new InMemoryNoteContent();
-	const memory = new InMemoryMemoryEntryRepository();
-	const search = new InMemorySearchRepository();
-	const embeddings = new InMemoryEmbeddingClient();
-	const reranker = new InMemoryReranker();
+export const inlineSuggestionFixture = (
+	overrides: Partial<InlineSuggestionsDependencies> = {},
+	viewer: ActorContext = testActor()
+) => {
+	const notes = new InMemoryNoteContent(viewer);
+	const memory = new InMemoryMemoryEntryRepository(viewer);
+	const search = new InMemorySearchRepository(viewer);
+	const provider = new InMemoryRetrievalProvider();
 	const generator = new InMemoryInlineCompletion();
-	const preferences = new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository());
-	const admission = new InlineSuggestionAdmission();
+	const preferences = new AgentPreferenceCatalog(
+		viewer,
+		new InMemoryAgentPreferencesRepository(viewer)
+	);
+	const attempts = new InMemoryInlineAttempts();
 	const controller = new InlineSuggestions(
+		viewer,
 		capabilityDependencies<InlineSuggestionsDependencies>({
+			context: new InlineContextService(testTokenizer),
 			noteReader: notes,
 			memory,
-			embeddings,
-			reranker,
-			knowledgeLookup: new KnowledgeLookup(search),
-			inlineCompletionGenerator: generator,
-			inlineSuggestionThrottle: admission,
+			knowledge: createTestContentIndex(search, undefined, undefined, false, provider),
+			completion: generator,
+			defaultCompletionModel: 'default-inline-model',
+			admission: new InlineAdmissionService(attempts),
+			now: () => 0,
 			preferences,
 			observer: { run: (_name, _context, body) => body() },
+			workflow: { run: (_name, _context, body) => body() },
 			...overrides
 		})
 	);
@@ -46,10 +56,9 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 		notes,
 		memory,
 		search,
-		embeddings,
-		reranker,
+		provider,
 		generator,
 		preferences,
-		admission
+		attempts
 	};
 };

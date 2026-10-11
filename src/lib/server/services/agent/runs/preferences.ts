@@ -1,11 +1,7 @@
-import { OpenRouter } from '@openrouter/sdk';
+import type { AgentCatalogMetadata } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	AgentExecutionMode,
-	AgentModel,
-	AgentPreferences,
-	Conversation
-} from '$lib/models/agent';
+import type { AgentModel, AgentPreferences } from '$lib/models/agent';
+import { ExternalServiceError } from '$lib/errors';
 import type { DateTime } from '$lib/models/workspace';
 import { ValidationError } from '$lib/errors';
 import type { AgentPreferencesRepository } from '$lib/server/repositories/agent';
@@ -13,89 +9,91 @@ import type { AgentPreferencesRepository } from '$lib/server/repositories/agent'
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export interface AgentPreferencesStore {
-	get(actor: ActorContext): Promise<AgentPreferences>;
+	get(): Promise<AgentPreferences>;
 }
 
 export interface AgentModelCatalog {
 	list(): Promise<readonly AgentModel[]>;
 }
 
-export class AgentPreferenceCatalog implements AgentPreferencesStore {
-	constructor(private readonly repository: AgentPreferencesRepository) {}
+export interface AgentPreferenceEditor extends AgentPreferencesStore {
+	defaults(timestamp: DateTime): AgentPreferences;
+	getForWrite(resourceKey: string): Promise<AgentPreferences | undefined>;
+	persist(preferences: AgentPreferences): Promise<AgentPreferences>;
+}
 
-	defaults(actor: ActorContext, timestamp: DateTime): AgentPreferences {
+export class AgentPreferenceCatalog implements AgentPreferencesStore, AgentPreferenceEditor {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly repository: AgentPreferencesRepository
+	) {}
+
+	defaults(timestamp: DateTime): AgentPreferences {
 		return {
-			userId: actor.userId,
+			userId: this.actor.userId,
 			executionMode: 'approval_required',
 			inlineSuggestionsEnabled: true,
 			createdAt: timestamp,
 			updatedAt: timestamp
 		};
 	}
-	async get(actor: ActorContext): Promise<AgentPreferences> {
-		return (await this.repository.get(actor)) ?? this.defaults(actor, now());
+	async get(): Promise<AgentPreferences> {
+		return (await this.repository.get()) ?? this.defaults(now());
 	}
-	getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined> {
-		return this.repository.getForWrite(actor);
+	getForWrite(resourceKey: string): Promise<AgentPreferences | undefined> {
+		return this.repository.getForWrite(resourceKey);
 	}
-	persist(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences> {
-		if (preferences.userId !== actor.userId)
+	persist(preferences: AgentPreferences): Promise<AgentPreferences> {
+		if (preferences.userId !== this.actor.userId)
 			throw new ValidationError('The preferences belong to another account');
-		return this.repository.upsert(actor, preferences);
+		return this.repository.upsert(preferences);
 	}
 }
 
-export class AgentModels implements AgentModelCatalog {
-	private cached: readonly AgentModel[] | undefined;
-	private refreshedAt = 0;
+export interface AgentModelReader {
+	list(): Promise<{ readonly data: readonly AgentCatalogMetadata[] }>;
+}
 
+/**
+ * The provider catalog, read on every call. The browser keeps its copy in the workspace
+ * bootstrap, so the server holds none.
+ */
+export class AgentModels implements AgentModelCatalog {
 	constructor(
-		private readonly client: OpenRouter,
-		private readonly recommended: ReadonlySet<string>,
-		private readonly ttlMs = 5 * 60 * 1000
+		private readonly client: AgentModelReader,
+		private readonly recommended: ReadonlySet<string>
 	) {}
 
 	async list(): Promise<readonly AgentModel[]> {
-		if (this.cached && Date.now() - this.refreshedAt < this.ttlMs) return this.cached;
-		try {
-			const response = await this.client.models.list();
-			this.cached = response.data
-				.map((model): AgentModel => {
-					const supportsTools = model.supportedParameters.includes('tools');
-					const supportsVision = model.architecture?.inputModalities.includes('image') ?? false;
-					const capabilities = [
-						supportsTools ? 'tools' : undefined,
-						model.supportedParameters.includes('structured_outputs')
-							? 'structured output'
-							: undefined,
-						model.supportedParameters.includes('reasoning') ? 'reasoning' : undefined
-					].filter((value): value is string => value !== undefined);
-					return {
-						id: model.id,
-						name: model.name,
-						provider: model.id.split('/')[0] ?? 'OpenRouter',
-						...(model.contextLength ? { contextLength: model.contextLength } : {}),
-						supportsTools,
-						supportsVision,
-						recommended: this.recommended.has(model.id),
-						capabilities
-					};
-				})
-				.sort(
-					(a, b) => Number(b.recommended) - Number(a.recommended) || a.name.localeCompare(b.name)
-				);
-			this.refreshedAt = Date.now();
-			return this.cached;
-		} catch (error) {
-			if (this.cached) return this.cached;
-			throw error;
-		}
+		const response = await this.client.list().catch((cause) => {
+			throw new ExternalServiceError('The model catalog could not be read.', {
+				cause: cause instanceof Error ? cause.message : String(cause)
+			});
+		});
+		return response.data
+			.map((model): AgentModel => {
+				const supportsTools = model.supportedParameters.includes('tools');
+				const supportsVision = model.architecture?.inputModalities.includes('image') ?? false;
+				const capabilities = [
+					supportsTools ? 'tools' : undefined,
+					model.supportedParameters.includes('structured_outputs')
+						? 'structured output'
+						: undefined,
+					model.supportedParameters.includes('reasoning') ? 'reasoning' : undefined
+				].filter((value): value is string => value !== undefined);
+				return {
+					id: model.id,
+					name: model.name,
+					provider: model.id.split('/')[0] ?? 'OpenRouter',
+					...(model.contextLength ? { contextLength: model.contextLength } : {}),
+					supportsTools,
+					supportsVision,
+					recommended: this.recommended.has(model.id),
+					capabilities
+				};
+			})
+			.sort(
+				(a, b) => Number(b.recommended) - Number(a.recommended) || a.name.localeCompare(b.name)
+			);
 	}
-}
-
-export function resolveAgentExecutionMode(
-	conversation: Pick<Conversation, 'executionModeOverride'>,
-	preferences: Pick<AgentPreferences, 'executionMode'>
-): AgentExecutionMode {
-	return conversation.executionModeOverride ?? preferences.executionMode;
 }

@@ -1,4 +1,6 @@
-import type { IndexingResult } from '$lib/models/knowledge-search';
+import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import type { DiagramIndexContextRequirement } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
@@ -11,16 +13,13 @@ import type { Note, TextSelection } from '$lib/models/notes';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { Skill } from '$lib/models/skills';
 import { ExternalServiceError, NotFoundError, StaleRevisionError } from '$lib/errors';
+import type { DiagramFinder, DiagramWriter } from '$lib/server/services/diagrams/library';
+import type { DiagramIndexing as DiagramIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import type {
-	DiagramFinder,
-	DiagramIndexer,
-	DiagramPromoter,
 	DiagramTextExtractor,
-	DiagramWriter,
-	DrawioDiagramExporter,
 	MermaidDiagramRenderer
-} from '$lib/server/services/diagrams/contracts';
-import type { SkillCreator } from '$lib/server/services/skills/contracts';
+} from '$lib/server/services/diagrams/content';
+import type { SkillCreator } from '$lib/server/services/skills/library';
 import {
 	noteBuilder,
 	testActor,
@@ -68,13 +67,12 @@ export class InMemoryDiagrams
 	implements
 		DiagramFinder,
 		MermaidDiagramRenderer,
-		DrawioDiagramExporter,
-		DiagramPromoter,
 		DiagramTextExtractor,
 		DiagramWriter,
 		DiagramIndexer,
 		SnapshotParticipant
 {
+	constructor(private readonly actor: ActorContext) {}
 	diagrams: Diagram[] = [];
 	indexedIds: DiagramId[] = [];
 	failIndex = false;
@@ -88,33 +86,20 @@ export class InMemoryDiagrams
 		};
 	}
 
-	async get(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
+	async get(diagramId: DiagramId): Promise<Diagram> {
 		const diagram = this.diagrams.find(
-			(candidate) => candidate.id === diagramId && candidate.userId === actor.userId
+			(candidate) => candidate.id === diagramId && candidate.userId === this.actor.userId
 		);
 		if (!diagram) throw new NotFoundError('Diagram was not found');
 		return diagram;
 	}
 
-	getForWrite(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
-		return this.get(actor, diagramId);
+	getForWrite(diagramId: DiagramId): Promise<Diagram> {
+		return this.get(diagramId);
 	}
 
 	async render(source: string): Promise<string> {
 		return `<svg>${source}</svg>`;
-	}
-
-	async exportSvg(diagram: DrawioDiagram): Promise<string> {
-		return `<svg>${diagram.searchableText}</svg>`;
-	}
-
-	async promote(
-		_actor: ActorContext,
-		source: MermaidDiagram,
-		target: DrawioDiagram
-	): Promise<DrawioDiagram> {
-		void _actor;
-		return { ...target, promotedFromId: source.id };
 	}
 
 	async extract(diagram: { readonly source: string }): Promise<string> {
@@ -124,15 +109,14 @@ export class InMemoryDiagrams
 			.trim();
 	}
 
-	async create(_actor: ActorContext, diagram: Diagram): Promise<Diagram> {
-		void _actor;
+	async create(diagram: Diagram): Promise<Diagram> {
 		this.diagrams.push(diagram);
 		return diagram;
 	}
 
-	async persistContent(actor: ActorContext, write: DiagramContentWrite): Promise<Diagram> {
+	async persistContent(write: DiagramContentWrite): Promise<Diagram> {
 		const current = this.diagrams.find(
-			(item) => item.id === write.diagramId && item.userId === actor.userId
+			(item) => item.id === write.diagramId && item.userId === this.actor.userId
 		);
 		if (
 			!current ||
@@ -156,25 +140,28 @@ export class InMemoryDiagrams
 		this.diagrams = this.diagrams.map((item) => (item.id === saved.id ? saved : item));
 		return saved;
 	}
-	async index(_actor: ActorContext, diagram: Diagram): Promise<IndexingResult> {
+	private readonly indexing = createTestContentIndex(
+		new InMemorySearchRepository(testActor()),
+		'test-embedding'
+	);
+	diagramContextRequirement(diagram: Diagram): DiagramIndexContextRequirement {
+		return this.indexing.diagramContextRequirement(diagram);
+	}
+	async indexDiagram(diagram: Diagram): Promise<void> {
 		if (this.failIndex) throw new ExternalServiceError('Indexing failed');
-		void _actor;
 		this.indexedIds.push(diagram.id);
-		return { kind: 'stored' };
 	}
 }
 
 export class InMemorySkillCreator implements SkillCreator, SnapshotParticipant {
 	skills: Skill<Note>[] = [];
 	failCreation = false;
-	async lockCatalog(_actor: ActorContext): Promise<void> {}
+	async lockCatalog(): Promise<void> {}
 
 	async create(
-		_actor: ActorContext,
 		note: Note,
 		input: { name: string; description: string; triggerHints: readonly string[] }
 	): Promise<Skill<Note>> {
-		void _actor;
 		if (this.failCreation) throw new ExternalServiceError('Skill creation failed');
 		const skill: Skill<Note> = {
 			note,
@@ -190,7 +177,6 @@ export class InMemorySkillCreator implements SkillCreator, SnapshotParticipant {
 	}
 
 	async createFromSelection(
-		actor: ActorContext,
 		selection: TextSelection,
 		input: {
 			name: string;
@@ -200,7 +186,6 @@ export class InMemorySkillCreator implements SkillCreator, SnapshotParticipant {
 		}
 	): Promise<Skill<Note>> {
 		return this.create(
-			actor,
 			noteBuilder({
 				id: testNoteId(90 + this.skills.length),
 				kind: 'skill',

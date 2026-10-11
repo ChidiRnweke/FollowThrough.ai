@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { resourceDataSchemas } from '$lib/models/workspace-records';
 
 export const workspaceAccountCookieName = 'workspace_account';
+/** The localStorage key of the saved bootstrap; other tabs observe it to follow sign-out. */
+export const workspaceBootstrapKey = 'followthrough-workspace-bootstrap-v2';
 
 /** Deployment data has no database journal; refresh this small bootstrap once per app start. */
 export const workspaceBootstrapSchema = z.object({
@@ -29,3 +31,8 @@ export const workspaceBootstrapSchema = z.object({
 	agentAvailable: z.boolean()
 });
 export type WorkspaceBootstrap = z.infer<typeof workspaceBootstrapSchema>;
+
+export type StoredBootstrap =
+	| { kind: 'absent' }
+	| { kind: 'stored'; value: WorkspaceBootstrap }
+	| { kind: 'corrupt'; message: string };

@@ -1,4 +1,4 @@
-import type { ActorContext, User, UserId, UserRole } from '$lib/models/identity';
+import type { User, UserId, UserRole } from '$lib/models/identity';
 
 export interface CreateUserData {
 	email: string;
@@ -11,8 +11,13 @@ export interface CreateUserData {
 
 /** `ensureLocal` provisions explicit test and evaluation accounts; request authentication never calls it. */
 export interface UserRepository {
-	findById(actor: ActorContext, id: UserId): Promise<User | undefined>;
-	ensureLocal(actor: ActorContext): Promise<void>;
+	/** The bound user's account. */
+	findCurrent(): Promise<User | undefined>;
+	ensureLocal(): Promise<void>;
+}
+
+/** Accounts looked up and created by sign-in, before any user is known. */
+export interface UserAccountRepository {
 	findByEmail(email: string): Promise<User | undefined>;
 	findByAuthProviderId(providerId: string): Promise<User | undefined>;
 	updateAuthProvider(userId: UserId, provider: string, providerId: string): Promise<void>;

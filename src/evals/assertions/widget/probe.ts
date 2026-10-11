@@ -1,3 +1,5 @@
+import { WidgetSourceService } from '$lib/services/widgets/sources';
+const widgetSourcesRule = new WidgetSourceService();
 import type { LocalDate } from '$lib/models/workspace';
 import type { TodoId, TodoResponsibility, TodoStatus } from '$lib/models/todos';
 import type {
@@ -7,7 +9,7 @@ import type {
 	WidgetDataTableColumn,
 	WidgetElement
 } from '$lib/models/widgets';
-import { widgetSourceRows, type WidgetSourceRecords } from '$lib/services/widgets/sources';
+import type { WidgetSourceRecords } from '$lib/models/widgets';
 import {
 	describeReadout,
 	isJsonObject,
@@ -751,7 +753,11 @@ export const runWidgetProbe = (
 	let state: ProbeState = { data: widget.data, records };
 	const findings: string[] = [];
 	const readout = () =>
-		widgetReadout(widget, state.data, widgetSourceRows(widget.layout.sources ?? {}, state.records));
+		widgetReadout(
+			widget,
+			state.data,
+			widgetSourcesRule.rows(widget.layout.sources ?? {}, state.records)
+		);
 	const seen = new Set<string>();
 	const problems = (at: string) => {
 		for (const problem of readout().problems)

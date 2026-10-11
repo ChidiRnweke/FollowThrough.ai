@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getSchema } from '@tiptap/core';
 import { clipboardImage, isLiteralPasteShortcut, looksLikeMarkdown, markdownSlice } from './paste';
-import { noteMarkdownExtensions } from './markdown-extensions';
+import { headlessEditorExtensions } from '$lib/testing/notes/fixtures/headless-editor';
 
 describe('Deciding whether pasted text has structure', () => {
 	it.each([
@@ -36,7 +36,7 @@ describe('Deciding whether pasted text has structure', () => {
  * Markdown extension read `$4–13 vs $` as inline math and dropped the text.
  */
 describe('Pasting text that contains prices', () => {
-	const schema = getSchema(noteMarkdownExtensions);
+	const schema = getSchema(headlessEditorExtensions);
 	const pasted = markdownSlice(schema, 'Costs $4–13 vs $30 per 1,000 pages.\n\nStill worth it.');
 
 	it('keeps every price', () => {
@@ -49,7 +49,7 @@ describe('Pasting text that contains prices', () => {
 });
 
 describe('Pasting text with boundary whitespace', () => {
-	const schema = getSchema(noteMarkdownExtensions);
+	const schema = getSchema(headlessEditorExtensions);
 
 	it('does not create blank blocks around padded paragraphs', () => {
 		const pasted = markdownSlice(schema, '\n\nFirst thought.\n\nSecond thought.\n\n');

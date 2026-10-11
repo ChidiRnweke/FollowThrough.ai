@@ -1,11 +1,14 @@
 import AdmZip from 'adm-zip';
 import { createHash } from 'node:crypto';
 import { ValidationError } from '$lib/errors';
-import type { TemplateUpload } from '$lib/models/projects';
-import type { ExtractedTemplateStyles } from '$lib/models/deliverables';
+import type { ExtractedTemplateStyles, TemplateUploadProof } from '$lib/models/deliverables';
 
-export async function verifiedTemplateStyles(
-	upload: TemplateUpload,
+export interface TemplateStyleReader {
+	read(upload: TemplateUploadProof, bytes: Uint8Array): Promise<ExtractedTemplateStyles>;
+}
+
+async function verifiedTemplateStyles(
+	upload: TemplateUploadProof,
 	bytes: Uint8Array
 ): Promise<ExtractedTemplateStyles> {
 	if (bytes.byteLength !== upload.byteSize)
@@ -134,7 +137,7 @@ function extractPageMargins(documentXml: string): ExtractedTemplateStyles['pageM
 	};
 }
 
-export async function extractTemplateStyles(docxBuffer: Buffer): Promise<ExtractedTemplateStyles> {
+async function extractTemplateStyles(docxBuffer: Buffer): Promise<ExtractedTemplateStyles> {
 	const zip = new AdmZip(docxBuffer);
 
 	const stylesEntry = zip.getEntry('word/styles.xml');
@@ -188,4 +191,11 @@ export async function extractTemplateStyles(docxBuffer: Buffer): Promise<Extract
 		...(footerContent ? { footerContent } : {}),
 		themeColors
 	};
+}
+
+/** Verifies an uploaded DOCX package against its reservation and reads its styles. */
+export class DocxTemplateStyleReader implements TemplateStyleReader {
+	read(upload: TemplateUploadProof, bytes: Uint8Array): Promise<ExtractedTemplateStyles> {
+		return verifiedTemplateStyles(upload, bytes);
+	}
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { goto } from '$app/navigation';
 	import * as Icon from '$lib/components/icons';
 	import { TodoDetailPanel } from '$lib/components/todos';
@@ -17,7 +18,7 @@
 	{/snippet}
 	<TodoDetailPanel
 		todoId={data.todoId}
-		notes={data.session.shell.noteTree}
+		notes={workspaceViews.currentShell.noteTree}
 		ondeleted={() => void goto(data.returnTo)}
 	/>
 </PageShell>

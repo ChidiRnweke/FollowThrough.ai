@@ -9,15 +9,15 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 it('refuses a saved request identity when the task content changes', async () => {
-	const service = new TodoBatchReceipts(new InMemoryTodoBatchReceipts());
+	const service = new TodoBatchReceipts(new InMemoryTodoBatchReceipts(testActor()));
 	const input = createTodoBatchSchema.parse({
 		requestId: crypto.randomUUID(),
 		projectId: testProjectId(),
 		todos: [{ title: 'Original', responsibility: 'mine' }]
 	});
-	await service.save(testActor(), input, { todos: [todoBuilder({ title: 'Original' })] });
+	await service.save(input, { todos: [todoBuilder({ title: 'Original' })] });
 	await expect(
-		service.findForUpdate(testActor(), {
+		service.findForUpdate({
 			...input,
 			todos: [{ title: 'Changed', responsibility: 'mine' }]
 		})

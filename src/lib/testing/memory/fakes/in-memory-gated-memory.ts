@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { MemoryEntryListFilter } from '$lib/server/repositories/memory';
 import { InMemoryMemoryEntryRepository } from './in-memory-memory-repository';
 
@@ -17,9 +16,9 @@ export class InMemoryGatedMemoryEntries extends InMemoryMemoryEntryRepository {
 		this.released();
 	}
 
-	override async list(actor: ActorContext, filter: MemoryEntryListFilter) {
+	override async list(filter: MemoryEntryListFilter) {
 		this.entered();
 		await this.gate;
-		return super.list(actor, filter);
+		return super.list(filter);
 	}
 }

@@ -1,17 +1,22 @@
-import { describe, expect, it } from 'vitest';
-import { Skills, type SkillsDependencies } from './controller';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
-import { SkillLibrary } from '$lib/server/services/skills/library';
-import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	projectBuilder,
@@ -19,23 +24,42 @@ import {
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Skills, type SkillsDependencies } from './controller';
 
 const setup = () => {
-	const noteRepository = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository();
+	const noteRepository = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const notes = new NoteCatalog(noteRepository, new InMemoryAnchorRepository(), projects);
+	const notes = createNoteServices(
+		testActor(),
+		noteRepository,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
 	const skills = new InMemorySkillRepository(noteRepository);
-	const library = new SkillLibrary(skills, noteRepository, new InMemoryProvenanceRepository());
-	const content = new InMemoryNoteContent();
+	const library = createSkillServices(
+		testActor(),
+		skills,
+		noteRepository,
+		new InMemoryProvenanceRepository(testActor())
+	);
+	const content = new InMemoryNoteContent(testActor());
 	const controller = new Skills(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
-			skillCreator: library,
-			noteEditor: notes,
-			anchorRepairer: notes,
+			...agentToolResultsFixture(),
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			skillCreator: library.creator,
+			noteEditor: notes.editor,
+			anchorRepairer: notes.anchorRepairer,
 			noteLinkReconciler: content,
 			noteIndexer: content,
-			noteCreation: notes,
+			noteCreation: notes.creator,
 			transactionRunner: new InMemoryTransactionRunner([noteRepository, skills, content])
 		})
 	);
@@ -46,7 +70,7 @@ describe('Create skill invariants', () => {
 	it('preserves the locally assigned identity of the skill and its backing note', async () => {
 		const { controller } = setup();
 		const id = testNoteId(501);
-		const output = await controller.create(testActor(), {
+		const output = await controller.create({
 			id,
 			name: 'Offline skill',
 			projectId: testProjectId()
@@ -55,7 +79,7 @@ describe('Create skill invariants', () => {
 	});
 	it('creates and inserts a skill named after the input', async () => {
 		const { controller, skills } = setup();
-		const output = await controller.create(testActor(), {
+		const output = await controller.create({
 			name: 'ADR writing',
 			projectId: testProjectId()
 		});
@@ -68,7 +92,7 @@ describe('Create skill invariants', () => {
 	it('places the skill note inside the requested folder', async () => {
 		const { controller, noteRepository, skills } = setup();
 		noteRepository.notes = [noteBuilder({ kind: 'folder' })];
-		await controller.create(testActor(), {
+		await controller.create({
 			name: 'ADR writing',
 			projectId: testProjectId(),
 			parentId: testNoteId()
@@ -79,7 +103,7 @@ describe('Create skill invariants', () => {
 	it('rejects an empty skill name', async () => {
 		const { controller } = setup();
 		await expect(
-			controller.create(testActor(), { name: '  ', projectId: testProjectId() })
+			controller.create({ name: '  ', projectId: testProjectId() })
 		).rejects.toMatchObject({
 			code: 'VALIDATION'
 		});
@@ -94,7 +118,7 @@ it('creates the initial instructions with the default description in one operati
 		instructions: 'Read the diff carefully.',
 		description: ''
 	};
-	const { skill } = await controller.create(testActor(), input);
+	const { skill } = await controller.create(input);
 	expect({ text: skill.note.plainText, description: skill.description }).toEqual({
 		text: input.instructions,
 		description: 'Reusable instructions for Reviewing changes.'
@@ -108,7 +132,7 @@ it('does not leave an empty skill when initial instruction indexing fails', asyn
 		projectId: testProjectId(),
 		instructions: 'Read the diff carefully.'
 	};
-	const outcome = await controller.create(testActor(), input).then(
+	const outcome = await controller.create(input).then(
 		() => 'created',
 		() => 'failed'
 	);
@@ -126,7 +150,7 @@ it('does not leave a note when the supplied description is invalid', async () =>
 		instructions: 'Read the diff carefully.',
 		description: 'x'.repeat(1025)
 	};
-	const outcome = await controller.create(testActor(), input).then(
+	const outcome = await controller.create(input).then(
 		() => 'created',
 		() => 'failed'
 	);

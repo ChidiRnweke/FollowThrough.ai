@@ -1,14 +1,14 @@
 <script lang="ts">
 	import type { NoteId, ProseMirrorDocument } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
-	import type { DiffTone, FocusedSideBlock, SourceLine } from '$lib/models/notes/note-diff';
+	import type { DiffTone, FocusedSideBlock, SourceLine } from '$lib/models/note-comparison';
 	import { paintDiff } from './note-diff-decorations';
 	import NoteDiffSource from './note-diff-source.svelte';
 	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';
 	import type { PerNoteEditorSlot } from './editor-context';
 	import { createEditor } from '$lib/components/edra/commands/editor';
 	import { MermaidNodeView } from '$lib/components/diagrams';
-	import { toEditorContent } from './editor-document';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
 	import { WidgetNode } from '$lib/components/edra/commands/BuiltinExtensions.js';
 	import { WidgetNodeView } from '$lib/components/widgets';
@@ -186,7 +186,7 @@
 
 	$effect(() => {
 		if (!editor) return;
-		editor.commands.setContent(toEditorContent(document));
+		editor.commands.setContent(noteDocuments.editorContent(document));
 		rendered = untrack(() => rendered) + 1;
 	});
 </script>

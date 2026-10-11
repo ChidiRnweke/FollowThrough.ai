@@ -1,20 +1,25 @@
-import { describe, expect, it } from 'vitest';
-import { AgentTools } from './agent-tool-factory';
-import { jsonObjectSchema } from '$lib/server/repositories/agent/sdk-tool';
+import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
+import { createWidgetRules } from '$lib/factories/widgets/rules';
+import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
+import { widgetTemplates } from '$lib/models/widgets';
+import { jsonObjectSchema } from '$lib/server/infrastructure/agents/sdk-tool';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
-import { WidgetLibrary } from '$lib/server/services/widgets/library';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { WidgetLibrary } from '$lib/server/services/widgets/library';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { InMemoryWidgetRepository } from '$lib/testing/widgets/fakes/in-memory-widget-repository';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { testWidgetId, widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	projectBuilder,
 	testActor,
@@ -22,47 +27,55 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { widgetTemplates } from '$lib/models/widgets';
-import { readAgentPayloadObject } from '$lib/models/agent/payload';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
-import { widgetReferencesIn } from '$lib/services/notes/references';
+import { describe, expect, it } from 'vitest';
+import { createAgentToolSurface } from '$lib/testing/agent/fixtures/tool-surface';
+const noteMarkdown = new NoteMarkdownCodec();
+
+import { NoteReferenceService } from '$lib/services/notes/references';
+const noteReferences = new NoteReferenceService();
 
 const setup = () => {
-	const repository = new InMemoryWidgetRepository();
+	const repository = new InMemoryWidgetRepository(testActor());
 	repository.widgets = [widgetBuilder()];
-	const projects = new InMemoryProjectRepository();
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const library = new WidgetLibrary(repository, projects);
-	const embeddings = new InMemoryEmbeddingClient();
-	const index = new ContentIndex(new InMemorySearchRepository(), embeddings.model);
+	const library = new WidgetLibrary(
+		testActor(),
+		repository,
+		projects,
+		new InMemoryNoteRepository(testActor())
+	);
+	const embeddings = new InMemoryRetrievalProvider();
+	const index = createContentIndex(new InMemorySearchRepository(testActor()), embeddings.model);
 	const controller = new Widgets(
+		testActor(),
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<WidgetsDependencies>({
+			...agentToolResultsFixture(),
+			...createWidgetRules(),
 			widgetReader: library,
 			widgetLister: library,
 			widgetWriter: library,
-			widgetIndexer: index.widgets,
-			indexEmbeddings: embeddings,
-			indexWriter: index,
+			widgetIndexer: index,
 			transactionRunner: new InMemoryTransactionRunner([repository])
 		})
 	);
-	const tools = new AgentTools(
+	const tools = createAgentToolSurface(
+		testTokenizer,
 		capabilityDependencies<ControllerFactory>({ widgets: () => controller }),
-		testActor(),
 		'auto_accept',
 		{
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Tick the first step' },
 			model: 'openai/gpt-5.6'
 		},
-		{ execute: (_input, action) => action() },
+		{ completed: async () => {} },
 		new InMemoryToolRetriever(),
 		{ isEnabled: () => true }
 	);
 	const tool = (name: string) => {
 		const definition = tools.definitions().find((candidate) => candidate.name === name);
-		if (!definition) throw new Error(`${name} is missing`);
-		return definition;
+		return directTool(definition);
 	};
 	return { repository, tool };
 };
@@ -123,7 +136,7 @@ describe('agent widget tools', () => {
 				data: JSON.stringify(widgetTemplates.checklist.data)
 			})
 			.execute();
-		const read = readAgentPayloadObject(output);
+		const read = agentPayloadObjectResultSchema.parse(output);
 		const embed = read.kind === 'valid' ? read.value.embed : null;
 		return {
 			embed: typeof embed === 'string' ? embed : '',
@@ -132,8 +145,8 @@ describe('agent widget tools', () => {
 	};
 	it('create a widget from JSON strings and return a line that embeds it in a note', async () => {
 		const { embed, created } = await createLaunch();
-		const note = noteContentFromMarkdown(`Plan\n\n${embed}\n`);
-		expect(widgetReferencesIn([note])).toEqual([created?.id]);
+		const note = noteMarkdown.read(`Plan\n\n${embed}\n`);
+		expect(noteReferences.widgets([note])).toEqual([created?.id]);
 	});
 	// The agent inserts the line inside edit_note's JSON arguments; a double quote it forgets to
 	// escape there fails the whole run as malformed tool arguments.

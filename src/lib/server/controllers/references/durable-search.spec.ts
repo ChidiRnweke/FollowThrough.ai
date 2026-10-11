@@ -4,7 +4,6 @@ import {
 	referenceSearchFixture,
 	referenceSelection
 } from '$lib/testing/references/fixtures/search';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const candidate = {
 	url: 'https://www.rfc-editor.org/rfc/rfc6749' as Url,
@@ -18,7 +17,7 @@ const prepare = async () => {
 	const state = referenceSearchFixture();
 	state.references.candidates = [candidate];
 	const receipt = await state.transactions.run(() =>
-		state.requests.prepare(testActor(), {
+		state.requests.prepare({
 			requestId: crypto.randomUUID(),
 			context: { kind: 'reference_search', model: 'test/model', selection: referenceSelection }
 		})
@@ -32,7 +31,7 @@ it('uses the stored model after deployment settings change', async () => {
 		{ ...candidate, title: 'Frozen model source' }
 	]);
 	state.dependencies.referenceModel = 'different/model';
-	await state.reference.executeReferenceRun(testActor(), state.receipt.runId);
+	await state.reference.executeReferenceRun(state.receipt.runId);
 	expect(
 		state.suggestions.suggestions.map((suggestion) =>
 			suggestion.kind === 'reference' ? suggestion.payload.title : suggestion.kind
@@ -42,7 +41,7 @@ it('uses the stored model after deployment settings change', async () => {
 
 it('recovers a queued search from its saved selection', async () => {
 	const state = await prepare();
-	await state.reference.recoverQueuedReferenceRuns();
+	await state.reference.resumeQueuedReferenceRun(state.receipt.runId);
 	await vi.waitFor(() => {
 		if (state.runs.runs[0].status !== 'completed') throw new Error('Search has not settled');
 	});
@@ -58,9 +57,9 @@ it('saves no anchor or proposals when cancellation wins during web search', asyn
 	const state = await prepare();
 	const gate = Promise.withResolvers<void>();
 	state.references.completion = gate.promise;
-	const execution = state.reference.executeReferenceRun(testActor(), state.receipt.runId);
+	const execution = state.reference.executeReferenceRun(state.receipt.runId);
 	await state.references.started.promise;
-	await state.agent.cancel(testActor(), state.receipt.runId);
+	await state.agent.cancel(state.receipt.runId);
 	gate.resolve();
 	await execution;
 	expect({
@@ -74,7 +73,7 @@ it('rejects a source revision changed during web search', async () => {
 	const state = await prepare();
 	const gate = Promise.withResolvers<void>();
 	state.references.completion = gate.promise;
-	const execution = state.reference.executeReferenceRun(testActor(), state.receipt.runId);
+	const execution = state.reference.executeReferenceRun(state.receipt.runId);
 	await state.references.started.promise;
 	state.content.notes[0] = { ...state.content.notes[0], currentRevision: 2 };
 	gate.resolve();
@@ -87,7 +86,7 @@ it('rejects a source revision changed during web search', async () => {
 it('rolls back reference proposals and their anchor when the result event fails', async () => {
 	const state = await prepare();
 	state.runs.failedEvent = 'workflow_result';
-	await state.reference.executeReferenceRun(testActor(), state.receipt.runId);
+	await state.reference.executeReferenceRun(state.receipt.runId);
 	expect({
 		status: state.runs.runs[0].status,
 		anchors: state.content.anchors,
@@ -105,11 +104,11 @@ it('returns the same completed search for a repeated request ID', async () => {
 	const state = referenceSearchFixture();
 	state.references.candidates = [candidate];
 	const request = { requestId: crypto.randomUUID(), selection: referenceSelection };
-	const first = await state.reference.startSuggestFromSelection(testActor(), request);
+	const first = await state.reference.startSuggestFromSelection(request);
 	await vi.waitFor(() => {
 		if (state.runs.runs[0].status !== 'completed') throw new Error('Search has not settled');
 	});
-	const second = await state.reference.startSuggestFromSelection(testActor(), request);
+	const second = await state.reference.startSuggestFromSelection(request);
 	expect({
 		sameRun: first.runId === second.runId,
 		suggestions: state.suggestions.suggestions.length,
@@ -119,8 +118,8 @@ it('returns the same completed search for a repeated request ID', async () => {
 
 it('settles a completed search only once when execution is delivered again', async () => {
 	const state = await prepare();
-	await state.reference.executeReferenceRun(testActor(), state.receipt.runId);
-	await state.reference.executeReferenceRun(testActor(), state.receipt.runId);
+	await state.reference.executeReferenceRun(state.receipt.runId);
+	await state.reference.executeReferenceRun(state.receipt.runId);
 	expect(
 		state.runs.events.filter((record) => record.event.type === 'workflow_result')
 	).toHaveLength(1);

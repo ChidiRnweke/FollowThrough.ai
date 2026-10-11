@@ -1,6 +1,6 @@
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import {
@@ -14,12 +14,13 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const projects = new InMemoryProjectRepository();
-	const records = new InMemoryNoteRepository();
+	const projects = new InMemoryProjectRepository(testActor());
+	const records = new InMemoryNoteRepository(testActor());
 	return {
 		projects,
 		creation: noteCreationControllers(
-			new NoteCatalog(records, new InMemoryAnchorRepository(), projects),
+			createNoteServices(testActor(), records, new InMemoryAnchorRepository(testActor()), projects)
+				.creator,
 			new InMemoryTransactionRunner([records, projects])
 		)
 	};
@@ -29,7 +30,7 @@ describe('The project a note is created in', () => {
 	it('uses the project it was told to use', async () => {
 		const { creation, projects } = setup();
 		projects.projects = [projectBuilder({ id: testProjectId() })];
-		const { note } = await creation.notes.create(testActor(), {
+		const { note } = await creation.notes.create({
 			title: 'Ingest design',
 			projectId: testProjectId()
 		});
@@ -44,7 +45,7 @@ describe('The project a note is created in', () => {
 		const { creation, projects } = setup();
 		projects.projects = [projectBuilder({ id: testProjectId() })];
 		await expect(
-			creation.notes.create(testActor(), {
+			creation.notes.create({
 				title: 'Ingest design',
 				projectId: '9f1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d' as ReturnType<typeof testProjectId>
 			})

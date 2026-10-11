@@ -6,9 +6,14 @@
  * periodic tasks the request path deliberately hands off. Deployed as a second
  * container on the same image; see `docker-compose.prod.yml`.
  */
-import { createProductionFactory } from '$lib/server/factories/production-factory';
-import { hydrateEnvironment } from '$lib/server/config';
-import { startScheduler } from '$lib/server/services/scheduler';
+import { createProductionComposition } from '$lib/server/factories/production-factory';
+import {
+	hydrateEnvironment,
+	optionalProperty,
+	positiveNumberFromEnvironment
+} from '$lib/server/config';
+import { createScheduler } from '$lib/server/factories/scheduler';
+import { attachmentProcessing, embeddingBackfill } from './worker-tasks';
 import {
 	drainBeforeTelemetryShutdown,
 	shutdownTelemetry
@@ -16,12 +21,36 @@ import {
 
 const shutdownTimeoutMs = Number(process.env.WORKER_SHUTDOWN_TIMEOUT_MS ?? 30_000);
 
+const embeddingSettings = () => ({
+	intervalMs: 10 * 60 * 1000,
+	maxSourcesPerTick: 200,
+	...optionalProperty('intervalMs', positiveNumberFromEnvironment('EMBEDDING_SWEEP_INTERVAL_MS')),
+	...optionalProperty(
+		'maxSourcesPerTick',
+		positiveNumberFromEnvironment('EMBEDDING_SWEEP_MAX_SOURCES')
+	)
+});
+
 const main = async (): Promise<void> => {
 	await hydrateEnvironment();
-	const application = createProductionFactory();
-	const tasks = application.backgroundTasks;
+	const composition = createProductionComposition();
+	const tasks = [
+		...composition.system().tasks,
+		embeddingBackfill(
+			{
+				backlog: () => composition.system().controllers.embeddingBacklog(),
+				indexingFor: (actor) => composition.forActor(actor).controllers.knowledgeIndexing()
+			},
+			embeddingSettings()
+		),
+		attachmentProcessing({
+			backlog: () => composition.system().controllers.attachmentBacklog(),
+			processingFor: (actor) => composition.forActor(actor).controllers.attachmentProcessing()
+		})
+	];
 
-	const scheduler = startScheduler(tasks, { runOnStart: true });
+	const scheduler = createScheduler(tasks, { runOnStart: true });
+	scheduler.start();
 	drainBeforeTelemetryShutdown(async () => {
 		await scheduler.stop();
 		console.log('[worker] stopped');

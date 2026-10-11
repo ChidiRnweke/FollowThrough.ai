@@ -29,8 +29,8 @@ const requestSchema = z.object({
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const input = requestSchema.parse(await request.json());
-	const controller = AppFactory.controllers().inlineSuggestions();
 	const actor = AppFactory.actor(locals);
+	const controller = AppFactory.forActor(actor).inlineSuggestions();
 	const inlineRequest = {
 		requestId: input.requestId,
 		noteId: input.noteId as NoteId,
@@ -43,8 +43,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		...(input.heading ? { heading: input.heading } : {})
 	};
 	try {
-		const suggestion = await controller.suggest(actor, inlineRequest, request.signal);
-		if (suggestion.outcome === 'busy' || suggestion.outcome === 'rate_limited') {
+		const suggestion = await controller.suggest(inlineRequest, request.signal);
+		if (suggestion.outcome === 'rate_limited') {
 			const retryAfterSeconds = Math.max(1, Math.ceil(suggestion.retryAfterMs / 1_000));
 			return json(suggestion, {
 				status: 429,

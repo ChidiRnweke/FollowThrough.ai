@@ -3,14 +3,9 @@ import {
 	type MentionDocument,
 	type MentionEdit,
 	type MentionHistory,
+	type MentionRestore,
 	type ResourceChip
 } from '$lib/models/chat';
-
-export const createMentionHistory = (text: string): MentionHistory => ({
-	past: [],
-	present: { text, references: [] },
-	future: []
-});
 
 const commit = (history: MentionHistory, present: MentionDocument): MentionHistory => ({
 	past: [...history.past, history.present],
@@ -18,7 +13,7 @@ const commit = (history: MentionHistory, present: MentionDocument): MentionHisto
 	future: []
 });
 
-export function editMentionDocument(document: MentionDocument, edit: MentionEdit): MentionDocument {
+function editMentionDocument(document: MentionDocument, edit: MentionEdit): MentionDocument {
 	if (edit.from < 0 || edit.to < edit.from || edit.to > document.text.length)
 		throw new RangeError('Invalid composer edit');
 	const text = document.text.slice(0, edit.from) + edit.text + document.text.slice(edit.to);
@@ -43,10 +38,10 @@ export function editMentionDocument(document: MentionDocument, edit: MentionEdit
 	return { text, references };
 }
 
-export const editMentions = (history: MentionHistory, edit: MentionEdit): MentionHistory =>
+const editMentions = (history: MentionHistory, edit: MentionEdit): MentionHistory =>
 	commit(history, editMentionDocument(history.present, edit));
 
-export function addMention(history: MentionHistory, chip: ResourceChip): MentionHistory {
+function addMention(history: MentionHistory, chip: ResourceChip): MentionHistory {
 	const match = MENTION_PATTERN.exec(history.present.text);
 	if (!match) throw new Error('Choose a mention while its query is active');
 	const from = match.index + match[1]!.length;
@@ -62,7 +57,7 @@ export function addMention(history: MentionHistory, chip: ResourceChip): Mention
 	});
 }
 
-export function removeMention(history: MentionHistory, chip: ResourceChip): MentionHistory {
+function removeMention(history: MentionHistory, chip: ResourceChip): MentionHistory {
 	let document = history.present;
 	const targets = document.references
 		.filter((reference) => reference.chip.kind === chip.kind && reference.chip.id === chip.id)
@@ -74,7 +69,7 @@ export function removeMention(history: MentionHistory, chip: ResourceChip): Ment
 	return commit(history, document);
 }
 
-export function restoreMentions(
+function restoreMentions(
 	history: MentionHistory,
 	text: string,
 	direction: 'undo' | 'redo'
@@ -101,4 +96,25 @@ export function restoreMentions(
 			future: history.future.slice(index + 1)
 		}
 	};
+}
+
+export interface ChatMentions {
+	edit(history: MentionHistory, edit: MentionEdit): MentionHistory;
+	add(history: MentionHistory, chip: ResourceChip): MentionHistory;
+	remove(history: MentionHistory, chip: ResourceChip): MentionHistory;
+	restore(history: MentionHistory, text: string, direction: 'undo' | 'redo'): MentionRestore;
+}
+export class ChatMentionService implements ChatMentions {
+	edit(history: MentionHistory, edit: MentionEdit): MentionHistory {
+		return editMentions(history, edit);
+	}
+	add(history: MentionHistory, chip: ResourceChip): MentionHistory {
+		return addMention(history, chip);
+	}
+	remove(history: MentionHistory, chip: ResourceChip): MentionHistory {
+		return removeMention(history, chip);
+	}
+	restore(history: MentionHistory, text: string, direction: 'undo' | 'redo'): MentionRestore {
+		return restoreMentions(history, text, direction);
+	}
 }

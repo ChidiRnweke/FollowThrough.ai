@@ -1,4 +1,10 @@
-import type { TodoStatus, TodoPriority, TodoView, BoardMarkdownOptions } from '$lib/models/todos';
+import type {
+	TodoStatus,
+	TodoPriority,
+	TodoView,
+	BoardMarkdownOptions,
+	PreparedBoardExport
+} from '$lib/models/todos';
 
 /** Columns in rendered kanban order — see kanban-board.svelte. `cancelled` never
     appears on the board, so it never appears in an export either. */
@@ -32,7 +38,7 @@ const generatedFormatter = new Intl.DateTimeFormat('en-GB', {
 
 /** Local calendar date as YYYY-MM-DD — the LocalDate shape `dueDate` uses, and the
     date stamp in an export filename. */
-export const boardExportDate = (date: Date): string =>
+const boardExportDate = (date: Date): string =>
 	`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
 		date.getDate()
 	).padStart(2, '0')}`;
@@ -41,14 +47,14 @@ export const boardExportDate = (date: Date): string =>
 const inlineTitle = (title: string): string => title.replace(/\s+/g, ' ').trim();
 
 /** Filename-safe slug for a board export: `kanban-<slug>-<date>.<ext>`. */
-export const boardExportSlug = (name: string): string =>
+const boardExportSlug = (name: string): string =>
 	name
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, '-')
 		.replace(/(^-|-$)/g, '') || 'board';
 
 /** Render the visible kanban board as a Markdown task list, one section per column. */
-export function boardMarkdown(todos: readonly TodoView[], opts: BoardMarkdownOptions): string {
+function boardMarkdown(todos: readonly TodoView[], opts: BoardMarkdownOptions): string {
 	const generatedAt = opts.generatedAt;
 	const today = boardExportDate(generatedAt);
 	const lines: string[] = [
@@ -76,4 +82,26 @@ export function boardMarkdown(todos: readonly TodoView[], opts: BoardMarkdownOpt
 		}
 	}
 	return `${lines.join('\n')}\n`;
+}
+
+export interface TodoBoardExport {
+	prepare(
+		todos: readonly TodoView[],
+		options: BoardMarkdownOptions,
+		scope: string,
+		format: 'md' | 'pdf'
+	): PreparedBoardExport;
+}
+export class TodoBoardExportService implements TodoBoardExport {
+	prepare(
+		todos: readonly TodoView[],
+		options: BoardMarkdownOptions,
+		scope: string,
+		format: 'md' | 'pdf'
+	): PreparedBoardExport {
+		return {
+			markdown: boardMarkdown(todos, options),
+			filename: `kanban-${boardExportSlug(scope)}-${boardExportDate(options.generatedAt)}.${format}`
+		};
+	}
 }

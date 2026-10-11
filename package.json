@@ -45,7 +45,7 @@
 		"test:ui": "node --experimental-strip-types scripts/audit-ui.ts",
 		"corpus:capture": "node --experimental-strip-types --env-file=.env scripts/capture-corpus.ts",
 		"test:chisel": "chisel-js check .",
-		"test:architecture": "pnpm test:topology && pnpm test:source && pnpm test:quality && pnpm test:chisel && pnpm test:ui",
+		"test:architecture": "pnpm test:topology && pnpm test:source && pnpm test:quality && pnpm test:architecture:semantic && pnpm test:chisel && pnpm test:ui",
 		"test:e2e": "playwright test --project=app",
 		"test:pwa": "playwright test --config=playwright.pwa.config.ts --project=pwa",
 		"trace:audit": "bun scripts/phoenix-trace-audit.js",
@@ -61,7 +61,8 @@
 		"db:seed:tools": "pnpm build:worker && node build-worker/seed-tool-embeddings.js",
 		"db:studio": "drizzle-kit studio",
 		"test:sync:pwa": "node scripts/test-sync-pwa.mjs",
-		"db:sync:setup": "node --experimental-strip-types --env-file-if-exists=.env scripts/setup-workspace-sync.ts"
+		"db:sync:setup": "node --experimental-strip-types --env-file-if-exists=.env scripts/setup-workspace-sync.ts",
+		"test:architecture:semantic": "node --experimental-strip-types scripts/audit-architecture.ts"
 	},
 	"devDependencies": {
 		"@arizeai/phoenix-client": "^6.14.0",

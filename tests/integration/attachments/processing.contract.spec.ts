@@ -1,23 +1,28 @@
+import { InMemoryStorage } from '$lib/testing/attachments/fakes/processing';
+import {
+	AttachmentClaimService,
+	AttachmentVersionService
+} from '$lib/server/services/attachments/records';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
+import { InMemoryAttachmentExtraction } from '$lib/testing/attachments/fakes/extraction';
+import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { afterAll, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { PostgresAttachmentClaims } from '$lib/server/repositories/attachments/postgres/claims';
-import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
+import {
+	AttachmentBacklogRecords,
+	AttachmentRecords
+} from '$lib/server/repositories/attachments/postgres/attachments';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
-import {
-	InMemoryTextParser,
-	InMemoryStorage,
-	InMemoryOcrEngine,
-	InMemoryImageDescriber
-} from '$lib/testing/attachments/fakes/processing';
-import { AttachmentContent } from '$lib/server/services/attachments/content';
-import { AttachmentParserRegistry } from '$lib/server/services/attachments/storage';
-import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { AttachmentFormatService } from '$lib/server/services/attachments/formats';
+import { AttachmentProcessingService } from '$lib/server/services/attachments/content';
 import type {
 	AttachmentId,
 	AttachmentUploadId,
@@ -34,19 +39,19 @@ const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
 	await Promise.all(clients.map((client) => client.end()));
 });
-const setup = async (suffix: string, chunker = new TokenAwareChunker()) => {
+const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapTokens: 480 }) => {
 	const owner = actor(suffix);
-	await new UserRecords(context.db).ensureLocal(owner);
+	await new UserRecords(owner, context.db).ensureLocal();
 	const { note } = await seedNote(suffix, owner);
 	const client = postgres(context.url, { max: 3 });
 	clients.push(client);
 	const transaction = createTransactionContext(drizzle(client, { schema }));
-	const records = new AttachmentRecords(transaction.database);
-	const search = new KnowledgeIndexRecords(transaction.database);
+	const records = new AttachmentRecords(owner, transaction.database);
+	const search = new KnowledgeIndexRecords(owner, transaction.database);
 	const finalize = () =>
 		transaction.transactionRunner.run(async () => {
 			const versionId = crypto.randomUUID() as AttachmentVersionId;
-			const upload = await records.createUpload(owner, {
+			const upload = await records.createUpload({
 				id: crypto.randomUUID() as AttachmentUploadId,
 				projectId: note.projectId,
 				noteId: note.id,
@@ -58,7 +63,7 @@ const setup = async (suffix: string, chunker = new TokenAwareChunker()) => {
 				expiresAt: now,
 				createdAt: now
 			});
-			return records.finalize(owner, upload, {
+			return records.finalize(upload, {
 				id: versionId,
 				attachmentId: crypto.randomUUID() as AttachmentId,
 				objectKey: `object/${versionId}`,
@@ -70,19 +75,21 @@ const setup = async (suffix: string, chunker = new TokenAwareChunker()) => {
 			});
 		});
 	const view = await finalize();
-	const parser = new InMemoryTextParser();
-	parser.text = 'Extracted document';
+	const extraction = new InMemoryAttachmentExtraction();
+	extraction.results.text = { text: 'Extracted document', parserKind: 'text' };
 	const worker = new AttachmentProcessing({
-		records,
-		claims: new PostgresAttachmentClaims(
-			{ open: () => postgres(context.url, { max: 1, idle_timeout: 0, max_lifetime: 0 }) },
-			transaction.connectionScope
+		modelSelection: new AgentModelSelectionService(),
+		records: new AttachmentVersionService(records),
+		claims: new AttachmentClaimService(
+			new PostgresAttachmentClaims(
+				{ open: () => postgres(context.url, { max: 1, idle_timeout: 0, max_lifetime: 0 }) },
+				transaction.connectionScope
+			)
 		),
+		extraction,
 		storage: new InMemoryStorage(),
-		parsers: new AttachmentParserRegistry([parser]),
-		ocr: new InMemoryOcrEngine(),
-		imageDescriber: new InMemoryImageDescriber(),
-		content: new AttachmentContent(),
+		processing: new AttachmentProcessingService(),
+		formats: new AttachmentFormatService(),
 		preferences: {
 			get: async () => ({
 				userId: owner.userId,
@@ -92,36 +99,35 @@ const setup = async (suffix: string, chunker = new TokenAwareChunker()) => {
 				updatedAt: now
 			})
 		},
-		indexer: new ContentIndex(search, new InMemoryEmbeddingClient().model, chunker).attachments,
+		indexer: createContentIndex(search, new InMemoryRetrievalProvider().model, chunker),
 		transactionRunner: transaction.transactionRunner,
-		visionModel: 'test/model',
-		logger: { error: () => {} }
+		visionModel: 'test/model'
 	});
-	return { owner, records, search, view, parser, worker, finalize, transaction };
+	return { owner, records, search, view, extraction, worker, finalize, transaction };
 };
 describe('attachment processing persistence', () => {
 	it('recovers an old truncated index from saved extraction without parsing again', async () => {
-		const { owner, records, search, view, parser, worker } = await setup(
-			'9751',
-			new TokenAwareChunker(30, 5)
-		);
+		const { records, search, view, extraction, worker } = await setup('9751', {
+			targetTokens: 30,
+			overlapTokens: 5
+		});
 		const text =
 			Array.from(
 				{ length: 60 },
 				(_, index) => `Section ${index}. ${'Document evidence. '.repeat(10)}`
 			).join('\n\n') + '\n\nRecovery marker amberfalcon.';
-		await records.updateVersion(owner, {
+		await records.updateVersion({
 			...view.version,
 			processingStatus: 'partial',
 			parserKind: 'text',
 			extractedText: text
 		});
-		parser.beforeParse = async () => {
+		extraction.beforeExtract = async () => {
 			throw new Error('Parsing is unavailable');
 		};
-		await worker.run();
-		const saved = await records.findById(owner, view.attachment.id);
-		const matches = await search.search(owner, 'amberfalcon', 10, view.attachment.projectId);
+		await worker.process(view.version.id);
+		const saved = await records.findById(view.attachment.id);
+		const matches = await search.search('amberfalcon', 10, view.attachment.projectId);
 		expect({
 			status: saved?.version.processingStatus,
 			tail: matches.map(({ document }) => document.chunkIndex >= 50)
@@ -129,44 +135,44 @@ describe('attachment processing persistence', () => {
 	});
 
 	it('rescans interrupted versions and saves searchable text', async () => {
-		const { owner, records, search, view, worker, transaction } = await setup('9711');
+		const { records, search, view, worker, transaction } = await setup('9711');
 		await transaction.transactionRunner.run(() =>
-			records.updateVersion(owner, { ...view.version, processingStatus: 'processing' })
+			records.updateVersion({ ...view.version, processingStatus: 'processing' })
 		);
-		await worker.process(owner, view.version.id);
+		await worker.process(view.version.id);
 		expect({
-			status: (await records.findById(owner, view.attachment.id))?.version.processingStatus,
-			text: (await search.listForAttachment(owner, view.attachment.id)).map((item) => item.content)
+			status: (await records.findById(view.attachment.id))?.version.processingStatus,
+			text: (await search.listForAttachment(view.attachment.id)).map((item) => item.content)
 		}).toEqual({ status: 'ready', text: ['Extracted document'] });
 	});
 	it('does not publish older text when another upload becomes current during extraction', async () => {
-		const { owner, records, search, view, parser, worker, finalize } = await setup('9712');
-		parser.beforeParse = async () => {
+		const { records, search, view, extraction, worker, finalize } = await setup('9712');
+		extraction.beforeExtract = async () => {
 			await finalize();
 		};
-		await worker.process(owner, view.version.id);
+		await worker.process(view.version.id);
 		expect({
-			current: (await records.findById(owner, view.attachment.id))?.version.processingStatus,
-			chunks: await search.listForAttachment(owner, view.attachment.id)
+			current: (await records.findById(view.attachment.id))?.version.processingStatus,
+			chunks: await search.listForAttachment(view.attachment.id)
 		}).toEqual({ current: 'queued', chunks: [] });
 	});
 	it('lists both queued and interrupted versions in the durable backlog', async () => {
 		const { owner, records, view, finalize, transaction } = await setup('9713');
 		await transaction.transactionRunner.run(() =>
-			records.updateVersion(owner, { ...view.version, processingStatus: 'processing' })
+			records.updateVersion({ ...view.version, processingStatus: 'processing' })
 		);
 		const latest = await finalize();
 		expect(
-			(await records.listPendingVersions())
+			(await new AttachmentBacklogRecords(context.db).listPendingVersions())
 				.filter((item) => item.userId === owner.userId)
 				.map((item) => item.versionId)
 				.sort()
 		).toEqual([view.version.id, latest.version.id].sort());
 	});
 	it('clears a previous failure when retry queues a version', async () => {
-		const { owner, records, view, transaction } = await setup('9714');
+		const { records, view, transaction } = await setup('9714');
 		await transaction.transactionRunner.run(() =>
-			records.updateVersion(owner, {
+			records.updateVersion({
 				...view.version,
 				processingStatus: 'failed',
 				processingFailure: 'OCR unavailable',
@@ -174,39 +180,36 @@ describe('attachment processing persistence', () => {
 			})
 		);
 		await transaction.transactionRunner.run(() =>
-			records.updateVersion(owner, { ...view.version, processingStatus: 'queued' })
+			records.updateVersion({ ...view.version, processingStatus: 'queued' })
 		);
-		expect(
-			(await records.findById(owner, view.attachment.id))?.version.processingFailure
-		).toBeUndefined();
+		expect((await records.findById(view.attachment.id))?.version.processingFailure).toBeUndefined();
 	});
 });
 
 it('preserves successful empty extraction when the version is read back', async () => {
-	const { owner, records, view, parser, worker } = await setup('21701');
-	parser.text = '';
-	await worker.process(owner, view.version.id);
-	expect((await records.findById(owner, view.attachment.id))?.version).toMatchObject({
+	const { owner, records, view, extraction, worker } = await setup('21701');
+	extraction.results.text = { text: '', parserKind: 'text' };
+	await worker.process(view.version.id);
+	expect((await records.findById(view.attachment.id))?.version).toMatchObject({
 		processingStatus: 'ready',
 		parserKind: 'text',
 		extractedText: ''
 	});
 	const files = new AgentVirtualFiles(
 		capabilityDependencies<AgentVirtualFilesDependencies>({
+			tokens: testTokenizer,
 			attachments: records,
-			stored: new InMemoryAgentFiles()
+			stored: new InMemoryAgentFiles(owner)
 		})
 	);
 	const path = `/projects/${view.attachment.projectId}/attachments/${view.attachment.id}.txt`;
-	expect(await files.ls(owner, path)).toMatchObject({
+	expect(await files.ls(path)).toMatchObject({
 		kind: 'listed',
 		entries: [{ kind: 'file', path, byteSize: 0, lineCount: 0 }]
 	});
 });
 
 it('does not invent extracted text for a queued attachment', async () => {
-	const { owner, records, view } = await setup('21703');
-	expect(
-		(await records.findById(owner, view.attachment.id))?.version.extractedText
-	).toBeUndefined();
+	const { records, view } = await setup('21703');
+	expect((await records.findById(view.attachment.id))?.version.extractedText).toBeUndefined();
 });

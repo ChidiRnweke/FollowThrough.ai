@@ -3,9 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ProjectId } from '$lib/models/projects';
 import type { SearchDocumentId, SearchMatch } from '$lib/models/knowledge-search';
-import type { Reranker } from '$lib/server/services/knowledge-search/contracts';
 import { describe, expect, it } from 'vitest';
-import { CachedReranker, rerankerCacheKey } from './cached-clients';
+import { cachedRetrievalFetch, rerankerCacheKey } from './cached-clients';
 import { DiskCache } from './disk-cache';
 
 const match = (content: string, id = `document-${content}`): SearchMatch => ({
@@ -21,22 +20,34 @@ const match = (content: string, id = `document-${content}`): SearchMatch => ({
 	score: 0.8
 });
 
-class ReverseReranker implements Reranker {
-	async rerank(_query: string, matches: readonly SearchMatch[], topN: number) {
-		return [...matches].reverse().slice(0, topN);
-	}
-}
+/** Title, optional section and content: the reranker document text knowledge search sends. */
+const text = (item: SearchMatch): string =>
+	[
+		`Title: ${JSON.stringify(item.document.sourceTitle)}`,
+		...(item.document.sectionPath ? [`Section: ${JSON.stringify(item.document.sectionPath)}`] : []),
+		`Content: |-\n  ${item.document.content}`
+	].join('\n');
 
-class ThrowingReranker implements Reranker {
-	async rerank(): Promise<readonly SearchMatch[]> {
-		throw new Error('cached order should replay');
-	}
-}
+const rerank = (fetch: typeof globalThis.fetch, documents: readonly string[]) =>
+	fetch('https://provider.test/v1/rerank', {
+		method: 'POST',
+		body: JSON.stringify({ query: 'incident', documents, top_n: documents.length })
+	}).then((response) => response.json());
+
+const reversing: typeof globalThis.fetch = async (_url, init) => {
+	const documents: string[] = JSON.parse(String(init?.body)).documents;
+	return Response.json({
+		results: documents.map((_, index) => ({ index: documents.length - 1 - index }))
+	});
+};
+const throwing: typeof globalThis.fetch = async () => {
+	throw new Error('cached order should replay');
+};
 
 describe('reranker cache provenance', () => {
 	it('invalidates a ranking when document content changes', () => {
-		expect(rerankerCacheKey('incident', [match('old procedure')], 1)).not.toBe(
-			rerankerCacheKey('incident', [match('new procedure')], 1)
+		expect(rerankerCacheKey('incident', [text(match('old procedure'))], 1)).not.toBe(
+			rerankerCacheKey('incident', [text(match('new procedure'))], 1)
 		);
 	});
 
@@ -45,17 +56,31 @@ describe('reranker cache provenance', () => {
 		const path = join(directory, 'cache.json');
 		try {
 			const recordedCache = new DiskCache(path);
-			const recorded = new CachedReranker(new ReverseReranker(), recordedCache);
-			await recorded.rerank('incident', [match('alpha', 'old-a'), match('beta', 'old-b')], 2);
+			await rerank(cachedRetrievalFetch(recordedCache, reversing), [
+				text(match('alpha', 'old-a')),
+				text(match('beta', 'old-b'))
+			]);
 			await recordedCache.flush();
-			const replayed = await new CachedReranker(new ThrowingReranker(), new DiskCache(path)).rerank(
-				'incident',
-				[match('alpha', 'new-a'), match('beta', 'new-b')],
-				2
-			);
-			expect(replayed.map((item) => item.document.content)).toEqual(['beta', 'alpha']);
+			const replayed = await rerank(cachedRetrievalFetch(new DiskCache(path), throwing), [
+				text(match('alpha', 'new-a')),
+				text(match('beta', 'new-b'))
+			]);
+			expect(replayed.results.map((result: { index: number }) => result.index)).toEqual([1, 0]);
 		} finally {
 			await rm(directory, { recursive: true });
 		}
 	});
+});
+
+it('preserves the existing cache identity including uncapped topN', () => {
+	expect(rerankerCacheKey('incident', [text(match('alpha'))], 8)).toBe(
+		'rerank:e2079c8f8e31b5830d69038011f0f12e'
+	);
+});
+it.each(['sourceTitle', 'sectionPath'] as const)('invalidates ranking when %s changes', (field) => {
+	const original = match('alpha');
+	const changed = { ...original, document: { ...original.document, [field]: 'Changed context' } };
+	expect(rerankerCacheKey('incident', [text(changed)], 1)).not.toBe(
+		rerankerCacheKey('incident', [text(original)], 1)
+	);
 });

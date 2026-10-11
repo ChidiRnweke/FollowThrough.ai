@@ -1,3 +1,7 @@
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
@@ -18,29 +22,37 @@ import { ConversationRecords } from '$lib/server/repositories/agent/postgres/con
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
-import { InMemoryAgentRunner } from '$lib/testing/agent/fakes/in-memory-agent';
+import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
+import { InMemoryAgentTurns } from '$lib/testing/agent/fakes/in-memory-agent-turns';
+import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
+import { harnessTurnDependencies } from '$lib/testing/agent/fixtures/harness';
+import { ConversationHistoryService } from '$lib/server/services/agent/conversations/history';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { actor, context, now, seedProvenance } from '../database-harness';
+import { actor, context, now, seedProvenance, notifications } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const owner = actor(suffix);
-	await new UserRecords(context.db).ensureLocal(owner);
+	await new UserRecords(owner, context.db).ensureLocal();
 	const transaction = createTransactionContext(context.db);
-	const conversations = new ConversationRecords(transaction.database);
-	const conversation = await conversations.insert(owner, {
+	const conversations = new ConversationRecords(owner, transaction.database);
+	const conversation = await conversations.insert({
 		id: crypto.randomUUID() as ConversationId,
 		userId: owner.userId,
 		kind: 'chat',
 		createdAt: now,
 		updatedAt: now
 	});
-	const runs = new AgentRunRecords(transaction.database);
-	const events = new AgentRunEventRecords(transaction.database);
-	const sessions = new AgentSessionRecords(transaction.database);
-	const decisions = new AgentRunDecisionRecords(transaction.database);
+	const runs = new AgentRunRecords(owner, transaction.database);
+	const events = new AgentRunEventRecords(owner, transaction.database);
+	const sessions = new AgentSessionRecords(owner, transaction.database);
+	const decisions = new AgentRunDecisionRecords(owner, transaction.database);
 	const provenance = await seedProvenance(owner, suffix);
-	const run = await runs.insert(owner, {
+	const run = await runs.insert({
 		kind: 'agent',
 		id: crypto.randomUUID() as AgentRunId,
 		userId: owner.userId,
@@ -56,23 +68,31 @@ const setup = async (suffix: string) => {
 		createdAt: now,
 		updatedAt: now
 	});
-	const runner = new InMemoryAgentRunner();
+	const runner = new InMemoryAgentTurns();
 	runner.events = [{ type: 'text_delta', text: 'Done' }];
-	const controller = new Agent(
-		capabilityDependencies<AgentDependencies>({
+	const controller = new AgentSdkHarness(
+		owner,
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<AgentHarnessDependencies>({
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),
 			checkpoints: new RunCheckpoints(runs),
-			webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
+			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			events,
 			sessions,
 			transactionRunner: transaction.transactionRunner,
 			decisions,
 			settlements: new RunSettlements(runs, events),
-			conversationJournal: new ConversationArchive(conversations),
-			runner,
-			eventBus: { notify: () => {} }
+			conversationMessages: new ConversationArchive(owner, conversations),
+			conversationSessions: new ConversationArchive(owner, conversations),
+			toolActivity: new ToolActivityProjection(),
+			...harnessTurnDependencies(
+				runner,
+				new ConversationHistoryService(sessions, new InMemoryAgentFiles(owner), testTokenizer)
+			),
+			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
 	return {
@@ -91,21 +111,20 @@ const setup = async (suffix: string) => {
 
 describe('atomic execution settlement', () => {
 	it('does not complete a queued run before execution claims it', async () => {
-		const { owner, runs, events, run } = await setup('17802');
+		const { runs, events, run } = await setup('17802');
 		const claim = await new RunSettlements(runs, events).claim(run.id, {
 			kind: 'completed',
 			conversationId: run.conversationId,
 			model: run.model
 		});
-		expect({ claim, status: (await runs.findById(owner, run.id))?.status }).toEqual({
+		expect({ claim, status: (await runs.findById(run.id))?.status }).toEqual({
 			claim: { kind: 'lost' },
 			status: 'queued'
 		});
 	});
 
 	it('clears the provider checkpoint after an approved run resumes and completes', async () => {
-		const { owner, runs, run, runner, controller, transactionRunner, decisions } =
-			await setup('17801');
+		const { runs, run, runner, controller, transactionRunner, decisions } = await setup('17801');
 		runner.events = [];
 		runner.outcome = {
 			type: 'approval_checkpoint',
@@ -118,19 +137,19 @@ describe('atomic execution settlement', () => {
 		await controller.execute(run.id, new AbortController().signal);
 		await transactionRunner.run(async () => {
 			const approvals = new RunApprovals(runs);
-			const current = await approvals.getForWrite(owner, run.id);
+			const current = await approvals.getForWrite(run.id);
 			const change = approvals.plan(current, ['create-1'], now);
 			if (!change) throw new Error('Expected a reviewed checkpoint');
-			await decisions.record(owner, {
+			await decisions.record({
 				runId: run.id,
 				callId: 'create-1',
 				decision: 'approve'
 			});
-			await approvals.persist(owner, run.id, change);
+			await approvals.persist(run.id, change);
 		});
 		runner.outcome = { type: 'completed', sessionItems: [] };
 		await controller.execute(run.id, new AbortController().signal);
-		const saved = await runs.findById(owner, run.id);
+		const saved = await runs.findById(run.id);
 		const [row] =
 			await context.client`select serialized_state from agent_runs where id = ${run.id}`;
 		expect({
@@ -149,7 +168,7 @@ describe('atomic execution settlement', () => {
 	});
 
 	it('does not publish a checkpoint after another execution cancels the run', async () => {
-		const { owner, runs, events, sessions, run, runner, controller } = await setup('17701');
+		const { runs, events, sessions, run, runner, controller } = await setup('17701');
 		runner.events = [];
 		runner.outcome = {
 			type: 'approval_checkpoint',
@@ -164,19 +183,19 @@ describe('atomic execution settlement', () => {
 		const execution = controller.execute(run.id, new AbortController().signal);
 		try {
 			await runner.started.promise;
-			await controller.cancel(owner, run.id);
+			await controller.cancel(run.id);
 		} finally {
 			completion.resolve();
 		}
 		const outcome = await execution;
-		const saved = await runs.findById(owner, run.id);
+		const saved = await runs.findById(run.id);
 		expect({
 			outcome,
 			status: saved?.status,
 			checkpoint: saved?.serializedState,
 			pending: saved?.pendingDecisions,
-			session: await sessions.list(owner, run.conversationId),
-			events: (await events.replay(owner, run.id, '0')).map((record) =>
+			session: await sessions.list(run.conversationId),
+			events: (await events.replay(run.id, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			)
 		}).toEqual({
@@ -190,7 +209,7 @@ describe('atomic execution settlement', () => {
 	});
 
 	it('rolls back the checkpoint and session when approval publication fails', async () => {
-		const { owner, runs, events, sessions, run, runner, controller } = await setup('17702');
+		const { runs, events, sessions, run, runner, controller } = await setup('17702');
 		runner.events = [];
 		runner.outcome = {
 			type: 'approval_checkpoint',
@@ -226,13 +245,13 @@ describe('atomic execution settlement', () => {
 			await context.client`drop trigger reject_contract_checkpoint on agent_run_events`;
 			await context.client`drop function reject_contract_checkpoint()`;
 		}
-		const saved = await runs.findById(owner, run.id);
+		const saved = await runs.findById(run.id);
 		expect({
 			status: saved?.status,
 			checkpoint: saved?.serializedState,
 			pending: saved?.pendingDecisions,
-			session: await sessions.list(owner, run.conversationId),
-			events: (await events.replay(owner, run.id, '0')).map((record) =>
+			session: await sessions.list(run.conversationId),
+			events: (await events.replay(run.id, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			)
 		}).toEqual({
@@ -245,17 +264,17 @@ describe('atomic execution settlement', () => {
 	});
 
 	it('records one completion when competing workers execute the same run', async () => {
-		const { owner, runs, events, run, controller, conversations } = await setup('9611');
+		const { runs, events, run, controller, conversations } = await setup('9611');
 		await Promise.all([
 			controller.execute(run.id, new AbortController().signal),
 			controller.execute(run.id, new AbortController().signal)
 		]);
 		expect({
-			status: (await runs.findById(owner, run.id))?.status,
-			events: (await events.replay(owner, run.id, '0')).map((record) =>
+			status: (await runs.findById(run.id))?.status,
+			events: (await events.replay(run.id, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			),
-			messages: (await conversations.listMessages(owner, run.conversationId)).length
+			messages: (await conversations.listMessages(run.conversationId)).length
 		}).toEqual({
 			status: 'completed',
 			events: ['run_started', 'text_delta', 'completed'],
@@ -263,7 +282,7 @@ describe('atomic execution settlement', () => {
 		});
 	});
 	it('publishes only cancellation after cancellation wins against execution', async () => {
-		const { owner, runs, events, run, runner, controller, transactionRunner } = await setup('9612');
+		const { runs, events, run, runner, controller, transactionRunner } = await setup('9612');
 		runner.events = [];
 		const completion = Promise.withResolvers<void>();
 		runner.completion = completion.promise;
@@ -271,27 +290,27 @@ describe('atomic execution settlement', () => {
 		await runner.started.promise;
 		await transactionRunner.run(async () => {
 			const cancellations = new RunCancellation(runs);
-			const current = await cancellations.getForWrite(owner, run.id);
+			const current = await cancellations.getForWrite(run.id);
 			const change = cancellations.plan(current.status, now);
 			if (!change) throw new Error('Expected an active run');
-			await cancellations.persist(owner, run.id, change);
+			await cancellations.persist(run.id, change);
 		});
 		completion.resolve();
 		await Promise.all([execution, controller.finishCancellation(run.id)]);
 		expect({
-			status: (await runs.findById(owner, run.id))?.status,
-			events: (await events.replay(owner, run.id, '0')).map((record) =>
+			status: (await runs.findById(run.id))?.status,
+			events: (await events.replay(run.id, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			)
 		}).toEqual({ status: 'cancelled', events: ['run_started', 'cancelled'] });
 	});
 	it('rolls back completion, session replacement and saved messages when the terminal event fails', async () => {
-		const { owner, runs, events, sessions, run, controller, conversations } = await setup('9613');
+		const { runs, events, sessions, run, controller, conversations } = await setup('9613');
 		const original: PersistedSessionItem = {
 			type: 'user_message',
 			content: 'Original request'
 		};
-		await sessions.append(owner, run.conversationId, [original]);
+		await sessions.append(run.conversationId, [original]);
 		await context.client`create function reject_contract_completion() returns trigger language plpgsql as $$
 		begin
 			if NEW.event->>'type' = 'completed' and exists (
@@ -320,12 +339,12 @@ describe('atomic execution settlement', () => {
 			await context.client`drop function reject_contract_completion()`;
 		}
 		expect({
-			status: (await runs.findById(owner, run.id))?.status,
-			events: (await events.replay(owner, run.id, '0')).map((record) =>
+			status: (await runs.findById(run.id))?.status,
+			events: (await events.replay(run.id, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			),
-			session: (await sessions.list(owner, run.conversationId)).map((row) => row.item),
-			messages: await conversations.listMessages(owner, run.conversationId)
+			session: (await sessions.list(run.conversationId)).map((row) => row.item),
+			messages: await conversations.listMessages(run.conversationId)
 		}).toEqual({
 			status: 'running',
 			events: ['run_started', 'text_delta'],

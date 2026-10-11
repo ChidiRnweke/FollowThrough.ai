@@ -1,20 +1,56 @@
-import { describe, expect, it } from 'vitest';
-import { Notes, type NotesDependencies } from './controller';
+import { noteEtag } from '$lib/models/notes';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	testActor,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+import { describe, expect, it } from 'vitest';
+import { Notes, type NotesDependencies } from './controller';
+const noteMarkdown = new NoteMarkdownCodec();
 
 const setup = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
+			...agentToolResultsFixture(),
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			noteReader: content,
 			noteEditor: content,
 			noteLinkReconciler: content,
@@ -33,23 +69,23 @@ const setup = () => {
 describe('Note revision restore invariants', () => {
 	it('restores snapshot content, title, history, attachments, and search index together', async () => {
 		const { content, controller } = setup();
-		const originalBody = noteContentFromMarkdown('# Snapshot heading\n\nThe original **body**.');
+		const originalBody = noteMarkdown.read('# Snapshot heading\n\nThe original **body**.');
 		content.notes = [noteBuilder({ ...originalBody, title: 'First name' })];
 		const publishedNote = content.notes[0]!;
-		await controller.publish(testActor(), {
+		await controller.publish({
 			noteId: publishedNote.id,
-			baseEtag: noteEtag(publishedNote)
+			baseEtag: noteEtag(publishedNote.id, publishedNote.currentRevision)
 		});
-		const changedBody = noteContentFromMarkdown('# Current heading\n\nThe changed *body*.');
-		await controller.save(testActor(), {
+		const changedBody = noteMarkdown.read('# Current heading\n\nThe changed *body*.');
+		await controller.save({
 			note: { ...content.notes[0]!, ...changedBody, title: 'Second name' }
 		});
-		const { revisions: savedRevisions } = await controller.listRevisions(testActor(), {
+		const { revisions: savedRevisions } = await controller.listRevisions({
 			noteId: publishedNote.id
 		});
 		const revision = savedRevisions[0]!;
 		content.indexedNoteIds = [];
-		const result = await controller.restoreRevision(testActor(), {
+		const result = await controller.restoreRevision({
 			noteId: publishedNote.id,
 			revisionId: revision.id
 		});
@@ -58,7 +94,7 @@ describe('Note revision restore invariants', () => {
 		);
 		expect(result.note.title).toBe('First name');
 		expect(result.note.currentRevision).toBeGreaterThan(revision.revision);
-		const { revisions } = await controller.listRevisions(testActor(), { noteId: publishedNote.id });
+		const { revisions } = await controller.listRevisions({ noteId: publishedNote.id });
 		expect(revisions.map((entry) => entry.id)).toContain(revision.id);
 		expect(content.restoredAttachmentRevisionIds).toEqual([revision.id]);
 		expect(content.indexedNoteIds).toEqual([testNoteId()]);
@@ -68,7 +104,7 @@ describe('Note revision restore invariants', () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder()];
 		await expect(
-			controller.restoreRevision(testActor(), {
+			controller.restoreRevision({
 				noteId: testNoteId(),
 				revisionId: `${testNoteId(2)}:r1` as never
 			})

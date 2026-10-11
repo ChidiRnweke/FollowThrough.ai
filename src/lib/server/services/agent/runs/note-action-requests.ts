@@ -25,8 +25,7 @@ import type { NoteActionResult } from '$lib/server/repositories/agent/agent-runs
 export type { NoteActionResult } from '$lib/server/repositories/agent/agent-runs';
 import { NotFoundError, ValidationError } from '$lib/errors';
 
-/** The controller rolls back its conversation when another submission wins the request ID. */
-export class DuplicateNoteActionRequest extends Error {}
+import { DuplicateNoteActionRequest } from '$lib/errors';
 
 type PromiseRun = WorkflowAgentRun & { readonly contextSnapshot: PromiseExtractionRunContext };
 type ReferenceRun = WorkflowAgentRun & { readonly contextSnapshot: ReferenceSearchRunContext };
@@ -35,21 +34,32 @@ type DiagramRun = WorkflowAgentRun & { readonly contextSnapshot: DiagramActionRu
 type NoteActionRun = PromiseRun | ReferenceRun | RelatedRun | DiagramRun;
 
 /** Persists note-action identity and input through actual repositories. Controllers own transactions. */
-export class NoteActionRequests {
+export interface NoteActionSubmission {
+	prepare(request: NoteActionRequest): Promise<AgentRunReceipt>;
+	existing(request: NoteActionRequest): Promise<AgentRunReceipt>;
+	findExisting(request: NoteActionIdentity): Promise<AgentRunReceipt | undefined>;
+	claim(runId: AgentRunId, kind: 'promise_extraction'): Promise<PromiseRun | undefined>;
+	claim(runId: AgentRunId, kind: 'reference_search'): Promise<ReferenceRun | undefined>;
+	claim(runId: AgentRunId, kind: 'related_notes'): Promise<RelatedRun | undefined>;
+	claim(runId: AgentRunId, kind: 'diagram_action'): Promise<DiagramRun | undefined>;
+	recordResult(runId: AgentRunId, result: NoteActionResult): Promise<void>;
+}
+export class NoteActionRequests implements NoteActionSubmission {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly runs: AgentRunRepository,
 		private readonly events: AgentRunEventRepository,
 		private readonly conversations: ConversationRepository
 	) {}
 
-	async prepare(actor: ActorContext, request: NoteActionRequest): Promise<AgentRunReceipt> {
-		const existing = await this.runs.findByRequestId(actor, request.requestId);
-		if (existing) return this.matchingReceipt(actor, existing, request);
+	async prepare(request: NoteActionRequest): Promise<AgentRunReceipt> {
+		const existing = await this.runs.findByRequestId(request.requestId);
+		if (existing) return this.matchingReceipt(existing, request);
 		const timestamp = new Date().toISOString() as DateTime;
 		const context = request.context;
-		const conversation = await this.conversations.insert(actor, {
+		const conversation = await this.conversations.insert({
 			id: crypto.randomUUID() as ConversationId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			kind: 'workflow',
 			contextNoteId:
 				context.kind === 'diagram_action'
@@ -74,7 +84,7 @@ export class NoteActionRequests {
 		});
 		const run: WorkflowAgentRun = {
 			id: crypto.randomUUID() as AgentRunId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			kind: 'workflow',
 			conversationId: conversation.id,
 			model:
@@ -92,7 +102,7 @@ export class NoteActionRequests {
 			createdAt: timestamp,
 			updatedAt: timestamp
 		};
-		if (!(await this.runs.insertIdempotent(actor, run))) throw new DuplicateNoteActionRequest();
+		if (!(await this.runs.insertIdempotent(run))) throw new DuplicateNoteActionRequest();
 		const queued = await this.events.append(run.id, 1, {
 			type: 'run_queued',
 			runId: run.id,
@@ -107,46 +117,26 @@ export class NoteActionRequests {
 		};
 	}
 
-	async existing(actor: ActorContext, request: NoteActionRequest): Promise<AgentRunReceipt> {
-		const run = await this.runs.findByRequestId(actor, request.requestId);
+	async existing(request: NoteActionRequest): Promise<AgentRunReceipt> {
+		const run = await this.runs.findByRequestId(request.requestId);
 		if (!run) throw new NotFoundError('The note action request was not found');
-		return this.matchingReceipt(actor, run, request);
+		return this.matchingReceipt(run, request);
 	}
 
-	async findExisting(
-		actor: ActorContext,
-		request: NoteActionIdentity
-	): Promise<AgentRunReceipt | undefined> {
-		const run = await this.runs.findByRequestId(actor, request.requestId);
-		return run ? this.matchingReceipt(actor, run, request) : undefined;
+	async findExisting(request: NoteActionIdentity): Promise<AgentRunReceipt | undefined> {
+		const run = await this.runs.findByRequestId(request.requestId);
+		return run ? this.matchingReceipt(run, request) : undefined;
 	}
 
-	claim(
-		actor: ActorContext,
-		runId: AgentRunId,
-		kind: 'promise_extraction'
-	): Promise<PromiseRun | undefined>;
-	claim(
-		actor: ActorContext,
-		runId: AgentRunId,
-		kind: 'reference_search'
-	): Promise<ReferenceRun | undefined>;
-	claim(
-		actor: ActorContext,
-		runId: AgentRunId,
-		kind: 'related_notes'
-	): Promise<RelatedRun | undefined>;
+	claim(runId: AgentRunId, kind: 'promise_extraction'): Promise<PromiseRun | undefined>;
+	claim(runId: AgentRunId, kind: 'reference_search'): Promise<ReferenceRun | undefined>;
+	claim(runId: AgentRunId, kind: 'related_notes'): Promise<RelatedRun | undefined>;
+	async claim(runId: AgentRunId, kind: 'diagram_action'): Promise<DiagramRun | undefined>;
 	async claim(
-		actor: ActorContext,
-		runId: AgentRunId,
-		kind: 'diagram_action'
-	): Promise<DiagramRun | undefined>;
-	async claim(
-		actor: ActorContext,
 		runId: AgentRunId,
 		kind: NoteActionRunContext['kind']
 	): Promise<NoteActionRun | undefined> {
-		const run = await this.runs.findById(actor, runId);
+		const run = await this.runs.findById(runId);
 		if (!run || run.kind !== 'workflow' || run.contextSnapshot.kind !== kind)
 			throw new NotFoundError('The note action run was not found');
 		const timestamp = new Date().toISOString() as DateTime;
@@ -171,14 +161,6 @@ export class NoteActionRequests {
 		throw new ValidationError('The claimed run has no saved note-action input');
 	}
 
-	async queued(
-		kind: NoteActionRunContext['kind']
-	): Promise<readonly { actor: ActorContext; runId: AgentRunId }[]> {
-		return (await this.runs.listQueuedWorkflows()).flatMap((run) =>
-			run.contextSnapshot.kind === kind ? [{ actor: { userId: run.userId }, runId: run.id }] : []
-		);
-	}
-
 	async recordResult(runId: AgentRunId, result: NoteActionResult): Promise<void> {
 		await this.events.appendNoteActionResult(runId, result);
 	}
@@ -195,7 +177,6 @@ export class NoteActionRequests {
 	}
 
 	private async matchingReceipt(
-		actor: ActorContext,
 		run: AgentRun,
 		request: NoteActionIdentity
 	): Promise<AgentRunReceipt> {
@@ -212,7 +193,7 @@ export class NoteActionRequests {
 			runId: run.id,
 			conversationId: run.conversationId,
 			status: run.status,
-			latestCursor: await this.events.latestCursor(actor, run.id)
+			latestCursor: await this.events.latestCursor(run.id)
 		};
 	}
 }

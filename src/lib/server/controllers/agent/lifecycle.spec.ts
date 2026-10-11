@@ -1,33 +1,32 @@
-import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
-import { AgentTools } from '$lib/server/factories/agent/agent-tool-factory';
-import { ConversationBuffer } from '$lib/server/services/agent/conversations/buffer';
+import { z } from 'zod';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
+import {
+	ScriptedAgentTurns,
+	InMemoryAgentTurns
+} from '$lib/testing/agent/fakes/in-memory-agent-turns';
+import { harnessTurnDependencies } from '$lib/testing/agent/fixtures/harness';
+import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
+import { ConversationHistoryService } from '$lib/server/services/agent/conversations/history';
+import { AgentTurnService } from '$lib/server/services/agent/runs/turns';
+import { createAgentTools } from '$lib/server/factories/agent/tools/definitions';
+import { parseProviderStreamEvent } from '$lib/server/infrastructure/agents/provider-events';
+import type { AgentTool } from '$lib/models/agent-tool-protocol';
+import { RunContext } from '@openai/agents';
 import {
 	InMemoryToolBatchModel,
 	InMemoryToolCallingModel
 } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
-import type { Model } from '@openai/agents';
+import { OpenAIProvider, type Model } from '@openai/agents';
+import OpenAI from 'openai';
 import type { Note } from '$lib/models/notes';
-import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
-import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
-import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
-import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
-import { AgentContext } from '$lib/server/services/agent/runs/context';
-import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
-import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
-import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
-import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
-import { InMemoryGatedMemoryEntries } from '$lib/testing/memory/fakes/in-memory-gated-memory';
-import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
-import { describe, expect, it } from 'vitest';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+const noteMarkdown = new NoteMarkdownCodec();
+
 import { AgentProviderFailure } from '$lib/errors';
 import type {
 	AgentExecutionUpdate,
@@ -37,17 +36,39 @@ import type {
 	ConversationId,
 	ToolActivity
 } from '$lib/models/agent';
+import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import type { ToolName } from '$lib/models/agent/tool-catalog';
-import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { DateTime } from '$lib/models/workspace';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
+import type { ConversationMessages } from '$lib/server/services/agent/conversations/archive';
+import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
+import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
+import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
+import { InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
+import { InMemoryGatedMemoryEntries } from '$lib/testing/memory/fakes/in-memory-gated-memory';
+import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
+import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import type { AgentRunner, ConversationJournal } from '$lib/server/services/agent/runs/contracts';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import {
+	noteBuilder,
+	testActor,
+	testProvenanceId
+} from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
 
 const testRunId = '30000000-0000-4000-8000-000000000001' as AgentRunId;
 const testConversationId = '30000000-0000-4000-8000-0000000000c1' as ConversationId;
@@ -63,41 +84,36 @@ const resolvedContext: AgentRunContext = {
  * fires, and `started` lets a test wait for the run to actually be `running`
  * before asking to cancel it.
  */
-const abortingRunner = () => {
-	let entered: () => void;
-	const started = new Promise<void>((resolve) => (entered = resolve));
-	return {
-		started,
-		execute: async function* (input: { readonly signal: AbortSignal }) {
-			entered();
+const abortingRunner = () =>
+	new ScriptedAgentTurns({
+		// eslint-disable-next-line require-yield
+		events: async function* (input) {
 			await new Promise<void>((resolve) => {
 				if (input.signal.aborted) return resolve();
 				input.signal.addEventListener('abort', () => resolve(), { once: true });
 			});
 			throw new Error('The operation was aborted');
-			yield undefined as never;
 		}
+	});
+
+const throwingRunner = (error: unknown) => {
+	const turns = new InMemoryAgentTurns();
+	turns.turn = async () => {
+		throw error;
 	};
+	return turns;
 };
 
-const throwingRunner = (error: unknown) => ({
-	// eslint-disable-next-line require-yield
-	execute: async function* () {
-		throw error;
-	}
-});
-
-const setup = <T extends AgentRunner>(
+const setup = <T extends InMemoryAgentTurns | AgentTurnService>(
 	runner: T,
 	options?: {
 		readonly contextMemory?: InMemoryMemoryEntryRepository;
 		readonly pendingDecisions?: AgentRun['pendingDecisions'];
+		readonly tools?: readonly AgentTool[];
 	}
 ) => {
-	const runs = new InMemoryAgentRunPersistence();
+	const runs = new InMemoryAgentRunPersistence(testActor());
 	const sessions = new InMemoryAgentSessionRepository();
-	const notified: AgentRunId[] = [];
-	const approvalVisibility: boolean[] = [];
 	const journalled: { kind: 'text' | 'reasoning'; text: string; cursor?: string }[] = [];
 	const toolRows: ToolActivity[] = [];
 	const run: AgentRun = {
@@ -119,57 +135,61 @@ const setup = <T extends AgentRunner>(
 	};
 	runs.runs.push(run);
 	const transactions = new InMemoryTransactionRunner([runs, sessions]);
-	const lifecycle = new Agent(
-		capabilityDependencies<AgentDependencies>({
+	const lifecycle = new AgentSdkHarness(
+		testActor(),
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<AgentHarnessDependencies>({
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),
 			checkpoints: new RunCheckpoints(runs),
-			webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
+			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			events: runs,
 			decisions: runs,
 			sessions,
 			transactionRunner: transactions,
 			settlements: new RunSettlements(runs, runs),
-			contextFormatter: new AgentContext(),
-			contextNotes: new InMemoryNoteContent(),
+			contextFormatter: createAgentContext(),
+			contextNotes: new InMemoryNoteContent(testActor()),
 			contextSkills: new InMemorySkills(),
 			builtInSkills: builtInSkillsFixture().builtInSkills,
-			contextProjects: new InMemoryProjects(),
-			contextMemory: options?.contextMemory ?? new InMemoryMemoryEntryRepository(),
-			contextConversations: new ConversationArchive(new InMemoryConversationRepository()),
+			contextProjects: new InMemoryProjects(testActor()),
+			contextMemory: options?.contextMemory ?? new InMemoryMemoryEntryRepository(testActor()),
+			conversationSessions: new ConversationArchive(
+				testActor(),
+				new InMemoryConversationRepository(testActor())
+			),
 			provenance: {
 				record: async () => {
 					throw new Error('Unexpected provenance record');
 				}
 			},
-			conversationJournal: capabilityDependencies<ConversationJournal>({
-				recordToolActivity: async (_actor, _conversationId, activity) => {
+			toolActivity: new ToolActivityProjection(),
+			traceContext: { activeTraceparent: () => undefined },
+			conversationMessages: capabilityDependencies<ConversationMessages>({
+				recordToolActivity: async (_conversationId, activity) => {
 					toolRows.push(activity);
 				},
-				recordAssistantText: async (_actor, _conversationId, text, _model, provenance) => {
+				recordAssistantText: async (_conversationId, text, _model, provenance) => {
 					journalled.push({ kind: 'text', text, cursor: provenance?.eventCursor });
 				},
-				recordAssistantReasoning: async (_actor, _conversationId, text, _model, provenance) => {
+				recordAssistantReasoning: async (_conversationId, text, _model, provenance) => {
 					journalled.push({ kind: 'reasoning', text, cursor: provenance?.eventCursor });
 				}
 			}),
-			runner,
-			eventBus: {
-				notify: (runId) => {
-					notified.push(runId);
-					if (runs.events.some((record) => record.event.type === 'approval_required')) {
-						const saved = runs.runs.find((row) => row.id === runId);
-						approvalVisibility.push(
-							saved?.status === 'awaiting_approval' &&
-								saved.pendingDecisions.some((pending) => pending.review !== undefined)
-						);
-					}
-				}
-			}
+			...harnessTurnDependencies(
+				runner,
+				new ConversationHistoryService(
+					sessions,
+					new InMemoryAgentFiles(testActor()),
+					testTokenizer
+				),
+				options?.tools ?? []
+			)
 		})
 	);
-	return { lifecycle, runs, notified, runner, journalled, toolRows, approvalVisibility };
+	return { lifecycle, runs, runner, journalled, toolRows };
 };
 
 /** Runs a turn to the point where the provider is streaming, then stops it. */
@@ -177,7 +197,7 @@ const stopMidStream = async () => {
 	const context = setup(abortingRunner());
 	const controller = new AbortController();
 	const execution = context.lifecycle.execute(testRunId, controller.signal);
-	await context.runner.started;
+	await context.runner.started.promise;
 	await requestCancellation(context.runs);
 	controller.abort();
 	return { ...context, outcome: await execution };
@@ -186,29 +206,27 @@ const stopMidStream = async () => {
 /** Drives a run to `cancelling` the way the controller does before aborting. */
 const requestCancellation = async (runs: InMemoryAgentRunPersistence) => {
 	const cancellations = new RunCancellation(runs);
-	const current = await cancellations.getForWrite(testActor(), testRunId);
+	const current = await cancellations.getForWrite(testRunId);
 	const change = cancellations.plan(current.status, testTime);
-	if (change) await cancellations.persist(testActor(), testRunId, change);
+	if (change) await cancellations.persist(testRunId, change);
 };
 
 const currentRun = (runs: InMemoryAgentRunPersistence) =>
 	runs.runs.find((run) => run.id === testRunId)!;
 
 describe('stopping a running agent run', () => {
-	it('settles and publishes cancellation to the run, stream, and subscribers', async () => {
-		const { runs, outcome, notified } = await stopMidStream();
+	it('settles cancellation into the run and its event stream', async () => {
+		const { runs, outcome } = await stopMidStream();
 		expect({
 			status: currentRun(runs).status,
 			finished: currentRun(runs).finishedAt !== undefined,
 			event: runs.events.some((record) => record.event.type === 'cancelled'),
-			outcome,
-			notifiedMoreThanOnce: notified.filter((runId) => runId === testRunId).length > 1
+			outcome
 		}).toEqual({
 			status: 'cancelled',
 			finished: true,
 			event: true,
-			outcome: 'cancelled',
-			notifiedMoreThanOnce: true
+			outcome: 'cancelled'
 		});
 	});
 });
@@ -218,30 +236,22 @@ describe('a cancellation the provider stream never unwinds', () => {
 	 * Swallows the abort and keeps streaming, the way a hung provider call or a
 	 * tool doing local work does: the signal fires but nothing throws.
 	 */
-	const swallowingRunner = () => {
-		let entered: () => void;
-		const started = new Promise<void>((resolve) => (entered = resolve));
-		return {
-			started,
-			execute: async function* (input: { readonly signal: AbortSignal }) {
-				entered();
+	const swallowingRunner = () =>
+		new ScriptedAgentTurns({
+			events: async function* (input) {
 				await new Promise<void>((resolve) => {
 					if (input.signal.aborted) return resolve();
 					input.signal.addEventListener('abort', () => resolve(), { once: true });
 				});
-				yield {
-					type: 'event',
-					event: { type: 'text_delta', text: 'still going' }
-				} as AgentExecutionUpdate;
+				yield { type: 'text_delta', text: 'still going' };
 			}
-		};
-	};
+		});
 
 	it('settles at the next stream boundary', async () => {
 		const context = setup(swallowingRunner());
 		const controller = new AbortController();
 		const execution = context.lifecycle.execute(testRunId, controller.signal);
-		await context.runner.started;
+		await context.runner.started.promise;
 		await requestCancellation(context.runs);
 		controller.abort();
 		await execution;
@@ -254,13 +264,24 @@ describe('a cancellation that races the end of a run', () => {
 	const finishingRunner = (final: AgentExecutionUpdate) => {
 		let release: () => void;
 		const finishing = new Promise<void>((resolve) => (release = resolve));
-		return {
-			release: () => release(),
-			execute: async function* () {
+		const turns = new ScriptedAgentTurns({
+			// eslint-disable-next-line require-yield
+			events: async function* () {
 				await finishing;
-				yield final;
-			}
-		};
+			},
+			outcome: async () =>
+				final.type === 'completed'
+					? { kind: 'completed', sessionItems: final.sessionItems }
+					: final.type === 'approval_checkpoint'
+						? {
+								kind: 'approval',
+								serialize: () => final.serializedState,
+								pending: final.pendingDecisions,
+								sessionItems: final.sessionItems
+							}
+						: { kind: 'completed', sessionItems: [] }
+		});
+		return Object.assign(turns, { release: () => release() });
 	};
 
 	const untilRunning = async (runs: InMemoryAgentRunPersistence) => {
@@ -344,7 +365,7 @@ describe('a cancellation that races preparation', () => {
 	 * settlement must not depend on abort timing.
 	 */
 	const racingSetup = () => {
-		const memory = new InMemoryGatedMemoryEntries();
+		const memory = new InMemoryGatedMemoryEntries(testActor());
 		const context = setup(abortingRunner(), {
 			contextMemory: memory
 		});
@@ -469,29 +490,46 @@ describe('settling a run whose execution threw', () => {
 });
 
 /** Each successful mutation requests workspace synchronization. */
-const mutatingRunner = (calls: readonly { toolName: ToolName; callId?: string }[]) => ({
-	execute: async function* (input: {
-		readonly toolExecutor: AgentToolExecutor;
-	}): AsyncIterable<AgentExecutionUpdate> {
-		for (const call of calls)
-			await input.toolExecutor.execute(
-				{ ...call, arguments: {}, classification: 'mutation' },
-				async () => ({ ok: true })
-			);
-		for (const call of calls)
-			if (call.callId !== undefined)
-				yield {
-					type: 'event',
-					event: { type: 'tool_succeeded', callId: call.callId, name: call.toolName }
-				};
-		yield { type: 'completed', sessionItems: [] };
-	} as never
+const mutatingTool = (name: ToolName): AgentTool => ({
+	kind: 'direct',
+	name,
+	description: name,
+	classification: 'mutation',
+	parameters: z.object({}).strict(),
+	prepare: () => ({ arguments: {}, execute: async () => ({ ok: true }) })
 });
+const mutatingRunner = (calls: readonly { toolName: ToolName; callId?: string }[]) =>
+	new ScriptedAgentTurns({
+		// eslint-disable-next-line require-yield
+		events: async function* (input) {
+			for (const call of calls) {
+				const tool = input.tools.find((candidate) => candidate.name === call.toolName);
+				if (!tool || tool.type !== 'function') throw new Error(`Missing tool ${call.toolName}`);
+				await tool.invoke(
+					new RunContext(),
+					'{}',
+					call.callId === undefined
+						? undefined
+						: {
+								toolCall: {
+									type: 'function_call',
+									name: call.toolName,
+									callId: call.callId,
+									arguments: '{}'
+								}
+							}
+				);
+			}
+		}
+	});
 
 const staleResources = async (
 	calls: readonly { toolName: ToolName; callId?: string }[]
 ): Promise<string[]> => {
-	const context = setup(mutatingRunner(calls) as never);
+	const context = setup(mutatingRunner(calls), {
+		tools: calls.map((call) => mutatingTool(call.toolName))
+	});
+	context.runs.runs = context.runs.runs.map((run) => ({ ...run, executionMode: 'auto_accept' }));
 	await context.lifecycle.execute(testRunId, new AbortController().signal);
 	return context.runs.events.flatMap((record) =>
 		record.event.type === 'resources_stale' ? [...record.event.resources] : []
@@ -517,22 +555,28 @@ describe('telling the client what a mutation left stale', () => {
  * reopened conversation can show, and for a long time it could show neither the thinking nor
  * the order.
  */
-const talkativeRunner = () => ({
-	execute: async function* (): AsyncIterable<AgentExecutionUpdate> {
-		yield { type: 'event', event: { type: 'reasoning_delta', text: 'It has five bullets.' } };
-		yield { type: 'event', event: { type: 'text_delta', text: 'Reading it first.' } };
-		yield {
-			type: 'event',
-			event: { type: 'tool_started', callId: 'c1', name: 'get_note', arguments: {} }
-		};
-		yield { type: 'event', event: { type: 'tool_succeeded', callId: 'c1', name: 'get_note' } };
-		yield { type: 'event', event: { type: 'text_delta', text: 'Done.' } };
-		yield { type: 'completed', sessionItems: [] };
-	} as never
-});
+const providerItem = (
+	name: 'tool_called' | 'tool_output',
+	rawItem: Readonly<Record<string, string>>
+) => parseProviderStreamEvent({ type: 'run_item_stream_event', name, item: { rawItem } });
+const talkativeRunner = () =>
+	new ScriptedAgentTurns({
+		events: async function* () {
+			yield { type: 'reasoning_delta', text: 'It has five bullets.' };
+			yield { type: 'text_delta', text: 'Reading it first.' };
+			yield providerItem('tool_called', { type: 'function_call', callId: 'c1', name: 'get_note' });
+			yield providerItem('tool_output', {
+				type: 'function_call_result',
+				callId: 'c1',
+				name: 'get_note',
+				output: '{}'
+			});
+			yield { type: 'text_delta', text: 'Done.' };
+		}
+	});
 
 const completeTalkativeTurn = async () => {
-	const context = setup(talkativeRunner() as never);
+	const context = setup(talkativeRunner());
 	await context.lifecycle.execute(testRunId, new AbortController().signal);
 	return context;
 };
@@ -563,22 +607,22 @@ describe('Durable note approval publication', () => {
 		review: { kind: 'note_change' as const, content: JSON.stringify(prepared) }
 	};
 	const checkpoint = () =>
-		setup({
-			execute: async function* () {
-				yield {
-					type: 'approval_checkpoint' as const,
-					serializedState: 'provider-checkpoint',
-					pendingDecisions: [pending],
+		setup(
+			new ScriptedAgentTurns({
+				events: async function* () {},
+				outcome: async () => ({
+					kind: 'approval',
+					serialize: () => 'provider-checkpoint',
+					pending: [pending],
 					sessionItems: []
-				};
-			}
-		});
+				})
+			})
+		);
 	it('publishes the durable review to the run, event, and replayable tool row', async () => {
-		const { lifecycle, runs, toolRows, approvalVisibility } = checkpoint();
+		const { lifecycle, runs, toolRows } = checkpoint();
 		await lifecycle.execute(testRunId, new AbortController().signal);
 		expect({
 			run: currentRun(runs),
-			visibleAfterCheckpoint: approvalVisibility,
 			event: runs.events.find((record) => record.event.type === 'approval_required')?.event,
 			toolRows
 		}).toMatchObject({
@@ -587,7 +631,6 @@ describe('Durable note approval publication', () => {
 				serializedState: 'provider-checkpoint',
 				pendingDecisions: [pending]
 			},
-			visibleAfterCheckpoint: [true],
 			event: { review: pending.review },
 			toolRows: [{ status: 'approval_required', review: pending.review }]
 		});
@@ -601,36 +644,28 @@ describe('Durable note approval publication', () => {
 const productionRun = async (
 	model: ((note: Note) => Model) | { readonly fetch: typeof globalThis.fetch }
 ) => {
-	const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+	const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.') });
 	const notes = reviewedNoteFixture(note);
-	const reasoning = new AgentReasoning(
-		async ({ run, executor, signal }) => {
-			if (!run.inputSnapshot) throw new Error('Run input is missing');
-			return new AgentTools(
-				notes.factory,
-				testActor(),
-				run.executionMode,
-				{ provenanceId: testProvenanceId(), input: run.inputSnapshot, model: run.model },
-				executor,
-				new InMemoryToolRetriever(),
-				{ isEnabled: () => true },
-				run.pendingDecisions,
-				signal
-			);
-		},
-		new InMemoryAgentSessionRepository(),
-		'test-key',
-		'https://unused.test',
-		'https://unused.test',
-		typeof model === 'function' ? undefined : model.fetch,
-		(repository, actor, conversationId) =>
-			new ConversationBuffer(repository, actor, conversationId, {
-				virtualize: async (_actor, _id, item) => item
-			}),
-		undefined,
-		...(typeof model === 'function' ? [() => new InMemoryModelProvider(model(note))] : [])
-	);
-	const fixture = setup(reasoning);
+	const reasoning = new AgentTurnService({
+		models: () =>
+			typeof model === 'function'
+				? new InMemoryModelProvider(model(note))
+				: new OpenAIProvider({
+						openAIClient: new OpenAI({
+							apiKey: 'test-key',
+							baseURL: 'https://unused.test',
+							fetch: model.fetch
+						}),
+						useResponses: false
+					}),
+		images: capabilityDependencies<Pick<OpenAI, 'chat'>>({})
+	});
+	const tools = createAgentTools(notes.factory, {
+		provenanceId: testProvenanceId(),
+		input: { conversationId: testConversationId, prompt: 'Do the thing' },
+		model: 'openai/test-model'
+	});
+	const fixture = setup(reasoning, { tools });
 	fixture.runs.runs = fixture.runs.runs.map((run) => ({ ...run, executionMode: 'auto_accept' }));
 	// As the background executor does: a run whose execution threw is settled as failed.
 	await fixture.lifecycle

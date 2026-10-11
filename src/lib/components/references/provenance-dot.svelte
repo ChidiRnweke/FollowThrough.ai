@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Provenance, SourceAnchor } from '$lib/models/provenance';
-	import { provenanceOrigin } from '$lib/services/provenance/presentation';
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { provenanceOrigin } = workspacePresentation;
+
 	import * as HoverCard from '$lib/components/ui/hover-card';
 	import { provenanceCaption } from '../shared/labels';
 

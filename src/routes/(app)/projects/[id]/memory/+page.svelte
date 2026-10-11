@@ -1,11 +1,12 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { MemoryEntryList } from '$lib/components/memory';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
-	const project = $derived(data.session.resources.views.get('projects', data.projectId));
+	const project = $derived(workspaceViews.get('projects', data.projectId));
 </script>
 
 {#if project && !project.archivedAt}

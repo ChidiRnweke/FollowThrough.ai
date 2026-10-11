@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { changedTopLevelBlockIndices } from './note-shimmer';
+import { NoteDocumentPresentationService } from './document-presentation';
+const presentation = new NoteDocumentPresentationService();
 import type {
 	ProseMirrorDocument,
 	ProseMirrorNode,
@@ -25,42 +26,42 @@ describe('changedTopLevelBlockIndices', () => {
 	it('reports nothing for two identical documents', () => {
 		const note = doc(para('one'), para('two'));
 
-		expect(changedTopLevelBlockIndices(note, note)).toEqual([]);
+		expect(presentation.changedBlocks(note, note)).toEqual([]);
 	});
 
 	it('reports only the paragraph whose text changed', () => {
 		const before = doc(para('one'), para('two'));
 		const after = doc(para('one'), para('two, edited'));
 
-		expect(changedTopLevelBlockIndices(before, after)).toEqual([1]);
+		expect(presentation.changedBlocks(before, after)).toEqual([1]);
 	});
 
 	it('reports a block appended at the end', () => {
 		const before = doc(para('one'));
 		const after = doc(para('one'), para('new block'));
 
-		expect(changedTopLevelBlockIndices(before, after)).toEqual([1]);
+		expect(presentation.changedBlocks(before, after)).toEqual([1]);
 	});
 
 	it('reports a block inserted in the middle and those that follow it', () => {
 		const before = doc(para('one'), para('two'));
 		const after = doc(para('one'), para('inserted'), para('two'));
 
-		expect(changedTopLevelBlockIndices(before, after)).toEqual([1, 2]);
+		expect(presentation.changedBlocks(before, after)).toEqual([1, 2]);
 	});
 
 	it('reports a heading whose text changed', () => {
 		const before = doc(para('one'), heading('Extraction'));
 		const after = doc(para('one'), heading('Extraction and follow-through'));
 
-		expect(changedTopLevelBlockIndices(before, after)).toEqual([1]);
+		expect(presentation.changedBlocks(before, after)).toEqual([1]);
 	});
 
 	it('reports every block for a full rewrite', () => {
 		const before = doc(para('one'), para('two'), heading('Three'));
 		const after = doc(para('alpha'), para('beta'));
 
-		expect(changedTopLevelBlockIndices(before, after)).toEqual([0, 1]);
+		expect(presentation.changedBlocks(before, after)).toEqual([0, 1]);
 	});
 
 	it('ignores structural noise when the text is unchanged', () => {
@@ -71,7 +72,7 @@ describe('changedTopLevelBlockIndices', () => {
 			content: [{ type: 'text', text: 'same' }]
 		});
 
-		expect(changedTopLevelBlockIndices(before, after)).toEqual([]);
+		expect(presentation.changedBlocks(before, after)).toEqual([]);
 	});
 
 	it('ignores mark-only changes inside a block', () => {
@@ -81,12 +82,12 @@ describe('changedTopLevelBlockIndices', () => {
 			content: [{ type: 'text', text: 'same', marks: [{ type: 'bold' }] }]
 		});
 
-		expect(changedTopLevelBlockIndices(before, after)).toEqual([]);
+		expect(presentation.changedBlocks(before, after)).toEqual([]);
 	});
 
 	it('handles documents with no blocks', () => {
 		const empty = doc();
 
-		expect(changedTopLevelBlockIndices(empty, empty)).toEqual([]);
+		expect(presentation.changedBlocks(empty, empty)).toEqual([]);
 	});
 });

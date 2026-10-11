@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { createMermaidDiagrams } from '$lib/factories/diagrams/mermaid';
+	const mermaidDiagrams = createMermaidDiagrams();
+
 	import { toast } from 'svelte-sonner';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -10,15 +13,10 @@
 	import {
 		MERMAID_PALETTE_KEYS,
 		MERMAID_PALETTE_LABELS,
-		diagramKeepsOwnColours,
-		mermaidTokensFor,
 		type MermaidPalette,
 		type MermaidTheme
-	} from '$lib/client/diagrams/mermaid-rendering';
-	import {
-		exportMermaidDiagram,
-		type MermaidExportFormat
-	} from '$lib/client/diagrams/mermaid-export';
+	} from '$lib/models/diagrams/mermaid-theme';
+	import { type MermaidExportFormat } from '$lib/models/diagrams/mermaid-theme';
 
 	let { source, fileName = 'diagram' }: { source: string; fileName?: string } = $props();
 
@@ -31,14 +29,14 @@
 	let busy = $state(false);
 	let open = $state(false);
 
-	const preset = $derived(mermaidTokensFor({ base }));
+	const preset = $derived(mermaidDiagrams.appearance({ base }).tokens);
 	const theme = $derived<MermaidTheme>({ base, palette, transparent });
 	const customised = $derived(Object.keys(palette).length > 0);
 
 	async function run(): Promise<void> {
 		busy = true;
 		try {
-			await exportMermaidDiagram({ source, theme, format, fileName });
+			await mermaidDiagrams.download({ source, theme, format, fileName });
 			open = false;
 			// audit-allow: silent-catch — export failure is reported and the menu remains available for retry.
 		} catch (error) {
@@ -74,7 +72,7 @@
 				</ToggleGroup.Root>
 				<!-- Stated only when it applies: a diagram that styles itself keeps its own
 				     colours whatever is chosen here, and mermaid gives us no way to override that. -->
-				{#if diagramKeepsOwnColours(source)}
+				{#if mermaidDiagrams.keepsOwnColours(source)}
 					<p class="text-xs text-muted-foreground">
 						A diagram with its own <code>style</code> or <code>classDef</code> keeps those colours.
 					</p>

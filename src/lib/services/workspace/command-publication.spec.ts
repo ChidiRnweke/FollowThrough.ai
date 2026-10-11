@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { noteHasUnpublishedChanges } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { noteHasUnpublishedChanges } = new WorkspaceCommandRulesService();
 const note = noteBuilder({ currentRevision: 2, publishedRevision: 2 });
 it('offers publication for an offline edit without inventing a server revision', () => {
 	expect(

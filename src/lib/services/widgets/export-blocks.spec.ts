@@ -1,11 +1,12 @@
+import { WidgetExportService } from '$lib/services/widgets/export-blocks';
+const widgetExporting = new WidgetExportService();
 import { describe, expect, it } from 'vitest';
 import { widgetTemplates } from '$lib/models/widgets';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import type { Widget } from '$lib/models/widgets';
-import { widgetExport } from './export-blocks';
 
 /** These widgets have no formulas, so their saved data is the state they render. */
-const exported = (widget: Widget) => widgetExport(widget, widget.data);
+const exported = (widget: Widget) => widgetExporting.prepare(widget, widget.data);
 
 describe('widget export', () => {
 	it('writes a checklist as a heading and one check per item', () => {
@@ -71,9 +72,9 @@ describe('widget export', () => {
 			},
 			data: { a: 1, b: 2 }
 		});
-		expect(widgetExport(widget, { ...widget.data, derived: { total: 3 } }).blocks).toEqual([
-			{ kind: 'metric', label: 'Total', value: '3' }
-		]);
+		expect(
+			widgetExporting.prepare(widget, { ...widget.data, derived: { total: 3 } }).blocks
+		).toEqual([{ kind: 'metric', label: 'Total', value: '3' }]);
 	});
 	it('prints a chart as the table of what it plots, under its title', () => {
 		const widget = widgetBuilder({
@@ -113,10 +114,12 @@ describe('widget export', () => {
 	});
 	it('prints an editable table with ticks, option labels and its footer', () => {
 		const { layout, data } = widgetTemplates.expenses;
-		const table = widgetExport(widgetBuilder({ layout, data }), {
-			...data,
-			derived: { totals: { item: 'Total', amount: '1,446.50' } }
-		}).blocks.find((block) => block.kind === 'table');
+		const table = widgetExporting
+			.prepare(widgetBuilder({ layout, data }), {
+				...data,
+				derived: { totals: { item: 'Total', amount: '1,446.50' } }
+			})
+			.blocks.find((block) => block.kind === 'table');
 		expect(table).toEqual({
 			kind: 'table',
 			columns: ['Item', 'Category', 'Amount', 'Paid'],
@@ -130,7 +133,7 @@ describe('widget export', () => {
 	});
 	it('prints a row of inputs with their labels, and a slider with its suffix', () => {
 		const { layout, data } = widgetTemplates.savings;
-		const blocks = widgetExport(widgetBuilder({ layout, data }), data).blocks;
+		const blocks = widgetExporting.prepare(widgetBuilder({ layout, data }), data).blocks;
 		expect(blocks.slice(1, 4)).toEqual([
 			{ kind: 'paragraph', text: 'Starting amount: 10000 · Monthly deposit: 250', muted: false },
 			{ kind: 'field', label: 'Yearly interest', value: '5%' },

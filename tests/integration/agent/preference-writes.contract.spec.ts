@@ -1,24 +1,29 @@
-import { expect, it, vi } from 'vitest';
-import postgres from 'postgres';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
-import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { AgentPreferenceRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
-import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import {
 	AgentSettings,
 	type AgentSettingsDependencies
 } from '$lib/server/controllers/agent/settings/controller';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { AgentPreferenceRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
+import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import postgres from 'postgres';
+import { expect, it, vi } from 'vitest';
 import { context, now, seedNote } from '../database-harness';
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 
 it.each([false, true])(
 	'retains concurrent independent preference edits (existing row: %s)',
 	async (existing) => {
 		const { owner } = await seedNote(existing ? '16901' : '16902');
-		const records = new AgentPreferenceRecords(context.db);
+		const records = new AgentPreferenceRecords(owner, context.db);
 		if (existing)
-			await records.upsert(owner, {
+			await records.upsert({
 				userId: owner.userId,
 				defaultModel: 'vendor/retained',
 				executionMode: 'approval_required',
@@ -31,8 +36,16 @@ it.each([false, true])(
 		const controller = (connection: typeof first) => {
 			const { database, transactionRunner } = createTransactionContext(connection.db);
 			return new AgentSettings(
+				owner,
+				new WorkspaceCommandRulesService(),
 				capabilityDependencies<AgentSettingsDependencies>({
-					preferences: new AgentPreferenceCatalog(new AgentPreferenceRecords(database)),
+					...agentToolResultsFixture(),
+					preferenceEditing: new AgentPreferenceEditingService(),
+					...agentRulesFixture(),
+					preferences: new AgentPreferenceCatalog(
+						owner,
+						new AgentPreferenceRecords(owner, database)
+					),
 					transactionRunner,
 					now: () => now
 				})
@@ -55,8 +68,8 @@ it.each([false, true])(
 				{ pid: number }[]
 			>`select pg_backend_pid() as pid`;
 			const updates = Promise.all([
-				controller(first).updatePreferences(owner, { inlineSuggestionsEnabled: false }),
-				controller(second).updatePreferences(owner, { webSearchMaxResults: 17 })
+				controller(first).updatePreferences({ inlineSuggestionsEnabled: false }),
+				controller(second).updatePreferences({ webSearchMaxResults: 17 })
 			]);
 			await vi.waitFor(async () => {
 				const waiting = await blocker<
@@ -68,7 +81,7 @@ it.each([false, true])(
 			release.resolve();
 			await holding;
 			await updates;
-			const saved = await records.get(owner);
+			const saved = await records.get();
 			expect({
 				inline: saved?.inlineSuggestionsEnabled,
 				results: saved?.webSearchMaxResults,

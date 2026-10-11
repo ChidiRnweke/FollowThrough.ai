@@ -1332,3 +1332,28 @@ export type ProjectTemplate = typeof projectTemplates.$inferSelect;
 export type ToolPreferenceRow = typeof toolPreferences.$inferSelect;
 export type ProjectToolOverrideRow = typeof projectToolOverrides.$inferSelect;
 export type UserPreferencesRow = typeof userPreferences.$inferSelect;
+
+/** Durable physical deletion, independent of attachment/user rows that may already be gone. */
+export const attachmentObjectRemovals = pgTable('attachment_object_removals', {
+	objectKey: text('object_key').primaryKey(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+export const maintenanceCursors = pgTable('maintenance_cursors', {
+	task: text('task').primaryKey(),
+	position: jsonb('position').notNull(),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+/** One row per inline completion the budget admitted; rows older than the budget window are pruned. */
+export const inlineCompletionAttempts = pgTable(
+	'inline_completion_attempts',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		attemptedAt: timestamp('attempted_at', { withTimezone: true }).notNull()
+	},
+	(table) => [index('inline_completion_attempts_user_time_idx').on(table.userId, table.attemptedAt)]
+);

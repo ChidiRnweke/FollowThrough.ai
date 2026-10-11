@@ -1,4 +1,5 @@
-import { mutationResource } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { mutationResource, workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { expect, it } from 'vitest';
 import { WorkspaceMutationReceipts } from './mutation-receipts';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -20,11 +21,11 @@ const input: NoteMutationRequest = {
 	command: { kind: 'renameNote', noteId: testNoteId(), title: 'Changed title' }
 };
 const setup = () => {
-	const content = new InMemoryNoteContent();
-	const receipts = new InMemoryWorkspaceReceipts();
+	const content = new InMemoryNoteContent(testActor());
+	const receipts = new InMemoryWorkspaceReceipts(testActor());
 	const service = new WorkspaceMutationReceipts({
 		mutationReceipts: receipts,
-		syncObjects: new InMemoryWorkspaceNoteReads(content)
+		syncObjects: new InMemoryWorkspaceNoteReads(testActor(), content)
 	});
 	return { content, receipts, service };
 };
@@ -32,7 +33,12 @@ const setup = () => {
 it('returns the observed note when its version matches the requested base', async () => {
 	const { content, service } = setup();
 	content.notes = [noteBuilder()];
-	expect(await service.prepare(testActor(), input, mutationResource(input.command))).toEqual({
+	expect(
+		await service.prepare(input, {
+			identity: mutationResource(input.command),
+			key: workspaceResourceKey(mutationResource(input.command))
+		})
+	).toEqual({
 		kind: 'ready',
 		current: {
 			kind: 'found',
@@ -46,16 +52,16 @@ it('returns the observed note when its version matches the requested base', asyn
 
 it('does not acknowledge an operation that produced no authoritative resource', async () => {
 	const { service } = setup();
-	await expect(
-		service.complete(testActor(), input, mutationResource(input.command))
-	).rejects.toThrow('no authoritative resource');
+	await expect(service.complete(input, mutationResource(input.command))).rejects.toThrow(
+		'no authoritative resource'
+	);
 });
 
 it('stores proof of the authoritative version when the controller completes a write', async () => {
 	const { content, receipts, service } = setup();
 	content.notes = [noteBuilder({ title: 'Changed title', currentRevision: 2 })];
-	await service.complete(testActor(), input, mutationResource(input.command));
-	expect(await receipts.find(testActor(), input.operationId, JSON.stringify(input))).toEqual({
+	await service.complete(input, mutationResource(input.command));
+	expect(await receipts.find(input.operationId, JSON.stringify(input))).toEqual({
 		kind: 'proven',
 		proof: { operationId: input.operationId, resourceKind: 'found', etag: syncEtag(2n) }
 	});

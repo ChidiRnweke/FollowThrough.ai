@@ -1,27 +1,31 @@
-import { todoWrite } from '$lib/controllers/workspace/commands';
 import type { UpdateTodoInput } from '$lib/models/todos';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { describe, expect, it } from 'vitest';
-import { Todos, type TodosDependencies } from './controller';
-import { TodoCatalog } from '$lib/server/services/todos/catalog';
-import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { todoWrite } from '$lib/testing/workspace/fixtures/commands';
 import {
 	testActor,
+	testNoteId,
 	testNow,
 	testTodoId,
-	testNoteId,
 	todoBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
+import { describe, expect, it } from 'vitest';
+import { Todos, type TodosDependencies } from './controller';
 const setup = () => {
-	const records = new InMemoryTodoRepository();
+	const records = new InMemoryTodoRepository(testActor());
 	const original = todoBuilder({
 		title: 'Original',
 		description: 'Keep context',
@@ -29,25 +33,32 @@ const setup = () => {
 		waitingOn: 'Sam'
 	});
 	records.todos = [original];
-	const catalog = new TodoCatalog(
+	const catalog = createTodoServices(
+		testActor(),
 		records,
-		new InMemoryProjectRepository(),
-		new InMemoryAnchorRepository(),
-		new InMemoryNoteRepository(),
-		new InMemoryProvenanceRepository(),
+		new InMemoryProjectRepository(testActor()),
+		new InMemoryAnchorRepository(testActor()),
+		new InMemoryNoteRepository(testActor()),
+		new InMemoryProvenanceRepository(testActor()),
 		() => testNow
 	);
 	const controller = new Todos(
+		testActor(),
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
-			todoEditor: catalog,
-			todoContextReader: catalog,
+			...agentToolResultsFixture(),
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
+			todoEditor: catalog.editor,
+			todoContextReader: catalog.context,
 			transactionRunner: new InMemoryTransactionRunner([records])
 		}),
 		() => testNow
 	);
 	return { records, original, controller };
 };
-
 describe('complete task edits', () => {
 	const edits: readonly Omit<UpdateTodoInput, 'todoId'>[] = [
 		{ title: '  Retitled  ', status: 'done' },
@@ -63,15 +74,14 @@ describe('complete task edits', () => {
 	];
 	it.each(edits)('matches the offline task preview for %j', async (edit) => {
 		const { controller, original } = setup();
-		const { todo } = await controller.update(testActor(), { todoId: original.id, ...edit });
-		expect(todo).toEqual(todoWrite(original, edit, testNow).local?.value);
+		const { todo } = await controller.update({ todoId: original.id, ...edit });
+		expect(todo).toEqual((await todoWrite(original, edit, testNow)).local?.value);
 	});
-
 	it('leaves all fields unchanged when saving the completed task fails', async () => {
 		const { controller, records, original } = setup();
 		records.updateFailures.set('done', new Error('Completion write failed'));
 		const result = await controller
-			.update(testActor(), { todoId: testTodoId(), title: 'Changed', status: 'done' })
+			.update({ todoId: testTodoId(), title: 'Changed', status: 'done' })
 			.then(
 				() => 'saved',
 				(error: Error) => error.message
@@ -83,7 +93,7 @@ describe('complete task edits', () => {
 	});
 	it('stores fields and completion together with one resolved timestamp', async () => {
 		const { controller, records } = setup();
-		const result = await controller.update(testActor(), {
+		const result = await controller.update({
 			todoId: testTodoId(),
 			title: '  Finished  ',
 			status: 'done',
@@ -105,7 +115,7 @@ describe('complete task edits', () => {
 	it('rejects an unavailable linked note before saving any other edit', async () => {
 		const { controller, records, original } = setup();
 		const result = await controller
-			.update(testActor(), {
+			.update({
 				todoId: testTodoId(),
 				title: 'Changed',
 				status: 'done',
@@ -124,7 +134,7 @@ describe('complete task edits', () => {
 		const { controller, records, original } = setup();
 		const completedAt = '2026-01-01T00:00:00.000Z' as typeof testNow;
 		records.todos = [{ ...original, status: 'done', completedAt }];
-		const result = await controller.update(testActor(), {
+		const result = await controller.update({
 			todoId: testTodoId(),
 			title: 'Retitled',
 			status: 'done'

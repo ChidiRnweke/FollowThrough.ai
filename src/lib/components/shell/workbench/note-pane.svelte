@@ -1,11 +1,14 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import { workspaceViews } from '$lib/factories/workspace/session';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import { accessMessage } from '$lib/services/sync/state';
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { accessMessage } = workspacePresentation;
+
 	import type { NoteId } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
 	import NoteWorkspace from '../../notes/workspace/note-workspace.svelte';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
@@ -33,10 +36,10 @@
 	const draft = untrack(() => resources.draft({ type: 'notes', id: [noteId] }));
 	const editorSelection = untrack(() => editorSelectionRegistry.for(noteId));
 
-	const projection = $derived(resources.views.note(noteId));
+	const projection = $derived(workspaceViews.note(noteId));
 	const archivedProject = $derived.by(() => {
-		const current = resources.views.get('notes', noteId);
-		return current ? resources.views.get('projects', current.projectId)?.archivedAt : undefined;
+		const current = workspaceViews.get('notes', noteId);
+		return current ? workspaceViews.get('projects', current.projectId)?.archivedAt : undefined;
 	});
 	// A server deletion removes the projection; the open document stays so its work can be kept.
 	let view = $state(untrack(() => projection?.view));

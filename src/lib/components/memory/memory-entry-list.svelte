@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { accessMessage } from '$lib/services/sync/state';
+	import { workspaceApplication, type WorkspaceGraph } from '$lib/factories/workspace/session';
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { accessMessage } = workspacePresentation;
+
 	import { Form } from '$lib/components/ui/form';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type { MemoryEntry, MemoryEntryId, MemoryEntryType } from '$lib/models/memory';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { SuggestionId, MemorySuggestionView } from '$lib/models/suggestions';
@@ -19,14 +21,14 @@
 	import * as Scene from '$lib/components/icons/scenes';
 	import EmptyState from '../shared/empty-state.svelte';
 
-	import type { WorkspaceDraft, WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 	import { formatRelativeTime, memoryEntryTypeLabels } from '../shared/labels';
 
 	let {
 		projectId,
-		workspace,
+		graph = workspaceApplication,
 		placeholder,
 		emptyText,
 		emptyHint,
@@ -36,7 +38,8 @@
 	}: {
 		/** Omit for the user's profile memory. */
 		projectId?: ProjectId;
-		workspace?: WorkspaceResources;
+		/** The workspace and its views; a test supplies its own. */
+		graph?: WorkspaceGraph;
 		placeholder: string;
 		emptyText: string;
 		/** Second line of the empty state — the invitation, kept out of the voice line. */
@@ -50,7 +53,9 @@
 		heroEmpty?: boolean;
 	} = $props();
 
-	const resources = $derived(workspace ?? workspaceSession.current?.resources);
+	const workspaceSession = $derived(graph.workspace);
+	const workspaceViews = $derived(graph.views);
+	const resources = $derived(graph.workspace.current?.resources);
 	const project = $derived(
 		projectId ? resources?.view({ type: 'projects', id: [projectId] }) : undefined
 	);
@@ -65,22 +70,23 @@
 			addOpen = false;
 		}
 	});
-	const entries = $derived(resources?.views.memories(projectId) ?? []);
-	const pending = $derived(resources?.views.memorySuggestions(projectId) ?? []);
+	const entries = $derived(workspaceViews.memories(projectId) ?? []);
+	const pending = $derived(workspaceViews.memorySuggestions(projectId) ?? []);
 	let loadError = $state<string | null>(null);
 	let loading = $state(false);
 	let busyIds = $state<SuggestionId[]>([]);
 	let draft = $state('');
 	let draftType = $state<MemoryEntryType | 'none'>('none');
 	const entryTypes: MemoryEntryType[] = ['fact', 'decision', 'constraint', 'preference'];
-	let editing = $state<{ resource: WorkspaceDraft<'memory_entries'>; content: string } | null>(
-		null
-	);
-	let deletion = $state<WorkspaceDraft<'memory_entries'> | null>(null);
+	let editing = $state<{
+		resource: WorkspaceDraftController<'memory_entries'>;
+		content: string;
+	} | null>(null);
+	let deletion = $state<WorkspaceDraftController<'memory_entries'> | null>(null);
 	let addOpen = $state(false);
 	let adding = $state(false);
 
-	function editorFor(entry: MemoryEntry): WorkspaceDraft<'memory_entries'> {
+	function editorFor(entry: MemoryEntry): WorkspaceDraftController<'memory_entries'> {
 		if (!resources) throw new Error('Open the workspace before editing memory');
 		const resource = resources.draft({ type: 'memory_entries', id: [entry.id] });
 		resource.capture();

@@ -1,12 +1,13 @@
-import type { ShellContext } from '$lib/client/shell/views';
+import type { ShellContext } from '$lib/models/workspace-views';
 import type { EntityKind, EntityRef } from '$lib/models/tool-display';
 
 import { toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
-import {
-	agentPayloadItems,
-	isAgentPayloadObject,
-	type AgentPayload
-} from '$lib/models/agent/payload';
+import { type AgentPayload } from '$lib/models/agent/payload';
+import { agentPayloadOperations } from '$lib/factories/agent/payload';
+const { agentPayloadItems } = agentPayloadOperations;
+
+const { isAgentPayloadObject } = agentPayloadOperations;
+
 import { noteTitle } from '../../chat/actions/tool-approval-fields';
 import { toolResultFields, type ToolResultFields } from './tool-result-fields';
 import { toolPresentationKind } from './tool-catalog-presentation';

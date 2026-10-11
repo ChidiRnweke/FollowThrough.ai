@@ -1,14 +1,15 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { AttachmentList } from '$lib/components/attachments';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
-	const project = $derived(data.session.resources.views.get('projects', data.projectId));
+	const project = $derived(workspaceViews.get('projects', data.projectId));
 
 	const attachmentCount = $derived(
-		data.session.resources.views.attachments({ kind: 'project', id: data.projectId }).length
+		workspaceViews.attachments({ kind: 'project', id: data.projectId }).length
 	);
 </script>
 

@@ -1,15 +1,24 @@
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
-import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
-import { diagramGenerationFixture } from './generation';
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { diagramGenerationFixture } from './generation';
 
 export const diagramSelection = {
 	noteId: testNoteId(),
@@ -22,7 +31,7 @@ export const diagramSelection = {
 export const durableDiagramFixture = () => {
 	const state = diagramGenerationFixture();
 	state.notes.notes = [noteBuilder({ plainText: diagramSelection.text })];
-	const suggestions = new InMemorySuggestions();
+	const suggestions = new InMemorySuggestions(testActor());
 	const transactions = new InMemoryTransactionRunner([
 		state.persistence,
 		state.conversations,
@@ -31,12 +40,15 @@ export const durableDiagramFixture = () => {
 		suggestions
 	]);
 	const requests = new NoteActionRequests(
+		testActor(),
 		state.persistence,
 		state.persistence,
 		state.conversations
 	);
 	const settlements = new RunSettlements(state.persistence, state.persistence);
 	const dependencies = capabilityDependencies<DiagramsDependencies>({
+		...agentToolResultsFixture(),
+		generationRules: new DiagramGenerationRuleService(),
 		...state,
 		selectionOrigins: new InMemorySelectionOrigins(state.notes, state.provenance),
 		drawioXmlValidator: new DrawioXmlValidator(),
@@ -44,17 +56,20 @@ export const durableDiagramFixture = () => {
 		transactionRunner: transactions,
 		noteActionRequests: requests,
 		runSettlements: settlements,
-		runEvents: { notify: () => {} }
+		runSignals: new RunSignalService(state.persistence, state.persistence)
 	});
-	const agent = new Agent(
-		capabilityDependencies<AgentDependencies>({
+	const agent = new AgentSdkHarness(
+		testActor(),
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<AgentHarnessDependencies>({
+			...agentRulesFixture(),
 			runs: state.persistence,
 			cancellations: new RunCancellation(state.persistence),
 			events: state.persistence,
 			decisions: state.persistence,
 			settlements,
 			transactionRunner: transactions,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(state.persistence, state.persistence)
 		})
 	);
 	return {
@@ -64,6 +79,6 @@ export const durableDiagramFixture = () => {
 		requests,
 		dependencies,
 		agent,
-		controller: new Diagrams(dependencies)
+		controller: new Diagrams(testActor(), dependencies)
 	};
 };

@@ -1,6 +1,5 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { LocalDate, DateTime } from '$lib/models/workspace';
-import type { PromiseCandidate } from '$lib/models/todos';
+import type { PromiseCandidate, TodoResponsibility } from '$lib/models/todos';
 import type { TextSelection } from '$lib/models/notes';
 import { ValidationError } from '$lib/errors';
 
@@ -8,7 +7,7 @@ const titleCase = (value: string): string =>
 	value.charAt(0).toUpperCase() + value.slice(1).replace(/[.!?]+$/, '');
 const localDate = (date: Date): LocalDate => date.toISOString().slice(0, 10) as LocalDate;
 
-export function parsePromises(
+function parsePromises(
 	selection: TextSelection,
 	baseDate = new Date()
 ): readonly PromiseCandidate[] {
@@ -49,16 +48,22 @@ export function parsePromises(
 }
 
 export interface IPromiseRules {
-	extract(
-		actor: ActorContext,
-		selection: TextSelection,
-		requestedAt: DateTime
-	): Promise<readonly PromiseCandidate[]>;
+	select(
+		candidates: readonly PromiseCandidate[],
+		responsibility: TodoResponsibility
+	): readonly PromiseCandidate[];
+	extract(selection: TextSelection, requestedAt: DateTime): Promise<readonly PromiseCandidate[]>;
 }
 
 export class DeterministicPromiseExtractor implements IPromiseRules {
+	select(
+		candidates: readonly PromiseCandidate[],
+		responsibility: TodoResponsibility
+	): readonly PromiseCandidate[] {
+		return candidates.filter((candidate) => candidate.responsibility === responsibility);
+	}
+
 	async extract(
-		_actor: ActorContext,
 		selection: TextSelection,
 		requestedAt: DateTime
 	): Promise<readonly PromiseCandidate[]> {

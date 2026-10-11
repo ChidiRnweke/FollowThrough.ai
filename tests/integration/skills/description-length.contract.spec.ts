@@ -8,8 +8,8 @@ import { skillController } from './edit-harness';
 const setup = async (suffix: string) => {
 	const seed = await seedNote(suffix);
 	const tx = createTransactionContext(context.db);
-	const controller = skillController(tx.database, tx.transactionRunner);
-	const { skill } = await controller.create(seed.owner, {
+	const controller = skillController(seed.owner, tx.database, tx.transactionRunner);
+	const { skill } = await controller.create({
 		name: 'Review',
 		projectId: seed.project.id,
 		description: 'Review changes'
@@ -19,14 +19,14 @@ const setup = async (suffix: string) => {
 it('rejects an oversized direct metadata edit without replacing saved fields', async () => {
 	const { owner, controller, skill } = await setup('21501');
 	const result = await controller
-		.update(owner, { noteId: skill.note.id, description: 'x'.repeat(1025), isEnabled: false })
+		.update({ noteId: skill.note.id, description: 'x'.repeat(1025), isEnabled: false })
 		.then(
 			() => ({ kind: 'saved' }),
 			(error: Error) => ({ kind: 'failure', error })
 		);
 	expect({
 		result,
-		skill: await new SkillRecords(context.db).findByNoteId(owner, skill.note.id)
+		skill: await new SkillRecords(owner, context.db).findByNoteId(skill.note.id)
 	}).toMatchObject({
 		result: { kind: 'failure', error: { code: 'VALIDATION' } },
 		skill: { description: 'Review changes', isEnabled: true }
@@ -34,10 +34,10 @@ it('rejects an oversized direct metadata edit without replacing saved fields', a
 });
 it('rejects an oversized synchronized description without persisting its companion toggle', async () => {
 	const { owner, controller, skill, database } = await setup('21502');
-	const sync = createSyncCapability({ db: database });
-	const base = await sync.objects.read(owner, { type: 'skills', id: [skill.note.id] }, null);
+	const sync = createSyncCapability(owner, { db: database });
+	const base = await sync.objects.read({ type: 'skills', id: [skill.note.id] }, null);
 	if (base.kind !== 'found') throw new Error('Expected the skill metadata');
-	const result = await controller.synchronize(owner, {
+	const result = await controller.synchronize({
 		operationId: crypto.randomUUID(),
 		baseEtag: base.snapshot.etag,
 		command: {
@@ -49,7 +49,7 @@ it('rejects an oversized synchronized description without persisting its compani
 	});
 	expect({
 		result,
-		skill: await new SkillRecords(context.db).findByNoteId(owner, skill.note.id)
+		skill: await new SkillRecords(owner, context.db).findByNoteId(skill.note.id)
 	}).toMatchObject({
 		result: { kind: 'rejected' },
 		skill: { description: 'Review changes', isEnabled: true }

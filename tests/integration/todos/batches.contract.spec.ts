@@ -1,19 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { createTodoBatchSchema } from '$lib/models/todos';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createTodosCapability } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { createTodoBatchSchema } from '$lib/models/todos';
+import { describe, expect, it } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
+	const actor = seeded.owner;
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const projects = new ProjectRecords(database);
-	const notes = createNotesCapability({ db: database, projects });
-	const capability = createTodosCapability({
+	const projects = new ProjectRecords(actor, database);
+	const notes = createNotesCapability(actor, { db: database, projects });
+	const capability = createTodosCapability(actor, {
 		db: database,
 		projects,
 		notes: notes.repository,
@@ -21,10 +27,17 @@ const setup = async (suffix: string) => {
 		provenance: notes.provenanceRepository
 	});
 	const controller = new Todos(
+		actor,
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
-			todoCreator: capability.catalog,
-			todoEditor: capability.catalog,
-			todoContextReader: capability.catalog,
+			...agentToolResultsFixture(),
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
+			todoCreator: capability.services.creator,
+			todoEditor: capability.services.editor,
+			todoContextReader: capability.services.context,
 			todoBatchReceipts: capability.batchReceipts,
 			transactionRunner
 		})
@@ -43,9 +56,9 @@ const setup = async (suffix: string) => {
 describe('durable task batch transactions', () => {
 	it('fails on an unreadable saved outcome without creating replacement tasks', async () => {
 		const { owner, project, controller, input } = await setup('9268');
-		const original = await controller.createBatch(owner, input);
+		const original = await controller.createBatch(input);
 		await context.client`update todo_batch_receipts set result = '{"todos":[{"id":"invalid"}]}'::jsonb where user_id = ${owner.userId} and request_id = ${input.requestId}`;
-		const outcome = await controller.createBatch(owner, input).then(
+		const outcome = await controller.createBatch(input).then(
 			() => 'saved',
 			() => 'rejected'
 		);
@@ -61,7 +74,7 @@ describe('durable task batch transactions', () => {
 		await context.client`alter table todos add constraint batch_failure_test check (title <> 'Reject this batch task')`;
 		try {
 			const outcome = await controller
-				.createBatch(owner, {
+				.createBatch({
 					...input,
 					todos: [input.todos[0]!, { title: 'Reject this batch task', responsibility: 'mine' }]
 				})
@@ -82,10 +95,10 @@ describe('durable task batch transactions', () => {
 		}
 	});
 	it('returns one saved batch to concurrent duplicate deliveries', async () => {
-		const { owner, project, controller, input } = await setup('9262');
+		const { project, controller, input } = await setup('9262');
 		const [first, second] = await Promise.all([
-			controller.createBatch(owner, input),
-			controller.createBatch(owner, input)
+			controller.createBatch(input),
+			controller.createBatch(input)
 		]);
 		const ids =
 			await context.client`select id from todos where project_id = ${project.id} order by title`;
@@ -95,16 +108,16 @@ describe('durable task batch transactions', () => {
 		});
 	});
 	it('returns the original outcome after tasks are edited and the original response is lost', async () => {
-		const { owner, controller, input } = await setup('9263');
-		const first = await controller.createBatch(owner, input);
-		await controller.update(owner, { todoId: first.todos[0]!.id, title: 'Later edit' });
-		expect(await controller.createBatch(owner, input)).toEqual(first);
+		const { controller, input } = await setup('9263');
+		const first = await controller.createBatch(input);
+		await controller.update({ todoId: first.todos[0]!.id, title: 'Later edit' });
+		expect(await controller.createBatch(input)).toEqual(first);
 	});
 	it('rejects a different batch under an existing request ID', async () => {
-		const { owner, controller, input } = await setup('9264');
-		await controller.createBatch(owner, input);
+		const { controller, input } = await setup('9264');
+		await controller.createBatch(input);
 		await expect(
-			controller.createBatch(owner, {
+			controller.createBatch({
 				...input,
 				todos: [{ title: 'Changed request', responsibility: 'mine' }]
 			})
@@ -113,8 +126,8 @@ describe('durable task batch transactions', () => {
 	it('isolates the same request ID between accounts', async () => {
 		const first = await setup('9265');
 		const second = await setup('9266');
-		await first.controller.createBatch(first.owner, first.input);
-		const result = await second.controller.createBatch(second.owner, {
+		await first.controller.createBatch(first.input);
+		const result = await second.controller.createBatch({
 			...second.input,
 			requestId: first.input.requestId
 		});
@@ -124,13 +137,13 @@ describe('durable task batch transactions', () => {
 		]);
 	});
 	it('compares request content without depending on object key order', async () => {
-		const { owner, controller, input } = await setup('9267');
-		const first = await controller.createBatch(owner, input);
+		const { controller, input } = await setup('9267');
+		const first = await controller.createBatch(input);
 		const retry = {
 			todos: input.todos.map(({ title, responsibility }) => ({ responsibility, title })),
 			projectId: input.projectId,
 			requestId: input.requestId
 		};
-		expect(await controller.createBatch(owner, retry)).toEqual(first);
+		expect(await controller.createBatch(retry)).toEqual(first);
 	});
 });

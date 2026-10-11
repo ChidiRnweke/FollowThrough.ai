@@ -10,9 +10,11 @@ import {
 } from '../fixtures/workspaces/time-aware';
 import { findCall } from '../assertions/tool-calls';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
-import { toolOutcomeEvent } from '$lib/server/services/agent/conversations/tool-activity';
+import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { judgeAdherenceConsensus } from '../judges/consensus';
 import { ARCHETYPES, type EvalCase } from './types';
+
+const toolActivity = new ToolActivityProjection();
 
 /**
  * Time awareness is the agent's use of the system-rendered clock line and the
@@ -306,14 +308,20 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			const workspace = await seedWorkspace(lab, temporalNotesWorkspace());
 			const actor = workspace.actor;
 
-			const recent = await lab.controllers.retrieval().search(actor, {
-				query: this.input.query as string,
-				createdAfter: cutoff
-			});
-			const old = await lab.controllers.retrieval().search(actor, {
-				query: this.input.query as string,
-				createdBefore: cutoff
-			});
+			const recent = await lab
+				.forActor(actor)
+				.controllers.retrieval()
+				.search({
+					query: this.input.query as string,
+					createdAfter: cutoff
+				});
+			const old = await lab
+				.forActor(actor)
+				.controllers.retrieval()
+				.search({
+					query: this.input.query as string,
+					createdBefore: cutoff
+				});
 
 			const recentExcludesOld = !recent.some((match) => match.content.includes('GitHub Actions'));
 			const oldIncludesOld = old.some((match) => match.content.includes('GitHub Actions'));
@@ -395,7 +403,7 @@ const timedToolCalls = (result: AgentRunResult): TimedToolCall[] => {
 	const completed = new Map<string, Date>();
 	for (const { event, createdAt } of result.events) {
 		if (event.type === 'tool_started') started.set(event.callId, createdAt);
-		const outcome = toolOutcomeEvent(event);
+		const outcome = toolActivity.outcome(event);
 		if (outcome?.callId !== undefined) completed.set(outcome.callId, createdAt);
 	}
 	return result.toolCalls.map((call) => ({

@@ -1,3 +1,8 @@
+import type { Todo } from '$lib/models/todos';
+import type { NoteRelationship } from '$lib/models/notes';
+import type { ExternalReference } from '$lib/models/references';
+import type { Diagram } from '$lib/models/diagrams';
+import type { MemoryEntry } from '$lib/models/memory';
 import type {
 	Provenance,
 	ProvenanceOrigin,
@@ -398,3 +403,6 @@ export type ProposalSelectionOrigin = SelectionOrigin<{
 	readonly id: NoteId;
 	readonly projectId: ProjectId;
 }>;
+
+export type SuggestionArtifact =
+	Todo | NoteRelationship | ExternalReference | Diagram | MemoryEntry;

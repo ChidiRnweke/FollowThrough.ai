@@ -1,37 +1,43 @@
+import type { ActorContext } from '$lib/models/identity';
+import type { ToolDiscoveryController } from '$lib/server/controllers/tool-discovery/controller';
+import { createSystemApplication } from '$lib/server/factories/system-factory';
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
+const toolCatalogRules = new AgentToolCatalogService();
 import { InMemoryAttachmentClaims } from '$lib/testing/attachments/fakes/claims';
 import { fileURLToPath } from 'node:url';
-import { createApplication, type ProductionApplication } from '$lib/server/application';
-import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
-import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
-import { SearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
+import {
+	createApplication,
+	type ApplicationConfig,
+	type ProductionApplication
+} from '$lib/server/application';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
-import {
-	CachedSearchQueryGeneration,
-	CachedEmbeddingClient,
-	CachedReranker
-} from './cache/cached-clients';
+import { cachedRetrievalFetch } from './cache/cached-clients';
+import { createRetrievalProvider } from '$lib/server/factories/retrieval-providers';
+import { ToolSearch } from '$lib/server/services/agent/tools/tool-search';
+import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
+import { Cl100kTokenizer } from '$lib/server/infrastructure/tokenization/cl100k';
+import { operationObserver } from '$lib/server/infrastructure/telemetry/tracing';
+import { DEFAULT_EMBEDDING_MODEL } from '$lib/models/knowledge-search/embeddings';
 import type { Database } from '$lib/server/db';
-import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 import { createPGliteDatabase } from './pglite-database';
-import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
-import { ToolDiscovery } from '$lib/server/controllers/tool-discovery/controller';
-import { ToolCatalogIndex, toolEmbeddingText } from '$lib/server/services/agent/tools/tool-index';
-import { TOOL_CATALOG } from '$lib/models/agent/tool-catalog';
 
 const CACHE_PATH = fileURLToPath(new URL('../fixtures/auxiliary-cache.json', import.meta.url));
 
-export interface Lab extends ProductionApplication {
+export interface Lab {
 	readonly model: string;
+	/** One account's production graph; every case seeds its own account. */
+	forActor(actor: ActorContext): ProductionApplication;
+	/** Tool discovery spans every account, so it is reachable without one. */
+	readonly toolRetriever: ToolDiscoveryController;
 	/**
 	 * Exposed so tool-retrieval can be evaluated on its own, without paying for a
 	 * full agent turn. Whether the catalog surfaces the right tool for a goal is
 	 * a property of the retriever, and testing it directly covers dozens of tools
 	 * in the time one agent case takes.
 	 */
-	readonly embeddingClient: EmbeddingClient;
 	/**
 	 * Raw database handle, used by seeding helpers for explicit account initialization and to backdate
 	 * `createdAt` on fixtures. Content writes go through the real
@@ -70,21 +76,46 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	const baseURL = process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL;
 	const appURL = 'http://localhost:5173';
 
-	const { database, transactionRunner, close: closeDatabase } = await createPGliteDatabase();
+	const {
+		database,
+		transactionRunner,
+		notifications,
+		close: closeDatabase
+	} = await createPGliteDatabase();
 
 	const cache = new DiskCache(CACHE_PATH);
-	const deterministicToolTexts = new Set(TOOL_CATALOG.map(toolEmbeddingText));
-	const clientOptions = { baseURL, appURL };
-	const embeddingClient = new CachedEmbeddingClient(
-		new Embeddings(openRouterApiKey, clientOptions),
-		cache,
-		(content) => deterministicToolTexts.has(content)
+	// The tool catalog's discovery texts are fixed by the catalog, so their embeddings must
+	// replay; the agent's own search wording varies run to run and may call the provider.
+	const deterministicToolTexts = new Set(
+		toolCatalogRules
+			.discoverable()
+			.map((entry) => `${entry.name}: ${entry.retrievalText ?? entry.description}`)
 	);
+	// The lab replaces both retrieval services with ones whose providers replay from the cache.
+	const provider = createRetrievalProvider({
+		apiKey: openRouterApiKey,
+		baseURL,
+		appURL,
+		fetch: cachedRetrievalFetch(cache, globalThis.fetch, (content) =>
+			deterministicToolTexts.has(content)
+		)
+	});
+	const tokenizer = new Cl100kTokenizer();
+	const observer = { run: operationObserver.run };
+	const toolSearch = new ToolSearch({
+		repository: new ToolEmbeddingRecords(database),
+		provider: provider.client,
+		model: DEFAULT_EMBEDDING_MODEL,
+		tokens: tokenizer,
+		observer
+	});
 
-	const application = createApplication({
+	const config: ApplicationConfig = {
 		attachmentClaims: new InMemoryAttachmentClaims(),
 		db: database,
+		notifications,
 		transactionRunner,
+		tokenizer,
 		openRouterApiKey,
 		// Evals never upload attachments, so OCR is wired but never called.
 		mistralApiKey: process.env.MISTRAL_API_KEY ?? 'eval-unused',
@@ -92,31 +123,24 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		appURL,
 		defaultAgentModel: model,
 		overrides: {
-			embeddingClient,
-			reranker: new CachedReranker(new SearchRanking(openRouterApiKey, clientOptions), cache),
-			queryGenerator: new CachedSearchQueryGeneration(
-				new SearchQueryGeneration(openRouterApiKey, clientOptions),
-				cache
-			),
+			retrievalProvider: provider,
+			toolSearch,
 			attachmentStorage: new InMemoryAttachmentStorage(),
 			modelCatalog: new StubModelCatalog()
 		}
-	});
+	};
+	const toolRetriever = createSystemApplication(config).controllers.toolDiscovery();
 
 	// Tool discovery ranks against stored vectors. An unseeded database now fails
 	// explicitly rather than making every long-tail tool appear unavailable.
 	// Deploys run this seed next to migrations; the lab has to do the same or it
 	// evaluates a configuration that never ships.
-	await new ToolDiscovery(
-		new ToolCatalogIndex(new ToolEmbeddingRecords(database)),
-		embeddingClient,
-		transactionRunner
-	).seed();
+	await toolRetriever.seed();
 
 	return {
-		...application,
+		forActor: (actor) => createApplication(actor, config),
+		toolRetriever,
 		model,
-		embeddingClient,
 		db: database,
 		async close() {
 			const stats = cache.stats();

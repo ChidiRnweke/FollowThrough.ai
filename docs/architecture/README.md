@@ -9,7 +9,7 @@ capabilities first; frameworks and infrastructure appear only at delivery bounda
 | --------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `models`              | Self-contained domain and use-case data               | identity, projects, notes, todos, memory, relationships, references, diagrams, suggestions, skills, attachments, deliverables, agent, knowledge-search, provenance, workspace |
 | `remote`              | Stable SvelteKit remote-function delivery             | agent, settings, projects, notes, todos, relationships, references, diagrams, suggestions, skills, memory, attachments, deliverables, feedback                                |
-| `client`              | Browser transports and orchestration                  | agent, notes, todos, workbench, diagrams, attachments, suggestions, observability                                                                                             |
+| `client`              | Browser transports and storage adapters               | agent, notes, todos, workbench, diagrams, attachments, suggestions, observability                                                                                             |
 | `stores`              | Reactive state and state mutations only               | agent, note-workbench, workbench, shell, todos, project-tree                                                                                                                  |
 | `components`          | Product presentation                                  | shell, agent, chat, notes, todos, projects, memory, attachments, artifacts, suggestions, skills, settings, today                                                              |
 | `server/controllers`  | Cross-service orchestration                           | one directory per capability                                                                                                                                                  |
@@ -61,12 +61,12 @@ structural values and explicit callbacks, so they do not become new controllers 
 Edra owns editor structure: node transactions, opaque references, and pending-reference state. It
 does not know product IDs, client transports, repositories, or product dialogs. Product adapters in
 `components/notes` translate opaque references to suggestion and diagram models, inject preview and
-link resolution, and own review acceptance or rejection through product services.
+link resolution, and invoke controller operations for review acceptance or rejection.
 
 ## Transactions and schema
 
-The workspace operation contract owns `AtomicOperation`; presentation utilities do not. Services
-request atomic work through that contract, while repositories implement persistence inside the
+The workspace operation contract owns `AtomicOperation`; presentation utilities do not. Controllers
+own sequencing and the transaction boundary, while repositories implement persistence inside the
 provided transaction. The Drizzle registry at `server/db/schema/index.ts` re-exports the exact
 capability schemas for migrations and tooling. It does not become a shared query module: concrete
 repositories import their capability schema modules directly.
@@ -114,6 +114,7 @@ factory wrapper alone — controllers and routes must not hand-place their own.
 
 ## Verification
 
-`pnpm test:architecture` runs the topology audit, test-quality audit, and the locally pinned Chisel
-check. Chisel must use the `tsconfig` named in `chisel.config.json`; replacing `$lib` imports is not
+`pnpm test:architecture` runs topology, source, test-quality, semantic architecture, Chisel and UI
+checks. [Semantic enforcement](semantic-enforcement.md) explains symbol provenance, service surfaces,
+state ownership and workflow checks, including their limits. Chisel must use the `tsconfig` named in `chisel.config.json`; replacing `$lib` imports is not
 an acceptable workaround for alias-resolution errors.

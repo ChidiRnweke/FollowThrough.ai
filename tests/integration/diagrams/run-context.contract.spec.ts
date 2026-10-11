@@ -11,15 +11,15 @@ import { actor, context, now, seedProvenance } from '../database-harness';
 
 const seed = async (suffix: string) => {
 	const owner = actor(suffix);
-	await new UserRecords(context.db).ensureLocal(owner);
-	const conversation = await new ConversationRecords(context.db).insert(owner, {
+	await new UserRecords(owner, context.db).ensureLocal();
+	const conversation = await new ConversationRecords(owner, context.db).insert({
 		id: crypto.randomUUID() as ConversationId,
 		userId: owner.userId,
 		kind: 'workflow',
 		createdAt: now,
 		updatedAt: now
 	});
-	const run = await new AgentRunRecords(context.db).insert(owner, {
+	const run = await new AgentRunRecords(owner, context.db).insert({
 		kind: 'workflow',
 		id: crypto.randomUUID() as AgentRunId,
 		userId: owner.userId,
@@ -53,7 +53,7 @@ it('rejects diagram preparation when cancellation commits before the context loc
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
 	const { database, transactionRunner } = createTransactionContext(writer.db);
-	const contexts = new DiagramRunContext(new AgentRunRecords(database));
+	const contexts = new DiagramRunContext(new AgentRunRecords(owner, database));
 	const locked = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
 	const cancelling = blocker.begin(async (transaction) => {
@@ -66,8 +66,8 @@ it('rejects diagram preparation when cancellation commits before the context loc
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
 		const rejected = expect(
 			transactionRunner.run(async () => {
-				const current = await contexts.getForWrite(owner, run.id);
-				await contexts.persist(owner, run.id, contexts.prepare(current, prepared, now));
+				const current = await contexts.getForWrite(run.id);
+				await contexts.persist(run.id, contexts.prepare(current, prepared, now));
 			})
 		).rejects.toThrow('no longer running');
 		await vi.waitFor(async () => {
@@ -88,9 +88,9 @@ it('rejects diagram preparation when cancellation commits before the context loc
 
 it('writes only resolved workflow context fields', async () => {
 	const { owner, run, prepared } = await seed('17302');
-	const records = new AgentRunRecords(context.db);
+	const records = new AgentRunRecords(owner, context.db);
 	await context.client`update agent_runs set status = 'cancelling', cancel_requested_at = ${now}, started_at = ${now} where id = ${run.id}`;
-	const updated = await records.updateWorkflowContext(owner, run.id, {
+	const updated = await records.updateWorkflowContext(run.id, {
 		contextSnapshot: prepared,
 		updatedAt: now
 	});
@@ -114,7 +114,7 @@ it('does not expose another actor’s workflow through the context lock', async 
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	await expect(
 		transactionRunner.run(() =>
-			new DiagramRunContext(new AgentRunRecords(database)).getForWrite(actor('17304'), run.id)
+			new DiagramRunContext(new AgentRunRecords(actor('17304'), database)).getForWrite(run.id)
 		)
 	).rejects.toThrow('not found');
 });

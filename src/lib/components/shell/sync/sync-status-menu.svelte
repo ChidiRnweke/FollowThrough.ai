@@ -1,8 +1,10 @@
 <script lang="ts">
 	import * as Icon from '$lib/components/icons';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
-	import { syncIndicator } from '$lib/services/sync/indicator';
-	import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { syncIndicator } = workspacePresentation;
+
+	import type { WorkspaceResourcesController } from '$lib/controllers/workspace/workspace';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -13,7 +15,7 @@
 		startupFailure = null,
 		side = 'bottom'
 	}: {
-		resources: WorkspaceResources;
+		resources: WorkspaceResourcesController;
 		startupFailure?: string | null;
 		/** `right` from the sidebar's icon rail; `bottom` from the mobile header. */
 		side?: 'bottom' | 'right';

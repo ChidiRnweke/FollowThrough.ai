@@ -1,41 +1,48 @@
-import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
-import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
-import { afterAll, expect, it, vi } from 'vitest';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import * as schema from '$lib/server/db/schema';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
+import { type AgentRunId } from '$lib/models/agent';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import {
 	Relationships,
 	type RelationshipsDependencies
 } from '$lib/server/controllers/relationships/controller';
-import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
-import { RelationshipRules } from '$lib/server/services/relationships/rules';
-import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
-import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import {
-	InMemoryEmbeddingClient,
-	InMemoryReranker
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import * as schema from '$lib/server/db/schema';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import {
-	AgentRunEventRecords,
-	AgentRunDecisionRecords
+	AgentRunDecisionRecords,
+	AgentRunEventRecords
 } from '$lib/server/repositories/agent/postgres/agent-runs';
+import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
+import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { type AgentRunId } from '$lib/models/agent';
+import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
+import { RelationshipRules } from '$lib/server/services/relationships/rules';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+import { RelationshipCandidatesService } from '$lib/services/relationships/candidates';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
+import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { InMemoryStructuredRelationshipClient } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { context, seedNote } from '../database-harness';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { afterAll, expect, it, vi } from 'vitest';
+import { context, seedNote, notifications } from '../database-harness';
+const runStatus = new AgentRunStatusService();
 
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
@@ -47,16 +54,16 @@ const setup = async (suffix: string) => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const projects = new ProjectRecords(database);
-	const notes = createNotesCapability({ db: database, projects });
-	const suggestions = createSuggestionsCapability({
+	const projects = new ProjectRecords(seeded.owner, database);
+	const notes = createNotesCapability(seeded.owner, { db: database, projects });
+	const suggestions = createSuggestionsCapability(seeded.owner, {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
 	const text = 'Use OAuth';
-	const note = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
+	const note = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
@@ -68,9 +75,14 @@ const setup = async (suffix: string) => {
 		to: text.length,
 		text
 	};
-	const runs = new AgentRunRecords(database);
-	const events = new AgentRunEventRecords(database);
-	const requests = new NoteActionRequests(runs, events, new ConversationRecords(database));
+	const runs = new AgentRunRecords(seeded.owner, database);
+	const events = new AgentRunEventRecords(seeded.owner, database);
+	const requests = new NoteActionRequests(
+		seeded.owner,
+		runs,
+		events,
+		new ConversationRecords(seeded.owner, database)
+	);
 	const settlements = new RunSettlements(runs, events);
 	const classifier = new InMemoryStructuredRelationshipClient();
 	classifier.result = {
@@ -79,12 +91,12 @@ const setup = async (suffix: string) => {
 		confidence: 95
 	};
 	const targetText = 'The team chose OAuth.';
-	const target = await storedNote(notes.catalog, seeded.owner, {
+	const target = await storedNote(notes.services.creator, seeded.owner, {
 		kind: 'note',
 		projectId: seeded.project.id,
 		title: 'Earlier decision'
 	});
-	const savedTarget = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
+	const savedTarget = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
 		...target,
 		plainText: targetText,
 		document: {
@@ -93,8 +105,8 @@ const setup = async (suffix: string) => {
 		}
 	});
 	const vector = Array.from({ length: 3072 }, (_, index) => (index === 0 ? 1 : 0));
-	const index = new KnowledgeIndexRecords(database);
-	await index.replaceForNote(seeded.owner, target.id, [
+	const index = new KnowledgeIndexRecords(seeded.owner, database);
+	await index.replaceForNote(target.id, [
 		searchDocumentBuilder({
 			noteId: target.id,
 			projectId: seeded.project.id,
@@ -104,39 +116,41 @@ const setup = async (suffix: string) => {
 			embeddingModel: 'contract-model'
 		})
 	]);
-	const embeddings = new InMemoryEmbeddingClient();
+	const embeddings = new InMemoryRetrievalProvider();
 	embeddings.model = 'contract-model';
 	embeddings.vectorsByContent.set(text, vector);
 	const dependencies: RelationshipsDependencies = {
+		...agentToolResultsFixture(),
 		transactionRunner,
 		noteActionRequests: requests,
-		knowledgeLookup: new KnowledgeLookup(index),
-		embeddings,
-		reranker: new InMemoryReranker(),
+		knowledge: createTestContentIndex(index, 'contract-model', undefined, false, embeddings),
 		relationshipClassifier: new RelationshipDiscovery(classifier),
 		relationshipRules: new RelationshipRules(),
 		relationshipGeneration: { kind: 'model', model: 'test/model' },
 		runSettlements: settlements,
-		runEvents: { notify: () => {} },
+		runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs),
 		selectionOrigins: notes.selectionOrigins,
-		suggestionCreator: suggestions.inbox
+		suggestionCreator: suggestions.creator
 	};
-	const agent = new Agent(
-		capabilityDependencies<AgentDependencies>({
+	const agent = new AgentSdkHarness(
+		seeded.owner,
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<AgentHarnessDependencies>({
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
-			decisions: new AgentRunDecisionRecords(database),
+			decisions: new AgentRunDecisionRecords(seeded.owner, database),
 			settlements,
 			transactionRunner,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
-	const controller = new Relationships(dependencies);
+	const controller = new Relationships(new RelationshipCandidatesService(), dependencies);
 	const input = { requestId: crypto.randomUUID(), selection };
 	const prepare = () =>
 		transactionRunner.run(() =>
-			requests.prepare(seeded.owner, {
+			requests.prepare({
 				requestId: input.requestId,
 				context: {
 					kind: 'related_notes',
@@ -147,8 +161,8 @@ const setup = async (suffix: string) => {
 		);
 	const finished = async (runId: AgentRunId) => {
 		await vi.waitFor(async () => {
-			const run = await runs.findById(seeded.owner, runId);
-			if (!run || !isTerminalAgentRunStatus(run.status)) throw new Error('Run has not settled');
+			const run = await runs.findById(runId);
+			if (!run || !runStatus.isTerminal(run.status)) throw new Error('Run has not settled');
 		});
 	};
 	return {
@@ -170,8 +184,8 @@ const setup = async (suffix: string) => {
 it('commits one related-note search for simultaneous duplicate submissions on separate connections', async () => {
 	const state = await setup('13001');
 	const [first, second] = await Promise.all([
-		state.controller.startSuggestFromSelection(state.owner, state.input),
-		state.controller.startSuggestFromSelection(state.owner, state.input)
+		state.controller.startSuggestFromSelection(state.input),
+		state.controller.startSuggestFromSelection(state.input)
 	]);
 	await state.finished(first.runId);
 	const [counts] =
@@ -187,10 +201,10 @@ it('keeps the database free of proposals when cancellation beats the classifier 
 	const receipt = await state.prepare();
 	const gate = Promise.withResolvers<void>();
 	state.classifier.completion = gate.promise;
-	const execution = state.controller.executeRelatedNoteRun(state.owner, receipt.runId);
+	const execution = state.controller.executeRelatedNoteRun(receipt.runId);
 	try {
 		await state.classifier.started.promise;
-		await state.agent.cancel(state.owner, receipt.runId);
+		await state.agent.cancel(receipt.runId);
 	} finally {
 		gate.resolve();
 	}
@@ -198,7 +212,7 @@ it('keeps the database free of proposals when cancellation beats the classifier 
 	const [counts] =
 		await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 	expect({
-		status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+		status: (await state.runs.findById(receipt.runId))?.status,
 		counts
 	}).toEqual({ status: 'cancelled', counts: { suggestions: 0, anchors: 0 } });
 });
@@ -208,13 +222,13 @@ it('rolls back backlink proposals and anchors when the result event fails', asyn
 	const receipt = await state.prepare();
 	await context.client`alter table agent_run_events add constraint related_result_failure check (not (event->>'type' = 'workflow_result' and event->>'action' = 'relate')) not valid`;
 	try {
-		await state.controller.executeRelatedNoteRun(state.owner, receipt.runId);
+		await state.controller.executeRelatedNoteRun(receipt.runId);
 		const [counts] =
 			await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 		expect({
-			status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+			status: (await state.runs.findById(receipt.runId))?.status,
 			counts,
-			events: (await state.events.replay(state.owner, receipt.runId, '0')).map((record) =>
+			events: (await state.events.replay(receipt.runId, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			)
 		}).toEqual({
@@ -230,10 +244,13 @@ it('rolls back backlink proposals and anchors when the result event fails', asyn
 it('reconstructs a queued related-note search after its submitting controller has been discarded', async () => {
 	const state = await setup('13004');
 	const receipt = await state.prepare();
-	await new Relationships(state.dependencies).recoverQueuedRelatedNoteRuns();
+	await new Relationships(
+		new RelationshipCandidatesService(),
+		state.dependencies
+	).resumeQueuedRelatedNoteRun(receipt.runId);
 	await state.finished(receipt.runId);
 	expect(
-		(await state.events.replay(state.owner, receipt.runId, '0')).flatMap((record) =>
+		(await state.events.replay(receipt.runId, '0')).flatMap((record) =>
 			record.kind === 'readable' && record.event.type === 'workflow_result'
 				? [record.event.action]
 				: []

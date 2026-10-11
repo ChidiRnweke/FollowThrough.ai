@@ -3,10 +3,10 @@
 	// saved, rising while it saves, falling while it downloads, dropped out when offline. A
 	// problem turns the line and dot into an exclamation mark; colour it at the call site.
 	import type { SVGAttributes } from 'svelte/elements';
-	import type { syncIndicator } from '$lib/services/sync/indicator';
+	import type { SyncIndicatorKind } from '$lib/models/sync';
 	import Glyph from './glyph.svelte';
 
-	type SyncState = ReturnType<typeof syncIndicator>['kind'];
+	type SyncState = SyncIndicatorKind;
 
 	let { state, ...props }: SVGAttributes<SVGSVGElement> & { state: SyncState } = $props();
 

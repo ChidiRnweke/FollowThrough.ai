@@ -1,15 +1,10 @@
 import { z } from 'zod';
 export type AgentRunExecutionOutcome = 'completed' | 'awaiting_approval' | 'cancelled';
 import type { PersistedSessionItem } from './session-item';
+import { TOOL_DESCRIPTIONS, type AgentToolName, type ToolName } from './tool-catalog';
 import {
-	AGENT_TOOL_NAME_VALUES,
-	TOOL_NAME_VALUES,
-	type AgentToolName,
-	type ToolName
-} from './tool-catalog';
-import {
-	readAgentPayload,
-	readAgentPayloadObject,
+	agentPayloadSchema,
+	agentPayloadObjectSchema,
 	type AgentPayload,
 	type AgentPayloadObject
 } from './payload';
@@ -239,6 +234,15 @@ export type AgentExecutionMode = 'approval_required' | 'auto_accept';
 export type AgentRunStatus =
 	'queued' | 'running' | 'awaiting_approval' | 'cancelling' | 'completed' | 'failed' | 'cancelled';
 
+/** A run that startup recovery acts on, with the account it acts for. */
+export interface OwnedRun {
+	readonly owner: { readonly userId: UserId };
+	readonly runId: AgentRunId;
+}
+export interface InterruptedRun extends OwnedRun {
+	readonly status: AgentRunStatus;
+}
+
 /**
  * Which provider fulfils the agent's web searches. Declared here rather than in
  * the server's web-research module because the settings picker renders the list
@@ -281,13 +285,6 @@ export const CHAT_WEB_SEARCH_DEFAULTS: WebResearchSettings = {
 
 export const DEFAULT_AGENT_MAX_TURNS = 20;
 
-/** Construct the canonical identifier spelling without selecting a model or consulting a catalog. */
-export const normalizeLanguageModelId = (modelId: string): string => {
-	const separator = modelId.indexOf(':');
-	if (separator <= 0 || modelId.includes('/')) return modelId;
-	return `${modelId.slice(0, separator)}/${modelId.slice(separator + 1)}`;
-};
-
 export const REFERENCE_WEB_SEARCH_DEFAULTS: WebResearchSettings = {
 	engine: 'exa',
 	maxResults: 8,
@@ -302,15 +299,6 @@ export interface WebResearchTool {
 		readonly max_total_results: number;
 	};
 }
-
-export const openRouterWebSearchTool = (options: WebResearchSettings): WebResearchTool => ({
-	type: 'openrouter:web_search',
-	parameters: {
-		engine: options.engine,
-		max_results: options.maxResults,
-		max_total_results: options.maxTotalResults
-	}
-});
 
 /**
  * The user's agent defaults. Every optional field is absent rather than null
@@ -844,7 +832,7 @@ export type InlineSuggestion =
 			readonly grounding: InlineSuggestionGrounding;
 	  }
 	| { readonly outcome: 'no_suggestion'; readonly reason: 'ineligible' | 'empty_model' }
-	| { readonly outcome: 'busy' | 'rate_limited'; readonly retryAfterMs: number };
+	| { readonly outcome: 'rate_limited'; readonly retryAfterMs: number };
 
 export const inlineSuggestionSchema = z.discriminatedUnion('outcome', [
 	z
@@ -868,7 +856,7 @@ export const inlineSuggestionSchema = z.discriminatedUnion('outcome', [
 		.strict(),
 	z
 		.object({
-			outcome: z.enum(['busy', 'rate_limited']),
+			outcome: z.literal('rate_limited'),
 			retryAfterMs: z.number().int().nonnegative()
 		})
 		.strict()
@@ -1076,38 +1064,13 @@ export type StoredAgentEvent =
 	| { readonly kind: 'readable'; readonly event: AgentEvent }
 	| { readonly kind: 'unreadable'; readonly reason: string };
 
-/**
- * The JSON a tool call carried, read with {@link readAgentPayload} rather than a
- * zod schema. `z.record` accepts a `Date` — which has no enumerable keys — and
- * parses it clean to `{}`, which is the silent wrong answer this whole exercise
- * removes, so the value reaches the hand-written reader untouched.
- */
-const eventPayloadSchema = z
-	.custom<unknown>(() => true)
-	.transform((value, context) => {
-		const read = readAgentPayload(value);
-		if (read.kind === 'corrupt') {
-			context.addIssue({ code: 'custom', message: read.message });
-			return z.NEVER;
-		}
-		return read.value;
-	});
-
-const eventPayloadObjectSchema = z
-	.custom<unknown>(() => true)
-	.transform((value, context) => {
-		const read = readAgentPayloadObject(value);
-		if (read.kind === 'corrupt') {
-			context.addIssue({ code: 'custom', message: read.message });
-			return z.NEVER;
-		}
-		return read.value;
-	});
+const eventPayloadSchema = agentPayloadSchema;
+const eventPayloadObjectSchema = agentPayloadObjectSchema;
 
 const runIdSchema = z.string().transform((value) => value as AgentRunId);
 
 /** A catalog tool name. `search_tools` is not one; see {@link agentToolNameSchema}. */
-const toolNameSchema = z.enum(TOOL_NAME_VALUES);
+export const toolNameSchema = z.enum(TOOL_DESCRIPTIONS.map((entry) => entry.name));
 
 /**
  * Every name the agent surface can produce, catalog or not.
@@ -1117,7 +1080,12 @@ const toolNameSchema = z.enum(TOOL_NAME_VALUES);
  * `tests/corpus/`, the only name outside the catalog is `search_tools`, which
  * `AgentTools.agentTools()` assembles rather than defines.
  */
-export const agentToolNameSchema = z.enum(AGENT_TOOL_NAME_VALUES);
+export const agentToolNameSchema = z.union([
+	toolNameSchema,
+	z.literal('search_tools'),
+	z.literal('submit_mermaid_diagram'),
+	z.literal('submit_drawio_diagram')
+]);
 
 export const pendingDecisionIdentitySchema = z.object({ callId: z.string() });
 
@@ -1342,7 +1310,7 @@ export interface ProviderToolCall {
 
 /**
  * The value a tool returned, taken out of the item without validation so
- * {@link readAgentPayload} can classify it.
+ * {@link agentPayloadResultSchema} can classify it.
  *
  * A `z.record`-shaped JSON schema accepts a `Date` — which has no enumerable
  * keys — and parses it to `{}`. That is the silent wrong answer `payload.ts` is
@@ -2081,6 +2049,50 @@ export interface RunSettlementPlan {
 export type RunSettlementClaim =
 	| { readonly kind: 'claimed'; readonly run: AgentRun; readonly events: readonly AgentEvent[] }
 	| { readonly kind: 'lost' };
+
+/** Provider metadata consumed when presenting the available model catalog. */
+export interface AgentCatalogMetadata {
+	readonly id: string;
+	readonly name: string;
+	readonly contextLength?: number | null;
+	readonly supportedParameters: readonly string[];
+	readonly architecture?: { readonly inputModalities: readonly string[] } | null;
+}
+
+export type InlineSuggestionAdmission =
+	| { readonly allowed: true }
+	| {
+			readonly allowed: false;
+			readonly reason: 'rate_limited';
+			readonly retryAfterMs: number;
+	  };
+
+/** Whether a user's completion budget had room, and when its oldest counted attempt was made. */
+export type InlineBudgetReservation =
+	{ readonly kind: 'reserved' } | { readonly kind: 'exhausted'; readonly oldest: DateTime };
+
+export type LanguageModelId = string & { readonly __brand: 'LanguageModelId' };
+
+/** Construct the canonical identifier spelling without selecting a model or consulting a catalog. */
+export const normalizeLanguageModelId = (modelId: string): LanguageModelId => {
+	const separator = modelId.indexOf(':');
+	if (separator <= 0 || modelId.includes('/')) return modelId as LanguageModelId;
+	return `${modelId.slice(0, separator)}/${modelId.slice(separator + 1)}` as LanguageModelId;
+};
+
+/** A provider tool result after its structured failure envelope has been read. */
+export type AgentToolOutcome =
+	| Exclude<ProviderToolOutput, { readonly kind: 'value' }>
+	| { readonly kind: 'succeeded'; readonly value: AgentPayload }
+	| { readonly kind: 'reported_failure'; readonly value: AgentPayload; readonly failure: string }
+	/** A value claiming the failure kind that does not match the envelope: still a failure. */
+	| { readonly kind: 'unreadable_failure'; readonly message: string };
+
+/** Prepared autocomplete messages, with no provider protocol or executable rules. */
+export interface InlineCompletionPrompt {
+	readonly system: string;
+	readonly user: string;
+}
 
 /**
  * What identifies a rejected provider request, read off the provider client's error: the

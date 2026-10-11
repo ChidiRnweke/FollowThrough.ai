@@ -1,7 +1,9 @@
 import { todoBuilder, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import type { Todo, TodoView } from '$lib/models/todos';
-import { boardExportSlug, boardMarkdown } from './board-export';
+import { TodoBoardExportService } from './board-export';
+import type { BoardMarkdownOptions } from '$lib/models/todos';
+const board = new TodoBoardExportService();
 
 const generatedAt = new Date(2026, 7, 3); // 3 Aug 2026, local time
 
@@ -9,10 +11,8 @@ const view = (overrides: Partial<Todo> = {}): TodoView => ({
 	todo: todoBuilder({ title: 'Send the design', ...overrides })
 });
 
-const exportBoard = (
-	todos: readonly TodoView[],
-	opts: Partial<Parameters<typeof boardMarkdown>[1]> = {}
-) => boardMarkdown(todos, { title: 'Todos', generatedAt, ...opts });
+const exportBoard = (todos: readonly TodoView[], opts: Partial<BoardMarkdownOptions> = {}) =>
+	board.prepare(todos, { title: 'Todos', generatedAt, ...opts }, 'all', 'md').markdown;
 
 const sections = (markdown: string) => markdown.match(/^## .*$/gm);
 
@@ -95,10 +95,14 @@ describe('Kanban board Markdown export', () => {
 
 describe('Board export filename slug', () => {
 	it('slugifies a project name', () => {
-		expect(boardExportSlug('Apollo 11 Redesign')).toBe('apollo-11-redesign');
+		expect(
+			board.prepare([], { title: 'Todos', generatedAt }, 'Apollo 11 Redesign', 'pdf').filename
+		).toBe('kanban-apollo-11-redesign-2026-08-03.pdf');
 	});
 
 	it('falls back to a generic slug for an empty name', () => {
-		expect(boardExportSlug('!!!')).toBe('board');
+		expect(board.prepare([], { title: 'Todos', generatedAt }, '!!!', 'md').filename).toBe(
+			'kanban-board-2026-08-03.md'
+		);
 	});
 });

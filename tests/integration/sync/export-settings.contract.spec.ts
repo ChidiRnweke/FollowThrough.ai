@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import {
 	Deliverables,
@@ -7,22 +6,30 @@ import {
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';
-import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
-import { InMemoryArtifactRepository } from '$lib/testing/attachments/fakes/in-memory-deliverables';
+import { ArtifactSettingsService } from '$lib/server/services/deliverables/artifacts';
+import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { describe, expect, it } from 'vitest';
 import { actor, context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
+	const actor = seeded.owner;
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database });
-	const settings = new ExportSettingsRecords(database);
-	const artifacts = new ArtifactLibrary(new InMemoryArtifactRepository(), settings);
+	const sync = createSyncCapability(actor, { db: database });
+	const settings = new ExportSettingsRecords(actor, database);
+	const artifacts = new ArtifactSettingsService(settings);
 	const controller = new Deliverables(
+		actor,
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
+			...agentToolResultsFixture(),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			transactionRunner,
+			exportSettingsRules: new ExportSettingsRuleService(),
 			exportSettingsWriter: artifacts
 		})
 	);
@@ -43,14 +50,14 @@ describe('guarded export default writes', () => {
 				settings: selected
 			}
 		};
-		await controller.synchronize(owner, input);
-		await controller.synchronize(owner, input);
-		expect(await settings.find(owner, project.id)).toEqual(selected);
+		await controller.synchronize(input);
+		await controller.synchronize(input);
+		expect(await settings.find(project.id)).toEqual(selected);
 	});
 	it('preserves another client’s override when an absent-base form is submitted late', async () => {
 		const { owner, project, controller, settings } = await setup('9392');
-		await settings.upsert(owner, project.id, { ...defaultExportSettings, fontSize: 16 });
-		const result = await controller.synchronize(owner, {
+		await settings.upsert(project.id, { ...defaultExportSettings, fontSize: 16 });
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: null,
 			command: {
@@ -60,7 +67,7 @@ describe('guarded export default writes', () => {
 				settings: defaultExportSettings
 			}
 		});
-		expect({ kind: result.kind, settings: await settings.find(owner, project.id) }).toEqual({
+		expect({ kind: result.kind, settings: await settings.find(project.id) }).toEqual({
 			kind: 'conflict',
 			settings: { ...defaultExportSettings, fontSize: 16 }
 		});
@@ -68,7 +75,7 @@ describe('guarded export default writes', () => {
 	it('rejects writes to a project owned by another account', async () => {
 		const { project, controller } = await setup('9393');
 		const outsider = actor('9394');
-		const result = await controller.synchronize(outsider, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: null,
 			command: {

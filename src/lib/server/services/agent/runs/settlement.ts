@@ -27,7 +27,7 @@ export class RunSettlements implements RunSettlement {
 		claim: Extract<RunSettlementClaim, { kind: 'claimed' }>
 	): Promise<RunSettlementResult> {
 		for (const event of claim.events) await this.events.append(claim.run.id, 1, event);
-		const run = await this.runs.findById({ userId: claim.run.userId }, claim.run.id);
+		const run = await this.runs.findById(claim.run.id);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return { kind: 'settled', run };
 	}

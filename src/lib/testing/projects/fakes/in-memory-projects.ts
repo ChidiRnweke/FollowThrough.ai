@@ -16,7 +16,7 @@ import type {
 	ProjectLister,
 	ProjectReader,
 	ProjectTreeReader
-} from '$lib/server/services/projects/contracts';
+} from '$lib/server/services/projects/catalog';
 import {
 	projectBuilder,
 	testNow,
@@ -32,16 +32,17 @@ export class InMemoryProjects
 		ProjectTreeReader,
 		ProjectTreeWriter
 {
+	constructor(private readonly actor: ActorContext) {}
 	projects: Project[] = [];
 	entries: Note[] = [];
 	private nextProject = 100;
 
-	async create(actor: ActorContext, input: CreateProjectInput & ProjectDetails): Promise<Project> {
+	async create(input: CreateProjectInput & ProjectDetails): Promise<Project> {
 		const name = input.name;
 		if (
 			this.projects.some(
 				(project) =>
-					project.userId === actor.userId &&
+					project.userId === this.actor.userId &&
 					!project.archivedAt &&
 					project.name.toLowerCase() === name.toLowerCase()
 			)
@@ -49,7 +50,7 @@ export class InMemoryProjects
 			throw new ConflictError('An active project with this name already exists');
 		const project = projectBuilder({
 			id: input.id ?? testProjectId(this.nextProject++),
-			userId: actor.userId,
+			userId: this.actor.userId,
 			name,
 			description: input.description
 		});
@@ -57,22 +58,22 @@ export class InMemoryProjects
 		return project;
 	}
 
-	async get(actor: ActorContext, projectId: ProjectId): Promise<Project> {
+	async get(projectId: ProjectId): Promise<Project> {
 		const project = this.projects.find(
-			(candidate) => candidate.id === projectId && candidate.userId === actor.userId
+			(candidate) => candidate.id === projectId && candidate.userId === this.actor.userId
 		);
 		if (!project) throw new NotFoundError('Project was not found');
 		return project;
 	}
 
-	async list(actor: ActorContext): Promise<readonly Project[]> {
+	async list(): Promise<readonly Project[]> {
 		return this.projects
-			.filter((project) => project.userId === actor.userId && !project.archivedAt)
+			.filter((project) => project.userId === this.actor.userId && !project.archivedAt)
 			.sort((a, b) => a.name.localeCompare(b.name));
 	}
 
-	async rename(actor: ActorContext, input: ProjectRename): Promise<Project> {
-		const current = await this.get(actor, input.projectId);
+	async rename(input: ProjectRename): Promise<Project> {
+		const current = await this.get(input.projectId);
 		const name = input.name;
 		const updated: Project = {
 			...current,
@@ -84,18 +85,15 @@ export class InMemoryProjects
 		return updated;
 	}
 
-	async archive(actor: ActorContext, projectId: ProjectId): Promise<Project> {
-		const current = await this.get(actor, projectId);
+	async archive(projectId: ProjectId): Promise<Project> {
+		const current = await this.get(projectId);
 		const updated = { ...current, archivedAt: testNow, updatedAt: testNow };
 		this.replaceProject(updated);
 		return updated;
 	}
 
-	async setSectionNumberingDefault(
-		actor: ActorContext,
-		input: SetProjectSectionNumberingInput
-	): Promise<Project> {
-		const current = await this.get(actor, input.projectId);
+	async setSectionNumberingDefault(input: SetProjectSectionNumberingInput): Promise<Project> {
+		const current = await this.get(input.projectId);
 		const updated: Project = {
 			...current,
 			sectionNumberingDefault: input.enabled,
@@ -105,28 +103,27 @@ export class InMemoryProjects
 		return updated;
 	}
 
-	async readEntries(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]> {
-		await this.get(actor, projectId);
+	async readEntries(projectId: ProjectId): Promise<readonly Note[]> {
+		await this.get(projectId);
 		const entries = this.entries
 			.filter(
 				(entry) =>
-					entry.userId === actor.userId && entry.projectId === projectId && !entry.archivedAt
+					entry.userId === this.actor.userId && entry.projectId === projectId && !entry.archivedAt
 			)
 			.sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt));
 		return entries;
 	}
 
-	readForMove(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]> {
-		return this.readEntries(actor, projectId);
+	readForMove(projectId: ProjectId): Promise<readonly Note[]> {
+		return this.readEntries(projectId);
 	}
 
 	async persistOrder(
-		actor: ActorContext,
 		entries: readonly { id: NoteId; parentId: NoteId | undefined; position: number }[]
 	): Promise<void> {
 		const changes = new Map(entries.map((entry) => [entry.id, entry]));
 		this.entries = this.entries.map((entry) => {
-			const change = entry.userId === actor.userId ? changes.get(entry.id) : undefined;
+			const change = entry.userId === this.actor.userId ? changes.get(entry.id) : undefined;
 			return change ? { ...entry, ...change } : entry;
 		});
 	}

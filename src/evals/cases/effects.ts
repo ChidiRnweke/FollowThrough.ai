@@ -287,7 +287,7 @@ export const effectCases: readonly EvalCase[] = [
 			const workspace = await seedWorkspace(lab, personaWorkspace);
 			const noteId = workspace.noteIds.get('Background');
 			if (!noteId) throw new Error('Background note was not seeded');
-			const before = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const before = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const beforeBody = before.note.plainText.toLowerCase();
 
 			const result = await runCase(lab, workspace.actor, {
@@ -297,7 +297,7 @@ export const effectCases: readonly EvalCase[] = [
 			});
 
 			// Read back the note and check the body changed to include the new content.
-			const noteView = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const noteView = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const body = noteView.note.plainText.toLowerCase();
 			const existingParagraphs = beforeBody
 				.split('\n')
@@ -346,7 +346,7 @@ export const effectCases: readonly EvalCase[] = [
 			const noteId = workspace.noteIds.get('Background');
 			if (!noteId) throw new Error('Background note was not seeded');
 
-			const before = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const before = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const beforeLines = before.note.plainText
 				.split('\n')
 				.map((line) => line.trim())
@@ -358,7 +358,7 @@ export const effectCases: readonly EvalCase[] = [
 				noteId
 			});
 
-			const after = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const after = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const afterText = after.note.plainText;
 			// Every line the edit did not target must survive verbatim. A full rewrite
 			// tends to paraphrase or drop them, which is exactly what this catches.

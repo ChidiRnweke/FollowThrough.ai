@@ -1,11 +1,12 @@
+import { WidgetSearchService } from '$lib/services/widgets/search-text';
+const widgetSearch = new WidgetSearchService();
 import { describe, expect, it } from 'vitest';
 import { widgetTemplates } from '$lib/models/widgets';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
-import { widgetSearchText } from './search-text';
 
 describe('widget search text', () => {
 	it('holds the title and the words the checklist shows', () => {
-		expect(widgetSearchText(widgetBuilder())).toBe(
+		expect(widgetSearch.text(widgetBuilder())).toBe(
 			['Checklist', 'New item', 'Add a step', 'First step', 'Second step', 'Third step'].join('\n')
 		);
 	});
@@ -16,10 +17,10 @@ describe('widget search text', () => {
 				items: widgetTemplates.checklist.data.items.map((item) => ({ ...item, done: true }))
 			}
 		});
-		expect(widgetSearchText(ticked)).toBe(widgetSearchText(widgetBuilder()));
+		expect(widgetSearch.text(ticked)).toBe(widgetSearch.text(widgetBuilder()));
 	});
 	it('includes table column labels and select option labels', () => {
-		const status = widgetSearchText(
+		const status = widgetSearch.text(
 			widgetBuilder({ layout: widgetTemplates.status.layout, data: widgetTemplates.status.data })
 		);
 		expect(status.includes('Needs attention') && status.includes('At risk')).toBe(true);

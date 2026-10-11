@@ -14,8 +14,8 @@ import { skillController } from './edit-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const note = await replaceNoteFixture({ ...seeded.note, kind: 'skill' });
-	const records = new SkillRecords(context.db);
-	await records.insert(seeded.owner, {
+	const records = new SkillRecords(seeded.owner, context.db);
+	await records.insert({
 		note,
 		slug: `skill-${suffix}`,
 		description: 'Release guidance',
@@ -31,28 +31,28 @@ const setup = async (suffix: string) => {
 		note,
 		records,
 		provenance,
-		controller: skillController(tx.database, tx.transactionRunner)
+		controller: skillController(seeded.owner, tx.database, tx.transactionRunner)
 	};
 };
 
 it('records an agent load with context in another owned project and leaves read-only views uncounted', async () => {
 	const { owner, note, provenance, controller, records } = await setup('20301');
 	const other = await seedNote('20302', owner);
-	const result = await controller.loadForAgent(owner, {
+	const result = await controller.use({
 		noteId: note.id,
 		provenanceId: provenance.id,
 		contextNoteId: other.note.id
 	});
-	await controller.get(owner, { noteId: note.id });
+	await controller.get({ noteId: note.id });
 	expect({
-		stored: (await records.listUsages(owner, note.id)).map(
+		stored: (await records.listUsages(note.id)).map(
 			({ skillNoteId, contextNoteId, provenanceId }) => ({
 				skillNoteId,
 				contextNoteId,
 				provenanceId
 			})
 		),
-		context: result.usages.map((view) => view.contextNote)
+		context: result.view.usages.map((view) => view.contextNote)
 	}).toEqual({
 		stored: [{ skillNoteId: note.id, contextNoteId: other.note.id, provenanceId: provenance.id }],
 		context: [{ id: other.note.id, title: other.note.title }]
@@ -60,13 +60,13 @@ it('records an agent load with context in another owned project and leaves read-
 });
 
 it('records a context-free agent load with its provenance', async () => {
-	const { owner, note, provenance, controller } = await setup('20303');
-	const result = await controller.loadForAgent(owner, {
+	const { note, provenance, controller } = await setup('20303');
+	const result = await controller.use({
 		noteId: note.id,
 		provenanceId: provenance.id
 	});
 	expect(
-		result.usages.map(({ usage, contextNote }) => ({
+		result.view.usages.map(({ usage, contextNote }) => ({
 			context: usage.contextNoteId,
 			provenance: usage.provenanceId,
 			contextNote
@@ -80,11 +80,11 @@ it.each([
 ])(
 	'rejects another actor’s $resource without recording usage',
 	async ({ resource, suffix, foreign }) => {
-		const { owner, note, provenance, controller, records } = await setup(suffix);
+		const { note, provenance, controller, records } = await setup(suffix);
 		const other = await seedNote(foreign, actor(foreign));
 		const foreignProvenance = await seedProvenance(other.owner, foreign);
 		const result = await controller
-			.loadForAgent(owner, {
+			.use({
 				noteId: note.id,
 				provenanceId: resource === 'provenance' ? foreignProvenance.id : provenance.id,
 				contextNoteId: resource === 'context' ? other.note.id : undefined
@@ -93,7 +93,7 @@ it.each([
 				() => ({ kind: 'success' as const }),
 				(error: Error) => ({ kind: 'failure' as const, error })
 			);
-		expect({ result, usages: await records.listUsages(owner, note.id) }).toMatchObject({
+		expect({ result, usages: await records.listUsages(note.id) }).toMatchObject({
 			result: { kind: 'failure', error: { code: 'NOT_FOUND' } },
 			usages: []
 		});
@@ -101,18 +101,16 @@ it.each([
 );
 
 it('hides an archived skill from discovery and refuses to count it as loaded', async () => {
-	const { owner, note, provenance, controller, records } = await setup('20308');
+	const { note, provenance, controller, records } = await setup('20308');
 	await replaceNoteFixture({ ...note, archivedAt: now });
-	const result = await controller
-		.loadForAgent(owner, { noteId: note.id, provenanceId: provenance.id })
-		.then(
-			() => ({ kind: 'success' as const }),
-			(error: Error) => ({ kind: 'failure' as const, error })
-		);
+	const result = await controller.use({ noteId: note.id, provenanceId: provenance.id }).then(
+		() => ({ kind: 'success' as const }),
+		(error: Error) => ({ kind: 'failure' as const, error })
+	);
 	expect({
 		result,
-		catalog: await records.listAll(owner),
-		usages: await records.listUsages(owner, note.id)
+		catalog: await records.listAll(),
+		usages: await records.listUsages(note.id)
 	}).toMatchObject({
 		result: { kind: 'failure', error: { code: 'NOT_FOUND' } },
 		catalog: [],

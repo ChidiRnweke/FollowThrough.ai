@@ -1,73 +1,87 @@
-import { afterAll, expect, it } from 'vitest';
+import type { ActorContext } from '$lib/models/identity';
+import type { NoteId } from '$lib/models/notes';
 import { syncCursorSchema } from '$lib/models/sync';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import * as schema from '$lib/server/db/schema';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createSkillsCapability } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import {
 	Workspace,
 	type WorkspaceDependencies
 } from '$lib/server/controllers/workspace/controller';
+import * as schema from '$lib/server/db/schema';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createSkillsCapability } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
+import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { TodayPresentationService } from '$lib/services/workspace/today';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { seedUser, context, now } from '../database-harness';
-import type { NoteId } from '$lib/models/notes';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { afterAll, expect, it } from 'vitest';
+import { context, now, seedUser } from '../database-harness';
 
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
 	await Promise.all(clients.map((client) => client.end()));
 });
 
-const setup = () => {
+const setup = (actor: ActorContext) => {
 	const client = postgres(context.url, { max: 3 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const projects = new ProjectRecords(database);
-	const notes = new NoteRecords(database);
-	const capability = createSkillsCapability({
+	const synchronization = createSyncCapability(actor, { db: database });
+	const projects = new ProjectRecords(actor, database);
+	const notes = new NoteRecords(actor, database);
+	const capability = createSkillsCapability(actor, {
 		db: database,
 		projects,
 		notes,
-		provenance: new ProvenanceRecords(database)
+		provenance: new ProvenanceRecords(actor, database)
 	});
 	const dependencies = {
 		transactionRunner,
 		builtInSkills: capability.builtIns,
-		skillFinder: capability.library
+		skillFinder: capability.services.finder
 	};
 	return {
 		projects,
 		notes,
-		skills: new Skills(capabilityDependencies<SkillsDependencies>(dependencies)),
+		skills: new Skills(
+			new WorkspaceCommandRulesService(),
+			capabilityDependencies<SkillsDependencies>(dependencies)
+		),
 		workspace: new Workspace(
+			new TodayPresentationService(),
 			capabilityDependencies<WorkspaceDependencies>({
+				...agentToolResultsFixture(),
+				todoPresentation: new TodoPresentationService(),
+				memoryPresentation: new MemoryPresentationService(),
 				...dependencies,
-				syncChanges: new WorkspaceSyncChanges(database)
+				syncChanges: synchronization.changes,
+				resourceVersions: synchronization.resourceVersions,
+				resourceKeys: synchronization.resourceKeys
 			})
 		)
 	};
 };
 
 it('returns one complete built-in installation to simultaneous first requests', async () => {
-	const state = setup();
 	const owner = await seedUser('811');
+	const state = setup(owner);
 	const results = await Promise.all([
-		state.skills.list(owner),
-		state.skills.list(owner),
-		state.skills.list(owner)
+		state.skills.list(),
+		state.skills.list(),
+		state.skills.list()
 	]);
-	const notes = await state.notes.listActive(owner);
-	const revisions = await Promise.all(
-		notes.map((note) => state.notes.listRevisions(owner, note.id))
-	);
+	const notes = await state.notes.listActive();
+	const revisions = await Promise.all(notes.map((note) => state.notes.listRevisions(note.id)));
 	expect({
 		catalogs: results.map((result) => result.skills.map((skill) => skill.name)),
-		projects: (await state.projects.listActive(owner)).map((project) => project.role),
+		projects: (await state.projects.listActive()).map((project) => project.role),
 		notes: notes.length,
 		revisions: revisions.map((history) => history.length)
 	}).toEqual({
@@ -79,11 +93,8 @@ it('returns one complete built-in installation to simultaneous first requests', 
 });
 
 it('includes built-in skills and their Inbox in the first browser synchronization page', async () => {
-	const state = setup();
-	const page = await state.workspace.pullChangePage(
-		await seedUser('812'),
-		syncCursorSchema.parse('0')
-	);
+	const state = setup(await seedUser('812'));
+	const page = await state.workspace.pullChangePage(syncCursorSchema.parse('0'));
 	const records = page.records.flatMap((record) =>
 		record.resource.kind === 'found' ? [record.resource.snapshot.value] : []
 	);
@@ -96,13 +107,11 @@ it('includes built-in skills and their Inbox in the first browser synchronizatio
 });
 
 it('provisions one replacement Inbox after archive without moving ordinary content', async () => {
-	const state = setup();
 	const owner = await seedUser('19801');
-	const initial = await state.skills.list(owner);
-	const previous = (await state.projects.listActive(owner)).find(
-		(project) => project.role === 'inbox'
-	)!;
-	const ordinary = await state.notes.insert(owner, {
+	const state = setup(owner);
+	const initial = await state.skills.list();
+	const previous = (await state.projects.listActive()).find((project) => project.role === 'inbox')!;
+	const ordinary = await state.notes.insert({
 		id: crypto.randomUUID() as NoteId,
 		userId: owner.userId,
 		projectId: previous.id,
@@ -117,9 +126,9 @@ it('provisions one replacement Inbox after archive without moving ordinary conte
 		createdAt: now,
 		updatedAt: now
 	});
-	await state.projects.archive(owner, previous.id);
-	const results = await Promise.all([state.skills.list(owner), state.skills.list(owner)]);
-	const replacement = (await state.projects.listActive(owner)).find(
+	await state.projects.archive(previous.id);
+	const results = await Promise.all([state.skills.list(), state.skills.list()]);
+	const replacement = (await state.projects.listActive()).find(
 		(project) => project.role === 'inbox'
 	)!;
 	const [archived] = await context.client<{ archived: boolean }[]>`
@@ -128,16 +137,13 @@ it('provisions one replacement Inbox after archive without moving ordinary conte
 		select project_id as "projectId", archived_at is not null as archived from notes where id = ${ordinary.id}`;
 	expect({
 		replaced: replacement.id !== previous.id,
-		activeInboxes: (await state.projects.listActive(owner)).filter(
-			(project) => project.role === 'inbox'
-		).length,
+		activeInboxes: (await state.projects.listActive()).filter((project) => project.role === 'inbox')
+			.length,
 		catalogs: results.map((result) => result.skills.map((skill) => skill.noteId).sort()),
 		archived: archived?.archived,
 		ordinary: stored,
-		visibleOrdinary: await state.notes.findById(owner, ordinary.id),
-		builtInProjects: [
-			...new Set((await state.notes.listActive(owner)).map((note) => note.projectId))
-		]
+		visibleOrdinary: await state.notes.findById(ordinary.id),
+		builtInProjects: [...new Set((await state.notes.listActive()).map((note) => note.projectId))]
 	}).toEqual({
 		replaced: true,
 		activeInboxes: 1,
@@ -150,18 +156,16 @@ it('provisions one replacement Inbox after archive without moving ordinary conte
 });
 
 it('keeps an existing project named Inbox when choosing the replacement name', async () => {
-	const state = setup();
 	const owner = await seedUser('19802');
-	await state.skills.list(owner);
-	const previous = (await state.projects.listActive(owner)).find(
-		(project) => project.role === 'inbox'
-	)!;
-	await state.projects.update(owner, { projectId: previous.id, name: 'Old captures' });
-	const ordinary = await state.projects.insert(owner, { name: 'inbox', role: 'workspace' });
-	await state.projects.archive(owner, previous.id);
-	await state.skills.list(owner);
+	const state = setup(owner);
+	await state.skills.list();
+	const previous = (await state.projects.listActive()).find((project) => project.role === 'inbox')!;
+	await state.projects.update({ projectId: previous.id, name: 'Old captures' });
+	const ordinary = await state.projects.insert({ name: 'inbox', role: 'workspace' });
+	await state.projects.archive(previous.id);
+	await state.skills.list();
 	expect({
-		inbox: (await state.projects.listActive(owner)).find((project) => project.role === 'inbox'),
-		ordinary: await state.projects.findById(owner, ordinary.id)
+		inbox: (await state.projects.listActive()).find((project) => project.role === 'inbox'),
+		ordinary: await state.projects.findById(ordinary.id)
 	}).toMatchObject({ inbox: { name: 'Inbox (2)', role: 'inbox' }, ordinary });
 });

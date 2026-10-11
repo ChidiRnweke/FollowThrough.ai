@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { NamedModel } from '$lib/models/agent/model-label';
-import {
-	compactContextLength,
-	effectiveModel,
-	modelMatchesQuery,
-	modelMetaLine,
-	shortModelName
-} from './model-label';
+import { ModelPresentationService } from '$lib/services/agent/model-label';
+const { effectiveModel, modelMatchesQuery, modelMetaLine, shortModelName } =
+	new ModelPresentationService();
 
 const sonnet: NamedModel = {
 	id: 'anthropic/claude-sonnet-4.5',
@@ -63,21 +59,49 @@ describe('effectiveModel', () => {
 	});
 });
 
-describe('compactContextLength', () => {
+describe('context window presentation', () => {
 	it('says a million-token window in the unit a reader compares', () => {
-		expect(compactContextLength(1_048_576)).toBe('1M');
+		expect(
+			modelMetaLine({
+				...sonnet,
+				contextLength: 1_048_576,
+				supportsTools: true,
+				supportsVision: false
+			})
+		).toBe('anthropic · 1M context');
 	});
 
 	it('keeps one decimal where the difference between models is in it', () => {
-		expect(compactContextLength(1_500_000)).toBe('1.5M');
+		expect(
+			modelMetaLine({
+				...sonnet,
+				contextLength: 1_500_000,
+				supportsTools: true,
+				supportsVision: false
+			})
+		).toBe('anthropic · 1.5M context');
 	});
 
 	it('drops the decimal once the number is large enough not to need it', () => {
-		expect(compactContextLength(20_000_000)).toBe('20M');
+		expect(
+			modelMetaLine({
+				...sonnet,
+				contextLength: 20_000_000,
+				supportsTools: true,
+				supportsVision: false
+			})
+		).toBe('anthropic · 20M context');
 	});
 
 	it('reports a smaller window in thousands', () => {
-		expect(compactContextLength(128_000)).toBe('128K');
+		expect(
+			modelMetaLine({
+				...sonnet,
+				contextLength: 128_000,
+				supportsTools: true,
+				supportsVision: false
+			})
+		).toBe('anthropic · 128K context');
 	});
 });
 

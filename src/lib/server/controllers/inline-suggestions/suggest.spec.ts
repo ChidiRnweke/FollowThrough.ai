@@ -32,13 +32,13 @@ const signal = () => new AbortController().signal;
 
 describe('direct inline completion', () => {
 	it('returns nothing when the passage is too short', async () => {
-		expect(await setup().controller.suggest(actor, request({ prefix: 'Hi' }), signal())).toEqual({
+		expect(await setup().controller.suggest(request({ prefix: 'Hi' }), signal())).toEqual({
 			outcome: 'no_suggestion',
 			reason: 'ineligible'
 		});
 	});
 	it('returns completion text when project retrieval is empty', async () => {
-		expect(await setup().controller.suggest(actor, request(), signal())).toEqual({
+		expect(await setup().controller.suggest(request(), signal())).toEqual({
 			outcome: 'suggested',
 			text: ' window.',
 			grounding: { currentNote: true, userMemoryCount: 0, projectPassageCount: 0 }
@@ -52,7 +52,7 @@ describe('direct inline completion', () => {
 				document: searchDocumentBuilder({ content: 'Ana owns the cutover.' })
 			}
 		];
-		expect(await fixture.controller.suggest(actor, request(), signal())).toMatchObject({
+		expect(await fixture.controller.suggest(request(), signal())).toMatchObject({
 			grounding: { projectPassageCount: 1 }
 		});
 	});
@@ -68,23 +68,23 @@ describe('direct inline completion', () => {
 				document: searchDocumentBuilder({ projectId: testProjectId(2), content: 'Wrong project' })
 			}
 		];
-		await fixture.controller.suggest(actor, request(), signal());
-		expect(
-			fixture.generator.contexts[0]?.projectPassages.map((passage) => passage.content)
-		).toEqual(['Authoritative project']);
+		await fixture.controller.suggest(request(), signal());
+		expect(fixture.generator.requests[0]?.context.projectPassages).toEqual([
+			{ sourceType: 'note', sourceTitle: 'Untitled source', content: 'Authoritative project' }
+		]);
 	});
 	it('provides the authoritative full note to completion', async () => {
 		const fixture = setup();
-		await fixture.controller.suggest(actor, request(), signal());
-		expect(fixture.generator.contexts[0]?.noteText).toBe('Saved note text');
+		await fixture.controller.suggest(request(), signal());
+		expect(fixture.generator.requests[0]?.context.noteText).toBe('Saved note text');
 	});
 	it('returns nothing when inline completion is disabled', async () => {
 		const fixture = setup();
-		await fixture.preferences.persist(actor, {
-			...(await fixture.preferences.get(actor)),
+		await fixture.preferences.persist({
+			...(await fixture.preferences.get()),
 			inlineSuggestionsEnabled: false
 		});
-		expect(await fixture.controller.suggest(actor, request(), signal())).toEqual({
+		expect(await fixture.controller.suggest(request(), signal())).toEqual({
 			outcome: 'no_suggestion',
 			reason: 'ineligible'
 		});
@@ -92,50 +92,38 @@ describe('direct inline completion', () => {
 	it('returns nothing for an archived note', async () => {
 		const fixture = setup();
 		fixture.notes.notes = [noteBuilder({ archivedAt: testNow })];
-		expect(await fixture.controller.suggest(actor, request(), signal())).toEqual({
+		expect(await fixture.controller.suggest(request(), signal())).toEqual({
 			outcome: 'no_suggestion',
 			reason: 'ineligible'
-		});
-	});
-	it('refuses a second completion while one is admitted', async () => {
-		const fixture = setup();
-		fixture.admission.admit(actor.userId);
-		expect(await fixture.controller.suggest(actor, request(), signal())).toEqual({
-			outcome: 'busy',
-			retryAfterMs: 250
 		});
 	});
 	it('allows retry after completion fails', async () => {
 		const fixture = setup();
 		fixture.generator.failure = new Error('provider down');
 		try {
-			await fixture.controller.suggest(actor, request(), signal());
+			await fixture.controller.suggest(request(), signal());
 		} catch {
 			/* Retry verifies admission was released. */
 		}
 		fixture.generator.failure = undefined;
-		expect((await fixture.controller.suggest(actor, request(), signal())).outcome).toBe(
-			'suggested'
-		);
+		expect((await fixture.controller.suggest(request(), signal())).outcome).toBe('suggested');
 	});
 	it('allows retry after retrieval aborts', async () => {
 		const fixture = setup();
-		fixture.embeddings.failure = new DOMException('stale caret', 'AbortError');
+		fixture.provider.embeddingFailure = new DOMException('stale caret', 'AbortError');
 		try {
-			await fixture.controller.suggest(actor, request(), signal());
+			await fixture.controller.suggest(request(), signal());
 		} catch {
 			/* The next request must be admitted. */
 		}
-		fixture.embeddings.failure = undefined;
-		expect((await fixture.controller.suggest(actor, request(), signal())).outcome).toBe(
-			'suggested'
-		);
+		fixture.provider.embeddingFailure = undefined;
+		expect((await fixture.controller.suggest(request(), signal())).outcome).toBe('suggested');
 	});
 	it('reports retrieval failure instead of inventing empty grounding', async () => {
 		const fixture = setup();
-		fixture.embeddings.failure = new Error('embedding unavailable');
-		await expect(fixture.controller.suggest(actor, request(), signal())).rejects.toThrow(
-			'embedding unavailable'
+		fixture.provider.embeddingFailure = new Error('embedding unavailable');
+		await expect(fixture.controller.suggest(request(), signal())).rejects.toThrow(
+			'Embedding generation failed'
 		);
 	});
 });

@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import * as Icon from '$lib/components/icons';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { CHAT_ROW, CHAT_ROW_ICON } from '../chat-row';
 
 	let {
@@ -26,7 +27,7 @@
 
 	const resources = $derived(workspaceSession.current?.resources);
 	const existing = $derived(
-		resources?.views
+		workspaceViews
 			.all('memory_entries')
 			.filter((entry) => !entry.deletedAt && entry.projectId === projectId)
 	);

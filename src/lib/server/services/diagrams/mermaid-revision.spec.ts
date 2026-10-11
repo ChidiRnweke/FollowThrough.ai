@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { prepareMermaidRevision } from './mermaid-revision';
+import { DiagramGenerationRuleService } from './generation-rules';
 import { mermaidBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { testNow, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { DateTime } from '$lib/models/workspace';
@@ -8,7 +8,7 @@ it('rejects a newer write even when its source matches the generation base', () 
 	const base = mermaidBuilder();
 	const current = { ...base, updatedAt: '2026-09-23T12:00:00.000Z' as DateTime };
 	expect(() =>
-		prepareMermaidRevision(
+		new DiagramGenerationRuleService().revision(
 			current,
 			base,
 			{ source: 'flowchart LR\nA --> C', provenanceId: testProvenanceId() },
@@ -20,7 +20,7 @@ it('rejects a newer write even when its source matches the generation base', () 
 it('rejects a changed title even when the timestamp and source match', () => {
 	const base = mermaidBuilder();
 	expect(() =>
-		prepareMermaidRevision(
+		new DiagramGenerationRuleService().revision(
 			{ ...base, title: 'Peer title' },
 			base,
 			{ source: base.source, provenanceId: testProvenanceId() },
@@ -36,5 +36,7 @@ it('uses a submitted title with the generated source', () => {
 		title: 'Revised system',
 		provenanceId: testProvenanceId()
 	};
-	expect(prepareMermaidRevision(base, base, draft, testNow)).toMatchObject(draft);
+	expect(new DiagramGenerationRuleService().revision(base, base, draft, testNow)).toMatchObject(
+		draft
+	);
 });

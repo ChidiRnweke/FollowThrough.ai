@@ -9,29 +9,34 @@ import * as schema from '$lib/server/db/schema/references';
 import { toReference } from '$lib/server/db/mappers';
 
 export class ReferenceRecords implements ReferenceRepository {
-	constructor(private readonly database: Database) {}
-	async listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly ExternalReference[]> {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
+	async listForNote(noteId: NoteId): Promise<readonly ExternalReference[]> {
 		return (
 			await this.database
 				.select()
 				.from(schema.references)
 				.where(
-					and(eq(schema.references.userId, actor.userId), eq(schema.references.noteId, noteId))
+					and(eq(schema.references.userId, this.actor.userId), eq(schema.references.noteId, noteId))
 				)
 				.orderBy(asc(schema.references.createdAt))
 		).map(toReference);
 	}
-	async insert(actor: ActorContext, reference: ExternalReference): Promise<ExternalReference> {
+	async insert(reference: ExternalReference): Promise<ExternalReference> {
 		const [note] = await this.database
 			.select({ projectId: schema.notes.projectId })
 			.from(schema.notes)
-			.where(and(eq(schema.notes.id, reference.noteId), eq(schema.notes.userId, actor.userId)));
+			.where(
+				and(eq(schema.notes.id, reference.noteId), eq(schema.notes.userId, this.actor.userId))
+			);
 		if (!note) throw new NotFoundError('Reference note was not found');
 		const [row] = await this.database
 			.insert(schema.references)
 			.values({
 				id: reference.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				projectId: note.projectId,
 				noteId: reference.noteId,
 				url: reference.url,
@@ -45,10 +50,10 @@ export class ReferenceRecords implements ReferenceRepository {
 			.returning();
 		return toReference(row!);
 	}
-	async delete(actor: ActorContext, id: ReferenceId): Promise<void> {
+	async delete(id: ReferenceId): Promise<void> {
 		const [row] = await this.database
 			.delete(schema.references)
-			.where(and(eq(schema.references.id, id), eq(schema.references.userId, actor.userId)))
+			.where(and(eq(schema.references.id, id), eq(schema.references.userId, this.actor.userId)))
 			.returning({ id: schema.references.id });
 		if (!row) throw new NotFoundError('Reference was not found');
 	}

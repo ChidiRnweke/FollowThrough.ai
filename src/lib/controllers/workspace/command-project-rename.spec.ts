@@ -1,18 +1,19 @@
 import { expect, it } from 'vitest';
-import { prepareWorkspaceCommand } from './commands';
+import { prepareWorkspaceCommand } from '$lib/testing/workspace/fixtures/commands';
 import {
 	projectBuilder,
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
-it('retains project description when a local rename changes only its name', () => {
+it('retains project description when a local rename changes only its name', async () => {
 	const project = projectBuilder({ description: 'Keep this context', role: 'inbox' });
 	expect(
-		prepareWorkspaceCommand(
-			{ kind: 'renameProject', projectId: project.id, name: '  Renamed inbox  ' },
-			{ type: 'projects', value: project },
-			{ userId: testActor().userId, now: testNow, records: new Map(), inventory: 'complete' }
+		(
+			await prepareWorkspaceCommand(
+				{ kind: 'renameProject', projectId: project.id, name: '  Renamed inbox  ' },
+				{ type: 'projects', value: project },
+				{ userId: testActor().userId, now: testNow, records: new Map(), inventory: 'complete' }
+			)
 		).local
 	).toEqual({ type: 'projects', value: { ...project, name: 'Renamed inbox', updatedAt: testNow } });
 });

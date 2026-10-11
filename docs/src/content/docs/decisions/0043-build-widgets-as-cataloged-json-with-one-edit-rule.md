@@ -433,7 +433,7 @@ would misrepresent the note.
 
 ## Evidence
 
-- `src/lib/services/widgets/edits.spec.ts` checks the rule: revisions per part, catalog and prop
+- `src/lib/controllers/widgets/editing.spec.ts` checks the rule: revisions per part, catalog and prop
   rejection, structural rejection, and the smallest data diff.
 - `tests/integration/widgets/repositories.contract.spec.ts` checks the Postgres round trip, owner
   isolation and the revision guard.

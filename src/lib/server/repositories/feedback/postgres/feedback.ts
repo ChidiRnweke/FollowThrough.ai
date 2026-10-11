@@ -5,11 +5,14 @@ import type { FeedbackReport } from '$lib/models/feedback';
 import type { FeedbackRepository } from '../feedback';
 
 export class FeedbackRecords implements FeedbackRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async create(actor: ActorContext, report: FeedbackReport): Promise<void> {
+	async create(report: FeedbackReport): Promise<void> {
 		await this.database.insert(feedbackReports).values({
-			userId: actor.userId,
+			userId: this.actor.userId,
 			body: report.body,
 			url: report.url,
 			appContext: report.appContext

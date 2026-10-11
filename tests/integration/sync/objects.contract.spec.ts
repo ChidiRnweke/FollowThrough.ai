@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
-import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
+import { workspacePullFixture } from '$lib/testing/workspace/fixtures/sync-pull';
 import { initialSyncCursor } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { actor, context, seedNote } from '../database-harness';
 
 describe('conditional normalized object reads', () => {
@@ -12,17 +13,17 @@ describe('conditional normalized object reads', () => {
 		await context.client`delete from workspace_sync_versions where resource_type = 'notes'
 			and resource_id = jsonb_build_array(${note.id}::text)`;
 		await expect(
-			new WorkspaceSyncObjects(context.db).read(owner, { type: 'notes', id: [note.id] }, null)
+			new WorkspaceSyncObjects(owner, context.db).read({ type: 'notes', id: [note.id] }, null)
 		).rejects.toThrow(ZodError);
 	});
 	it('returns a normalized note and the version of that same database snapshot', async () => {
 		const { note, owner } = await seedNote('8701');
 		const identity = { type: 'notes' as const, id: [note.id] as [string] };
-		const batch = await new WorkspaceSyncChanges(context.db).pullPage(owner, initialSyncCursor);
+		const batch = await workspacePullFixture(owner, context.db).pullChangePage(initialSyncCursor);
 		const entry = batch.records.find((entry) => entry.key === workspaceResourceKey(identity));
 		if (entry?.resource.kind !== 'found')
 			throw new Error('Seeded note is missing from the journal');
-		expect(await new WorkspaceSyncObjects(context.db).read(owner, identity, null)).toEqual({
+		expect(await new WorkspaceSyncObjects(owner, context.db).read(identity, null)).toEqual({
 			kind: 'found',
 			snapshot: { etag: entry.resource.snapshot.etag, value: { type: 'notes', value: note } }
 		});
@@ -31,10 +32,10 @@ describe('conditional normalized object reads', () => {
 	it('returns no document body when the requested tag matches', async () => {
 		const { note, owner } = await seedNote('8702');
 		const identity = { type: 'notes' as const, id: [note.id] as [string] };
-		const reader = new WorkspaceSyncObjects(context.db);
-		const initial = await reader.read(owner, identity, null);
+		const reader = new WorkspaceSyncObjects(owner, context.db);
+		const initial = await reader.read(identity, null);
 		if (initial.kind !== 'found') throw new Error('The seeded note was not returned');
-		expect(await reader.read(owner, identity, initial.snapshot.etag)).toEqual({
+		expect(await reader.read(identity, initial.snapshot.etag)).toEqual({
 			kind: 'unchanged',
 			etag: initial.snapshot.etag
 		});
@@ -43,8 +44,7 @@ describe('conditional normalized object reads', () => {
 	it('does not disclose another account’s object', async () => {
 		const { note } = await seedNote('8703');
 		expect(
-			await new WorkspaceSyncObjects(context.db).read(
-				actor('8704'),
+			await new WorkspaceSyncObjects(actor('8704'), context.db).read(
 				{ type: 'notes', id: [note.id] },
 				null
 			)
@@ -55,7 +55,7 @@ describe('conditional normalized object reads', () => {
 		const { note, owner } = await seedNote('8705');
 		await context.client`delete from notes where id = ${note.id}`;
 		expect(
-			await new WorkspaceSyncObjects(context.db).read(owner, { type: 'notes', id: [note.id] }, null)
+			await new WorkspaceSyncObjects(owner, context.db).read({ type: 'notes', id: [note.id] }, null)
 		).toEqual({ kind: 'deleted', etag: expect.stringMatching(/^sync-v1-/) });
 	});
 
@@ -64,8 +64,7 @@ describe('conditional normalized object reads', () => {
 		const todoId = crypto.randomUUID();
 		await context.client`insert into todos (id, user_id, project_id, title) values
 			(${todoId}, ${owner.userId}, ${project.id}, 'Offline todo')`;
-		const result = await new WorkspaceSyncObjects(context.db).read(
-			owner,
+		const result = await new WorkspaceSyncObjects(owner, context.db).read(
 			{ type: 'todos', id: [todoId] },
 			null
 		);
@@ -81,8 +80,7 @@ describe('conditional normalized object reads', () => {
 		await context.client`insert into conversations (id, user_id) values (${conversationId}, ${owner.userId})`;
 		await context.client`insert into agent_runs (id, kind, user_id, conversation_id, model, execution_mode, serialized_state, input_snapshot)
 			values (${runId}, 'agent', ${owner.userId}, ${conversationId}, 'contract-model', 'auto_accept', 'server-only-state', jsonb_build_object('conversationId', ${conversationId}::text, 'prompt', 'Resume the saved request'))`;
-		const result = await new WorkspaceSyncObjects(context.db).read(
-			owner,
+		const result = await new WorkspaceSyncObjects(owner, context.db).read(
 			{ type: 'agent_runs', id: [runId] },
 			null
 		);
@@ -97,8 +95,7 @@ it('retains unreadable chat messages as explicit records in the workspace cache'
 	const messageId = crypto.randomUUID();
 	await context.client`insert into conversations (id, user_id) values (${conversationId}, ${owner.userId})`;
 	await context.client`insert into messages (id, conversation_id, role, content) values (${messageId}, ${conversationId}, 'assistant', '[]'::jsonb)`;
-	const result = await new WorkspaceSyncObjects(context.db).read(
-		owner,
+	const result = await new WorkspaceSyncObjects(owner, context.db).read(
 		{ type: 'messages', id: [messageId] },
 		null
 	);
@@ -123,8 +120,7 @@ it('reads message content and its ordering cursor without loss of precision', as
 	await context.client`insert into agent_runs (id, kind, user_id, conversation_id, model, execution_mode, input_snapshot) values (${runId}, 'agent', ${owner.userId}, ${conversationId}, 'contract-model', 'auto_accept', jsonb_build_object('conversationId', ${conversationId}::text, 'prompt', 'Save an answer'))`;
 	await context.client`insert into agent_run_events (cursor, run_id, attempt, event) overriding system value values (9007199254740993, ${runId}, 0, '{"type":"text_delta","text":"Saved answer"}'::jsonb)`;
 	await context.client`insert into messages (id, conversation_id, role, content, event_cursor) values (${messageId}, ${conversationId}, 'assistant', '{"type":"text","text":"Saved answer"}'::jsonb, 9007199254740993)`;
-	const result = await new WorkspaceSyncObjects(context.db).read(
-		owner,
+	const result = await new WorkspaceSyncObjects(owner, context.db).read(
 		{ type: 'messages', id: [messageId] },
 		null
 	);
@@ -146,7 +142,7 @@ it('normalizes PostgreSQL provenance timestamps in complete pages', async () => 
 	const runId = crypto.randomUUID();
 	await context.client`insert into provenance (id, user_id, producer_kind, producer_name, pipeline, run_id, model, created_at)
  values (${id}, ${owner.userId}, 'agent', 'FollowThrough Workbench Agent', 'agent', ${runId}, 'contract-model', '2026-09-14T10:30:45.123+02:00')`;
-	const page = await new WorkspaceSyncChanges(context.db).pullPage(owner, initialSyncCursor);
+	const page = await workspacePullFixture(owner, context.db).pullChangePage(initialSyncCursor);
 	expect(
 		page.records.find(
 			(entry) => entry.key === workspaceResourceKey({ type: 'provenance', id: [id] })

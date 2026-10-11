@@ -1,41 +1,5 @@
-import {
-	initializeMermaid,
-	mermaidExportBackground,
-	renderMermaidOffscreen,
-	sanitizeMermaidSvg,
-	type MermaidTheme
-} from './mermaid-rendering.js';
-
-/**
- * Exporting a diagram out of the app.
- *
- * The old path serialized whatever was on screen and painted `document.body`'s background
- * behind it, so a diagram exported in dark mode arrived as light strokes on a near-black
- * fill — unusable in any document that is not also dark. Re-rendering at the chosen theme,
- * and letting the background be omitted entirely, is the fix; SVG is offered because a
- * diagram is line art and rasterising it at one size throws that away.
- */
-
-export type MermaidExportFormat = 'png' | 'svg';
-
-export interface MermaidExportRequest {
-	readonly source: string;
-	readonly theme: MermaidTheme;
-	readonly format: MermaidExportFormat;
-	/** Raster scale. Ignored for SVG, which needs no resolution decision. */
-	readonly scale?: number;
-	readonly fileName?: string;
-}
-
+import type { MermaidImageOutput } from '$lib/models/diagrams/mermaid-theme';
 const DIMENSION_FALLBACK = { width: 800, height: 600 };
-
-/** Render the source at the requested theme rather than reusing the on-screen SVG. */
-const renderAtTheme = async (source: string, theme: MermaidTheme): Promise<string> => {
-	initializeMermaid(theme);
-	return sanitizeMermaidSvg(
-		await renderMermaidOffscreen(`mermaid-export-${crypto.randomUUID()}`, source)
-	);
-};
 
 const dimensionsOf = (svg: string): { width: number; height: number } => {
 	const viewBox = /viewBox="([\d.\-\s]+)"/.exec(svg)?.[1]?.trim().split(/\s+/);
@@ -91,34 +55,25 @@ const rasterise = (svg: string, background: string | undefined, scale: number): 
 		image.src = url;
 	});
 
-/**
- * The diagram as a PNG blob — for the clipboard, where triggering a download
- * makes no sense. Same render-at-theme + rasterise pipeline as the file export.
- */
-export const mermaidPngBlob = async (
-	source: string,
-	theme: MermaidTheme,
-	scale: number = window.devicePixelRatio || 1
-): Promise<Blob> => {
-	const svg = await renderAtTheme(source, theme);
-	const dataUrl = await rasterise(svg, mermaidExportBackground(theme), scale);
-	return await (await fetch(dataUrl)).blob();
-};
-
-export const exportMermaidDiagram = async (request: MermaidExportRequest): Promise<void> => {
-	const svg = await renderAtTheme(request.source, request.theme);
-	const name = request.fileName ?? 'diagram';
-
-	if (request.format === 'svg') {
-		const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
-		triggerDownload(url, `${name}.svg`);
-		URL.revokeObjectURL(url);
-		return;
+export class BrowserMermaidImageOutput implements MermaidImageOutput {
+	pixelRatio(): number {
+		return window.devicePixelRatio || 1;
 	}
-
-	const scale = request.scale ?? (window.devicePixelRatio || 1);
-	triggerDownload(
-		await rasterise(svg, mermaidExportBackground(request.theme), scale),
-		`${name}.png`
-	);
-};
+	rasterise(svg: string, background: string | undefined, scale: number): Promise<string> {
+		return rasterise(svg, background, scale);
+	}
+	async blob(dataUrl: string): Promise<Blob> {
+		return await (await fetch(dataUrl)).blob();
+	}
+	downloadSvg(svg: string, name: string): void {
+		const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+		try {
+			triggerDownload(url, `${name}.svg`);
+		} finally {
+			URL.revokeObjectURL(url);
+		}
+	}
+	downloadPng(dataUrl: string, name: string): void {
+		triggerDownload(dataUrl, `${name}.png`);
+	}
+}

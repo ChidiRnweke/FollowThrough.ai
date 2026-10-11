@@ -1,5 +1,8 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import { decideSuggestion } from '$lib/components/suggestions';
+	import { workspaceChatHistory } from './chat-history';
+	import { workspaceViews } from '$lib/factories/workspace/session';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { onMount, tick, untrack } from 'svelte';
 	import { z } from 'zod';
@@ -19,11 +22,11 @@
 	import {
 		entryText,
 		type ChatEntry,
-		type ChatStore,
+		type ChatSession,
 		type ContextChip,
 		type ResourceChip
 	} from '$lib/stores/agent/chat.svelte';
-	import { liveSelectionChipOf, selectionChipOf } from '$lib/stores/agent/selection-chip';
+	import { agentSelectionContext } from '$lib/factories/agent/selection-context';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -35,7 +38,7 @@
 		MAX_CONCURRENT_STREAMS
 	} from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { canvasFor, latestDiagramWrite } from '$lib/stores/diagrams/canvas.svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { slide } from 'svelte/transition';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
 	import { takeCanvasRender } from '$lib/stores/diagrams/canvas-render.svelte';
@@ -43,18 +46,13 @@
 	import { Button } from '$lib/components/ui/button';
 	import ChatComposer from './chat-composer.svelte';
 	import ChatThread from './chat-thread.svelte';
-	import { folderNoteIds, resolveFolderContext } from '$lib/services/notes/folder-context';
-	import {
-		addMention,
-		removeMention,
-		editMentions,
-		createMentionHistory,
-		restoreMentions
-	} from '$lib/services/chat/mentions';
+	import { agentContext } from '$lib/factories/agent/context';
+
 	import type { ComposerSelection, MentionHistory } from '$lib/models/chat';
 	import { readMentionInput } from '$lib/client/agent/mention-input';
-	import { MENTION_PATTERN, diagramNameOf, mentionCandidatesFor, mentionQueryOf } from './mentions';
-	import { chipKeyOf, contextResourceRefOf } from '$lib/services/chat/chips';
+	import { MENTION_PATTERN } from '$lib/models/chat';
+
+	const { chipKeyOf, contextResourceRefOf } = agentContext;
 
 	let {
 		chat,
@@ -76,7 +74,7 @@
 		 * conversations run at once, each with its own store, and a module
 		 * singleton would make every mounted panel share one transcript.
 		 */
-		chat: ChatStore;
+		chat: ChatSession;
 		shell?: ShellContext;
 		sessions: readonly Conversation[];
 		activeNoteId?: NoteId;
@@ -113,6 +111,7 @@
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before opening a chat');
 	const resources = session.resources;
+	const history = workspaceChatHistory(workspaceSession, workspaceViews, session);
 	$effect(() => {
 		const online = resources.online;
 		untrack(() => {
@@ -152,10 +151,10 @@
 		chat.initialize(agentPreferences.executionMode);
 		if (initialConversationId === null) {
 			chat.clear();
-			void chat.hydrate(resources);
+			void chat.hydrate(history);
 		} else if (initialConversationId)
-			void openConversation(chat.switchToConversation(initialConversationId, resources));
-		else void openConversation(chat.hydrate(resources));
+			void openConversation(chat.switchToConversation(initialConversationId, history));
+		else void openConversation(chat.hydrate(history));
 		const staged = consumeChatHandoff();
 		if (staged) prefill(staged);
 		else replacePrompt(sessionStorage.getItem(draftKey()) ?? '');
@@ -184,7 +183,7 @@
 		// same passage twice is a no-op: the chip's id is its range.
 		if (request.selection) {
 			const title = shell?.noteTree.find((entry) => entry.id === request.selection?.noteId)?.title;
-			chat.addChip(selectionChipOf(request.selection, title ?? 'Untitled note'));
+			chat.addChip(agentSelectionContext.pin(request.selection, title ?? 'Untitled note'));
 		}
 		saveDraft();
 		// The textarea may not be bound yet on the mount path, so go through the tick
@@ -342,15 +341,15 @@
 	function openResourceChip(): ResourceChip | undefined {
 		if (!openResource) return undefined;
 		if (openResource.kind === 'widget') {
-			const widget = resources.views.widget(openResource.id);
+			const widget = workspaceViews.widget(openResource.id);
 			return widget ? { kind: 'widget', id: widget.id, name: widget.title } : undefined;
 		}
 		// A studio conversation already works on its canvas; attaching that same diagram again
 		// would hand the agent two copies of the drawing it is editing.
 		if (canvas?.diagramId === openResource.id) return undefined;
-		const diagram = resources.views.diagram(openResource.id);
+		const diagram = workspaceViews.diagram(openResource.id);
 		return diagram && !diagram.archivedAt
-			? { kind: 'diagram', id: diagram.id, name: diagramNameOf(diagram) }
+			? { kind: 'diagram', id: diagram.id, name: agentContext.diagramName(diagram) }
 			: undefined;
 	}
 
@@ -373,9 +372,10 @@
 		const title = selection
 			? shell?.noteTree.find((entry) => entry.id === selection.noteId)?.title
 			: undefined;
-		return liveSelectionChipOf(
-			selection,
-			title ?? 'Untitled note',
+		return agentSelectionContext.live(
+			selection
+				? { kind: 'selected', selection, noteTitle: title ?? 'Untitled note' }
+				: { kind: 'none' },
 			chat.chips.filter((chip) => chip.kind === 'selection').map((chip) => chip.id),
 			chat.dismissedSelectionId
 		);
@@ -383,24 +383,24 @@
 
 	// --- @ mention picker ---
 
-	const mentionQuery = $derived(mentionQueryOf(prompt));
+	const mentionQuery = $derived(agentContext.query(prompt));
 	let highlighted = $state(0);
 
 	const mentionCandidates = $derived(
 		mentionQuery === undefined || !shell
 			? []
-			: mentionCandidatesFor(
+			: agentContext.candidates(
 					mentionQuery,
 					shell.noteTree,
 					shell.skills,
 					resources.availability,
-					resources.views.mentionableResources(mentionQuery, activeProjectId)
+					workspaceViews.mentionableResources(mentionQuery, activeProjectId)
 				)
 	);
 	const visibleChips = $derived(
 		chat.chips.map((chip) =>
 			chip.kind === 'folder' && shell && resources.availability === 'complete'
-				? { ...chip, noteCount: folderNoteIds(shell.noteTree, chip.id).length }
+				? { ...chip, noteCount: agentContext.folderNotes(shell.noteTree, chip.id).length }
 				: chip
 		)
 	);
@@ -413,7 +413,7 @@
 	/** The tag stays in the sentence; the chip is the same choice, shown as a badge. */
 	function pick(candidate: ResourceChip): void {
 		replacePrompt(prompt);
-		chat.mentionDraft = addMention(chat.mentionDraft, candidate);
+		chat.mentionDraft = agentContext.add(chat.mentionDraft, candidate);
 		prompt = chat.mentionDraft.present.text;
 		chat.addChip(candidate);
 		saveDraft();
@@ -424,7 +424,7 @@
 		// A pinned selection put no token in the sentence, so there is nothing to take back
 		// out of it — and its name is a note title the user may well have typed themselves.
 		if (chip.kind !== 'selection') {
-			chat.mentionDraft = removeMention(chat.mentionDraft, chip);
+			chat.mentionDraft = agentContext.remove(chat.mentionDraft, chip);
 			prompt = chat.mentionDraft.present.text;
 		}
 		chat.removeChip(chip);
@@ -445,7 +445,7 @@
 	function replacePrompt(text: string): void {
 		prompt = text;
 		if (chat.mentionDraft.present.text !== text) {
-			chat.mentionDraft = createMentionHistory(text);
+			chat.mentionDraft = agentContext.start(text);
 			chat.chips = chat.chips.filter((chip) => chip.kind === 'selection');
 		}
 	}
@@ -456,7 +456,7 @@
 		const inputType = event instanceof InputEvent ? event.inputType : '';
 		let next: MentionHistory | undefined;
 		if (inputType === 'historyUndo' || inputType === 'historyRedo') {
-			const restored = restoreMentions(
+			const restored = agentContext.restore(
 				chat.mentionDraft,
 				text,
 				inputType === 'historyUndo' ? 'undo' : 'redo'
@@ -464,12 +464,12 @@
 			if (restored.kind === 'restored') next = restored.history;
 		} else if (beforeInput) {
 			const change = readMentionInput(chat.mentionDraft.present.text, text, beforeInput, inputType);
-			if (change.kind === 'edit') next = editMentions(chat.mentionDraft, change.edit);
+			if (change.kind === 'edit') next = agentContext.edit(chat.mentionDraft, change.edit);
 		} else if (text === chat.mentionDraft.present.text) next = chat.mentionDraft;
 		beforeInput = undefined;
 		if (!next && chat.mentionDraft.present.references.length)
 			toast.info('Context mentions were cleared by this edit. Add them again before sending.');
-		chat.mentionDraft = next ?? createMentionHistory(text);
+		chat.mentionDraft = next ?? agentContext.start(text);
 		prompt = text;
 		const mentioned = new Map(
 			chat.mentionDraft.present.references.map(({ chip }) => [`${chip.kind}:${chip.id}`, chip])
@@ -494,7 +494,7 @@
 		| { kind: 'ready'; request: Omit<RunAgentInput, 'conversationId'> }
 		| { kind: 'unavailable'; message: string } {
 		const folderIds = chat.chips.flatMap((chip) => (chip.kind === 'folder' ? [chip.id] : []));
-		const folders = resolveFolderContext(
+		const folders = agentContext.folders(
 			shell?.noteTree ?? [],
 			folderIds,
 			shell ? resources.availability : 'unknown'
@@ -574,7 +574,7 @@
 		});
 		// The tags left with the prompt, so the chips they stood for go too.
 		chat.chips = [];
-		chat.mentionDraft = createMentionHistory('');
+		chat.mentionDraft = agentContext.start('');
 		handoff = undefined;
 		await tick();
 		pinLatestQuestion();
@@ -669,7 +669,7 @@
 				event.preventDefault();
 				const match = MENTION_PATTERN.exec(prompt);
 				if (match) {
-					chat.mentionDraft = editMentions(chat.mentionDraft, {
+					chat.mentionDraft = agentContext.edit(chat.mentionDraft, {
 						from: match.index + match[1]!.length,
 						to: prompt.length,
 						text: ''
@@ -692,9 +692,9 @@
 			.uuid()
 			.transform((value) => value as SuggestionId)
 			.parse(id);
-		const ok = await chat.decideSuggestion(suggestionId, decision, (id, choice) =>
-			suggestionActions.decide(id, choice)
-		);
+		const ok = await decideSuggestion(suggestionId, decision);
+		// The tray drops its own card; a decision from the panel must drop this one.
+		if (ok) chat.resolveSuggestion(suggestionId);
 		if (ok) toast.success(decision === 'accept' ? 'Accepted' : 'Dismissed');
 		else toast.error('That did not go through. Try again.');
 	}
@@ -731,7 +731,7 @@
 	{#if chat.historyError}
 		<div role="alert" class="mb-4 text-sm text-destructive">
 			{chat.historyError}
-			<Button variant="outline" onclick={() => void chat.hydrate(resources)}>Retry</Button>
+			<Button variant="outline" onclick={() => void chat.hydrate(history)}>Retry</Button>
 		</div>
 	{/if}
 	{#if chat.persistenceError}
@@ -774,7 +774,7 @@
 			bind:questionRef
 			bind:anchorSpacer
 			{showJumpToLatest}
-			onswitchconversation={(id) => void openConversation(chat.switchToConversation(id, resources))}
+			onswitchconversation={(id) => void openConversation(chat.switchToConversation(id, history))}
 			onstarter={useStarter}
 			oneditkeydown={handleEditKeydown}
 			onresubmit={(entry, text) => void resubmit(entry, text)}

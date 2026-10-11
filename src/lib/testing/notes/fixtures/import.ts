@@ -1,23 +1,38 @@
-import AdmZip from 'adm-zip';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import AdmZip from 'adm-zip';
+const noteMarkdown = new NoteMarkdownCodec();
+
 import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
-import {
-	readMarkdownArchive,
+	describeArchiveRejection,
 	parseMarkdownNote,
-	describeArchiveRejection
+	readMarkdownArchive
 } from '$lib/remote/notes/archive-reader.server';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
-	InMemoryNoteRepository,
-	InMemoryAnchorRepository
+	InMemoryAnchorRepository,
+	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	projectBuilder,
 	testActor,
@@ -31,26 +46,50 @@ export const archiveBytes = (files: Readonly<Record<string, string>>): Uint8Arra
 };
 
 export const importedNotesFixture = () => {
-	const records = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository(records);
+	const records = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor(), records);
 	projects.projects = [projectBuilder()];
-	const catalog = new NoteCatalog(records, new InMemoryAnchorRepository(), projects);
-	const consequences = new InMemoryNoteContent();
+	const catalog = createNoteServices(
+		testActor(),
+		records,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
+	const consequences = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
-			noteCreation: catalog,
-			noteEditor: catalog,
-			anchorRepairer: catalog,
+			...agentToolResultsFixture(),
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
+			noteCreation: catalog.creator,
+			noteEditor: catalog.editor,
+			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: consequences,
 			noteIndexer: consequences,
-			markdown: { read: noteContentFromMarkdown, write: noteMarkdownFromContent },
+			markdown: noteMarkdown,
 			transactionRunner: new InMemoryTransactionRunner([records, consequences])
 		})
 	);
 	const run = (files: Readonly<Record<string, string>>) => {
 		const archive = readMarkdownArchive(archiveBytes(files));
 		if (!archive.ok) throw new Error(describeArchiveRejection(archive.rejection));
-		return controller.importMarkdownArchive(testActor(), {
+		return controller.importMarkdownArchive({
 			projectId: testProjectId(),
 			notes: archive.result.entries.map(parseMarkdownNote),
 			skipped: archive.result.skipped

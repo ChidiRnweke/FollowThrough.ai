@@ -1,3 +1,11 @@
+import type { ActorContext } from '$lib/models/identity';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { vi } from 'vitest';
 import postgres from 'postgres';
 import type { Database } from '$lib/server/db';
@@ -10,55 +18,77 @@ import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
 import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { SkillPins } from '$lib/server/services/skills/pins';
 import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { context } from '../database-harness';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 
-export const skillController = (database: Database, transactionRunner: TransactionRunner) => {
-	const projects = new ProjectRecords(database);
-	const notes = new NoteRecords(database);
-	const skills = new SkillRecords(database);
-	const provenance = new ProvenanceRecords(database);
-	const library = new SkillLibrary(skills, notes, provenance);
-	const catalog = new NoteCatalog(notes, new SourceAnchorRecords(database), projects);
-	const content = new InMemoryNoteContent();
-	const sync = createSyncCapability({ db: database });
+export const skillController = (
+	actor: ActorContext,
+	database: Database,
+	transactionRunner: TransactionRunner
+) => {
+	const projects = new ProjectRecords(actor, database);
+	const notes = new NoteRecords(actor, database);
+	const skills = new SkillRecords(actor, database);
+	const provenance = new ProvenanceRecords(actor, database);
+	const library = createSkillServices(actor, skills, notes, provenance);
+	const catalog = createNoteServices(
+		actor,
+		notes,
+		new SourceAnchorRecords(actor, database),
+		projects
+	);
+	const content = new InMemoryNoteContent(actor);
+	const sync = createSyncCapability(actor, { db: database });
 	return new Skills(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
-			selectionOrigins: new SelectionOrigins(notes, new SourceAnchorRecords(database), provenance),
+			selectionOrigins: new SelectionOrigins(
+				actor,
+				notes,
+				new SourceAnchorRecords(actor, database),
+				provenance
+			),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
-			builtInSkills: new BuiltInSkills(projects, notes, skills, {
+			builtInSkills: new BuiltInSkills(actor, projects, notes, skills, {
 				active: BUILT_INS,
 				retired: RETIRED_BUILT_INS
 			}),
-			skillFinder: library,
-			skillCreator: library,
-			noteCreation: catalog,
-			skillEditor: library,
+			skillFinder: library.finder,
+			skillCreator: library.creator,
+			noteCreation: catalog.creator,
+			skillEditor: library.editor,
 			skillPinWriter: new SkillPins(projects, notes, skills),
-			skillUsageLister: library,
-			skillUsageRecorder: library,
-			noteEditor: catalog,
-			revisionReader: catalog,
-			revisionRecorder: catalog,
-			attachmentRestorer: catalog,
-			anchorRepairer: catalog,
+			skillUsageLister: library.usageLister,
+			skillUsageRecorder: library.usageRecorder,
+			noteEditor: catalog.editor,
+			revisionReader: catalog.revisionReader,
+			revisionRecorder: catalog.revisionRecorder,
+			attachmentRestorer: catalog.attachmentRestorer,
+			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: content,
-			noteIndexer: content
+			noteIndexer: content,
+			markdown: new NoteMarkdownCodec()
 		})
 	);
 };
 
 /** Commit the first controller write only after the competing write reaches a PostgreSQL lock. */
 export const competingSkillWrites = async <T>(
+	actor: ActorContext,
 	first: (controller: Skills) => Promise<void>,
 	second: (controller: Skills) => Promise<T>
 ) => {
@@ -70,7 +100,7 @@ export const competingSkillWrites = async <T>(
 	const ready = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
 	const holding = held.transactionRunner.run(async () => {
-		await first(skillController(held.database, held.transactionRunner));
+		await first(skillController(actor, held.database, held.transactionRunner));
 		ready.resolve();
 		await release.promise;
 	});
@@ -81,7 +111,7 @@ export const competingSkillWrites = async <T>(
 	try {
 		await ready.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const writing = second(skillController(write.database, write.transactionRunner)).then(
+		const writing = second(skillController(actor, write.database, write.transactionRunner)).then(
 			(value) => ({ kind: 'success' as const, value }),
 			(error: Error) => ({ kind: 'failure' as const, error })
 		);

@@ -18,34 +18,63 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import type { SuggestionRepository } from '$lib/server/repositories/suggestions/suggestions';
+export type { SuggestionProposal, SuggestionContext } from '$lib/models/suggestions';
+export type { AppliedRecord } from '$lib/server/repositories/suggestions/application-effects';
 export interface Clock {
 	now(): DateTime;
 }
-
-export class SystemClock implements Clock {
-	now(): DateTime {
-		return new Date().toISOString() as DateTime;
-	}
+export interface SuggestionCreator {
+	create<P extends SuggestionProposal>(
+		proposal: P
+	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
+	createFromSelection<P extends SelectionProposal>(
+		origin: ProposalSelectionOrigin,
+		proposal: P
+	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
 }
-
-export class SuggestionInbox {
+export interface SuggestionFinder {
+	get(id: SuggestionId): Promise<Suggestion>;
+}
+export interface SuggestionLister {
+	listByStatus(status: SuggestionStatus, noteId?: NoteId): Promise<readonly Suggestion[]>;
+	countByStatus(status: SuggestionStatus): Promise<number>;
+}
+export interface SuggestionContextReader {
+	readContexts(suggestions: readonly Suggestion[]): Promise<readonly SuggestionContext[]>;
+}
+export interface SuggestionAccepter {
+	accept(
+		suggestion: Suggestion,
+		appliedArtifactId: string,
+		autoAccepted: boolean
+	): Promise<Suggestion>;
+}
+export interface SuggestionRejecter {
+	reject(suggestion: Suggestion): Promise<Suggestion>;
+}
+export interface SuggestionReverter {
+	revert(suggestion: Suggestion): Promise<Suggestion>;
+}
+export interface SuggestionExpirer {
+	expire(): Promise<number>;
+}
+export class SuggestionCreationService implements SuggestionCreator {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly suggestions: SuggestionRepository,
 		private readonly notes: NoteRepository,
 		private readonly provenance: ProvenanceRepository,
 		private readonly anchors: SourceAnchorRepository,
-		private readonly clock: Clock = new SystemClock()
+		private readonly clock: Clock
 	) {}
-
 	async create<P extends SuggestionProposal>(
-		actor: ActorContext,
 		proposal: P
 	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
-	async create(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion> {
+	async create(proposal: SuggestionProposal): Promise<Suggestion> {
 		const [note, provenance, anchor] = await Promise.all([
-			proposal.noteId ? this.notes.findById(actor, proposal.noteId) : undefined,
-			this.provenance.findById(actor, proposal.provenanceId),
-			proposal.sourceAnchorId ? this.anchors.findById(actor, proposal.sourceAnchorId) : undefined
+			proposal.noteId ? this.notes.findById(proposal.noteId) : undefined,
+			this.provenance.findById(proposal.provenanceId),
+			proposal.sourceAnchorId ? this.anchors.findById(proposal.sourceAnchorId) : undefined
 		]);
 		if (proposal.noteId && !note) throw new NotFoundError('Suggestion note was not found');
 		if (!provenance) throw new NotFoundError('Suggestion provenance was not found');
@@ -55,146 +84,27 @@ export class SuggestionInbox {
 			throw new InvalidTransitionError('Suggestion anchor must belong to its note');
 		if (note && !this.payloadBelongsToNote(proposal, note.id, note.projectId))
 			throw new InvalidTransitionError('Suggestion payload must belong to its source note');
-		return this.persist(actor, proposal);
+		return this.persist(proposal);
 	}
 	async createFromSelection<P extends SelectionProposal>(
-		actor: ActorContext,
 		origin: ProposalSelectionOrigin,
 		proposal: P
 	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
 	async createFromSelection(
-		actor: ActorContext,
 		origin: ProposalSelectionOrigin,
 		proposal: SelectionProposal
 	): Promise<Suggestion> {
-		return this.persist(actor, selectionProposal(origin, proposal));
+		return this.persist(selectionProposal(origin, proposal));
 	}
-	private async persist(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion> {
+	private async persist(proposal: SuggestionProposal): Promise<Suggestion> {
 		const suggestion = createProposalRecord(proposal, {
 			id: crypto.randomUUID() as SuggestionId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			now: this.clock.now()
 		});
-		await this.suggestions.insert(actor, suggestion);
+		await this.suggestions.insert(suggestion);
 		return suggestion;
 	}
-
-	async get(actor: ActorContext, id: SuggestionId): Promise<Suggestion> {
-		const suggestion = await this.suggestions.findById(actor, id);
-		if (!suggestion) throw new NotFoundError('Suggestion was not found', { suggestionId: id });
-		return suggestion;
-	}
-
-	/**
-	 * Readable suggestions only, with the rest reported rather than dropped
-	 * quietly.
-	 *
-	 * A suggestion whose payload no longer parses cannot be rendered, decided, or
-	 * accepted — the payload is the whole card. So the inbox omits it, and says
-	 * so where an operator will see it. That is the decision this layer is the
-	 * one able to make: the repository knows a row did not read, but only the
-	 * inbox knows the row was going to become a card.
-	 */
-	async listByStatus(
-		actor: ActorContext,
-		status: SuggestionStatus,
-		noteId?: Suggestion['noteId']
-	): Promise<readonly Suggestion[]> {
-		const stored = await this.suggestions.list(actor, {
-			status,
-			...(noteId ? { noteId } : {})
-		});
-		const unreadable = stored.filter((row) => row.status === 'unreadable');
-		if (unreadable.length > 0)
-			console.warn(
-				`[suggestions] ${unreadable.length} stored suggestion(s) were left out of the inbox because their payload no longer matches their kind: ${unreadable
-					.map((row) => `${row.id} (${row.kind}): ${row.reason}`)
-					.join('; ')}`
-			);
-		return stored.flatMap((row) => (row.status === 'readable' ? [row.suggestion] : []));
-	}
-	async countByStatus(actor: ActorContext, status: SuggestionStatus): Promise<number> {
-		return (await this.listByStatus(actor, status)).length;
-	}
-
-	async readContexts(
-		actor: ActorContext,
-		suggestions: readonly Suggestion[]
-	): Promise<readonly SuggestionContext[]> {
-		return Promise.all(
-			suggestions.map(async (suggestion) => {
-				const [provenance, note, anchor] = await Promise.all([
-					this.provenance.findById(actor, suggestion.provenanceId),
-					suggestion.noteId ? this.notes.findById(actor, suggestion.noteId) : undefined,
-					suggestion.sourceAnchorId
-						? this.anchors.findById(actor, suggestion.sourceAnchorId)
-						: undefined
-				]);
-				if (!provenance) throw new NotFoundError('Suggestion provenance was not found');
-				return { suggestion, note, anchor, provenance };
-			})
-		);
-	}
-
-	async accept(
-		actor: ActorContext,
-		suggestion: Suggestion,
-		artifactId: string,
-		autoAccepted: boolean
-	): Promise<Suggestion> {
-		this.assertPending(suggestion);
-		return this.transition(actor, suggestion, 'proposed', {
-			status: 'accepted',
-			decidedAt: this.clock.now(),
-			appliedArtifactType: suggestion.kind,
-			appliedArtifactId: artifactId,
-			isAutoAccepted: autoAccepted,
-			updatedAt: this.clock.now()
-		});
-	}
-	async reject(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion> {
-		this.assertPending(suggestion);
-		return this.transition(actor, suggestion, 'proposed', {
-			status: 'rejected',
-			decidedAt: this.clock.now(),
-			updatedAt: this.clock.now()
-		});
-	}
-	async revert(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion> {
-		if (suggestion.status !== 'accepted')
-			throw new InvalidTransitionError('Only an applied suggestion can be reverted');
-		return this.transition(actor, suggestion, 'accepted', {
-			status: 'reverted',
-			decidedAt: this.clock.now(),
-			updatedAt: this.clock.now()
-		});
-	}
-	async expire(actor: ActorContext): Promise<number> {
-		return this.suggestions.expireProposedThrough(actor, this.clock.now());
-	}
-
-	private async transition(
-		actor: ActorContext,
-		suggestion: Suggestion,
-		expected: SuggestionStatus,
-		patch: Parameters<SuggestionRepository['transition']>[3]
-	): Promise<Suggestion> {
-		const updated = await this.suggestions.transition(actor, suggestion.id, expected, patch);
-		if (!updated)
-			throw new InvalidTransitionError(
-				expected === 'proposed'
-					? 'Suggestion is no longer pending'
-					: 'Suggestion cannot be reverted'
-			);
-		return updated;
-	}
-	private assertPending(suggestion: Suggestion): void {
-		if (suggestion.expiresAt && suggestion.expiresAt <= this.clock.now())
-			throw new ExpiredSuggestionError('Suggestion has expired');
-		if (suggestion.status !== 'proposed')
-			throw new InvalidTransitionError('Suggestion is not pending');
-	}
-
 	private payloadBelongsToNote(
 		proposal: SuggestionProposal,
 		noteId: NoteId,
@@ -213,17 +123,127 @@ export class SuggestionInbox {
 		}
 	}
 }
-
+export class SuggestionReadingService implements SuggestionFinder, SuggestionLister {
+	constructor(private readonly suggestions: SuggestionRepository) {}
+	async get(id: SuggestionId): Promise<Suggestion> {
+		const suggestion = await this.suggestions.findById(id);
+		if (!suggestion) throw new NotFoundError('Suggestion was not found', { suggestionId: id });
+		return suggestion;
+	}
+	async listByStatus(
+		status: SuggestionStatus,
+		noteId?: Suggestion['noteId']
+	): Promise<readonly Suggestion[]> {
+		const stored = await this.suggestions.list({
+			status,
+			...(noteId ? { noteId } : {})
+		});
+		const unreadable = stored.filter((row) => row.status === 'unreadable');
+		if (unreadable.length > 0)
+			console.warn(
+				`[suggestions] ${unreadable.length} stored suggestion(s) were left out of the inbox because their payload no longer matches their kind: ${unreadable
+					.map((row) => `${row.id} (${row.kind}): ${row.reason}`)
+					.join('; ')}`
+			);
+		return stored.flatMap((row) => (row.status === 'readable' ? [row.suggestion] : []));
+	}
+	async countByStatus(status: SuggestionStatus): Promise<number> {
+		return (await this.listByStatus(status)).length;
+	}
+}
+export class SuggestionContextService implements SuggestionContextReader {
+	constructor(
+		private readonly notes: NoteRepository,
+		private readonly provenance: ProvenanceRepository,
+		private readonly anchors: SourceAnchorRepository
+	) {}
+	async readContexts(suggestions: readonly Suggestion[]): Promise<readonly SuggestionContext[]> {
+		return Promise.all(
+			suggestions.map(async (suggestion) => {
+				const [provenance, note, anchor] = await Promise.all([
+					this.provenance.findById(suggestion.provenanceId),
+					suggestion.noteId ? this.notes.findById(suggestion.noteId) : undefined,
+					suggestion.sourceAnchorId ? this.anchors.findById(suggestion.sourceAnchorId) : undefined
+				]);
+				if (!provenance) throw new NotFoundError('Suggestion provenance was not found');
+				return { suggestion, note, anchor, provenance };
+			})
+		);
+	}
+}
+export class SuggestionLifecycleService
+	implements SuggestionAccepter, SuggestionRejecter, SuggestionReverter, SuggestionExpirer
+{
+	constructor(
+		private readonly suggestions: SuggestionRepository,
+		private readonly clock: Clock
+	) {}
+	async accept(
+		suggestion: Suggestion,
+		artifactId: string,
+		autoAccepted: boolean
+	): Promise<Suggestion> {
+		this.assertPending(suggestion);
+		return this.transition(suggestion, 'proposed', {
+			status: 'accepted',
+			decidedAt: this.clock.now(),
+			appliedArtifactType: suggestion.kind,
+			appliedArtifactId: artifactId,
+			isAutoAccepted: autoAccepted,
+			updatedAt: this.clock.now()
+		});
+	}
+	async reject(suggestion: Suggestion): Promise<Suggestion> {
+		this.assertPending(suggestion);
+		return this.transition(suggestion, 'proposed', {
+			status: 'rejected',
+			decidedAt: this.clock.now(),
+			updatedAt: this.clock.now()
+		});
+	}
+	async revert(suggestion: Suggestion): Promise<Suggestion> {
+		if (suggestion.status !== 'accepted')
+			throw new InvalidTransitionError('Only an applied suggestion can be reverted');
+		return this.transition(suggestion, 'accepted', {
+			status: 'reverted',
+			decidedAt: this.clock.now(),
+			updatedAt: this.clock.now()
+		});
+	}
+	async expire(): Promise<number> {
+		return this.suggestions.expireProposedThrough(this.clock.now());
+	}
+	private async transition(
+		suggestion: Suggestion,
+		expected: SuggestionStatus,
+		patch: Parameters<SuggestionRepository['transition']>[2]
+	): Promise<Suggestion> {
+		const updated = await this.suggestions.transition(suggestion.id, expected, patch);
+		if (!updated)
+			throw new InvalidTransitionError(
+				expected === 'proposed'
+					? 'Suggestion is no longer pending'
+					: 'Suggestion cannot be reverted'
+			);
+		return updated;
+	}
+	private assertPending(suggestion: Suggestion): void {
+		if (suggestion.expiresAt && suggestion.expiresAt <= this.clock.now())
+			throw new ExpiredSuggestionError('Suggestion has expired');
+		if (suggestion.status !== 'proposed')
+			throw new InvalidTransitionError('Suggestion is not pending');
+	}
+}
 type SuggestionIdentity = {
 	readonly id: SuggestionId;
 	readonly userId: ActorContext['userId'];
 	readonly now: DateTime;
 };
-export function createProposalRecord<P extends SuggestionProposal>(
+function createProposalRecord<P extends SuggestionProposal>(
 	proposal: P,
 	identity: SuggestionIdentity
 ): Extract<Suggestion, { kind: P['kind'] }>;
-export function createProposalRecord(
+function createProposalRecord(
 	proposal: SuggestionProposal,
 	identity: SuggestionIdentity
 ): Suggestion {
@@ -255,11 +275,11 @@ export function createProposalRecord(
 	}
 }
 
-export function selectionProposal<P extends SelectionProposal>(
+function selectionProposal<P extends SelectionProposal>(
 	origin: ProposalSelectionOrigin,
 	proposal: P
 ): Extract<SuggestionProposal, { kind: P['kind'] }>;
-export function selectionProposal(
+function selectionProposal(
 	origin: ProposalSelectionOrigin,
 	proposal: SelectionProposal
 ): SuggestionProposal {

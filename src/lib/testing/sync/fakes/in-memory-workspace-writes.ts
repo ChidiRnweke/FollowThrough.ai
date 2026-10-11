@@ -1,37 +1,40 @@
+import type { ResolvedWorkspaceResource } from '$lib/models/workspace-sync';
 import { syncEtag } from '$lib/models/sync';
 import type { ActorContext } from '$lib/models/identity';
 import type { WorkspaceWriteReceipt } from '$lib/models/workspace-records';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import type { SyncObjectReader, SyncReceiptWriter } from '$lib/server/services/workspace/contracts';
-import type { ReceiptLookup } from '$lib/server/repositories/workspace/sync-receipts';
+import type { SyncReceiptWriter } from '$lib/server/services/workspace/contracts';
+import type { SyncObjectReader } from '$lib/server/services/workspace/sync-objects';
+import type { ReceiptLookup } from '$lib/models/workspace-mutations';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 
 export class InMemoryWorkspaceReceipts implements SyncReceiptWriter {
+	constructor(private readonly actor: ActorContext) {}
 	async publishChanges(): Promise<void> {}
 	private receipts = new Map<
 		string,
 		{ request: string; outcome: Exclude<ReceiptLookup, { kind: 'missing' | 'reused' }> }
 	>();
 	writeFailure: string | null = null;
-	async lockResource(): Promise<void> {}
+	async lockResource(_resource: ResolvedWorkspaceResource): Promise<void> {}
 	async lockOperation(): Promise<void> {}
-	async cancel(actor: ActorContext, operationId: string, request: string): Promise<void> {
-		this.receipts.set(JSON.stringify([actor.userId, operationId]), {
+	async cancel(operationId: string, request: string): Promise<void> {
+		this.receipts.set(JSON.stringify([this.actor.userId, operationId]), {
 			request,
 			outcome: { kind: 'cancelled' }
 		});
 	}
-	async find(actor: ActorContext, operationId: string, request: string): Promise<ReceiptLookup> {
-		const stored = this.receipts.get(JSON.stringify([actor.userId, operationId]));
+	async find(operationId: string, request: string): Promise<ReceiptLookup> {
+		const stored = this.receipts.get(JSON.stringify([this.actor.userId, operationId]));
 		return !stored
 			? { kind: 'missing' }
 			: stored.request !== request
 				? { kind: 'reused' }
 				: stored.outcome;
 	}
-	async save(actor: ActorContext, request: string, receipt: WorkspaceWriteReceipt): Promise<void> {
+	async save(request: string, receipt: WorkspaceWriteReceipt): Promise<void> {
 		if (this.writeFailure) throw new Error(this.writeFailure);
-		this.receipts.set(JSON.stringify([actor.userId, receipt.operationId]), {
+		this.receipts.set(JSON.stringify([this.actor.userId, receipt.operationId]), {
 			request,
 			outcome: {
 				kind: 'proven',
@@ -56,11 +59,14 @@ export class InMemoryWorkspaceReceipts implements SyncReceiptWriter {
 
 /** Note revision changes in this fake supply monotonically increasing test versions. */
 export class InMemoryWorkspaceNoteReads implements SyncObjectReader {
-	constructor(private readonly content: InMemoryNoteContent) {}
-	async read(actor: ActorContext, identity: WorkspaceResourceIdentity) {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly content: InMemoryNoteContent
+	) {}
+	async read(identity: WorkspaceResourceIdentity) {
 		const note = this.content.notes.find(
 			(note) =>
-				note.userId === actor.userId && identity.type === 'notes' && note.id === identity.id[0]
+				note.userId === this.actor.userId && identity.type === 'notes' && note.id === identity.id[0]
 		);
 		return note
 			? {

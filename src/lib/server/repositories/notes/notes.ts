@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	Note,
 	NoteId,
@@ -10,43 +9,35 @@ import type {
 import type { ProjectId } from '$lib/models/projects';
 /** `updateIfRevision` is the compare-and-swap write the sync protocol depends on: a stale expected revision fails instead of overwriting. */
 export interface NoteRepository {
-	updatePublication(actor: ActorContext, write: NotePublicationWrite): Promise<Note | undefined>;
+	updatePublication(write: NotePublicationWrite): Promise<Note | undefined>;
 	/** Retain the note row lock until the caller transaction ends. */
-	findForWrite(actor: ActorContext, id: NoteId): Promise<Note | undefined>;
-	updateTrash(actor: ActorContext, note: Note): Promise<Note>;
-	findById(actor: ActorContext, id: NoteId): Promise<Note | undefined>;
-	findBuiltInForWrite(actor: ActorContext, key: string): Promise<Note | undefined>;
-	repairBuiltIn(actor: ActorContext, write: NoteBuiltInRepairWrite): Promise<Note | undefined>;
-	findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined>;
-	listActive(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]>;
+	findForWrite(id: NoteId): Promise<Note | undefined>;
+	updateTrash(note: Note): Promise<Note>;
+	findById(id: NoteId): Promise<Note | undefined>;
+	findBuiltInForWrite(key: string): Promise<Note | undefined>;
+	repairBuiltIn(write: NoteBuiltInRepairWrite): Promise<Note | undefined>;
+	findByBuiltInKey(key: string): Promise<Note | undefined>;
+	listActive(projectId?: ProjectId): Promise<readonly Note[]>;
 	/**
 	 * The search projection of {@link listActive}: only the columns exact text search
 	 * reads, so a global search never ships every note's document body out of the database.
 	 */
-	listSearchable(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSearchTarget[]>;
+	listSearchable(projectId?: ProjectId): Promise<readonly NoteSearchTarget[]>;
 	/** The complement of {@link listActive}: notes in the trash, most recently discarded first. */
-	listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]>;
-	countSiblings(actor: ActorContext, projectId: ProjectId, parentId?: NoteId): Promise<number>;
-	insert(actor: ActorContext, note: Note): Promise<Note>;
+	listTrashed(projectId?: ProjectId): Promise<readonly Note[]>;
+	countSiblings(projectId: ProjectId, parentId?: NoteId): Promise<number>;
+	insert(note: Note): Promise<Note>;
 	/**
 	 * Targeted write for the note's section-numbering override (`null` clears it back to
 	 * inherit), kept off document writes so the sync protocol can never clobber it with a
 	 * stale device copy.
 	 */
-	setSectionNumbering(actor: ActorContext, id: NoteId, enabled: boolean | null): Promise<Note>;
-	updateIfRevision(
-		actor: ActorContext,
-		note: Note,
-		expectedRevision: number
-	): Promise<Note | undefined>;
-	deleteTrashed(actor: ActorContext, id: NoteId): Promise<Pick<Note, 'id' | 'title'> | undefined>;
-	insertRevision(actor: ActorContext, revision: NoteRevision): Promise<NoteRevision>;
-	listRevisions(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]>;
+	setSectionNumbering(id: NoteId, enabled: boolean | null): Promise<Note>;
+	updateIfRevision(note: Note, expectedRevision: number): Promise<Note | undefined>;
+	deleteTrashed(id: NoteId): Promise<Pick<Note, 'id' | 'title'> | undefined>;
+	insertRevision(revision: NoteRevision): Promise<NoteRevision>;
+	listRevisions(noteId: NoteId): Promise<readonly NoteRevision[]>;
 	/** Drop all but the newest `keepNewest` revisions of a note, so history stays bounded. */
-	pruneRevisions(actor: ActorContext, noteId: NoteId, keepNewest: number): Promise<void>;
-	restoreAttachmentSnapshot(
-		actor: ActorContext,
-		revisionId: NoteRevision['id'],
-		noteId: NoteId
-	): Promise<void>;
+	pruneRevisions(noteId: NoteId, keepNewest: number): Promise<void>;
+	restoreAttachmentSnapshot(revisionId: NoteRevision['id'], noteId: NoteId): Promise<void>;
 }

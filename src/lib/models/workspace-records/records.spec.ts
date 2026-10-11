@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { readProseMirrorDocument } from '$lib/models/notes';
+import { storedDocumentReadSchema } from '$lib/models/notes';
 import { agentPayloadObjectSchema } from '$lib/models/agent/payload';
 import { noteRecordSchema } from './index';
 
@@ -8,7 +8,7 @@ describe('cached record boundaries', () => {
 	it('preserves an explicitly unreadable block across repeated cache reads', () => {
 		const note = {
 			...noteBuilder(),
-			document: readProseMirrorDocument({
+			document: storedDocumentReadSchema.parse({
 				type: 'doc',
 				content: [{ type: 'future-block', text: 'Keep this content' }]
 			})

@@ -7,10 +7,10 @@ import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-art
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const projects = new InMemoryProjectRepository();
-	const notes = new InMemoryNoteRepository();
+	const projects = new InMemoryProjectRepository(testActor());
+	const notes = new InMemoryNoteRepository(testActor());
 	const skills = new InMemorySkillRepository(notes);
-	const provisioner = new BuiltInSkills(projects, notes, skills, {
+	const provisioner = new BuiltInSkills(testActor(), projects, notes, skills, {
 		active: BUILT_INS,
 		retired: RETIRED_BUILT_INS
 	});
@@ -19,13 +19,12 @@ const setup = () => {
 
 it('replaces an archived Inbox while preserving built-in identities', async () => {
 	const { projects, notes, provisioner } = setup();
-	const owner = testActor();
-	await provisioner.ensure(owner);
-	const previous = (await projects.listActive(owner)).find((project) => project.role === 'inbox')!;
+	await provisioner.ensure();
+	const previous = (await projects.listActive()).find((project) => project.role === 'inbox')!;
 	const ids = notes.notes.map((note) => note.id).sort();
-	await projects.archive(owner, previous.id);
-	await provisioner.ensure(owner);
-	const active = (await projects.listActive(owner)).find((project) => project.role === 'inbox')!;
+	await projects.archive(previous.id);
+	await provisioner.ensure();
+	const active = (await projects.listActive()).find((project) => project.role === 'inbox')!;
 	expect({
 		replaced: active.id !== previous.id,
 		previousArchived: Boolean(
@@ -38,10 +37,9 @@ it('replaces an archived Inbox while preserving built-in identities', async () =
 
 it('uses an available Inbox name without claiming another project', async () => {
 	const { projects, provisioner } = setup();
-	const owner = testActor();
-	await projects.insert(owner, { name: 'inbox', role: 'workspace' });
-	await projects.insert(owner, { name: 'Inbox (2)', role: 'workspace' });
-	await provisioner.ensure(owner);
+	await projects.insert({ name: 'inbox', role: 'workspace' });
+	await projects.insert({ name: 'Inbox (2)', role: 'workspace' });
+	await provisioner.ensure();
 	expect(projects.projects.map((project) => ({ name: project.name, role: project.role }))).toEqual([
 		{ name: 'inbox', role: 'workspace' },
 		{ name: 'Inbox (2)', role: 'workspace' },

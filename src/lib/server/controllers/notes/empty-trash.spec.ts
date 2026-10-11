@@ -1,13 +1,27 @@
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { describe, expect, it } from 'vitest';
-import { Notes, type NotesDependencies } from './controller';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	projectBuilder,
@@ -16,15 +30,41 @@ import {
 	testNow,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository();
+	const notes = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder(), projectBuilder({ id: testProjectId(2), name: 'Beta' })];
-	const service = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
+	const service = createNoteServices(
+		testActor(),
+		notes,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
 	const controller = new Notes(
+		testActor(),
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
-			noteDeletion: service,
+			...agentToolResultsFixture(),
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
+			noteDeletion: service.deletion,
 			transactionRunner: new InMemoryTransactionRunner([notes, projects])
 		})
 	);
@@ -38,21 +78,21 @@ describe('Empty trash invariants', () => {
 			noteBuilder({ archivedAt: testNow }),
 			noteBuilder({ id: testNoteId(2), archivedAt: testNow })
 		];
-		await controller.emptyTrash(testActor(), {});
+		await controller.emptyTrash({});
 		expect(notes.notes).toEqual([]);
 	});
 
 	it('leaves the active notes untouched', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder(), noteBuilder({ id: testNoteId(2), archivedAt: testNow })];
-		await controller.emptyTrash(testActor(), {});
+		await controller.emptyTrash({});
 		expect(notes.notes.map((note) => note.id)).toEqual([testNoteId()]);
 	});
 
 	it('reports the ids it destroyed', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		const result = await controller.emptyTrash(testActor(), {});
+		const result = await controller.emptyTrash({});
 		expect(result.deletedNoteIds).toEqual([testNoteId()]);
 	});
 
@@ -62,7 +102,7 @@ describe('Empty trash invariants', () => {
 			noteBuilder({ archivedAt: testNow }),
 			noteBuilder({ id: testNoteId(2), projectId: testProjectId(2), archivedAt: testNow })
 		];
-		await controller.emptyTrash(testActor(), { projectId: testProjectId(2) });
+		await controller.emptyTrash({ projectId: testProjectId(2) });
 		expect(notes.notes.map((note) => note.id)).toEqual([testNoteId()]);
 	});
 
@@ -71,20 +111,20 @@ describe('Empty trash invariants', () => {
 	it('spares trashed skills', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ kind: 'skill', archivedAt: testNow })];
-		await controller.emptyTrash(testActor(), {});
+		await controller.emptyTrash({});
 		expect(notes.notes).toHaveLength(1);
 	});
 
 	it('leaves another user’s trash alone', async () => {
 		const { notes, controller } = setup();
-		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		await controller.emptyTrash(testActor(2), {});
+		notes.notes = [noteBuilder({ archivedAt: testNow, userId: testActor(2).userId })];
+		await controller.emptyTrash({});
 		expect(notes.notes).toHaveLength(1);
 	});
 
 	it('does nothing when the trash is already empty', async () => {
 		const { controller } = setup();
-		const result = await controller.emptyTrash(testActor(), {});
+		const result = await controller.emptyTrash({});
 		expect(result.deletedNoteIds).toEqual([]);
 	});
 
@@ -95,7 +135,7 @@ describe('Empty trash invariants', () => {
 			noteBuilder({ id: testNoteId(2), projectId: testProjectId(2), archivedAt: testNow })
 		];
 		notes.deleteFailures.add(testNoteId(2));
-		await controller.emptyTrash(testActor(), {}).catch(() => undefined);
+		await controller.emptyTrash({}).catch(() => undefined);
 		expect(notes.notes.map((note) => note.id)).toEqual([testNoteId(), testNoteId(2)]);
 	});
 });

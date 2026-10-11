@@ -14,7 +14,7 @@ export * from './MediaPlaceHolder.js';
 export * from './Proofread.js';
 export * from './SvelteMarkViewRenderer.js';
 export * from './SvelteNodeViewRenderer.js';
-export * from './Video.js';
+export * from '$lib/infrastructure/notes/schema/video';
 export * from './VideoExtended.js';
 export * from './commands.js';
 export * from './editor.js';

@@ -1,21 +1,56 @@
-import { describe, expect, it } from 'vitest';
-import { Notes, type NotesDependencies } from './controller';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemoryUserPreferencesRepository } from '$lib/testing/identity/fakes/in-memory-user-preferences';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
-import { InMemoryUserPreferencesRepository } from '$lib/testing/identity/fakes/in-memory-user-preferences';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	noteBuilder,
 	projectBuilder,
 	testActor
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const content = new InMemoryNoteContent();
-	const projects = new InMemoryProjects();
-	const preferences = new InMemoryUserPreferencesRepository();
+	const content = new InMemoryNoteContent(testActor());
+	const projects = new InMemoryProjects(testActor());
+	const preferences = new InMemoryUserPreferencesRepository(testActor());
 	const controller = new Notes(
+		testActor(),
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
+			...agentToolResultsFixture(),
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			noteReader: content,
 			noteSectionNumbering: content,
 			projectReader: projects,
@@ -36,7 +71,7 @@ describe('Setting section numbering on a note', () => {
 	it('pins an explicit choice on the note', async () => {
 		const { content, projects, controller } = setup();
 		const note = seed(content, projects);
-		const output = await controller.setSectionNumbering(testActor(), {
+		const output = await controller.setSectionNumbering({
 			noteId: note.id,
 			enabled: true
 		});
@@ -46,7 +81,7 @@ describe('Setting section numbering on a note', () => {
 	it('persists the override on the note itself', async () => {
 		const { content, projects, controller } = setup();
 		const note = seed(content, projects);
-		await controller.setSectionNumbering(testActor(), { noteId: note.id, enabled: false });
+		await controller.setSectionNumbering({ noteId: note.id, enabled: false });
 		expect(content.notes[0]?.sectionNumbering).toBe(false);
 	});
 
@@ -54,16 +89,16 @@ describe('Setting section numbering on a note', () => {
 		const { content, projects, controller } = setup();
 		const note = seed(content, projects);
 		projects.projects = [{ ...projects.projects[0]!, sectionNumberingDefault: true }];
-		await controller.setSectionNumbering(testActor(), { noteId: note.id, enabled: false });
-		const output = await controller.setSectionNumbering(testActor(), { noteId: note.id });
+		await controller.setSectionNumbering({ noteId: note.id, enabled: false });
+		const output = await controller.setSectionNumbering({ noteId: note.id });
 		expect(output.sectionNumbering.effective).toBe(true);
 	});
 
 	it('reports what an inheriting note falls back to', async () => {
 		const { content, projects, preferences, controller } = setup();
 		const note = seed(content, projects);
-		await preferences.update(testActor(), { sectionNumberingDefault: true });
-		const output = await controller.setSectionNumbering(testActor(), { noteId: note.id });
+		await preferences.update({ sectionNumberingDefault: true });
+		const output = await controller.setSectionNumbering({ noteId: note.id });
 		expect(output.sectionNumbering.inherited).toBe(true);
 	});
 });

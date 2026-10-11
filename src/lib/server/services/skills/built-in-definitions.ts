@@ -545,16 +545,3 @@ export const RETIRED_BUILT_INS: readonly BuiltInSkillDefinition[] = [
 	DIAGRAMMING_V1,
 	DIAGRAMMING_V2
 ];
-
-/**
- * Built-in skills a screen asks for on the user's behalf.
- *
- * Named rather than identified by note id: the name resolves through the same
- * catalogue whether or not the user has edited their copy. The trade is that a
- * user who *renames* their copy stops matching — an id would have survived that,
- * but would not have survived them never having installed it.
- */
-export const skillsForSurface = (kind: AppSurfaceKind | undefined): readonly string[] =>
-	kind === undefined
-		? []
-		: BUILT_INS.filter((skill) => skill.surfaces?.includes(kind)).map((skill) => skill.name);

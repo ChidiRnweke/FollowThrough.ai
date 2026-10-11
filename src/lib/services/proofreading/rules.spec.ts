@@ -1,12 +1,8 @@
 import type { ProofreadIssue } from '$lib/models/proofreading';
 import { describe, expect, it } from 'vitest';
-import {
-	dictionaryWordFor,
-	isSpellingIssue,
-	normalizeDictionaryWord,
-	proofreadSuggestion,
-	withoutIgnoredWords
-} from './rules';
+import { ProofreadingRulesService } from '$lib/services/proofreading/rules';
+const { dictionaryWordFor, normalizeDictionaryWord, proofreadSuggestion, withoutIgnoredWords } =
+	new ProofreadingRulesService();
 
 const issue = (overrides: Partial<ProofreadIssue> = {}): ProofreadIssue => ({
 	start: 0,
@@ -32,13 +28,13 @@ describe('normalizeDictionaryWord', () => {
 	});
 });
 
-describe('isSpellingIssue', () => {
+describe('dictionary eligibility', () => {
 	it('treats a typo as a spelling problem', () => {
-		expect(isSpellingIssue(issue({ kind: 'Typo' }))).toBe(true);
+		expect(dictionaryWordFor(issue({ kind: 'Typo' }))).toBe('nweke');
 	});
 
 	it('does not treat a style note as a spelling problem', () => {
-		expect(isSpellingIssue(issue({ kind: 'Style' }))).toBe(false);
+		expect(dictionaryWordFor(issue({ kind: 'Style' }))).toBeUndefined();
 	});
 });
 

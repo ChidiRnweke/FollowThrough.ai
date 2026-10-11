@@ -132,3 +132,12 @@ export interface WriteConflictView<T> {
 	readonly remote:
 		{ readonly kind: 'found'; readonly value: T } | { readonly kind: 'deleted' | 'unavailable' };
 }
+
+export interface OutboxProjection<C, T> {
+	readonly entries: readonly OutboxEntry<C, T>[];
+	readonly receipts: ReadonlyMap<string, WriteReceipt<T>>;
+}
+
+export type EditorSave<T> =
+	| { readonly kind: 'saved'; readonly value: T }
+	| { readonly kind: 'failure'; readonly message: string };

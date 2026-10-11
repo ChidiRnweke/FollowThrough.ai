@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { rebaseFields, sameValue, wholeValueRebase } from './rebase';
+import { FieldReplayService } from '$lib/services/sync/rebase';
+const { rebaseFields } = new FieldReplayService();
 
 interface Task {
 	readonly title: string;
@@ -68,21 +69,23 @@ describe('three-way field replay', () => {
 
 describe('stored value equality', () => {
 	it('ignores key order in nested values', () => {
-		expect(sameValue({ a: 1, b: { c: 2, d: 3 } }, { b: { d: 3, c: 2 }, a: 1 })).toBe(true);
+		expect(
+			rebaseFields(
+				{ value: { a: 1, b: { c: 2, d: 3 } } },
+				{ value: { b: { d: 3, c: 2 }, a: 1 } },
+				{ value: { a: 2, b: { c: 2, d: 3 } } },
+				new Set()
+			)
+		).toEqual({ value: { value: { a: 2, b: { c: 2, d: 3 } } }, overlaps: false });
 	});
 	it('treats an absent field and an undefined field as equal', () => {
-		expect(sameValue<{ a?: number }>({}, { a: undefined })).toBe(true);
-	});
-});
-
-describe('whole-value replay', () => {
-	it('takes the newer value when the local edit changed nothing', () => {
-		expect(wholeValueRebase<string>()('Original', 'Original', 'Theirs')).toEqual({
-			value: 'Theirs',
-			overlaps: false
-		});
-	});
-	it('reports an overlap when both sides replaced the value', () => {
-		expect(wholeValueRebase<string>()('Original', 'Mine', 'Theirs')?.overlaps).toBe(true);
+		expect(
+			rebaseFields<{ value: { a?: number } }>(
+				{ value: {} },
+				{ value: { a: undefined } },
+				{ value: { a: 2 } },
+				new Set()
+			)
+		).toEqual({ value: { value: { a: 2 } }, overlaps: false });
 	});
 });

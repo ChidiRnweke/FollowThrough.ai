@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { SignIn } from '$lib/server/controllers/identity/controller';
 import { AuthentikClient } from '$lib/server/repositories/identity/authentik';
-import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
+import { UserAccountRecords } from '$lib/server/repositories/identity/postgres/users';
 import { SessionRecords } from '$lib/server/repositories/identity/postgres/sessions';
 import { OAuthAuthorization } from '$lib/server/services/identity/oauth-authorization';
 import { ProviderAccounts } from '$lib/server/services/identity/provider-accounts';
@@ -31,7 +31,7 @@ const setup = (suffix: string) => {
 		sessions,
 		controller: new SignIn({
 			authorization: new OAuthAuthorization(new AuthentikClient(config, fetch), config),
-			accounts: new ProviderAccounts(new UserRecords(context.db)),
+			accounts: new ProviderAccounts(new UserAccountRecords(context.db)),
 			sessions
 		})
 	};

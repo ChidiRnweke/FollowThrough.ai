@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { extractTemplateStyles } from './template-styles';
+import { DocxTemplateStyleReader } from './template-styles';
+import { createHash } from 'node:crypto';
 
 describe('template styles', () => {
 	it('rejects a truncated ZIP package', async () => {
-		await expect(extractTemplateStyles(Buffer.from('PK'))).rejects.toThrow();
+		const bytes = Buffer.from('PK');
+		await expect(
+			new DocxTemplateStyleReader().read(
+				{
+					byteSize: bytes.length,
+					checksumSha256: createHash('sha256').update(bytes).digest('hex')
+				},
+				bytes
+			)
+		).rejects.toThrow();
 	});
 });

@@ -20,6 +20,7 @@ const key = (record: AppliedRecord) => `${record.type}:${record.value.id}`;
 export class InMemoryApplicationEffects
 	implements ApplicationEffectRepository, SnapshotParticipant
 {
+	constructor(private readonly actor: ActorContext) {}
 	readonly effects = new Map<SuggestionId, ApplicationEffect<AppliedRecord>>();
 	readonly records = new Map<string, AppliedRecord>();
 	readonly versions = new Map<string, number>();
@@ -28,37 +29,27 @@ export class InMemoryApplicationEffects
 		this.records.set(key(record), structuredClone(record));
 		this.versions.set(key(record), (this.versions.get(key(record)) ?? 0) + 1);
 	}
-	async lock(_actor: ActorContext, _id: SuggestionId): Promise<void> {}
-	async find(
-		_actor: ActorContext,
-		id: SuggestionId
-	): Promise<ApplicationEffect<AppliedRecord> | null> {
+	async lock(_id: SuggestionId): Promise<void> {}
+	async find(id: SuggestionId): Promise<ApplicationEffect<AppliedRecord> | null> {
 		return this.effects.get(id) ?? null;
 	}
-	async lockVersion(actor: ActorContext, record: AppliedRecord): Promise<string | null> {
+	async lockVersion(record: AppliedRecord): Promise<string | null> {
 		const stored = this.records.get(key(record));
-		return stored?.value.userId === actor.userId
+		return stored?.value.userId === this.actor.userId
 			? `sync-v1-${this.versions.get(key(record))}`
 			: null;
 	}
-	async record(
-		actor: ActorContext,
-		id: SuggestionId,
-		changes: readonly AppliedChange<AppliedRecord>[]
-	): Promise<void> {
+	async record(id: SuggestionId, changes: readonly AppliedChange<AppliedRecord>[]): Promise<void> {
 		const recorded: RecordedChange<AppliedRecord>[] = [];
 		for (const change of changes) {
-			const version = await this.lockVersion(actor, change.after);
+			const version = await this.lockVersion(change.after);
 			if (version === null)
 				throw new InvalidTransitionError('An applied proposal participant is unavailable');
 			recorded.push(change.kind === 'unchanged' ? change : { ...change, version });
 		}
 		this.effects.set(id, structuredClone({ changes: recorded }));
 	}
-	async restore(
-		_actor: ActorContext,
-		change: AppliedChange<AppliedRecord>
-	): Promise<AppliedRecord> {
+	async restore(change: AppliedChange<AppliedRecord>): Promise<AppliedRecord> {
 		if (this.failRestore) throw new ExternalServiceError('Recorded changes could not be restored');
 		if (change.kind === 'unchanged') return change.after;
 		let record = change.kind === 'modified' ? change.before : change.after;

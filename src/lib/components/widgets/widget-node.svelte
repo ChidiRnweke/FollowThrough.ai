@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { NodeViewProps } from '@tiptap/core';
 	import { untrack } from 'svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -7,10 +8,13 @@
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Icon from '$lib/components/icons';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
-	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
+	import { widgetEdits } from './widget-edits';
 	import WidgetView from './widget-view.svelte';
-	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
+	import type { Widget } from '$lib/models/widgets';
+	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
+	import { todayLocalDate } from '$lib/client/todos/local-date';
+	const widgetSources = (widget: Widget) => sourceViews.widgetSources(widget, todayLocalDate());
 
 	let { node, editor }: NodeViewProps = $props();
 
@@ -29,7 +33,7 @@
 				? draft.value
 				: null
 			: widgetId
-				? (workspaceSession.current?.resources.views.get('widgets', widgetId) ?? null)
+				? (workspaceViews.get('widgets', widgetId) ?? null)
 				: null
 	);
 </script>

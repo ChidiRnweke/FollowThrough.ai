@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { assembleTodoView } from './presentation';
+import { TodoPresentationService } from './presentation';
+const presentation = new TodoPresentationService();
 import {
 	anchorBuilder,
 	noteBuilder,
@@ -12,7 +13,7 @@ it('shows the linked note while preserving the extraction origin', () => {
 	const linked = noteBuilder({ id: testNoteId(2), title: 'Work plan' });
 	const anchor = anchorBuilder({ noteId: origin.id });
 	const todo = todoBuilder({ sourceAnchorId: anchor.id, linkedNoteId: linked.id });
-	const view = assembleTodoView(todo, { origin, linked, anchor, provenance: null });
+	const view = presentation.view(todo, { origin, linked, anchor, provenance: null });
 	expect({ source: view.sourceNote, origin: view.originNote }).toEqual({
 		source: { id: linked.id, title: linked.title },
 		origin: { id: origin.id, title: origin.title }
@@ -24,6 +25,6 @@ it('uses the extraction origin when the linked note is absent', () => {
 	const anchor = anchorBuilder({ noteId: origin.id });
 	const todo = todoBuilder({ sourceAnchorId: anchor.id, linkedNoteId: testNoteId(2) });
 	expect(
-		assembleTodoView(todo, { origin, linked: null, anchor, provenance: null }).sourceNote
+		presentation.view(todo, { origin, linked: null, anchor, provenance: null }).sourceNote
 	).toEqual({ id: origin.id, title: origin.title });
 });

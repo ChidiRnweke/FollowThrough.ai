@@ -1,16 +1,19 @@
-import { prepareWorkspaceCommand } from '$lib/controllers/workspace/commands';
 import type { CreateTodoInput } from '$lib/models/todos';
-import { Todos, type TodosDependencies } from './controller';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { describe, expect, it } from 'vitest';
-import { TodoCatalog } from '$lib/server/services/todos/catalog';
-import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { prepareWorkspaceCommand } from '$lib/testing/workspace/fixtures/commands';
 import {
 	anchorBuilder,
 	noteBuilder,
@@ -20,17 +23,27 @@ import {
 	testProjectId,
 	testTodoId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
+import { describe, expect, it } from 'vitest';
+import { Todos, type TodosDependencies } from './controller';
 const setup = () => {
-	const todos = new InMemoryTodoRepository();
-	const projects = new InMemoryProjectRepository();
-	const anchors = new InMemoryAnchorRepository();
-	const notes = new InMemoryNoteRepository();
-	const provenance = new InMemoryProvenanceRepository();
+	const todos = new InMemoryTodoRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
+	const anchors = new InMemoryAnchorRepository(testActor());
+	const notes = new InMemoryNoteRepository(testActor());
+	const provenance = new InMemoryProvenanceRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const service = new TodoCatalog(todos, projects, anchors, notes, provenance);
+	const service = createTodoServices(testActor(), todos, projects, anchors, notes, provenance);
 	const controller = new Todos(
-		capabilityDependencies<TodosDependencies>({ todoCreator: service }),
+		testActor(),
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<TodosDependencies>({
+			...agentToolResultsFixture(),
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
+			todoCreator: service.creator
+		}),
 		() => testNow
 	);
 	return {
@@ -42,7 +55,6 @@ const setup = () => {
 		controller
 	};
 };
-
 describe('Task creation rules', () => {
 	const variants: readonly Pick<CreateTodoInput, 'responsibility' | 'waitingOn' | 'status'>[] = [
 		{ responsibility: 'mine', waitingOn: 'Sam' },
@@ -59,13 +71,13 @@ describe('Task creation rules', () => {
 				title: '  Send design  ',
 				...variant
 			};
-			const preview = prepareWorkspaceCommand({ kind: 'createTodo', ...input }, null, {
+			const preview = await prepareWorkspaceCommand({ kind: 'createTodo', ...input }, null, {
 				userId: testActor().userId,
 				now: testNow,
 				records: new Map(),
 				inventory: 'complete'
 			});
-			const { todo } = await controller.create(testActor(), input);
+			const { todo } = await controller.create(input);
 			expect({ returned: todo, stored: todos.todos }).toEqual({
 				returned: preview.local?.value,
 				stored: [preview.local?.value]
@@ -75,7 +87,7 @@ describe('Task creation rules', () => {
 	it('rejects a blank title before creating a task', async () => {
 		const { controller, todos } = setup();
 		const result = await controller
-			.create(testActor(), { projectId: testProjectId(), title: '  ', responsibility: 'mine' })
+			.create({ projectId: testProjectId(), title: '  ', responsibility: 'mine' })
 			.then(
 				() => 'saved',
 				(error: Error) => error.message
@@ -92,18 +104,17 @@ describe('Task creation rules', () => {
 		const { controller, projects } = setup();
 		projects.projects = [project];
 		await expect(
-			controller.create(testActor(), {
+			controller.create({
 				projectId: project.id,
 				title: 'Send design',
 				responsibility: 'mine'
 			})
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
-
 	it('preserves the final identity assigned to a task before it was synchronized', async () => {
 		const { controller } = setup();
 		const id = testTodoId(501);
-		const { todo } = await controller.create(testActor(), {
+		const { todo } = await controller.create({
 			id,
 			projectId: testProjectId(),
 			title: 'Offline task',
@@ -113,7 +124,7 @@ describe('Task creation rules', () => {
 	});
 	it('normalizes the title and clears an irrelevant counterparty at creation', async () => {
 		const { controller } = setup();
-		const { todo } = await controller.create(testActor(), {
+		const { todo } = await controller.create({
 			projectId: testProjectId(),
 			title: '  Send design  ',
 			responsibility: 'mine',
@@ -124,7 +135,7 @@ describe('Task creation rules', () => {
 	});
 	it('allows waiting-on work without a named counterparty', async () => {
 		const { controller } = setup();
-		const { todo } = await controller.create(testActor(), {
+		const { todo } = await controller.create({
 			projectId: testProjectId(),
 			title: 'Receive spec',
 			responsibility: 'waiting_on'
@@ -136,7 +147,7 @@ describe('Task creation rules', () => {
 		anchors.anchors = [anchorBuilder()];
 		notes.notes = [noteBuilder({ projectId: testProjectId(2) })];
 		await expect(
-			controller.create(testActor(), {
+			controller.create({
 				projectId: testProjectId(),
 				title: 'Send design',
 				responsibility: 'mine',

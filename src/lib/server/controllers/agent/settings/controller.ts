@@ -1,57 +1,41 @@
-import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
-import { DEFAULT_AGENT_MAX_TURNS, type WebResearchSettings } from '$lib/models/agent';
 import {
-	configuredAgentModels,
-	configuredChatModels,
-	modelChoiceIssue,
-	resolveDefaultAgentModel,
-	resolveDefaultVisionModel
+	CHAT_WEB_SEARCH_DEFAULTS,
+	DEFAULT_AGENT_MAX_TURNS,
+	type WebResearchOptions
+} from '$lib/models/agent';
+import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
+import type {
+	IAgentModelChoiceService,
+	IAgentModelSelectionService
 } from '$lib/services/agent/model-selection';
-import { applyAgentPreferenceUpdate } from '$lib/services/agent/preferences';
-import { mutationResource } from '$lib/services/workspace/commands';
+import type { AgentRunSettings } from '$lib/services/agent/run-settings';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+
+import type { AgentPreferenceEditing } from '$lib/services/agent/preferences';
+
+import { ValidationError } from '$lib/errors';
+import type { AgentModel, AgentPreferences, UpdateAgentPreferencesInput } from '$lib/models/agent';
+import type { AgentModelDefaults } from '$lib/models/agent/model-label';
+import type { ActorContext } from '$lib/models/identity';
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
 import type {
 	AgentPreferenceMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
-import type { ActorContext } from '$lib/models/identity';
-import type { AgentModel, AgentPreferences, UpdateAgentPreferencesInput } from '$lib/models/agent';
-import { webSearchEngines } from '$lib/models/agent';
-import type { AgentModelDefaults } from '$lib/models/agent/model-label';
-import { ValidationError } from '$lib/errors';
 import type {
 	AgentModelCatalog,
-	AgentPreferenceCatalog
+	AgentPreferenceEditor
 } from '$lib/server/services/agent/runs/preferences';
-
-/**
- * Rejected rather than clamped: a caller that asks for 500 search results has
- * misunderstood the setting, and silently storing 50 would tell them they got
- * what they asked for.
- */
-const assertRange = (
-	label: string,
-	value: number | null | undefined,
-	minimum: number,
-	maximum: number
-): void => {
-	if (value === undefined || value === null) return;
-	if (!Number.isInteger(value) || value < minimum || value > maximum)
-		throw new ValidationError(`${label} must be a whole number between ${minimum} and ${maximum}`);
-};
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /**
  * Application boundary for agent preferences: reading and updating the user's defaults,
  * and listing the models they can choose from.
  */
 export interface AgentSettingsController {
-	synchronize(
-		actor: ActorContext,
-		input: AgentPreferenceMutationRequest
-	): Promise<WorkspaceMutationResult>;
+	synchronize(input: AgentPreferenceMutationRequest): Promise<WorkspaceMutationResult>;
 	/** Read the user's current agent preferences. */
-	getPreferences(actor: ActorContext): Promise<AgentPreferences>;
+	getPreferences(): Promise<AgentPreferences>;
 	/**
 	 * Apply an update to the user's agent preferences, validating every value in one
 	 * place — the settings form and the agent's own `update_agent_preferences` tool both
@@ -62,12 +46,16 @@ export interface AgentSettingsController {
 	 * @throws ValidationError if a model is not selectable, the engine is unknown, or a
 	 * numeric limit falls outside its range.
 	 */
-	updatePreferences(
-		actor: ActorContext,
-		input: UpdateAgentPreferencesInput
-	): Promise<AgentPreferences>;
+	updatePreferences(input: UpdateAgentPreferencesInput): Promise<AgentPreferences>;
+	/**
+	 * {@link updatePreferences}, answered with the preferences before the update as well. A
+	 * preference is a bare scalar, so the result alone cannot say whether a value changed or
+	 * was restated; the before-image is read here, before the write, because reading it after
+	 * is the one moment it is guaranteed to be wrong.
+	 */
+	changePreferences(input: UpdateAgentPreferencesInput): Promise<AgentPreferenceChange>;
 	/** List the models the user can choose from for the agent. */
-	listModels(actor: ActorContext): Promise<readonly AgentModel[]>;
+	listModels(): Promise<readonly AgentModel[]>;
 	/**
 	 * The chat and vision models a conversation with no override of its own runs on.
 	 *
@@ -76,38 +64,42 @@ export interface AgentSettingsController {
 	 * deployment configuration the browser cannot see, and a guess there would label
 	 * a model the run does not use.
 	 */
-	resolveDefaults(actor: ActorContext): Promise<AgentModelDefaults>;
-	bootstrap(actor: ActorContext): Promise<WorkspaceBootstrap>;
+	resolveDefaults(): Promise<AgentModelDefaults>;
+	bootstrap(): Promise<WorkspaceBootstrap>;
 }
 
 export interface AgentSettingsDependencies {
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	readonly preferenceEditing: AgentPreferenceEditing;
+	readonly modelSelection: IAgentModelSelectionService;
+	readonly modelChoices: IAgentModelChoiceService;
+	syncMutations: WorkspaceMutationGuard;
 	transactionRunner: AtomicOperation;
 	syncRetry: 'database-only' | 'never';
-	preferences: Pick<AgentPreferenceCatalog, 'get' | 'getForWrite' | 'defaults' | 'persist'>;
+	preferences: AgentPreferenceEditor;
 	now: () => DateTime;
 	models: AgentModelCatalog;
 	/** Deployment fallback chat model when the user has not chosen one. */
 	defaultModel: string;
 	/** Deployment fallback vision model when the user has not chosen one. */
 	defaultVisionModel: string;
-	webSearchDefaults: WebResearchSettings;
+	readonly runSettings: AgentRunSettings;
+	webSearchOverrides: WebResearchOptions;
 	agentAvailable: boolean;
 }
 
 export class AgentSettings implements AgentSettingsController {
-	async synchronize(
-		actor: ActorContext,
-		input: AgentPreferenceMutationRequest
-	): Promise<WorkspaceMutationResult> {
+	async synchronize(input: AgentPreferenceMutationRequest): Promise<WorkspaceMutationResult> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
+					const prepared = await this.dependencies.syncMutations.prepare(input, {
+						identity: target,
+						key: this.workspaceCommandRules.workspaceResourceKey(target)
+					});
 					if (prepared.kind === 'finished') return prepared.result;
-					await this.applySynchronizedCommand(actor, input);
-					return this.dependencies.syncMutations.complete(actor, input, target);
+					await this.applySynchronizedCommand(input);
+					return this.dependencies.syncMutations.complete(input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);
@@ -117,24 +109,27 @@ export class AgentSettings implements AgentSettingsController {
 		}
 	}
 
-	private async applySynchronizedCommand(
-		actor: ActorContext,
-		input: AgentPreferenceMutationRequest
-	): Promise<void> {
-		if (input.command.userId !== actor.userId)
+	private async applySynchronizedCommand(input: AgentPreferenceMutationRequest): Promise<void> {
+		if (input.command.userId !== this.actor.userId)
 			throw new ValidationError('The preferences belong to another account');
-		await this.updatePreferences(actor, input.command.patch);
+		await this.updatePreferences(input.command.patch);
 	}
-	constructor(private readonly dependencies: AgentSettingsDependencies) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: AgentSettingsDependencies
+	) {}
 
-	getPreferences(actor: ActorContext): Promise<AgentPreferences> {
-		return this.dependencies.preferences.get(actor);
+	getPreferences(): Promise<AgentPreferences> {
+		return this.dependencies.preferences.get();
 	}
 
-	async updatePreferences(
-		actor: ActorContext,
-		input: UpdateAgentPreferencesInput
-	): Promise<AgentPreferences> {
+	async changePreferences(input: UpdateAgentPreferencesInput): Promise<AgentPreferenceChange> {
+		const previous = await this.getPreferences();
+		return { ...(await this.updatePreferences(input)), previous };
+	}
+
+	async updatePreferences(input: UpdateAgentPreferencesInput): Promise<AgentPreferences> {
 		const choices: { modelId: string; role: 'chat' | 'vision' | 'generation' }[] = [];
 		if (input.defaultModel) choices.push({ modelId: input.defaultModel, role: 'chat' });
 		if (input.defaultVisionModel)
@@ -143,46 +138,57 @@ export class AgentSettings implements AgentSettingsController {
 			choices.push({ modelId: input.attachmentVisionModel, role: 'vision' });
 		if (input.inlineModel) choices.push({ modelId: input.inlineModel, role: 'generation' });
 		if (choices.length > 0) {
-			const models = configuredAgentModels(
+			const models = this.dependencies.modelChoices.configuredAgentModels(
 				await this.dependencies.models.list(),
 				this.modelDefaults()
 			);
 			for (const choice of choices) {
-				const issue = modelChoiceIssue(models, choice.modelId, choice.role);
+				const issue = this.dependencies.modelChoices.modelChoiceIssue(
+					models,
+					choice.modelId,
+					choice.role
+				);
 				if (issue) throw new ValidationError(issue);
 			}
 		}
-		// Both the settings form and the agent's own `update_agent_preferences`
-		// land here, so this is the one place the limits have to hold.
-		if (input.webSearchEngine && !webSearchEngines.includes(input.webSearchEngine))
-			throw new ValidationError(`Web search engine must be one of: ${webSearchEngines.join(', ')}`);
-		assertRange('Web search results', input.webSearchMaxResults, 1, 50);
-		assertRange('Total web search results', input.webSearchMaxTotalResults, 1, 100);
-		assertRange('Agent turn limit', input.agentMaxTurns, 1, 50);
+		this.dependencies.preferenceEditing.validate(input);
 		return this.dependencies.transactionRunner.run(async () => {
-			const stored = await this.dependencies.preferences.getForWrite(actor);
+			const resourceKey = this.workspaceCommandRules.workspaceResourceKey({
+				type: 'agent_preferences',
+				id: [this.actor.userId]
+			});
+			const stored = await this.dependencies.preferences.getForWrite(resourceKey);
 			const timestamp = this.dependencies.now();
-			const current = stored ?? this.dependencies.preferences.defaults(actor, timestamp);
-			const preferences = applyAgentPreferenceUpdate(current, input, timestamp);
-			return this.dependencies.preferences.persist(actor, preferences);
+			const current = stored ?? this.dependencies.preferences.defaults(timestamp);
+			const preferences = this.dependencies.preferenceEditing.apply(current, input, timestamp);
+			return this.dependencies.preferences.persist(preferences);
 		});
 	}
 
-	async listModels(_actor: ActorContext): Promise<readonly AgentModel[]> {
-		void _actor;
-		return configuredChatModels(await this.dependencies.models.list(), this.modelDefaults());
+	async listModels(): Promise<readonly AgentModel[]> {
+		return this.dependencies.modelChoices.configuredChatModels(
+			await this.dependencies.models.list(),
+			this.modelDefaults()
+		);
 	}
 
-	async bootstrap(actor: ActorContext): Promise<WorkspaceBootstrap> {
+	async bootstrap(): Promise<WorkspaceBootstrap> {
 		const agentDefaults = this.modelDefaults();
-		const agentModels = configuredChatModels(await this.dependencies.models.list(), agentDefaults);
+		const webSearch = this.dependencies.runSettings.research(
+			this.dependencies.webSearchOverrides,
+			CHAT_WEB_SEARCH_DEFAULTS
+		);
+		const agentModels = this.dependencies.modelChoices.configuredChatModels(
+			await this.dependencies.models.list(),
+			agentDefaults
+		);
 		return {
-			accountId: actor.userId,
+			accountId: this.actor.userId,
 			agentDefaults,
 			agentModels,
 			numericDefaults: {
-				webSearchMaxResults: this.dependencies.webSearchDefaults.maxResults,
-				webSearchMaxTotalResults: this.dependencies.webSearchDefaults.maxTotalResults,
+				webSearchMaxResults: webSearch.maxResults,
+				webSearchMaxTotalResults: webSearch.maxTotalResults,
 				agentMaxTurns: DEFAULT_AGENT_MAX_TURNS
 			},
 			agentAvailable: this.dependencies.agentAvailable
@@ -191,16 +197,31 @@ export class AgentSettings implements AgentSettingsController {
 
 	private modelDefaults(): AgentModelDefaults {
 		return {
-			chatModelId: resolveDefaultAgentModel({}, this.dependencies.defaultModel),
-			visionModelId: resolveDefaultVisionModel({}, this.dependencies.defaultVisionModel)
+			chatModelId: this.dependencies.modelSelection.resolveDefaultAgentModel(
+				{},
+				this.dependencies.defaultModel
+			),
+			visionModelId: this.dependencies.modelSelection.resolveDefaultVisionModel(
+				{},
+				this.dependencies.defaultVisionModel
+			)
 		};
 	}
 
-	async resolveDefaults(actor: ActorContext): Promise<AgentModelDefaults> {
-		const preferences = await this.dependencies.preferences.get(actor);
+	async resolveDefaults(): Promise<AgentModelDefaults> {
+		const preferences = await this.dependencies.preferences.get();
 		return {
-			chatModelId: resolveDefaultAgentModel(preferences, this.dependencies.defaultModel),
-			visionModelId: resolveDefaultVisionModel(preferences, this.dependencies.defaultVisionModel)
+			chatModelId: this.dependencies.modelSelection.resolveDefaultAgentModel(
+				preferences,
+				this.dependencies.defaultModel
+			),
+			visionModelId: this.dependencies.modelSelection.resolveDefaultVisionModel(
+				preferences,
+				this.dependencies.defaultVisionModel
+			)
 		};
 	}
 }
+
+/** Agent preferences after an update, with the preferences it replaced. */
+export type AgentPreferenceChange = AgentPreferences & { readonly previous: AgentPreferences };

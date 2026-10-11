@@ -5,20 +5,20 @@ import {
 	type WorkspaceWriteReviewEntry as Entry
 } from '$lib/models/workspace-write-review';
 
-export const writeTitle = (entry: Entry): string => {
+const writeTitle = (entry: Entry): string => {
 	const record = entry.intent.local ?? entry.intent.base?.value;
 	if (!record) return 'Deleted item';
 	if ('title' in record.value && record.value.title) return record.value.title;
 	if ('name' in record.value) return record.value.name;
 	return writeAction[entry.intent.command.kind];
 };
-export const writeGroup = (entry: Entry): 'decision' | 'waiting' | 'sending' =>
+const writeGroup = (entry: Entry): 'decision' | 'waiting' | 'sending' =>
 	entry.delivery.kind === 'queued'
 		? 'waiting'
 		: entry.delivery.kind === 'sending'
 			? 'sending'
 			: 'decision';
-export const writeStatus = (entry: Entry): string => {
+const writeStatus = (entry: Entry): string => {
 	const action = writeAction[entry.intent.command.kind];
 	switch (entry.delivery.kind) {
 		case 'queued':
@@ -33,7 +33,7 @@ export const writeStatus = (entry: Entry): string => {
 			return `${action} · ${entry.delivery.remote.kind === 'deleted' ? 'deleted elsewhere' : entry.delivery.remote.kind === 'unavailable' ? 'latest unavailable' : entry.intent.base === null ? 'already exists elsewhere' : 'also changed elsewhere'}`;
 	}
 };
-export const writeExplanation = (entry: Entry, online: boolean): string => {
+const writeExplanation = (entry: Entry, online: boolean): string => {
 	switch (entry.delivery.kind) {
 		case 'queued':
 			return online
@@ -56,7 +56,7 @@ export const writeExplanation = (entry: Entry, online: boolean): string => {
 	}
 };
 
-export const visibleReviewFields = (record: WorkspaceRecord, title: string) =>
+const visibleReviewFields = (record: WorkspaceRecord, title: string) =>
 	Object.entries(record.value).filter(
 		([field, value]) =>
 			reviewFieldLabels[field] &&
@@ -64,8 +64,43 @@ export const visibleReviewFields = (record: WorkspaceRecord, title: string) =>
 			value !== null &&
 			!((field === 'name' || field === 'title') && value === title)
 	);
-export const hasReviewContent = (record: WorkspaceRecord | null, title: string): boolean =>
+const hasReviewContent = (record: WorkspaceRecord | null, title: string): boolean =>
 	record === null ||
 	record.type === 'notes' ||
 	record.type === 'diagrams' ||
 	visibleReviewFields(record, title).length > 0;
+
+export interface WriteReviewPresentation {
+	writeTitle(entry: Entry): string;
+	writeGroup(entry: Entry): 'decision' | 'waiting' | 'sending';
+	writeStatus(entry: Entry): string;
+	writeExplanation(entry: Entry, online: boolean): string;
+	visibleReviewFields(
+		record: WorkspaceRecord,
+		title: string
+	): ReturnType<typeof visibleReviewFields>;
+	hasReviewContent(record: WorkspaceRecord | null, title: string): boolean;
+}
+export class WriteReviewPresentationService implements WriteReviewPresentation {
+	writeTitle(entry: Entry): string {
+		return writeTitle(entry);
+	}
+	writeGroup(entry: Entry): 'decision' | 'waiting' | 'sending' {
+		return writeGroup(entry);
+	}
+	writeStatus(entry: Entry): string {
+		return writeStatus(entry);
+	}
+	writeExplanation(entry: Entry, online: boolean): string {
+		return writeExplanation(entry, online);
+	}
+	visibleReviewFields(
+		record: WorkspaceRecord,
+		title: string
+	): ReturnType<typeof visibleReviewFields> {
+		return visibleReviewFields(record, title);
+	}
+	hasReviewContent(record: WorkspaceRecord | null, title: string): boolean {
+		return hasReviewContent(record, title);
+	}
+}

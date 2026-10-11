@@ -1,5 +1,5 @@
 import type { MemorySuggestion } from '$lib/models/suggestions';
-import type { SuggestionContext } from '$lib/server/services/suggestions/contracts';
+import type { SuggestionContext } from '$lib/server/services/suggestions/inbox';
 
 export const memorySuggestionContext = (suggestion: MemorySuggestion): SuggestionContext => ({
 	suggestion,

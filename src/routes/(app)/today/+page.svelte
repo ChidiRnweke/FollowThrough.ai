@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { page } from '$app/state';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { QuickCapture } from '$lib/components/shell';
@@ -7,11 +8,11 @@
 
 	let { data } = $props();
 	const inboxProjectId = $derived.by(() => {
-		const inbox = data.session.resources.views.projects.find((project) => project.role === 'inbox');
+		const inbox = workspaceViews.projects.find((project) => project.role === 'inbox');
 		if (!inbox) throw new Error('This workspace has no inbox; provisioning did not run.');
 		return inbox.id;
 	});
-	const view = $derived(data.session.resources.views.today(data.today));
+	const view = $derived(workspaceViews.today(data.today));
 
 	const now = new Date();
 	const dateLine = `${now.toLocaleDateString('en-GB', { weekday: 'long' })} · ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`;
@@ -39,5 +40,5 @@
 		projectId={inboxProjectId}
 		focusOnMount={page.url.searchParams.has('quickCapture')}
 	/>
-	<TodayTriage {view} projects={data.session.shell.projects} />
+	<TodayTriage {view} projects={workspaceViews.currentShell.projects} />
 </PageShell>

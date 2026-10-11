@@ -11,18 +11,35 @@ import { NotFoundError, ValidationError } from '$lib/errors';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';
 
 /** Direct workflow run values. Controllers own creation and publication transactions. */
-export class AgentRunLedger {
-	constructor(private readonly repository: AgentRunRepository) {}
+export interface WorkflowRunLedger {
+	prepareCreation(
+		input: Pick<WorkflowAgentRun, 'conversationId' | 'model' | 'executionMode' | 'contextSnapshot'>,
+		timestamp: DateTime
+	): WorkflowAgentRun;
+	persistCreated(run: WorkflowAgentRun): Promise<AgentRun>;
+	getForWrite(runId: AgentRunId): Promise<WorkflowAgentRun>;
+	prepareCompletion(status: AgentRunStatus, timestamp: DateTime): WorkflowSettlementWrite;
+	prepareFailure(
+		status: AgentRunStatus,
+		failure: string,
+		timestamp: DateTime
+	): WorkflowSettlementWrite | null;
+	persistSettlement(runId: AgentRunId, change: WorkflowSettlementWrite): Promise<WorkflowAgentRun>;
+}
+export class AgentRunLedger implements WorkflowRunLedger {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly repository: AgentRunRepository
+	) {}
 
 	prepareCreation(
-		actor: ActorContext,
 		input: Pick<WorkflowAgentRun, 'conversationId' | 'model' | 'executionMode' | 'contextSnapshot'>,
 		timestamp: DateTime
 	): WorkflowAgentRun {
 		return {
 			kind: 'workflow',
 			id: crypto.randomUUID() as AgentRunId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			...input,
 			status: 'running',
 			requestId: crypto.randomUUID(),
@@ -34,12 +51,12 @@ export class AgentRunLedger {
 		};
 	}
 
-	persistCreated(actor: ActorContext, run: WorkflowAgentRun): Promise<AgentRun> {
-		return this.repository.insert(actor, run);
+	persistCreated(run: WorkflowAgentRun): Promise<AgentRun> {
+		return this.repository.insert(run);
 	}
 
-	async getForWrite(actor: ActorContext, runId: AgentRunId): Promise<WorkflowAgentRun> {
-		const run = await this.repository.findForWrite(actor, runId);
+	async getForWrite(runId: AgentRunId): Promise<WorkflowAgentRun> {
+		const run = await this.repository.findForWrite(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		if (run.kind !== 'workflow') throw new ValidationError('The run is not a workflow');
 		return run;
@@ -71,11 +88,7 @@ export class AgentRunLedger {
 		};
 	}
 
-	persistSettlement(
-		actor: ActorContext,
-		runId: AgentRunId,
-		change: WorkflowSettlementWrite
-	): Promise<WorkflowAgentRun> {
-		return this.repository.updateWorkflowSettlement(actor, runId, change);
+	persistSettlement(runId: AgentRunId, change: WorkflowSettlementWrite): Promise<WorkflowAgentRun> {
+		return this.repository.updateWorkflowSettlement(runId, change);
 	}
 }

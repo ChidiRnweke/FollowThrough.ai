@@ -1,3 +1,5 @@
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
+import { Cl100kTokenizer } from '$lib/server/infrastructure/tokenization/cl100k';
 /**
  * Deploy-time seeder for the `tool_embeddings` table.
  *
@@ -14,21 +16,29 @@ import {
 import { db } from '$lib/server/db';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import { ToolDiscovery } from '$lib/server/controllers/tool-discovery/controller';
-import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
+import { ToolSearch } from '$lib/server/services/agent/tools/tool-search';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
+import { createRetrievalProvider } from '$lib/server/factories/retrieval-providers';
+import { DEFAULT_EMBEDDING_MODEL } from '$lib/models/knowledge-search/embeddings';
 
 const main = async (): Promise<void> => {
 	await hydrateEnvironment();
-	const embeddings = new Embeddings(requiredEnvironmentValue('OPENROUTER_API_KEY'), {
+	const provider = createRetrievalProvider({
+		apiKey: requiredEnvironmentValue('OPENROUTER_API_KEY'),
 		baseURL: process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL,
 		appURL: process.env.ORIGIN ?? 'http://localhost:5173'
 	});
 	const transaction = createTransactionContext(db);
 	const summary = await new ToolDiscovery(
-		new ToolCatalogIndex(new ToolEmbeddingRecords(transaction.database)),
-		embeddings,
-		transaction.transactionRunner
+		new ToolSearch({
+			repository: new ToolEmbeddingRecords(transaction.database),
+			provider: provider.client,
+			model: DEFAULT_EMBEDDING_MODEL,
+			tokens: new Cl100kTokenizer(),
+			observer: { run: (_name, _context, body) => body() }
+		}),
+		transaction.transactionRunner,
+		new AgentToolCatalogService()
 	).seed();
 	console.log(
 		`[seed-tool-embeddings] embedded ${summary.embedded}, unchanged ${summary.unchanged}, removed ${summary.removed}`

@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import {
-	findProseMirrorDocumentIssue,
-	readProseMirrorDocument,
-	unknownProseMirrorNodes
-} from './index';
+import { proseMirrorDocumentSchema, storedDocumentReadSchema } from './index';
+import { unreadableDocumentBlocks } from '$lib/testing/notes/fixtures/unreadable-documents';
 
 describe('ProseMirror document invariants', () => {
 	it('accepts a structurally valid nested document', () => {
 		expect(
-			findProseMirrorDocumentIssue({
+			proseMirrorDocumentSchema.safeParse({
 				type: 'doc',
 				content: [
 					{
@@ -21,22 +18,22 @@ describe('ProseMirror document invariants', () => {
 						]
 					}
 				]
-			})
+			}).error?.issues[0]
 		).toBeUndefined();
 	});
 
 	it('reports the path of a text node without a type', () => {
 		expect(
-			findProseMirrorDocumentIssue({
+			proseMirrorDocumentSchema.safeParse({
 				type: 'doc',
 				content: [{ type: 'paragraph', content: [{ text: 'Broken' }] }]
-			})?.path
-		).toBe('$.content[0].content[0].type');
+			}).error?.issues[0]?.path
+		).toEqual(['content', 0, 'content', 0, 'type']);
 	});
 
 	it('rejects strong wrappers because bold formatting belongs on text marks', () => {
 		expect(
-			findProseMirrorDocumentIssue({
+			proseMirrorDocumentSchema.safeParse({
 				type: 'doc',
 				content: [
 					{
@@ -44,8 +41,8 @@ describe('ProseMirror document invariants', () => {
 						content: [{ type: 'strong', content: [{ type: 'text', text: 'Broken' }] }]
 					}
 				]
-			})?.path
-		).toBe('$.content[0].content[0].type');
+			}).error?.issues[0]?.path
+		).toEqual(['content', 0, 'content', 0, 'type']);
 	});
 });
 
@@ -57,10 +54,10 @@ describe('ProseMirror document invariants', () => {
 describe('attributes the editor actually writes', () => {
 	it('accepts an image height stored as a number rather than a string', () => {
 		expect(
-			findProseMirrorDocumentIssue({
+			proseMirrorDocumentSchema.safeParse({
 				type: 'doc',
 				content: [{ type: 'image', attrs: { src: 'https://example.test/a.png', height: 80 } }]
-			})
+			}).error?.issues[0]
 		).toBeUndefined();
 	});
 
@@ -79,10 +76,10 @@ describe('reading a document out of storage', () => {
 	};
 
 	it('degrades an unmodelled block instead of throwing', () => {
-		const document = readProseMirrorDocument(withUnknownBlock);
-		const unknown = unknownProseMirrorNodes(document)[0];
+		const document = storedDocumentReadSchema.parse(withUnknownBlock);
+		const unknown = unreadableDocumentBlocks(document)[0];
 		expect({
-			unknownCount: unknownProseMirrorNodes(document).length,
+			unknownCount: unreadableDocumentBlocks(document).length,
 			keptKnownPrefix: document.content?.[0]?.type,
 			reason: unknown?.reason,
 			raw: unknown?.raw
@@ -97,12 +94,12 @@ describe('reading a document out of storage', () => {
 	// The write boundary must not accept what the read boundary tolerates:
 	// `saveNote` and the importer still reject an unmodelled block outright.
 	it('is still rejected at the write boundary', () => {
-		expect(findProseMirrorDocumentIssue(withUnknownBlock)).toBeDefined();
+		expect(proseMirrorDocumentSchema.safeParse(withUnknownBlock).error?.issues[0]).toBeDefined();
 	});
 
 	it('answers with a document even when the column is not one', () => {
-		const document = readProseMirrorDocument('not a document');
-		expect(unknownProseMirrorNodes(document)).toMatchObject([
+		const document = storedDocumentReadSchema.parse('not a document');
+		expect(unreadableDocumentBlocks(document)).toMatchObject([
 			{
 				type: 'unknown',
 				reason: expect.stringContaining('Stored document is not readable')

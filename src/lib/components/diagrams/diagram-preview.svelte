@@ -1,11 +1,10 @@
 <script lang="ts">
+	import { createMermaidDiagrams } from '$lib/factories/diagrams/mermaid';
+	const mermaidDiagrams = createMermaidDiagrams();
+
 	import { mode as colorMode } from 'mode-watcher';
 	import type { DiagramKind } from '$lib/models/diagrams';
-	import {
-		initializeMermaid,
-		renderMermaidOffscreen,
-		sanitizeMermaidSvg
-	} from '$lib/client/diagrams/mermaid-rendering';
+
 	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';
 
 	/*
@@ -47,10 +46,13 @@
 		let cancelled = false;
 		void (async () => {
 			try {
-				initializeMermaid(colorMode.current === 'dark');
-				const svg = await renderMermaidOffscreen(`diagram-preview-${crypto.randomUUID()}`, text);
+				const svg = await mermaidDiagrams.render(
+					`diagram-preview-${crypto.randomUUID()}`,
+					text,
+					colorMode.current === 'dark'
+				);
 				if (cancelled) return;
-				target.innerHTML = sanitizeMermaidSvg(svg);
+				target.innerHTML = svg;
 				failed = false;
 				// audit-allow: silent-catch — the preview clears partial DOM and renders its explicit failed state.
 			} catch {

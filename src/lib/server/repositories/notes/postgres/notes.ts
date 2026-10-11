@@ -18,12 +18,12 @@ import * as schema from '$lib/server/db/schema/notes';
 import { toAnchor, toNote, toRevision } from '$lib/server/db/mappers';
 
 export class NoteRecords implements NoteRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async updatePublication(
-		actor: ActorContext,
-		write: NotePublicationWrite
-	): Promise<Note | undefined> {
+	async updatePublication(write: NotePublicationWrite): Promise<Note | undefined> {
 		const [row] = await this.database
 			.update(schema.notes)
 			.set({
@@ -34,7 +34,7 @@ export class NoteRecords implements NoteRepository {
 			.where(
 				and(
 					eq(schema.notes.id, write.noteId),
-					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.userId, this.actor.userId),
 					eq(schema.notes.currentRevision, write.expectedRevision),
 					isNull(schema.notes.archivedAt)
 				)
@@ -43,7 +43,7 @@ export class NoteRecords implements NoteRepository {
 		return row ? toNote(row) : undefined;
 	}
 
-	async findById(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
+	async findById(id: NoteId): Promise<Note | undefined> {
 		const [row] = await this.database
 			.select({ note: schema.notes })
 			.from(schema.notes)
@@ -51,14 +51,14 @@ export class NoteRecords implements NoteRepository {
 			.where(
 				and(
 					eq(schema.notes.id, id),
-					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.userId, this.actor.userId),
 					isNull(schema.projects.archivedAt)
 				)
 			);
 		return row ? toNote(row.note) : undefined;
 	}
 
-	async findForWrite(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
+	async findForWrite(id: NoteId): Promise<Note | undefined> {
 		const [row] = await this.database
 			.select({ note: schema.notes })
 			.from(schema.notes)
@@ -66,7 +66,7 @@ export class NoteRecords implements NoteRepository {
 			.where(
 				and(
 					eq(schema.notes.id, id),
-					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.userId, this.actor.userId),
 					isNull(schema.projects.archivedAt)
 				)
 			)
@@ -74,7 +74,7 @@ export class NoteRecords implements NoteRepository {
 		return row ? toNote(row.note) : undefined;
 	}
 
-	async updateTrash(actor: ActorContext, note: Note): Promise<Note> {
+	async updateTrash(note: Note): Promise<Note> {
 		const [row] = await this.database
 			.update(schema.notes)
 			.set({
@@ -83,25 +83,22 @@ export class NoteRecords implements NoteRepository {
 				archivedAt: note.archivedAt ? new Date(note.archivedAt) : null,
 				updatedAt: new Date(note.updatedAt)
 			})
-			.where(and(eq(schema.notes.id, note.id), eq(schema.notes.userId, actor.userId)))
+			.where(and(eq(schema.notes.id, note.id), eq(schema.notes.userId, this.actor.userId)))
 			.returning();
 		if (!row) throw new NotFoundError('Note was not found');
 		return toNote(row);
 	}
 
-	async findBuiltInForWrite(actor: ActorContext, key: string): Promise<Note | undefined> {
+	async findBuiltInForWrite(key: string): Promise<Note | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.notes)
-			.where(and(eq(schema.notes.userId, actor.userId), eq(schema.notes.builtInKey, key)))
+			.where(and(eq(schema.notes.userId, this.actor.userId), eq(schema.notes.builtInKey, key)))
 			.for('update');
 		return row ? toNote(row) : undefined;
 	}
 
-	async repairBuiltIn(
-		actor: ActorContext,
-		write: NoteBuiltInRepairWrite
-	): Promise<Note | undefined> {
+	async repairBuiltIn(write: NoteBuiltInRepairWrite): Promise<Note | undefined> {
 		const [row] = await this.database
 			.update(schema.notes)
 			.set({
@@ -115,7 +112,7 @@ export class NoteRecords implements NoteRepository {
 			.where(
 				and(
 					eq(schema.notes.id, write.noteId),
-					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.userId, this.actor.userId),
 					eq(schema.notes.builtInKey, write.builtInKey)
 				)
 			)
@@ -123,16 +120,19 @@ export class NoteRecords implements NoteRepository {
 		return row ? toNote(row) : undefined;
 	}
 
-	async findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined> {
+	async findByBuiltInKey(key: string): Promise<Note | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.notes)
-			.where(and(eq(schema.notes.userId, actor.userId), eq(schema.notes.builtInKey, key)));
+			.where(and(eq(schema.notes.userId, this.actor.userId), eq(schema.notes.builtInKey, key)));
 		return row ? toNote(row) : undefined;
 	}
 
-	async listActive(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]> {
-		const conditions = [eq(schema.notes.userId, actor.userId), isNull(schema.notes.archivedAt)];
+	async listActive(projectId?: ProjectId): Promise<readonly Note[]> {
+		const conditions = [
+			eq(schema.notes.userId, this.actor.userId),
+			isNull(schema.notes.archivedAt)
+		];
 		if (projectId) conditions.push(eq(schema.notes.projectId, projectId));
 		return (
 			(
@@ -149,11 +149,11 @@ export class NoteRecords implements NoteRepository {
 		);
 	}
 
-	async listSearchable(
-		actor: ActorContext,
-		projectId?: ProjectId
-	): Promise<readonly NoteSearchTarget[]> {
-		const conditions = [eq(schema.notes.userId, actor.userId), isNull(schema.notes.archivedAt)];
+	async listSearchable(projectId?: ProjectId): Promise<readonly NoteSearchTarget[]> {
+		const conditions = [
+			eq(schema.notes.userId, this.actor.userId),
+			isNull(schema.notes.archivedAt)
+		];
 		if (projectId) conditions.push(eq(schema.notes.projectId, projectId));
 		const rows = await this.database
 			.select({
@@ -174,8 +174,11 @@ export class NoteRecords implements NoteRepository {
 		}));
 	}
 
-	async listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]> {
-		const conditions = [eq(schema.notes.userId, actor.userId), isNotNull(schema.notes.archivedAt)];
+	async listTrashed(projectId?: ProjectId): Promise<readonly Note[]> {
+		const conditions = [
+			eq(schema.notes.userId, this.actor.userId),
+			isNotNull(schema.notes.archivedAt)
+		];
 		if (projectId) conditions.push(eq(schema.notes.projectId, projectId));
 		return (
 			(
@@ -191,17 +194,13 @@ export class NoteRecords implements NoteRepository {
 		);
 	}
 
-	async countSiblings(
-		actor: ActorContext,
-		projectId: ProjectId,
-		parentId?: NoteId
-	): Promise<number> {
+	async countSiblings(projectId: ProjectId, parentId?: NoteId): Promise<number> {
 		const [row] = await this.database
 			.select({ count: sql<number>`count(*)::int` })
 			.from(schema.notes)
 			.where(
 				and(
-					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.userId, this.actor.userId),
 					eq(schema.notes.projectId, projectId),
 					parentId ? eq(schema.notes.parentId, parentId) : isNull(schema.notes.parentId)
 				)
@@ -209,12 +208,12 @@ export class NoteRecords implements NoteRepository {
 		return row?.count ?? 0;
 	}
 
-	async insert(actor: ActorContext, note: Note): Promise<Note> {
+	async insert(note: Note): Promise<Note> {
 		const [row] = await this.database
 			.insert(schema.notes)
 			.values({
 				id: note.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				projectId: note.projectId,
 				parentId: note.parentId,
 				kind: note.kind,
@@ -233,11 +232,7 @@ export class NoteRecords implements NoteRepository {
 		return toNote(row!);
 	}
 
-	async updateIfRevision(
-		actor: ActorContext,
-		note: Note,
-		expectedRevision: number
-	): Promise<Note | undefined> {
+	async updateIfRevision(note: Note, expectedRevision: number): Promise<Note | undefined> {
 		const [row] = await this.database
 			.update(schema.notes)
 			.set({
@@ -251,7 +246,7 @@ export class NoteRecords implements NoteRepository {
 			.where(
 				and(
 					eq(schema.notes.id, note.id),
-					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.userId, this.actor.userId),
 					eq(schema.notes.currentRevision, expectedRevision),
 					isNull(schema.notes.archivedAt)
 				)
@@ -260,16 +255,13 @@ export class NoteRecords implements NoteRepository {
 		return row ? toNote(row) : undefined;
 	}
 
-	async deleteTrashed(
-		actor: ActorContext,
-		id: NoteId
-	): Promise<Pick<Note, 'id' | 'title'> | undefined> {
+	async deleteTrashed(id: NoteId): Promise<Pick<Note, 'id' | 'title'> | undefined> {
 		const [row] = await this.database
 			.delete(schema.notes)
 			.where(
 				and(
 					eq(schema.notes.id, id),
-					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.userId, this.actor.userId),
 					isNotNull(schema.notes.archivedAt),
 					ne(schema.notes.kind, 'skill')
 				)
@@ -278,22 +270,18 @@ export class NoteRecords implements NoteRepository {
 		return row ? { id: row.id as NoteId, title: row.title } : undefined;
 	}
 
-	async setSectionNumbering(
-		actor: ActorContext,
-		id: NoteId,
-		enabled: boolean | null
-	): Promise<Note> {
+	async setSectionNumbering(id: NoteId, enabled: boolean | null): Promise<Note> {
 		const [row] = await this.database
 			.update(schema.notes)
 			.set({ sectionNumbering: enabled })
-			.where(and(eq(schema.notes.id, id), eq(schema.notes.userId, actor.userId)))
+			.where(and(eq(schema.notes.id, id), eq(schema.notes.userId, this.actor.userId)))
 			.returning();
 		if (!row) throw new NotFoundError('Note was not found');
 		return toNote(row);
 	}
 
-	async insertRevision(actor: ActorContext, revision: NoteRevision): Promise<NoteRevision> {
-		const note = await this.findById(actor, revision.noteId);
+	async insertRevision(revision: NoteRevision): Promise<NoteRevision> {
+		const note = await this.findById(revision.noteId);
 		if (!note) throw new NotFoundError('Note was not found');
 		const [row] = await this.database
 			.insert(schema.noteRevisions)
@@ -333,8 +321,8 @@ export class NoteRecords implements NoteRepository {
 		return row ? toRevision(row) : revision;
 	}
 
-	async listRevisions(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]> {
-		if (!(await this.findById(actor, noteId))) return [];
+	async listRevisions(noteId: NoteId): Promise<readonly NoteRevision[]> {
+		if (!(await this.findById(noteId))) return [];
 		return (
 			await this.database
 				.select()
@@ -344,9 +332,9 @@ export class NoteRecords implements NoteRepository {
 		).map(toRevision);
 	}
 
-	async pruneRevisions(actor: ActorContext, noteId: NoteId, keepNewest: number): Promise<void> {
+	async pruneRevisions(noteId: NoteId, keepNewest: number): Promise<void> {
 		if (keepNewest < 1) throw new ValidationError('At least one revision must be kept');
-		if (!(await this.findById(actor, noteId))) throw new NotFoundError('Note was not found');
+		if (!(await this.findById(noteId))) throw new NotFoundError('Note was not found');
 		const kept = this.database
 			.select({ id: schema.noteRevisions.id })
 			.from(schema.noteRevisions)
@@ -362,12 +350,8 @@ export class NoteRecords implements NoteRepository {
 			);
 	}
 
-	async restoreAttachmentSnapshot(
-		actor: ActorContext,
-		revisionId: NoteRevision['id'],
-		noteId: NoteId
-	): Promise<void> {
-		if (!(await this.findById(actor, noteId))) throw new NotFoundError('Note was not found');
+	async restoreAttachmentSnapshot(revisionId: NoteRevision['id'], noteId: NoteId): Promise<void> {
+		if (!(await this.findById(noteId))) throw new NotFoundError('Note was not found');
 		const snapshot = await this.database
 			.select({
 				attachmentId: schema.attachmentVersions.attachmentId,
@@ -383,7 +367,7 @@ export class NoteRecords implements NoteRepository {
 			.update(schema.attachments)
 			.set({ currentVersionId: null, updatedAt: new Date() })
 			.where(
-				and(eq(schema.attachments.noteId, noteId), eq(schema.attachments.userId, actor.userId))
+				and(eq(schema.attachments.noteId, noteId), eq(schema.attachments.userId, this.actor.userId))
 			);
 		for (const item of snapshot)
 			await this.database
@@ -393,39 +377,44 @@ export class NoteRecords implements NoteRepository {
 					and(
 						eq(schema.attachments.id, item.attachmentId),
 						eq(schema.attachments.noteId, noteId),
-						eq(schema.attachments.userId, actor.userId)
+						eq(schema.attachments.userId, this.actor.userId)
 					)
 				);
 	}
 }
 
 export class SourceAnchorRecords implements SourceAnchorRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async findById(actor: ActorContext, id: SourceAnchorId): Promise<SourceAnchor | undefined> {
+	async findById(id: SourceAnchorId): Promise<SourceAnchor | undefined> {
 		const [row] = await this.database
 			.select({ anchor: schema.sourceAnchors })
 			.from(schema.sourceAnchors)
 			.innerJoin(schema.notes, eq(schema.notes.id, schema.sourceAnchors.noteId))
-			.where(and(eq(schema.sourceAnchors.id, id), eq(schema.notes.userId, actor.userId)));
+			.where(and(eq(schema.sourceAnchors.id, id), eq(schema.notes.userId, this.actor.userId)));
 		return row ? toAnchor(row.anchor) : undefined;
 	}
 
-	async listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly SourceAnchor[]> {
+	async listForNote(noteId: NoteId): Promise<readonly SourceAnchor[]> {
 		return (
 			await this.database
 				.select({ anchor: schema.sourceAnchors })
 				.from(schema.sourceAnchors)
 				.innerJoin(schema.notes, eq(schema.notes.id, schema.sourceAnchors.noteId))
-				.where(and(eq(schema.sourceAnchors.noteId, noteId), eq(schema.notes.userId, actor.userId)))
+				.where(
+					and(eq(schema.sourceAnchors.noteId, noteId), eq(schema.notes.userId, this.actor.userId))
+				)
 		).map((row) => toAnchor(row.anchor));
 	}
 
-	async insert(actor: ActorContext, anchor: SourceAnchor): Promise<SourceAnchor> {
+	async insert(anchor: SourceAnchor): Promise<SourceAnchor> {
 		const [owned] = await this.database
 			.select({ id: schema.notes.id })
 			.from(schema.notes)
-			.where(and(eq(schema.notes.id, anchor.noteId), eq(schema.notes.userId, actor.userId)));
+			.where(and(eq(schema.notes.id, anchor.noteId), eq(schema.notes.userId, this.actor.userId)));
 		if (!owned) throw new NotFoundError('Note was not found');
 		const [row] = await this.database
 			.insert(schema.sourceAnchors)
@@ -445,8 +434,8 @@ export class SourceAnchorRecords implements SourceAnchorRepository {
 		return toAnchor(row!);
 	}
 
-	async update(actor: ActorContext, anchor: SourceAnchor): Promise<SourceAnchor> {
-		if (!(await this.findById(actor, anchor.id))) throw new NotFoundError('Anchor was not found');
+	async update(anchor: SourceAnchor): Promise<SourceAnchor> {
+		if (!(await this.findById(anchor.id))) throw new NotFoundError('Anchor was not found');
 		const [row] = await this.database
 			.update(schema.sourceAnchors)
 			.set({

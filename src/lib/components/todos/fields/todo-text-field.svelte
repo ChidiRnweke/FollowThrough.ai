@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
+	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { untrack } from 'svelte';
 	import type { TodoId } from '$lib/models/todos';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from 'svelte-sonner';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from '../todo-updates';
 
 	let {
 		todoId,
@@ -34,7 +34,7 @@
 		return editor;
 	});
 
-	const editorSession = new EditorSession(() => resourceDraft.active);
+	const editorSession = createEditorSession(() => resourceDraft.active);
 	$effect(() => () => editorSession.close());
 	const initialValue = (): string => value;
 	let saved = $state(initialValue());

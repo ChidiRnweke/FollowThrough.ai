@@ -1,142 +1,187 @@
-import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
-import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
-import type { Database } from '$lib/server/db';
-import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
-import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
+import type { ActorContext } from '$lib/models/identity';
+import type { OperationObserver, WorkflowObserver } from '$lib/models/telemetry';
+import type { InlineCompletionService } from '$lib/server/services/inline-suggestions/completion';
+import { normalizeLanguageModelId } from '$lib/models/agent';
+import type { TokenCodec } from '$lib/models/tokenization';
 import {
-	ContentIndex,
-	retrievalChunkerFromEnv
-} from '$lib/server/services/knowledge-search/indexing';
-import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
-import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
-import type { Reranker } from '$lib/server/services/knowledge-search/contracts';
-import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
-import type { TransactionRunner } from '$lib/server/repositories/workspace';
-import { operationObserver } from '$lib/server/services/telemetry';
-import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
-import {
-	SearchQueryGeneration,
-	type ISearchQueryGeneration
-} from '$lib/server/services/knowledge-search/query-generation';
+	EmbeddingBacklog,
+	KnowledgeIndexing,
+	type EmbeddingBacklogController,
+	type KnowledgeIndexingController
+} from '$lib/server/controllers/knowledge-indexing/controller';
 import {
 	ToolDiscovery,
-	type ToolRetriever
+	type ToolDiscoveryController
 } from '$lib/server/controllers/tool-discovery/controller';
+import type { Database } from '$lib/server/db';
+import {
+	createRetrievalProvider,
+	type RetrievalProvider
+} from '$lib/server/factories/retrieval-providers';
+import {
+	KnowledgeRetrieval,
+	type KnowledgeRetrievalCapabilities
+} from '$lib/server/services/knowledge-search/retrieval';
+import {
+	ToolSearch,
+	type ToolRanking,
+	type ToolSeeding
+} from '$lib/server/services/agent/tools/tool-search';
+import { DEFAULT_EMBEDDING_MODEL } from '$lib/models/knowledge-search/embeddings';
+import { DEFAULT_SEARCH_QUERY_MODEL } from '$lib/models/knowledge-search/query-generation';
+import {
+	KnowledgeBacklogRecords,
+	KnowledgeIndexRecords
+} from '$lib/server/repositories/knowledge-search/postgres/search';
+import {
+	InlineContextService,
+	type IInlineContextService
+} from '$lib/server/services/inline-suggestions/inline-context';
+import { MaintenanceProgressService } from '$lib/server/services/maintenance/progress';
+import { IndexBacklogService } from '$lib/server/services/knowledge-search/backlog';
+import { MaintenanceCursorRecords } from '$lib/server/repositories/maintenance/postgres/cursors';
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
+
+import {
+	InlineAdmissionService,
+	type InlineAdmission
+} from '$lib/server/services/inline-suggestions/inline-admission';
+import { InlineAttemptRecords } from '$lib/server/repositories/inline-suggestions/postgres/attempts';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
-import type { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
-import { InlineSuggestionAdmission } from '$lib/server/services/inline-suggestions/inline-admission';
-import { InlineSuggestionCompletion } from '$lib/server/services/inline-suggestions/inline-completion';
+import type { TransactionRunner } from '$lib/server/repositories/workspace';
+import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
+import { createInlineCompletion } from '$lib/server/factories/inline-completion';
+import { operationObserver, workflowObserver } from '$lib/server/infrastructure/telemetry/tracing';
 
 export interface KnowledgeSearchCapabilityInput {
 	readonly db: Database;
 	readonly transactionRunner: TransactionRunner;
+	readonly tokenizer: TokenCodec;
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
-	readonly embeddingClient?: EmbeddingClient;
-	readonly reranker?: Reranker;
-	readonly queryGenerator?: ISearchQueryGeneration;
+	/** Replaces the provider client, e.g. with one that replays recorded responses. */
+	readonly retrievalProvider?: RetrievalProvider;
+	readonly toolSearch?: ToolSeeding & ToolRanking;
 	readonly deferEmbedding: boolean;
 }
 
 export interface KnowledgeSearchCapability {
-	readonly repository: KnowledgeIndexRecords;
-	readonly indexWriter: ContentIndex;
-	readonly embeddingClient: EmbeddingClient;
-	readonly reranker: Reranker;
-	readonly queryGenerator: ISearchQueryGeneration;
-	readonly attachmentIndexer: ContentIndex['attachments'];
-	readonly noteIndexer: ContentIndex['notes'];
-	readonly diagramIndexer: ContentIndex['diagrams'];
-	readonly memoryIndexer: ContentIndex['memories'];
-	readonly widgetIndexer: ContentIndex['widgets'];
-	readonly lookup: KnowledgeLookup;
-	readonly maintenance: EmbeddingMaintenance;
-	readonly toolRetriever: ToolRetriever;
+	readonly tokenizer: TokenCodec;
+	/** Indexing, backfill and search over knowledge: one capability behind its interfaces. */
+	readonly knowledge: KnowledgeRetrievalCapabilities;
+	readonly indexing: KnowledgeIndexingController;
+	readonly toolDiscovery: ToolRanking;
 	readonly finalize: (input: KnowledgeSearchFinalizeInput) => KnowledgeSearchFinalized;
 }
 
 export interface KnowledgeSearchFinalizeInput {
-	readonly preferences: AgentPreferenceCatalog;
+	readonly preferences: AgentPreferenceEditor;
 }
 
 export interface KnowledgeSearchFinalized {
-	readonly preferences: AgentPreferenceCatalog;
-	readonly inlineCompletion: InlineSuggestionCompletion;
-	readonly observer: typeof operationObserver;
-	readonly inlineAdmission: InlineSuggestionAdmission;
+	readonly preferences: AgentPreferenceEditor;
+	readonly completion: InlineCompletionService;
+	readonly defaultCompletionModel: string;
+	readonly inlineContext: IInlineContextService;
+	readonly observer: OperationObserver;
+	readonly workflow: WorkflowObserver;
+	readonly admission: InlineAdmission;
 }
 
 export const createKnowledgeSearchCapability = (
+	actor: ActorContext,
 	input: KnowledgeSearchCapabilityInput
 ): KnowledgeSearchCapability => {
-	const repository = new KnowledgeIndexRecords(input.db);
-	const embeddingClient =
-		input.embeddingClient ??
-		new Embeddings(input.openRouterApiKey, {
+	const { tokenizer } = input;
+	const provider =
+		input.retrievalProvider ??
+		createRetrievalProvider({
+			apiKey: input.openRouterApiKey,
 			baseURL: input.openRouterBaseURL,
-			appURL: input.appURL,
+			appURL: input.appURL
+		});
+	const knowledge = new KnowledgeRetrieval({
+		repository: new KnowledgeIndexRecords(actor, input.db),
+		provider: provider.client,
+		rerank: provider.rerank,
+		models: { embedding: DEFAULT_EMBEDDING_MODEL, query: DEFAULT_SEARCH_QUERY_MODEL },
+		encoding: tokenizer,
+		chunking: {
+			targetTokens: Number(process.env.RETRIEVAL_CHUNK_TOKENS ?? 2400),
+			overlapTokens: Number(process.env.RETRIEVAL_CHUNK_OVERLAP_TOKENS ?? 480)
+		},
+		defer: input.deferEmbedding,
+		observer: operationObserver
+	});
+	const toolSearch =
+		input.toolSearch ??
+		new ToolSearch({
+			repository: new ToolEmbeddingRecords(input.db),
+			provider: provider.client,
+			model: DEFAULT_EMBEDDING_MODEL,
+			tokens: tokenizer,
 			observer: operationObserver
 		});
-	const reranker =
-		input.reranker ??
-		new SearchRanking(input.openRouterApiKey, {
-			baseURL: input.openRouterBaseURL,
-			appURL: input.appURL,
-			observer: operationObserver
-		});
-	const chunker = retrievalChunkerFromEnv();
-	const queryGenerator =
-		input.queryGenerator ??
-		new SearchQueryGeneration(input.openRouterApiKey, {
-			baseURL: input.openRouterBaseURL,
-			appURL: input.appURL,
-			observer: operationObserver
-		});
-	const index = new ContentIndex(repository, embeddingClient.model, chunker, input.deferEmbedding);
 
 	return {
-		repository,
-		indexWriter: index,
-		embeddingClient,
-		toolRetriever: new ToolDiscovery(
-			new ToolCatalogIndex(new ToolEmbeddingRecords(input.db)),
-			embeddingClient,
-			input.transactionRunner
-		),
+		tokenizer,
+		knowledge,
+		toolDiscovery: toolSearch,
 		finalize: ({ preferences }) => ({
+			inlineContext: new InlineContextService(tokenizer),
 			preferences,
-			inlineCompletion: new InlineSuggestionCompletion(input.openRouterApiKey, {
-				baseURL: input.openRouterBaseURL,
-				appURL: input.appURL,
-				observer: operationObserver
-			}),
+			defaultCompletionModel: normalizeLanguageModelId(
+				process.env.OPENROUTER_INLINE_COMPLETION_MODEL ??
+					process.env.OPENROUTER_INLINE_MODEL ??
+					'deepseek/deepseek-v4-flash'
+			),
+			completion: createInlineCompletion(
+				{
+					apiKey: input.openRouterApiKey,
+					baseURL: input.openRouterBaseURL,
+					appURL: input.appURL
+				},
+				operationObserver
+			),
 			observer: operationObserver,
-			inlineAdmission: new InlineSuggestionAdmission()
+			workflow: workflowObserver,
+			admission: new InlineAdmissionService(new InlineAttemptRecords(input.db))
 		}),
-		reranker,
-		queryGenerator,
-		attachmentIndexer: index.attachments,
-		noteIndexer: index.notes,
-		diagramIndexer: index.diagrams,
-		memoryIndexer: index.memories,
-		widgetIndexer: index.widgets,
-		lookup: new KnowledgeLookup(repository),
-		maintenance: new EmbeddingMaintenance(
-			new IndexBacklog(repository),
-			embeddingClient,
-			input.transactionRunner,
-			{
-				...optionalProperty(
-					'intervalMs',
-					positiveNumberFromEnvironment('EMBEDDING_SWEEP_INTERVAL_MS')
-				),
-				...optionalProperty(
-					'maxSourcesPerTick',
-					positiveNumberFromEnvironment('EMBEDDING_SWEEP_MAX_SOURCES')
-				)
-			}
-		)
+		indexing: new KnowledgeIndexing(knowledge, input.transactionRunner)
 	};
 };
+
+/** The embedding backlog across every user, which the worker drains as each source's owner. */
+export const createEmbeddingBacklog = (db: Database): EmbeddingBacklogController =>
+	new EmbeddingBacklog(
+		new IndexBacklogService(new KnowledgeBacklogRecords(db)),
+		new MaintenanceProgressService(new MaintenanceCursorRecords(db))
+	);
+
+/** Tool discovery over the catalog's stored embeddings, which belong to no user. */
+export const createToolDiscovery = (input: {
+	readonly db: Database;
+	readonly transactionRunner: TransactionRunner;
+	readonly tokenizer: TokenCodec;
+	readonly openRouterApiKey: string;
+	readonly openRouterBaseURL: string;
+	readonly appURL: string;
+	readonly toolSearch?: ToolSeeding & ToolRanking;
+}): ToolDiscoveryController =>
+	new ToolDiscovery(
+		input.toolSearch ??
+			new ToolSearch({
+				repository: new ToolEmbeddingRecords(input.db),
+				provider: createRetrievalProvider({
+					apiKey: input.openRouterApiKey,
+					baseURL: input.openRouterBaseURL,
+					appURL: input.appURL
+				}).client,
+				model: DEFAULT_EMBEDDING_MODEL,
+				tokens: input.tokenizer,
+				observer: operationObserver
+			}),
+		input.transactionRunner,
+		new AgentToolCatalogService()
+	);

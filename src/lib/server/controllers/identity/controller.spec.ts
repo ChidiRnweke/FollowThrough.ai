@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { SignIn } from './controller';
 import { AuthentikClient } from '$lib/server/repositories/identity/authentik';
@@ -20,7 +21,7 @@ const profile = {
 	name: 'Example Person'
 };
 const setup = (failure?: 'token' | 'profile') => {
-	const users = new InMemoryUserRepository();
+	const users = new InMemoryUserRepository(testActor());
 	const sessions = new InMemorySessionRepository();
 	sessions.users = users.users;
 	const registry = new SessionRegistry(sessions, () => Date.parse('2026-09-16T12:00:00Z'));

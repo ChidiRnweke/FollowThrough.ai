@@ -6,7 +6,9 @@ import { architectureWorkspace } from '../fixtures/workspaces/architecture';
 import { todosWorkspace } from '../fixtures/workspaces/todos';
 import { personaWorkspace } from '../fixtures/workspaces/profile';
 import { findCall, scoreToolCalling, scoreToolDiscovery } from '../assertions/tool-calls';
-import { isAgentPayloadObject, readAgentPayload } from '$lib/models/agent/payload';
+import { agentPayloadResultSchema } from '$lib/models/agent/payload';
+import { AgentPayloadInspectionService } from '$lib/services/agent/payload';
+const { isAgentPayloadObject } = new AgentPayloadInspectionService();
 import { ARCHETYPES, type EvalCase } from './types';
 import { expectSuggestionPending } from '../assertions/effects';
 
@@ -65,7 +67,7 @@ export const multiStepCases: readonly EvalCase[] = [
 			// probing it three times. A corrupt output is not a miss: it is a tool
 			// this eval could not read, so it is named in the explanation below
 			// instead of scoring as evidence the model failed.
-			const searchOutput = readAgentPayload(authoritativeSearch?.output);
+			const searchOutput = agentPayloadResultSchema.parse(authoritativeSearch?.output);
 			const searchResults =
 				searchOutput.kind === 'valid' && Array.isArray(searchOutput.value)
 					? searchOutput.value
@@ -120,7 +122,7 @@ export const multiStepCases: readonly EvalCase[] = [
 			const listIndex = names.indexOf('list_todos');
 			const updateIndex = names.indexOf('update_todo');
 			const sequenceCorrect = listIndex >= 0 && updateIndex > listIndex;
-			const { todos } = await lab.controllers.todos().list(workspace.actor, {});
+			const { todos } = await lab.forActor(workspace.actor).controllers.todos().list({});
 			const tls = todos.find((view) => view.todo.title === 'Renew the TLS certificates');
 			const neighbors = todos
 				.filter((view) => view.todo.title !== 'Renew the TLS certificates')
@@ -173,7 +175,7 @@ export const multiStepCases: readonly EvalCase[] = [
 			const call = findCall(result, 'create_todo');
 			const expectedProjectId = workspace.projectIds.get('Platform');
 			const hasProject = call?.arguments.projectId === expectedProjectId;
-			const { todos } = await lab.controllers.todos().list(workspace.actor, {});
+			const { todos } = await lab.forActor(workspace.actor).controllers.todos().list({});
 			const persisted = todos.find((view) =>
 				view.todo.title.toLowerCase().includes('deploy v2 to production')
 			);
@@ -240,7 +242,7 @@ export const multiStepCases: readonly EvalCase[] = [
 			const verdict = scoreToolDiscovery(result, 'create_todos');
 			const names = result.calledToolNames;
 			const createIndex = names.indexOf('create_todos');
-			const { todos } = await lab.controllers.todos().list(workspace.actor, { projectId });
+			const { todos } = await lab.forActor(workspace.actor).controllers.todos().list({ projectId });
 			const titles = todos.map((view) => view.todo.title.toLowerCase());
 			const persisted = (this.expected.todoMarkers as string[]).every((marker) =>
 				titles.some((title) => title.includes(marker))
@@ -331,7 +333,7 @@ export const multiStepCases: readonly EvalCase[] = [
 				projectId,
 				noteId
 			});
-			const { todos } = await lab.controllers.todos().list(workspace.actor, { projectId });
+			const { todos } = await lab.forActor(workspace.actor).controllers.todos().list({ projectId });
 			const statuses = Object.fromEntries(todos.map((view) => [view.todo.title, view.todo.status]));
 			px.logOutput({
 				model: result.model,
@@ -379,10 +381,11 @@ export const multiStepCases: readonly EvalCase[] = [
 				noteId,
 				selection: await selectionFromSeededNote(lab, workspace, noteId, sourceText)
 			});
-			const canvas = await lab.controllers
-				.diagramStudio()
-				.readCanvasDiagram(workspace.actor, { conversationId: result.conversationId });
-			const { todos } = await lab.controllers.todos().list(workspace.actor, { projectId });
+			const canvas = await lab
+				.forActor(workspace.actor)
+				.controllers.diagramStudio()
+				.readCanvasDiagram({ conversationId: result.conversationId });
+			const { todos } = await lab.forActor(workspace.actor).controllers.todos().list({ projectId });
 			const reminder = todos.find(
 				(view) =>
 					view.todo.dueDate === this.expected.dueDate &&
@@ -466,12 +469,13 @@ export const multiStepCases: readonly EvalCase[] = [
 				mode: 'auto_accept',
 				projectId
 			});
-			const shell = await lab.controllers.workspace().getShellContext(workspace.actor);
+			const shell = await lab.forActor(workspace.actor).controllers.workspace().getShellContext();
 			const note = shell.noteTree.find(
 				(candidate) => candidate.projectId === projectId && candidate.kind === 'note'
 			);
 			const body = note
-				? (await lab.controllers.notes().get(workspace.actor, { noteId: note.id })).note.plainText
+				? (await lab.forActor(workspace.actor).controllers.notes().get({ noteId: note.id })).note
+						.plainText
 				: '';
 			const memory = await expectSuggestionPending(lab, workspace.actor, 'memory');
 			const followed =

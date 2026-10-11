@@ -1,7 +1,12 @@
-import { SKILL_PORTABLE_LIMITS, type Skill, type SkillEditInput } from '$lib/models/skills';
+import {
+	SKILL_PORTABLE_LIMITS,
+	type Skill,
+	type SkillEditInput,
+	type SkillMetadataUpdate
+} from '$lib/models/skills';
 import { ValidationError } from '$lib/errors';
 /** Metadata edits do not change the instruction document or its revision. */
-export function applySkillMetadataEdit(
+function applySkillMetadataEdit(
 	current: Pick<Skill<never>, 'description' | 'triggerHints' | 'isEnabled'>,
 	input: Pick<SkillEditInput, 'description' | 'triggerHints' | 'isEnabled'>
 ) {
@@ -17,4 +22,19 @@ export function applySkillMetadataEdit(
 			: [...current.triggerHints],
 		isEnabled: input.isEnabled ?? current.isEnabled
 	};
+}
+
+export interface SkillMetadataEditing {
+	edit(
+		current: Pick<Skill<never>, 'description' | 'triggerHints' | 'isEnabled'>,
+		input: Pick<SkillEditInput, 'description' | 'triggerHints' | 'isEnabled'>
+	): SkillMetadataUpdate;
+}
+export class SkillMetadataEditingService implements SkillMetadataEditing {
+	edit(
+		current: Pick<Skill<never>, 'description' | 'triggerHints' | 'isEnabled'>,
+		input: Pick<SkillEditInput, 'description' | 'triggerHints' | 'isEnabled'>
+	): SkillMetadataUpdate {
+		return applySkillMetadataEdit(current, input);
+	}
 }

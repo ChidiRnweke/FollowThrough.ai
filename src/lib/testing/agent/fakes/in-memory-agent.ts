@@ -1,50 +1,20 @@
-import type { Note } from '$lib/models/notes';
-import type { ActorContext } from '$lib/models/identity';
-import type { AgentEvent, AgentExecutionUpdate, WebResearchSettings } from '$lib/models/agent';
-import type { NoteId, TextSelection } from '$lib/models/notes';
+import { NotFoundError } from '$lib/errors';
+import type { ToolDescriptor } from '$lib/models/agent/tool-index';
+import type { Note, NoteId, TextSelection } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { Skill, SkillSummary } from '$lib/models/skills';
-import type { ProjectId } from '$lib/models/projects';
-import { NotFoundError } from '$lib/errors';
-import type { AgentRunner, AgentWorkflowToolbox } from '$lib/server/services/agent/runs/contracts';
-import type { SkillFinder, SkillUsageRecorder } from '$lib/server/services/skills/contracts';
-import type { ToolDescriptor } from '$lib/models/agent/tool-index';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
+import type { ToolRanking } from '$lib/server/services/agent/tools/tool-search';
+import type { AgentWorkflowToolbox } from '$lib/server/services/agent/runs/contracts';
+import type { SkillFinder, SkillUsageRecorder } from '$lib/server/services/skills/library';
 
-export class InMemoryAgentRunner implements AgentRunner {
-	events: AgentEvent[] = [];
-	readonly started = Promise.withResolvers<void>();
-	completion: Promise<void> = Promise.resolve();
-	readonly signals: AbortSignal[] = [];
-	readonly researchSettings: WebResearchSettings[] = [];
-	abortable = false;
-	outcome: Extract<AgentExecutionUpdate, { type: 'completed' | 'approval_checkpoint' }> = {
-		type: 'completed',
-		sessionItems: []
-	};
-
-	async *execute(
-		input: Parameters<AgentRunner['execute']>[0]
-	): AsyncIterable<AgentExecutionUpdate> {
-		this.signals.push(input.signal);
-		this.researchSettings.push(input.webSearch);
-		this.started.resolve();
-		for (const event of this.events) yield { type: 'event', event };
-		const aborted = Promise.withResolvers<void>();
-		const onAbort = () => aborted.resolve();
-		if (input.signal.aborted) onAbort();
-		input.signal.addEventListener('abort', onAbort, { once: true });
-		try {
-			await (this.abortable ? Promise.race([this.completion, aborted.promise]) : this.completion);
-		} finally {
-			input.signal.removeEventListener('abort', onAbort);
-		}
-		yield this.outcome;
-	}
-}
-
-export class InMemoryToolRetriever implements ToolRetriever {
+export class InMemoryToolRetriever implements ToolRetriever, ToolRanking {
 	names: string[] = [];
+
+	async rank(_names: readonly string[], _query: string, _limit: number): Promise<string[]> {
+		return this.names;
+	}
 
 	async retrieve(
 		_catalog: readonly ToolDescriptor[],
@@ -59,27 +29,19 @@ export class InMemoryToolRetriever implements ToolRetriever {
 }
 
 export class InMemoryAgentToolbox implements AgentWorkflowToolbox {
-	async extractPromises(_actor: ActorContext, _selection: TextSelection): Promise<never> {
-		void _actor;
+	async extractPromises(_selection: TextSelection): Promise<never> {
 		void _selection;
 		throw new Error('Unexpected extractPromises tool invocation');
 	}
-	async relate(_actor: ActorContext, _selection: TextSelection): Promise<never> {
-		void _actor;
+	async relate(_selection: TextSelection): Promise<never> {
 		void _selection;
 		throw new Error('Unexpected relate tool invocation');
 	}
-	async reference(_actor: ActorContext, _selection: TextSelection): Promise<never> {
-		void _actor;
+	async reference(_selection: TextSelection): Promise<never> {
 		void _selection;
 		throw new Error('Unexpected reference tool invocation');
 	}
-	async generateDiagram(
-		_actor: ActorContext,
-		_selection: TextSelection,
-		_instruction?: string
-	): Promise<never> {
-		void _actor;
+	async generateDiagram(_selection: TextSelection, _instruction?: string): Promise<never> {
 		void _selection;
 		void _instruction;
 		throw new Error('Unexpected generateDiagram tool invocation');
@@ -107,14 +69,13 @@ export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
 		};
 	}
 
-	async listEnabled(_actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
-		void _actor;
+	async listEnabled(projectId?: ProjectId): Promise<readonly SkillSummary[]> {
 		return this.skills
 			.filter((skill) => skill.isEnabled)
 			.map((skill) => this.summarize(skill, projectId));
 	}
-	async listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
-		const enabled = await this.listEnabled(actor, projectId);
+	async listAll(projectId?: ProjectId): Promise<readonly SkillSummary[]> {
+		const enabled = await this.listEnabled(projectId);
 		const enabledIds = new Set(enabled.map((skill) => skill.noteId));
 		return [
 			...enabled,
@@ -124,18 +85,17 @@ export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
 		];
 	}
 
-	async load(_actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
-		void _actor;
+	async load(noteId: NoteId): Promise<Skill<Note>> {
 		const skill = this.skills.find((candidate) => candidate.note.id === noteId);
 		if (!skill) throw new NotFoundError('Skill was not found');
 		return skill;
 	}
 
-	async record(
-		_actor: ActorContext,
-		input: { skillNoteId: NoteId; contextNoteId?: NoteId; provenanceId: ProvenanceId }
-	): Promise<void> {
-		void _actor;
+	async record(input: {
+		skillNoteId: NoteId;
+		contextNoteId?: NoteId;
+		provenanceId: ProvenanceId;
+	}): Promise<void> {
 		this.usages.push(input);
 	}
 }

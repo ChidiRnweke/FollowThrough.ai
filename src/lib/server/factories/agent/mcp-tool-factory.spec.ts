@@ -1,21 +1,21 @@
-import { z } from 'zod';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
 import { toolFailureSchema } from '$lib/models/agent/tool-failure';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+import { agentFilesFixture } from '$lib/testing/agent/fixtures/files';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
-import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
-import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { describe, expect, it } from 'vitest';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { z } from 'zod';
+const noteMarkdown = new NoteMarkdownCodec();
+
+import type { ApiTokenScope } from '$lib/models/identity';
+import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-factory';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { createMcpToolDefinitions } from '$lib/testing/agent/fixtures/tool-surface';
+import { noteBuilder, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import type { ApiTokenScope } from '$lib/models/identity';
-import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
-import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-factory';
+import { describe, expect, it } from 'vitest';
 
 const connect = async (
 	scope: ApiTokenScope,
@@ -25,14 +25,14 @@ const connect = async (
 		disabled?: readonly string[];
 	} = {}
 ): Promise<Client> => {
-	const server = createMcpToolSurface({
-		controllers: options.factory ?? ({} as ControllerFactory),
-		actor: testActor(),
-		scope,
-		provenanceId: testProvenanceId(),
-		toolRetriever: options.retriever ?? new InMemoryToolRetriever(),
-		toolAccess: { isEnabled: (name) => !(options.disabled ?? []).includes(name) }
-	});
+	const session = createMcpToolDefinitions(
+		testTokenizer,
+		options.factory ?? ({} as ControllerFactory),
+		{ provenanceId: testProvenanceId() },
+		{ isEnabled: (name) => !(options.disabled ?? []).includes(name) },
+		options.retriever ?? new InMemoryToolRetriever()
+	).open(scope);
+	const server = createMcpToolSurface(session).open();
 	const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 	const client = new Client({ name: 'test', version: '1.0.0' });
 	await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
@@ -189,7 +189,7 @@ describe('MCP lifecycle failure contract', () => {
 	it.each([[], Array.from({ length: 6 }, () => ({ oldText: 'Monday', newText: 'Tuesday' }))])(
 		'returns application validation as a structured tool error for edits %j',
 		async (edits) => {
-			const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+			const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.') });
 			const fixture = reviewedNoteFixture(note);
 			const client = await connect('full', { factory: fixture.factory });
 			const failure = readFailure(
@@ -207,7 +207,7 @@ describe('MCP lifecycle failure contract', () => {
 		}
 	);
 	it('allows a corrected call after validation fails', async () => {
-		const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+		const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.') });
 		const fixture = reviewedNoteFixture(note);
 		const client = await connect('full', { factory: fixture.factory });
 		await client.callTool({ name: 'edit_note', arguments: { noteId: note.id, edits: [] } });
@@ -218,7 +218,7 @@ describe('MCP lifecycle failure contract', () => {
 		expect(fixture.content.notes[0].plainText).toBe('Launch Tuesday.');
 	});
 	it('marks returned preparation failures as tool errors', async () => {
-		const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+		const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.') });
 		const client = await connect('full', { factory: reviewedNoteFixture(note).factory });
 		const failure = readFailure(
 			await client.callTool({
@@ -238,7 +238,7 @@ describe('MCP lifecycle failure contract', () => {
 			read: () => {
 				throw new TypeError('private converter implementation');
 			},
-			write: noteMarkdownFromContent
+			write: noteMarkdown.write
 		});
 		const client = await connect('full', { factory: fixture.factory });
 		const failure = readFailure(
@@ -288,17 +288,13 @@ it('returns an execution-time domain refusal as a canonical MCP failure', async 
 
 it('preserves the exact file recovery call in an MCP error result', async () => {
 	const nextActions = [
-		{ reason: 'List available files', tool: 'ls' as const, arguments: { path: '/' } }
+		{
+			reason: 'List / to choose an exact existing path.',
+			tool: 'ls' as const,
+			arguments: { path: '/' }
+		}
 	];
-	const files = capabilityDependencies<AgentFilesController>({
-		ls: async () => ({
-			kind: 'error',
-			code: 'path_not_found',
-			message: 'Path does not exist.',
-			requestedPath: '/missing',
-			nextActions
-		})
-	});
+	const files = agentFilesFixture();
 	const factory = capabilityDependencies<ControllerFactory>({ agentFiles: () => files });
 	const client = await connect('full', { factory });
 	expect(
@@ -306,16 +302,14 @@ it('preserves the exact file recovery call in an MCP error result', async () => 
 	).toEqual({
 		kind: 'failure',
 		code: 'path_not_found',
-		message: 'Path does not exist.',
+		message: 'No file or directory exists at /missing. The path was not changed or guessed.',
 		recovery: 'Follow the exact nextActions below.',
 		details: { requestedPath: '/missing', nextActions }
 	});
 });
 
 it('accepts omitted MCP arguments when every application field is optional', async () => {
-	const files = capabilityDependencies<AgentFilesController>({
-		ls: async () => ({ kind: 'listed', path: '/', entries: [] })
-	});
+	const files = agentFilesFixture();
 	const factory = capabilityDependencies<ControllerFactory>({ agentFiles: () => files });
 	const client = await connect('full', { factory });
 	const result = await client.callTool({ name: 'ls' });
@@ -331,4 +325,18 @@ it('retains the fifteen-tool discovery ceiling for MCP', async () => {
 			await client.callTool({ name: 'search_tools', arguments: { query: 'notes', limit: 16 } })
 		).code
 	).toBe('VALIDATION');
+});
+
+it('keeps discovered tools inside the MCP connection that found them', async () => {
+	const retriever = new InMemoryToolRetriever();
+	retriever.names = ['create_todo'];
+	const first = await connect('full', { retriever });
+	const second = await connect('full', { retriever });
+	await first.callTool({ name: 'search_tools', arguments: { query: 'create a todo' } });
+	const firstTools = await first.listTools();
+	const secondTools = await second.listTools();
+	expect({
+		first: firstTools.tools.some((tool) => tool.name === 'create_todo'),
+		second: secondTools.tools.some((tool) => tool.name === 'create_todo')
+	}).toEqual({ first: true, second: false });
 });

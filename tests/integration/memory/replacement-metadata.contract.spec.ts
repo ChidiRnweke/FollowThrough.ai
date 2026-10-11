@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
@@ -14,14 +14,14 @@ it('stores the existing classification on the active replacement entry', async (
 	const { owner, project } = await seedNote('22901');
 	const provenance = await seedProvenance(owner, '22901');
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const entries = new MemoryRecords(database);
-	const library = new MemoryLibrary(
-		entries,
-		new ProjectRecords(database),
-		new ProvenanceRecords(database)
-	);
-	const original = await library.create(
+	const entries = new MemoryRecords(owner, database);
+	const library = createMemoryServices(
 		owner,
+		entries,
+		new ProjectRecords(owner, database),
+		new ProvenanceRecords(owner, database)
+	);
+	const original = await library.creator.create(
 		memoryEntryBuilder({
 			id: testMemoryEntryId(22901),
 			userId: owner.userId,
@@ -31,8 +31,7 @@ it('stores the existing classification on the active replacement entry', async (
 		})
 	);
 	const { entry } = await transactionRunner.run(() =>
-		library.apply(
-			owner,
+		library.changes.apply(
 			{
 				scope: 'project',
 				projectId: project.id,
@@ -44,7 +43,7 @@ it('stores the existing classification on the active replacement entry', async (
 		)
 	);
 	expect(
-		(await entries.list(owner, { projectId: project.id })).map((item) => ({
+		(await entries.list({ projectId: project.id })).map((item) => ({
 			id: item.id,
 			type: item.type,
 			content: item.content

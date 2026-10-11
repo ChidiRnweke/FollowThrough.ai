@@ -1,33 +1,43 @@
-import { expect, it } from 'vitest';
-import { Suggestions, type SuggestionsDependencies } from './controller';
-import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
-import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
-	InMemoryNoteRepository,
-	InMemoryAnchorRepository
+	InMemoryAnchorRepository,
+	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	suggestionBuilder,
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { Suggestions, type SuggestionsDependencies } from './controller';
 
 const setup = () => {
-	const records = new InMemorySuggestionRepository();
-	const inbox = new SuggestionInbox(
+	const records = new InMemorySuggestionRepository(testActor());
+	const inbox = createSuggestionServices(
+		testActor(),
 		records,
-		new InMemoryNoteRepository(),
-		new InMemoryProvenanceRepository(),
-		new InMemoryAnchorRepository(),
+		new InMemoryNoteRepository(testActor()),
+		new InMemoryProvenanceRepository(testActor()),
+		new InMemoryAnchorRepository(testActor()),
 		{ now: () => testNow }
 	);
 	const controller = new Suggestions(
+		testActor(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
-			suggestionFinder: inbox,
-			suggestionRejecter: inbox,
+			...agentToolResultsFixture(),
+			todoCreationRules: new TodoEditingRulesService(),
+			suggestionPresentation: new SuggestionPresentationService(),
+			suggestionFinder: inbox.finder,
+			suggestionRejecter: inbox.rejecter,
 			transactionRunner: new InMemoryTransactionRunner([])
 		})
 	);
@@ -37,7 +47,7 @@ it('returns and stores rejection with its decision time and no applied artifact'
 	const { records, controller } = setup();
 	const proposal = suggestionBuilder();
 	records.suggestions = [proposal];
-	const result = await controller.reject(testActor(), { suggestionId: proposal.id });
+	const result = await controller.reject({ suggestionId: proposal.id });
 	const rejected = { ...proposal, status: 'rejected', decidedAt: testNow, updatedAt: testNow };
 	expect({ result, stored: records.suggestions }).toEqual({ result: rejected, stored: [rejected] });
 });
@@ -47,7 +57,7 @@ it.each(['accepted', 'rejected', 'reverted', 'expired'] as const)(
 		const { records, controller } = setup();
 		const terminal = suggestionBuilder({ status });
 		records.suggestions = [terminal];
-		const outcome = await controller.reject(testActor(), { suggestionId: terminal.id }).then(
+		const outcome = await controller.reject({ suggestionId: terminal.id }).then(
 			() => 'unexpected success',
 			(error: Error) => error.message
 		);
@@ -59,9 +69,9 @@ it.each(['accepted', 'rejected', 'reverted', 'expired'] as const)(
 );
 it('refuses another actor without changing the proposal', async () => {
 	const { records, controller } = setup();
-	const proposal = suggestionBuilder();
+	const proposal = suggestionBuilder({ userId: testActor(2).userId });
 	records.suggestions = [proposal];
-	const outcome = await controller.reject(testActor(2), { suggestionId: proposal.id }).then(
+	const outcome = await controller.reject({ suggestionId: proposal.id }).then(
 		() => 'unexpected success',
 		(error: Error) => error.message
 	);
@@ -74,13 +84,12 @@ it('preserves a decision that won after the pending proposal was read', async ()
 	const { records, inbox } = setup();
 	const proposal = suggestionBuilder();
 	records.suggestions = [proposal];
-	const accepted = await inbox.accept(
-		testActor(),
+	const accepted = await inbox.accepter.accept(
 		proposal,
 		'00000000-0000-4000-8005-000000000001',
 		false
 	);
-	const outcome = await inbox.reject(testActor(), proposal).then(
+	const outcome = await inbox.rejecter.reject(proposal).then(
 		() => 'unexpected success',
 		(error: Error) => error.message
 	);

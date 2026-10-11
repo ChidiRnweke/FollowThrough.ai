@@ -1,3 +1,9 @@
+import { NoteActionEventReader } from '$lib/client/notes/action-event-reader';
+import type { NoteActionEventRecord } from '$lib/models/note-actions';
+import type {
+	NoteActionRunTransport,
+	NoteActionRunStorage
+} from '$lib/controllers/notes/action-runs';
 import type {
 	AgentEvent,
 	StoredAgentRunEventRecord,
@@ -12,7 +18,7 @@ interface EventStream {
 interface OpenStream {
 	readonly runId: AgentRunId;
 	readonly after: string;
-	readonly deliver: (record: StoredAgentRunEventRecord) => void | Promise<void>;
+	readonly deliver: (record: NoteActionEventRecord) => void | Promise<void>;
 	closed: boolean;
 }
 
@@ -23,7 +29,13 @@ interface OpenStream {
  * what follows the cursor the client reconnects with — the behaviour a refresh
  * depends on.
  */
-export class InMemoryNoteActionRunTransport {
+export class InMemoryNoteActionRunTransport implements NoteActionRunTransport {
+	private readonly reader = new NoteActionEventReader();
+	private pending: Promise<void>[] = [];
+	cancellationFailure: Error | null = null;
+	async flush(): Promise<void> {
+		await Promise.all(this.pending.splice(0));
+	}
 	readonly cancelled: AgentRunId[] = [];
 	readonly streams: OpenStream[] = [];
 	private readonly log = new Map<AgentRunId, StoredAgentRunEventRecord[]>();
@@ -32,13 +44,13 @@ export class InMemoryNoteActionRunTransport {
 	open(
 		runId: AgentRunId,
 		after: string,
-		onEvent: (record: StoredAgentRunEventRecord) => void | Promise<void>,
-		_onError: () => void
+		onEvent: (record: NoteActionEventRecord) => void | Promise<void>
 	): EventStream {
 		const stream: OpenStream = { runId, after, deliver: onEvent, closed: false };
 		this.streams.push(stream);
 		for (const record of this.log.get(runId) ?? []) {
-			if (record.cursor > after) onEvent(record);
+			if (record.cursor > after)
+				this.pending.push(Promise.resolve(onEvent(this.reader.read(record))));
 		}
 		return {
 			close: () => {
@@ -48,6 +60,7 @@ export class InMemoryNoteActionRunTransport {
 	}
 
 	async cancel(runId: AgentRunId): Promise<void> {
+		if (this.cancellationFailure) throw this.cancellationFailure;
 		this.cancelled.push(runId);
 		return undefined;
 	}
@@ -65,7 +78,8 @@ export class InMemoryNoteActionRunTransport {
 		};
 		this.log.set(runId, [...(this.log.get(runId) ?? []), record]);
 		for (const stream of this.streams)
-			if (stream.runId === runId && !stream.closed) stream.deliver(record);
+			if (stream.runId === runId && !stream.closed)
+				this.pending.push(Promise.resolve(stream.deliver(this.reader.read(record))));
 		return record;
 	}
 
@@ -75,7 +89,7 @@ export class InMemoryNoteActionRunTransport {
 }
 
 /** Session storage without a browser, and shareable across two stores to model a refresh. */
-export class InMemoryNoteActionRunStorage {
+export class InMemoryNoteActionRunStorage implements NoteActionRunStorage {
 	private records: readonly StoredNoteActionRun[] = [];
 
 	load(): readonly StoredNoteActionRun[] {
@@ -85,4 +99,25 @@ export class InMemoryNoteActionRunStorage {
 	save(runs: readonly StoredNoteActionRun[]): void {
 		this.records = runs;
 	}
+}
+
+/** The editor's refresh of this device's records, which a test can hold open. */
+export class InMemoryRecordRefresh {
+	refreshes = 0;
+	private gate: { started(): void; ready: Promise<void> } | null = null;
+	pause() {
+		const started = Promise.withResolvers<void>();
+		const ready = Promise.withResolvers<void>();
+		this.gate = { started: started.resolve, ready: ready.promise };
+		return { started: started.promise, release: ready.resolve };
+	}
+	readonly refresh = async (): Promise<void> => {
+		this.refreshes += 1;
+		const gate = this.gate;
+		this.gate = null;
+		if (gate) {
+			gate.started();
+			await gate.ready;
+		}
+	};
 }

@@ -1,24 +1,63 @@
+import type { ActorContext } from '$lib/models/identity';
+import {
+	SyncObjectService,
+	type SyncObjectReader
+} from '$lib/server/services/workspace/sync-objects';
+import {
+	WorkspaceJournal,
+	type WorkspaceJournalReader
+} from '$lib/server/services/workspace/journal';
+import {
+	WorkspaceResourceVersions,
+	type WorkspaceResourceVersionReader
+} from '$lib/server/services/workspace/resource-versions';
+import {
+	WorkspaceCommandRulesService,
+	type WorkspaceCommandRules
+} from '$lib/services/workspace/commands';
 import type { Database } from '$lib/server/db';
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
-import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
+import {
+	WorkspaceSyncObjects,
+	type SyncObjectRepository
+} from '$lib/server/repositories/workspace/sync-objects';
 import { WorkspaceSyncReceipts } from '$lib/server/repositories/workspace/sync-receipts';
-import { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import {
+	WorkspaceMutationReceipts,
+	type WorkspaceMutationGuard,
+	type WorkspaceWriteRecoveryService
+} from '$lib/server/services/workspace/mutation-receipts';
 
-export const createSyncCapability = ({
-	db,
-	deferEmbedding = false
-}: {
-	readonly db: Database;
-	readonly deferEmbedding?: boolean;
-}) => {
-	const objects = new WorkspaceSyncObjects(db);
+export interface SyncCapability {
+	readonly changes: WorkspaceJournalReader;
+	readonly resourceVersions: WorkspaceResourceVersionReader;
+	readonly resourceKeys: WorkspaceCommandRules;
+	readonly objects: SyncObjectRepository;
+	readonly objectReader: SyncObjectReader;
+	readonly mutationRetry: 'database-only' | 'never';
+	readonly mutations: WorkspaceMutationGuard & WorkspaceWriteRecoveryService;
+}
+export const createSyncCapability = (
+	actor: ActorContext,
+	{
+		db,
+		deferEmbedding = false
+	}: {
+		readonly db: Database;
+		readonly deferEmbedding?: boolean;
+	}
+): SyncCapability => {
+	const objects = new WorkspaceSyncObjects(actor, db);
 	return {
-		changes: new WorkspaceSyncChanges(db),
+		changes: new WorkspaceJournal(new WorkspaceSyncChanges(actor, db)),
+		resourceVersions: new WorkspaceResourceVersions(objects),
+		resourceKeys: new WorkspaceCommandRulesService(),
 		objects,
+		objectReader: new SyncObjectService(objects),
 		mutationRetry: deferEmbedding ? ('database-only' as const) : ('never' as const),
 		mutations: new WorkspaceMutationReceipts({
 			syncObjects: objects,
-			mutationReceipts: new WorkspaceSyncReceipts(db)
+			mutationReceipts: new WorkspaceSyncReceipts(actor, db)
 		})
 	};
 };

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
@@ -17,13 +18,15 @@
 	import * as Icon from '$lib/components/icons';
 	import * as Scene from '$lib/components/icons/scenes';
 	import { formatDateTime } from '$lib/components/shared/labels';
-	import { widgetReferencesIn } from '$lib/services/notes/references';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { widgetTab } from '$lib/stores/workbench/tab-ref';
-	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
+	import { widgetEdits } from '../widget-edits';
 	import WidgetView from '../widget-view.svelte';
-	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
+	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
+	import { todayLocalDate } from '$lib/client/todos/local-date';
+	const widgetSources = (widget: Widget) => sourceViews.widgetSources(widget, todayLocalDate());
 
 	export interface WidgetGalleryData {
 		readonly widgets: readonly Widget[];
@@ -47,8 +50,9 @@
 		const resources = workspaceSession.current?.resources;
 		if (!resources || resources.availability !== 'complete') return null;
 		const id = removeTarget.id;
-		return resources.views.all('notes').filter((note) => widgetReferencesIn([note]).includes(id))
-			.length;
+		return workspaceViews
+			.all('notes')
+			.filter((note) => noteDocuments.widgetReferences([note]).includes(id)).length;
 	});
 
 	// Mirrors the loader's canonical URL, so navigation never takes an extra redirect.

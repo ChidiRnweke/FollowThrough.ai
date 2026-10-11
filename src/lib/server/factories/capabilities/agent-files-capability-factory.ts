@@ -1,36 +1,50 @@
+import type { ActorContext } from '$lib/models/identity';
+import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+import type { TokenCounter } from '$lib/models/tokenization';
 import type { Database } from '$lib/server/db';
 import { AgentFileRecords } from '$lib/server/repositories/agent-files/postgres/agent-files';
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
-import { AgentVirtualFiles } from '$lib/server/services/agent-files/virtual-files';
-import { noteMarkdownFromContent } from '$lib/server/services/notes/markdown';
+import {
+	AgentFileReferenceService,
+	AgentVirtualFiles,
+	type AgentFileReader,
+	type AgentFileReferences
+} from '$lib/server/services/agent-files/virtual-files';
 
 export interface AgentFilesCapabilityInput {
+	readonly tokens: TokenCounter;
 	readonly db: Database;
 	readonly projects: ProjectRepository;
 	readonly notes: NoteRepository;
 }
 
 export interface AgentFilesCapability {
-	readonly reader: AgentVirtualFiles;
-	readonly repository: AgentFileRecords;
+	readonly reader: AgentFileReader;
+	readonly references: AgentFileReferences;
+	readonly repository: AgentFileRepository;
 }
 
 export const createAgentFilesCapability = (
+	actor: ActorContext,
 	input: AgentFilesCapabilityInput
 ): AgentFilesCapability => {
-	const repository = new AgentFileRecords(input.db);
+	const tokens = input.tokens;
+	const repository = new AgentFileRecords(actor, input.db, tokens);
 	return {
 		repository,
+		references: new AgentFileReferenceService(tokens),
 		reader: new AgentVirtualFiles({
+			tokens,
 			projects: input.projects,
 			notes: input.notes,
-			attachments: new AttachmentRecords(input.db),
-			diagrams: new DiagramRecords(input.db),
+			attachments: new AttachmentRecords(actor, input.db),
+			diagrams: new DiagramRecords(actor, input.db),
 			stored: repository,
-			noteMarkdown: noteMarkdownFromContent
+			noteMarkdown: new NoteMarkdownCodec()
 		})
 	};
 };

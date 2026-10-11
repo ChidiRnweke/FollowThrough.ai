@@ -2,7 +2,7 @@ import type { WidgetDraft } from '$lib/models/widgets';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 import type { LocalDate } from '$lib/models/workspace';
-import type { WidgetSourceRecords } from '$lib/services/widgets/sources';
+import type { WidgetSourceRecords } from '$lib/models/widgets';
 import type { WorkspaceFixture } from '../../lab/workspace';
 import type { ProbeStep } from '../../assertions/widget/probe';
 

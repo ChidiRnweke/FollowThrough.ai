@@ -1,9 +1,7 @@
 import type { AgentModel } from '$lib/models/agent';
 import type { AgentModelCatalog } from '$lib/server/services/agent/runs/preferences';
-import type {
-	IAttachmentStorage,
-	StoredObjectInfo
-} from '$lib/server/services/attachments/storage';
+import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
+import type { StoredObjectInfo } from '$lib/models/attachments';
 
 /**
  * The real catalog lists every OpenRouter model over the network on submit.

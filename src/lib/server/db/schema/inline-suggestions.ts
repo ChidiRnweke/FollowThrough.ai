@@ -1,0 +1,1 @@
+export { inlineCompletionAttempts } from './registry';

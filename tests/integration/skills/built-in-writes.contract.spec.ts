@@ -1,38 +1,54 @@
-import { expect, it, vi } from 'vitest';
-import postgres from 'postgres';
-import type { Database } from '$lib/server/db';
+import type { ActorContext } from '$lib/models/identity';
 import type { NoteId, NoteRevisionId } from '$lib/models/notes';
-import type { TransactionRunner } from '$lib/server/repositories/workspace';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
-import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
-import { SkillLibrary } from '$lib/server/services/skills/library';
-import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
+import type { Database } from '$lib/server/db';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
+import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
+import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
+import type { TransactionRunner } from '$lib/server/repositories/workspace';
+import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
+import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { seedUser, replaceNoteFixture, context, now } from '../database-harness';
+import postgres from 'postgres';
+import { expect, it, vi } from 'vitest';
+import { context, now, replaceNoteFixture, seedUser } from '../database-harness';
 
 const currentDefinitions = { active: BUILT_INS, retired: RETIRED_BUILT_INS };
 const controller = (
+	actor: ActorContext,
 	database: Database,
 	transactionRunner: TransactionRunner,
-	definitions: ConstructorParameters<typeof BuiltInSkills>[3]
+	definitions: ConstructorParameters<typeof BuiltInSkills>[4]
 ) => {
-	const projects = new ProjectRecords(database);
-	const notes = new NoteRecords(database);
-	const skills = new SkillRecords(database);
-	const library = new SkillLibrary(skills, notes, new ProvenanceRecords(database));
+	const projects = new ProjectRecords(actor, database);
+	const notes = new NoteRecords(actor, database);
+	const skills = new SkillRecords(actor, database);
+	const library = createSkillServices(actor, skills, notes, new ProvenanceRecords(actor, database));
 	return new Skills(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
+			...agentToolResultsFixture(),
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
-			builtInSkills: new BuiltInSkills(projects, notes, skills, definitions),
-			skillFinder: library,
-			skillEditor: library,
-			skillUsageLister: library
+			builtInSkills: new BuiltInSkills(actor, projects, notes, skills, definitions),
+			skillFinder: library.finder,
+			skillEditor: library.editor,
+			skillUsageLister: library.usageLister
 		})
 	);
 };
@@ -41,14 +57,14 @@ it('upgrades an untouched stored guide and records the new revision', async () =
 	const owner = await seedUser('19503');
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const retired = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough')!;
-	await controller(database, transactionRunner, { active: [retired], retired: [] }).list(owner);
-	await controller(database, transactionRunner, currentDefinitions).list(owner);
-	const records = new NoteRecords(context.db);
-	const note = (await records.findByBuiltInKey(owner, 'followthrough'))!;
+	await controller(owner, database, transactionRunner, { active: [retired], retired: [] }).list();
+	await controller(owner, database, transactionRunner, currentDefinitions).list();
+	const records = new NoteRecords(owner, context.db);
+	const note = (await records.findByBuiltInKey('followthrough'))!;
 	expect({
 		instructions: note.plainText,
 		revision: note.currentRevision,
-		history: (await records.listRevisions(owner, note.id)).map((revision) => revision.revision)
+		history: (await records.listRevisions(note.id)).map((revision) => revision.revision)
 	}).toEqual({
 		instructions: BUILT_INS.find((definition) => definition.key === 'followthrough')!.instructions,
 		revision: 2,
@@ -59,15 +75,15 @@ it('upgrades an untouched stored guide and records the new revision', async () =
 it('repairs legacy built-ins from an archived project while preserving authored content and identity', async () => {
 	const owner = await seedUser('19501');
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const skills = controller(database, transactionRunner, currentDefinitions);
-	const initial = await skills.list(owner);
-	const notes = new NoteRecords(context.db);
-	const projects = new ProjectRecords(context.db);
+	const skills = controller(owner, database, transactionRunner, currentDefinitions);
+	const initial = await skills.list();
+	const notes = new NoteRecords(owner, context.db);
+	const projects = new ProjectRecords(owner, context.db);
 	// Before project roles, provisioning installed built-ins in the ordinary General project.
-	const legacy = await projects.insert(owner, { name: 'General', role: 'workspace' });
+	const legacy = await projects.insert({ name: 'General', role: 'workspace' });
 	await context.client`update notes set project_id = ${legacy.id} where user_id = ${owner.userId} and built_in_key is not null`;
-	const original = (await notes.findByBuiltInKey(owner, 'followthrough'))!;
-	const folder = await notes.insert(owner, {
+	const original = (await notes.findByBuiltInKey('followthrough'))!;
+	const folder = await notes.insert({
 		...original,
 		id: crypto.randomUUID() as NoteId,
 		builtInKey: undefined,
@@ -90,7 +106,7 @@ it('repairs legacy built-ins from an archived project while preserving authored 
 		publishedAt: now,
 		isPinned: true
 	});
-	await notes.insertRevision(owner, {
+	await notes.insertRevision({
 		id: crypto.randomUUID() as NoteRevisionId,
 		noteId: edited.id,
 		revision: edited.currentRevision,
@@ -99,10 +115,10 @@ it('repairs legacy built-ins from an archived project while preserving authored 
 		plainText: edited.plainText,
 		createdAt: now
 	});
-	await projects.archive(owner, original.projectId);
-	const result = await skills.list(owner);
-	const inbox = (await projects.listActive(owner)).find((project) => project.role === 'inbox')!;
-	const stored = await notes.findByBuiltInKey(owner, 'followthrough');
+	await projects.archive(original.projectId);
+	const result = await skills.list();
+	const inbox = (await projects.listActive()).find((project) => project.role === 'inbox')!;
+	const stored = await notes.findByBuiltInKey('followthrough');
 	expect({ ids: result.skills.map((skill) => skill.noteId).sort(), stored }).toMatchObject({
 		ids: initial.skills.map((skill) => skill.noteId).sort(),
 		stored: {
@@ -127,11 +143,12 @@ it.each([
 	const owner = await seedUser(suffix);
 	const seed = createTransactionContext(context.db);
 	const retired = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough')!;
-	await controller(seed.database, seed.transactionRunner, { active: [retired], retired: [] }).list(
-		owner
-	);
-	const notes = new NoteRecords(context.db);
-	const original = (await notes.findByBuiltInKey(owner, 'followthrough'))!;
+	await controller(owner, seed.database, seed.transactionRunner, {
+		active: [retired],
+		retired: []
+	}).list();
+	const notes = new NoteRecords(owner, context.db);
+	const original = (await notes.findByBuiltInKey('followthrough'))!;
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
 	const { database, transactionRunner } = createTransactionContext(writer.db);
@@ -153,7 +170,7 @@ it.each([
 	try {
 		await locked.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const provisioning = controller(database, transactionRunner, currentDefinitions).list(owner);
+		const provisioning = controller(owner, database, transactionRunner, currentDefinitions).list();
 		await vi.waitFor(async () => {
 			const waiting = await blocker<
 				{ pid: number }[]
@@ -163,8 +180,8 @@ it.each([
 		release.resolve();
 		await editing;
 		await provisioning;
-		const saved = (await notes.findByBuiltInKey(owner, 'followthrough'))!;
-		const metadata = await new SkillRecords(context.db).findByNoteId(owner, saved.id);
+		const saved = (await notes.findByBuiltInKey('followthrough'))!;
+		const metadata = await new SkillRecords(owner, context.db).findByNoteId(saved.id);
 		const instructions =
 			change === 'document'
 				? 'Concurrent user instructions'
@@ -199,18 +216,21 @@ it.each(['description', 'hints'] as const)(
 		const { database, transactionRunner } = createTransactionContext(context.db);
 		const released = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough');
 		if (!released) throw new Error('The released guide fixture is required');
-		await controller(database, transactionRunner, { active: [released], retired: [] }).list(owner);
-		const note = await new NoteRecords(context.db).findByBuiltInKey(owner, released.key);
+		await controller(owner, database, transactionRunner, {
+			active: [released],
+			retired: []
+		}).list();
+		const note = await new NoteRecords(owner, context.db).findByBuiltInKey(released.key);
 		if (!note) throw new Error('The installed guide is required');
-		const current = controller(database, transactionRunner, currentDefinitions);
-		const edited = await current.update(owner, {
+		const current = controller(owner, database, transactionRunner, currentDefinitions);
+		const edited = await current.update({
 			noteId: note.id,
 			...(field === 'description'
 				? { description: 'My team workflow' }
 				: { triggerHints: ['my workflow'] })
 		});
-		await current.list(owner);
-		const retained = await new SkillRecords(context.db).findByNoteId(owner, note.id);
+		await current.list();
+		const retained = await new SkillRecords(owner, context.db).findByNoteId(note.id);
 		expect({
 			text: retained?.note.plainText,
 			revision: retained?.note.currentRevision,

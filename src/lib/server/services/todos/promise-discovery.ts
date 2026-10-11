@@ -1,19 +1,23 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { PromiseCandidate, PromiseModelContext } from '$lib/models/todos';
 import type { TextSelection } from '$lib/models/notes';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
 import type { StructuredPromiseClient } from '$lib/server/repositories/todos/classification';
 
-export class PromiseDiscovery {
+export interface PromiseExtractor {
+	extract(
+		selection: TextSelection,
+		context: PromiseModelContext,
+		signal?: AbortSignal
+	): Promise<readonly PromiseCandidate[]>;
+}
+export class PromiseDiscovery implements PromiseExtractor {
 	constructor(private readonly client: StructuredPromiseClient) {}
 
 	async extract(
-		actor: ActorContext,
 		selection: TextSelection,
 		context: PromiseModelContext,
 		signal?: AbortSignal
 	): Promise<readonly PromiseCandidate[]> {
-		void actor;
 		try {
 			const promises = await this.client.extract(selection.text, context, signal);
 			if (!promises)

@@ -1,4 +1,3 @@
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
 import { readCanvasSessionResult } from '../canvas-results';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
@@ -6,6 +5,7 @@ import type {
 	AgentPreferences,
 	AgentRun,
 	AgentRunId,
+	AgentRunStatus,
 	RunSettlementWrite,
 	RunCancellationWrite,
 	RunApprovalWrite,
@@ -22,7 +22,11 @@ import type {
 	ResolvedAgentRun,
 	WorkflowAgentRun
 } from '$lib/models/agent';
-import { parseSessionItem, workflowRunContextSchema, toStoredSessionItem } from '$lib/models/agent';
+import {
+	persistedSessionItemSchema,
+	storedSessionItemSchema,
+	workflowRunContextSchema
+} from '$lib/models/agent';
 import {
 	parseAgentRunContextSnapshot,
 	parseRunAgentInput,
@@ -31,6 +35,7 @@ import {
 import { NotFoundError } from '$lib/errors';
 import type {
 	AgentPreferencesRepository,
+	AgentRunBacklogRepository,
 	AgentRunRepository,
 	AgentSessionRepository
 } from '$lib/server/repositories/agent';
@@ -129,32 +134,34 @@ type PendingDecisionRows = NonNullable<(typeof schema.agentRuns.$inferInsert)['p
 const toPendingDecisionRows = (run: AgentRun): PendingDecisionRows => run.pendingDecisions;
 
 export class AgentPreferenceRecords implements AgentPreferencesRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async get(actor: ActorContext): Promise<AgentPreferences | undefined> {
+	async get(): Promise<AgentPreferences | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.agentPreferences)
-			.where(eq(schema.agentPreferences.userId, actor.userId));
+			.where(eq(schema.agentPreferences.userId, this.actor.userId));
 		return row ? toPreferences(row) : undefined;
 	}
 
-	async getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined> {
+	async getForWrite(resourceKey: string): Promise<AgentPreferences | undefined> {
 		// The same resource lock as synchronized writes also covers an absent preference row.
-		const key =
-			'resource:' + workspaceResourceKey({ type: 'agent_preferences', id: [actor.userId] });
+		const key = 'resource:' + resourceKey;
 		await this.database.execute(
-			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${key}))`
+			sql`select pg_advisory_xact_lock(hashtext(${this.actor.userId}), hashtext(${key}))`
 		);
 		const [row] = await this.database
 			.select()
 			.from(schema.agentPreferences)
-			.where(eq(schema.agentPreferences.userId, actor.userId))
+			.where(eq(schema.agentPreferences.userId, this.actor.userId))
 			.for('update');
 		return row ? toPreferences(row) : undefined;
 	}
 
-	async upsert(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences> {
+	async upsert(preferences: AgentPreferences): Promise<AgentPreferences> {
 		// The settable columns are named once: an insert and its conflict update
 		// that drift apart would silently drop a new setting on every save after
 		// the first, which is the hardest kind of bug to see from the UI.
@@ -173,7 +180,7 @@ export class AgentPreferenceRecords implements AgentPreferencesRepository {
 		};
 		const [row] = await this.database
 			.insert(schema.agentPreferences)
-			.values({ userId: actor.userId, createdAt: new Date(preferences.createdAt), ...columns })
+			.values({ userId: this.actor.userId, createdAt: new Date(preferences.createdAt), ...columns })
 			.onConflictDoUpdate({ target: schema.agentPreferences.userId, set: columns })
 			.returning();
 		return toPreferences(row!);
@@ -181,54 +188,64 @@ export class AgentPreferenceRecords implements AgentPreferencesRepository {
 }
 
 export class AgentRunRecords implements AgentRunRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async findById(actor: ActorContext, id: AgentRun['id']): Promise<AgentRun | undefined> {
+	async findById(id: AgentRun['id']): Promise<AgentRun | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.agentRuns)
-			.where(and(eq(schema.agentRuns.id, id), eq(schema.agentRuns.userId, actor.userId)));
+			.where(and(eq(schema.agentRuns.id, id), eq(schema.agentRuns.userId, this.actor.userId)));
 		return row ? toRun(row) : undefined;
 	}
 
-	async findForWrite(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {
+	async findStatus(id: AgentRunId): Promise<AgentRunStatus | undefined> {
+		const [row] = await this.database
+			.select({ status: schema.agentRuns.status })
+			.from(schema.agentRuns)
+			.where(eq(schema.agentRuns.id, id));
+		return row?.status;
+	}
+
+	async findForWrite(id: AgentRunId): Promise<AgentRun | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.agentRuns)
-			.where(and(eq(schema.agentRuns.id, id), eq(schema.agentRuns.userId, actor.userId)))
+			.where(and(eq(schema.agentRuns.id, id), eq(schema.agentRuns.userId, this.actor.userId)))
 			.for('update');
 		return row ? toRun(row) : undefined;
 	}
 
-	async findAgentById(
-		actor: ActorContext,
-		id: AgentRun['id']
-	): Promise<ResolvedAgentRun | undefined> {
+	async findAgentById(id: AgentRun['id']): Promise<ResolvedAgentRun | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.agentRuns)
 			.where(
 				and(
 					eq(schema.agentRuns.id, id),
-					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.userId, this.actor.userId),
 					eq(schema.agentRuns.kind, 'agent')
 				)
 			);
 		return row ? toResolvedRun(row) : undefined;
 	}
 
-	async findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined> {
+	async findByRequestId(requestId: string): Promise<AgentRun | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.agentRuns)
 			.where(
-				and(eq(schema.agentRuns.userId, actor.userId), eq(schema.agentRuns.requestId, requestId))
+				and(
+					eq(schema.agentRuns.userId, this.actor.userId),
+					eq(schema.agentRuns.requestId, requestId)
+				)
 			);
 		return row ? toRun(row) : undefined;
 	}
 
 	async findAwaitingByConversation(
-		actor: ActorContext,
 		conversationId: AgentRun['conversationId']
 	): Promise<AgentRun | undefined> {
 		const [row] = await this.database
@@ -236,7 +253,7 @@ export class AgentRunRecords implements AgentRunRepository {
 			.from(schema.agentRuns)
 			.where(
 				and(
-					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.userId, this.actor.userId),
 					eq(schema.agentRuns.conversationId, conversationId),
 					eq(schema.agentRuns.status, 'awaiting_approval')
 				)
@@ -246,7 +263,6 @@ export class AgentRunRecords implements AgentRunRepository {
 	}
 
 	async findLatestByConversation(
-		actor: ActorContext,
 		conversationId: AgentRun['conversationId']
 	): Promise<AgentRun | undefined> {
 		const [row] = await this.database
@@ -254,7 +270,7 @@ export class AgentRunRecords implements AgentRunRepository {
 			.from(schema.agentRuns)
 			.where(
 				and(
-					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.userId, this.actor.userId),
 					eq(schema.agentRuns.conversationId, conversationId)
 				)
 			)
@@ -262,16 +278,13 @@ export class AgentRunRecords implements AgentRunRepository {
 		return row ? toRun(row) : undefined;
 	}
 
-	async findActiveByConversation(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<AgentRun | undefined> {
+	async findActiveByConversation(conversationId: ConversationId): Promise<AgentRun | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.agentRuns)
 			.where(
 				and(
-					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.userId, this.actor.userId),
 					eq(schema.agentRuns.conversationId, conversationId),
 					inArray(schema.agentRuns.status, ['queued', 'running', 'awaiting_approval', 'cancelling'])
 				)
@@ -280,18 +293,18 @@ export class AgentRunRecords implements AgentRunRepository {
 		return row ? toRun(row) : undefined;
 	}
 
-	async insert(actor: ActorContext, run: AgentRun): Promise<AgentRun> {
+	async insert(run: AgentRun): Promise<AgentRun> {
 		const [row] = await this.database
 			.insert(schema.agentRuns)
-			.values(this.toInsert(actor, run))
+			.values(this.toInsert(run))
 			.returning();
 		return toRun(row!);
 	}
 
-	async insertIdempotent(actor: ActorContext, run: AgentRun): Promise<AgentRun | undefined> {
+	async insertIdempotent(run: AgentRun): Promise<AgentRun | undefined> {
 		const [row] = await this.database
 			.insert(schema.agentRuns)
-			.values(this.toInsert(actor, run))
+			.values(this.toInsert(run))
 			.onConflictDoNothing({
 				target: [schema.agentRuns.userId, schema.agentRuns.requestId]
 			})
@@ -299,11 +312,7 @@ export class AgentRunRecords implements AgentRunRepository {
 		return row ? toRun(row) : undefined;
 	}
 
-	async updateCancellation(
-		actor: ActorContext,
-		runId: AgentRunId,
-		change: RunCancellationWrite
-	): Promise<AgentRun> {
+	async updateCancellation(runId: AgentRunId, change: RunCancellationWrite): Promise<AgentRun> {
 		const [row] = await this.database
 			.update(schema.agentRuns)
 			.set({
@@ -312,14 +321,13 @@ export class AgentRunRecords implements AgentRunRepository {
 				updatedAt: new Date(change.updatedAt),
 				...(change.status === 'cancelled' ? { finishedAt: new Date(change.finishedAt) } : {})
 			})
-			.where(and(eq(schema.agentRuns.id, runId), eq(schema.agentRuns.userId, actor.userId)))
+			.where(and(eq(schema.agentRuns.id, runId), eq(schema.agentRuns.userId, this.actor.userId)))
 			.returning();
 		if (!row) throw new NotFoundError('Agent run was not found');
 		return toRun(row);
 	}
 
 	async updateAgentProvenance(
-		actor: ActorContext,
 		runId: AgentRunId,
 		change: AgentProvenanceWrite
 	): Promise<ResolvedAgentRun> {
@@ -329,7 +337,7 @@ export class AgentRunRecords implements AgentRunRepository {
 			.where(
 				and(
 					eq(schema.agentRuns.id, runId),
-					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.userId, this.actor.userId),
 					eq(schema.agentRuns.kind, 'agent')
 				)
 			)
@@ -339,7 +347,6 @@ export class AgentRunRecords implements AgentRunRepository {
 	}
 
 	async updateAgentContext(
-		actor: ActorContext,
 		runId: AgentRunId,
 		change: AgentContextWrite
 	): Promise<PreparedAgentRun> {
@@ -352,7 +359,7 @@ export class AgentRunRecords implements AgentRunRepository {
 			.where(
 				and(
 					eq(schema.agentRuns.id, runId),
-					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.userId, this.actor.userId),
 					eq(schema.agentRuns.kind, 'agent')
 				)
 			)
@@ -364,7 +371,6 @@ export class AgentRunRecords implements AgentRunRepository {
 	}
 
 	async updateWorkflowSettlement(
-		actor: ActorContext,
 		runId: AgentRunId,
 		change: WorkflowSettlementWrite
 	): Promise<WorkflowAgentRun> {
@@ -382,7 +388,7 @@ export class AgentRunRecords implements AgentRunRepository {
 			.where(
 				and(
 					eq(schema.agentRuns.id, runId),
-					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.userId, this.actor.userId),
 					eq(schema.agentRuns.kind, 'workflow')
 				)
 			)
@@ -392,7 +398,6 @@ export class AgentRunRecords implements AgentRunRepository {
 	}
 
 	async updateWorkflowContext(
-		actor: ActorContext,
 		runId: AgentRunId,
 		change: WorkflowContextWrite
 	): Promise<WorkflowAgentRun> {
@@ -405,7 +410,7 @@ export class AgentRunRecords implements AgentRunRepository {
 			.where(
 				and(
 					eq(schema.agentRuns.id, runId),
-					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.userId, this.actor.userId),
 					eq(schema.agentRuns.kind, 'workflow')
 				)
 			)
@@ -414,25 +419,21 @@ export class AgentRunRecords implements AgentRunRepository {
 		return toWorkflowRun(row);
 	}
 
-	async updateApproval(
-		actor: ActorContext,
-		runId: AgentRunId,
-		change: RunApprovalWrite
-	): Promise<AgentRun> {
+	async updateApproval(runId: AgentRunId, change: RunApprovalWrite): Promise<AgentRun> {
 		const [row] = await this.database
 			.update(schema.agentRuns)
 			.set({ status: change.status, updatedAt: new Date(change.updatedAt) })
-			.where(and(eq(schema.agentRuns.id, runId), eq(schema.agentRuns.userId, actor.userId)))
+			.where(and(eq(schema.agentRuns.id, runId), eq(schema.agentRuns.userId, this.actor.userId)))
 			.returning();
 		if (!row) throw new NotFoundError('Agent run was not found');
 		return toRun(row);
 	}
 
-	private toInsert(actor: ActorContext, run: AgentRun): typeof schema.agentRuns.$inferInsert {
+	private toInsert(run: AgentRun): typeof schema.agentRuns.$inferInsert {
 		return {
 			id: run.id,
 			kind: run.kind,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			conversationId: run.conversationId,
 			model: run.model,
 			executionMode: run.executionMode,
@@ -528,6 +529,14 @@ export class AgentRunRecords implements AgentRunRepository {
 			.returning();
 		return row ? toResolvedRun(row) : undefined;
 	}
+}
+
+/**
+ * Runs across every user, for the recovery that runs at startup. The rows carry their owner,
+ * which recovery uses to act for that user.
+ */
+export class AgentRunBacklogRecords implements AgentRunBacklogRepository {
+	constructor(private readonly database: Database) {}
 
 	async listQueuedAgents(): Promise<readonly ResolvedAgentRun[]> {
 		const rows = await this.database
@@ -558,36 +567,35 @@ const toSessionItem = (row: typeof schema.agentSessionItems.$inferSelect): Agent
 	id: row.id as AgentSessionItem['id'],
 	conversationId: row.conversationId as AgentSessionItem['conversationId'],
 	position: row.position,
-	item: parseSessionItem(row.item),
+	item: persistedSessionItemSchema.parse(row.item),
 	createdAt: row.createdAt.toISOString() as AgentSessionItem['createdAt']
 });
 
 export class AgentSessionRecords implements AgentSessionRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async listCanvasResults(actor: ActorContext, conversationId: ConversationId) {
-		return (await this.list(actor, conversationId)).map((row) => readCanvasSessionResult(row.item));
+	async listCanvasResults(conversationId: ConversationId) {
+		return (await this.list(conversationId)).map((row) => readCanvasSessionResult(row.item));
 	}
 
-	private async assertOwned(actor: ActorContext, conversationId: ConversationId): Promise<void> {
+	private async assertOwned(conversationId: ConversationId): Promise<void> {
 		const [owned] = await this.database
 			.select({ id: schema.conversations.id })
 			.from(schema.conversations)
 			.where(
 				and(
 					eq(schema.conversations.id, conversationId),
-					eq(schema.conversations.userId, actor.userId)
+					eq(schema.conversations.userId, this.actor.userId)
 				)
 			);
 		if (!owned) throw new NotFoundError('Conversation was not found');
 	}
 
-	async list(
-		actor: ActorContext,
-		conversationId: ConversationId,
-		limit?: number
-	): Promise<readonly AgentSessionItem[]> {
-		await this.assertOwned(actor, conversationId);
+	async list(conversationId: ConversationId, limit?: number): Promise<readonly AgentSessionItem[]> {
+		await this.assertOwned(conversationId);
 		if (limit !== undefined) {
 			const rows = await this.database
 				.select()
@@ -607,12 +615,11 @@ export class AgentSessionRecords implements AgentSessionRepository {
 	}
 
 	async append(
-		actor: ActorContext,
 		conversationId: ConversationId,
 		items: readonly PersistedSessionItem[]
 	): Promise<void> {
 		if (items.length === 0) return;
-		await this.assertOwned(actor, conversationId);
+		await this.assertOwned(conversationId);
 		const [row] = await this.database
 			.select({ position: sql<number>`coalesce(max(${schema.agentSessionItems.position}), -1)` })
 			.from(schema.agentSessionItems)
@@ -623,16 +630,13 @@ export class AgentSessionRecords implements AgentSessionRepository {
 				id: crypto.randomUUID(),
 				conversationId,
 				position: start + index,
-				item: toStoredSessionItem(item)
+				item: storedSessionItemSchema.parse(item)
 			}))
 		);
 	}
 
-	async pop(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<AgentSessionItem | undefined> {
-		const [latest] = await this.list(actor, conversationId, 1);
+	async pop(conversationId: ConversationId): Promise<AgentSessionItem | undefined> {
+		const [latest] = await this.list(conversationId, 1);
 		if (!latest) return undefined;
 		await this.database
 			.delete(schema.agentSessionItems)
@@ -640,8 +644,8 @@ export class AgentSessionRecords implements AgentSessionRepository {
 		return latest;
 	}
 
-	async clear(actor: ActorContext, conversationId: ConversationId): Promise<void> {
-		await this.assertOwned(actor, conversationId);
+	async clear(conversationId: ConversationId): Promise<void> {
+		await this.assertOwned(conversationId);
 		const rows = await this.database
 			.select({ id: schema.agentSessionItems.id })
 			.from(schema.agentSessionItems)
@@ -669,7 +673,7 @@ export class AgentSessionRecords implements AgentSessionRepository {
 						id: crypto.randomUUID(),
 						conversationId,
 						position,
-						item: toStoredSessionItem(item)
+						item: storedSessionItemSchema.parse(item)
 					}))
 				);
 		});

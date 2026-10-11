@@ -14,15 +14,15 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = async () => {
-	const projects = new InMemoryProjectRepository();
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder({ role: 'inbox' })];
-	const notes = new InMemoryNoteRepository();
+	const notes = new InMemoryNoteRepository(testActor());
 	const skills = new InMemorySkillRepository(notes);
-	const provisioner = new BuiltInSkills(projects, notes, skills, {
+	const provisioner = new BuiltInSkills(testActor(), projects, notes, skills, {
 		active: BUILT_INS,
 		retired: RETIRED_BUILT_INS
 	});
-	await provisioner.ensure(testActor());
+	await provisioner.ensure();
 	// Older releases installed these notes in General before Inbox became a project role.
 	const legacy = projectBuilder({ id: testProjectId(2), name: 'General', role: 'workspace' });
 	projects.projects.push(legacy);
@@ -38,12 +38,10 @@ const setup = async () => {
 
 it('moves a built-in out of an archived project without retaining its old folder', async () => {
 	const { projects, notes, provisioner, builtIn } = await setup();
-	await projects.archive(testActor(), builtIn.projectId);
-	await provisioner.ensure(testActor());
-	const repaired = await notes.findByBuiltInKey(testActor(), 'followthrough');
-	const inbox = (await projects.listActive(testActor())).find(
-		(project) => project.role === 'inbox'
-	);
+	await projects.archive(builtIn.projectId);
+	await provisioner.ensure();
+	const repaired = await notes.findByBuiltInKey('followthrough');
+	const inbox = (await projects.listActive()).find((project) => project.role === 'inbox');
 	expect({ projectId: repaired?.projectId, parentId: repaired?.parentId }).toEqual({
 		projectId: inbox?.id,
 		parentId: undefined
@@ -55,8 +53,8 @@ it('restores a built-in at the root when its previous parent was archived', asyn
 	notes.notes = notes.notes.map((note) =>
 		note.id === folder.id || note.id === builtIn.id ? { ...note, archivedAt: testNow } : note
 	);
-	await provisioner.ensure(testActor());
-	const repaired = await notes.findByBuiltInKey(testActor(), 'followthrough');
+	await provisioner.ensure();
+	const repaired = await notes.findByBuiltInKey('followthrough');
 	expect({ parentId: repaired?.parentId, archivedAt: repaired?.archivedAt }).toEqual({
 		parentId: undefined,
 		archivedAt: undefined

@@ -2,7 +2,15 @@ import type { RelationshipClassification } from '$lib/models/relationships';
 import type { StructuredRelationshipClient } from '$lib/server/repositories/relationships/classification';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
 
-export class RelationshipDiscovery {
+export interface RelationshipClassifier {
+	classify(
+		sourceText: string,
+		targetText: string,
+		model: string,
+		signal?: AbortSignal
+	): Promise<RelationshipClassification>;
+}
+export class RelationshipDiscovery implements RelationshipClassifier {
 	constructor(private readonly client: StructuredRelationshipClient) {}
 	async classify(
 		sourceText: string,

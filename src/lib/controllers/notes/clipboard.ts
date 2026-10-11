@@ -5,6 +5,12 @@ import type {
 	ClipboardTransferReport,
 	RichClipboardContent
 } from '$lib/models/clipboard';
+import type {
+	MermaidImageOutput,
+	MermaidSvgRenderer,
+	MermaidTheme
+} from '$lib/models/diagrams/mermaid-theme';
+import type { MermaidThemeRules } from '$lib/services/diagrams/mermaid-theme';
 
 export interface ClipboardDocument {
 	readonly assets: readonly ClipboardAsset[];
@@ -23,11 +29,34 @@ export interface ClipboardDependencies {
 	writer: ClipboardWriter;
 	document(content: RichClipboardContent): ClipboardDocument;
 	readImage(source: string): Promise<Blob>;
-	renderDiagram(source: string): Promise<Blob>;
+	/** Diagrams are copied as images drawn in the reader's current colour mode. */
+	mermaid: {
+		readonly themes: MermaidThemeRules;
+		readonly renderer: MermaidSvgRenderer;
+		readonly output: MermaidImageOutput;
+		theme(): MermaidTheme;
+	};
 }
 
-export class ClipboardTransfer {
+/** Copy a note selection with its images and diagrams; media that fails is marked, not lost. */
+export interface NoteClipboardController {
+	copy(source: ClipboardSource): Promise<ClipboardTransferReport>;
+}
+
+export class ClipboardTransfer implements NoteClipboardController {
 	constructor(private readonly dependencies: ClipboardDependencies) {}
+
+	private async renderDiagram(source: string): Promise<Blob> {
+		const { themes, renderer, output, theme } = this.dependencies.mermaid;
+		const appearance = themes.resolve(theme());
+		const svg = await renderer.render(
+			`mermaid-export-${crypto.randomUUID()}`,
+			source,
+			appearance.config,
+			'screen'
+		);
+		return output.blob(await output.rasterise(svg, appearance.background, output.pixelRatio()));
+	}
 
 	/** Start the native write before awaiting media so the user's activation is retained. */
 	async copy(source: ClipboardSource): Promise<ClipboardTransferReport> {
@@ -50,7 +79,7 @@ export class ClipboardTransfer {
 			const image =
 				source.kind === 'image'
 					? this.dependencies.readImage(source.source)
-					: this.dependencies.renderDiagram(source.source);
+					: this.renderDiagram(source.source);
 			await this.dependencies.writer.writeImage(image, source.text);
 			return { kind: 'complete' };
 			// audit-allow: silent-catch — the copied text marks the unavailable image/diagram and the returned degraded/failure report is displayed by the note clipboard adapter.
@@ -76,7 +105,7 @@ export class ClipboardTransfer {
 				const image =
 					asset.kind === 'image'
 						? await this.dependencies.readImage(asset.source)
-						: await this.dependencies.renderDiagram(asset.source);
+						: await this.renderDiagram(asset.source);
 				await document.embed(asset.id, image);
 				// audit-allow: silent-catch — markUnavailable inserts a visible placeholder into the copied document; the returned issues produce the note clipboard warning.
 			} catch (error) {

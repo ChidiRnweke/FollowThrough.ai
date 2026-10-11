@@ -1,18 +1,27 @@
+import { instrumentedController } from './controller-instrumentation';
+import { accessSurface, authenticationSurface } from './controller-surfaces';
+import { Access, type AccessController } from '../controllers/identity/access';
+import { createMcpToolSurface, type McpSurfaceFactory } from './agent/mcp-tool-factory';
 import type { ActorContext } from '$lib/models/identity';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import type { AgentEventBus } from '../services/agent/runs/events';
-import { createProductionFactory, type ProductionApplication } from './production-factory';
-import { SessionRegistry, type ISessionRegistry } from '$lib/server/services/identity/sessions';
-import { AccessTokens, type IAccessTokens } from '$lib/server/services/identity/api-tokens';
-import type { ProvenanceRecorder } from '../services/notes/provenance';
-import type { ToolRetriever } from '../controllers/tool-discovery/controller';
-import { ApiTokenRecords } from '../repositories/identity/postgres/api-tokens';
+import type { SystemControllers } from './system-factory';
+import {
+	Authentication,
+	type AuthenticationController
+} from '../controllers/identity/authentication';
+import { createProductionComposition } from './production-factory';
+import { SessionRegistry } from '$lib/server/services/identity/sessions';
+import { AccessTokens, TokenVerification } from '$lib/server/services/identity/api-tokens';
+import {
+	ApiTokenCredentialRecords,
+	ApiTokenRecords
+} from '../repositories/identity/postgres/api-tokens';
 import { SignIn, type ISignIn } from '$lib/server/controllers/identity/controller';
 import { OAuthAuthorization } from '$lib/server/services/identity/oauth-authorization';
 import { ProviderAccounts } from '$lib/server/services/identity/provider-accounts';
 import { AuthentikClient } from '$lib/server/repositories/identity/authentik';
 import { SessionRecords } from '../repositories/identity/postgres/sessions';
-import { UserRecords } from '../repositories/identity/postgres/users';
+import { UserAccountRecords } from '../repositories/identity/postgres/users';
 import { db } from '../db';
 import { authentikConfiguration, requestActor } from '../config';
 
@@ -26,53 +35,60 @@ class DeferredValue<T> {
 	}
 }
 
-const application = new DeferredValue(createProductionFactory);
+const composition = new DeferredValue(createProductionComposition);
 const sessions = new DeferredValue(() => new SessionRegistry(new SessionRecords(db)));
-const accessTokens = new DeferredValue(() => new AccessTokens(new ApiTokenRecords(db)));
+const authentication = new DeferredValue(() =>
+	instrumentedController(
+		'authentication',
+		new Authentication({
+			sessions: sessions.get(),
+			tokens: new TokenVerification(new ApiTokenCredentialRecords(db))
+		}),
+		authenticationSurface
+	)
+);
 const signIn = new DeferredValue(() => {
 	const config = authentikConfiguration();
 	return new SignIn({
 		authorization: new OAuthAuthorization(new AuthentikClient(config), config),
-		accounts: new ProviderAccounts(new UserRecords(db)),
+		accounts: new ProviderAccounts(new UserAccountRecords(db)),
 		sessions: sessions.get()
 	});
 });
 
 export class AppFactory {
-	private static application(): ProductionApplication {
-		return application.get();
+	/** The controllers for one user: a request's authenticated actor. */
+	static forActor(actor: ActorContext): ControllerFactory {
+		return composition.get().forActor(actor).controllers;
 	}
 
-	static controllers(): ControllerFactory {
-		return this.application().controllers;
+	/** The controllers for work that acts for no user: startup recovery lists runs here. */
+	static system(): SystemControllers {
+		return composition.get().system().controllers;
 	}
 
-	static recoverInterruptedRuns(): Promise<number> {
-		return this.application().recoverInterruptedRuns();
-	}
-
-	static eventBus(): AgentEventBus {
-		return this.application().eventBus;
-	}
-
-	static provenance(): ProvenanceRecorder {
-		return this.application().provenance;
-	}
-
-	static toolRetriever(): ToolRetriever {
-		return this.application().toolRetriever;
+	static mcpSurface(...args: Parameters<McpSurfaceFactory>): ReturnType<McpSurfaceFactory> {
+		return createMcpToolSurface(...args);
 	}
 
 	static actor(locals?: App.Locals): ActorContext {
 		return requestActor(locals?.user);
 	}
 
-	static sessions(): ISessionRegistry {
-		return sessions.get();
+	/** Establishes who a request acts for; it runs before any user is known. */
+	static authentication(): AuthenticationController {
+		return authentication.get();
 	}
 
-	static accessTokens(): IAccessTokens {
-		return accessTokens.get();
+	static access(actor: ActorContext): AccessController {
+		return instrumentedController(
+			'access',
+			new Access(actor, {
+				tokens: new AccessTokens(new ApiTokenRecords(actor, db)),
+				provenance: composition.get().forActor(actor).provenance
+			}),
+			accessSurface
+		);
 	}
 
 	static signIn(): ISignIn {

@@ -1,81 +1,110 @@
-import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
-import { expect, it, vi } from 'vitest';
-import postgres from 'postgres';
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
+import { DomainError } from '$lib/errors';
+import type { AgentRunId } from '$lib/models/agent';
+import type { DiagramId } from '$lib/models/diagrams';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
+import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
+import { isPermanentWriteConstraint } from '$lib/server/db/postgres-errors';
 import {
 	connectPostgresTestDatabase,
 	type PostgresDatabaseContext
 } from '$lib/server/db/postgres-test-context';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
+import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
+import {
+	AgentRunDecisionRecords,
+	AgentRunEventRecords
+} from '$lib/server/repositories/agent/postgres/agent-runs';
+import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
-import { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
+import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryDiagrams,
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import type { DiagramId } from '$lib/models/diagrams';
-import { DomainError } from '$lib/errors';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { isPermanentWriteConstraint } from '$lib/server/db/postgres-errors';
-import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
-import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
-import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
-import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
-import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { context, seedNote } from '../database-harness';
-import type { AgentRunId } from '$lib/models/agent';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
-import {
-	AgentRunEventRecords,
-	AgentRunDecisionRecords
-} from '$lib/server/repositories/agent/postgres/agent-runs';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
-import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import postgres from 'postgres';
+import { expect, it, vi } from 'vitest';
+import { context, seedNote, notifications } from '../database-harness';
 
 const setup = async (suffix: string, connection: PostgresDatabaseContext = context) => {
 	const seeded = await seedNote(suffix);
+	const actor = seeded.owner;
 	const { database, transactionRunner } = createTransactionContext(connection.db);
-	const notes = createNotesCapability({ db: database, projects: new ProjectRecords(database) });
-	const suggestions = createSuggestionsCapability({
+	const notes = createNotesCapability(actor, {
+		db: database,
+		projects: new ProjectRecords(actor, database)
+	});
+	const suggestions = createSuggestionsCapability(actor, {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
 	const fixture = diagramGenerationFixture();
-	const records = new DiagramRecords(database);
-	const library = new DiagramLibrary(
+	const records = new DiagramRecords(actor, database);
+	const library = createDiagramServices(
+		actor,
 		records,
 		notes.repository,
 		notes.anchors,
 		notes.provenanceRepository,
-		new ProjectRecords(database)
+		new ProjectRecords(actor, database)
 	);
-	const diagrams = new InMemoryDiagrams();
+	const diagrams = new InMemoryDiagrams(actor);
 	const controller = new Diagrams(
+		actor,
 		capabilityDependencies<DiagramsDependencies>({
+			...agentToolResultsFixture(),
+			generationRules: new DiagramGenerationRuleService(),
 			...fixture,
-			diagramFinder: library,
-			diagramWriter: library,
-			diagramSourceNotes: notes.catalog,
+			diagramFinder: library.finder,
+			diagramWriter: library.writer,
+			diagramSourceNotes: notes.services.reader,
 			mermaidRenderer: diagrams,
 			textExtractor: diagrams,
 			diagramIndexer: diagrams,
 			generation: {
 				...fixture.generation,
-				contextNotes: notes.catalog,
-				conversations: new ConversationArchive(new ConversationRecords(database)),
-				runs: new AgentRunLedger(new AgentRunRecords(database)),
-				runContext: new DiagramRunContext(new AgentRunRecords(database)),
+				contextNotes: notes.services.reader,
+				conversations: new ConversationArchive(actor, new ConversationRecords(actor, database)),
+				conversationMessages: new ConversationArchive(
+					actor,
+					new ConversationRecords(actor, database)
+				),
+				runs: new AgentRunLedger(actor, new AgentRunRecords(actor, database)),
+				runContext: new DiagramRunContext(new AgentRunRecords(actor, database)),
 				provenance: notes.provenance
 			},
 			transactionRunner,
 			drawioXmlValidator: new DrawioXmlValidator(),
-			suggestionCreator: suggestions.inbox
+			suggestionCreator: suggestions.creator,
+			runSignals: new RunSignalService(
+				new AgentRunNotificationRecords(notifications),
+				new AgentRunRecords(actor, database)
+			),
+			runSettlements: new RunSettlements(
+				new AgentRunRecords(actor, database),
+				new AgentRunEventRecords(actor, database)
+			)
 		})
 	);
 	return { ...seeded, controller, provider: fixture.provider, records };
@@ -94,7 +123,6 @@ it.each([
 		try {
 			const state = await setup(suffix, writer);
 			const diagram = await state.records.insert(
-				state.owner,
 				mermaidBuilder({
 					id: crypto.randomUUID() as DiagramId,
 					userId: state.owner.userId,
@@ -105,7 +133,7 @@ it.each([
 			);
 			state.provider.completion = generated.promise;
 			const execution = state.controller
-				.reviseMermaid(state.owner, { diagramId: diagram.id, instruction: 'add queue' })
+				.reviseMermaid({ diagramId: diagram.id, instruction: 'add queue' })
 				.then(
 					() => 'saved',
 					(error) => {
@@ -135,7 +163,7 @@ it.each([
 				release.resolve();
 				await peer;
 				const outcome = await execution;
-				const current = await state.records.findById(state.owner, diagram.id);
+				const current = await state.records.findById(diagram.id);
 				const [run] =
 					await writer.client`select status from agent_runs where user_id = ${state.owner.userId}`;
 				expect({
@@ -165,7 +193,6 @@ it.each([
 it('persists the provenance of a generated Mermaid revision', async () => {
 	const state = await setup('18801');
 	const diagram = await state.records.insert(
-		state.owner,
 		mermaidBuilder({
 			id: crypto.randomUUID() as DiagramId,
 			userId: state.owner.userId,
@@ -174,7 +201,7 @@ it('persists the provenance of a generated Mermaid revision', async () => {
 			provenanceId: undefined
 		})
 	);
-	const result = await state.controller.reviseMermaid(state.owner, {
+	const result = await state.controller.reviseMermaid({
 		diagramId: diagram.id,
 		instruction: 'add queue'
 	});
@@ -182,7 +209,7 @@ it('persists the provenance of a generated Mermaid revision', async () => {
 		{ id: string }[]
 	>`select id from provenance where user_id = ${state.owner.userId}`;
 	if (!provenance) throw new Error('Generation provenance was not recorded');
-	const saved = await state.records.findById(state.owner, diagram.id);
+	const saved = await state.records.findById(diagram.id);
 	expect({ returned: result.diagram.provenanceId, stored: saved?.provenanceId }).toEqual({
 		returned: provenance.id,
 		stored: provenance.id
@@ -194,7 +221,7 @@ it('rolls back conversation creation when the direct run cannot be inserted', as
 	await context.client`alter table agent_runs add constraint reject_direct_run_test check (user_id <> '10000000-0000-4000-8000-000000017401') not valid`;
 	try {
 		const result = await state.controller
-			.convertInlineMermaid(state.owner, { noteId: state.note.id, source: 'flowchart LR\nA --> B' })
+			.convertInlineMermaid({ noteId: state.note.id, source: 'flowchart LR\nA --> B' })
 			.catch((error) => {
 				if (!isPermanentWriteConstraint(error)) throw error;
 				return { kind: 'failure' as const };
@@ -215,10 +242,14 @@ it('does not publish a direct result after cancellation settles its run', async 
 	const gate = Promise.withResolvers<void>();
 	state.provider.completion = gate.promise;
 	const execution = state.controller
-		.convertInlineMermaid(state.owner, { noteId: state.note.id, source: 'flowchart LR\nA --> B' })
+		.convertInlineMermaid({ noteId: state.note.id, source: 'flowchart LR\nA --> B' })
 		.catch((error) => {
-			if (!(error instanceof Error) || error.message !== 'The workflow run is no longer running')
-				throw error;
+			// The cancel either aborts the generation or, if the provider finished first, refuses
+			// to complete a run that is no longer running. Neither publishes a diagram.
+			const stopped =
+				error instanceof Error &&
+				(error.name === 'AbortError' || error.message === 'The workflow run is no longer running');
+			if (!stopped) throw error;
 			return { kind: 'failure' as const };
 		});
 	try {
@@ -228,20 +259,23 @@ it('does not publish a direct result after cancellation settles its run', async 
 		>`select id from agent_runs where user_id = ${state.owner.userId}`;
 		if (!run) throw new Error('Direct diagram run was not created');
 		const { database, transactionRunner } = createTransactionContext(context.db);
-		const runs = new AgentRunRecords(database);
-		const events = new AgentRunEventRecords(database);
-		const agent = new Agent(
-			capabilityDependencies<AgentDependencies>({
+		const runs = new AgentRunRecords(state.owner, database);
+		const events = new AgentRunEventRecords(state.owner, database);
+		const agent = new AgentSdkHarness(
+			state.owner,
+			new WorkspaceCommandRulesService(),
+			capabilityDependencies<AgentHarnessDependencies>({
+				...agentRulesFixture(),
 				runs,
 				events,
 				transactionRunner,
 				cancellations: new RunCancellation(runs),
 				settlements: new RunSettlements(runs, events),
-				decisions: new AgentRunDecisionRecords(database),
-				eventBus: { notify: () => {} }
+				decisions: new AgentRunDecisionRecords(state.owner, database),
+				runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 			})
 		);
-		await agent.cancel(state.owner, run.id);
+		await agent.cancel(run.id);
 	} finally {
 		gate.resolve();
 	}
@@ -256,7 +290,7 @@ it('records failed generation when proposal storage rejects the generated diagra
 	await context.client`alter table suggestions add constraint reject_diagram_proposal_test check (user_id <> '10000000-0000-4000-8000-000000013101') not valid`;
 	try {
 		await state.controller
-			.convertInlineMermaid(state.owner, {
+			.convertInlineMermaid({
 				noteId: state.note.id,
 				source: 'flowchart LR\nA --> B'
 			})
@@ -274,7 +308,7 @@ it('rolls back the diagram proposal when completion cannot be saved', async () =
 	await context.client`alter table agent_runs add constraint reject_diagram_completion_test check (user_id <> '10000000-0000-4000-8000-000000013102' or status <> 'completed') not valid`;
 	try {
 		await state.controller
-			.convertInlineMermaid(state.owner, {
+			.convertInlineMermaid({
 				noteId: state.note.id,
 				source: 'flowchart LR\nA --> B'
 			})

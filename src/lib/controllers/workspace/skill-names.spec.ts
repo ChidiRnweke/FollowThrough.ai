@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import {
 	noteRecordSchema,
 	projectRecordSchema,
@@ -34,7 +34,9 @@ it('shows an offline note rename before the skill metadata projection synchroniz
 			{ type: 'projects', value: projectRecordSchema.parse(projectBuilder()) }
 		]
 	];
-	expect(new WorkspaceViews(new Map(records)).skills().map((skill) => skill.name)).toEqual([
-		'Ship checklist'
-	]);
+	expect(
+		createWorkspaceViews(new Map(records))
+			.skills()
+			.map((skill) => skill.name)
+	).toEqual(['Ship checklist']);
 });

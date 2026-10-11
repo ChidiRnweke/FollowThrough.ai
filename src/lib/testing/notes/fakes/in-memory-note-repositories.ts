@@ -14,6 +14,7 @@ import type { SourceAnchorRepository } from '$lib/server/repositories/provenance
 import { NotFoundError } from '$lib/errors';
 
 export class InMemoryNoteRepository implements NoteRepository {
+	constructor(private readonly actor: ActorContext) {}
 	insertFailures = new Set<string>();
 	saveFailures = new Set<string>();
 	deleteFailures = new Set<NoteId>();
@@ -40,22 +41,22 @@ export class InMemoryNoteRepository implements NoteRepository {
 		return { started: started.promise, release: ready.resolve };
 	}
 
-	async findById(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
-		return this.notes.find((note) => note.id === id && note.userId === actor.userId);
+	async findById(id: NoteId): Promise<Note | undefined> {
+		return this.notes.find((note) => note.id === id && note.userId === this.actor.userId);
 	}
 
-	async findForWrite(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
+	async findForWrite(id: NoteId): Promise<Note | undefined> {
 		const paused = this.nextWriteRead;
 		this.nextWriteRead = null;
 		if (paused) {
 			paused.started();
 			await paused.ready;
 		}
-		return this.findById(actor, id);
+		return this.findById(id);
 	}
 
-	async updateTrash(actor: ActorContext, note: Note): Promise<Note> {
-		const current = await this.findById(actor, note.id);
+	async updateTrash(note: Note): Promise<Note> {
+		const current = await this.findById(note.id);
 		if (!current) throw new NotFoundError('Note was not found');
 		const { archivedAt, parentId, ...rest } = current;
 		void archivedAt;
@@ -71,18 +72,15 @@ export class InMemoryNoteRepository implements NoteRepository {
 		return updated;
 	}
 
-	findBuiltInForWrite(actor: ActorContext, key: string): Promise<Note | undefined> {
-		return this.findByBuiltInKey(actor, key);
+	findBuiltInForWrite(key: string): Promise<Note | undefined> {
+		return this.findByBuiltInKey(key);
 	}
 
-	async repairBuiltIn(
-		actor: ActorContext,
-		write: NoteBuiltInRepairWrite
-	): Promise<Note | undefined> {
+	async repairBuiltIn(write: NoteBuiltInRepairWrite): Promise<Note | undefined> {
 		const current = this.notes.find(
 			(note) =>
 				note.id === write.noteId &&
-				note.userId === actor.userId &&
+				note.userId === this.actor.userId &&
 				note.builtInKey === write.builtInKey
 		);
 		if (!current) return undefined;
@@ -99,27 +97,24 @@ export class InMemoryNoteRepository implements NoteRepository {
 		return repaired;
 	}
 
-	async findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined> {
-		return this.notes.find((note) => note.userId === actor.userId && note.builtInKey === key);
+	async findByBuiltInKey(key: string): Promise<Note | undefined> {
+		return this.notes.find((note) => note.userId === this.actor.userId && note.builtInKey === key);
 	}
 
-	async listActive(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]> {
+	async listActive(projectId?: ProjectId): Promise<readonly Note[]> {
 		return this.notes.filter(
 			(note) =>
-				note.userId === actor.userId &&
+				note.userId === this.actor.userId &&
 				!note.archivedAt &&
 				(projectId === undefined || note.projectId === projectId)
 		);
 	}
 
-	async listSearchable(
-		actor: ActorContext,
-		projectId?: ProjectId
-	): Promise<readonly NoteSearchTarget[]> {
+	async listSearchable(projectId?: ProjectId): Promise<readonly NoteSearchTarget[]> {
 		return this.notes
 			.filter(
 				(note) =>
-					note.userId === actor.userId &&
+					note.userId === this.actor.userId &&
 					!note.archivedAt &&
 					(projectId === undefined || note.projectId === projectId)
 			)
@@ -131,43 +126,37 @@ export class InMemoryNoteRepository implements NoteRepository {
 			}));
 	}
 
-	async listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]> {
+	async listTrashed(projectId?: ProjectId): Promise<readonly Note[]> {
 		return this.notes
 			.filter(
 				(note) =>
-					note.userId === actor.userId &&
+					note.userId === this.actor.userId &&
 					note.archivedAt &&
 					(projectId === undefined || note.projectId === projectId)
 			)
 			.sort((left, right) => (right.archivedAt ?? '').localeCompare(left.archivedAt ?? ''));
 	}
 
-	async countSiblings(
-		actor: ActorContext,
-		projectId: ProjectId,
-		parentId?: NoteId
-	): Promise<number> {
+	async countSiblings(projectId: ProjectId, parentId?: NoteId): Promise<number> {
 		return this.notes.filter(
 			(note) =>
-				note.userId === actor.userId && note.projectId === projectId && note.parentId === parentId
+				note.userId === this.actor.userId &&
+				note.projectId === projectId &&
+				note.parentId === parentId
 		).length;
 	}
 
-	async insert(_actor: ActorContext, note: Note): Promise<Note> {
+	async insert(note: Note): Promise<Note> {
 		if (this.insertFailures.has(note.title)) throw new Error('Note could not be stored');
-		void _actor;
 		this.notes.push(note);
 		return note;
 	}
 
-	async updatePublication(
-		actor: ActorContext,
-		write: NotePublicationWrite
-	): Promise<Note | undefined> {
+	async updatePublication(write: NotePublicationWrite): Promise<Note | undefined> {
 		const current = this.notes.find(
 			(note) =>
 				note.id === write.noteId &&
-				note.userId === actor.userId &&
+				note.userId === this.actor.userId &&
 				note.currentRevision === write.expectedRevision &&
 				!note.archivedAt
 		);
@@ -182,11 +171,7 @@ export class InMemoryNoteRepository implements NoteRepository {
 		return published;
 	}
 
-	async updateIfRevision(
-		actor: ActorContext,
-		note: Note,
-		expectedRevision: number
-	): Promise<Note | undefined> {
+	async updateIfRevision(note: Note, expectedRevision: number): Promise<Note | undefined> {
 		if (this.saveFailures.has(note.title)) throw new Error('Note body could not be stored');
 		if (this.failNextConditionalUpdate) {
 			this.failNextConditionalUpdate = false;
@@ -195,7 +180,7 @@ export class InMemoryNoteRepository implements NoteRepository {
 		const current = this.notes.find(
 			(candidate) =>
 				candidate.id === note.id &&
-				candidate.userId === actor.userId &&
+				candidate.userId === this.actor.userId &&
 				!candidate.archivedAt &&
 				candidate.currentRevision === expectedRevision
 		);
@@ -204,13 +189,13 @@ export class InMemoryNoteRepository implements NoteRepository {
 		return note;
 	}
 
-	async deleteTrashed(
-		actor: ActorContext,
-		id: NoteId
-	): Promise<Pick<Note, 'id' | 'title'> | undefined> {
+	async deleteTrashed(id: NoteId): Promise<Pick<Note, 'id' | 'title'> | undefined> {
 		const current = this.notes.find(
 			(note) =>
-				note.id === id && note.userId === actor.userId && note.archivedAt && note.kind !== 'skill'
+				note.id === id &&
+				note.userId === this.actor.userId &&
+				note.archivedAt &&
+				note.kind !== 'skill'
 		);
 		if (!current) return undefined;
 		if (this.deleteFailures.has(id)) throw new Error('Note could not be deleted');
@@ -226,20 +211,15 @@ export class InMemoryNoteRepository implements NoteRepository {
 		return { id: current.id, title: current.title };
 	}
 
-	async setSectionNumbering(
-		actor: ActorContext,
-		id: NoteId,
-		enabled: boolean | null
-	): Promise<Note> {
-		const current = this.notes.find((note) => note.id === id && note.userId === actor.userId);
+	async setSectionNumbering(id: NoteId, enabled: boolean | null): Promise<Note> {
+		const current = this.notes.find((note) => note.id === id && note.userId === this.actor.userId);
 		if (!current) throw new NotFoundError('Note was not found');
 		const updated: Note = { ...current, sectionNumbering: enabled ?? undefined };
 		this.notes = this.notes.map((note) => (note.id === id ? updated : note));
 		return updated;
 	}
 
-	async insertRevision(_actor: ActorContext, revision: NoteRevision): Promise<NoteRevision> {
-		void _actor;
+	async insertRevision(revision: NoteRevision): Promise<NoteRevision> {
 		if (
 			!this.revisions.some(
 				(candidate) =>
@@ -250,13 +230,11 @@ export class InMemoryNoteRepository implements NoteRepository {
 		return revision;
 	}
 
-	async listRevisions(_actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]> {
-		void _actor;
+	async listRevisions(noteId: NoteId): Promise<readonly NoteRevision[]> {
 		return this.revisions.filter((revision) => revision.noteId === noteId);
 	}
 
-	async pruneRevisions(_actor: ActorContext, noteId: NoteId, keepNewest: number): Promise<void> {
-		void _actor;
+	async pruneRevisions(noteId: NoteId, keepNewest: number): Promise<void> {
 		const kept = new Set(
 			this.revisions
 				.filter((revision) => revision.noteId === noteId)
@@ -269,18 +247,14 @@ export class InMemoryNoteRepository implements NoteRepository {
 		);
 	}
 
-	async restoreAttachmentSnapshot(
-		_actor: ActorContext,
-		_revisionId: NoteRevision['id'],
-		_noteId: NoteId
-	): Promise<void> {
-		void _actor;
+	async restoreAttachmentSnapshot(_revisionId: NoteRevision['id'], _noteId: NoteId): Promise<void> {
 		void _noteId;
 		this.restoredAttachmentSnapshots.push(_revisionId);
 	}
 }
 
 export class InMemoryAnchorRepository implements SourceAnchorRepository {
+	constructor(private readonly actor: ActorContext) {}
 	snapshot(): () => void {
 		const anchors = [...this.anchors];
 		const ownerIds = new Map(this.ownerIds);
@@ -293,25 +267,22 @@ export class InMemoryAnchorRepository implements SourceAnchorRepository {
 	anchors: SourceAnchor[] = [];
 	ownerIds = new Map<SourceAnchorId, UserId>();
 
-	async findById(actor: ActorContext, id: SourceAnchorId): Promise<SourceAnchor | undefined> {
+	async findById(id: SourceAnchorId): Promise<SourceAnchor | undefined> {
 		const ownerId = this.ownerIds.get(id);
-		if (ownerId && ownerId !== actor.userId) return undefined;
+		if (ownerId && ownerId !== this.actor.userId) return undefined;
 		return this.anchors.find((anchor) => anchor.id === id);
 	}
 
-	async listForNote(_actor: ActorContext, noteId: NoteId): Promise<readonly SourceAnchor[]> {
-		void _actor;
+	async listForNote(noteId: NoteId): Promise<readonly SourceAnchor[]> {
 		return this.anchors.filter((anchor) => anchor.noteId === noteId);
 	}
 
-	async insert(_actor: ActorContext, anchor: SourceAnchor): Promise<SourceAnchor> {
-		void _actor;
+	async insert(anchor: SourceAnchor): Promise<SourceAnchor> {
 		this.anchors.push(anchor);
 		return anchor;
 	}
 
-	async update(_actor: ActorContext, anchor: SourceAnchor): Promise<SourceAnchor> {
-		void _actor;
+	async update(anchor: SourceAnchor): Promise<SourceAnchor> {
 		this.anchors = this.anchors.map((candidate) =>
 			candidate.id === anchor.id ? anchor : candidate
 		);

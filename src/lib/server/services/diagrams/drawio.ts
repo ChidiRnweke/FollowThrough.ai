@@ -3,7 +3,11 @@ import createDOMPurify from 'dompurify';
 import type { WindowLike } from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { ValidationError } from '$lib/errors';
-import { drawioLabelValues } from '$lib/models/diagrams/drawio-labels';
+/** Read draw.io label attributes in document order without applying display/search policy. */
+const drawioLabelValues = (document: Document): readonly string[] =>
+	Array.from(document.querySelectorAll('mxCell, object, UserObject'))
+		.flatMap((element) => [element.getAttribute('label'), element.getAttribute('value')])
+		.filter((value): value is string => value !== null);
 
 const URL_ATTRIBUTES = new Set(['href', 'src', 'xlink:href']);
 const REFERENCE_ATTRIBUTES = ['parent', 'source', 'target'] as const;
@@ -238,7 +242,7 @@ const assertFiniteGeometry = (model: Element): void => {
 	}
 };
 
-export class DrawioXmlValidator {
+export class DrawioXmlValidator implements DrawioXmlContentValidator {
 	validate(source: string): string {
 		const normalized = source.trim();
 		if (!normalized) throw new ValidationError('draw.io XML is required.');
@@ -292,7 +296,7 @@ const purifierWindow = (window: JSDOM['window']): WindowLike => ({
 	trustedTypes: window.trustedTypes
 });
 
-export class DrawioSvgSanitizer {
+export class DrawioSvgSanitizer implements DrawioSvgPreviewSanitizer {
 	sanitize(source: string): string {
 		const normalized = source.trim();
 		if (!normalized) throw new ValidationError('A draw.io SVG preview is required.');
@@ -335,7 +339,10 @@ export class DrawioSvgSanitizer {
 	}
 }
 
-export class DrawioLabelReader {
+export interface DrawioLabels {
+	read(source: string): readonly string[];
+}
+export class DrawioLabelReader implements DrawioLabels {
 	/** Decode XML attributes and rich HTML labels; callers apply label policy. */
 	read(source: string): readonly string[] {
 		const xmlDom = parseXml(source, 'draw.io XML');
@@ -354,4 +361,12 @@ export class DrawioLabelReader {
 			htmlDom.window.close();
 		}
 	}
+}
+
+export interface DrawioXmlContentValidator {
+	validate(source: string): string;
+}
+
+export interface DrawioSvgPreviewSanitizer {
+	sanitize(source: string): string;
 }

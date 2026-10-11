@@ -1,3 +1,4 @@
+import type { AppSurfaceKind } from '$lib/models/workspace/app-context';
 import { isDeepStrictEqual } from 'node:util';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
@@ -13,8 +14,16 @@ import type { BuiltInSkillDefinition } from '$lib/models/skills/built-ins';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
-export class BuiltInSkills {
+export interface BuiltInSkillProvisioner {
+	ensure(): Promise<void>;
+	load(key: string): Promise<Skill<Note>>;
+}
+export interface BuiltInSkillSelection {
+	forSurface(kind: AppSurfaceKind): readonly string[];
+}
+export class BuiltInSkills implements BuiltInSkillProvisioner, BuiltInSkillSelection {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly projects: ProjectRepository,
 		private readonly notes: NoteRepository,
 		private readonly skills: SkillRepository,
@@ -24,20 +33,25 @@ export class BuiltInSkills {
 		}
 	) {}
 
+	forSurface(kind: AppSurfaceKind): readonly string[] {
+		return this.definitions.active
+			.filter((skill) => skill.surfaces?.includes(kind))
+			.map((skill) => skill.name);
+	}
 	/** The calling controller owns the transaction for installation and its lock. */
-	async ensure(actor: ActorContext): Promise<void> {
-		await this.skills.lockCatalog(actor);
+	async ensure(): Promise<void> {
+		await this.skills.lockCatalog();
 		const projects: Project[] = [];
-		const ids = (await this.projects.listActive(actor)).map((project) => project.id).sort();
+		const ids = (await this.projects.listActive()).map((project) => project.id).sort();
 		for (const id of ids) {
-			const project = await this.projects.findForWrite(actor, id);
+			const project = await this.projects.findForWrite(id);
 			if (project) projects.push(project);
 		}
-		const inbox = await this.ensureInbox(actor, projects);
+		const inbox = await this.ensureInbox(projects);
 		const activeProjectIds = new Set(projects.map((project) => project.id));
 		activeProjectIds.add(inbox.id);
 		for (const definition of this.definitions.active)
-			await this.ensureDefinition(actor, definition, inbox.id, activeProjectIds);
+			await this.ensureDefinition(definition, inbox.id, activeProjectIds);
 	}
 
 	/**
@@ -48,20 +62,20 @@ export class BuiltInSkills {
 	 * saving something. Now the role says which project it is, and this runs on the
 	 * provisioning path that every actor already goes through.
 	 */
-	private async ensureInbox(actor: ActorContext, projects: readonly Project[]): Promise<Project> {
+	private async ensureInbox(projects: readonly Project[]): Promise<Project> {
 		const existing = projects.find((project) => project.role === 'inbox');
 		if (existing) return existing;
 		const names = new Set(projects.map((project) => project.name.toLowerCase()));
 		let name = INBOX_PROJECT_NAME;
 		for (let suffix = 2; names.has(name.toLowerCase()); suffix++)
 			name = `${INBOX_PROJECT_NAME} (${suffix})`;
-		return this.projects.insert(actor, { name, role: 'inbox' });
+		return this.projects.insert({ name, role: 'inbox' });
 	}
 
-	async load(actor: ActorContext, key: string): Promise<Skill<Note>> {
-		const note = await this.notes.findByBuiltInKey(actor, key);
+	async load(key: string): Promise<Skill<Note>> {
+		const note = await this.notes.findByBuiltInKey(key);
 		if (!note) throw new NotFoundError(`Built-in skill "${key}" was not found`);
-		const skill = await this.skills.findByNoteId(actor, note.id);
+		const skill = await this.skills.findByNoteId(note.id);
 		if (!skill) throw new NotFoundError(`Built-in skill "${key}" is incomplete`);
 		if (!skill.isEnabled)
 			throw new ValidationError(
@@ -71,18 +85,17 @@ export class BuiltInSkills {
 	}
 
 	private async ensureDefinition(
-		actor: ActorContext,
 		definition: BuiltInSkillDefinition,
 		defaultProjectId: ProjectId,
 		activeProjectIds: ReadonlySet<ProjectId>
 	): Promise<void> {
-		let note = await this.notes.findBuiltInForWrite(actor, definition.key);
-		if (!note) note = await this.createNote(actor, definition, defaultProjectId);
+		let note = await this.notes.findBuiltInForWrite(definition.key);
+		if (!note) note = await this.createNote(definition, defaultProjectId);
 		else {
 			const moved = !activeProjectIds.has(note.projectId);
 			const projectId = moved ? defaultProjectId : note.projectId;
 			const parent =
-				!moved && note.parentId ? await this.notes.findForWrite(actor, note.parentId) : undefined;
+				!moved && note.parentId ? await this.notes.findForWrite(note.parentId) : undefined;
 			const detached =
 				note.parentId !== undefined &&
 				(moved ||
@@ -92,15 +105,13 @@ export class BuiltInSkills {
 					parent.projectId !== projectId);
 			if (moved || detached || note.kind !== 'skill' || note.archivedAt !== undefined) {
 				const parentId = detached ? undefined : note.parentId;
-				const repaired = await this.notes.repairBuiltIn(actor, {
+				const repaired = await this.notes.repairBuiltIn({
 					noteId: note.id,
 					builtInKey: definition.key,
 					projectId,
 					parentId,
 					position:
-						moved || detached
-							? await this.notes.countSiblings(actor, projectId, parentId)
-							: note.position,
+						moved || detached ? await this.notes.countSiblings(projectId, parentId) : note.position,
 					kind: 'skill',
 					archivedAt: null,
 					updatedAt: note.updatedAt
@@ -109,9 +120,9 @@ export class BuiltInSkills {
 				note = repaired;
 			}
 		}
-		const existing = await this.skills.findForWrite(actor, note.id);
+		const existing = await this.skills.findForWrite(note.id);
 		if (!existing) {
-			await this.skills.insert(actor, this.toSkill(note, definition));
+			await this.skills.insert(this.toSkill(note, definition));
 			return;
 		}
 
@@ -120,7 +131,7 @@ export class BuiltInSkills {
 				(retired) => retired.key === definition.key && this.isUntouched(note, existing, retired)
 			)
 		)
-			await this.upgradeBuiltIn(actor, note, existing, definition);
+			await this.upgradeBuiltIn(note, existing, definition);
 	}
 
 	/**
@@ -165,14 +176,12 @@ export class BuiltInSkills {
 	}
 
 	private async upgradeBuiltIn(
-		actor: ActorContext,
 		note: Note,
 		skill: Skill<Note>,
 		definition: BuiltInSkillDefinition
 	): Promise<void> {
 		const timestamp = now();
 		const updated = await this.notes.updateIfRevision(
-			actor,
 			{
 				...note,
 				document: this.stockDocument(definition),
@@ -183,7 +192,7 @@ export class BuiltInSkills {
 			note.currentRevision
 		);
 		if (!updated) throw new StaleRevisionError('The built-in note changed during upgrade');
-		await this.notes.insertRevision(actor, {
+		await this.notes.insertRevision({
 			id: crypto.randomUUID() as NoteRevisionId,
 			noteId: updated.id,
 			revision: updated.currentRevision,
@@ -192,7 +201,7 @@ export class BuiltInSkills {
 			plainText: updated.plainText,
 			createdAt: timestamp
 		});
-		await this.skills.update(actor, {
+		await this.skills.update({
 			...skill,
 			note: updated,
 			slug: definition.key,
@@ -204,17 +213,16 @@ export class BuiltInSkills {
 	}
 
 	private async createNote(
-		actor: ActorContext,
 		definition: BuiltInSkillDefinition,
 		projectId: ProjectId
 	): Promise<Note> {
 		const timestamp = now();
-		const note = await this.notes.insert(actor, {
+		const note = await this.notes.insert({
 			id: crypto.randomUUID() as NoteId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			projectId,
 			kind: 'skill',
-			position: await this.notes.countSiblings(actor, projectId),
+			position: await this.notes.countSiblings(projectId),
 			title: definition.name,
 			builtInKey: definition.key,
 			document: this.stockDocument(definition),
@@ -225,7 +233,7 @@ export class BuiltInSkills {
 			createdAt: timestamp,
 			updatedAt: timestamp
 		});
-		await this.notes.insertRevision(actor, {
+		await this.notes.insertRevision({
 			id: crypto.randomUUID() as NoteRevisionId,
 			noteId: note.id,
 			revision: 1,

@@ -10,10 +10,10 @@ import {
 	testNoteId,
 	testTodoId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 
 const views = (records: readonly WorkspaceRecord[]) =>
-	new WorkspaceViews(
+	createWorkspaceViews(
 		new Map(
 			records.map((record) => {
 				if (!('id' in record.value)) throw new Error('This fixture uses single-ID resources');

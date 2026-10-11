@@ -4,10 +4,10 @@ import { IconifyIconSearch } from './icons';
 /** A recording fetch: the repo's fakes stand in for collaborators, never a mock library. */
 const respondWith = (body: string, status = 200) => {
 	const calls: string[] = [];
-	const fetchImpl = (async (url: URL | string) => {
+	const fetchImpl: typeof fetch = async (url) => {
 		calls.push(String(url));
 		return new Response(body, { status });
-	}) as unknown as typeof fetch;
+	};
 	return { calls, search: new IconifyIconSearch(fetchImpl) };
 };
 
@@ -17,11 +17,9 @@ const icons = (...names: string[]) =>
 describe('Finding a logo for a diagram', () => {
 	it('returns the icon names the library matched', async () => {
 		const { search } = respondWith(icons('logos:aws-s3'));
-		expect((await search.search('aws'))[0]?.name).toBe('logos:aws-s3');
-
-		expect((await search.search('aws'))[0]?.url).toBe(
-			'https://api.iconify.design/logos/aws-s3.svg'
-		);
+		expect(await search.search('aws')).toEqual([
+			{ name: 'logos:aws-s3', url: 'https://api.iconify.design/logos/aws-s3.svg' }
+		]);
 	});
 
 	// The URL is the whole point: draw.io renders it through `shape=image`, and the

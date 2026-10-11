@@ -1,0 +1,60 @@
+import { DomainError } from '$lib/errors';
+import {
+	logLevelEnabled,
+	summarize,
+	traceOperation
+} from '$lib/server/infrastructure/telemetry/tracing';
+import type { ControllerSurface } from '$lib/models/controller-boundary';
+type BoundaryLogger = Pick<Console, 'info' | 'debug' | 'warn' | 'error'>;
+/** Runtime boundary middleware. Construction creates a facade; calls retain original receivers. */
+export class ControllerBoundary<T extends object> {
+	readonly controller: T;
+	constructor(
+		domain: string,
+		controller: T,
+		surface: ControllerSurface<T>,
+		logger: BoundaryLogger = console
+	) {
+		const methods = new Map<PropertyKey, (...args: unknown[]) => unknown>();
+		this.controller = new Proxy(controller, {
+			get(target, name) {
+				const value = Reflect.get(target, name, target);
+				if (typeof value !== 'function') return value;
+				const cached = methods.get(name);
+				if (cached) return cached;
+				if (!Object.hasOwn(surface, name) || !surface[name as keyof T]) return value.bind(target);
+				const wrapped = (...args: unknown[]): Promise<unknown> =>
+					traceOperation(`${domain}.${String(name)}`, { kind: null }, async () => {
+						const [actor, ...rest] = args;
+						const userId =
+							typeof actor === 'object' && actor !== null && 'userId' in actor
+								? actor.userId
+								: undefined;
+						if (logLevelEnabled('info'))
+							logger.info(
+								`[${domain}] ${String(name)}`,
+								summarize({ ...(userId !== undefined ? { userId } : {}), args: rest })
+							);
+						const startedAt = performance.now();
+						try {
+							const result = await Reflect.apply(value, target, args);
+							if (logLevelEnabled('debug'))
+								logger.debug(
+									`[${domain}] ${String(name)} completed in ${Math.round(performance.now() - startedAt)}ms`,
+									summarize(result)
+								);
+							return result;
+						} catch (error) {
+							if (error instanceof DomainError) {
+								if (logLevelEnabled('warn'))
+									logger.warn(`[${domain}] ${String(name)} failed`, error);
+							} else logger.error(`[${domain}] ${String(name)} failed`, error);
+							throw error;
+						}
+					});
+				methods.set(name, wrapped);
+				return wrapped;
+			}
+		});
+	}
+}

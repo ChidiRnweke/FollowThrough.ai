@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { decideSuggestion } from './decide';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import type { NodeViewProps } from '@tiptap/core';
@@ -23,7 +24,7 @@
 
 	async function decide(decision: 'accept' | 'reject'): Promise<void> {
 		if (!perNote) return;
-		const ok = await suggestionActions.decide(suggestionId, decision);
+		const ok = await decideSuggestion(suggestionId, decision);
 		if (!ok) toast.error('Could not apply the decision. Try again.');
 	}
 

@@ -1,0 +1,246 @@
+import { ValidationError } from '$lib/errors';
+import type {
+	AgentTool,
+	AgentToolPolicy,
+	AgentToolset,
+	PreparedAction,
+	ToolPreparation
+} from '$lib/models/agent-tool-protocol';
+import { agentPayloadResultSchema, type AgentPayload } from '$lib/models/agent/payload';
+import type { Tool } from '@openai/agents';
+import { z } from 'zod';
+import { sdkTool, withToolFeedback } from '$lib/server/infrastructure/agents/sdk-tool';
+import { bindToolArguments, toolOutput } from './arguments';
+import { describeTools } from './catalog';
+
+const SEARCH_DESCRIPTION =
+	'Find more FollowThrough tools relevant to what you want to do, when the tool you need is not already available directly. Each match comes back with its exact input schema and becomes a direct tool from your next message onward: call it by its own name with its arguments as flat top-level fields, exactly as the schema describes. There is no wrapper tool and no nested payload.';
+
+export const searchToolsParameters = z
+	.object({
+		query: z.string().min(1),
+		limit: z.number().int().min(1).max(15).optional()
+	})
+	.strict();
+
+/**
+ * Builds the SDK tools for one run from the harness's tool list and policy.
+ *
+ * First-class tools are registered directly. Every long-tail tool is registered with its real
+ * flat schema but gated behind `isEnabled`: the SDK drops disabled function tools before it
+ * serializes a request, so a gated tool costs no prompt tokens, and `isEnabled` is evaluated
+ * before every generation, so a tool `search_tools` finds is callable on the very next one.
+ * There is no `use_tool` envelope: its free-form payload renders as a property-less schema,
+ * and several model families answered it with an empty object forever.
+ */
+export const createAgentToolset = (
+	tools: readonly AgentTool[],
+	policy: AgentToolPolicy
+): AgentToolset => {
+	const byName = new Map(tools.map((entry) => [entry.name, entry]));
+	const reviews = new Map<string, string>();
+	const preparations = new Map<string, { input: string; preparation: Promise<ToolPreparation> }>();
+	for (const decision of policy.parked) {
+		const entry = byName.get(decision.toolName);
+		if (entry?.kind !== 'reviewed') continue;
+		if (!decision.review) throw new Error('A saved note approval is missing its prepared review');
+		reviews.set(decision.callId, entry.review.restore(decision.review.content));
+	}
+
+	const prepareCall = async (
+		entry: AgentTool,
+		input: AgentPayload,
+		callId: string | undefined
+	): Promise<ToolPreparation> => {
+		const requirement = policy.plan.approvalRequired.includes(entry.name)
+			? 'approval_required'
+			: 'ready';
+		if (entry.kind === 'direct') return { kind: requirement, action: entry.prepare(input) };
+		// The review is bound to its call id, so the approval checkpoint can carry it.
+		if (callId === undefined)
+			throw new Error('A note change cannot be reviewed without a tool call identity');
+		// A resumed approval was restored from its checkpoint above; any other call prepares
+		// its review here, once, by call id.
+		const saved = reviews.get(callId);
+		const prepared = await entry.review.prepare(input, saved);
+		reviews.set(callId, prepared.review);
+		if (prepared.kind === 'failure') return prepared.failure;
+		return {
+			kind: requirement,
+			action: { arguments: prepared.arguments, execute: prepared.apply }
+		};
+	};
+
+	/**
+	 * One preparation per call identity, so the user approves exactly what runs. Everything here
+	 * is tool work, so any error is feedback, including a provider reusing a call id for
+	 * different arguments.
+	 */
+	const prepare = (
+		bind: (input: AgentPayload) => Promise<ToolPreparation>,
+		input: AgentPayload,
+		callId: string | undefined
+	): Promise<ToolPreparation> => {
+		const serialized = JSON.stringify(input);
+		const prior = callId === undefined ? undefined : preparations.get(callId);
+		if (prior) {
+			if (prior.input !== serialized)
+				throw new ValidationError('A tool call identity was reused with different arguments');
+			return prior.preparation;
+		}
+		const preparation = withToolFeedback(policy.signal, () => bind(input));
+		if (callId !== undefined) preparations.set(callId, { input: serialized, preparation });
+		return preparation;
+	};
+
+	/** Run a prepared action. Its errors reach the model through the tool's feedback boundary. */
+	const run = async (action: PreparedAction): Promise<AgentPayload> => {
+		policy.signal.throwIfAborted();
+		return toolOutput(await action.execute());
+	};
+
+	const build = (entry: AgentTool, gated: boolean): Tool<unknown> =>
+		agentSdkTool({
+			name: entry.name,
+			description: entry.description,
+			parameters: entry.parameters,
+			signal: policy.signal,
+			...(gated ? { isEnabled: () => policy.isDiscovered(entry.name) } : {}),
+			prepare: (input, callId) =>
+				prepare((payload) => prepareCall(entry, payload, callId), input, callId),
+			execute: async (action, callId) => {
+				const result = await withToolFeedback(policy.signal, () => run(action));
+				await policy.completed(
+					{
+						...(callId === undefined ? {} : { callId }),
+						toolName: entry.name,
+						arguments: action.arguments,
+						classification: entry.classification
+					},
+					result
+				);
+				return result;
+			}
+		});
+
+	const permitted = [...policy.plan.initial, ...policy.plan.discoverable].flatMap((name) => {
+		const entry = byName.get(name);
+		return entry ? [entry] : [];
+	});
+	const searchTools = agentSdkTool({
+		name: 'search_tools',
+		description: SEARCH_DESCRIPTION,
+		parameters: searchToolsParameters,
+		signal: policy.signal,
+		prepare: (input, callId) =>
+			prepare(
+				async (payload) => ({
+					kind: 'ready',
+					action: bindToolArguments(searchToolsParameters, payload, async ({ query, limit }) =>
+						describeTools(permitted, await policy.discover(query, limit ?? 5))
+					)
+				}),
+				input,
+				callId
+			),
+		execute: (action) => withToolFeedback(policy.signal, () => run(action))
+	});
+
+	return {
+		tools: [
+			...policy.plan.initial.flatMap((name) => {
+				const entry = byName.get(name);
+				return entry ? [build(entry, false)] : [];
+			}),
+			...policy.plan.discoverable.flatMap((name) => {
+				const entry = byName.get(name);
+				return entry ? [build(entry, true)] : [];
+			}),
+			searchTools
+		],
+		checkpoint(pending) {
+			const entry = byName.get(pending.toolName);
+			if (entry?.kind !== 'reviewed') return pending;
+			const content = reviews.get(pending.callId);
+			if (content === undefined) throw new Error('A note approval has no prepared review');
+			return { ...pending, review: { kind: entry.review.kind, content } };
+		}
+	};
+};
+
+interface SdkToolOptions {
+	readonly name: string;
+	readonly description: string;
+	readonly parameters: z.ZodObject;
+	readonly signal: AbortSignal;
+	readonly isEnabled?: () => boolean;
+	readonly prepare: (input: AgentPayload, callId: string | undefined) => Promise<ToolPreparation>;
+	readonly execute: (action: PreparedAction, callId: string | undefined) => Promise<AgentPayload>;
+}
+
+/** Direct invocation also accepts a blank argument string for fieldless tools. */
+const withBlankInputTolerated = (built: Tool<unknown>): Tool<unknown> => {
+	if (built.type !== 'function') return built;
+	const invoke = built.invoke.bind(built);
+	return {
+		...built,
+		invoke: (runContext, input, details) =>
+			invoke(runContext, input.trim().length === 0 ? '{}' : input, details)
+	};
+};
+
+// Strict model schemas represent omitted optional fields with null. Approval runs before the
+// SDK removes those nulls, so both stages are normalized from the original application schema;
+// explicitly nullable fields keep their null.
+const allowsNull = (schema: z.core.JSONSchema.JSONSchema): boolean =>
+	schema.type === 'null' ||
+	(Array.isArray(schema.type) && schema.type.includes('null')) ||
+	(schema.anyOf ?? schema.oneOf ?? []).some(allowsNull);
+
+const normalizeInput = (
+	value: AgentPayload,
+	schema: z.core.JSONSchema.JSONSchema
+): AgentPayload => {
+	if (Array.isArray(value)) {
+		const items = schema.items;
+		return items && typeof items === 'object' && !Array.isArray(items)
+			? value.map((item) => normalizeInput(item, items))
+			: value;
+	}
+	if (value === null || typeof value !== 'object' || schema.type !== 'object') return value;
+	return Object.fromEntries(
+		Object.entries(value).flatMap(([key, entry]) => {
+			const property = schema.properties?.[key];
+			if (!property || typeof property === 'boolean') return [[key, entry]];
+			if (entry === null && !schema.required?.includes(key) && !allowsNull(property)) return [];
+			return [[key, normalizeInput(entry, property)]];
+		})
+	);
+};
+
+const agentSdkTool = (options: SdkToolOptions): Tool<unknown> => {
+	const schema = z.toJSONSchema(options.parameters, { io: 'input' });
+	const prepare = (input: unknown, callId: string | undefined): Promise<ToolPreparation> =>
+		withToolFeedback(options.signal, async () => {
+			const payload = agentPayloadResultSchema.parse(input);
+			if (payload.kind === 'corrupt') throw new ValidationError(payload.message);
+			return options.prepare(normalizeInput(payload.value, schema), callId);
+		});
+	const built = sdkTool({
+		name: options.name,
+		description: options.description,
+		parameters: options.parameters,
+		signal: options.signal,
+		...(options.isEnabled ? { isEnabled: options.isEnabled } : {}),
+		needsApproval: async (input, callId) =>
+			(await prepare(input, callId)).kind === 'approval_required',
+		execute: async (input, callId) => {
+			const prepared = await prepare(input, callId);
+			if (prepared.kind === 'failure') return prepared;
+			return options.execute(prepared.action, callId);
+		}
+	});
+	return Object.keys(options.parameters.shape).length === 0
+		? withBlankInputTolerated(built)
+		: built;
+};

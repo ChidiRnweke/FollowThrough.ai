@@ -6,21 +6,25 @@ import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';
-import { RelationshipGraph } from '$lib/server/services/relationships/graph';
+import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { context, seedUser } from '../database-harness';
 
 it('hides a retained backlink after built-in recovery moves its source out of an archived project', async () => {
 	const owner = await seedUser('29001');
 	const tx = createTransactionContext(context.db);
-	const projects = new ProjectRecords(tx.database);
-	const notes = new NoteRecords(tx.database);
-	const provenance = new ProvenanceRecords(tx.database);
-	const { builtIns } = createSkillsCapability({ db: tx.database, projects, notes, provenance });
-	await tx.transactionRunner.run(() => builtIns.ensure(owner));
-	const source = (await notes.findByBuiltInKey(owner, 'followthrough'))!;
+	const projects = new ProjectRecords(owner, tx.database);
+	const notes = new NoteRecords(owner, tx.database);
+	const provenance = new ProvenanceRecords(owner, tx.database);
+	const { builtIns } = createSkillsCapability(owner, {
+		db: tx.database,
+		projects,
+		notes,
+		provenance
+	});
+	await tx.transactionRunner.run(() => builtIns.ensure());
+	const source = (await notes.findByBuiltInKey('followthrough'))!;
 	const target = await notes.insert(
-		owner,
 		noteBuilder({
 			id: '40000000-0000-4000-8000-000000029001' as NoteId,
 			userId: owner.userId,
@@ -28,22 +32,29 @@ it('hides a retained backlink after built-in recovery moves its source out of an
 			title: 'Original project note'
 		})
 	);
-	const relationships = new RelationshipRecords(tx.database);
-	const graph = new RelationshipGraph(
+	const relationships = new RelationshipRecords(owner, tx.database);
+	const graph = createRelationshipServices(
+		owner,
 		relationships,
 		notes,
-		new SourceAnchorRecords(tx.database),
+		new SourceAnchorRecords(owner, tx.database),
 		provenance
 	);
 	const edge = await tx.transactionRunner.run(() =>
-		graph.create(owner, { sourceNoteId: source.id, targetNoteId: target.id, kind: 'mentions' })
+		graph.creator
+			.createWithChange({
+				sourceNoteId: source.id,
+				targetNoteId: target.id,
+				kind: 'mentions'
+			})
+			.then((change) => change.after)
 	);
-	await projects.archive(owner, source.projectId);
-	await tx.transactionRunner.run(() => builtIns.ensure(owner));
-	const recovered = await notes.findById(owner, source.id);
+	await projects.archive(source.projectId);
+	await tx.transactionRunner.run(() => builtIns.ensure());
+	const recovered = await notes.findById(source.id);
 	expect({
 		recoveredElsewhere: recovered !== undefined && recovered.projectId !== source.projectId,
-		contexts: await graph.readContexts(owner, await graph.findForNote(owner, source.id)),
-		retained: (await relationships.listForNote(owner, source.id)).map((item) => item.id)
+		contexts: await graph.contexts.readContexts(await graph.finder.findForNote(source.id)),
+		retained: (await relationships.listForNote(source.id)).map((item) => item.id)
 	}).toEqual({ recoveredElsewhere: true, contexts: [], retained: [edge.id] });
 });

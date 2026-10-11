@@ -1,29 +1,33 @@
-import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { describe, expect, it } from 'vitest';
-import { Diagrams, type DiagramsDependencies } from './controller';
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	drawioBuilder,
 	InMemoryDiagrams,
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Diagrams, type DiagramsDependencies } from './controller';
 
 const setup = (drawio = false) => {
 	const generation = diagramGenerationFixture();
-	const sourceNotes = new InMemoryNoteContent();
+	const sourceNotes = new InMemoryNoteContent(testActor());
 	sourceNotes.notes = [noteBuilder()];
-	const diagrams = new InMemoryDiagrams();
+	const diagrams = new InMemoryDiagrams(testActor());
 	diagrams.diagrams = [drawio ? drawioBuilder() : mermaidBuilder()];
 	return {
 		diagrams,
 		persistence: generation.persistence,
 		provider: generation.provider,
 		controller: new Diagrams(
+			testActor(),
 			capabilityDependencies<DiagramsDependencies>({
+				...agentToolResultsFixture(),
+				generationRules: new DiagramGenerationRuleService(),
 				transactionRunner: new InMemoryTransactionRunner([
 					diagrams,
 					generation.persistence,
@@ -49,7 +53,7 @@ describe('Revise Mermaid workflow invariants', () => {
 			const completion = Promise.withResolvers<void>();
 			provider.completion = completion.promise;
 			const pending = controller
-				.reviseMermaid(testActor(), {
+				.reviseMermaid({
 					diagramId: mermaidBuilder().id,
 					instruction: 'add queue'
 				})
@@ -84,7 +88,7 @@ describe('Revise Mermaid workflow invariants', () => {
 		const original = structuredClone(diagrams.diagrams);
 		diagrams.failIndex = true;
 		await controller
-			.reviseMermaid(testActor(), {
+			.reviseMermaid({
 				diagramId: mermaidBuilder().id,
 				instruction: 'add queue'
 			})
@@ -101,7 +105,7 @@ describe('Revise Mermaid workflow invariants', () => {
 	it('rejects revision of a promoted draw.io diagram', async () => {
 		const { controller } = setup(true);
 		await expect(
-			controller.reviseMermaid(testActor(), {
+			controller.reviseMermaid({
 				diagramId: drawioBuilder().id,
 				instruction: 'change'
 			})
@@ -110,7 +114,7 @@ describe('Revise Mermaid workflow invariants', () => {
 
 	it('persists rendered output for a Mermaid revision', async () => {
 		const { controller, diagrams } = setup();
-		const result = await controller.reviseMermaid(testActor(), {
+		const result = await controller.reviseMermaid({
 			diagramId: mermaidBuilder().id,
 			instruction: 'add queue'
 		});

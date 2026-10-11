@@ -1,19 +1,24 @@
+import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
+import { durableDiagramFixture } from '$lib/testing/diagrams/fixtures/durable-generation';
+import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
+import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
-import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
-import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
-import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { durableDiagramFixture } from '$lib/testing/diagrams/fixtures/durable-generation';
 
 const setup = () => {
 	const fixture = diagramGenerationFixture();
-	const suggestions = new InMemorySuggestions();
+	const suggestions = new InMemorySuggestions(testActor());
 	const controller = new Diagrams(
+		testActor(),
 		capabilityDependencies<DiagramsDependencies>({
+			...agentToolResultsFixture(),
+			generationRules: new DiagramGenerationRuleService(),
 			...fixture,
 			drawioXmlValidator: new DrawioXmlValidator(),
 			suggestionCreator: suggestions,
@@ -39,15 +44,20 @@ describe('Diagram generation run settlement', () => {
 		const gate = Promise.withResolvers<void>();
 		state.provider.completion = gate.promise;
 		const execution = state.controller
-			.convertInlineMermaid(testActor(), { noteId: testNoteId(), source: revision.source })
+			.convertInlineMermaid({ noteId: testNoteId(), source: revision.source })
 			.catch((error) => {
-				if (!(error instanceof Error) || error.message !== 'The workflow run is no longer running')
-					throw error;
+				// The cancel either aborts the generation or, if the provider finished first, refuses
+				// to complete a run that is no longer running. Neither publishes a diagram.
+				const stopped =
+					error instanceof Error &&
+					(error.name === 'AbortError' ||
+						error.message === 'The workflow run is no longer running');
+				if (!stopped) throw error;
 				return { kind: 'failure' as const };
 			});
 		try {
 			await state.provider.started.promise;
-			await state.agent.cancel(testActor(), state.persistence.runs[0].id);
+			await state.agent.cancel(state.persistence.runs[0].id);
 		} finally {
 			gate.resolve();
 		}
@@ -63,13 +73,13 @@ describe('Diagram generation run settlement', () => {
 		const gate = Promise.withResolvers<void>();
 		state.provider.completion = gate.promise;
 		state.provider.failure = new Error('Provider disconnected');
-		const execution = state.controller.reviseInlineMermaid(testActor(), revision).catch((error) => {
+		const execution = state.controller.reviseInlineMermaid(revision).catch((error) => {
 			if (!(error instanceof Error)) throw error;
 			return { kind: 'failure' as const, message: error.message };
 		});
 		try {
 			await state.provider.started.promise;
-			await state.agent.cancel(testActor(), state.persistence.runs[0].id);
+			await state.agent.cancel(state.persistence.runs[0].id);
 		} finally {
 			gate.resolve();
 		}
@@ -78,7 +88,7 @@ describe('Diagram generation run settlement', () => {
 	it('does not leave a conversation when model lookup fails before generation', async () => {
 		const { controller, conversations, models } = setup();
 		models.failure = new Error('Catalog unavailable');
-		await controller.reviseInlineMermaid(testActor(), revision).catch((error) => {
+		await controller.reviseInlineMermaid(revision).catch((error) => {
 			if (!(error instanceof Error) || error.message !== 'Catalog unavailable') throw error;
 			return { kind: 'failure' as const };
 		});
@@ -87,7 +97,7 @@ describe('Diagram generation run settlement', () => {
 
 	it('records the start and finish times of a completed direct run', async () => {
 		const { controller, persistence } = setup();
-		await controller.reviseInlineMermaid(testActor(), revision);
+		await controller.reviseInlineMermaid(revision);
 		expect(
 			persistence.runs.map((run) => ({ startedAt: run.startedAt, finishedAt: run.finishedAt }))
 		).toEqual([{ startedAt: testNow, finishedAt: testNow }]);
@@ -98,7 +108,7 @@ describe('Diagram generation run settlement', () => {
 		const { controller, persistence, suggestions } = setup();
 		suggestions.failCreation = true;
 		await controller
-			.convertInlineMermaid(testActor(), {
+			.convertInlineMermaid({
 				noteId: testNoteId(),
 				source: revision.source
 			})
@@ -111,7 +121,7 @@ describe('Diagram generation run settlement', () => {
 	it('marks the run failed when its source note cannot be loaded during preparation', async () => {
 		const { controller, persistence } = setup();
 		await controller
-			.reviseInlineMermaid(testActor(), { ...revision, noteId: testNoteId(2) })
+			.reviseInlineMermaid({ ...revision, noteId: testNoteId(2) })
 			.catch(() => undefined);
 		expect(persistence.runs.map((run) => ({ status: run.status, failure: run.failure }))).toEqual([
 			{ status: 'failed', failure: 'Note was not found' }
@@ -121,7 +131,7 @@ describe('Diagram generation run settlement', () => {
 	it('marks the run failed when the provider stops without producing a diagram', async () => {
 		const { controller, persistence, provider } = setup();
 		provider.failure = new Error('Provider connection lost');
-		await controller.reviseInlineMermaid(testActor(), revision).catch(() => undefined);
+		await controller.reviseInlineMermaid(revision).catch(() => undefined);
 		expect(persistence.runs.map((run) => ({ status: run.status, failure: run.failure }))).toEqual([
 			{ status: 'failed', failure: 'Provider connection lost' }
 		]);
@@ -133,7 +143,7 @@ describe('Diagram generation run settlement', () => {
 			{ kind: 'drawio', title: 'Invalid', source: '<mxfile />' },
 			{ kind: 'drawio', title: 'Corrected', source: VALID_DRAWIO_XML }
 		];
-		const result = await controller.convertInlineMermaid(testActor(), {
+		const result = await controller.convertInlineMermaid({
 			noteId: testNoteId(),
 			source: revision.source
 		});
@@ -141,9 +151,13 @@ describe('Diagram generation run settlement', () => {
 	});
 
 	it('rejects Mermaid click handlers before offering an inline revision', async () => {
-		const { controller, provider } = setup();
+		const { controller, provider, mermaidValidator } = setup();
 		provider.mermaidSource = 'flowchart LR\nA --> B\nclick A "https://example.com"';
-		await expect(controller.reviseInlineMermaid(testActor(), revision)).rejects.toThrow(
+		mermaidValidator.rejections.set(
+			provider.mermaidSource,
+			'Links and click handlers are not allowed in Mermaid diagrams.'
+		);
+		await expect(controller.reviseInlineMermaid(revision)).rejects.toThrow(
 			'did not submit a valid diagram'
 		);
 	});

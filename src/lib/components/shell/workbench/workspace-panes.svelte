@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import { workspaceViews } from '$lib/factories/workspace/session';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { untrack } from 'svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -15,7 +16,6 @@
 		type TabId
 	} from '$lib/stores/workbench/tab-ref';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import { Button } from '$lib/components/ui/button';
@@ -73,12 +73,9 @@
 		if (isSearchTab(tabId)) return 'Search';
 		const diagramId = diagramIdOf(tabId);
 		if (diagramId !== undefined)
-			return (
-				workspaceSession.current?.resources.views.diagram(diagramId)?.title ?? 'Untitled diagram'
-			);
+			return workspaceViews.diagram(diagramId)?.title ?? 'Untitled diagram';
 		const widgetId = widgetIdOf(tabId);
-		if (widgetId !== undefined)
-			return workspaceSession.current?.resources.views.widget(widgetId)?.title ?? 'Widget';
+		if (widgetId !== undefined) return workspaceViews.widget(widgetId)?.title ?? 'Widget';
 		const sessionKey = chatKeyOf(tabId);
 		if (sessionKey !== undefined) {
 			const conversationId = chatRegistry.peek(sessionKey)?.conversationId;

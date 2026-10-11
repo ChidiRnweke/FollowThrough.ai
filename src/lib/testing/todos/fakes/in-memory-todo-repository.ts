@@ -9,6 +9,7 @@ import type {
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export class InMemoryTodoRepository implements TodoRepository, SnapshotParticipant {
+	constructor(private readonly actor: ActorContext) {}
 	todos: Todo[] = [];
 	updateFailures = new Map<TodoStatus, Error>();
 	insertFailures = new Map<string, Error>();
@@ -19,20 +20,20 @@ export class InMemoryTodoRepository implements TodoRepository, SnapshotParticipa
 		};
 	}
 
-	findForUpdate(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
-		return this.findById(actor, id);
+	findForUpdate(id: TodoId): Promise<Todo | undefined> {
+		return this.findById(id);
 	}
 
-	async findById(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
+	async findById(id: TodoId): Promise<Todo | undefined> {
 		return this.todos.find(
-			(todo) => todo.id === id && todo.userId === actor.userId && !todo.deletedAt
+			(todo) => todo.id === id && todo.userId === this.actor.userId && !todo.deletedAt
 		);
 	}
 
-	async list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> {
+	async list(filter: TodoListFilter): Promise<readonly Todo[]> {
 		return this.todos.filter(
 			(todo) =>
-				todo.userId === actor.userId &&
+				todo.userId === this.actor.userId &&
 				!todo.deletedAt &&
 				(filter.projectId === undefined || todo.projectId === filter.projectId) &&
 				(filter.status === undefined || todo.status === filter.status) &&
@@ -43,34 +44,34 @@ export class InMemoryTodoRepository implements TodoRepository, SnapshotParticipa
 		);
 	}
 
-	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
-		return (await this.list(actor, filter)).length;
+	async count(filter: TodoListFilter): Promise<number> {
+		return (await this.list(filter)).length;
 	}
 
-	async listCategories(actor: ActorContext): Promise<readonly string[]> {
+	async listCategories(): Promise<readonly string[]> {
 		return [
 			...new Set(
 				this.todos
-					.filter((todo) => todo.userId === actor.userId && !todo.deletedAt && todo.category)
+					.filter((todo) => todo.userId === this.actor.userId && !todo.deletedAt && todo.category)
 					.map((todo) => todo.category!)
 			)
 		].sort();
 	}
 
-	async insert(_actor: ActorContext, todo: Todo): Promise<Todo> {
+	async insert(todo: Todo): Promise<Todo> {
 		const failure = this.insertFailures.get(todo.title);
 		if (failure) throw failure;
 		this.todos.push(todo);
 		return todo;
 	}
-	async update(actor: ActorContext, todo: Todo): Promise<Todo> {
-		if (!(await this.findById(actor, todo.id))) throw new NotFoundError('Todo was not found');
+	async update(todo: Todo): Promise<Todo> {
+		if (!(await this.findById(todo.id))) throw new NotFoundError('Todo was not found');
 		const failure = this.updateFailures.get(todo.status);
 		if (failure) throw failure;
 		this.todos = this.todos.map((item) => (item.id === todo.id ? todo : item));
 		return todo;
 	}
-	async softDelete(_actor: ActorContext, id: TodoId, deletedAt: DateTime): Promise<void> {
+	async softDelete(id: TodoId, deletedAt: DateTime): Promise<void> {
 		this.todos = this.todos.map((todo) => (todo.id === id ? { ...todo, deletedAt } : todo));
 	}
 }

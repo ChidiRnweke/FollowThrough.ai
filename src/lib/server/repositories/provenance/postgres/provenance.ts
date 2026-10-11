@@ -7,20 +7,23 @@ import * as schema from '$lib/server/db/schema/provenance';
 import { toProvenance } from '$lib/server/db/mappers';
 
 export class ProvenanceRecords implements ProvenanceRepository {
-	constructor(private readonly database: Database) {}
-	async findById(actor: ActorContext, id: ProvenanceId): Promise<Provenance | undefined> {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
+	async findById(id: ProvenanceId): Promise<Provenance | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.provenance)
-			.where(and(eq(schema.provenance.id, id), eq(schema.provenance.userId, actor.userId)));
+			.where(and(eq(schema.provenance.id, id), eq(schema.provenance.userId, this.actor.userId)));
 		return row ? toProvenance(row) : undefined;
 	}
-	async insert(actor: ActorContext, provenance: Provenance): Promise<Provenance> {
+	async insert(provenance: Provenance): Promise<Provenance> {
 		const [row] = await this.database
 			.insert(schema.provenance)
 			.values({
 				id: provenance.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				producerKind: provenance.producerKind,
 				producerName: provenance.producerName,
 				pipeline: 'pipeline' in provenance ? provenance.pipeline : undefined,

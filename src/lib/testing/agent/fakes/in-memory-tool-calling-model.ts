@@ -1,4 +1,4 @@
-import { readToolOutput } from '$lib/models/agent/tool-failure';
+import { readToolOutput } from '$lib/server/repositories/agent/tool-failure';
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from '@openai/agents';
 
 /** A model that can correct a call only after the runner delivers its failure. */

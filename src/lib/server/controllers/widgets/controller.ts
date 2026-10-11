@@ -1,12 +1,27 @@
 import { StaleRevisionError, ValidationError } from '$lib/errors';
-import { mutationResource } from '$lib/services/workspace/commands';
-import { applyWidgetChange, applyWidgetEdit, createWidget } from '$lib/services/widgets/edits';
-import { decideWidgetTrash, widgetTrashChange } from '$lib/services/widgets/trash';
-import { widgetCatalogPrompt } from '$lib/services/widgets/catalog-prompt';
-import { widgetSearchText } from '$lib/services/widgets/search-text';
-import type { IndexingResult } from '$lib/models/knowledge-search';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+import type { WidgetCatalogReader } from '$lib/models/widgets';
+import type { WidgetIndexing } from '$lib/server/services/knowledge-search/retrieval';
+import type { ProjectLister } from '$lib/server/services/projects/catalog';
+import type { ProjectChoiceRules } from '$lib/services/projects/choice';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+
+import type {
+	WidgetCandidate,
+	WidgetCandidateReader,
+	WidgetCatalog,
+	WidgetChange,
+	WidgetCreation,
+	WidgetDraft,
+	WidgetEdit
+} from '$lib/models/widgets';
+import type { IWidgetCatalogService } from '$lib/services/widgets/catalog-prompt';
+import type { IWidgetEditingService } from '$lib/services/widgets/edits';
+import type { IWidgetPatchService } from '$lib/services/widgets/patches';
+import type { IWidgetSearchService } from '$lib/services/widgets/search-text';
+import type { IWidgetLifecycleService } from '$lib/services/widgets/trash';
+
+import type { ActorContext } from '$lib/models/identity';
+import type { ProjectId, WithProjectChoice } from '$lib/models/projects';
 import {
 	widgetCatalog,
 	type CreateWidgetInput,
@@ -15,19 +30,17 @@ import {
 	type WidgetEditResult,
 	type WidgetId
 } from '$lib/models/widgets';
-import type { ActorContext } from '$lib/models/identity';
-import type { ProjectId } from '$lib/models/projects';
-import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
+import type { DateTime, AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type {
 	WidgetMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type {
 	WidgetLister,
 	WidgetReader,
 	WidgetWriter
-} from '$lib/server/services/widgets/contracts';
+} from '$lib/server/services/widgets/library';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /**
  * Application boundary for widgets (ADR 0043). Every change, from the workspace queue or an
@@ -35,40 +48,47 @@ import type {
  * widget, so the browser's optimistic result and the saved result come from one rule.
  */
 export interface WidgetsController {
-	synchronize(actor: ActorContext, input: WidgetMutationRequest): Promise<WorkspaceMutationResult>;
-	get(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
+	synchronize(input: WidgetMutationRequest): Promise<WorkspaceMutationResult>;
+	get(input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
 	/** The catalog a layout must fit, written for an agent that is about to write one. */
-	catalog(actor: ActorContext): Promise<{ catalogVersion: number; reference: string }>;
-	list(
-		actor: ActorContext,
-		input: { readonly projectId: ProjectId }
-	): Promise<{ widgets: readonly Widget[] }>;
+	catalog(): Promise<{ catalogVersion: number; reference: string }>;
+	/** @throws ProjectChoiceRequiredError if the request names no project. */
+	list(input: { readonly projectId?: ProjectId }): Promise<{ widgets: readonly Widget[] }>;
 	/**
 	 * @throws ValidationError if the draft uses a component or prop the catalog rejects.
+	 * @throws ProjectChoiceRequiredError if the request names no project.
 	 */
-	create(actor: ActorContext, input: CreateWidgetInput): Promise<{ widget: Widget }>;
+	create(input: WithProjectChoice<CreateWidgetInput>): Promise<{ widget: Widget }>;
 	/**
 	 * @throws StaleRevisionError if the edited part changed since the edit was made.
 	 * @throws ValidationError if the patch does not apply or its result is not a valid widget.
 	 */
-	edit(actor: ActorContext, input: EditWidgetInput): Promise<{ widget: Widget }>;
+	edit(input: EditWidgetInput): Promise<{ widget: Widget }>;
 	/** Move a widget to the trash. Notes that embed it show it as in the trash. */
-	archive(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
-	restore(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
+	archive(input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
+	restore(input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
 	/** @throws ValidationError unless the widget is in the trash. */
-	delete(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<void>;
+	delete(input: { readonly widgetId: WidgetId }): Promise<void>;
 }
 
 export interface WidgetsDependencies {
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	readonly projectChoice: ProjectChoiceRules;
+	readonly projectLister: ProjectLister;
+
+	catalogReader: WidgetCatalogReader;
+	widgetEditingRules: IWidgetEditingService;
+	widgetPatches: IWidgetPatchService;
+	widgetCandidateReader: WidgetCandidateReader;
+	lifecycle: IWidgetLifecycleService;
+	catalog: IWidgetCatalogService;
+	search: IWidgetSearchService;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	widgetReader: WidgetReader;
 	widgetLister: WidgetLister;
 	widgetWriter: WidgetWriter;
 	/** Keeps the knowledge index in step with what each widget shows (ADR 0019). */
-	widgetIndexer: ContentIndex['widgets'];
-	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	widgetIndexer: WidgetIndexing;
 	transactionRunner: TransactionRunner;
 }
 
@@ -91,39 +111,43 @@ const decided = (result: WidgetEditResult): Widget => {
 };
 
 export class Widgets implements WidgetsController {
-	constructor(private readonly dependencies: WidgetsDependencies) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: WidgetsDependencies
+	) {}
 
-	async synchronize(
-		actor: ActorContext,
-		input: WidgetMutationRequest
-	): Promise<WorkspaceMutationResult> {
+	async synchronize(input: WidgetMutationRequest): Promise<WorkspaceMutationResult> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
+					const prepared = await this.dependencies.syncMutations.prepare(input, {
+						identity: target,
+						key: this.workspaceCommandRules.workspaceResourceKey(target)
+					});
 					if (prepared.kind === 'finished') return prepared.result;
 					const command = input.command;
 					switch (command.kind) {
 						case 'createWidget':
-							await this.create(actor, command);
+							await this.create(command);
 							break;
 						case 'editWidget':
-							await this.write(actor, command.widgetId, (current) =>
-								applyWidgetChange(current, command.change, widgetCatalog, now())
+							await this.write(command.widgetId, (current) =>
+								this.applyWidgetChange(current, command.change, widgetCatalog, now())
 							);
 							break;
 						case 'archiveWidget':
-							await this.archive(actor, command);
+							await this.archive(command);
 							break;
 						case 'restoreWidget':
-							await this.restore(actor, command);
+							await this.restore(command);
 							break;
 						case 'deleteWidget':
-							await this.delete(actor, command);
+							await this.delete(command);
 							break;
 					}
-					return this.dependencies.syncMutations.complete(actor, input, target);
+					return this.dependencies.syncMutations.complete(input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);
@@ -133,84 +157,84 @@ export class Widgets implements WidgetsController {
 		}
 	}
 
-	async get(
-		actor: ActorContext,
-		input: { readonly widgetId: WidgetId }
-	): Promise<{ widget: Widget }> {
-		return { widget: await this.dependencies.widgetReader.get(actor, input.widgetId) };
+	async get(input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }> {
+		return { widget: await this.dependencies.widgetReader.get(input.widgetId) };
 	}
 
-	async catalog(actor: ActorContext): Promise<{ catalogVersion: number; reference: string }> {
-		void actor;
-		return { catalogVersion: widgetCatalog.version, reference: widgetCatalogPrompt(widgetCatalog) };
+	async catalog(): Promise<{ catalogVersion: number; reference: string }> {
+		return {
+			catalogVersion: widgetCatalog.version,
+			reference: this.dependencies.catalog.describe(
+				this.dependencies.catalogReader.readCatalog(widgetCatalog)
+			)
+		};
 	}
 
-	async list(
-		actor: ActorContext,
-		input: { readonly projectId: ProjectId }
-	): Promise<{ widgets: readonly Widget[] }> {
-		return { widgets: await this.dependencies.widgetLister.listForProject(actor, input.projectId) };
+	async list(input: { readonly projectId?: ProjectId }): Promise<{ widgets: readonly Widget[] }> {
+		const projectId =
+			input.projectId ??
+			this.dependencies.projectChoice.requireChoice(
+				await this.dependencies.projectLister.list(),
+				'list widgets'
+			);
+		return { widgets: await this.dependencies.widgetLister.listForProject(projectId) };
 	}
 
-	async create(actor: ActorContext, input: CreateWidgetInput): Promise<{ widget: Widget }> {
+	async create(input: WithProjectChoice<CreateWidgetInput>): Promise<{ widget: Widget }> {
+		const projectId =
+			input.projectId ??
+			this.dependencies.projectChoice.requireChoice(
+				await this.dependencies.projectLister.list(),
+				'create a widget'
+			);
 		return this.dependencies.transactionRunner.run(async () => {
 			const widget = decided(
-				createWidget(
+				this.createWidget(
 					input.draft,
 					{
 						id: input.id,
-						userId: actor.userId,
-						projectId: input.projectId,
+						userId: this.actor.userId,
+						projectId,
 						...(input.sourceNoteId ? { sourceNoteId: input.sourceNoteId } : {}),
 						now: now()
 					},
 					widgetCatalog
 				)
 			);
-			const created = await this.dependencies.widgetWriter.create(actor, widget);
-			await this.index(actor, created);
+			const created = await this.dependencies.widgetWriter.create(widget);
+			await this.index(created);
 			return { widget: created };
 		});
 	}
 
-	async edit(actor: ActorContext, input: EditWidgetInput): Promise<{ widget: Widget }> {
+	async edit(input: EditWidgetInput): Promise<{ widget: Widget }> {
 		return {
-			widget: await this.write(actor, input.widgetId, (current) =>
-				applyWidgetEdit(current, input.edit, widgetCatalog, now())
+			widget: await this.write(input.widgetId, (current) =>
+				this.applyWidgetEdit(current, input.edit, widgetCatalog, now())
 			)
 		};
 	}
 
-	async archive(
-		actor: ActorContext,
-		input: { readonly widgetId: WidgetId }
-	): Promise<{ widget: Widget }> {
-		return { widget: await this.moveTrash(actor, input.widgetId, 'archive') };
+	async archive(input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }> {
+		return { widget: await this.moveTrash(input.widgetId, 'archive') };
 	}
 
-	async restore(
-		actor: ActorContext,
-		input: { readonly widgetId: WidgetId }
-	): Promise<{ widget: Widget }> {
-		return { widget: await this.moveTrash(actor, input.widgetId, 'restore') };
+	async restore(input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }> {
+		return { widget: await this.moveTrash(input.widgetId, 'restore') };
 	}
 
-	async delete(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<void> {
+	async delete(input: { readonly widgetId: WidgetId }): Promise<void> {
 		await this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.widgetWriter.getForEdit(actor, input.widgetId);
-			const decision = decideWidgetTrash('delete', current);
+			const current = await this.dependencies.widgetWriter.getForEdit(input.widgetId);
+			const decision = this.dependencies.lifecycle.decide('delete', current);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-			await this.dependencies.widgetWriter.deleteArchived(actor, input.widgetId);
+			await this.dependencies.widgetWriter.deleteArchived(input.widgetId);
 		});
 	}
 
-	private async moveTrash(
-		actor: ActorContext,
-		widgetId: WidgetId,
-		action: 'archive' | 'restore'
-	): Promise<Widget> {
-		return this.write(actor, widgetId, (current) => {
-			const change = widgetTrashChange(action, current, now());
+	private async moveTrash(widgetId: WidgetId, action: 'archive' | 'restore'): Promise<Widget> {
+		return this.write(widgetId, (current) => {
+			const change = this.dependencies.lifecycle.change(action, current, now());
 			return change.kind === 'change'
 				? { kind: 'applied', widget: change.widget }
 				: { kind: 'invalid', issues: [{ path: '/archivedAt', message: change.message }] };
@@ -219,32 +243,83 @@ export class Widgets implements WidgetsController {
 
 	/** Decide a change against the locked current widget and save it from that revision. */
 	private async write(
-		actor: ActorContext,
 		widgetId: WidgetId,
 		decide: (current: Widget) => WidgetEditResult
 	): Promise<Widget> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.widgetWriter.getForEdit(actor, widgetId);
-			const saved = await this.dependencies.widgetWriter.update(actor, decided(decide(current)), {
+			const current = await this.dependencies.widgetWriter.getForEdit(widgetId);
+			const saved = await this.dependencies.widgetWriter.update(decided(decide(current)), {
 				layoutRevision: current.layoutRevision,
 				dataRevision: current.dataRevision
 			});
-			await this.index(actor, saved);
+			await this.index(saved);
 			return saved;
 		});
 	}
 
-	/** Index what the widget now shows; embed inline unless the index defers to the worker. */
-	private async index(actor: ActorContext, widget: Widget): Promise<void> {
-		const result: IndexingResult = await this.dependencies.widgetIndexer.index(
-			actor,
+	/** Index what the widget now shows. */
+	private index(widget: Widget): Promise<void> {
+		return this.dependencies.widgetIndexer.indexWidget(
 			widget,
-			widgetSearchText(widget)
+			this.dependencies.search.text(widget)
 		);
-		if (result.kind === 'stored') return;
-		const batch = await this.dependencies.indexEmbeddings.embed(
-			result.missing.map((chunk) => chunk.input)
-		);
-		await this.dependencies.indexWriter.complete(actor, result, batch);
+	}
+
+	private validate(candidate: WidgetCandidate, catalog: WidgetCatalog): WidgetEditResult {
+		const read = this.dependencies.widgetCandidateReader.read(candidate, catalog);
+		return read.kind === 'invalid'
+			? read
+			: this.dependencies.widgetEditingRules.decide(read.widget, read.issues);
+	}
+
+	private createWidget(
+		draft: WidgetDraft,
+		creation: WidgetCreation,
+		catalog: WidgetCatalog
+	): WidgetEditResult {
+		const widget = this.dependencies.widgetEditingRules.create(draft, creation, catalog.version);
+		return this.validate(widget, catalog);
+	}
+
+	private applyWidgetChange(
+		widget: Widget,
+		change: WidgetChange,
+		catalog: WidgetCatalog,
+		now: DateTime
+	): WidgetEditResult {
+		if (change.kind === 'parts') {
+			const data = this.dependencies.widgetPatches.propose(
+				widget,
+				{ kind: 'data', patch: change.data },
+				catalog.version,
+				now
+			);
+			if (data.kind === 'invalid') return data;
+			const read = this.dependencies.widgetCandidateReader.read(data.widget, catalog);
+			if (read.kind === 'invalid') return read;
+			// Preserve data-shape failure precedence. Semantic and catalog issues belong
+			// to the completed pair: the new layout may repair an intermediate issue.
+			return this.applyWidgetChange(
+				read.widget,
+				{ kind: 'layout', patch: change.layout },
+				catalog,
+				now
+			);
+		}
+		const proposal = this.dependencies.widgetPatches.propose(widget, change, catalog.version, now);
+		if (proposal.kind === 'invalid') return proposal;
+		// Renaming has never revalidated an unchanged stored layout or data.
+		if (proposal.change === 'rename') return { kind: 'applied', widget: proposal.widget };
+		return this.validate(proposal.widget, catalog);
+	}
+
+	private applyWidgetEdit(
+		widget: Widget,
+		edit: WidgetEdit,
+		catalog: WidgetCatalog,
+		now: DateTime
+	): WidgetEditResult {
+		const stale = this.dependencies.widgetEditingRules.revision(widget, edit);
+		return stale ?? this.applyWidgetChange(widget, edit, catalog, now);
 	}
 }

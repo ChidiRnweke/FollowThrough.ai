@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { TodayView } from '$lib/client/shell/views';
+	import type { TodayView } from '$lib/models/workspace-views';
 
 	import type { NoteSummary } from '$lib/models/notes';
 	import type { Project } from '$lib/models/projects';
@@ -10,7 +10,7 @@
 	import EmptyState from '../../shared/empty-state.svelte';
 	import { openTodoSurface } from '$lib/client/shell/responsive-surfaces';
 	import { page } from '$app/state';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from '$lib/components/todos';
 	import TodoCard from '../../todos/todo-card.svelte';
 	import { formatDateTime } from '../../shared/labels';
 

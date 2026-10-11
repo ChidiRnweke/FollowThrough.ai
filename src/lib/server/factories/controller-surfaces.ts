@@ -1,5 +1,5 @@
+import type { ControllerSurface } from '$lib/models/controller-boundary';
 import type { ControllerFactory } from './controller-factory';
-import type { ControllerSurface } from '../controllers/instrumentation';
 
 /** The explicit public controller surface. Adding a capability requires declaring its boundary here. */
 export const controllerSurfaces = {
@@ -34,6 +34,7 @@ export const controllerSurfaces = {
 		get: true,
 		setSectionNumbering: true,
 		listDocuments: true,
+		readDocument: true,
 		create: true,
 		save: true,
 		publish: true,
@@ -66,19 +67,19 @@ export const controllerSurfaces = {
 		extractPromises: true,
 		startExtractPromises: true,
 		executePromiseRun: true,
-		recoverQueuedPromiseRuns: true
+		resumeQueuedPromiseRun: true
 	},
 	relationships: {
 		suggestFromSelection: true,
 		startSuggestFromSelection: true,
 		executeRelatedNoteRun: true,
-		recoverQueuedRelatedNoteRuns: true
+		resumeQueuedRelatedNoteRun: true
 	},
 	references: {
 		suggestFromSelection: true,
 		startSuggestFromSelection: true,
 		executeReferenceRun: true,
-		recoverQueuedReferenceRuns: true
+		resumeQueuedReferenceRun: true
 	},
 	diagrams: {
 		generateMermaid: true,
@@ -90,7 +91,7 @@ export const controllerSurfaces = {
 		startReviseInlineMermaid: true,
 		startConvertInlineMermaid: true,
 		executeDiagramRun: true,
-		recoverQueuedDiagramRuns: true
+		resumeQueuedDiagramRun: true
 	},
 	diagramStudio: {
 		synchronize: true,
@@ -127,7 +128,7 @@ export const controllerSurfaces = {
 		synchronize: true,
 		list: true,
 		get: true,
-		loadForAgent: true,
+		use: true,
 		create: true,
 		createFromSelection: true,
 		listVersions: true,
@@ -135,14 +136,17 @@ export const controllerSurfaces = {
 		update: true,
 		setPinned: true
 	},
-	agent: {
+	agentHarness: {
 		execute: true,
+		openMcpTools: true,
 		finishCancellation: true,
 		failRun: true,
-		recoverInterruptedRuns: true,
+		recoverInterrupted: true,
+		resumeQueued: true,
 		synchronize: true,
 		submit: true,
 		getRun: true,
+		observeRun: true,
 		listRunEvents: true,
 		isRunStreamComplete: true,
 		decide: true,
@@ -157,6 +161,7 @@ export const controllerSurfaces = {
 		synchronize: true,
 		getPreferences: true,
 		updatePreferences: true,
+		changePreferences: true,
 		listModels: true,
 		resolveDefaults: true,
 		bootstrap: true
@@ -239,7 +244,28 @@ export const controllerSurfaces = {
 	},
 	feedback: {
 		submit: true
+	},
+	attachmentProcessing: {
+		process: true
+	},
+	knowledgeIndexing: {
+		backfill: true
 	}
 } satisfies {
 	[K in keyof ControllerFactory]: ControllerSurface<ReturnType<ControllerFactory[K]>>;
 };
+
+export const localIdentitySurface = { initializeLocal: true } satisfies ControllerSurface<
+	import('../controllers/identity/local').LocalIdentityController
+>;
+export const authenticationSurface = {
+	resumeSession: true,
+	endSession: true,
+	verifyBearer: true
+} satisfies ControllerSurface<
+	import('../controllers/identity/authentication').AuthenticationController
+>;
+export const accessSurface = {
+	issueApiToken: true,
+	attributeMcp: true
+} satisfies ControllerSurface<import('../controllers/identity/access').AccessController>;

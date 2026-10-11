@@ -1,10 +1,22 @@
-import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import type { AgentRunId } from '$lib/models/agent';
-import { SkillLibrary } from '$lib/server/services/skills/library';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
+import { SkillPins } from '$lib/server/services/skills/pins';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+const noteMarkdown = new NoteMarkdownCodec();
+
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
@@ -18,9 +30,9 @@ export const loadedSkillFixture = (body = 'Number every finding.') => {
 	const note = noteBuilder({
 		kind: 'skill',
 		title: 'Compliance format',
-		...noteContentFromMarkdown(body)
+		...noteMarkdown.read(body)
 	});
-	const notes = new InMemoryNoteRepository();
+	const notes = new InMemoryNoteRepository(testActor());
 	notes.notes = [note];
 	const skills = new InMemorySkillRepository(notes);
 	skills.skills = [
@@ -34,7 +46,7 @@ export const loadedSkillFixture = (body = 'Number every finding.') => {
 			isEnabled: true
 		}
 	];
-	const provenance = new InMemoryProvenanceRepository();
+	const provenance = new InMemoryProvenanceRepository(testActor());
 	provenance.provenance = [
 		{
 			id: testProvenanceId(),
@@ -48,12 +60,22 @@ export const loadedSkillFixture = (body = 'Number every finding.') => {
 			createdAt: testNow
 		}
 	];
-	const library = new SkillLibrary(skills, notes, provenance);
+	const library = createSkillServices(testActor(), skills, notes, provenance);
+	const projects = new InMemoryProjectRepository(testActor());
+	projects.projects = [projectBuilder()];
 	const controller = new Skills(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
-			skillFinder: library,
-			skillUsageRecorder: library,
-			skillUsageLister: library,
+			...agentToolResultsFixture(),
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			skillFinder: library.finder,
+			skillPinWriter: new SkillPins(projects, notes, skills),
+			skillUsageRecorder: library.usageRecorder,
+			skillUsageLister: library.usageLister,
 			transactionRunner: new InMemoryTransactionRunner([notes, skills])
 		})
 	);

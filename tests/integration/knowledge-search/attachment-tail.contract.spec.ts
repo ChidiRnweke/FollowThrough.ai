@@ -1,10 +1,10 @@
-import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { Attachment, AttachmentId, AttachmentVersionId } from '$lib/models/attachments';
-import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
-import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
-import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
+import { KnowledgeIndexing } from '$lib/server/controllers/knowledge-indexing/controller';
+import { retrievalTransport } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
+import { z } from 'zod';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import * as schema from '$lib/server/db/schema';
@@ -17,13 +17,19 @@ const text =
 	).join('\n\n') + '\n\nThe final approval code is amberfalcon.';
 const vector = (tail: boolean) =>
 	Array.from({ length: 3072 }, (_, index) => (index === (tail ? 0 : 1) ? 1 : 0));
-const client: EmbeddingClient = {
-	model: 'contract-embedding',
-	embed: async (contents) => ({
-		model: 'contract-embedding',
-		vectors: contents.map((content) => vector(content.includes('amberfalcon')))
-	})
-};
+const client = retrievalTransport(async (_url, init) => {
+	const contents = z
+		.object({ input: z.array(z.string()) })
+		.parse(JSON.parse(String(init?.body))).input;
+	return Response.json({
+		data: contents.map((content, index) => ({
+			index,
+			embedding: Buffer.from(
+				new Float32Array(vector(content.includes('amberfalcon'))).buffer
+			).toString('base64')
+		}))
+	});
+}, 'contract-embedding');
 const setup = async (suffix: string) => {
 	const { owner, project } = await seedNote(suffix);
 	const attachment: Attachment = {
@@ -58,19 +64,18 @@ const setup = async (suffix: string) => {
 		.set({ currentVersionId: attachment.currentVersionId })
 		.where(eq(schema.attachments.id, attachment.id));
 	const transaction = createTransactionContext(context.db);
-	const repository = new KnowledgeIndexRecords(transaction.database);
-	await new ContentIndex(repository, client.model, new TokenAwareChunker(30, 5)).attachments.index(
-		owner,
-		attachment,
-		text
-	);
+	const repository = new KnowledgeIndexRecords(owner, transaction.database);
+	await createContentIndex(repository, client.model, {
+		targetTokens: 30,
+		overlapTokens: 5
+	}).indexAttachment(attachment, text);
 	return { owner, project, attachment, repository, transaction };
 };
 
 describe('attachment search tail in PostgreSQL', () => {
 	it('finds accepted tail text before embeddings are ready', async () => {
-		const { owner, project, repository } = await setup('9741');
-		const matches = await repository.search(owner, 'amberfalcon', 10, project.id);
+		const { project, repository } = await setup('9741');
+		const matches = await repository.search('amberfalcon', 10, project.id);
 		expect(
 			matches.map(({ document }) => ({
 				tail: document.chunkIndex >= 50,
@@ -80,13 +85,12 @@ describe('attachment search tail in PostgreSQL', () => {
 	});
 
 	it('returns the tail as the nearest semantic result after backfill', async () => {
-		const { owner, project, attachment, repository, transaction } = await setup('9742');
-		await new EmbeddingMaintenance(
-			new IndexBacklog(repository),
-			client,
+		const { project, attachment, repository, transaction } = await setup('9742');
+		await new KnowledgeIndexing(
+			createContentIndex(repository, client.model, undefined, false, client),
 			transaction.transactionRunner
-		).run();
-		const matches = await repository.searchByEmbedding(owner, vector(true), 1, project.id);
+		).backfill({ kind: 'attachment', attachmentId: attachment.id });
+		const matches = await repository.searchByEmbedding(vector(true), 1, project.id);
 		expect(
 			matches.map(({ document }) => ({
 				id: document.attachmentId,

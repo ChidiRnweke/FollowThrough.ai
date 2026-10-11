@@ -34,34 +34,37 @@ const toWidget = (row: typeof schema.widgets.$inferSelect): Widget => ({
 });
 
 export class WidgetRecords implements WidgetRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	private owned(actor: ActorContext, id: WidgetId) {
-		return and(eq(schema.widgets.id, id), eq(schema.widgets.userId, actor.userId));
+	private owned(id: WidgetId) {
+		return and(eq(schema.widgets.id, id), eq(schema.widgets.userId, this.actor.userId));
 	}
 
-	async findById(actor: ActorContext, id: WidgetId): Promise<Widget | undefined> {
-		const [row] = await this.database.select().from(schema.widgets).where(this.owned(actor, id));
+	async findById(id: WidgetId): Promise<Widget | undefined> {
+		const [row] = await this.database.select().from(schema.widgets).where(this.owned(id));
 		return row ? toWidget(row) : undefined;
 	}
 
-	async findByIdForUpdate(actor: ActorContext, id: WidgetId): Promise<Widget | undefined> {
+	async findByIdForUpdate(id: WidgetId): Promise<Widget | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.widgets)
-			.where(this.owned(actor, id))
+			.where(this.owned(id))
 			.for('update');
 		return row ? toWidget(row) : undefined;
 	}
 
-	async listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly Widget[]> {
+	async listForProject(projectId: ProjectId): Promise<readonly Widget[]> {
 		return (
 			await this.database
 				.select()
 				.from(schema.widgets)
 				.where(
 					and(
-						eq(schema.widgets.userId, actor.userId),
+						eq(schema.widgets.userId, this.actor.userId),
 						eq(schema.widgets.projectId, projectId),
 						isNull(schema.widgets.archivedAt)
 					)
@@ -70,12 +73,12 @@ export class WidgetRecords implements WidgetRepository {
 		).map(toWidget);
 	}
 
-	async insert(actor: ActorContext, widget: Widget): Promise<Widget> {
+	async insert(widget: Widget): Promise<Widget> {
 		const [row] = await this.database
 			.insert(schema.widgets)
 			.values({
 				id: widget.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				projectId: widget.projectId,
 				sourceNoteId: widget.sourceNoteId,
 				title: widget.title,
@@ -91,7 +94,7 @@ export class WidgetRecords implements WidgetRepository {
 		return toWidget(row!);
 	}
 
-	async update(actor: ActorContext, widget: Widget, from: WidgetRevisions): Promise<Widget> {
+	async update(widget: Widget, from: WidgetRevisions): Promise<Widget> {
 		const [row] = await this.database
 			.update(schema.widgets)
 			.set({
@@ -106,7 +109,7 @@ export class WidgetRecords implements WidgetRepository {
 			})
 			.where(
 				and(
-					this.owned(actor, widget.id),
+					this.owned(widget.id),
 					eq(schema.widgets.layoutRevision, from.layoutRevision),
 					eq(schema.widgets.dataRevision, from.dataRevision)
 				)
@@ -116,10 +119,10 @@ export class WidgetRecords implements WidgetRepository {
 		return toWidget(row);
 	}
 
-	async deleteArchived(actor: ActorContext, id: WidgetId): Promise<void> {
+	async deleteArchived(id: WidgetId): Promise<void> {
 		const deleted = await this.database
 			.delete(schema.widgets)
-			.where(and(this.owned(actor, id), isNotNull(schema.widgets.archivedAt)))
+			.where(and(this.owned(id), isNotNull(schema.widgets.archivedAt)))
 			.returning({ id: schema.widgets.id });
 		if (deleted.length === 0)
 			throw new NotFoundError('Widget was not found in the trash', { widgetId: id });

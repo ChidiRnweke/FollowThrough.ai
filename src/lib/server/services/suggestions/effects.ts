@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { Suggestion, SuggestionId } from '$lib/models/suggestions';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type {
@@ -6,36 +5,23 @@ import type {
 	AppliedRecord
 } from '$lib/server/repositories/suggestions/application-effects';
 import { InvalidTransitionError } from '$lib/errors';
-export function mapAppliedChange<Input, Output>(
-	change: AppliedChange<Input>,
-	map: (record: Input) => Output
-): AppliedChange<Output> {
-	switch (change.kind) {
-		case 'created':
-			return { kind: 'created', after: map(change.after) };
-		case 'modified':
-			return { kind: 'modified', before: map(change.before), after: map(change.after) };
-		case 'unchanged':
-			return { kind: 'unchanged', after: map(change.after) };
-	}
+export interface SuggestionEffectService {
+	lock(id: SuggestionId): Promise<void>;
+	record(id: SuggestionId, changes: readonly AppliedChange<AppliedRecord>[]): Promise<void>;
+	restore(suggestion: Suggestion): Promise<readonly AppliedRecord[]>;
 }
-
-export class SuggestionEffects {
+export class SuggestionEffects implements SuggestionEffectService {
 	constructor(private readonly effects: ApplicationEffectRepository) {}
-	lock(actor: ActorContext, id: SuggestionId): Promise<void> {
-		return this.effects.lock(actor, id);
+	lock(id: SuggestionId): Promise<void> {
+		return this.effects.lock(id);
 	}
-	record(
-		actor: ActorContext,
-		id: SuggestionId,
-		changes: readonly AppliedChange<AppliedRecord>[]
-	): Promise<void> {
-		return this.effects.record(actor, id, changes);
+	record(id: SuggestionId, changes: readonly AppliedChange<AppliedRecord>[]): Promise<void> {
+		return this.effects.record(id, changes);
 	}
-	async restore(actor: ActorContext, suggestion: Suggestion): Promise<readonly AppliedRecord[]> {
+	async restore(suggestion: Suggestion): Promise<readonly AppliedRecord[]> {
 		if (suggestion.status !== 'accepted')
 			throw new InvalidTransitionError('Only an accepted suggestion can be undone.');
-		const effect = await this.effects.find(actor, suggestion.id);
+		const effect = await this.effects.find(suggestion.id);
 		if (!effect)
 			throw new InvalidTransitionError(
 				'Cannot undo this suggestion because its changes were not recorded.'
@@ -45,7 +31,7 @@ export class SuggestionEffects {
 		)) {
 			if (
 				change.kind !== 'unchanged' &&
-				(await this.effects.lockVersion(actor, change.after)) !== change.version
+				(await this.effects.lockVersion(change.after)) !== change.version
 			)
 				throw new InvalidTransitionError(
 					'Cannot undo this suggestion because its saved data has changed.'
@@ -53,7 +39,7 @@ export class SuggestionEffects {
 		}
 		const restored: AppliedRecord[] = [];
 		for (const change of [...effect.changes].reverse()) {
-			if (change.kind !== 'unchanged') restored.push(await this.effects.restore(actor, change));
+			if (change.kind !== 'unchanged') restored.push(await this.effects.restore(change));
 		}
 		return restored;
 	}

@@ -21,9 +21,9 @@ export const initiateTemplateUpload = command(
 		checksumSha256: z.string()
 	}),
 	async (input) =>
-		AppFactory.controllers()
+		AppFactory.forActor(requestActor())
 			.deliverables()
-			.initiateTemplateUpload(requestActor(), {
+			.initiateTemplateUpload({
 				...input
 			})
 );
@@ -31,11 +31,11 @@ export const initiateTemplateUpload = command(
 export const completeTemplateUpload = command(
 	z.object({ templateId: templateIdSchema }),
 	async (input) =>
-		AppFactory.controllers().deliverables().completeTemplateUpload(requestActor(), input.templateId)
+		AppFactory.forActor(requestActor()).deliverables().completeTemplateUpload(input.templateId)
 );
 
 export const deleteTemplate = command(z.object({ templateId: templateIdSchema }), async (input) =>
-	AppFactory.controllers().deliverables().deleteTemplate(requestActor(), input.templateId)
+	AppFactory.forActor(requestActor()).deliverables().deleteTemplate(input.templateId)
 );
 
 const diagramSizesSchema = z
@@ -54,7 +54,7 @@ export const generateDocument = command(
 		diagramPngs: z.record(z.string(), z.string()).optional(),
 		diagramSizes: diagramSizesSchema
 	}),
-	async (input) => AppFactory.controllers().deliverables().generateDocument(requestActor(), input)
+	async (input) => AppFactory.forActor(requestActor()).deliverables().generateDocument(input)
 );
 
 export const generateBundle = command(
@@ -69,7 +69,7 @@ export const generateBundle = command(
 		diagramPngs: z.record(z.string(), z.string()).optional(),
 		diagramSizes: diagramSizesSchema
 	}),
-	async (input) => AppFactory.controllers().deliverables().generateBundle(requestActor(), input)
+	async (input) => AppFactory.forActor(requestActor()).deliverables().generateBundle(input)
 );
 
 export const previewDocument = command(
@@ -83,21 +83,21 @@ export const previewDocument = command(
 		diagramSizes: diagramSizesSchema
 	}),
 	async (input) =>
-		AppFactory.controllers()
+		AppFactory.forActor(requestActor())
 			.deliverables()
-			.previewDocument(requestActor(), input as PreviewDocumentInput)
+			.previewDocument(input as PreviewDocumentInput)
 );
 
 export const downloadArtifact = command(z.object({ artifactId: artifactIdSchema }), async (input) =>
-	AppFactory.controllers().deliverables().downloadArtifact(requestActor(), input.artifactId)
+	AppFactory.forActor(requestActor()).deliverables().downloadArtifact(input.artifactId)
 );
 
 export const deleteArtifact = command(z.object({ artifactId: artifactIdSchema }), async (input) =>
-	AppFactory.controllers().deliverables().deleteArtifact(requestActor(), input.artifactId)
+	AppFactory.forActor(requestActor()).deliverables().deleteArtifact(input.artifactId)
 );
 
 export const regenerateArtifact = command(
 	z.object({ artifactId: artifactIdSchema }),
 	async (input) =>
-		AppFactory.controllers().deliverables().regenerateArtifact(requestActor(), input.artifactId)
+		AppFactory.forActor(requestActor()).deliverables().regenerateArtifact(input.artifactId)
 );

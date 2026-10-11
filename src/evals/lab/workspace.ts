@@ -1,3 +1,6 @@
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+const noteMarkdown = new NoteMarkdownCodec();
+import { LocalIdentity } from '$lib/server/controllers/identity/local';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { randomUUID } from 'node:crypto';
@@ -8,7 +11,7 @@ import type { NoteId, ProseMirrorNode, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId, TodoResponsibility, TodoStatus } from '$lib/models/todos';
 import type { WidgetDraft, WidgetId } from '$lib/models/widgets';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+
 import type { Lab } from './application';
 
 /**
@@ -18,7 +21,7 @@ import type { Lab } from './application';
  * they get the same destination a real capture would, found by role.
  */
 async function labInboxProjectId(lab: Lab, actor: ActorContext): Promise<ProjectId> {
-	const { projects } = await lab.controllers.projects().list(actor);
+	const { projects } = await lab.forActor(actor).controllers.projects().list();
 	const inbox = projects.find((project) => project.role === 'inbox');
 	if (!inbox) throw new Error('The lab workspace has no inbox; provisioning did not run.');
 	return inbox.id;
@@ -94,7 +97,7 @@ export async function selectionFromSeededNote(
 	noteId: NoteId,
 	selectedText: string
 ): Promise<TextSelection> {
-	const { note } = await lab.controllers.notes().get(workspace.actor, { noteId });
+	const { note } = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 	const from = note.plainText.indexOf(selectedText);
 	if (from < 0)
 		throw new Error(
@@ -110,10 +113,11 @@ export async function selectionFromSeededNote(
 }
 
 /** The lab has no HTTP local-mode boundary, so establish its account before workspace writes. */
-export async function seedActor(lab: Pick<Lab, 'db' | 'controllers'>): Promise<ActorContext> {
+export async function seedActor(lab: Pick<Lab, 'db' | 'forActor'>): Promise<ActorContext> {
 	const actor: ActorContext = { userId: randomUUID() as UserId };
-	await new UserDirectory(new UserRecords(lab.db)).initializeLocal(actor);
-	await lab.controllers.workspace().getShellContext(actor);
+	const users = new UserDirectory(new UserRecords(actor, lab.db));
+	await new LocalIdentity({ provisioner: users, users }).initializeLocal();
+	await lab.forActor(actor).controllers.workspace().getShellContext();
 	return actor;
 }
 
@@ -136,60 +140,71 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 	const widgetIds = new Map<string, WidgetId>();
 
 	for (const content of fixture.memories ?? []) {
-		await lab.controllers.memory().create(actor, { content, shareWithAgents: true });
+		await lab.forActor(actor).controllers.memory().create({ content, shareWithAgents: true });
 	}
 
 	for (const seedProject of fixture.projects ?? []) {
-		const { project } = await lab.controllers.projects().create(actor, { name: seedProject.name });
+		const { project } = await lab
+			.forActor(actor)
+			.controllers.projects()
+			.create({ name: seedProject.name });
 		projectIds.set(seedProject.name, project.id);
 
 		for (const content of seedProject.memories ?? []) {
-			await lab.controllers
-				.memory()
-				.create(actor, { projectId: project.id, content, shareWithAgents: true });
+			await lab
+				.forActor(actor)
+				.controllers.memory()
+				.create({ projectId: project.id, content, shareWithAgents: true });
 		}
 
 		for (const seedNote of seedProject.notes ?? []) {
-			const { note } = await lab.controllers
-				.notes()
-				.create(actor, { projectId: project.id, title: seedNote.title });
+			const { note } = await lab
+				.forActor(actor)
+				.controllers.notes()
+				.create({ projectId: project.id, title: seedNote.title });
 			noteIds.set(seedNote.title, note.id);
 			// Composite key for disambiguation when multiple projects share a note title.
 			noteIds.set(`${seedNote.title}|${seedProject.name}`, note.id);
 			const embedded: WidgetId[] = [];
 			for (const draft of seedNote.widgets ?? []) {
-				const { widget } = await lab.controllers.widgets().create(actor, {
-					id: randomUUID() as WidgetId,
-					projectId: project.id,
-					sourceNoteId: note.id,
-					draft
-				});
+				const { widget } = await lab
+					.forActor(actor)
+					.controllers.widgets()
+					.create({
+						id: randomUUID() as WidgetId,
+						projectId: project.id,
+						sourceNoteId: note.id,
+						draft
+					});
 				widgetIds.set(draft.title, widget.id);
 				embedded.push(widget.id);
 			}
 			// Saving is what indexes the body; creation only establishes the title.
-			await lab.controllers.notes().save(actor, {
-				note: {
-					...note,
-					plainText: seedNote.body,
-					document: {
-						type: 'doc',
-						content: [
-							...seedNote.body
-								.split('\n\n')
-								.filter((paragraph) => paragraph.trim().length > 0)
-								.map((paragraph): ProseMirrorNode => ({
-									type: 'paragraph',
-									content: [{ type: 'text', text: paragraph }]
-								})),
-							...embedded.map((widgetId): ProseMirrorNode => ({
-								type: 'widgetNode',
-								attrs: { widgetId }
-							}))
-						]
+			await lab
+				.forActor(actor)
+				.controllers.notes()
+				.save({
+					note: {
+						...note,
+						plainText: seedNote.body,
+						document: {
+							type: 'doc',
+							content: [
+								...seedNote.body
+									.split('\n\n')
+									.filter((paragraph) => paragraph.trim().length > 0)
+									.map((paragraph): ProseMirrorNode => ({
+										type: 'paragraph',
+										content: [{ type: 'text', text: paragraph }]
+									})),
+								...embedded.map((widgetId): ProseMirrorNode => ({
+									type: 'widgetNode',
+									attrs: { widgetId }
+								}))
+							]
+						}
 					}
-				}
-			});
+				});
 			if (seedNote.createdAt) {
 				backdateCreatedAt(lab, actor, note.id, seedNote.createdAt, 'note');
 			}
@@ -201,20 +216,26 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 		// Nothing here may leave the project unstated: `create` requires it.
 		const named = seedSkill.projectName ? projectIds.get(seedSkill.projectName) : undefined;
 		const projectId = named ?? (await labInboxProjectId(lab, actor));
-		const { skill } = await lab.controllers.skills().create(actor, {
-			name: seedSkill.name,
-			projectId,
-			...(seedSkill.description ? { description: seedSkill.description } : {}),
-			...(seedSkill.triggerHints ? { triggerHints: seedSkill.triggerHints } : {})
-		});
+		const { skill } = await lab
+			.forActor(actor)
+			.controllers.skills()
+			.create({
+				name: seedSkill.name,
+				projectId,
+				...(seedSkill.description ? { description: seedSkill.description } : {}),
+				...(seedSkill.triggerHints ? { triggerHints: seedSkill.triggerHints } : {})
+			});
 		skillIds.set(seedSkill.name, skill.note.id);
 		// Save the skill body through the note path — the same write edit_skill and
 		// save_skill use at runtime — so load_skill returns it as Markdown. The
 		// `raw` manifest path is not used because the fixture body is a plain
 		// instruction body, not a full SKILL.md with YAML frontmatter.
-		await lab.controllers.notes().save(actor, {
-			note: { ...skill.note, ...noteContentFromMarkdown(seedSkill.body) }
-		});
+		await lab
+			.forActor(actor)
+			.controllers.notes()
+			.save({
+				note: { ...skill.note, ...noteMarkdown.read(seedSkill.body) }
+			});
 	}
 
 	for (const seedTodo of fixture.todos ?? []) {
@@ -223,13 +244,16 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 			throw new Error(
 				`Todo "${seedTodo.title}" references unknown project "${seedTodo.projectName}"`
 			);
-		const { todo } = await lab.controllers.todos().create(actor, {
-			title: seedTodo.title,
-			projectId,
-			...(seedTodo.status ? { status: seedTodo.status } : {}),
-			...responsibilityOf(seedTodo.responsibility ?? { kind: 'mine' }),
-			...(seedTodo.dueDate ? { dueDate: seedTodo.dueDate as LocalDate } : {})
-		});
+		const { todo } = await lab
+			.forActor(actor)
+			.controllers.todos()
+			.create({
+				title: seedTodo.title,
+				projectId,
+				...(seedTodo.status ? { status: seedTodo.status } : {}),
+				...responsibilityOf(seedTodo.responsibility ?? { kind: 'mine' }),
+				...(seedTodo.dueDate ? { dueDate: seedTodo.dueDate as LocalDate } : {})
+			});
 		todoIds.set(seedTodo.title, todo.id);
 		// Composite key for disambiguation when multiple projects share a todo title.
 		if (seedTodo.projectName) {

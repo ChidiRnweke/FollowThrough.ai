@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { Widget, WidgetId } from '$lib/models/widgets';
 
@@ -9,12 +8,12 @@ export interface WidgetRevisions {
 }
 
 export interface WidgetRepository {
-	findById(actor: ActorContext, id: WidgetId): Promise<Widget | undefined>;
+	findById(id: WidgetId): Promise<Widget | undefined>;
 	/** Locks the row for the rest of the transaction, so the edit rule sees the current widget. */
-	findByIdForUpdate(actor: ActorContext, id: WidgetId): Promise<Widget | undefined>;
-	listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly Widget[]>;
-	insert(actor: ActorContext, widget: Widget): Promise<Widget>;
-	update(actor: ActorContext, widget: Widget, from: WidgetRevisions): Promise<Widget>;
+	findByIdForUpdate(id: WidgetId): Promise<Widget | undefined>;
+	listForProject(projectId: ProjectId): Promise<readonly Widget[]>;
+	insert(widget: Widget): Promise<Widget>;
+	update(widget: Widget, from: WidgetRevisions): Promise<Widget>;
 	/** Removes a widget that is in the trash. Notes that embed it then show it as unavailable. */
-	deleteArchived(actor: ActorContext, id: WidgetId): Promise<void>;
+	deleteArchived(id: WidgetId): Promise<void>;
 }

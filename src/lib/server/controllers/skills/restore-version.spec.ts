@@ -1,41 +1,65 @@
-import { describe, expect, it } from 'vitest';
-import { Skills, type SkillsDependencies } from './controller';
-import { SkillLibrary } from '$lib/server/services/skills/library';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
-import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
-import {
-	InMemoryNoteRepository,
-	InMemoryAnchorRepository
-} from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import {
+	InMemoryAnchorRepository,
+	InMemoryNoteRepository
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	projectBuilder,
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Skills, type SkillsDependencies } from './controller';
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository();
+	const notes = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
 	const skills = new InMemorySkillRepository(notes);
-	const service = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
-	const catalog = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
-	const content = new InMemoryNoteContent();
+	const service = createSkillServices(
+		testActor(),
+		skills,
+		notes,
+		new InMemoryProvenanceRepository(testActor())
+	);
+	const catalog = createNoteServices(
+		testActor(),
+		notes,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
+	const content = new InMemoryNoteContent(testActor());
 	const controller = new Skills(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
-			skillFinder: service,
-			skillEditor: service,
-			skillUsageLister: service,
-			noteEditor: catalog,
-			revisionReader: catalog,
-			revisionRecorder: catalog,
-			attachmentRestorer: catalog,
-			anchorRepairer: catalog,
+			...agentToolResultsFixture(),
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			skillFinder: service.finder,
+			skillEditor: service.editor,
+			skillUsageLister: service.usageLister,
+			noteEditor: catalog.editor,
+			revisionReader: catalog.revisionReader,
+			revisionRecorder: catalog.revisionRecorder,
+			attachmentRestorer: catalog.attachmentRestorer,
+			anchorRepairer: catalog.anchorRepairer,
 			noteIndexer: content,
 			noteLinkReconciler: content,
 			transactionRunner: new InMemoryTransactionRunner([notes, skills])
@@ -77,7 +101,7 @@ describe('Skill restoration', () => {
 				isEnabled: true
 			}
 		];
-		const { skill: restored } = await controller.restoreVersion(testActor(), {
+		const { skill: restored } = await controller.restoreVersion({
 			noteId: current.id,
 			revision: 1
 		});

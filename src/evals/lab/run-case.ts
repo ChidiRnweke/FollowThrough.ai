@@ -7,12 +7,14 @@ import type {
 	AgentRunStatus,
 	ConversationId
 } from '$lib/models/agent';
-import { toolOutcomeEvent } from '$lib/server/services/agent/conversations/tool-activity';
+import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { Lab } from './application';
+
+const toolActivity = new ToolActivityProjection();
 
 const TERMINAL: readonly AgentRunStatus[] = [
 	'completed',
@@ -83,8 +85,8 @@ export async function runCase(
 	input: RunCaseInput
 ): Promise<AgentRunResult> {
 	const startedAt = Date.now();
-	const agent = lab.controllers.agent();
-	const receipt = await agent.submit(actor, {
+	const agent = lab.forActor(actor).controllers.agentHarness();
+	const receipt = await agent.submit({
 		requestId: randomUUID(),
 		input: input.prompt,
 		...(input.conversationId ? { conversationId: input.conversationId } : {}),
@@ -102,7 +104,7 @@ export async function runCase(
 	const cancelledStatus = new Promise<AgentRunStatus>((resolve, reject) => {
 		deadline = setTimeout(() => {
 			void agent
-				.cancel(actor, receipt.runId)
+				.cancel(receipt.runId)
 				.then(() => terminalStatus)
 				.then(resolve, reject);
 		}, evalCaseDeadlineMs());
@@ -113,8 +115,8 @@ export async function runCase(
 	} finally {
 		if (deadline) clearTimeout(deadline);
 	}
-	const snapshot = await agent.getRun(actor, receipt.runId);
-	const stored = await agent.listRunEvents(actor, receipt.runId, '0');
+	const snapshot = await agent.getRun(receipt.runId);
+	const stored = await agent.listRunEvents(receipt.runId, '0');
 	const events = stored.map((record) => {
 		if (record.kind === 'unreadable')
 			throw new Error(
@@ -140,7 +142,7 @@ export async function runCase(
 /**
  * Waits for the run to reach a durable terminal status.
  *
- * Driven by the event bus, which fires on every persisted transition, with a
+ * Driven by run notifications, which fire on every committed transition, with a
  * slow poll as a safety net. The poll is not redundant: a missed notification
  * would otherwise hang the case until the test timeout and report as a vague
  * "test timed out" rather than as whatever actually happened to the run, which
@@ -153,26 +155,42 @@ function waitForTerminalStatus(
 ): Promise<AgentRunStatus> {
 	return new Promise<AgentRunStatus>((resolve, reject) => {
 		let settled = false;
+		let unsubscribe = async () => {};
 		const finish = (outcome: () => void) => {
 			if (settled) return;
 			settled = true;
-			unsubscribe();
+			// audit-allow: silent-catch — a failed UNLISTEN cannot change the case outcome; the lab closes its database after the case.
+			unsubscribe().catch((error: unknown) =>
+				console.error('[eval] Could not stop listening:', error)
+			);
 			clearInterval(poll);
 			outcome();
 		};
 
 		const check = () => {
 			// audit-allow: silent-catch — the polling Promise propagates lookup failure through its reject continuation.
-			lab.controllers
-				.agent()
-				.getRun(actor, runId)
+			lab
+				.forActor(actor)
+				.controllers.agentHarness()
+				.getRun(runId)
 				.then((snapshot) => {
 					if (TERMINAL.includes(snapshot.run.status)) finish(() => resolve(snapshot.run.status));
 				})
 				.catch((error: unknown) => finish(() => reject(error)));
 		};
 
-		const unsubscribe = lab.eventBus.subscribe(runId, check);
+		// audit-allow: silent-catch — a failed subscription rejects the wait through `finish`.
+		lab
+			.forActor(actor)
+			.controllers.agentHarness()
+			.observeRun(runId, check)
+			.then(
+				(stop) => {
+					if (settled) void stop();
+					else unsubscribe = stop;
+				},
+				(error: unknown) => finish(() => reject(error))
+			);
 		const poll = setInterval(check, 1000);
 		// The run may already have finished between submit and subscribe.
 		check();
@@ -202,7 +220,7 @@ function reconstructToolCalls(events: readonly AgentRunEventRecord[]): readonly 
 			});
 			continue;
 		}
-		const outcome = toolOutcomeEvent(event);
+		const outcome = toolActivity.outcome(event);
 		if (outcome) {
 			// A completion the run could not name settles no call here. Correlating it
 			// by guesswork would attribute an outcome to a call that may not be its

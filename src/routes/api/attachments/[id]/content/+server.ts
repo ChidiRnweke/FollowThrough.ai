@@ -4,8 +4,8 @@ import { AppFactory } from '$lib/server/factories/app-factory';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
-	const { url } = await AppFactory.controllers()
+	const { url } = await AppFactory.forActor(AppFactory.actor(locals))
 		.attachments()
-		.downloadById(AppFactory.actor(locals), params.id as AttachmentId);
+		.downloadById(params.id as AttachmentId);
 	redirect(302, url, { external: true });
 };

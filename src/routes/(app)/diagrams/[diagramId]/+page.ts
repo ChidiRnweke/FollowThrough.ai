@@ -1,3 +1,4 @@
+import { workspacePresentation } from '$lib/factories/workspace/presentation';
 import { prepareRoute, requireRouteResource, routeResourceId } from '$lib/client/sync/route-access';
 import { diagramRecordSchema } from '$lib/models/workspace-records';
 import type { PageLoad } from './$types';
@@ -6,7 +7,7 @@ export const load: PageLoad = async ({ parent, params }) => {
 	const diagramId = routeResourceId(diagramRecordSchema.options[0].shape.id, params.diagramId);
 	const routeReady = prepareRoute(async () => {
 		const result = await session.resources.open({ type: 'diagrams', id: [diagramId] });
-		requireRouteResource(result, session.resources.online, 'diagram');
+		requireRouteResource(workspacePresentation, result, session.resources.online, 'diagram');
 	});
 	return { routeReady, diagramId };
 };

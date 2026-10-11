@@ -1,23 +1,19 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type { CanvasSessionResult, DiagramId } from '$lib/models/diagrams';
 
 export interface CanvasSourceItems {
-	listCanvasResults(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<readonly CanvasSessionResult[]>;
+	listCanvasResults(conversationId: ConversationId): Promise<readonly CanvasSessionResult[]>;
 }
 
 /** The latest successful diagram write in the conversation, backed by its full transcript. */
-export class PresentedCanvasSource {
+export interface CanvasSourceReader {
+	latest(conversationId: ConversationId): Promise<DiagramId | undefined>;
+}
+export class PresentedCanvasSource implements CanvasSourceReader {
 	constructor(private readonly items: CanvasSourceItems) {}
 
-	async latest(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<DiagramId | undefined> {
-		const results = await this.items.listCanvasResults(actor, conversationId);
+	async latest(conversationId: ConversationId): Promise<DiagramId | undefined> {
+		const results = await this.items.listCanvasResults(conversationId);
 		for (let index = results.length - 1; index >= 0; index -= 1) {
 			const result = results[index]!;
 			if (result.kind === 'written') return result.diagramId;

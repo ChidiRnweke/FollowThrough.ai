@@ -14,17 +14,27 @@ import type {
 	SourceAnchorRepository,
 	ProvenanceRepository
 } from '$lib/server/repositories/provenance';
-export class SelectionOrigins {
+export interface SelectionOriginService {
+	validate(selection: TextSelection): Promise<Note>;
+	resolve(selection: TextSelection): Promise<SelectionSource<Note>>;
+	record(
+		source: SelectionSource<Note>,
+		producer: SelectionProducer
+	): Promise<SelectionOrigin<Note>>;
+}
+
+export class SelectionOrigins implements SelectionOriginService {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly notes: NoteRepository,
 		private readonly anchors: SourceAnchorRepository,
 		private readonly provenance: ProvenanceRepository
 	) {}
-	async validate(actor: ActorContext, selection: TextSelection): Promise<Note> {
-		return this.selectedNote(actor, selection);
+	async validate(selection: TextSelection): Promise<Note> {
+		return this.selectedNote(selection);
 	}
-	private async selectedNote(actor: ActorContext, selection: TextSelection): Promise<Note> {
-		const note = await this.notes.findById(actor, selection.noteId);
+	private async selectedNote(selection: TextSelection): Promise<Note> {
+		const note = await this.notes.findById(selection.noteId);
 		if (!note) throw new NotFoundError('Selection note was not found');
 		const decision = decideSelection(selection, note);
 		if (decision.kind === 'invalid') {
@@ -33,9 +43,9 @@ export class SelectionOrigins {
 		}
 		return note;
 	}
-	async resolve(actor: ActorContext, selection: TextSelection): Promise<SelectionSource<Note>> {
-		const note = await this.selectedNote(actor, selection);
-		const anchor = await this.anchors.insert(actor, {
+	async resolve(selection: TextSelection): Promise<SelectionSource<Note>> {
+		const note = await this.selectedNote(selection);
+		const anchor = await this.anchors.insert({
 			id: crypto.randomUUID() as SourceAnchorId,
 			noteId: note.id,
 			from: selection.from,
@@ -47,15 +57,14 @@ export class SelectionOrigins {
 		return { note, anchor };
 	}
 	async record(
-		actor: ActorContext,
 		source: SelectionSource<Note>,
 		producer: SelectionProducer
 	): Promise<SelectionOrigin<Note>> {
-		const provenance = await this.provenance.insert(actor, {
+		const provenance = await this.provenance.insert({
 			...producer,
 			sourceAnchorId: source.anchor.id,
 			id: crypto.randomUUID() as ProvenanceId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			createdAt: new Date().toISOString() as DateTime
 		});
 		return { ...source, provenance };
@@ -63,7 +72,7 @@ export class SelectionOrigins {
 }
 
 /** Selection offsets describe one observed revision of the source document. */
-export function decideSelection(
+function decideSelection(
 	selection: TextSelection,
 	note: Pick<Note, 'id' | 'currentRevision' | 'plainText'>
 ): { kind: 'valid' } | { kind: 'invalid'; code: 'VALIDATION' | 'STALE_REVISION'; message: string } {

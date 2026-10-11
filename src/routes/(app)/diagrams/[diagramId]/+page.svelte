@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { DiagramPane } from '$lib/components/diagrams';
 	import { WorkspacePanes } from '$lib/components/shell';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -14,8 +15,8 @@
 -->
 {#if workbench.isWorkbenchPath}
 	<WorkspacePanes
-		shell={data.session.shell}
-		sessions={data.session.sessions}
+		shell={workspaceViews.currentShell}
+		sessions={workspaceViews.chatSessions}
 		agentPreferences={data.session.preferences}
 		agentModels={data.session.agentModels}
 		agentDefaults={data.session.agentDefaults}

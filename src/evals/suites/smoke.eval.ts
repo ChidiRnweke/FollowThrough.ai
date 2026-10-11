@@ -7,7 +7,7 @@ describe('evals lab harness', () => {
 		const lab = await createLab();
 		try {
 			const actor = await seedActor(lab);
-			const shell = await lab.controllers.workspace().getShellContext(actor);
+			const shell = await lab.forActor(actor).controllers.workspace().getShellContext();
 			expect(shell.projects.map((project) => project.role)).toEqual(['inbox']);
 		} finally {
 			await lab.close();

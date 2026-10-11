@@ -23,7 +23,7 @@ const archivePathKey = (value: string): string | undefined => {
 };
 
 /** Prepare once for the archive, rather than scanning every entry for every link. */
-export function indexArchiveReferences(
+function indexArchiveReferences(
 	references: readonly ArchiveNoteReference[]
 ): ArchiveReferenceIndex {
 	const paths = new Map<string, ArchiveNoteReference[]>();
@@ -42,7 +42,7 @@ export function indexArchiveReferences(
 }
 
 /** Resolve against archive identities, including entries whose creation failed. */
-export function resolveArchiveLinks(
+function resolveArchiveLinks(
 	note: ParsedMarkdownNote,
 	references: ArchiveReferenceIndex
 ): { markdown: string; issues: ArchiveLinkIssue[] } {
@@ -80,9 +80,7 @@ export function resolveArchiveLinks(
 }
 
 /** Frontmatter keys the importer does not map, so the report can name what was left. */
-export const unmappedFrontmatterKeys = (
-	notes: readonly ParsedMarkdownNote[]
-): readonly string[] => {
+const unmappedFrontmatterKeys = (notes: readonly ParsedMarkdownNote[]): readonly string[] => {
 	const mapped = new Set<string>();
 	const seen = new Set<string>();
 	for (const note of notes)
@@ -96,7 +94,7 @@ export const unmappedFrontmatterKeys = (
  * Import is additive by definition: a name collision must never merge two notes or
  * overwrite one that was already there.
  */
-export const uniqueTitleIn = (taken: Set<string>, title: string): string => {
+const uniqueTitleIn = (taken: Set<string>, title: string): string => {
 	if (!taken.has(title)) {
 		taken.add(title);
 		return title;
@@ -107,3 +105,47 @@ export const uniqueTitleIn = (taken: Set<string>, title: string): string => {
 	taken.add(unique);
 	return unique;
 };
+
+export interface NoteArchiveImportPlan {
+	readonly folders: readonly string[];
+	readonly titles: ReadonlyMap<ParsedMarkdownNote, string>;
+	readonly unmappedFrontmatterKeys: readonly string[];
+}
+export interface ResolvedArchiveNote {
+	readonly markdown: string;
+	readonly issues: readonly ArchiveLinkIssue[];
+}
+export interface NoteArchiveImportPreparation {
+	prepare(notes: readonly ParsedMarkdownNote[]): NoteArchiveImportPlan;
+	resolve(
+		notes: readonly ParsedMarkdownNote[],
+		references: readonly ArchiveNoteReference[]
+	): ReadonlyMap<ParsedMarkdownNote, ResolvedArchiveNote>;
+}
+export class NoteArchiveImportService implements NoteArchiveImportPreparation {
+	prepare(notes: readonly ParsedMarkdownNote[]): NoteArchiveImportPlan {
+		const paths = new Set<string>();
+		const titles = new Map<ParsedMarkdownNote, string>();
+		const takenByFolder = new Map<string, Set<string>>();
+		for (const note of notes) {
+			for (let depth = 1; depth <= note.folders.length; depth++)
+				paths.add(note.folders.slice(0, depth).join('/'));
+			const folder = note.folders.join('/');
+			const taken = takenByFolder.get(folder) ?? new Set<string>();
+			takenByFolder.set(folder, taken);
+			titles.set(note, uniqueTitleIn(taken, note.title));
+		}
+		return {
+			folders: [...paths].sort((a, b) => a.split('/').length - b.split('/').length),
+			titles,
+			unmappedFrontmatterKeys: unmappedFrontmatterKeys(notes)
+		};
+	}
+	resolve(
+		notes: readonly ParsedMarkdownNote[],
+		references: readonly ArchiveNoteReference[]
+	): ReadonlyMap<ParsedMarkdownNote, ResolvedArchiveNote> {
+		const index = indexArchiveReferences(references);
+		return new Map(notes.map((note) => [note, resolveArchiveLinks(note, index)]));
+	}
+}

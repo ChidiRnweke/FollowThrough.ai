@@ -22,56 +22,56 @@ export const discardNoteDraft = command(
 		noteId: z.string().uuid()
 	}),
 	async (input) => {
-		return AppFactory.controllers()
+		return AppFactory.forActor(requestActor())
 			.notes()
-			.discardDraft(requestActor(), input as DiscardNoteDraftInput);
+			.discardDraft(input as DiscardNoteDraftInput);
 	}
 );
 
 export const listNoteRevisions = command(z.string().uuid(), async (noteId) => {
-	return AppFactory.controllers()
+	return AppFactory.forActor(requestActor())
 		.notes()
-		.listRevisions(requestActor(), { noteId: noteId as NoteId });
+		.listRevisions({ noteId: noteId as NoteId });
 });
 
 export const getNoteRevision = query(
 	z.object({ noteId: z.string().uuid(), revisionId: z.string().uuid() }),
 	async (input) => {
-		return AppFactory.controllers()
+		return AppFactory.forActor(requestActor())
 			.notes()
-			.getRevision(requestActor(), input as GetNoteRevisionInput);
+			.getRevision(input as GetNoteRevisionInput);
 	}
 );
 
 export const restoreNoteRevision = command(
 	z.object({ noteId: z.string().uuid(), revisionId: z.string().uuid() }),
 	async (input) => {
-		return AppFactory.controllers()
+		return AppFactory.forActor(requestActor())
 			.notes()
-			.restoreRevision(requestActor(), input as RestoreNoteRevisionInput);
+			.restoreRevision(input as RestoreNoteRevisionInput);
 	}
 );
 
 export const extractPromises = command(startExtractPromisesSchema, async (input) => {
-	return AppFactory.controllers().todos().startExtractPromises(requestActor(), input);
+	return AppFactory.forActor(requestActor()).todos().startExtractPromises(input);
 });
 
 export const relateNote = command(startRelateSelectionSchema, async (input) => {
-	return AppFactory.controllers().relationships().startSuggestFromSelection(requestActor(), input);
+	return AppFactory.forActor(requestActor()).relationships().startSuggestFromSelection(input);
 });
 
 export const findReferences = command(startFindReferencesSchema, async (input) => {
-	return AppFactory.controllers().references().startSuggestFromSelection(requestActor(), input);
+	return AppFactory.forActor(requestActor()).references().startSuggestFromSelection(input);
 });
 
 export const generateDiagram = command(startGenerateMermaidSchema, async (input) => {
-	return AppFactory.controllers().diagrams().startGenerateMermaid(requestActor(), input);
+	return AppFactory.forActor(requestActor()).diagrams().startGenerateMermaid(input);
 });
 
 export const reviseDiagram = command(startReviseInlineMermaidSchema, async (input) => {
-	return AppFactory.controllers().diagrams().startReviseInlineMermaid(requestActor(), input);
+	return AppFactory.forActor(requestActor()).diagrams().startReviseInlineMermaid(input);
 });
 
 export const convertDiagram = command(startConvertInlineMermaidSchema, async (input) => {
-	return AppFactory.controllers().diagrams().startConvertInlineMermaid(requestActor(), input);
+	return AppFactory.forActor(requestActor()).diagrams().startConvertInlineMermaid(input);
 });

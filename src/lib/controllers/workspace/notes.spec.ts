@@ -14,7 +14,7 @@ import {
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 
 const note = noteRecordSchema.parse(noteBuilder());
 const entries: [string, WorkspaceRecord][] = [
@@ -41,7 +41,7 @@ describe('normalized note views', () => {
 			type: 'note_relationships',
 			value: relationship
 		});
-		const projected = new WorkspaceViews(records).note(note.id);
+		const projected = createWorkspaceViews(records).note(note.id);
 		expect({ note: projected?.view.note, missing: projected?.missing }).toEqual({
 			note,
 			missing: [{ type: 'notes', id: [testNoteId(2)] }]
@@ -54,7 +54,7 @@ describe('normalized note views', () => {
 			type: 'suggestions',
 			value: suggestion
 		});
-		const projected = new WorkspaceViews(records).note(note.id);
+		const projected = createWorkspaceViews(records).note(note.id);
 		expect({
 			suggestions: projected?.view.pendingSuggestions,
 			missing: projected?.missing
@@ -69,7 +69,7 @@ describe('normalized note views', () => {
 			type: 'projects',
 			value: projectRecordSchema.parse(projectBuilder({ sectionNumberingDefault: true }))
 		});
-		expect(new WorkspaceViews(records).note(note.id)?.view.sectionNumbering).toEqual({
+		expect(createWorkspaceViews(records).note(note.id)?.view.sectionNumbering).toEqual({
 			effective: true,
 			noteOverride: undefined,
 			inherited: true
@@ -97,14 +97,14 @@ describe('normalized skill detail', () => {
 			updatedAt: testNow
 		});
 		records.set(JSON.stringify(['skills', note.id]), { type: 'skills', value: metadata });
-		expect(new WorkspaceViews(records).skill(note.id)).toEqual({
+		expect(createWorkspaceViews(records).skill(note.id)).toEqual({
 			...metadata,
 			name: note.title,
 			note: { ...note, kind: 'skill', plainText: 'Local instructions' }
 		});
 	});
 	it('does not invent skill metadata when only the note is downloaded', () => {
-		expect(new WorkspaceViews(new Map(entries)).skill(note.id)).toBeNull();
+		expect(createWorkspaceViews(new Map(entries)).skill(note.id)).toBeNull();
 	});
 });
 
@@ -138,7 +138,7 @@ it('keeps suggestions scoped to their note without a mutable per-pane copy', () 
 		type: 'provenance',
 		value: provenance
 	});
-	const views = new WorkspaceViews(records);
+	const views = createWorkspaceViews(records);
 	expect([
 		views.note(note.id)?.view.pendingSuggestions.map((item) => item.suggestion.id),
 		views.note(secondNote.id)?.view.pendingSuggestions.map((item) => item.suggestion.id)

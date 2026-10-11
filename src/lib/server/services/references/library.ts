@@ -16,45 +16,56 @@ import type {
 import type { ReferenceRepository } from '$lib/server/repositories/references/references';
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
-export class ReferenceLibrary {
+export interface ReferenceCreator {
+	create(input: CreateReferenceInput): Promise<ExternalReference>;
+}
+export class ReferenceWritingService implements ReferenceCreator {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly references: ReferenceRepository,
 		private readonly notes: NoteRepository,
 		private readonly anchors: SourceAnchorRepository,
 		private readonly provenance: ProvenanceRepository
 	) {}
-	async create(actor: ActorContext, input: CreateReferenceInput): Promise<ExternalReference> {
-		const note = await this.notes.findById(actor, input.noteId);
+	async create(input: CreateReferenceInput): Promise<ExternalReference> {
+		const note = await this.notes.findById(input.noteId);
 		if (!note) throw new NotFoundError('Reference note was not found');
 		if (input.sourceAnchorId) {
-			const anchor = await this.anchors.findById(actor, input.sourceAnchorId);
+			const anchor = await this.anchors.findById(input.sourceAnchorId);
 			if (!anchor || anchor.noteId !== note.id)
 				throw new ValidationError('Reference anchor must belong to its note');
 		}
-		if (input.provenanceId && !(await this.provenance.findById(actor, input.provenanceId)))
+		if (input.provenanceId && !(await this.provenance.findById(input.provenanceId)))
 			throw new NotFoundError('Reference provenance was not found');
-		return this.references.insert(actor, {
+		return this.references.insert({
 			id: crypto.randomUUID() as ReferenceId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			...input,
 			createdAt: now()
 		});
 	}
-	delete(actor: ActorContext, referenceId: ReferenceId): Promise<void> {
-		return this.references.delete(actor, referenceId);
+}
+export interface ReferenceLister {
+	listForNote(noteId: NoteId): Promise<readonly ExternalReference[]>;
+}
+export interface ReferenceContextReader {
+	readContexts(references: readonly ExternalReference[]): Promise<readonly ReferenceView[]>;
+}
+export class ReferenceReadingService implements ReferenceLister, ReferenceContextReader {
+	constructor(
+		private readonly references: ReferenceRepository,
+		private readonly notes: NoteRepository,
+		private readonly anchors: SourceAnchorRepository
+	) {}
+	async listForNote(noteId: NoteId): Promise<readonly ExternalReference[]> {
+		if (!(await this.notes.findById(noteId))) throw new NotFoundError('Note was not found');
+		return this.references.listForNote(noteId);
 	}
-	async listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly ExternalReference[]> {
-		if (!(await this.notes.findById(actor, noteId))) throw new NotFoundError('Note was not found');
-		return this.references.listForNote(actor, noteId);
-	}
-	async readContexts(
-		actor: ActorContext,
-		references: readonly ExternalReference[]
-	): Promise<readonly ReferenceView[]> {
+	async readContexts(references: readonly ExternalReference[]): Promise<readonly ReferenceView[]> {
 		return Promise.all(
 			references.map(async (reference) => {
 				const anchor = reference.sourceAnchorId
-					? await this.anchors.findById(actor, reference.sourceAnchorId)
+					? await this.anchors.findById(reference.sourceAnchorId)
 					: undefined;
 				return { reference, ...(anchor ? { anchor } : {}) };
 			})

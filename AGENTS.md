@@ -115,20 +115,23 @@ the same header to exercise persisted UI preferences (`sidebar_state`,
 
 `src/lib/` is split by role, and the audits enforce the direction of imports between them:
 
-| Directory                      | Holds                                                                   |
-| ------------------------------ | ----------------------------------------------------------------------- |
-| `models/<domain>/`             | Values, types, Zod schemas and constructors. No business logic.         |
-| `services/<domain>/`           | Business rules shared by browser and server. No I/O (ADR 0041).         |
-| `controllers/<area>/`          | Browser-side coordination over shared services, such as offline edits.  |
-| `server/services/<domain>/`    | Server-only logic against repositories.                                 |
-| `server/controllers/<domain>/` | Orchestration across services; the only cross-service seam.             |
-| `remote/<domain>/`             | Zod-validated `query`/`command` — the sole UI→server entry point.       |
-| `stores/<area>/`               | Client `$state` singletons (`workbench`, `rightPanel`, `palette`, …).   |
-| `client/<area>/`               | Browser-only helpers: IndexedDB repositories, sync, drag payloads.      |
-| `hooks/`                       | Reactive environment wrappers (`IsMobile`, `IsDockedPanel`).            |
-| `components/ui/`               | Vendored shadcn-svelte primitives. **Ours to edit** — not a dependency. |
-| `components/<feature>/`        | App components. `components/shell/` is the app chrome.                  |
-| `testing/`                     | Typed fakes, stubs, and recorders for externally observable effects.    |
+| Directory                       | Holds                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------- |
+| `models/<domain>/`              | Values, types, Zod schemas and constructors. No business logic.         |
+| `services/<domain>/`            | Business rules shared by browser and server. No I/O (ADR 0041).         |
+| `controllers/<area>/`           | Browser local sequencing only: the workspace replica, uploads, exports. |
+| `client/services/<area>/`       | Browser services: own the workspace's IndexedDB and sync transport.     |
+| `client/repositories/<area>/`   | Browser persistence (IndexedDB) only; domain types in and out.          |
+| `server/services/<domain>/`     | Server-only logic against repositories.                                 |
+| `server/repositories/<domain>/` | Database persistence only; domain types in and out.                     |
+| `server/controllers/<domain>/`  | Orchestration across services; the only cross-service seam.             |
+| `remote/<domain>/`              | Zod-validated `query`/`command` — the sole UI→server entry point.       |
+| `stores/<area>/`                | Client `$state` singletons (`workbench`, `rightPanel`, `palette`, …).   |
+| `client/<area>/`                | Other browser-only helpers: event readers, drag payloads.               |
+| `hooks/`                        | Reactive environment wrappers (`IsMobile`, `IsDockedPanel`).            |
+| `components/ui/`                | Vendored shadcn-svelte primitives. **Ours to edit** — not a dependency. |
+| `components/<feature>/`         | App components. `components/shell/` is the app chrome.                  |
+| `testing/`                      | Typed fakes, stubs, and recorders for externally observable effects.    |
 
 Two locations are easy to miss:
 
@@ -170,8 +173,10 @@ A new controller method needs all of these, or `svelte-check` / the audits fail:
    capability factory (e.g. `src/lib/server/factories/capabilities/deliverables-capability-factory.ts`).
 3. UI access goes through a zod-validated `query`/`command` in `src/lib/remote/<domain>/`.
 4. Classify the method in the `AgentToolCoverage` map in
-   `src/lib/server/factories/agent/agent-tool-factory.ts`. The map is total over each controller's
-   methods; a missing entry is a type error.
+   `src/lib/server/factories/agent/tool-coverage.ts`. The map is total over each controller's
+   methods; a missing entry is a type error. If the agent may call the method, define the tool in
+   `src/lib/server/factories/agent/tools/definitions.ts`: it calls this one operation and projects
+   its result. Never add an agent-specific method to the controller.
 5. Register the public method in `src/lib/server/factories/controller-surfaces.ts`. This map is
    total over controller interfaces. Boundary instrumentation uses it to start tracing before
    execution and to leave internal helpers untouched.
@@ -181,6 +186,50 @@ one `domain.method` span, info before / debug after / warn on `DomainError` / er
 carrying the span's trace id. Do not add boundary logs at call sites; log at `debug` inside
 services for detail. `LOG_LEVEL` (platform key, never a secret) gates debug records — debug in
 dev, info in prod.
+
+## Service contracts and state ownership (ADR 0007)
+
+- Public services are stateless classes that explicitly implement narrow capability interfaces.
+  Private helpers stay private. Do not expose a helper solely for a test or wrap every helper
+  in a separate class. Production callers define the public capability.
+- The layers are closed: models, services, repositories, controllers and factories, plus stores
+  and components in the browser. Do not introduce another layer to satisfy a checker.
+- Services never call other services, including through function dependencies or renamed ports.
+  If a service needs another service, cut the capability differently. Controllers own
+  cross-capability sequencing and transactions, and depend on services, never on repositories.
+- The server is stateless. A value one service produces for another stays local to the operation;
+  anything that outlives an operation is a database record. Client caches go through sync.
+- Browser stores retain reactive state and expose controlled updates. They do not fetch, retry,
+  call providers or make business decisions.
+- Entry points (remote functions, API routes, form actions, hooks, the worker, agent tools) parse incoming
+  data into a model, then call controllers.
+- The agent controller is a harness over an injected tool list. A tool is an entry point: an agent
+  tool factory turns one public controller operation into a tool and converts its arguments and
+  result. Tools never sequence operations or call services, and controllers carry no tool vocabulary.
+  `docs/architecture/agent-harness.md` describes the harness architecture.
+- Components and adjacent TypeScript call controllers for local operations and remote functions
+  for server-only operations, and observe readonly application state. They never call services.
+- Factories construct and connect dependencies and expose their interfaces. They do not execute
+  application workflows or expose mutable internals to components.
+- A remote function is already the server controller plus boundary parsing, so a component calls
+  it directly. A browser controller exists only for real local sequencing — the workspace (replica,
+  outbox, sync, conflict review), uploads, exports, chat, editor sessions — and never wraps a
+  remote function or calls another controller. The workspace is the only writer of the replica;
+  after a server-only change, refresh it with `workspaceSession.serverChange(request)`.
+- The actor is bound when the request's factory is built, never passed to a method. Entry points
+  build `AppFactory.forActor(actor)`; work across all users uses the system composition.
+
+## Semantic architecture checks
+
+`pnpm test:architecture:semantic` supplements Chisel with project-symbol checks for indirect
+behavior dependencies, public service helpers, concrete dependency types, retained service state,
+and workflows in stores/factories. See `docs/architecture/semantic-enforcement.md` for the rule IDs,
+valid patterns and analysis limits. A type-only import or `Pick<ConcreteClass, ...>` does not hide
+a concrete dependency. A callback does not move workflow ownership out of its factory or store.
+
+Keep analyzer fixtures for both the prohibited pattern and its valid neighbor. Record existing
+application findings in the refactor plan without baselines or suppressions. When the chained
+architecture command stops, run the remaining stages individually and report each result.
 
 ## Layering rules the audits enforce
 
@@ -217,10 +266,12 @@ Parse external data into narrow types at the boundary; inward of the boundary, r
 total. The pattern catalog with remedies lives in @docs/architecture/type-narrowing.md; the decision and its limits
 are in ADR 0037.
 
-- Parsing happens only in the parse zones: `remote/`, the DB mappers and repository read paths,
-  the provider event mappers, and the client event/storage readers. Schemas live in `models/`
-  next to the type they produce. Services and controllers never parse — they receive narrow
-  values from both directions.
+- Parsing happens only in the parse zones: the caller of a controller (remote functions, API
+  routes, form actions, hooks, the worker), agent tools for model-sent arguments, repositories for
+  the rows they read, the service that owns a provider for that provider's responses, and the
+  client event/storage readers. Schemas live in `models/`
+  next to the type they produce. Apart from a service parsing its own provider's
+  responses, services and controllers never parse — they receive narrow values from both directions.
 - `unknown` type positions, `Record<string, unknown>`, `isRecord`-style guards, cast-probes
   (`x as { a?: unknown }`), `JSON.parse` casts, and `z.unknown()` schemas are banned in the
   strict layers (`models/`, `services/`, `controllers/`) and on their way to zero everywhere

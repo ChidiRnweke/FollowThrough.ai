@@ -12,7 +12,7 @@ describe('artifact generation behavior', () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
 		await expect(
-			service.generateDocument(testActor(), {
+			service.generateDocument({
 				projectId: testProjectId(),
 				noteIds: [testNoteId()],
 				title: 'Board report',
@@ -29,7 +29,7 @@ describe('artifact generation behavior', () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
 		expect(
-			await service.previewDocument(testActor(), {
+			await service.previewDocument({
 				projectId: testProjectId(),
 				noteIds: [testNoteId()],
 				title: 'Preview'
@@ -40,7 +40,7 @@ describe('artifact generation behavior', () => {
 	it('rejects a preview containing an inaccessible note', async () => {
 		const { service } = setup();
 		await expect(
-			service.previewDocument(testActor(), {
+			service.previewDocument({
 				projectId: testProjectId(),
 				noteIds: [testNoteId()],
 				title: 'Preview'
@@ -51,7 +51,7 @@ describe('artifact generation behavior', () => {
 	it('stores generated PDF metadata and bytes', async () => {
 		const { service, artifacts, storage, notes } = setup();
 		notes.notes = [noteBuilder()];
-		const result = await service.generateDocument(testActor(), {
+		const result = await service.generateDocument({
 			projectId: testProjectId(),
 			noteIds: [testNoteId()],
 			title: 'Architecture export',
@@ -71,7 +71,7 @@ describe('artifact generation behavior', () => {
 	it('uses the document generator selected by the requested format', async () => {
 		const { service, storage, notes } = setup();
 		notes.notes = [noteBuilder()];
-		const result = await service.generateDocument(testActor(), {
+		const result = await service.generateDocument({
 			projectId: testProjectId(),
 			noteIds: [testNoteId()],
 			title: 'Architecture export',
@@ -83,34 +83,39 @@ describe('artifact generation behavior', () => {
 	});
 
 	it('does not reveal an artifact belonging to another actor', async () => {
-		const { service, notes } = setup();
+		const { service, notes, artifacts } = setup();
 		notes.notes = [noteBuilder()];
-		const generated = await service.generateDocument(testActor(), {
+		const generated = await service.generateDocument({
 			projectId: testProjectId(),
 			noteIds: [testNoteId()],
 			title: 'Private export',
 			format: 'pdf'
 		});
-		expect(await service.getArtifact(testActor(2), generated.artifact.id)).toBeUndefined();
+		// The same artifact, as another account generated it.
+		artifacts.artifacts = artifacts.artifacts.map((artifact) => ({
+			...artifact,
+			userId: testActor(2).userId
+		}));
+		expect(await service.getArtifact(generated.artifact.id)).toBeUndefined();
 	});
 
 	it('rejects downloading an unknown artifact', async () => {
 		const { service } = setup();
 		await expect(
-			service.downloadArtifact(testActor(), '00000000-0000-4000-8000-000000000099' as ArtifactId)
+			service.downloadArtifact('00000000-0000-4000-8000-000000000099' as ArtifactId)
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 
 	it('regenerates from the original artifact inputs', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
-		const original = await service.generateDocument(testActor(), {
+		const original = await service.generateDocument({
 			projectId: testProjectId(),
 			noteIds: [testNoteId()],
 			title: 'Repeatable export',
 			format: 'pdf'
 		});
-		const regenerated = await service.regenerateArtifact(testActor(), original.artifact.id);
+		const regenerated = await service.regenerateArtifact(original.artifact.id);
 		expect({
 			title: regenerated.artifact.title,
 			format: regenerated.artifact.format,

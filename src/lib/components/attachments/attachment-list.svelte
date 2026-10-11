@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { attachmentsController } from '$lib/factories/attachments/capability';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import type { AttachmentView } from '$lib/models/attachments';
@@ -12,15 +12,11 @@
 	import { toast } from 'svelte-sonner';
 	import * as Icon from '$lib/components/icons';
 	import * as Scene from '$lib/components/icons/scenes';
-	import { userFacingMessage } from '$lib/errors';
-	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
-	import { storeUploadBytes } from '$lib/client/attachments/object-storage';
+	import { workspaceSession, workspaceViews } from '$lib/factories/workspace/session';
 	import {
-		initiateAttachmentUpload,
-		completeAttachmentUpload,
 		downloadAttachment,
-		retryAttachment,
-		removeAttachment
+		removeAttachment,
+		retryAttachment
 	} from '$lib/remote/attachments/attachments.remote';
 
 	let {
@@ -33,15 +29,13 @@
 	let blockedByNote = $state<{ id: string; title: string } | undefined>(undefined);
 	let removeOpen = $state(false);
 
-	const resources = $derived(workspaceSession.current?.resources);
-	const items = $derived(resources?.views.attachments(owner) ?? []);
-	const inputOwner = $derived(
-		owner.kind === 'project' ? { projectId: owner.id } : { noteId: owner.id }
-	);
+	const items = $derived(workspaceViews.attachments(owner));
+	const ready = $derived(workspaceSession.current?.resources.collectionReadiness() === 'ready');
 	let loadError = $state<string | null>(null);
 	$effect(() => {
-		if (!resources) return;
-		void resources.prepare().catch((error) => {
+		const session = workspaceSession.current;
+		if (!session) return;
+		void session.resources.prepare().catch((error) => {
 			loadError = error instanceof Error ? error.message : 'Could not load attachments';
 			return { kind: 'failure', message: loadError };
 		});
@@ -49,46 +43,26 @@
 
 	async function upload(file: File): Promise<void> {
 		busy = true;
-		try {
-			const intent = await initiateAttachmentUpload({
-				...inputOwner,
-				path: file.name,
-				mediaType: file.type || 'application/octet-stream',
-				byteSize: file.size,
-				checksumSha256: await fileChecksumSha256(file)
-			});
-			await storeUploadBytes(() =>
-				fetch(intent.uploadUrl, { method: 'PUT', headers: intent.requiredHeaders, body: file })
-			);
-			await completeAttachmentUpload({ uploadId: intent.upload.id });
-			await workspaceSession.synchronize();
-			toast.success('Attachment queued for processing');
-			// audit-allow: silent-catch — the upload remains in place for retry and the failure is shown to the user.
-		} catch (error) {
-			toast.error(userFacingMessage(error, 'The upload failed. Try again.'));
-		} finally {
-			busy = false;
-		}
+		const uploaded = await workspaceSession.serverChange(attachmentsController.upload(owner, file));
+		busy = false;
+		if (uploaded.kind === 'failure') toast.error(uploaded.message);
+		else toast.success('Attachment queued for processing');
 	}
 
-	async function download(attachmentId: string): Promise<void> {
+	async function download(attachmentId: string): Promise<void | { kind: 'failure' }> {
+		let url: string;
 		try {
-			const { url } = await downloadAttachment({ attachmentId });
-			window.open(url, '_blank', 'noopener,noreferrer');
-			// audit-allow: silent-catch — the attachment action failure is reported in a toast.
+			url = (await downloadAttachment({ attachmentId })).url;
 		} catch {
 			toast.error('The attachment action failed');
+			return { kind: 'failure' };
 		}
+		window.open(url, '_blank', 'noopener,noreferrer');
 	}
 
 	async function retry(attachmentId: string): Promise<void> {
-		try {
-			await retryAttachment({ attachmentId });
-			await workspaceSession.synchronize();
-			// audit-allow: silent-catch — retry failure is reported while the failed attachment remains retryable.
-		} catch {
-			toast.error('The attachment action failed');
-		}
+		const retried = await workspaceSession.serverChange(retryAttachment({ attachmentId }));
+		if (retried.kind === 'failure') toast.error('The attachment action failed');
 	}
 
 	function askRemove(item: AttachmentView): void {
@@ -110,15 +84,10 @@
 	}
 
 	async function remove(attachmentId: string) {
-		try {
-			const result = await removeAttachment({ attachmentId });
-			await workspaceSession.synchronize();
-			return result;
-			// audit-allow: silent-catch — removal failure is reported and the attachment stays in the list.
-		} catch (error) {
-			toast.error(userFacingMessage(error, 'The attachment could not be removed.'));
-			return undefined;
-		}
+		const removed = await workspaceSession.serverChange(removeAttachment({ attachmentId }));
+		if (removed.kind === 'saved') return removed.value;
+		toast.error(removed.message || 'The attachment could not be removed.');
+		return undefined;
 	}
 </script>
 
@@ -145,11 +114,7 @@
 <div class="flex flex-col gap-6">
 	{#if loadError}<p role="alert">
 			{loadError}
-		</p>{:else if items.length === 0 && resources?.collectionReadiness() !== 'ready'}<p
-			role="status"
-		>
-			Still downloading attachments.
-		</p>
+		</p>{:else if items.length === 0 && !ready}<p role="status">Still downloading attachments.</p>
 		{@render uploadButton()}{:else if items.length === 0}
 		<!-- An empty region is an invitation, not dead text: the one action the
 		     space exists for sits inside the empty state. -->

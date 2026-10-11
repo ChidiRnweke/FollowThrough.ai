@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SourceLine } from '$lib/models/notes/note-diff';
+	import type { SourceLine } from '$lib/models/note-comparison';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { untrack } from 'svelte';

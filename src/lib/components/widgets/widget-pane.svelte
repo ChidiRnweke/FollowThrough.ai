@@ -1,13 +1,16 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { WidgetId } from '$lib/models/widgets';
-	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
+	import { widgetEdits } from './widget-edits';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import * as Icon from '$lib/components/icons';
 	import WidgetView from './widget-view.svelte';
-	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
+	import type { Widget } from '$lib/models/widgets';
+	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
+	import { todayLocalDate } from '$lib/client/todos/local-date';
+	const widgetSources = (widget: Widget) => sourceViews.widgetSources(widget, todayLocalDate());
 	import WidgetJsonEditor from './widget-json-editor.svelte';
 	import type { WidgetChange } from '$lib/models/widgets';
 

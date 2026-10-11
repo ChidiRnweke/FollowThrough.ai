@@ -2,8 +2,9 @@ import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import type { LocalDate } from '$lib/models/workspace';
 import type { Widget } from '$lib/models/widgets';
-import { widgetReferencesIn } from '$lib/services/notes/references';
-import type { WidgetSourceRecords } from '$lib/services/widgets/sources';
+import { NoteReferenceService } from '$lib/services/notes/references';
+const noteReferences = new NoteReferenceService();
+import type { WidgetSourceRecords } from '$lib/models/widgets';
 import type { Lab } from '../../lab/application';
 
 /**
@@ -18,9 +19,11 @@ export interface WidgetVerdict {
 
 /** Every widget the actor has, in every project. */
 export async function savedWidgets(lab: Lab, actor: ActorContext): Promise<readonly Widget[]> {
-	const { projects } = await lab.controllers.projects().list(actor);
+	const { projects } = await lab.forActor(actor).controllers.projects().list();
 	const lists = await Promise.all(
-		projects.map((project) => lab.controllers.widgets().list(actor, { projectId: project.id }))
+		projects.map((project) =>
+			lab.forActor(actor).controllers.widgets().list({ projectId: project.id })
+		)
 	);
 	return lists.flatMap((result) => result.widgets);
 }
@@ -51,8 +54,8 @@ export async function embedVerdict(
 	noteId: NoteId,
 	widget: Widget
 ): Promise<WidgetVerdict> {
-	const { note } = await lab.controllers.notes().get(actor, { noteId });
-	const embedded = widgetReferencesIn([note]).includes(widget.id);
+	const { note } = await lab.forActor(actor).controllers.notes().get({ noteId });
+	const embedded = noteReferences.widgets([note]).includes(widget.id);
 	return {
 		passed: embedded,
 		explanation: embedded
@@ -75,8 +78,8 @@ export async function sourceRecordsFor(
 	widget: Widget
 ): Promise<WidgetSourceRecords> {
 	const [{ todos }, shell] = await Promise.all([
-		lab.controllers.todos().list(actor, { projectId: widget.projectId }),
-		lab.controllers.workspace().getShellContext(actor)
+		lab.forActor(actor).controllers.todos().list({ projectId: widget.projectId }),
+		lab.forActor(actor).controllers.workspace().getShellContext()
 	]);
 	return {
 		projectId: widget.projectId,

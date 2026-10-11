@@ -1,53 +1,69 @@
-import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
-import { describe, expect, it } from 'vitest';
+import { initialSyncCursor } from '$lib/models/sync';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
+import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
-import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
-import { SkillLibrary } from '$lib/server/services/skills/library';
-import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
+import { workspacePullFixture } from '$lib/testing/workspace/fixtures/sync-pull';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
+import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { initialSyncCursor } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { describe, expect, it } from 'vitest';
 import { context, seedNote } from '../database-harness';
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 
 const setup = async (suffix: string) => {
 	const { owner, project } = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability(owner, {
 		db: database,
-		projects: new ProjectRecords(database)
+		projects: new ProjectRecords(owner, database)
 	});
-	const records = new SkillRecords(database);
-	const library = new SkillLibrary(
+	const records = new SkillRecords(owner, database);
+	const library = createSkillServices(
+		owner,
 		records,
-		new NoteRecords(database),
-		new ProvenanceRecords(database)
+		new NoteRecords(owner, database),
+		new ProvenanceRecords(owner, database)
 	);
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(owner);
 	const controller = new Skills(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
+			...agentToolResultsFixture(),
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
-			skillEditor: library,
-			skillFinder: library,
-			skillUsageLister: library,
-			noteEditor: catalog,
+			skillEditor: library.editor,
+			skillFinder: library.finder,
+			skillUsageLister: library.usageLister,
+			noteEditor: catalog.editor,
 			anchorRepairer: content,
 			noteLinkReconciler: content,
 			noteIndexer: content
 		})
 	);
-	const note = await storedNote(catalog, owner, {
+	const note = await storedNote(catalog.creator, owner, {
 		kind: 'skill',
 		projectId: project.id,
 		title: 'Release checklist'
 	});
-	await records.insert(owner, {
+	await records.insert({
 		note,
 		slug: 'release-checklist',
 		description: 'Release instructions',
@@ -63,21 +79,24 @@ const setup = async (suffix: string) => {
 		records,
 		controller,
 		transactionRunner,
-		journal: new WorkspaceSyncChanges(database)
+		workspace: workspacePullFixture(owner, database)
 	};
 };
 
 describe('Skill display name authority', () => {
 	it('renames the note through a legacy display-name command', async () => {
-		const { owner, note, controller, records } = await setup('12201');
-		await controller.update(owner, { noteId: note.id, displayName: 'Ship checklist' });
-		expect((await records.findByNoteId(owner, note.id))?.note.title).toBe('Ship checklist');
+		const { note, controller, records } = await setup('12201');
+		await controller.update({ noteId: note.id, displayName: 'Ship checklist' });
+		expect((await records.findByNoteId(note.id))?.note.title).toBe('Ship checklist');
 	});
 	it('publishes the renamed skill and note resources with the derived database name', async () => {
-		const { owner, note, catalog, journal, transactionRunner } = await setup('12202');
-		const initial = await journal.pullPage(owner, initialSyncCursor);
-		await saveNoteDraft(catalog, transactionRunner, owner, { ...note, title: 'Ship checklist' });
-		const batch = await journal.pullPage(owner, initial.cursor);
+		const { owner, note, catalog, workspace, transactionRunner } = await setup('12202');
+		const initial = await workspace.pullChangePage(initialSyncCursor);
+		await saveNoteDraft(catalog.editor, transactionRunner, owner, {
+			...note,
+			title: 'Ship checklist'
+		});
+		const batch = await workspace.pullChangePage(initial.cursor);
 		expect({
 			resources: batch.records,
 			storedName: await context.client`select name from skills where note_id = ${note.id}`
@@ -103,11 +122,11 @@ describe('Skill display name authority', () => {
 		]);
 	});
 	it('rolls back both sync resources with a rejected rename', async () => {
-		const { owner, note, catalog, transactionRunner, journal } = await setup('12206');
-		const initial = await journal.pullPage(owner, initialSyncCursor);
+		const { owner, note, catalog, transactionRunner, workspace } = await setup('12206');
+		const initial = await workspace.pullChangePage(initialSyncCursor);
 		await transactionRunner
 			.run(async () => {
-				await saveNoteDraft(catalog, transactionRunner, owner, {
+				await saveNoteDraft(catalog.editor, transactionRunner, owner, {
 					...note,
 					title: 'Ship checklist'
 				});
@@ -115,7 +134,7 @@ describe('Skill display name authority', () => {
 			})
 			.catch(() => ({ kind: 'failure' }));
 		expect({
-			batch: await journal.pullPage(owner, initial.cursor),
+			batch: await workspace.pullChangePage(initial.cursor),
 			projection:
 				await context.client`select notes.title, skills.name from notes join skills on skills.note_id = notes.id where notes.id = ${note.id}`
 		}).toEqual({

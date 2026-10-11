@@ -12,14 +12,17 @@ import * as schema from '$lib/server/db/schema/skills';
 import { toSkill } from '$lib/server/db/mappers';
 
 export class SkillRecords implements SkillRepository {
-	constructor(private readonly database: Database) {}
-	async lockCatalog(actor: ActorContext): Promise<void> {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
+	async lockCatalog(): Promise<void> {
 		// Keep the existing provisioning lock namespace so both paths serialize together.
 		await this.database.execute(
-			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext('built-in-skills'))`
+			sql`select pg_advisory_xact_lock(hashtext(${this.actor.userId}), hashtext('built-in-skills'))`
 		);
 	}
-	async findForWrite(actor: ActorContext, noteId: NoteId): Promise<Skill<Note> | undefined> {
+	async findForWrite(noteId: NoteId): Promise<Skill<Note> | undefined> {
 		const [row] = await this.database
 			.select({ note: schema.notes, skill: schema.skills })
 			.from(schema.skills)
@@ -28,14 +31,14 @@ export class SkillRecords implements SkillRepository {
 			.where(
 				and(
 					eq(schema.notes.id, noteId),
-					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.userId, this.actor.userId),
 					isNull(schema.projects.archivedAt)
 				)
 			)
 			.for('update', { of: schema.skills });
 		return row ? toSkill(row.note, row.skill) : undefined;
 	}
-	async findByNoteId(actor: ActorContext, noteId: NoteId): Promise<Skill<Note> | undefined> {
+	async findByNoteId(noteId: NoteId): Promise<Skill<Note> | undefined> {
 		const [row] = await this.database
 			.select({ note: schema.notes, skill: schema.skills })
 			.from(schema.skills)
@@ -44,16 +47,16 @@ export class SkillRecords implements SkillRepository {
 			.where(
 				and(
 					eq(schema.notes.id, noteId),
-					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.userId, this.actor.userId),
 					isNull(schema.projects.archivedAt)
 				)
 			);
 		return row ? toSkill(row.note, row.skill) : undefined;
 	}
-	async listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
-		return (await this.listAll(actor, projectId)).filter((skill) => skill.isEnabled);
+	async listEnabled(projectId?: ProjectId): Promise<readonly SkillSummary[]> {
+		return (await this.listAll(projectId)).filter((skill) => skill.isEnabled);
 	}
-	async listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
+	async listAll(projectId?: ProjectId): Promise<readonly SkillSummary[]> {
 		return (
 			await this.database
 				.select({
@@ -75,7 +78,7 @@ export class SkillRecords implements SkillRepository {
 				)
 				.where(
 					and(
-						eq(schema.notes.userId, actor.userId),
+						eq(schema.notes.userId, this.actor.userId),
 						isNull(schema.projects.archivedAt),
 						isNull(schema.notes.archivedAt)
 					)
@@ -94,17 +97,12 @@ export class SkillRecords implements SkillRepository {
 		}));
 	}
 
-	async setPinned(
-		actor: ActorContext,
-		noteId: NoteId,
-		projectId: ProjectId,
-		pinned: boolean
-	): Promise<void> {
-		if (!(await this.findByNoteId(actor, noteId))) throw new NotFoundError('Skill was not found');
+	async setPinned(noteId: NoteId, projectId: ProjectId, pinned: boolean): Promise<void> {
+		if (!(await this.findByNoteId(noteId))) throw new NotFoundError('Skill was not found');
 		const [project] = await this.database
 			.select({ id: schema.projects.id })
 			.from(schema.projects)
-			.where(and(eq(schema.projects.id, projectId), eq(schema.projects.userId, actor.userId)));
+			.where(and(eq(schema.projects.id, projectId), eq(schema.projects.userId, this.actor.userId)));
 		if (!project) throw new NotFoundError('Project was not found');
 		if (pinned) {
 			await this.database
@@ -122,8 +120,8 @@ export class SkillRecords implements SkillRepository {
 				)
 			);
 	}
-	async insert(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>> {
-		const note = await this.ownedNote(actor, skill.note.id);
+	async insert(skill: Skill<Note>): Promise<Skill<Note>> {
+		const note = await this.ownedNote(skill.note.id);
 		try {
 			const [row] = await this.database
 				.insert(schema.skills)
@@ -137,8 +135,8 @@ export class SkillRecords implements SkillRepository {
 		}
 	}
 
-	async update(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>> {
-		const note = await this.ownedNote(actor, skill.note.id);
+	async update(skill: Skill<Note>): Promise<Skill<Note>> {
+		const note = await this.ownedNote(skill.note.id);
 		const [row] = await this.database
 			.update(schema.skills)
 			.set({ name: note.title, ...this.metadataValues(skill) })
@@ -161,16 +159,16 @@ export class SkillRecords implements SkillRepository {
 		};
 	}
 
-	private async ownedNote(actor: ActorContext, noteId: NoteId) {
+	private async ownedNote(noteId: NoteId) {
 		const [note] = await this.database
 			.select()
 			.from(schema.notes)
-			.where(and(eq(schema.notes.id, noteId), eq(schema.notes.userId, actor.userId)));
+			.where(and(eq(schema.notes.id, noteId), eq(schema.notes.userId, this.actor.userId)));
 		if (!note) throw new NotFoundError('Skill note was not found');
 		return note;
 	}
-	async recordUsage(actor: ActorContext, usage: SkillUsage): Promise<SkillUsage> {
-		if (!(await this.findByNoteId(actor, usage.skillNoteId)))
+	async recordUsage(usage: SkillUsage): Promise<SkillUsage> {
+		if (!(await this.findByNoteId(usage.skillNoteId)))
 			throw new NotFoundError('Skill was not found');
 		const [row] = await this.database
 			.insert(schema.skillUsages)
@@ -192,8 +190,8 @@ export class SkillRecords implements SkillRepository {
 			createdAt: row!.createdAt.toISOString() as SkillUsage['createdAt']
 		};
 	}
-	async listUsages(actor: ActorContext, noteId: NoteId): Promise<readonly SkillUsage[]> {
-		if (!(await this.findByNoteId(actor, noteId))) throw new NotFoundError('Skill was not found');
+	async listUsages(noteId: NoteId): Promise<readonly SkillUsage[]> {
+		if (!(await this.findByNoteId(noteId))) throw new NotFoundError('Skill was not found');
 		return (
 			await this.database
 				.select()

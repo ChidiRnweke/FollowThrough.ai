@@ -1,18 +1,27 @@
-import { expect, it } from 'vitest';
+import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryModelCatalog } from '$lib/testing/agent/fakes/in-memory-model-catalog';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
 import { AgentSettings, type AgentSettingsDependencies } from './controller';
 
 const setup = () => {
 	const models = new InMemoryModelCatalog();
 	const controller = new AgentSettings(
+		testActor(),
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentSettingsDependencies>({
+			...agentToolResultsFixture(),
+			preferenceEditing: new AgentPreferenceEditingService(),
+			...agentRulesFixture(),
 			models,
 			defaultModel: 'test/chat',
 			defaultVisionModel: 'test/vision',
 			agentAvailable: false,
-			webSearchDefaults: { engine: 'firecrawl', maxResults: 11, maxTotalResults: 23 }
+			webSearchOverrides: { engine: 'firecrawl', maxResults: 11, maxTotalResults: 23 }
 		})
 	);
 	return { controller, models };
@@ -20,7 +29,7 @@ const setup = () => {
 
 it('returns the resolved deployment budgets and availability for the authenticated bootstrap', async () => {
 	const { controller } = setup();
-	const result = await controller.bootstrap(testActor());
+	const result = await controller.bootstrap();
 	expect({
 		accountId: result.accountId,
 		defaults: result.numericDefaults,
@@ -35,5 +44,5 @@ it('returns the resolved deployment budgets and availability for the authenticat
 it('does not return a successful bootstrap when the model catalog fails', async () => {
 	const { controller, models } = setup();
 	models.failure = new Error('Catalog unavailable');
-	await expect(controller.bootstrap(testActor())).rejects.toThrow('Catalog unavailable');
+	await expect(controller.bootstrap()).rejects.toThrow('Catalog unavailable');
 });

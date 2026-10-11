@@ -1,7 +1,7 @@
 import type { Diagram } from '$lib/models/diagrams';
 import type { DateTime } from '$lib/models/workspace';
 
-export function decideDiagramTrash(
+function decideDiagramTrash(
 	action: 'archive' | 'restore' | 'delete',
 	current: Pick<Diagram, 'archivedAt'>
 ): { kind: 'allowed' } | { kind: 'invalid'; message: string } {
@@ -16,7 +16,7 @@ export function decideDiagramTrash(
 	return { kind: 'allowed' };
 }
 
-export function diagramTrashChange(
+function diagramTrashChange(
 	action: 'archive' | 'restore',
 	current: Diagram,
 	timestamp: DateTime
@@ -33,4 +33,31 @@ export function diagramTrashChange(
 			...(action === 'archive' ? { archivedAt: timestamp } : {})
 		}
 	};
+}
+
+export interface DiagramLifecycleRules {
+	decide(
+		action: 'archive' | 'restore' | 'delete',
+		current: Pick<Diagram, 'archivedAt'>
+	): { kind: 'allowed' } | { kind: 'invalid'; message: string };
+	change(
+		action: 'archive' | 'restore',
+		current: Diagram,
+		timestamp: DateTime
+	): { kind: 'invalid'; message: string } | { kind: 'change'; diagram: Diagram };
+}
+export class DiagramLifecycleService implements DiagramLifecycleRules {
+	decide(
+		action: 'archive' | 'restore' | 'delete',
+		current: Pick<Diagram, 'archivedAt'>
+	): { kind: 'allowed' } | { kind: 'invalid'; message: string } {
+		return decideDiagramTrash(action, current);
+	}
+	change(
+		action: 'archive' | 'restore',
+		current: Diagram,
+		timestamp: DateTime
+	): { kind: 'invalid'; message: string } | { kind: 'change'; diagram: Diagram } {
+		return diagramTrashChange(action, current, timestamp);
+	}
 }

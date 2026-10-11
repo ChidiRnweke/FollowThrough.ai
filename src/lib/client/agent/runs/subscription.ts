@@ -1,5 +1,5 @@
 import { readAgentRunEventRecord } from './event-reader';
-import type { AgentRunTransport } from './contracts';
+import type { AgentRunTransport } from '$lib/controllers/agent/chat.svelte';
 
 type SubscriptionInput = Parameters<AgentRunTransport['openEvents']>[0];
 export interface RunEventSource {

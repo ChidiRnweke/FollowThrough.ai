@@ -6,3 +6,6 @@ export interface EmbeddingBatch {
 
 /** Existing provider request budget; batching never discards source text. */
 export const EMBEDDING_BATCH_TOKENS = 30_000;
+
+/** Stored search vectors use this model's 3072 dimensions. */
+export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-large';

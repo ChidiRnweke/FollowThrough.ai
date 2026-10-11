@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { Projects, type ProjectsDependencies } from './controller';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
@@ -9,16 +12,25 @@ import {
 	testActor,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Projects, type ProjectsDependencies } from './controller';
 
 const setup = () => {
-	const repository = new InMemoryProjectRepository();
+	const repository = new InMemoryProjectRepository(testActor());
 	repository.projects = [projectBuilder()];
-	const catalog = new ProjectCatalog(repository, repository);
+	const catalog = createProjectServices(testActor(), repository, repository);
 	const controller = new Projects(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
-			projectCreator: catalog,
-			projectReader: catalog,
-			projectTreeReader: catalog
+			...agentToolResultsFixture(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			details: new ProjectDetailService(),
+			presentation: new ProjectTreePresentationService(),
+			placement: catalog.placement,
+			projectLifecycle: catalog.lifecycle,
+			projectCreator: catalog.creator,
+			projectReader: catalog.reader,
+			projectTreeReader: catalog.treeReader
 		})
 	);
 	return { repository, controller };
@@ -31,7 +43,7 @@ describe('Project tree presentation', () => {
 			noteBuilder({ id: testNoteId(1), kind: 'folder' }),
 			noteBuilder({ id: testNoteId(2), parentId: testNoteId(1) })
 		];
-		const { tree } = await controller.get(testActor(), { projectId: projectBuilder().id });
+		const { tree } = await controller.get({ projectId: projectBuilder().id });
 		expect(tree[0]?.children[0]?.entry.id).toBe(testNoteId(2));
 	});
 
@@ -43,7 +55,7 @@ describe('Project tree presentation', () => {
 			noteBuilder({ id: testNoteId(3), kind: 'skill', parentId: testNoteId(1) }),
 			noteBuilder({ id: testNoteId(4), kind: 'skill' })
 		];
-		const { tree } = await controller.get(testActor(), { projectId: projectBuilder().id });
+		const { tree } = await controller.get({ projectId: projectBuilder().id });
 		expect(
 			tree.map((node) => ({
 				id: node.entry.id,

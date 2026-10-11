@@ -1,4 +1,4 @@
-import type { ShellContext } from '$lib/client/shell/views';
+import type { ShellContext } from '$lib/models/workspace-views';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import NoteBreadcrumb from './note-breadcrumb.svelte';

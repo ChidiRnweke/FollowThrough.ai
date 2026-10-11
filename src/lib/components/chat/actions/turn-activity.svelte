@@ -1,8 +1,9 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import { workspaceViews } from '$lib/factories/workspace/session';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Icon from '$lib/components/icons';
@@ -73,7 +74,7 @@
 	});
 	const titleOf = (subject: SubjectActivity): string =>
 		(subject.entity.kind === 'todo' && subject.entity.id
-			? resources?.views.get('todos', subject.entity.id)?.title
+			? workspaceViews.get('todos', subject.entity.id)?.title
 			: undefined) ??
 		(subject.entity.kind === 'todo' && titleError
 			? 'Todo title unavailable'

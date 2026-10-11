@@ -11,7 +11,9 @@
 		SYNC_EVIDENCE
 	} from './sync-review';
 	import { reviewFieldLabels } from '$lib/models/workspace-write-review';
-	import { visibleReviewFields } from '$lib/services/workspace/write-review';
+	import { writeReviewOperations } from '$lib/factories/workspace/write-review';
+	const { visibleReviewFields } = writeReviewOperations;
+
 	let {
 		label,
 		record,

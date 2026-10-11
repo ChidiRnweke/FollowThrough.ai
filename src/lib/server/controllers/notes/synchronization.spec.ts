@@ -1,24 +1,42 @@
-import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
 import type { NoteMutationRequest } from '$lib/models/workspace-mutations';
+import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
+import {
+	Workspace,
+	type WorkspaceDependencies
+} from '$lib/server/controllers/workspace/controller';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { TodayPresentationService } from '$lib/services/workspace/today';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
 	InMemoryWorkspaceNoteReads,
 	InMemoryWorkspaceReceipts
 } from '$lib/testing/sync/fakes/in-memory-workspace-writes';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	testActor,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
-import { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
-import {
-	Workspace,
-	type WorkspaceDependencies
-} from '$lib/server/controllers/workspace/controller';
+import { describe, expect, it } from 'vitest';
 
 const input: NoteMutationRequest = {
 	operationId: 'a0000000-0000-4000-8000-000000000001',
@@ -26,16 +44,35 @@ const input: NoteMutationRequest = {
 	command: { kind: 'renameNote', noteId: testNoteId(), title: 'My rename' }
 };
 const setup = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	content.notes = [noteBuilder()];
-	const mutationReceipts = new InMemoryWorkspaceReceipts();
+	const mutationReceipts = new InMemoryWorkspaceReceipts(testActor());
 	const transactionRunner = new InMemoryTransactionRunner([content, mutationReceipts]);
 	const mutations = new WorkspaceMutationReceipts({
 		mutationReceipts,
-		syncObjects: new InMemoryWorkspaceNoteReads(content)
+		syncObjects: new InMemoryWorkspaceNoteReads(testActor(), content)
 	});
 	const notes = new Notes(
+		testActor(),
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
+			...agentToolResultsFixture(),
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			syncMutations: mutations,
 			syncRetry: 'never',
 			noteReader: content,
@@ -45,19 +82,23 @@ const setup = () => {
 		})
 	);
 	const workspace = new Workspace(
+		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
+			...agentToolResultsFixture(),
+			todoPresentation: new TodoPresentationService(),
+			memoryPresentation: new MemoryPresentationService(),
 			writeRecovery: mutations,
 			transactionRunner
 		})
 	);
-	const apply = (request: NoteMutationRequest) => notes.synchronize(testActor(), request);
+	const apply = (request: NoteMutationRequest) => notes.synchronize(request);
 	return { content, mutationReceipts, apply, workspace };
 };
 
 describe('guarded workspace mutation replay', () => {
 	it('does not execute an operation cancelled before submission', async () => {
 		const { workspace, apply, content } = setup();
-		await workspace.cancelMutation(testActor(), {
+		await workspace.cancelMutation({
 			operationId: input.operationId,
 			request: JSON.stringify(input)
 		});
@@ -67,8 +108,8 @@ describe('guarded workspace mutation replay', () => {
 	it('keeps a cancelled operation cancelled on repeated cancellation', async () => {
 		const { workspace } = setup();
 		const cancellation = { operationId: input.operationId, request: JSON.stringify(input) };
-		await workspace.cancelMutation(testActor(), cancellation);
-		expect(await workspace.cancelMutation(testActor(), cancellation)).toEqual({
+		await workspace.cancelMutation(cancellation);
+		expect(await workspace.cancelMutation(cancellation)).toEqual({
 			kind: 'cancelled'
 		});
 	});
@@ -78,7 +119,7 @@ describe('guarded workspace mutation replay', () => {
 		if (applied.kind !== 'applied' || applied.receipt.resource.kind !== 'found')
 			throw new Error('Expected applied note');
 		expect(
-			await workspace.cancelMutation(testActor(), {
+			await workspace.cancelMutation({
 				operationId: input.operationId,
 				request: JSON.stringify(input)
 			})

@@ -9,32 +9,30 @@ import type {
 } from '$lib/models/deliverables';
 import type { ProjectId, ProjectTemplate, TemplateUpload } from '$lib/models/projects';
 import type { ArtifactRepository, TemplateRepository } from '$lib/server/repositories/deliverables';
-import type {
-	IAttachmentStorage,
-	StoredObjectInfo
-} from '$lib/server/services/attachments/storage';
+import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
+import type { StoredObjectInfo } from '$lib/models/attachments';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export class InMemoryArtifactRepository implements ArtifactRepository, SnapshotParticipant {
+	constructor(private readonly actor: ActorContext) {}
 	artifacts: Artifact[] = [];
 	insertFailure?: Error;
 
-	async insert(_actor: ActorContext, artifact: Artifact): Promise<Artifact> {
+	async insert(artifact: Artifact): Promise<Artifact> {
 		if (this.insertFailure) throw this.insertFailure;
 		this.artifacts.push(artifact);
 		return artifact;
 	}
 
 	async listByProject(
-		actor: ActorContext,
 		projectId: ProjectId,
 		params: ListArtifactsParams = {}
 	): Promise<ListArtifactsOutput> {
 		const artifacts = this.artifacts.filter(
-			(artifact) => artifact.userId === actor.userId && artifact.projectId === projectId
+			(artifact) => artifact.userId === this.actor.userId && artifact.projectId === projectId
 		);
 		const offset = params.offset ?? 0;
 		const limit = params.limit ?? artifacts.length;
@@ -48,15 +46,15 @@ export class InMemoryArtifactRepository implements ArtifactRepository, SnapshotP
 		};
 	}
 
-	async findById(actor: ActorContext, id: ArtifactId): Promise<Artifact | undefined> {
+	async findById(id: ArtifactId): Promise<Artifact | undefined> {
 		return this.artifacts.find(
-			(artifact) => artifact.id === id && artifact.userId === actor.userId
+			(artifact) => artifact.id === id && artifact.userId === this.actor.userId
 		);
 	}
 
-	async delete(actor: ActorContext, id: ArtifactId): Promise<void> {
+	async delete(id: ArtifactId): Promise<void> {
 		this.artifacts = this.artifacts.filter(
-			(artifact) => artifact.id !== id || artifact.userId !== actor.userId
+			(artifact) => artifact.id !== id || artifact.userId !== this.actor.userId
 		);
 	}
 
@@ -69,35 +67,36 @@ export class InMemoryArtifactRepository implements ArtifactRepository, SnapshotP
 }
 
 export class InMemoryTemplateRepository implements TemplateRepository, SnapshotParticipant {
+	constructor(private readonly actor: ActorContext) {}
 	templates: ProjectTemplate[] = [];
 	uploads: TemplateUpload[] = [];
 	insertFailure?: Error;
 	nextTemplateReadGate?: Promise<void>;
-	async insertUpload(_actor: ActorContext, upload: TemplateUpload): Promise<TemplateUpload> {
+	async insertUpload(upload: TemplateUpload): Promise<TemplateUpload> {
 		this.uploads.push(upload);
 		return upload;
 	}
-	async findUpload(actor: ActorContext, id: TemplateId): Promise<TemplateUpload | undefined> {
-		return this.uploads.find((upload) => upload.id === id && upload.userId === actor.userId);
+	async findUpload(id: TemplateId): Promise<TemplateUpload | undefined> {
+		return this.uploads.find((upload) => upload.id === id && upload.userId === this.actor.userId);
 	}
-	findUploadForUpdate(actor: ActorContext, id: TemplateId) {
-		return this.findUpload(actor, id);
+	findUploadForUpdate(id: TemplateId) {
+		return this.findUpload(id);
 	}
-	async deleteUpload(actor: ActorContext, id: TemplateId): Promise<void> {
+	async deleteUpload(id: TemplateId): Promise<void> {
 		this.uploads = this.uploads.filter(
-			(upload) => upload.id !== id || upload.userId !== actor.userId
+			(upload) => upload.id !== id || upload.userId !== this.actor.userId
 		);
 	}
 
-	async insert(_actor: ActorContext, template: ProjectTemplate): Promise<ProjectTemplate> {
+	async insert(template: ProjectTemplate): Promise<ProjectTemplate> {
 		if (this.insertFailure) throw this.insertFailure;
 		this.templates.push(template);
 		return template;
 	}
 
-	async findById(actor: ActorContext, id: TemplateId): Promise<ProjectTemplate | undefined> {
+	async findById(id: TemplateId): Promise<ProjectTemplate | undefined> {
 		const snapshot = this.templates.find(
-			(template) => template.id === id && template.userId === actor.userId
+			(template) => template.id === id && template.userId === this.actor.userId
 		);
 		const gate = this.nextTemplateReadGate;
 		this.nextTemplateReadGate = undefined;
@@ -105,25 +104,22 @@ export class InMemoryTemplateRepository implements TemplateRepository, SnapshotP
 		return snapshot;
 	}
 
-	async listByProject(
-		actor: ActorContext,
-		projectId: ProjectId
-	): Promise<readonly ProjectTemplate[]> {
+	async listByProject(projectId: ProjectId): Promise<readonly ProjectTemplate[]> {
 		return this.templates.filter(
-			(template) => template.userId === actor.userId && template.projectId === projectId
+			(template) => template.userId === this.actor.userId && template.projectId === projectId
 		);
 	}
 
-	async update(_actor: ActorContext, template: ProjectTemplate): Promise<ProjectTemplate> {
+	async update(template: ProjectTemplate): Promise<ProjectTemplate> {
 		this.templates = this.templates.map((candidate) =>
 			candidate.id === template.id ? template : candidate
 		);
 		return template;
 	}
 
-	async delete(actor: ActorContext, id: TemplateId): Promise<void> {
+	async delete(id: TemplateId): Promise<void> {
 		this.templates = this.templates.filter(
-			(template) => template.id !== id || template.userId !== actor.userId
+			(template) => template.id !== id || template.userId !== this.actor.userId
 		);
 	}
 

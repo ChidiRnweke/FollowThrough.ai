@@ -8,7 +8,18 @@ import type { DateTime } from '$lib/models/workspace';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';
 
 /** The controller commits the checkpoint, session and approval events together. */
-export class RunCheckpoints {
+export interface RunCheckpointWriter {
+	prepare(
+		previous: Pick<ResolvedAgentRun, 'traceparent'>,
+		checkpoint: Pick<
+			Extract<AgentExecutionUpdate, { type: 'approval_checkpoint' }>,
+			'serializedState' | 'pendingDecisions' | 'traceparent'
+		>,
+		timestamp: DateTime
+	): AgentCheckpointWrite;
+	persist(runId: AgentRunId, change: AgentCheckpointWrite): Promise<ResolvedAgentRun | undefined>;
+}
+export class RunCheckpoints implements RunCheckpointWriter {
 	constructor(private readonly runs: AgentRunRepository) {}
 
 	prepare(

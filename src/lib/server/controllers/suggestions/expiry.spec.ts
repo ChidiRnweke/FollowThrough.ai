@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { memorySuggestionContext } from '$lib/testing/suggestions/fixtures/views';
-import { Suggestions, type SuggestionsDependencies } from './controller';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { memorySuggestionContext } from '$lib/testing/suggestions/fixtures/views';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	memorySuggestionBuilder,
@@ -9,9 +11,11 @@ import {
 	testNow,
 	testSuggestionId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Suggestions, type SuggestionsDependencies } from './controller';
 
 const setup = () => {
-	const proposals = new InMemorySuggestionReader();
+	const proposals = new InMemorySuggestionReader(testActor());
 	proposals.suggestions = [
 		memorySuggestionBuilder({ expiresAt: testNow }),
 		memorySuggestionBuilder({ id: testSuggestionId(2) }),
@@ -25,7 +29,12 @@ const setup = () => {
 		suggestion.kind === 'memory' ? [memorySuggestionContext(suggestion)] : []
 	);
 	const controller = new Suggestions(
+		testActor(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
+			...agentToolResultsFixture(),
+			todoCreationRules: new TodoEditingRulesService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionExpirer: proposals,
 			suggestionLister: proposals,
 			suggestionContextReader: proposals
@@ -39,7 +48,7 @@ describe('proposal expiry during review', () => {
 		'returns current %s proposals after expiry',
 		async (status) => {
 			const { controller } = setup();
-			const result = await controller.list(testActor(), { status });
+			const result = await controller.list({ status });
 			expect(
 				result.groups.flatMap((group) => group.suggestions.map((view) => view.suggestion.id))
 			).toEqual([testSuggestionId(status === 'proposed' ? 2 : 1)]);
@@ -47,12 +56,12 @@ describe('proposal expiry during review', () => {
 	);
 	it('excludes expired profile memory from pending review', async () => {
 		const { controller } = setup();
-		const result = await controller.listPendingMemory(testActor(), {});
+		const result = await controller.listPendingMemory({});
 		expect(result.suggestions.map((view) => view.suggestion.id)).toEqual([testSuggestionId(2)]);
 	});
 	it('leaves another account’s expiring proposal unchanged', async () => {
 		const { controller, proposals } = setup();
-		await controller.list(testActor(), { status: 'proposed' });
+		await controller.list({ status: 'proposed' });
 		expect(
 			proposals.suggestions.find((proposal) => proposal.id === testSuggestionId(3))?.status
 		).toBe('proposed');
@@ -60,8 +69,6 @@ describe('proposal expiry during review', () => {
 	it('reports expiry failure instead of returning stale pending counts', async () => {
 		const { controller, proposals } = setup();
 		proposals.expiryFailure = new Error('Expiry storage is unavailable');
-		await expect(controller.listPendingMemory(testActor(), {})).rejects.toThrow(
-			'Expiry storage is unavailable'
-		);
+		await expect(controller.listPendingMemory({})).rejects.toThrow('Expiry storage is unavailable');
 	});
 });

@@ -1,33 +1,44 @@
-import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
-import { afterAll, expect, it, vi } from 'vitest';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import * as schema from '$lib/server/db/schema';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
+import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
+import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
+import { type AgentRunId } from '$lib/models/agent';
+import type { Url } from '$lib/models/references';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import {
 	References,
 	type ReferencesDependencies
 } from '$lib/server/controllers/references/controller';
-import { ReferenceRanking } from '$lib/server/services/references/ranking';
-import type { Url } from '$lib/models/references';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import * as schema from '$lib/server/db/schema';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import {
-	AgentRunEventRecords,
-	AgentRunDecisionRecords
+	AgentRunDecisionRecords,
+	AgentRunEventRecords
 } from '$lib/server/repositories/agent/postgres/agent-runs';
+import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { type AgentRunId } from '$lib/models/agent';
+import { ReferenceRanking } from '$lib/server/services/references/ranking';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { InMemoryReferencePipeline } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { context, seedNote } from '../database-harness';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { afterAll, expect, it, vi } from 'vitest';
+import { context, seedNote, notifications } from '../database-harness';
+const runStatus = new AgentRunStatusService();
 
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
@@ -39,16 +50,16 @@ const setup = async (suffix: string) => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const projects = new ProjectRecords(database);
-	const notes = createNotesCapability({ db: database, projects });
-	const suggestions = createSuggestionsCapability({
+	const projects = new ProjectRecords(seeded.owner, database);
+	const notes = createNotesCapability(seeded.owner, { db: database, projects });
+	const suggestions = createSuggestionsCapability(seeded.owner, {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
 	const text = 'Use OAuth';
-	const note = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
+	const note = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
@@ -60,9 +71,14 @@ const setup = async (suffix: string) => {
 		to: text.length,
 		text
 	};
-	const runs = new AgentRunRecords(database);
-	const events = new AgentRunEventRecords(database);
-	const requests = new NoteActionRequests(runs, events, new ConversationRecords(database));
+	const runs = new AgentRunRecords(seeded.owner, database);
+	const events = new AgentRunEventRecords(seeded.owner, database);
+	const requests = new NoteActionRequests(
+		seeded.owner,
+		runs,
+		events,
+		new ConversationRecords(seeded.owner, database)
+	);
 	const settlements = new RunSettlements(runs, events);
 	const finder = new InMemoryReferencePipeline();
 	finder.candidates = [
@@ -75,32 +91,39 @@ const setup = async (suffix: string) => {
 		}
 	];
 	const dependencies: ReferencesDependencies = {
+		...agentToolResultsFixture(),
 		transactionRunner,
 		noteActionRequests: requests,
-		referenceFinder: finder,
+		referenceClient: finder,
+		referenceCandidates: new ReferenceDiscovery(),
+		researchSettings: new AgentRunSettingsService(),
+		researchOverrides: {},
 		referenceRanker: new ReferenceRanking(),
 		referenceModel: 'test/model',
 		runSettlements: settlements,
-		runEvents: { notify: () => {} },
+		runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs),
 		selectionOrigins: notes.selectionOrigins,
-		suggestionCreator: suggestions.inbox
+		suggestionCreator: suggestions.creator
 	};
-	const agent = new Agent(
-		capabilityDependencies<AgentDependencies>({
+	const agent = new AgentSdkHarness(
+		seeded.owner,
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<AgentHarnessDependencies>({
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
-			decisions: new AgentRunDecisionRecords(database),
+			decisions: new AgentRunDecisionRecords(seeded.owner, database),
 			settlements,
 			transactionRunner,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
 	const controller = new References(dependencies);
 	const input = { requestId: crypto.randomUUID(), selection };
 	const prepare = () =>
 		transactionRunner.run(() =>
-			requests.prepare(seeded.owner, {
+			requests.prepare({
 				requestId: input.requestId,
 				context: {
 					kind: 'reference_search',
@@ -111,8 +134,8 @@ const setup = async (suffix: string) => {
 		);
 	const finished = async (runId: AgentRunId) => {
 		await vi.waitFor(async () => {
-			const run = await runs.findById(seeded.owner, runId);
-			if (!run || !isTerminalAgentRunStatus(run.status)) throw new Error('Run has not settled');
+			const run = await runs.findById(runId);
+			if (!run || !runStatus.isTerminal(run.status)) throw new Error('Run has not settled');
 		});
 	};
 	return {
@@ -134,8 +157,8 @@ const setup = async (suffix: string) => {
 it('commits one reference search for simultaneous duplicate submissions on separate connections', async () => {
 	const state = await setup('12901');
 	const [first, second] = await Promise.all([
-		state.controller.startSuggestFromSelection(state.owner, state.input),
-		state.controller.startSuggestFromSelection(state.owner, state.input)
+		state.controller.startSuggestFromSelection(state.input),
+		state.controller.startSuggestFromSelection(state.input)
 	]);
 	await state.finished(first.runId);
 	const [counts] =
@@ -151,10 +174,10 @@ it('keeps the database free of proposals when cancellation beats the finder resu
 	const receipt = await state.prepare();
 	const gate = Promise.withResolvers<void>();
 	state.finder.completion = gate.promise;
-	const execution = state.controller.executeReferenceRun(state.owner, receipt.runId);
+	const execution = state.controller.executeReferenceRun(receipt.runId);
 	try {
 		await state.finder.started.promise;
-		await state.agent.cancel(state.owner, receipt.runId);
+		await state.agent.cancel(receipt.runId);
 	} finally {
 		gate.resolve();
 	}
@@ -162,7 +185,7 @@ it('keeps the database free of proposals when cancellation beats the finder resu
 	const [counts] =
 		await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 	expect({
-		status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+		status: (await state.runs.findById(receipt.runId))?.status,
 		counts
 	}).toEqual({ status: 'cancelled', counts: { suggestions: 0, anchors: 0 } });
 });
@@ -172,13 +195,13 @@ it('rolls back reference proposals and anchors when the result event fails', asy
 	const receipt = await state.prepare();
 	await context.client`alter table agent_run_events add constraint reference_result_failure check (not (event->>'type' = 'workflow_result' and event->>'action' = 'reference')) not valid`;
 	try {
-		await state.controller.executeReferenceRun(state.owner, receipt.runId);
+		await state.controller.executeReferenceRun(receipt.runId);
 		const [counts] =
 			await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 		expect({
-			status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+			status: (await state.runs.findById(receipt.runId))?.status,
 			counts,
-			events: (await state.events.replay(state.owner, receipt.runId, '0')).map((record) =>
+			events: (await state.events.replay(receipt.runId, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			)
 		}).toEqual({
@@ -194,10 +217,10 @@ it('rolls back reference proposals and anchors when the result event fails', asy
 it('reconstructs a queued reference search after its submitting controller has been discarded', async () => {
 	const state = await setup('12904');
 	const receipt = await state.prepare();
-	await new References(state.dependencies).recoverQueuedReferenceRuns();
+	await new References(state.dependencies).resumeQueuedReferenceRun(receipt.runId);
 	await state.finished(receipt.runId);
 	expect(
-		(await state.events.replay(state.owner, receipt.runId, '0')).flatMap((record) =>
+		(await state.events.replay(receipt.runId, '0')).flatMap((record) =>
 			record.kind === 'readable' && record.event.type === 'workflow_result'
 				? [record.event.action]
 				: []

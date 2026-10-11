@@ -3,6 +3,7 @@ import { ClipboardTransfer } from '$lib/controllers/notes/clipboard';
 import { InMemoryClipboard } from '$lib/testing/notes/fakes/in-memory-clipboard';
 import { BrowserClipboardDocument } from './document';
 import { readClipboardImage } from './images';
+import { MermaidThemeService } from '$lib/services/diagrams/mermaid-theme';
 
 const png = async (): Promise<Blob> => {
 	const canvas = document.createElement('canvas');
@@ -25,7 +26,18 @@ const setup = () => {
 		writer,
 		document: (content) => new BrowserClipboardDocument(content),
 		readImage: readClipboardImage,
-		renderDiagram: png
+		mermaid: {
+			themes: new MermaidThemeService(),
+			renderer: { render: async () => '<svg xmlns="http://www.w3.org/2000/svg"/>' },
+			output: {
+				pixelRatio: () => 1,
+				rasterise: async () => 'data:image/png;base64,',
+				blob: png,
+				downloadSvg: () => undefined,
+				downloadPng: () => undefined
+			},
+			theme: () => ({ base: 'light' })
+		}
 	});
 	return { writer, transfer };
 };

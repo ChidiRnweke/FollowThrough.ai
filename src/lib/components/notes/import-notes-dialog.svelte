@@ -1,17 +1,16 @@
 <script lang="ts">
 	import type {
-		ImportMarkdownArchiveOutput,
 		ProjectId,
-		ArchiveLinkIssue
+		ArchiveLinkIssue,
+		ImportMarkdownArchiveOutput
 	} from '$lib/models/projects';
-	import { readArchiveImportResponse } from '$lib/client/notes/import-response';
+	import { uploadArchive } from '$lib/client/notes/archive-import';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { NoteId } from '$lib/models/notes';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import FileDropzone from '../attachments/file-dropzone.svelte';
 
-	/** Mirrors DEFAULT_ARCHIVE_LIMITS server-side, so the reject happens before the upload. */
 	const linkIssueMessages: Record<ArchiveLinkIssue['reason'], string> = {
 		ambiguous: 'More than one note matches. Choose the intended note.',
 		missing: 'No matching note exists in this archive.',
@@ -36,34 +35,43 @@
 	let archive = $state<File | undefined>(undefined);
 	let busy = $state(false);
 	let error = $state('');
-	let report = $state<ImportMarkdownArchiveOutput | undefined>(undefined);
+	let report = $state<ImportMarkdownArchiveOutput>();
+	// An in-flight import belongs to the dialog destination it started in.
+	let generation = 0;
 
+	$effect(() => {
+		const scope = { open, projectId, parentId };
+		if (!scope.open) return;
+		return () => clear();
+	});
+
+	/** Upload, then refresh this device's copy so the imported notes are in the tree. */
 	async function run(): Promise<void> {
-		if (!archive) return;
+		if (!archive || busy) return;
+		const scope = generation;
 		busy = true;
 		error = '';
-		try {
-			const body = new FormData();
-			body.set('archive', archive);
-			body.set('projectId', projectId);
-			if (parentId) body.set('parentId', parentId);
-			const response = await fetch('/api/imports', { method: 'POST', body });
-			const result = await readArchiveImportResponse(response);
-			if (response.ok) await workspaceSession.synchronize();
-			if (result.kind === 'failure') error = result.message;
-			else report = result.report;
-			// audit-allow: silent-catch — an uncertain import outcome is rendered with advice to inspect the project before retrying.
-		} catch {
+		const imported = await workspaceSession.serverChange(
+			uploadArchive(archive, projectId, parentId)
+		);
+		if (scope !== generation) return;
+		busy = false;
+		if (imported.kind === 'failure')
 			error = 'The import outcome could not be confirmed. Check the project before trying again.';
-		} finally {
-			busy = false;
-		}
+		else if (imported.value.kind === 'failure') error = imported.value.message;
+		else report = imported.value.report;
+	}
+
+	function clear(): void {
+		generation += 1;
+		busy = false;
+		error = '';
+		report = undefined;
 	}
 
 	function reset(): void {
 		archive = undefined;
-		report = undefined;
-		error = '';
+		clear();
 	}
 </script>
 

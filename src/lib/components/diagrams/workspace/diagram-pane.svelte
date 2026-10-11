@@ -1,8 +1,11 @@
 <script lang="ts">
-	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
+	import { workspaceViews } from '$lib/factories/workspace/session';
+	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { onMount, untrack } from 'svelte';
 	import { diagramEtag } from '$lib/models/diagrams';
-	import { accessMessage } from '$lib/services/sync/state';
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { accessMessage } = workspacePresentation;
+
 	import type {
 		DiagramId,
 		DiagramRevisionId,
@@ -10,10 +13,11 @@
 		DrawioDiagram
 	} from '$lib/models/diagrams';
 	import type { DiagramMutationRequest } from '$lib/models/workspace-mutations';
-	import { workspaceResourceKey } from '$lib/models/workspace-sync';
 
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	const { workspaceResourceKey } = workspacePresentation;
+
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import * as Icon from '$lib/components/icons';
@@ -38,21 +42,21 @@
 	const resources = session.resources;
 	const draft = untrack(() => resources.draft({ type: 'diagrams', id: [diagramId] }));
 	void draft.open();
-	const editorSession = new EditorSession(() => resources.active);
+	const editorSession = createEditorSession(() => resources.active);
 	let control = $state<DrawioControl>();
 	let editor = $state<DrawioStatus>({ phase: 'loading', modified: false });
 	let renaming = $state(false);
-	let renameDraft = $state<WorkspaceDraft<'diagrams'> | null>(null);
+	let renameDraft = $state<WorkspaceDraftController<'diagrams'> | null>(null);
 	let restoring = $state(false);
 	let historyOpen = $state(false);
 	let conflictOpen = $state(false);
 	let reviewSource = $state<string | null>(null);
 	let selectedRevisionId = $state<DiagramRevisionId>();
 	const candidate = $derived(
-		draft.state.kind === 'ready' ? (resources.views.diagram(diagramId) ?? draft.state.value) : null
+		draft.state.kind === 'ready' ? (workspaceViews.diagram(diagramId) ?? draft.state.value) : null
 	);
 	const archivedProject = $derived(
-		candidate ? resources.views.get('projects', candidate.projectId)?.archivedAt : undefined
+		candidate ? workspaceViews.get('projects', candidate.projectId)?.archivedAt : undefined
 	);
 	// Keep a mounted canvas available for recovery, but do not open a new archived-project canvas.
 	let opened = $state(false);
@@ -210,7 +214,7 @@
 			const result = await restoreDiagramRevision({
 				diagramId,
 				revisionId,
-				baseEtag: diagramEtag(value)
+				baseEtag: diagramEtag(value.id, value.currentRevision)
 			});
 			if (result.outcome !== 'saved')
 				throw new Error('The diagram changed. Review it before restoring a version');

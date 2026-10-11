@@ -4,7 +4,6 @@ import { defaultExportSettings } from '$lib/models/deliverables';
 import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/export-controller';
 import {
 	noteBuilder,
-	testActor,
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -20,7 +19,7 @@ describe('durable document exports', () => {
 		const { service, notes, artifacts, provenance, storage } = exportControllerFixture();
 		notes.notes = [noteBuilder()];
 		artifacts.insertFailure = new Error('Database unavailable');
-		const outcome = await service.generateDocument(testActor(), input).then(
+		const outcome = await service.generateDocument(input).then(
 			() => 'success',
 			(error) => error.message
 		);
@@ -34,9 +33,9 @@ describe('durable document exports', () => {
 	it('preserves the original export when regeneration fails to persist', async () => {
 		const { service, notes, artifacts, provenance, storage } = exportControllerFixture();
 		notes.notes = [noteBuilder()];
-		const original = await service.generateDocument(testActor(), input);
+		const original = await service.generateDocument(input);
 		artifacts.insertFailure = new Error('Database unavailable');
-		const outcome = await service.regenerateArtifact(testActor(), original.artifact.id).then(
+		const outcome = await service.regenerateArtifact(original.artifact.id).then(
 			() => 'success',
 			(error) => error.message
 		);
@@ -56,7 +55,7 @@ describe('durable document exports', () => {
 		const { service, notes, artifacts, provenance, storage } = exportControllerFixture();
 		notes.notes = [noteBuilder()];
 		storage.downloadFailure = new Error('Signing unavailable');
-		const outcome = await service.generateDocument(testActor(), input).then(
+		const outcome = await service.generateDocument(input).then(
 			() => 'success',
 			(error) => error.message
 		);
@@ -74,7 +73,7 @@ describe('durable document exports', () => {
 		const cleanup = new Error('Storage unavailable');
 		artifacts.insertFailure = persistence;
 		storage.removeFailure = cleanup;
-		await expect(service.generateDocument(testActor(), input)).rejects.toMatchObject({
+		await expect(service.generateDocument(input)).rejects.toMatchObject({
 			errors: [persistence, cleanup]
 		});
 	});
@@ -86,15 +85,15 @@ describe('durable document exports', () => {
 		};
 		const { service, notes } = exportControllerFixture({ pdfGenerator });
 		notes.notes = [noteBuilder({ title: 'Before' })];
-		const original = await service.generateDocument(testActor(), input);
+		const original = await service.generateDocument(input);
 		notes.notes = [noteBuilder({ title: 'After' })];
 		const settings = {
 			...defaultExportSettings,
 			includeTitle: true,
 			diagramTheme: { base: 'dark' as const, colors: { primaryColor: '#123456' } }
 		};
-		await service.updateExportSettings(testActor(), testProjectId(), settings);
-		await service.regenerateArtifact(testActor(), original.artifact.id);
+		await service.updateExportSettings(testProjectId(), settings);
+		await service.regenerateArtifact(original.artifact.id);
 		expect({ title: rendered[1]?.notes[0]?.title, settings: rendered[1]?.settings }).toEqual({
 			title: 'After',
 			settings

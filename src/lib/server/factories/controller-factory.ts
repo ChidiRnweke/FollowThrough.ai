@@ -1,4 +1,6 @@
-import type { AgentController } from '../controllers/agent/controller';
+import type { AttachmentProcessingController } from '$lib/server/controllers/attachment-processing/controller';
+import type { KnowledgeIndexingController } from '$lib/server/controllers/knowledge-indexing/controller';
+import type { AgentHarness } from '../controllers/agent/controller';
 import type { AgentFilesController } from '../controllers/agent-files/controller';
 import type { AgentSettingsController } from '../controllers/agent/settings/controller';
 import type { ToolPreferencesController } from '../controllers/agent/tool-preferences/controller';
@@ -35,7 +37,7 @@ export interface ControllerFactory {
 	diagramStudio(): DiagramStudioController;
 	suggestions(): SuggestionsController;
 	skills(): SkillsController;
-	agent(): AgentController;
+	agentHarness(): AgentHarness;
 	agentSettings(): AgentSettingsController;
 	userSettings(): UserSettingsController;
 	apiTokens(): ApiTokensController;
@@ -48,4 +50,6 @@ export interface ControllerFactory {
 	retrieval(): RetrievalController;
 	inlineSuggestions(): InlineSuggestionsController;
 	feedback(): FeedbackController;
+	attachmentProcessing(): AttachmentProcessingController;
+	knowledgeIndexing(): KnowledgeIndexingController;
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { NodeViewProps } from '@tiptap/core';
 	import { untrack } from 'svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type { TodoId } from '$lib/models/todos';
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
 	import { Badge } from '$lib/components/ui/badge';
@@ -9,7 +9,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { openTodoSurface } from '$lib/client/shell/responsive-surfaces';
 	import { page } from '$app/state';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from './todo-updates';
 	import { formatDate, todayLocalDate } from '../shared/labels';
 
 	let { node, editor }: NodeViewProps = $props();
@@ -21,7 +21,7 @@
 
 	const perNote = $derived(editor.perNote);
 	const todoId = $derived(node.attrs.todoId as TodoId | null);
-	const views = $derived(workspaceSession.current?.resources.views);
+	const views = $derived(workspaceViews);
 	const todo = $derived(todoId && perNote ? views?.get('todos', todoId) : undefined);
 	const view = $derived(todo ? views?.todo(todo) : undefined);
 	const done = $derived(view?.todo.status === 'done');

@@ -122,3 +122,8 @@ export interface ReferenceView {
 	readonly reference: ExternalReference;
 	readonly anchor?: SourceAnchor;
 }
+
+export interface ReferenceSearchOptions {
+	readonly model?: string;
+	readonly signal?: AbortSignal;
+}

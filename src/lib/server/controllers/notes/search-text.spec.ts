@@ -1,8 +1,23 @@
-import { describe, expect, it } from 'vitest';
-import { Notes, type NotesDependencies } from './controller';
+import type { Note, ProseMirrorDocument } from '$lib/models/notes';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	testActor,
@@ -10,12 +25,32 @@ import {
 	testNow,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { Note, ProseMirrorDocument } from '$lib/models/notes';
+import { describe, expect, it } from 'vitest';
+import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
+			...agentToolResultsFixture(),
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			noteReader: content,
 			noteTextSearcher: content,
 			noteEditor: content,
@@ -42,7 +77,7 @@ describe('Searching note text', () => {
 	it('finds content matches with their offsets', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('ship it, then ship it again')];
-		const result = await controller.searchText(testActor(), search);
+		const result = await controller.searchText(search);
 		expect(result.hits[0]?.matches).toMatchObject([
 			{ start: 0, end: 4, text: 'ship' },
 			{ start: 14, end: 18, text: 'ship' }
@@ -60,7 +95,7 @@ describe('Searching note text', () => {
 	it('finds title matches alongside content matches', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('nothing here', { title: 'Ship log' })];
-		const result = await controller.searchText(testActor(), search);
+		const result = await controller.searchText(search);
 		expect(result.hits[0]?.titleMatches).toEqual([{ start: 0, end: 4, text: 'Ship' }]);
 	});
 
@@ -70,7 +105,7 @@ describe('Searching note text', () => {
 			noteWithText('ship alpha'),
 			noteWithText('ship beta', { id: testNoteId(2), projectId: testProjectId(2) })
 		];
-		const result = await controller.searchText(testActor(), {
+		const result = await controller.searchText({
 			...search,
 			projectId: testProjectId(2)
 		});
@@ -80,21 +115,21 @@ describe('Searching note text', () => {
 	it('excludes archived notes', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('ship it', { archivedAt: testNow })];
-		const result = await controller.searchText(testActor(), search);
+		const result = await controller.searchText(search);
 		expect(result.hits).toEqual([]);
 	});
 
 	it('rejects an invalid regex before reading anything', async () => {
 		const { controller } = setup();
 		await expect(
-			controller.searchText(testActor(), { query: '([', regex: true, caseSensitive: false })
+			controller.searchText({ query: '([', regex: true, caseSensitive: false })
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
 	it('rejects an empty query', async () => {
 		const { controller } = setup();
 		await expect(
-			controller.searchText(testActor(), { query: '', regex: false, caseSensitive: false })
+			controller.searchText({ query: '', regex: false, caseSensitive: false })
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 });
@@ -109,9 +144,7 @@ describe('Replacing note text', () => {
 		];
 		content.notes = original;
 		content.failIndexFor.add(testNoteId(2));
-		await controller
-			.replaceText(testActor(), { ...replace, query: 'deploy' })
-			.catch(() => undefined);
+		await controller.replaceText({ ...replace, query: 'deploy' }).catch(() => undefined);
 		expect({ notes: content.notes, indexed: content.indexedNoteIds }).toEqual({
 			notes: original,
 			indexed: []
@@ -124,14 +157,14 @@ describe('Replacing note text', () => {
 			noteWithText('deploy alpha'),
 			noteWithText('deploy beta', { id: testNoteId(2) })
 		];
-		await controller.replaceText(testActor(), { ...replace, query: 'deploy' });
+		await controller.replaceText({ ...replace, query: 'deploy' });
 		expect(content.notes.map((note) => note.plainText)).toEqual(['ship alpha', 'ship beta']);
 	});
 
 	it('reports how many notes and matches it replaced', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('deploy and deploy')];
-		const result = await controller.replaceText(testActor(), { ...replace, query: 'deploy' });
+		const result = await controller.replaceText({ ...replace, query: 'deploy' });
 		expect(result).toEqual({ replacedNotes: 1, replacedMatches: 2 });
 	});
 
@@ -141,7 +174,7 @@ describe('Replacing note text', () => {
 			noteWithText('deploy alpha'),
 			noteWithText('deploy beta', { id: testNoteId(2) })
 		];
-		await controller.replaceText(testActor(), {
+		await controller.replaceText({
 			...replace,
 			query: 'deploy',
 			noteIds: [testNoteId(2)]
@@ -152,14 +185,14 @@ describe('Replacing note text', () => {
 	it('leaves notes whose only match is the title untouched', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('nothing here', { title: 'Ship log' })];
-		const result = await controller.replaceText(testActor(), replace);
+		const result = await controller.replaceText(replace);
 		expect(result).toEqual({ replacedNotes: 0, replacedMatches: 0 });
 	});
 
 	it('saves through the regular path so the note is re-indexed', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('deploy alpha')];
-		await controller.replaceText(testActor(), { ...replace, query: 'deploy' });
+		await controller.replaceText({ ...replace, query: 'deploy' });
 		expect(content.indexedNoteIds).toEqual([testNoteId()]);
 	});
 
@@ -167,7 +200,7 @@ describe('Replacing note text', () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('deploy alpha')];
 		await expect(
-			controller.replaceText(testActor(), {
+			controller.replaceText({
 				query: '([',
 				regex: true,
 				caseSensitive: false,

@@ -1,39 +1,52 @@
-import { describe, expect, it } from 'vitest';
-import { Todos, type TodosDependencies } from './controller';
-import { TodoCatalog } from '$lib/server/services/todos/catalog';
+import { createTodoBatchSchema } from '$lib/models/todos';
+import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
-import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
-import { InMemoryTodoBatchReceipts } from '$lib/testing/todos/fakes/in-memory-todo-batch-receipts';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemoryTodoBatchReceipts } from '$lib/testing/todos/fakes/in-memory-todo-batch-receipts';
+import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	projectBuilder,
 	testActor,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { createTodoBatchSchema } from '$lib/models/todos';
+import { describe, expect, it } from 'vitest';
+import { Todos, type TodosDependencies } from './controller';
 
 const setup = () => {
-	const records = new InMemoryTodoRepository();
-	const receipts = new InMemoryTodoBatchReceipts();
-	const projects = new InMemoryProjectRepository();
+	const records = new InMemoryTodoRepository(testActor());
+	const receipts = new InMemoryTodoBatchReceipts(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const catalog = new TodoCatalog(
+	const catalog = createTodoServices(
+		testActor(),
 		records,
 		projects,
-		new InMemoryAnchorRepository(),
-		new InMemoryNoteRepository(),
-		new InMemoryProvenanceRepository()
+		new InMemoryAnchorRepository(testActor()),
+		new InMemoryNoteRepository(testActor()),
+		new InMemoryProvenanceRepository(testActor())
 	);
 	const controller = new Todos(
+		testActor(),
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
-			todoCreator: catalog,
+			...agentToolResultsFixture(),
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
+			todoCreator: catalog.creator,
 			todoBatchReceipts: new TodoBatchReceipts(receipts),
 			transactionRunner: new InMemoryTransactionRunner([records, receipts])
 		})
@@ -53,7 +66,7 @@ describe('durable task batches', () => {
 	it('rolls back earlier tasks when a later insert fails', async () => {
 		const { records, receipts, controller, input } = setup();
 		records.insertFailures.set('Second', new Error('Storage unavailable'));
-		const outcome = await controller.createBatch(testActor(), input).then(
+		const outcome = await controller.createBatch(input).then(
 			() => 'saved',
 			(error: Error) => error.message
 		);
@@ -66,7 +79,7 @@ describe('durable task batches', () => {
 	it('rolls back every task when its outcome cannot be saved', async () => {
 		const { records, receipts, controller, input } = setup();
 		receipts.saveError = new Error('Receipt unavailable');
-		const outcome = await controller.createBatch(testActor(), input).then(
+		const outcome = await controller.createBatch(input).then(
 			() => 'saved',
 			(error: Error) => error.message
 		);
@@ -77,8 +90,8 @@ describe('durable task batches', () => {
 	});
 	it('returns the saved result without creating duplicates after a lost response', async () => {
 		const { records, controller, input } = setup();
-		const original = await controller.createBatch(testActor(), input);
-		const retried = await controller.createBatch(testActor(), input);
+		const original = await controller.createBatch(input);
+		const retried = await controller.createBatch(input);
 		expect({
 			retried,
 			stored: records.todos,
@@ -87,9 +100,9 @@ describe('durable task batches', () => {
 	});
 	it('rejects reuse of a request ID for changed input', async () => {
 		const { records, controller, input } = setup();
-		const original = await controller.createBatch(testActor(), input);
+		const original = await controller.createBatch(input);
 		const outcome = await controller
-			.createBatch(testActor(), {
+			.createBatch({
 				...input,
 				todos: [{ title: 'Different', responsibility: 'mine' }]
 			})
@@ -111,6 +124,6 @@ it('creates all tasks in a batch beyond twenty', async () => {
 		...input,
 		todos: titles.map((title) => ({ title, responsibility: 'mine' }))
 	});
-	const result = await controller.createBatch(testActor(), request);
+	const result = await controller.createBatch(request);
 	expect(result.todos.map((todo) => todo.title)).toEqual(titles);
 });

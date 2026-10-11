@@ -1,6 +1,7 @@
 import type { HandleServerError, ServerInit } from '@sveltejs/kit';
 import { building } from '$app/env';
 import { AppFactory } from '$lib/server/factories/app-factory';
+import type { OwnedRun } from '$lib/models/agent';
 import {
 	getSessionCookie,
 	setSessionCookie,
@@ -16,7 +17,42 @@ export const init: ServerInit = async () => {
 	// Builds and prerendering do not load deployment secrets.
 	if (building) return;
 	await hydrateEnvironment();
-	const recovered = await AppFactory.recoverInterruptedRuns();
+	// Recovery lists runs across every user, then acts on each as its owner. Interrupted runs
+	// settle first, then queued agent runs and queued note-action workflows start.
+	const recovery = AppFactory.system().runRecovery();
+	const interrupted = await recovery.interrupted();
+	for (const run of interrupted)
+		await AppFactory.forActor(run.owner).agentHarness().recoverInterrupted(run.runId);
+	const queuedAgents = await recovery.queuedAgentRuns();
+	for (const run of queuedAgents)
+		await AppFactory.forActor(run.owner).agentHarness().resumeQueued(run.runId);
+	const workflows = [
+		[
+			'promise_extraction',
+			(run: OwnedRun) => AppFactory.forActor(run.owner).todos().resumeQueuedPromiseRun(run.runId)
+		],
+		[
+			'reference_search',
+			(run: OwnedRun) =>
+				AppFactory.forActor(run.owner).references().resumeQueuedReferenceRun(run.runId)
+		],
+		[
+			'related_notes',
+			(run: OwnedRun) =>
+				AppFactory.forActor(run.owner).relationships().resumeQueuedRelatedNoteRun(run.runId)
+		],
+		[
+			'diagram_action',
+			(run: OwnedRun) => AppFactory.forActor(run.owner).diagrams().resumeQueuedDiagramRun(run.runId)
+		]
+	] as const;
+	let queuedWorkflows = 0;
+	for (const [kind, resume] of workflows) {
+		const queued = await recovery.queuedWorkflowRuns(kind);
+		queuedWorkflows += queued.length;
+		for (const run of queued) await resume(run);
+	}
+	const recovered = interrupted.length + queuedAgents.length + queuedWorkflows;
 	if (recovered > 0)
 		console.log(`[agent-run] Recovered ${recovered} interrupted run(s) on startup`);
 };
@@ -53,8 +89,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = getSessionCookie(event.cookies);
 
 	if (sessionId) {
-		const authService = AppFactory.sessions();
-		const result = await authService.validateSession(sessionId);
+		const result = await AppFactory.authentication().resumeSession(sessionId);
 		if (result) {
 			// Session validation may extend the stored deadline. Keep the browser in sync.
 			setSessionCookie(

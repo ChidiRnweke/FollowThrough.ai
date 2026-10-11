@@ -1,7 +1,10 @@
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { expect, it } from 'vitest';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
-import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import {
+	AgentRunBacklogRecords,
+	AgentRunRecords
+} from '$lib/server/repositories/agent/postgres/agent-settings';
 import { AgentRunEventRecords } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
@@ -12,20 +15,20 @@ import { context, seedNote, now } from '../database-harness';
 it('selects queued chat runs without selecting running chats or queued note actions', async () => {
 	const { owner, note } = await seedNote('12601');
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const runs = new AgentRunRecords(database);
-	const events = new AgentRunEventRecords(database);
-	const conversations = new ConversationRecords(database);
-	const journal = new ConversationArchive(conversations);
+	const runs = new AgentRunRecords(owner, database);
+	const events = new AgentRunEventRecords(owner, database);
+	const conversations = new ConversationRecords(owner, database);
+	const journal = new ConversationArchive(owner, conversations);
 	const queuedChat = async () =>
 		transactionRunner.run(async () => {
-			const conversation = await conversations.insert(owner, {
+			const conversation = await conversations.insert({
 				id: crypto.randomUUID() as ConversationId,
 				userId: owner.userId,
 				kind: 'chat',
 				createdAt: now,
 				updatedAt: now
 			});
-			const run = await runs.insert(owner, {
+			const run = await runs.insert({
 				kind: 'agent',
 				id: crypto.randomUUID() as AgentRunId,
 				userId: owner.userId,
@@ -39,7 +42,7 @@ it('selects queued chat runs without selecting running chats or queued note acti
 				createdAt: now,
 				updatedAt: now
 			});
-			await journal.recordUserPrompt(owner, conversation.id, 'Queued request', run.id);
+			await journal.recordUserPrompt(conversation.id, 'Queued request', run.id);
 			await events.append(run.id, 1, {
 				type: 'run_queued',
 				runId: run.id,
@@ -53,7 +56,7 @@ it('selects queued chat runs without selecting running chats or queued note acti
 		const running = await queuedChat();
 		await new RunPreparation(runs).claim(running.id, now);
 		await transactionRunner.run(() =>
-			new NoteActionRequests(runs, events, conversations).prepare(owner, {
+			new NoteActionRequests(owner, runs, events, conversations).prepare({
 				requestId: crypto.randomUUID(),
 				context: {
 					kind: 'promise_extraction',
@@ -69,7 +72,7 @@ it('selects queued chat runs without selecting running chats or queued note acti
 			})
 		);
 		expect(
-			(await runs.listQueuedAgents())
+			(await new AgentRunBacklogRecords(database).listQueuedAgents())
 				.filter((run) => run.userId === owner.userId)
 				.map((run) => run.id)
 		).toEqual([queued.id]);

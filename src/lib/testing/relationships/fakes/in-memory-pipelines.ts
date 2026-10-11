@@ -1,3 +1,4 @@
+import type { WebResearchSettings } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
 import type { RelationshipClassification } from '$lib/models/relationships';
 import type { PipelineKind } from '$lib/models/agent';
@@ -6,18 +7,15 @@ import { provenanceSchema, type Provenance, type ProvenanceRequest } from '$lib/
 import type { ReferenceCandidate, ReferenceSource } from '$lib/models/references';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { TextSelection } from '$lib/models/notes';
-import type { StructuredRelationshipClient } from '$lib/server/services/relationships/contracts';
+import type { StructuredRelationshipClient } from '$lib/server/repositories/relationships/classification';
+import type { PromiseExtractor } from '$lib/server/services/todos/promise-discovery';
 import type {
-	PromiseExtractor,
 	StructuredPromiseClient,
 	StructuredPromiseResult
-} from '$lib/server/services/todos/promise-extraction/contracts';
+} from '$lib/server/repositories/todos/classification';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
-import type {
-	ReferenceFinder,
-	ReferenceSearchOptions,
-	WebReferenceClient
-} from '$lib/server/services/references/contracts';
+import type { WebReferenceClient } from '$lib/server/services/references/web-research';
+import type { ReferenceSearchOptions } from '$lib/models/references';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import { testNow, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 import type {
@@ -32,12 +30,10 @@ export class InMemoryPromiseExtractor implements PromiseExtractor {
 	readonly modelCandidates = new Map<string, readonly PromiseCandidate[]>();
 
 	async extract(
-		_actor: ActorContext,
 		_selection: TextSelection,
-		context: Parameters<PromiseExtractor['extract']>[2],
+		context: Parameters<PromiseExtractor['extract']>[1],
 		_signal?: AbortSignal
 	): Promise<readonly PromiseCandidate[]> {
-		void _actor;
 		void _selection;
 		void _signal;
 		this.started.resolve();
@@ -78,35 +74,45 @@ export class InMemoryStructuredRelationshipClient implements StructuredRelations
 	}
 }
 
-export class InMemoryReferencePipeline implements ReferenceFinder {
+export class InMemoryReferencePipeline implements WebReferenceClient {
 	candidates: ReferenceCandidate[] = [];
 	model?: string;
 	readonly started = Promise.withResolvers<void>();
 	completion: Promise<void> = Promise.resolve();
 	readonly modelCandidates = new Map<string, readonly ReferenceCandidate[]>();
-	async find(
-		_actor: ActorContext,
-		_selection: TextSelection,
+	async search(
+		_text: string,
+		_research: WebResearchSettings,
 		options: ReferenceSearchOptions = {}
-	): Promise<readonly ReferenceCandidate[]> {
-		void _actor;
-		void _selection;
+	): Promise<readonly ReferenceSource[]> {
+		void _text;
+		void _research;
 		this.model = options.model;
 		this.started.resolve();
 		await this.completion;
-		return (options.model ? this.modelCandidates.get(options.model) : undefined) ?? this.candidates;
+		return (
+			(options.model ? this.modelCandidates.get(options.model) : undefined) ?? this.candidates
+		).map((candidate) => ({
+			url: candidate.url,
+			title: candidate.title,
+			hostname: new URL(candidate.url).hostname,
+			content: candidate.relevanceNote
+		}));
 	}
 }
 
 export class InMemoryWebReferenceClient implements WebReferenceClient {
 	result?: readonly ReferenceSource[];
+	research?: WebResearchSettings;
 	failure?: Error;
 	model?: string;
 	async search(
 		_selectionText: string,
+		research: WebResearchSettings,
 		options: ReferenceSearchOptions = {}
 	): Promise<readonly ReferenceSource[] | undefined> {
 		void _selectionText;
+		this.research = research;
 		this.model = options.model;
 		if (this.failure) throw this.failure;
 		return this.result;
@@ -114,17 +120,18 @@ export class InMemoryWebReferenceClient implements WebReferenceClient {
 }
 
 export class InMemoryProvenanceRecorder implements ProvenanceRecorder, SnapshotParticipant {
+	constructor(private readonly actor: ActorContext) {}
 	records: Provenance[] = [];
 	readonly started = Promise.withResolvers<void>();
 	completion: Promise<void> = Promise.resolve();
 
-	async record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance> {
+	async record(input: ProvenanceRequest): Promise<Provenance> {
 		this.started.resolve();
 		await this.completion;
 		const provenance = provenanceSchema.parse({
 			...input,
 			id: testProvenanceId(this.records.length + 1),
-			userId: actor.userId,
+			userId: this.actor.userId,
 			createdAt: testNow
 		});
 		this.records.push(provenance);
@@ -140,14 +147,10 @@ export class InMemoryProvenanceRecorder implements ProvenanceRecorder, SnapshotP
 }
 
 export class InMemoryTrustPolicyEvaluator implements TrustPolicyEvaluator {
+	constructor() {}
 	autoAccept = false;
 
-	async shouldAutoAccept(
-		_actor: ActorContext,
-		pipeline: PipelineKind,
-		_suggestion: Suggestion
-	): Promise<boolean> {
-		void _actor;
+	async shouldAutoAccept(pipeline: PipelineKind, _suggestion: Suggestion): Promise<boolean> {
 		void _suggestion;
 		return pipeline !== 'reference' && this.autoAccept;
 	}

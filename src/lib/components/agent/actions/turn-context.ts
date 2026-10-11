@@ -1,8 +1,11 @@
-import type { ShellContext } from '$lib/client/shell/views';
+import type { ShellContext } from '$lib/models/workspace-views';
 import type { EntityRef } from '$lib/models/tool-display';
 
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
-import { isAgentPayloadObject, type AgentPayload } from '$lib/models/agent/payload';
+import { type AgentPayload } from '$lib/models/agent/payload';
+import { agentPayloadOperations } from '$lib/factories/agent/payload';
+const { isAgentPayloadObject } = agentPayloadOperations;
+
 import { toolFailure, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import { mechanismTools, type MechanismTool } from './rendered-tools';
 import { completedToolLabel, friendlyToolLabel, subjectVerb } from './tool-labels';

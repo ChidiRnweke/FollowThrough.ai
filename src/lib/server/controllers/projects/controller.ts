@@ -1,18 +1,13 @@
-import { decideProjectEntryMove } from '$lib/server/services/projects/catalog';
-import type { NoteCatalog } from '$lib/server/services/notes/catalog';
-import { decideNoteCreation } from '$lib/services/notes/creation';
-import type { DateTime } from '$lib/models/workspace';
-import { assembleProjectTree } from '$lib/services/projects/presentation';
-import { decideProjectDetails } from '$lib/services/projects/details';
 import { NotFoundError, ValidationError } from '$lib/errors';
-import { mutationResource } from '$lib/services/workspace/commands';
+import type { DateTime } from '$lib/models/workspace';
+import type { NoteCreator } from '$lib/server/services/notes/catalog';
+import type { NoteCreationRules } from '$lib/services/notes/lifecycle';
+import type { ProjectDetailRules } from '$lib/services/projects/details';
+import type { ProjectPlacement } from '$lib/services/projects/placement';
+import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+
 import type { Note, NoteId } from '$lib/models/notes';
-import type {
-	ProjectMutationRequest,
-	WorkspaceMutationResult
-} from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	ArchiveProjectInput,
 	ArchiveProjectOutput,
@@ -30,15 +25,21 @@ import type {
 	SetProjectSectionNumberingInput,
 	SetProjectSectionNumberingOutput
 } from '$lib/models/projects';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type {
+	ProjectMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
 import type {
 	ProjectCreator,
 	ProjectEditor,
-	ProjectTreeWriter,
+	ProjectLifecycle,
 	ProjectLister,
 	ProjectReader,
-	ProjectTreeReader
-} from '$lib/server/services/projects/contracts';
-import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+	ProjectTreeReader,
+	ProjectTreeWriter
+} from '$lib/server/services/projects/catalog';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /**
  * Application boundary for projects and their folder tree: listing, loading, creating,
@@ -46,54 +47,58 @@ import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace
  * lock while reading the tree and persisting its resolved changes.
  */
 export interface ProjectsController {
-	synchronize(actor: ActorContext, input: ProjectMutationRequest): Promise<WorkspaceMutationResult>;
+	synchronize(input: ProjectMutationRequest): Promise<WorkspaceMutationResult>;
 	/** List the user's projects. */
-	list(actor: ActorContext): Promise<ListProjectsOutput>;
+	list(): Promise<ListProjectsOutput>;
 	/** Load a project together with its full entry tree, fetched in parallel. */
-	get(actor: ActorContext, input: GetProjectInput): Promise<GetProjectOutput>;
+	get(input: GetProjectInput): Promise<GetProjectOutput>;
 	/** Create a project. */
-	create(actor: ActorContext, input: CreateProjectInput): Promise<CreateProjectOutput>;
+	create(input: CreateProjectInput): Promise<CreateProjectOutput>;
 	/** Rename a project. */
-	rename(actor: ActorContext, input: RenameProjectInput): Promise<RenameProjectOutput>;
+	rename(input: RenameProjectInput): Promise<RenameProjectOutput>;
 	/** Archive a project, removing it from the default workspace view. */
-	archive(actor: ActorContext, input: ArchiveProjectInput): Promise<ArchiveProjectOutput>;
+	archive(input: ArchiveProjectInput): Promise<ArchiveProjectOutput>;
 	/** Set or clear the project's section-numbering default (`undefined` inherits the app default). */
 	setSectionNumberingDefault(
-		actor: ActorContext,
 		input: SetProjectSectionNumberingInput
 	): Promise<SetProjectSectionNumberingOutput>;
 	/** Create a folder inside a project. */
-	createFolder(actor: ActorContext, input: CreateFolderInput): Promise<CreateFolderOutput<Note>>;
+	createFolder(input: CreateFolderInput): Promise<CreateFolderOutput<Note>>;
 	/** Move a note or folder to a new parent and position, atomically. */
-	move(actor: ActorContext, input: MoveProjectEntryInput): Promise<MoveProjectEntryOutput<Note>>;
+	move(input: MoveProjectEntryInput): Promise<MoveProjectEntryOutput<Note>>;
 }
 
 export interface ProjectsDependencies {
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	readonly noteCreationRules: NoteCreationRules;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	projectCreator: ProjectCreator;
 	projectReader: ProjectReader;
 	projectLister: ProjectLister;
 	projectEditor: ProjectEditor;
+	projectLifecycle: ProjectLifecycle;
+	placement: ProjectPlacement;
+	details: ProjectDetailRules;
+	presentation: ProjectTreePresentation;
 	projectTreeReader: ProjectTreeReader;
-	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
+	noteCreation: NoteCreator;
 	entryWriter: ProjectTreeWriter;
 	transactionRunner: TransactionRunner;
 }
 
 export class Projects implements ProjectsController {
-	async synchronize(
-		actor: ActorContext,
-		input: ProjectMutationRequest
-	): Promise<WorkspaceMutationResult> {
+	async synchronize(input: ProjectMutationRequest): Promise<WorkspaceMutationResult> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
+					const prepared = await this.dependencies.syncMutations.prepare(input, {
+						identity: target,
+						key: this.workspaceCommandRules.workspaceResourceKey(target)
+					});
 					if (prepared.kind === 'finished') return prepared.result;
-					await this.applySynchronizedCommand(actor, input);
-					return this.dependencies.syncMutations.complete(actor, input, target);
+					await this.applySynchronizedCommand(input);
+					return this.dependencies.syncMutations.complete(input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);
@@ -103,50 +108,50 @@ export class Projects implements ProjectsController {
 		}
 	}
 
-	private async applySynchronizedCommand(
-		actor: ActorContext,
-		input: ProjectMutationRequest
-	): Promise<void> {
+	private async applySynchronizedCommand(input: ProjectMutationRequest): Promise<void> {
 		const command = input.command;
 
 		switch (command.kind) {
 			case 'createProject':
-				await this.create(actor, command);
+				await this.create(command);
 				break;
 			case 'renameProject':
-				await this.rename(actor, command);
+				await this.rename(command);
 				break;
 			case 'archiveProject':
-				await this.archive(actor, command);
+				await this.archive(command);
 				break;
 			case 'projectNumbering':
-				await this.setSectionNumberingDefault(actor, command);
+				await this.setSectionNumberingDefault(command);
 				break;
 			case 'createFolder':
-				await this.createFolder(actor, command);
+				await this.createFolder(command);
 				break;
 		}
 	}
 
-	constructor(private readonly dependencies: ProjectsDependencies) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: ProjectsDependencies
+	) {}
 
-	async list(actor: ActorContext): Promise<ListProjectsOutput> {
-		return { projects: await this.dependencies.projectLister.list(actor) };
+	async list(): Promise<ListProjectsOutput> {
+		return { projects: await this.dependencies.projectLister.list() };
 	}
 
-	async get(actor: ActorContext, input: GetProjectInput): Promise<GetProjectOutput> {
+	async get(input: GetProjectInput): Promise<GetProjectOutput> {
 		const [project, entries] = await Promise.all([
-			this.dependencies.projectReader.get(actor, input.projectId),
-			this.dependencies.projectTreeReader.readEntries(actor, input.projectId)
+			this.dependencies.projectReader.get(input.projectId),
+			this.dependencies.projectTreeReader.readEntries(input.projectId)
 		]);
-		return { project, tree: assembleProjectTree(entries) };
+		return { project, tree: this.dependencies.presentation.assemble(entries) };
 	}
 
-	async create(actor: ActorContext, input: CreateProjectInput): Promise<CreateProjectOutput> {
-		const details = decideProjectDetails(input);
+	async create(input: CreateProjectInput): Promise<CreateProjectOutput> {
+		const details = this.dependencies.details.decide(input);
 		if (details.kind === 'invalid') throw new ValidationError(details.message);
 		return {
-			project: await this.dependencies.projectCreator.create(actor, {
+			project: await this.dependencies.projectCreator.create({
 				...input,
 				name: details.name,
 				description: details.description
@@ -154,11 +159,11 @@ export class Projects implements ProjectsController {
 		};
 	}
 
-	async rename(actor: ActorContext, input: RenameProjectInput): Promise<RenameProjectOutput> {
-		const details = decideProjectDetails(input);
+	async rename(input: RenameProjectInput): Promise<RenameProjectOutput> {
+		const details = this.dependencies.details.decide(input);
 		if (details.kind === 'invalid') throw new ValidationError(details.message);
 		return {
-			project: await this.dependencies.projectEditor.rename(actor, {
+			project: await this.dependencies.projectEditor.rename({
 				projectId: input.projectId,
 				name: details.name,
 				...(input.description !== undefined ? { description: details.description ?? null } : {})
@@ -166,26 +171,22 @@ export class Projects implements ProjectsController {
 		};
 	}
 
-	async archive(actor: ActorContext, input: ArchiveProjectInput): Promise<ArchiveProjectOutput> {
-		return { project: await this.dependencies.projectEditor.archive(actor, input.projectId) };
+	async archive(input: ArchiveProjectInput): Promise<ArchiveProjectOutput> {
+		return { project: await this.dependencies.projectLifecycle.archive(input.projectId) };
 	}
 
 	async setSectionNumberingDefault(
-		actor: ActorContext,
 		input: SetProjectSectionNumberingInput
 	): Promise<SetProjectSectionNumberingOutput> {
 		return {
-			project: await this.dependencies.projectEditor.setSectionNumberingDefault(actor, input)
+			project: await this.dependencies.projectEditor.setSectionNumberingDefault(input)
 		};
 	}
 
-	async createFolder(
-		actor: ActorContext,
-		input: CreateFolderInput
-	): Promise<CreateFolderOutput<Note>> {
+	async createFolder(input: CreateFolderInput): Promise<CreateFolderOutput<Note>> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
-			const decision = decideNoteCreation(
+			const facts = await this.dependencies.noteCreation.creationFacts(input);
+			const decision = this.dependencies.noteCreationRules.decideCreation(
 				{
 					id: input.id ?? (crypto.randomUUID() as NoteId),
 					title: input.name,
@@ -199,22 +200,19 @@ export class Projects implements ProjectsController {
 				if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
 				throw new ValidationError(decision.message);
 			}
-			return { folder: await this.dependencies.noteCreation.insert(actor, decision.note) };
+			return { folder: await this.dependencies.noteCreation.insert(decision.note) };
 		});
 	}
 
-	async move(
-		actor: ActorContext,
-		input: MoveProjectEntryInput
-	): Promise<MoveProjectEntryOutput<Note>> {
+	async move(input: MoveProjectEntryInput): Promise<MoveProjectEntryOutput<Note>> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const entries = await this.dependencies.entryWriter.readForMove(actor, input.projectId);
-			const decision = decideProjectEntryMove(input, entries);
+			const entries = await this.dependencies.entryWriter.readForMove(input.projectId);
+			const decision = this.dependencies.placement.decide(input, entries);
 			if (decision.kind === 'invalid') {
 				if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
 				throw new ValidationError(decision.message);
 			}
-			await this.dependencies.entryWriter.persistOrder(actor, decision.changes);
+			await this.dependencies.entryWriter.persistOrder(decision.changes);
 			return {
 				entry: { ...decision.entry, parentId: decision.parentId, position: decision.position }
 			};

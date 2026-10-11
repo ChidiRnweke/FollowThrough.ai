@@ -14,7 +14,10 @@ import {
 
 export class InMemoryProjectRepository implements ProjectRepository, ProjectTreeRepository {
 	projects: Project[] = [];
-	constructor(private readonly entriesStore: { notes: Note[] } = { notes: [] }) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly entriesStore: { notes: Note[] } = { notes: [] }
+	) {}
 	get entries(): Note[] {
 		return this.entriesStore.notes;
 	}
@@ -31,11 +34,11 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 		};
 	}
 
-	async insert(actor: ActorContext, input: CreateProjectInput): Promise<Project> {
+	async insert(input: CreateProjectInput): Promise<Project> {
 		if (
 			this.projects.some(
 				(project) =>
-					project.userId === actor.userId &&
+					project.userId === this.actor.userId &&
 					!project.archivedAt &&
 					project.name.toLowerCase() === input.name.toLowerCase()
 			)
@@ -45,13 +48,13 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 			input.role === 'inbox' &&
 			this.projects.some(
 				(project) =>
-					project.userId === actor.userId && project.role === 'inbox' && !project.archivedAt
+					project.userId === this.actor.userId && project.role === 'inbox' && !project.archivedAt
 			)
 		)
 			throw new ConflictError('This workspace already has an active inbox');
 		const project = projectBuilder({
 			id: input.id ?? testProjectId(this.nextProject++),
-			userId: actor.userId,
+			userId: this.actor.userId,
 			name: input.name,
 			role: input.role ?? 'workspace',
 			description: input.description
@@ -60,35 +63,35 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 		return project;
 	}
 
-	findForWrite(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined> {
-		return this.findById(actor, projectId);
+	findForWrite(projectId: ProjectId): Promise<Project | undefined> {
+		return this.findById(projectId);
 	}
 
-	async findById(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined> {
+	async findById(projectId: ProjectId): Promise<Project | undefined> {
 		return this.projects.find(
 			(project) =>
-				project.id === projectId && project.userId === actor.userId && !project.archivedAt
+				project.id === projectId && project.userId === this.actor.userId && !project.archivedAt
 		);
 	}
 
-	async listActive(actor: ActorContext): Promise<readonly Project[]> {
+	async listActive(): Promise<readonly Project[]> {
 		return this.projects.filter(
-			(project) => project.userId === actor.userId && !project.archivedAt
+			(project) => project.userId === this.actor.userId && !project.archivedAt
 		);
 	}
 
-	async update(actor: ActorContext, input: ProjectRename): Promise<Project> {
+	async update(input: ProjectRename): Promise<Project> {
 		if (
 			this.projects.some(
 				(project) =>
 					project.id !== input.projectId &&
-					project.userId === actor.userId &&
+					project.userId === this.actor.userId &&
 					!project.archivedAt &&
 					project.name.toLowerCase() === input.name.toLowerCase()
 			)
 		)
 			throw new ConflictError('An active project with this name already exists');
-		const current = (await this.findById(actor, input.projectId))!;
+		const current = (await this.findById(input.projectId))!;
 		const updated = {
 			...current,
 			name: input.name,
@@ -99,9 +102,9 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 		return updated;
 	}
 
-	async archive(actor: ActorContext, projectId: ProjectId): Promise<Project> {
+	async archive(projectId: ProjectId): Promise<Project> {
 		const current = this.projects.find(
-			(project) => project.id === projectId && project.userId === actor.userId
+			(project) => project.id === projectId && project.userId === this.actor.userId
 		)!;
 		const updated = { ...current, archivedAt: testNow, updatedAt: testNow };
 		this.projects = this.projects.map((project) => (project.id === updated.id ? updated : project));
@@ -109,13 +112,12 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 	}
 
 	async setSectionNumberingDefault(
-		actor: ActorContext,
 		projectId: ProjectId,
 		enabled: boolean | null
 	): Promise<Project> {
 		const current = this.projects.find(
 			(project) =>
-				project.id === projectId && project.userId === actor.userId && !project.archivedAt
+				project.id === projectId && project.userId === this.actor.userId && !project.archivedAt
 		);
 		if (!current) throw new NotFoundError('Project was not found');
 		const updated = {
@@ -127,20 +129,18 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 		return updated;
 	}
 
-	async list(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]> {
+	async list(projectId: ProjectId): Promise<readonly Note[]> {
 		return this.entries
 			.filter(
 				(entry) =>
-					entry.userId === actor.userId && entry.projectId === projectId && !entry.archivedAt
+					entry.userId === this.actor.userId && entry.projectId === projectId && !entry.archivedAt
 			)
 			.sort((left, right) => left.position - right.position);
 	}
 
 	async persistOrder(
-		_actor: ActorContext,
 		entries: readonly { id: NoteId; parentId?: NoteId; position: number }[]
 	): Promise<void> {
-		void _actor;
 		const changes = new Map(entries.map((entry) => [entry.id, entry]));
 		this.entries = this.entries.map((entry) => ({ ...entry, ...changes.get(entry.id) }));
 	}

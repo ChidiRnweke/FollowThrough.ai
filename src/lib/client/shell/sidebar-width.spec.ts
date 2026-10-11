@@ -1,3 +1,4 @@
+import { workspacePresentation } from '$lib/factories/workspace/presentation';
 import { describe, expect, it } from 'vitest';
 import {
 	SIDEBAR_WIDTH_DEFAULT_PX,
@@ -8,22 +9,22 @@ import { parseSidebarWidth } from './sidebar-width';
 
 describe('parseSidebarWidth', () => {
 	it('falls back to the default when no cookie has been set', () => {
-		expect(parseSidebarWidth(undefined)).toBe(SIDEBAR_WIDTH_DEFAULT_PX);
+		expect(parseSidebarWidth(workspacePresentation, undefined)).toBe(SIDEBAR_WIDTH_DEFAULT_PX);
 	});
 
 	it('falls back to the default for a non-numeric cookie', () => {
-		expect(parseSidebarWidth('wide-please')).toBe(SIDEBAR_WIDTH_DEFAULT_PX);
+		expect(parseSidebarWidth(workspacePresentation, 'wide-please')).toBe(SIDEBAR_WIDTH_DEFAULT_PX);
 	});
 
 	it('raises a cookie below the minimum to the minimum', () => {
-		expect(parseSidebarWidth('40')).toBe(SIDEBAR_WIDTH_MIN_PX);
+		expect(parseSidebarWidth(workspacePresentation, '40')).toBe(SIDEBAR_WIDTH_MIN_PX);
 	});
 
 	it('lowers a cookie above the maximum to the maximum', () => {
-		expect(parseSidebarWidth('9000')).toBe(SIDEBAR_WIDTH_MAX_PX);
+		expect(parseSidebarWidth(workspacePresentation, '9000')).toBe(SIDEBAR_WIDTH_MAX_PX);
 	});
 
 	it('keeps a cookie inside the allowed range', () => {
-		expect(parseSidebarWidth('320')).toBe(320);
+		expect(parseSidebarWidth(workspacePresentation, '320')).toBe(320);
 	});
 });

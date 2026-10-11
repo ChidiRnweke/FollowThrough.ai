@@ -5,7 +5,6 @@ import {
 	promiseExtractionFixture,
 	promiseSelection
 } from '$lib/testing/todos/fixtures/promise-extraction';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const prepare = async (
 	generation: SelectionGeneration = { kind: 'model', model: 'test/model' }
@@ -15,7 +14,7 @@ const prepare = async (
 		{ action: 'Send it', responsibility: 'mine', strength: 'explicit', confidence: 95 }
 	];
 	const receipt = await state.transactions.run(() =>
-		state.requests.prepare(testActor(), {
+		state.requests.prepare({
 			requestId: crypto.randomUUID(),
 			context: { kind: 'promise_extraction', selection: promiseSelection, generation }
 		})
@@ -29,7 +28,7 @@ it('executes from the persisted selection and generation settings', async () => 
 		{ action: 'Frozen model result', responsibility: 'mine', strength: 'explicit', confidence: 95 }
 	]);
 	state.dependencies.promiseGeneration = { kind: 'model', model: 'different/model' };
-	await state.controller.executePromiseRun(testActor(), state.receipt.runId);
+	await state.controller.executePromiseRun(state.receipt.runId);
 	expect(
 		state.suggestions.suggestions.map((suggestion) =>
 			suggestion.kind === 'todo' ? suggestion.payload.title : suggestion.kind
@@ -39,7 +38,7 @@ it('executes from the persisted selection and generation settings', async () => 
 
 it('keeps deterministic extraction for a queued request when model configuration changes', async () => {
 	const state = await prepare({ kind: 'rules' });
-	await state.controller.executePromiseRun(testActor(), state.receipt.runId);
+	await state.controller.executePromiseRun(state.receipt.runId);
 	expect(
 		state.suggestions.suggestions.map((suggestion) =>
 			suggestion.kind === 'todo' ? suggestion.payload.title : suggestion.kind
@@ -52,7 +51,7 @@ it('resolves tomorrow against the stored request date after queued recovery', as
 	const text = 'I will send it tomorrow.';
 	state.content.notes[0] = { ...state.content.notes[0], plainText: text };
 	const receipt = await state.transactions.run(() =>
-		state.requests.prepare(testActor(), {
+		state.requests.prepare({
 			requestId: crypto.randomUUID(),
 			context: {
 				kind: 'promise_extraction',
@@ -63,7 +62,7 @@ it('resolves tomorrow against the stored request date after queued recovery', as
 	);
 	const submittedAt = '2026-09-01T10:00:00.000Z' as DateTime;
 	state.runs.runs[0] = { ...state.runs.runs[0], createdAt: submittedAt, updatedAt: submittedAt };
-	await state.controller.executePromiseRun(testActor(), receipt.runId);
+	await state.controller.executePromiseRun(receipt.runId);
 	expect(
 		state.suggestions.suggestions.map((suggestion) =>
 			suggestion.kind === 'todo' ? suggestion.payload.dueDate : undefined
@@ -73,7 +72,7 @@ it('resolves tomorrow against the stored request date after queued recovery', as
 
 it('resumes a queued request without its original in-memory callback', async () => {
 	const state = await prepare();
-	await state.controller.recoverQueuedPromiseRuns();
+	await state.controller.resumeQueuedPromiseRun(state.receipt.runId);
 	await vi.waitFor(() => {
 		if (state.runs.runs[0]?.status !== 'completed') throw new Error('Run has not completed');
 	});
@@ -90,9 +89,9 @@ it('saves no proposals when cancellation wins while extraction is in flight', as
 	state.trust.autoAccept = true;
 	const gate = Promise.withResolvers<void>();
 	state.extractor.completion = gate.promise;
-	const execution = state.controller.executePromiseRun(testActor(), state.receipt.runId);
+	const execution = state.controller.executePromiseRun(state.receipt.runId);
 	await state.extractor.started.promise;
-	await state.agent.cancel(testActor(), state.receipt.runId);
+	await state.agent.cancel(state.receipt.runId);
 	gate.resolve();
 	await execution;
 	expect({
@@ -107,7 +106,7 @@ it('rejects an edited selection before saving extracted proposals', async () => 
 	const state = await prepare();
 	const gate = Promise.withResolvers<void>();
 	state.extractor.completion = gate.promise;
-	const execution = state.controller.executePromiseRun(testActor(), state.receipt.runId);
+	const execution = state.controller.executePromiseRun(state.receipt.runId);
 	await state.extractor.started.promise;
 	state.content.notes[0] = { ...state.content.notes[0], currentRevision: 2 };
 	gate.resolve();
@@ -121,7 +120,7 @@ it('rolls back proposals and accepted todos when the result event fails', async 
 	const state = await prepare();
 	state.trust.autoAccept = true;
 	state.runs.failedEvent = 'workflow_result';
-	await state.controller.executePromiseRun(testActor(), state.receipt.runId);
+	await state.controller.executePromiseRun(state.receipt.runId);
 	expect({
 		failure: state.runs.runs[0].failure,
 		status: state.runs.runs[0].status,
@@ -139,8 +138,8 @@ it('rolls back proposals and accepted todos when the result event fails', async 
 
 it('leaves a completed request unchanged when another execution arrives', async () => {
 	const state = await prepare();
-	await state.controller.executePromiseRun(testActor(), state.receipt.runId);
-	await state.controller.executePromiseRun(testActor(), state.receipt.runId);
+	await state.controller.executePromiseRun(state.receipt.runId);
+	await state.controller.executePromiseRun(state.receipt.runId);
 	expect(
 		state.runs.events.filter((record) => record.event.type === 'workflow_result')
 	).toHaveLength(1);

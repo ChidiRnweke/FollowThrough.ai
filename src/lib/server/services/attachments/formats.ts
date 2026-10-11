@@ -1,3 +1,21 @@
+const TEXT_EXTENSIONS = new Set([
+	'md',
+	'txt',
+	'json',
+	'yaml',
+	'yml',
+	'xml',
+	'csv',
+	'ts',
+	'js',
+	'py',
+	'sh',
+	'sql',
+	'html',
+	'css',
+	'svelte'
+]);
+
 /**
  * Format routing for Mistral Document AI. Kept as extensions rather than media
  * types because browsers report office and ebook formats inconsistently (and
@@ -41,10 +59,25 @@ const OCR_DOCUMENT_EXTENSIONS = new Set([
 const extensionOf = (path: string): string => path.split('.').pop()?.toLowerCase() ?? '';
 
 /** Images are the subset routed through `image_url` rather than `document_url`. */
-export const isOcrImage = (mediaType: string, path: string): boolean =>
+const isOcrImage = (mediaType: string, path: string): boolean =>
 	mediaType.startsWith('image/') || OCR_IMAGE_EXTENSIONS.has(extensionOf(path));
 
-export const isOcrSupported = (mediaType: string, path: string): boolean => {
+const isOcrSupported = (mediaType: string, path: string): boolean => {
 	if (isOcrImage(mediaType, path)) return true;
 	return mediaType === 'application/pdf' || OCR_DOCUMENT_EXTENSIONS.has(extensionOf(path));
 };
+
+export interface AttachmentFormats {
+	text(mediaType: string, path: string): boolean;
+	ocrKind(mediaType: string, path: string): 'image' | 'document' | undefined;
+}
+export class AttachmentFormatService implements AttachmentFormats {
+	text(mediaType: string, path: string): boolean {
+		const extension = path.split('.').pop()?.toLowerCase() ?? '';
+		return mediaType.startsWith('text/') || TEXT_EXTENSIONS.has(extension);
+	}
+	ocrKind(mediaType: string, path: string): 'image' | 'document' | undefined {
+		if (!isOcrSupported(mediaType, path)) return undefined;
+		return isOcrImage(mediaType, path) ? 'image' : 'document';
+	}
+}

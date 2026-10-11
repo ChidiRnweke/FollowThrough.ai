@@ -1,6 +1,8 @@
 import { Fragment, Node as ProseMirrorNode, Slice } from '@tiptap/pm/model';
 import type { EditorView } from '@tiptap/pm/view';
-import { noteContentFromMarkdown } from './note-markdown.js';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+
+const markdown = new NoteMarkdownCodec();
 
 /**
  * Pasting plain text that is secretly structured.
@@ -61,7 +63,7 @@ export const markdownSlice = (
 	try {
 		document = ProseMirrorNode.fromJSON(
 			schema,
-			noteContentFromMarkdown(withoutBoundaryBlankLines(text)).document
+			markdown.editorDocument(withoutBoundaryBlankLines(text))
 		);
 		// audit-allow: silent-catch — undefined is the parser's explicit “not valid Markdown document” result
 	} catch {

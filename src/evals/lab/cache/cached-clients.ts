@@ -1,20 +1,36 @@
-import type { SearchMatch } from '$lib/models/knowledge-search';
-import type {
-	EmbeddingBatch,
-	EmbeddingClient,
-	Reranker
-} from '$lib/server/services/knowledge-search/contracts';
-import type { ISearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
 import {
 	DEFAULT_RERANK_MODEL,
 	RERANKING_STRATEGY,
-	rerankDocumentText
-} from '$lib/server/services/knowledge-search/ranking';
+	rerankResponseSchema,
+	searchQueryCompletionSchema
+} from '$lib/models/knowledge-search';
+import { cachedSearchQuerySchema } from '$lib/models/knowledge-search/query-generation';
+import { z } from 'zod';
 import { DiskCache, decodeVector, encodeVector } from './disk-cache';
 
+const embeddingRequestSchema = z.object({
+	model: z.string(),
+	input: z.array(z.string()),
+	encoding_format: z.string().optional()
+});
+const embeddingResponseSchema = z.object({
+	data: z.array(
+		z.object({ index: z.number(), embedding: z.union([z.string(), z.array(z.number())]) })
+	)
+});
+const rerankRequestSchema = z.object({
+	query: z.string(),
+	documents: z.array(z.string()),
+	top_n: z.number()
+});
+const completionRequestSchema = z.looseObject({
+	messages: z.array(z.object({ role: z.string(), content: z.string() }))
+});
+
+/** The cache key of one rerank request: its documents carry title, section and content. */
 export const rerankerCacheKey = (
 	query: string,
-	matches: readonly SearchMatch[],
+	documents: readonly string[],
 	topN: number
 ): string =>
 	DiskCache.key('rerank', {
@@ -22,82 +38,84 @@ export const rerankerCacheKey = (
 		strategy: RERANKING_STRATEGY,
 		query,
 		topN,
-		documents: matches.map(rerankDocumentText)
+		documents
 	});
 
 /**
- * Embeds one content string at a time so that a batch of five where one string
- * is new still replays the other four. Batching would key on the whole array
- * and miss whenever any member changed.
+ * A recording transport for the auxiliary provider edges — embeddings, reranking and search-query
+ * rewriting — keyed exactly as the cache file has always been keyed. Embeddings are cached one
+ * input at a time, so a batch with one new string still replays the rest. Reranks cache candidate
+ * positions rather than document ids, which eval workspaces regenerate on every run.
  */
-export class CachedEmbeddingClient implements EmbeddingClient {
-	readonly model: string;
-
-	constructor(
-		private readonly inner: EmbeddingClient,
-		private readonly cache: DiskCache,
-		private readonly isDeterministic: (content: string) => boolean = () => false
-	) {
-		this.model = inner.model;
-	}
-
-	async embed(contents: readonly string[]): Promise<EmbeddingBatch> {
-		const vectors = await Promise.all(
-			contents.map(async (content) => {
-				const key = DiskCache.key('embed', { model: this.model, content });
-				const encoded = await this.cache.resolve(
-					key,
-					async () => {
-						const batch = await this.inner.embed([content]);
-						return encodeVector(batch.vectors[0]);
-					},
-					{ deterministic: this.isDeterministic(content) }
-				);
-				return decodeVector(encoded);
-			})
-		);
-		return { model: this.model, vectors };
-	}
-}
-
-export class CachedReranker implements Reranker {
-	constructor(
-		private readonly inner: Reranker,
-		private readonly cache: DiskCache
-	) {}
-
-	async rerank(
-		query: string,
-		matches: readonly SearchMatch[],
-		topN: number
-	): Promise<readonly SearchMatch[]> {
-		// Cache input positions rather than generated document ids. Eval workspaces
-		// get fresh ids on every run, while the ordered serialized documents in the
-		// cache key remain stable and still invalidate when their content changes.
-		const key = rerankerCacheKey(query, matches, topN);
-		const order = await this.cache.resolve(key, async () => {
-			const ranked = await this.inner.rerank(query, matches, topN);
-			return ranked.map((rankedMatch) => {
-				const index = matches.findIndex((match) => match.document.id === rankedMatch.document.id);
-				if (index < 0) throw new Error('Reranker returned a document outside its candidate set');
-				return index;
+export const cachedRetrievalFetch =
+	(
+		cache: DiskCache,
+		inner: typeof globalThis.fetch = globalThis.fetch,
+		isDeterministic: (content: string) => boolean = () => false
+	): typeof globalThis.fetch =>
+	async (input, init) => {
+		const url = String(input instanceof Request ? input.url : input);
+		const body: unknown = JSON.parse(String(init?.body ?? '{}'));
+		const forward = (payload: object) =>
+			inner(input, { ...init, body: JSON.stringify(payload) }).then(async (response) => {
+				if (!response.ok) throw new Error(`Provider returned ${response.status}`);
+				return response.json();
 			});
-		});
-		return order
-			.map((index) => matches[index])
-			.filter((match): match is SearchMatch => match !== undefined);
-	}
-}
 
-export class CachedSearchQueryGeneration implements ISearchQueryGeneration {
-	constructor(
-		private readonly inner: ISearchQueryGeneration,
-		private readonly cache: DiskCache
-	) {}
+		if (url.endsWith('/embeddings')) {
+			const request = embeddingRequestSchema.parse(body);
+			const vectors = await Promise.all(
+				request.input.map((content) =>
+					cache.resolve(
+						DiskCache.key('embed', { model: request.model, content }),
+						async () => {
+							const response = embeddingResponseSchema.parse(
+								await forward({ model: request.model, input: [content], encoding_format: 'float' })
+							);
+							const embedding = response.data[0]?.embedding;
+							if (embedding === undefined) throw new Error('Provider returned no embedding');
+							return typeof embedding === 'string' ? embedding : encodeVector(embedding);
+						},
+						{ deterministic: isDeterministic(content) }
+					)
+				)
+			);
+			return Response.json({
+				object: 'list',
+				model: request.model,
+				usage: { prompt_tokens: 0, total_tokens: 0 },
+				data: vectors.map((encoded, index) => ({
+					object: 'embedding',
+					index,
+					embedding: request.encoding_format === 'base64' ? encoded : decodeVector(encoded)
+				}))
+			});
+		}
 
-	generate(text: string): Promise<string> {
-		return this.cache.resolve(DiskCache.key('search-query-v2', { text }), () =>
-			this.inner.generate(text)
-		);
-	}
-}
+		if (url.endsWith('/rerank')) {
+			const request = rerankRequestSchema.parse(body);
+			const order = await cache.resolve(
+				rerankerCacheKey(request.query, request.documents, request.top_n),
+				async () =>
+					rerankResponseSchema.parse(await forward(request)).results.map((result) => result.index)
+			);
+			return Response.json({ results: order.map((index) => ({ index })) });
+		}
+
+		if (url.endsWith('/chat/completions')) {
+			const request = completionRequestSchema.parse(body);
+			const transcript = request.messages.find((message) => message.role === 'user')?.content;
+			if (transcript === undefined) return inner(input, init);
+			const query = cachedSearchQuerySchema.parse(
+				await cache.resolve(DiskCache.key('search-query-v2', { text: transcript }), async () => {
+					const completion = searchQueryCompletionSchema.parse(await forward(request));
+					const text = completion.choices[0]?.message.content?.trim();
+					if (!text) throw new Error('Search query generation returned no usable text');
+					return text;
+				})
+			);
+			return Response.json({ choices: [{ message: { role: 'assistant', content: query } }] });
+		}
+
+		return inner(input, init);
+	};

@@ -10,8 +10,8 @@ import { actor, context, now } from '../database-harness';
 
 it('preserves cancellation committed while prepared context waits for the run row', async () => {
 	const owner = actor('9621');
-	await new UserRecords(context.db).ensureLocal(owner);
-	const conversation = await new ConversationRecords(context.db).insert(owner, {
+	await new UserRecords(owner, context.db).ensureLocal();
+	const conversation = await new ConversationRecords(owner, context.db).insert({
 		id: crypto.randomUUID() as ConversationId,
 		userId: owner.userId,
 		kind: 'chat',
@@ -19,9 +19,9 @@ it('preserves cancellation committed while prepared context waits for the run ro
 		updatedAt: now
 	});
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const runs = new AgentRunRecords(database);
+	const runs = new AgentRunRecords(owner, database);
 	const preparation = new RunPreparation(runs);
-	const run = await runs.insert(owner, {
+	const run = await runs.insert({
 		kind: 'agent',
 		id: crypto.randomUUID() as AgentRunId,
 		userId: owner.userId,
@@ -51,13 +51,13 @@ it('preserves cancellation committed while prepared context waits for the run ro
 		await locked.promise;
 		const saved = transactionRunner
 			.run(async () => {
-				const current = await preparation.getForWrite(owner, run.id);
+				const current = await preparation.getForWrite(run.id);
 				const change = preparation.context(
 					current,
 					{ contextNotes: [], contextResources: [], skills: { items: [] } },
 					now
 				);
-				return preparation.persistContext(owner, run.id, change);
+				return preparation.persistContext(run.id, change);
 			})
 			.then(
 				(value) => ({ kind: 'saved' as const, value }),
@@ -73,7 +73,7 @@ it('preserves cancellation committed while prepared context waits for the run ro
 		cancel.resolve();
 		await cancellation;
 		const result = await saved;
-		expect({ status: (await runs.findById(owner, run.id))?.status, result: result.kind }).toEqual({
+		expect({ status: (await runs.findById(run.id))?.status, result: result.kind }).toEqual({
 			status: 'cancelling',
 			result: 'failure'
 		});

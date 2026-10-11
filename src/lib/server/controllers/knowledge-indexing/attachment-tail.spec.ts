@@ -1,16 +1,12 @@
-import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
-import {
-	ContentIndex,
-	TokenAwareChunker,
-	retrievalEncoding
-} from '$lib/server/services/knowledge-search/indexing';
-import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
-import { Embeddings, type EmbeddingClient } from '$lib/server/services/knowledge-search/embeddings';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+const tokenizer = testTokenizer;
+import { inMemoryEmbeddingSweep } from '$lib/testing/knowledge-search/fixtures/embedding-sweep';
+import { retrievalTransport } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { view } from '$lib/testing/attachments/fakes/processing';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 const text =
 	Array.from(
@@ -20,43 +16,30 @@ const text =
 
 describe('complete attachment search', () => {
 	it('makes text beyond fifty chunks available to literal search before embedding', async () => {
-		const repository = new InMemorySearchRepository();
+		const repository = new InMemorySearchRepository(testActor());
 		const batchTokens: number[] = [];
-		const provider: EmbeddingClient = {
-			embeddings: {
-				create: async ({ input: contents }) => {
-					batchTokens.push(
-						contents.reduce((sum, content) => sum + retrievalEncoding().encode(content).length, 0)
-					);
-					return { data: contents.map((_, index) => ({ index, embedding: [1, 0, 0] })) };
-				}
-			}
+		const transport: typeof globalThis.fetch = async (_url, init) => {
+			const contents: string[] = JSON.parse(String(init?.body)).input;
+			batchTokens.push(contents.reduce((sum, content) => sum + tokenizer.count(content), 0));
+			return Response.json({
+				data: contents.map((_, index) => ({
+					index,
+					embedding: Buffer.from(new Float32Array([1, 0, 0]).buffer).toString('base64')
+				}))
+			});
 		};
-		const client = new Embeddings('test-key', { client: provider, model: 'test-embedding' });
+		const client = retrievalTransport(transport, 'test-embedding');
 		const attachment = view('text/plain', 'report.txt').attachment;
-		await new ContentIndex(
-			repository,
-			client.model,
-			new TokenAwareChunker(700, 50)
-		).attachments.index(testActor(), attachment, text);
-		const matches = await repository.search(testActor(), 'amberfalcon', 10);
+		await createContentIndex(repository, client.model, {
+			targetTokens: 700,
+			overlapTokens: 50
+		}).indexAttachment(attachment, text);
+		const matches = await repository.search('amberfalcon', 10);
 		const literalMatch = matches.map(({ document }) => ({
 			beyondOldLimit: document.chunkIndex >= 50,
 			path: document.attachmentPath
 		}));
-		await new EmbeddingMaintenance(
-			new IndexBacklog(repository),
-			client,
-			new InMemoryTransactionRunner([repository]),
-			{
-				logger: {
-					log: () => {},
-					error: (message) => {
-						throw new Error(message);
-					}
-				}
-			}
-		).run();
+		await inMemoryEmbeddingSweep(repository, client).run();
 		const tail = repository.documents.find(({ document }) =>
 			document.content.includes('amberfalcon')
 		);

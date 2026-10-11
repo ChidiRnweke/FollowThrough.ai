@@ -1,15 +1,17 @@
-import { mutationResource } from '$lib/services/workspace/commands';
+import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+
+import { ValidationError } from '$lib/errors';
+import type { ToolPreference } from '$lib/models/agent';
+import type { ActorContext } from '$lib/models/identity';
+import type { ProjectId } from '$lib/models/projects';
 import type { AtomicOperation } from '$lib/models/workspace';
 import type {
 	ToolPreferenceMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
-import { ValidationError } from '$lib/errors';
-import type { ActorContext } from '$lib/models/identity';
-import type { ProjectId } from '$lib/models/projects';
-import type { ToolPreference } from '$lib/models/agent';
-import type { ToolPreferenceStore } from '$lib/server/services/agent/tools/preferences';
+import type { ToolPreferenceCapability } from '$lib/server/services/agent/tools/preferences';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /** Enables or disables a tool, either as the workspace default or as a per-project override. */
 export interface SetToolEnabledInput {
@@ -28,49 +30,44 @@ export interface ClearToolOverrideInput {
 /**
  * Which tools the agent may reach. Deliberately agent-callable: a user asking
  * the agent to "stop touching my todos" should be able to have it done rather
- * than being sent to a settings page, and the locked-tool guard in the store
+ * than being sent to a settings page, and the locked-tool guard in the capability
  * keeps that from becoming a way for the agent to strand itself.
  */
 export interface ToolPreferencesController {
-	synchronize(
-		actor: ActorContext,
-		input: ToolPreferenceMutationRequest
-	): Promise<WorkspaceMutationResult>;
+	synchronize(input: ToolPreferenceMutationRequest): Promise<WorkspaceMutationResult>;
 	/** List tool enablement, resolved for the workspace default or a specific project. */
-	list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<readonly ToolPreference[]>;
+	list(input?: { projectId?: ProjectId }): Promise<readonly ToolPreference[]>;
 	/**
 	 * Enable or disable a tool, as the workspace default or a per-project override, and
 	 * return the resolved view — the caller (settings page or agent) sees the effect of
 	 * its own write without a second round trip.
 	 */
-	setEnabled(actor: ActorContext, input: SetToolEnabledInput): Promise<readonly ToolPreference[]>;
+	setEnabled(input: SetToolEnabledInput): Promise<readonly ToolPreference[]>;
 	/** Remove a per-project override, returning the resolved view after the fallback applies. */
-	clearOverride(
-		actor: ActorContext,
-		input: ClearToolOverrideInput
-	): Promise<readonly ToolPreference[]>;
+	clearOverride(input: ClearToolOverrideInput): Promise<readonly ToolPreference[]>;
 }
 
 export interface ToolPreferencesDependencies {
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	transactionRunner: AtomicOperation;
 	syncRetry: 'database-only' | 'never';
-	preferences: ToolPreferenceStore;
+	preferences: ToolPreferenceCapability;
+	catalog: Pick<AgentToolCatalog, 'entries'>;
 }
 
 export class ToolPreferences implements ToolPreferencesController {
-	async synchronize(
-		actor: ActorContext,
-		input: ToolPreferenceMutationRequest
-	): Promise<WorkspaceMutationResult> {
+	async synchronize(input: ToolPreferenceMutationRequest): Promise<WorkspaceMutationResult> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
+					const prepared = await this.dependencies.syncMutations.prepare(input, {
+						identity: target,
+						key: this.workspaceCommandRules.workspaceResourceKey(target)
+					});
 					if (prepared.kind === 'finished') return prepared.result;
-					await this.applySynchronizedCommand(actor, input);
-					return this.dependencies.syncMutations.complete(actor, input, target);
+					await this.applySynchronizedCommand(input);
+					return this.dependencies.syncMutations.complete(input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);
@@ -80,44 +77,40 @@ export class ToolPreferences implements ToolPreferencesController {
 		}
 	}
 
-	private async applySynchronizedCommand(
-		actor: ActorContext,
-		input: ToolPreferenceMutationRequest
-	): Promise<void> {
-		if (input.command.userId !== actor.userId)
+	private async applySynchronizedCommand(input: ToolPreferenceMutationRequest): Promise<void> {
+		if (input.command.userId !== this.actor.userId)
 			throw new ValidationError('The preferences belong to another account');
 		const command = input.command;
-		if (command.kind === 'resetProjectToolOverride') await this.clearOverride(actor, command);
-		else await this.setEnabled(actor, command);
+		if (command.kind === 'resetProjectToolOverride') await this.clearOverride(command);
+		else await this.setEnabled(command);
 	}
-	constructor(private readonly dependencies: ToolPreferencesDependencies) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: ToolPreferencesDependencies
+	) {}
 
-	list(
-		actor: ActorContext,
-		input: { projectId?: ProjectId } = {}
-	): Promise<readonly ToolPreference[]> {
-		return this.dependencies.preferences.view(actor, input.projectId);
+	list(input: { projectId?: ProjectId } = {}): Promise<readonly ToolPreference[]> {
+		return this.dependencies.preferences.view(this.dependencies.catalog.entries(), input.projectId);
 	}
 
-	async setEnabled(
-		actor: ActorContext,
-		input: SetToolEnabledInput
-	): Promise<readonly ToolPreference[]> {
-		await this.dependencies.preferences.setEnabled(actor, {
+	async setEnabled(input: SetToolEnabledInput): Promise<readonly ToolPreference[]> {
+		await this.dependencies.preferences.setEnabled(this.dependencies.catalog.entries(), {
 			toolName: input.toolName,
 			enabled: input.enabled,
 			...(input.projectId ? { projectId: input.projectId } : {})
 		});
 		// The resolved view is returned so a caller — the settings page or the
 		// agent — sees the effect of its own write without a second round trip.
-		return this.dependencies.preferences.view(actor, input.projectId);
+		return this.dependencies.preferences.view(this.dependencies.catalog.entries(), input.projectId);
 	}
 
-	async clearOverride(
-		actor: ActorContext,
-		input: ClearToolOverrideInput
-	): Promise<readonly ToolPreference[]> {
-		await this.dependencies.preferences.clearOverride(actor, input.projectId, input.toolName);
-		return this.dependencies.preferences.view(actor, input.projectId);
+	async clearOverride(input: ClearToolOverrideInput): Promise<readonly ToolPreference[]> {
+		await this.dependencies.preferences.clearOverride(
+			this.dependencies.catalog.entries(),
+			input.projectId,
+			input.toolName
+		);
+		return this.dependencies.preferences.view(this.dependencies.catalog.entries(), input.projectId);
 	}
 }

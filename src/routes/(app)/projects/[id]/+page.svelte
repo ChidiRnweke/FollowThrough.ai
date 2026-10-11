@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import { workspaceViews } from '$lib/factories/workspace/session';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { NameDialog, ProjectOverview } from '$lib/components/projects';
 	import { Button } from '$lib/components/ui/button';
@@ -9,20 +10,21 @@
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import * as Icon from '$lib/components/icons';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { BulkExportDialog, ExportSettingsDialog, ImportNotesDialog } from '$lib/components/notes';
 	import type { ProjectExportEntry } from '$lib/models/projects';
-	import { projectExportEntries } from '$lib/services/projects/export-entries';
-	import { type SectionNumberingLevel } from '$lib/models/notes';
+	import { projectTreeController } from '$lib/factories/projects/tree';
 	import {
-		sectionNumberingLevelFor,
-		sectionNumberingOverrideFor
-	} from '$lib/services/notes/section-numbering';
+		sectionNumberingSettings,
+		type NoteId,
+		type SectionNumberingLevel
+	} from '$lib/models/notes';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
 
-	const views = $derived(data.session.resources.views);
+	const views = $derived(workspaceViews);
 	const view = $derived(views.project(data.projectId));
 	const project = $derived(view?.project);
 	const todos = $derived(views.todos({ projectId: data.projectId, status: 'open' }));
@@ -43,7 +45,17 @@
 	);
 	let newNoteOpen = $state(false);
 	let newFolderOpen = $state(false);
-	let renameDraft = $state<WorkspaceDraft<'projects'> | null>(null);
+	let renameDraft = $state<WorkspaceDraftController<'projects'> | null>(null);
+	let busy = $state(false);
+	async function action<T>(work: () => Promise<T>): Promise<T> {
+		busy = true;
+		try {
+			return await work();
+		} finally {
+			busy = false;
+		}
+	}
+	const projectIdentity = $derived({ type: 'projects' as const, id: [data.projectId] as [string] });
 	let exportDefaultsOpen = $state(false);
 	let importOpen = $state(false);
 	let exportOpen = $state(false);
@@ -52,7 +64,7 @@
 
 	// The whole project, folders preserved as folders inside the zip. A project with no
 	// notes in it gets no menu item rather than a dialog with nothing to offer.
-	const projectEntries = $derived(view ? projectExportEntries(view.tree) : []);
+	const projectEntries = $derived(view ? projectTreeController.exportEntries(view.tree) : []);
 
 	function startExport(sourceTitle: string, entries: readonly ProjectExportEntry[]): void {
 		exportSourceTitle = sourceTitle;
@@ -61,31 +73,47 @@
 	}
 
 	async function createNote(title: string): Promise<boolean> {
-		const output = await projectActions.createNote(title, data.projectId);
-		if (!output) {
+		const id = crypto.randomUUID() as NoteId;
+		const created = await action(() =>
+			workspaceSession.create({ kind: 'createNote', id, projectId: data.projectId, title })
+		);
+		if (created.kind === 'failure') {
 			toast.error('Could not create the note. Try again.');
 			return false;
 		}
-		await goto(`/notes/${output.note.id}`);
+		await goto(`/notes/${id}`);
 		return true;
 	}
 
 	async function createFolder(name: string): Promise<boolean> {
-		const output = await projectActions.createFolder(data.projectId, name);
-		if (!output) toast.error('Could not create the folder. Try again.');
-		return Boolean(output);
+		const created = await action(() =>
+			workspaceSession.create({
+				kind: 'createFolder',
+				id: crypto.randomUUID() as NoteId,
+				projectId: data.projectId,
+				name
+			})
+		);
+		if (created.kind === 'failure') toast.error('Could not create the folder. Try again.');
+		return created.kind === 'saved';
 	}
 
 	async function rename(name: string): Promise<boolean> {
-		if (!renameDraft) return false;
-		const output = await projectActions.renameProject(renameDraft, name);
-		if (!output) toast.error('Could not rename the project. Try again.');
-		return Boolean(output);
+		const draft = renameDraft;
+		if (!draft) return false;
+		const renamed = await action(() =>
+			draft.stage({ kind: 'renameProject', projectId: data.projectId, name })
+		);
+		if (renamed.kind === 'failure') toast.error('Could not rename the project. Try again.');
+		return renamed.kind === 'saved';
 	}
 
 	async function archive(): Promise<void> {
-		const output = await projectActions.archiveProject(data.projectId);
-		if (!output) {
+		const archived = await workspaceSession.edit(projectIdentity, {
+			kind: 'archiveProject',
+			projectId: data.projectId
+		});
+		if (archived.kind === 'failure') {
 			toast.error('Could not archive the project. Try again.');
 			return;
 		}
@@ -93,11 +121,12 @@
 	}
 
 	async function changeSectionNumberingDefault(level: SectionNumberingLevel): Promise<void> {
-		const output = await projectActions.setSectionNumberingDefault(
-			data.projectId,
-			sectionNumberingOverrideFor(level)
-		);
-		if (!output) toast.error('Could not update the project default. Try again.');
+		const changed = await workspaceSession.edit(projectIdentity, {
+			kind: 'projectNumbering',
+			projectId: data.projectId,
+			enabled: sectionNumberingSettings[level]
+		});
+		if (changed.kind === 'failure') toast.error('Could not update the project default. Try again.');
 	}
 </script>
 
@@ -135,14 +164,14 @@
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="end">
 						<DropdownMenu.Item
-							onclick={() => (renameDraft = projectActions.editor('projects', data.projectId))}
+							onclick={() => (renameDraft = workspaceSession.capture(projectIdentity))}
 							>Rename project</DropdownMenu.Item
 						>
 						<DropdownMenu.Sub>
 							<DropdownMenu.SubTrigger>Section numbering</DropdownMenu.SubTrigger>
 							<DropdownMenu.SubContent>
 								<DropdownMenu.RadioGroup
-									value={sectionNumberingLevelFor(project.sectionNumberingDefault)}
+									value={noteDocuments.numberingLevel(project.sectionNumberingDefault)}
 									onValueChange={(value) =>
 										void changeSectionNumberingDefault(value as SectionNumberingLevel)}
 								>
@@ -193,7 +222,7 @@
 		title="New note"
 		label="Note title"
 		submitLabel="Create"
-		busy={projectActions.busy}
+		{busy}
 		onsubmit={createNote}
 	/>
 	<NameDialog
@@ -201,7 +230,7 @@
 		title="New folder"
 		label="Folder name"
 		submitLabel="Create"
-		busy={projectActions.busy}
+		{busy}
 		onsubmit={createFolder}
 	/>
 	<NameDialog
@@ -214,7 +243,7 @@
 		title="Rename project"
 		label="Project name"
 		initialValue={renameDraft?.value?.name ?? ''}
-		busy={projectActions.busy}
+		{busy}
 		onsubmit={rename}
 	/>
 	<BulkExportDialog

@@ -8,7 +8,7 @@ import type { ProofreadIssue, ProofreadSuggestion } from '$lib/models/proofreadi
  */
 const spellingKinds = new Set(['Spelling', 'Typo', 'Malapropism', 'Eggcorn']);
 
-export const isSpellingIssue = (issue: ProofreadIssue): boolean => spellingKinds.has(issue.kind);
+const isSpellingIssue = (issue: ProofreadIssue): boolean => spellingKinds.has(issue.kind);
 
 /**
  * The form a word is stored and compared in. Case is folded because a word is no
@@ -17,7 +17,7 @@ export const isSpellingIssue = (issue: ProofreadIssue): boolean => spellingKinds
  * to teach it the name either way. Interior marks stay: `don't` and `dont` are
  * different words, and `co-op` is one.
  */
-export const normalizeDictionaryWord = (word: string): string =>
+const normalizeDictionaryWord = (word: string): string =>
 	word
 		.trim()
 		.replace(/^[^\p{L}\p{N}]+/u, '')
@@ -30,7 +30,7 @@ export const normalizeDictionaryWord = (word: string): string =>
  * "Add to dictionary" on a whole clause would silence a grammar rule by pretending
  * the clause is a word, which is how a personal dictionary fills up with sentences.
  */
-export const dictionaryWordFor = (issue: ProofreadIssue): string | undefined => {
+const dictionaryWordFor = (issue: ProofreadIssue): string | undefined => {
 	if (!isSpellingIssue(issue)) return undefined;
 	const word = normalizeDictionaryWord(issue.text);
 	if (word === '' || /\s/u.test(word)) return undefined;
@@ -42,7 +42,7 @@ export const dictionaryWordFor = (issue: ProofreadIssue): string | undefined => 
  * normalized form; anything that is not a spelling complaint passes through,
  * since the dictionary has no opinion on it.
  */
-export const withoutIgnoredWords = (
+const withoutIgnoredWords = (
 	issues: readonly ProofreadIssue[],
 	ignored: ReadonlySet<string>
 ): readonly ProofreadIssue[] => {
@@ -62,7 +62,7 @@ export const withoutIgnoredWords = (
  * appends, which is how a missing comma is offered without deleting the word it
  * follows.
  */
-export const proofreadSuggestion = (
+const proofreadSuggestion = (
 	kind: 'replace' | 'remove' | 'insertAfter',
 	text: string,
 	problemText: string
@@ -72,3 +72,38 @@ export const proofreadSuggestion = (
 	// A suggestion that replaces with whitespace reads as a blank row in the menu.
 	return { label: replacement.trim() === '' ? 'Remove' : replacement, replacement };
 };
+
+export interface ProofreadingRules {
+	normalizeDictionaryWord(word: string): string;
+	dictionaryWordFor(issue: ProofreadIssue): string | undefined;
+	withoutIgnoredWords(
+		issues: readonly ProofreadIssue[],
+		ignored: ReadonlySet<string>
+	): readonly ProofreadIssue[];
+	proofreadSuggestion(
+		kind: 'replace' | 'remove' | 'insertAfter',
+		text: string,
+		problemText: string
+	): ProofreadSuggestion;
+}
+export class ProofreadingRulesService implements ProofreadingRules {
+	normalizeDictionaryWord(word: string): string {
+		return normalizeDictionaryWord(word);
+	}
+	dictionaryWordFor(issue: ProofreadIssue): string | undefined {
+		return dictionaryWordFor(issue);
+	}
+	withoutIgnoredWords(
+		issues: readonly ProofreadIssue[],
+		ignored: ReadonlySet<string>
+	): readonly ProofreadIssue[] {
+		return withoutIgnoredWords(issues, ignored);
+	}
+	proofreadSuggestion(
+		kind: 'replace' | 'remove' | 'insertAfter',
+		text: string,
+		problemText: string
+	): ProofreadSuggestion {
+		return proofreadSuggestion(kind, text, problemText);
+	}
+}

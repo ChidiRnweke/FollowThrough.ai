@@ -1,18 +1,10 @@
-import { decideMemoryCreation, decideMemoryEdit } from '$lib/services/memory/edits';
+import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import { ValidationError } from '$lib/errors';
-import { mutationResource } from '$lib/services/workspace/commands';
-import type { IndexingResult } from '$lib/models/knowledge-search';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
-import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
-import { mapAppliedChange } from '$lib/server/services/suggestions/effects';
-import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
-import type { Suggestion } from '$lib/models/suggestions';
-import type {
-	MemoryMutationRequest,
-	WorkspaceMutationResult
-} from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { AppliedChange } from '$lib/models/proposal-effects';
+import type { IMemoryEditingService } from '$lib/services/memory/edits';
+import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateMemoryEntryInput,
@@ -25,19 +17,23 @@ import type {
 	ProposeMemoryChangeOutput,
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
-import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
+import type { Suggestion } from '$lib/models/suggestions';
+import type { DateTime, AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type {
+	MemoryMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import type {
 	MemoryChanges,
 	MemoryEntryCreator,
 	MemoryEntryDeleter,
 	MemoryEntryEditor,
 	MemoryEntryLister
-} from '$lib/server/services/memory/contracts';
-import type {
-	SuggestionAccepter,
-	SuggestionCreator
-} from '$lib/server/services/suggestions/contracts';
-import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
+} from '$lib/server/services/memory/library';
+import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
+import type { SuggestionAccepter, SuggestionCreator } from '$lib/server/services/suggestions/inbox';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /**
  * Application boundary for memory: the persistent facts the agent is allowed to read,
@@ -47,18 +43,18 @@ import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-
  * auto-accepted only when the trust policy says the change is safe.
  */
 export interface MemoryController {
-	synchronize(actor: ActorContext, input: MemoryMutationRequest): Promise<WorkspaceMutationResult>;
+	synchronize(input: MemoryMutationRequest): Promise<WorkspaceMutationResult>;
 	/**
 	 * List memory entries, optionally restricted to those shared with agents. Entries the
 	 * user keeps private are visible here but never to the agent.
 	 */
-	list(actor: ActorContext, input: ListMemoryInput): Promise<ListMemoryOutput>;
+	list(input: ListMemoryInput): Promise<ListMemoryOutput>;
 	/** Add a memory entry. */
-	create(actor: ActorContext, input: CreateMemoryEntryInput): Promise<{ entry: MemoryEntry }>;
+	create(input: CreateMemoryEntryInput): Promise<{ entry: MemoryEntry }>;
 	/** Edit an existing memory entry. */
-	update(actor: ActorContext, input: UpdateMemoryEntryInput): Promise<{ entry: MemoryEntry }>;
+	update(input: UpdateMemoryEntryInput): Promise<{ entry: MemoryEntry }>;
 	/** Delete a memory entry. */
-	remove(actor: ActorContext, input: DeleteMemoryEntryInput): Promise<void>;
+	remove(input: DeleteMemoryEntryInput): Promise<void>;
 	/**
 	 * Propose a memory change from the agent.
 	 *
@@ -70,17 +66,14 @@ export interface MemoryController {
 	 * @throws ValidationError if the proposal is malformed (project scope without a
 	 * project, an update/removal without a target entry, or a non-removal without content).
 	 */
-	propose(
-		actor: ActorContext,
-		input: ProposeMemoryChangeInput
-	): Promise<ProposeMemoryChangeOutput<Suggestion>>;
+	propose(input: ProposeMemoryChangeInput): Promise<ProposeMemoryChangeOutput<Suggestion>>;
 }
 
 export interface MemoryDependencies {
-	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	readonly editing: IMemoryEditingService;
+	readonly presentation: IMemoryPresentationService;
 	memoryIndexer: MemoryIndexer;
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	memoryLister: MemoryEntryLister;
 	memoryCreator: MemoryEntryCreator;
@@ -95,18 +88,18 @@ export interface MemoryDependencies {
 }
 
 export class Memory implements MemoryController {
-	async synchronize(
-		actor: ActorContext,
-		input: MemoryMutationRequest
-	): Promise<WorkspaceMutationResult> {
+	async synchronize(input: MemoryMutationRequest): Promise<WorkspaceMutationResult> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
+					const prepared = await this.dependencies.syncMutations.prepare(input, {
+						identity: target,
+						key: this.workspaceCommandRules.workspaceResourceKey(target)
+					});
 					if (prepared.kind === 'finished') return prepared.result;
-					await this.applySynchronizedCommand(actor, input);
-					return this.dependencies.syncMutations.complete(actor, input, target);
+					await this.applySynchronizedCommand(input);
+					return this.dependencies.syncMutations.complete(input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);
@@ -116,110 +109,98 @@ export class Memory implements MemoryController {
 		}
 	}
 
-	private async applySynchronizedCommand(
-		actor: ActorContext,
-		input: MemoryMutationRequest
-	): Promise<void> {
+	private async applySynchronizedCommand(input: MemoryMutationRequest): Promise<void> {
 		const command = input.command;
 		switch (command.kind) {
 			case 'createMemory':
-				await this.create(actor, command);
+				await this.create(command);
 				break;
 			case 'updateMemory':
-				await this.update(actor, command);
+				await this.update(command);
 				break;
 			case 'deleteMemory':
-				await this.remove(actor, command);
+				await this.remove(command);
 				break;
 		}
 	}
-	constructor(private readonly dependencies: MemoryDependencies) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: MemoryDependencies
+	) {}
 
-	async list(actor: ActorContext, input: ListMemoryInput): Promise<ListMemoryOutput> {
-		const entries = await this.dependencies.memoryLister.list(actor, {
+	async list(input: ListMemoryInput): Promise<ListMemoryOutput> {
+		const entries = await this.dependencies.memoryLister.list({
 			projectId: input.projectId
 		});
 		return {
-			entries: input.sharedOnly ? entries.filter((entry) => entry.shareWithAgents) : entries
+			entries: input.sharedOnly ? this.dependencies.presentation.sharedEntries(entries) : entries
 		};
 	}
 
-	async create(
-		actor: ActorContext,
-		input: CreateMemoryEntryInput
-	): Promise<{ entry: MemoryEntry }> {
+	async create(input: CreateMemoryEntryInput): Promise<{ entry: MemoryEntry }> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const decision = decideMemoryCreation(input, {
+			const decision = this.dependencies.editing.create(input, {
 				id: input.id ?? (crypto.randomUUID() as MemoryEntryId),
-				userId: actor.userId,
+				userId: this.actor.userId,
 				timestamp: new Date().toISOString() as DateTime
 			});
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-			const entry = await this.dependencies.memoryCreator.create(actor, decision.entry);
-			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));
+			const entry = await this.dependencies.memoryCreator.create(decision.entry);
+			await this.dependencies.memoryIndexer.indexMemory(entry);
 			return { entry };
 		});
 	}
 
-	async update(
-		actor: ActorContext,
-		input: UpdateMemoryEntryInput
-	): Promise<{ entry: MemoryEntry }> {
+	async update(input: UpdateMemoryEntryInput): Promise<{ entry: MemoryEntry }> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.memoryEditor.getForEdit(actor, input.memoryEntryId);
-			const decision = decideMemoryEdit(current, input, new Date().toISOString() as DateTime);
+			const current = await this.dependencies.memoryEditor.getForEdit(input.memoryEntryId);
+			const decision = this.dependencies.editing.edit(
+				current,
+				input,
+				new Date().toISOString() as DateTime
+			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-			const entry = await this.dependencies.memoryEditor.update(actor, decision.entry);
-			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));
+			const entry = await this.dependencies.memoryEditor.update(decision.entry);
+			await this.dependencies.memoryIndexer.indexMemory(entry);
 			return { entry };
 		});
 	}
 
-	async remove(actor: ActorContext, input: DeleteMemoryEntryInput): Promise<void> {
+	async remove(input: DeleteMemoryEntryInput): Promise<void> {
 		await this.dependencies.transactionRunner.run(async () => {
-			const entry = await this.dependencies.memoryDeleter.remove(actor, input.memoryEntryId);
-			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));
+			const entry = await this.dependencies.memoryDeleter.remove(input.memoryEntryId);
+			await this.dependencies.memoryIndexer.indexMemory(entry);
 		});
 	}
 
-	async propose(
-		actor: ActorContext,
-		input: ProposeMemoryChangeInput
-	): Promise<ProposeMemoryChangeOutput<Suggestion>> {
+	async propose(input: ProposeMemoryChangeInput): Promise<ProposeMemoryChangeOutput<Suggestion>> {
 		const { confidence, provenanceId, ...payload } = input;
 		return this.dependencies.transactionRunner.run(async () => {
-			await this.dependencies.memoryChanges.validate(actor, payload);
+			await this.dependencies.memoryChanges.validate(payload);
 
-			const suggestion = await this.dependencies.suggestionCreator.create(actor, {
+			const suggestion = await this.dependencies.suggestionCreator.create({
 				kind: 'memory',
 				...(confidence !== undefined ? { confidence } : {}),
 				provenanceId,
 				payload
 			});
 
-			if (
-				await this.dependencies.trustPolicyEvaluator.shouldAutoAccept(actor, 'memory', suggestion)
-			) {
+			if (await this.dependencies.trustPolicyEvaluator.shouldAutoAccept('memory', suggestion)) {
 				const applied = await this.dependencies.memoryChanges.apply(
-					actor,
 					suggestion.payload,
 					suggestion.provenanceId
 				);
 				for (const change of applied.changes)
-					await this.finishIndex(
-						actor,
-						await this.dependencies.memoryIndexer.index(actor, change.after)
-					);
+					await this.dependencies.memoryIndexer.indexMemory(change.after);
 				const entry = applied.entry;
 				await this.dependencies.suggestionEffects.record(
-					actor,
 					suggestion.id,
 					applied.changes.map((change) =>
 						mapAppliedChange(change, (value) => ({ type: 'memory_entries' as const, value }))
 					)
 				);
 				const accepted = await this.dependencies.suggestionAccepter.accept(
-					actor,
 					suggestion,
 					entry.id,
 					true
@@ -229,11 +210,18 @@ export class Memory implements MemoryController {
 			return { suggestion };
 		});
 	}
-	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
-		if (result.kind === 'stored') return;
-		const batch = await this.dependencies.indexEmbeddings.embed(
-			result.missing.map((chunk) => chunk.input)
-		);
-		await this.dependencies.indexWriter.complete(actor, result, batch);
+}
+
+function mapAppliedChange<Input, Output>(
+	change: AppliedChange<Input>,
+	map: (record: Input) => Output
+): AppliedChange<Output> {
+	switch (change.kind) {
+		case 'created':
+			return { kind: 'created', after: map(change.after) };
+		case 'modified':
+			return { kind: 'modified', before: map(change.before), after: map(change.after) };
+		case 'unchanged':
+			return { kind: 'unchanged', after: map(change.after) };
 	}
 }

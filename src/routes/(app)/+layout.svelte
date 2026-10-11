@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { newNoteDestination } from '$lib/client/shell/new-note-destination';
 	import { WorkspaceStartup, WorkspaceRouteOutlet } from '$lib/components/shell';
 	import type { RouteReadiness } from '$lib/client/sync/route-access';
 	import type { NoteId } from '$lib/models/notes';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { afterNavigate } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
@@ -13,13 +14,17 @@
 	import type { ProjectId } from '$lib/models/projects';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { IndexedDbWorkbenchLayout } from '$lib/client/workbench/indexeddb-layout';
-	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
-	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { proofreading } from '$lib/factories/notes/proofreading';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 	import { cn } from '$lib/utils';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
-	import { effectiveSidebarWidth } from '$lib/services/workspace/sidebar-width';
+	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { createChat } from '$lib/factories/agent/chat';
+	// The app is composed here: chats are built by the factory, held by the registry.
+	chatRegistry.provide(createChat);
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { effectiveSidebarWidth } = workspacePresentation;
+
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -33,7 +38,7 @@
 	let { data, children } = $props();
 	const shell = $derived(
 		workspaceSession.current === data.session
-			? data.session.resources.views.shell(data.session.bootstrap.accountId)
+			? workspaceViews.shell(data.session.bootstrap.accountId)
 			: null
 	);
 
@@ -95,9 +100,8 @@
 	// workbench can resolve the focused tab's project without re-scanning.
 	const projectOfTab = $derived.by(() => (tabId: TabId): ProjectId | undefined => {
 		const ref = parseTabId(tabId);
-		if (ref?.kind === 'diagram')
-			return data.session.resources.views.diagram(ref.diagramId)?.projectId;
-		if (ref?.kind === 'widget') return data.session.resources.views.widget(ref.widgetId)?.projectId;
+		if (ref?.kind === 'diagram') return workspaceViews.diagram(ref.diagramId)?.projectId;
+		if (ref?.kind === 'widget') return workspaceViews.widget(ref.widgetId)?.projectId;
 		return shell?.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.projectId;
 	});
 
@@ -135,7 +139,7 @@
 	$effect(() => {
 		void page.url;
 		if (!shell) return;
-		appContext.configure(shell, page.url);
+		appContext.configure(shell, page.url, workspaceViews.all('widgets'));
 		workbench.syncFromUrl();
 		workbench.refreshActiveProjectId(projectOfTab);
 		void pruneClosedTabs();
@@ -210,8 +214,14 @@
 			toast.error('This workspace has no inbox yet. Open Today to create your first note.');
 			return;
 		}
-		const output = await projectActions.createNote('Untitled', projectId);
-		if (output) await workbench.openTab(output.note.id);
+		const id = crypto.randomUUID() as NoteId;
+		const created = await workspaceSession.create({
+			kind: 'createNote',
+			id,
+			projectId,
+			title: 'Untitled'
+		});
+		if (created.kind === 'saved') await workbench.openTab(id);
 	}
 </script>
 
@@ -285,7 +295,7 @@
 		{#if shell && prerequisitesReady}
 			<WorkspaceTabs
 				{shell}
-				sessions={data.session.sessions}
+				sessions={workspaceViews.chatSessions}
 				hidden={workbench.stripHidden}
 				oncreateNote={inventoryLoading ? undefined : () => void createNoteFromStrip()}
 				ontoggleHidden={() => workbench.toggleStripHidden()}
@@ -304,7 +314,7 @@
 	{#if shell && prerequisitesReady && !inventoryLoading}
 		<RightPanel
 			{shell}
-			sessions={data.session.sessions}
+			sessions={workspaceViews.chatSessions}
 			agentPreferences={data.session.preferences}
 			agentModels={data.session.agentModels}
 			agentDefaults={data.session.agentDefaults}

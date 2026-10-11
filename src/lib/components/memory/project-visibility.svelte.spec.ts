@@ -4,9 +4,7 @@ import {
 	projectBuilder,
 	memoryEntryBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
-import { syncEtag } from '$lib/models/sync';
+import { offlineWorkspace, workspaceFixture } from '$lib/testing/workspace/fixtures/workspace';
 import MemoryEntryList from './memory-entry-list.svelte';
 
 const cleanup: (() => void)[] = [];
@@ -16,20 +14,12 @@ afterEach(() => {
 const setup = async () => {
 	const project = projectBuilder();
 	const memory = memoryEntryBuilder({ projectId: project.id });
-	const { resources, cache } = workspaceResourcesFixture(project.userId);
-	cleanup.push(() => resources.stop());
-	await cache.accept(workspaceResourceKey({ type: 'projects', id: [project.id] }), {
-		etag: syncEtag(1n),
-		value: { type: 'projects', value: project }
-	});
-	await cache.accept(workspaceResourceKey({ type: 'memory_entries', id: [memory.id] }), {
-		etag: syncEtag(2n),
-		value: { type: 'memory_entries', value: memory }
-	});
-	await resources.initialize();
-	resources.setOnline(false);
+	const { resources, store, graph, workspace } = await offlineWorkspace(project.userId);
+	cleanup.push(() => workspace.stop());
+	await store({ type: 'projects', value: project });
+	await store({ type: 'memory_entries', value: memory }, 2n);
 	const screen = render(MemoryEntryList, {
-		workspace: resources,
+		graph,
 		projectId: project.id,
 		placeholder: 'Remember…',
 		emptyText: 'No memory yet'
@@ -73,11 +63,12 @@ it('closes a pending deletion when its project is archived', async () => {
 
 it('withholds project memory actions until its project is downloaded', async () => {
 	const project = projectBuilder();
-	const { resources, transport } = workspaceResourcesFixture(project.userId);
-	cleanup.push(() => resources.stop());
-	const paused = transport.pause('changes');
+	const fixture = workspaceFixture({ accountId: project.userId });
+	cleanup.push(() => fixture.workspace.stop());
+	const paused = fixture.transport.reads.pause('changes');
+	await fixture.start();
 	const screen = render(MemoryEntryList, {
-		workspace: resources,
+		graph: { workspace: fixture.workspace, views: fixture.views },
 		projectId: project.id,
 		placeholder: 'Remember…',
 		emptyText: 'No memory yet'

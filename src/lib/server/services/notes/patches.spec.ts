@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { applyNotePatch } from './patches';
+import { NotePatchPreparationService } from './patches';
+const preparation = new NotePatchPreparationService();
 import type { NoteEdit } from '$lib/models/notes';
 
 const body = '# Plan\n\nShip the thing.\n\nThen ship it again.\n';
 
-const patch = (markdown: string, ...edits: NoteEdit[]) => applyNotePatch(markdown, edits);
+const patch = (markdown: string, ...edits: NoteEdit[]) => preparation.prepare(markdown, edits);
 
 describe('Applying a note patch', () => {
 	it('replaces the anchored text', () => {
 		const result = patch(body, { oldText: 'Ship the thing.', newText: 'Ship the feature.' });
-		expect(result).toMatchObject({
-			ok: true,
-			markdown: expect.stringContaining('Ship the feature.')
-		});
-
 		expect(result.ok && result.markdown).toBe(
 			'# Plan\n\nShip the feature.\n\nThen ship it again.\n'
 		);
@@ -47,36 +43,38 @@ describe('Rejecting a note patch', () => {
 	it('rejects an empty anchor rather than inserting at the start', () => {
 		expect(patch(body, { oldText: '', newText: 'x' })).toMatchObject({
 			ok: false,
-			failures: [{ reason: 'empty_anchor' }]
+			problems: ['Edit 1: oldText is empty. Quote the text you want to replace.']
 		});
 	});
 
 	it('rejects an edit that would change nothing', () => {
 		expect(patch(body, { oldText: 'Ship the thing.', newText: 'Ship the thing.' })).toMatchObject({
 			ok: false,
-			failures: [{ reason: 'no_op' }]
+			problems: ['Edit 1: oldText and newText are identical, so there is nothing to change.']
 		});
 	});
 
 	it('rejects an anchor that does not appear', () => {
 		expect(patch(body, { oldText: 'Sail the thing.', newText: 'x' })).toMatchObject({
 			ok: false,
-			failures: [{ reason: 'not_found' }]
+			problems: ['Edit 1: oldText was not found. Read the note again and quote it exactly.']
 		});
 	});
 
 	it('suggests the closest text when an anchor is close but not a match', () => {
 		const result = patch(body, { oldText: 'Ship the feature.', newText: 'x' });
-		expect(result.ok === false && result.failures[0]).toMatchObject({
-			reason: 'not_found',
-			nearest: 'Ship the thing.'
+		expect(result).toEqual({
+			ok: false,
+			problems: ['Edit 1: oldText was not found. The closest text in the note is:\nShip the thing.']
 		});
 	});
 
 	it('rejects an anchor that appears more than once', () => {
 		expect(patch('same\nsame\n', { oldText: 'same', newText: 'other' })).toMatchObject({
 			ok: false,
-			failures: [{ reason: 'ambiguous', occurrences: 2 }]
+			problems: [
+				'Edit 1: oldText appears 2 times. Quote more surrounding text to make it unique, or set replaceAll.'
+			]
 		});
 	});
 
@@ -96,14 +94,15 @@ describe('Rejecting a note patch', () => {
 			{ oldText: '# Plan', newText: '# Roadmap' },
 			{ oldText: 'missing', newText: 'x' }
 		);
-		expect(result.ok).toBe(false);
-
-		expect(result.ok === false && result.failures[0]).toMatchObject({ editIndex: 1 });
+		expect(result).toEqual({
+			ok: false,
+			problems: ['Edit 2: oldText was not found. Read the note again and quote it exactly.']
+		});
 	});
 
 	it('reports every failing edit, not just the first', () => {
 		const result = patch(body, { oldText: 'missing', newText: 'x' }, { oldText: '', newText: 'y' });
-		expect(result.ok === false && result.failures).toHaveLength(2);
+		expect(result.ok === false && result.problems).toHaveLength(2);
 	});
 });
 
@@ -115,9 +114,11 @@ describe('Tolerating a near-exact anchor', () => {
 
 	it('tolerates internal whitespace drift in the anchor', () => {
 		const result = patch('Ship  the thing.', { oldText: 'Ship the thing.', newText: 'Ship it.' });
-		expect(result.ok && result.markdown).toBe('Ship it.');
-
-		expect(result.ok && result.matchedTexts).toEqual(['Ship  the thing.']);
+		expect(result).toMatchObject({
+			ok: true,
+			markdown: 'Ship it.',
+			matchedTexts: ['Ship  the thing.']
+		});
 	});
 
 	it('tolerates typographic punctuation in the anchor', () => {
@@ -129,7 +130,9 @@ describe('Tolerating a near-exact anchor', () => {
 		const result = patch('a  b\na\tb\n', { oldText: 'a b', newText: 'x' });
 		expect(result).toMatchObject({
 			ok: false,
-			failures: [{ reason: 'ambiguous', occurrences: 2 }]
+			problems: [
+				'Edit 1: oldText appears 2 times. Quote more surrounding text to make it unique, or set replaceAll.'
+			]
 		});
 	});
 
@@ -140,7 +143,10 @@ describe('Tolerating a near-exact anchor', () => {
 
 	it('does not fuzzy-match a similar but different anchor', () => {
 		const result = patch(body, { oldText: 'Ships the thing', newText: 'x' });
-		expect(result.ok === false && result.failures[0]).toMatchObject({ reason: 'not_found' });
+		expect(result).toEqual({
+			ok: false,
+			problems: ['Edit 1: oldText was not found. Read the note again and quote it exactly.']
+		});
 	});
 });
 
@@ -160,7 +166,9 @@ describe('Literal text and source preservation', () => {
 	it('counts anchors with different line endings as ambiguous', () => {
 		expect(patch('a\nb / a\r\nb', { oldText: 'a\nb', newText: 'c' })).toMatchObject({
 			ok: false,
-			failures: [{ reason: 'ambiguous', occurrences: 2 }]
+			problems: [
+				'Edit 1: oldText appears 2 times. Quote more surrounding text to make it unique, or set replaceAll.'
+			]
 		});
 	});
 	it('replaces every line-ending equivalent span literally', () => {

@@ -8,10 +8,11 @@ it('refuses creation into a folder after a concurrent archive commits', async ()
 	const { owner, note, project } = await seedNote('19301');
 	await replaceNoteFixture({ ...note, kind: 'folder' });
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
-			await api.notes.archive(owner, { noteId: note.id });
+			await api.notes.archive({ noteId: note.id });
 		},
-		(api) => api.notes.create(owner, { projectId: project.id, parentId: note.id, title: 'Child' })
+		(api) => api.notes.create({ projectId: project.id, parentId: note.id, title: 'Child' })
 	);
 	expect(result).toMatchObject({ kind: 'failure', error: { code: 'VALIDATION' } });
 });
@@ -20,23 +21,24 @@ it('refuses archiving a folder after concurrent child creation commits', async (
 	const { owner, note, project } = await seedNote('19302');
 	await replaceNoteFixture({ ...note, kind: 'folder' });
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
-			await api.projects.createFolder(owner, {
+			await api.projects.createFolder({
 				projectId: project.id,
 				parentId: note.id,
 				name: 'Child folder'
 			});
 		},
-		(api) => api.notes.archive(owner, { noteId: note.id })
+		(api) => api.notes.archive({ noteId: note.id })
 	);
 	expect(result).toMatchObject({ kind: 'failure', error: { code: 'VALIDATION' } });
 });
 
 it('refuses the second of two moves that would create a folder cycle', async () => {
 	const { owner, note, project } = await seedNote('19303');
-	const records = new NoteRecords(context.db);
+	const records = new NoteRecords(owner, context.db);
 	await replaceNoteFixture({ ...note, kind: 'folder' });
-	const peer = await records.insert(owner, {
+	const peer = await records.insert({
 		...note,
 		id: crypto.randomUUID() as NoteId,
 		kind: 'folder',
@@ -44,8 +46,9 @@ it('refuses the second of two moves that would create a folder cycle', async () 
 		position: 1
 	});
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
-			await api.projects.move(owner, {
+			await api.projects.move({
 				projectId: project.id,
 				entryId: note.id,
 				parentId: peer.id,
@@ -53,7 +56,7 @@ it('refuses the second of two moves that would create a folder cycle', async () 
 			});
 		},
 		(api) =>
-			api.projects.move(owner, {
+			api.projects.move({
 				projectId: project.id,
 				entryId: peer.id,
 				parentId: note.id,
@@ -66,10 +69,11 @@ it('refuses the second of two moves that would create a folder cycle', async () 
 it('assigns a later sibling position after concurrent creation commits', async () => {
 	const { owner, project } = await seedNote('19304');
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
-			await api.notes.create(owner, { projectId: project.id, title: 'First new sibling' });
+			await api.notes.create({ projectId: project.id, title: 'First new sibling' });
 		},
-		(api) => api.projects.createFolder(owner, { projectId: project.id, name: 'Second new sibling' })
+		(api) => api.projects.createFolder({ projectId: project.id, name: 'Second new sibling' })
 	);
 	expect(result).toMatchObject({ kind: 'success', value: { folder: { position: 2 } } });
 });
@@ -77,17 +81,18 @@ it('assigns a later sibling position after concurrent creation commits', async (
 it('refuses creation after a concurrent project archive commits', async () => {
 	const { owner, project } = await seedNote('19305');
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
-			await api.projects.archive(owner, { projectId: project.id });
+			await api.projects.archive({ projectId: project.id });
 		},
-		(api) => api.notes.create(owner, { projectId: project.id, title: 'Too late' })
+		(api) => api.notes.create({ projectId: project.id, title: 'Too late' })
 	);
 	expect(result).toMatchObject({ kind: 'failure', error: { code: 'NOT_FOUND' } });
 });
 
 it('refuses moving into a folder after a concurrent archive commits', async () => {
 	const { owner, note, project } = await seedNote('19306');
-	const parent = await new NoteRecords(context.db).insert(owner, {
+	const parent = await new NoteRecords(owner, context.db).insert({
 		...note,
 		id: crypto.randomUUID() as NoteId,
 		kind: 'folder',
@@ -95,11 +100,12 @@ it('refuses moving into a folder after a concurrent archive commits', async () =
 		position: 1
 	});
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
-			await api.notes.archive(owner, { noteId: parent.id });
+			await api.notes.archive({ noteId: parent.id });
 		},
 		(api) =>
-			api.projects.move(owner, {
+			api.projects.move({
 				projectId: project.id,
 				entryId: note.id,
 				parentId: parent.id,

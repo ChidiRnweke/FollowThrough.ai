@@ -14,10 +14,10 @@ import {
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 
 const views = (...records: WorkspaceRecord[]) =>
-	new WorkspaceViews(
+	createWorkspaceViews(
 		new Map(
 			records.map((record, index) => [
 				'id' in record.value ? JSON.stringify([record.type, record.value.id]) : String(index),

@@ -42,9 +42,8 @@ describe('Project-owned diagram persistence invariants', () => {
 	it('preserves conversion identity and publication state when replacing reviewed content', async () => {
 		const { owner, project, note } = await seedNote('18802');
 		const provenance = await seedProvenance(owner, '18802');
-		const repository = new DiagramRecords(context.db);
+		const repository = new DiagramRecords(owner, context.db);
 		const current = await repository.insert(
-			owner,
 			drawioBuilder({
 				id: crypto.randomUUID() as DiagramId,
 				userId: owner.userId,
@@ -58,7 +57,7 @@ describe('Project-owned diagram persistence invariants', () => {
 		);
 		const source = VALID_DRAWIO_XML.replace('API &amp; worker', 'Reviewed queue');
 		const renderedSvg = '<svg xmlns="http://www.w3.org/2000/svg"><text>Reviewed queue</text></svg>';
-		const saved = await repository.updateContent(owner, {
+		const saved = await repository.updateContent({
 			kind: 'drawio',
 			diagramId: current.id,
 			source,
@@ -74,16 +73,15 @@ describe('Project-owned diagram persistence invariants', () => {
 
 	it('preserves a diagram restored after a caller observed it in the trash', async () => {
 		const { owner, project } = await seedNote('489');
-		const repository = new DiagramRecords(context.db);
+		const repository = new DiagramRecords(owner, context.db);
 		const stored = await repository.insert(
-			owner,
 			diagram('489', { userId: owner.userId, projectId: project.id })
 		);
-		await repository.updateTrash(owner, { ...stored, archivedAt: now });
-		await repository.findById(owner, stored.id);
-		await repository.updateTrash(owner, stored);
-		const removed = await repository.deleteArchived(owner, stored.id);
-		expect({ removed, diagram: (await repository.findById(owner, stored.id))?.id }).toEqual({
+		await repository.updateTrash({ ...stored, archivedAt: now });
+		await repository.findById(stored.id);
+		await repository.updateTrash(stored);
+		const removed = await repository.deleteArchived(stored.id);
+		expect({ removed, diagram: (await repository.findById(stored.id))?.id }).toEqual({
 			removed: false,
 			diagram: stored.id
 		});
@@ -91,10 +89,9 @@ describe('Project-owned diagram persistence invariants', () => {
 
 	it('keeps saved note references when their trashed diagram is permanently deleted', async () => {
 		const { owner, project, note } = await seedNote('490');
-		const repository = new DiagramRecords(context.db);
-		const notes = new NoteRecords(context.db);
+		const repository = new DiagramRecords(owner, context.db);
+		const notes = new NoteRecords(owner, context.db);
 		const stored = await repository.insert(
-			owner,
 			diagram('490', {
 				userId: owner.userId,
 				projectId: project.id,
@@ -107,16 +104,16 @@ describe('Project-owned diagram persistence invariants', () => {
 			content: [{ type: 'drawio', attrs: { diagramId: stored.id } }]
 		};
 		await replaceNoteFixture({ ...note, document });
-		await repository.updateTrash(owner, { ...stored, archivedAt: now });
-		await repository.deleteArchived(owner, stored.id);
+		await repository.updateTrash({ ...stored, archivedAt: now });
+		await repository.deleteArchived(stored.id);
 		expect({
-			diagram: await repository.findById(owner, stored.id),
-			document: (await notes.findById(owner, note.id))?.document
+			diagram: await repository.findById(stored.id),
+			document: (await notes.findById(note.id))?.document
 		}).toEqual({ diagram: undefined, document });
 	});
 	it('rejects a draft write after publication moved without changing the working revision', async () => {
 		const { owner, project } = await seedNote('480');
-		const repository = new DiagramRecords(context.db);
+		const repository = new DiagramRecords(owner, context.db);
 		const draft: DrawioDiagram = {
 			id: 'a0000000-0000-4000-8000-000000000480' as DiagramId,
 			userId: owner.userId,
@@ -129,16 +126,10 @@ describe('Project-owned diagram persistence invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		};
-		await repository.insert(owner, draft);
-		await repository.updateIfRevision(
-			owner,
-			{ ...draft, publishedRevision: 2, publishedAt: now },
-			2,
-			1
-		);
+		await repository.insert(draft);
+		await repository.updateIfRevision({ ...draft, publishedRevision: 2, publishedAt: now }, 2, 1);
 		expect(
 			await repository.updateIfRevision(
-				owner,
 				{ ...draft, source: '<mxfile>draft</mxfile>', currentRevision: 3 },
 				2,
 				1
@@ -148,7 +139,7 @@ describe('Project-owned diagram persistence invariants', () => {
 
 	it('preserves the first immutable snapshot when publication is retried', async () => {
 		const { owner, project } = await seedNote('481');
-		const repository = new DiagramRecords(context.db);
+		const repository = new DiagramRecords(owner, context.db);
 		const draft: DrawioDiagram = {
 			id: 'a0000000-0000-4000-8000-000000000481' as DiagramId,
 			userId: owner.userId,
@@ -162,7 +153,7 @@ describe('Project-owned diagram persistence invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		};
-		await repository.insert(owner, draft);
+		await repository.insert(draft);
 		const revision: DiagramRevision = {
 			id: 'b0000000-0000-4000-8000-000000000481' as DiagramRevisionId,
 			diagramId: draft.id,
@@ -172,9 +163,9 @@ describe('Project-owned diagram persistence invariants', () => {
 			searchableText: '',
 			createdAt: now
 		};
-		const original = await repository.insertRevision(owner, revision);
+		const original = await repository.insertRevision(revision);
 		expect(
-			await repository.insertRevision(owner, {
+			await repository.insertRevision({
 				...revision,
 				id: 'b0000000-0000-4000-8000-000000000482' as DiagramRevisionId,
 				renderedSvg: '<svg>regenerated</svg>'
@@ -186,9 +177,8 @@ describe('Project-owned diagram persistence invariants', () => {
 	// in a conversation and never belongs to a note at all.
 	it('persists a diagram that names no source note', async () => {
 		const { owner, project } = await seedNote('420');
-		const repository = new DiagramRecords(context.db);
+		const repository = new DiagramRecords(owner, context.db);
 		const stored = await repository.insert(
-			owner,
 			diagram('420', { userId: owner.userId, projectId: project.id })
 		);
 		expect(stored.sourceNoteId).toBeUndefined();
@@ -198,15 +188,14 @@ describe('Project-owned diagram persistence invariants', () => {
 	// is one place a diagram is shown rather than the thing that owns it.
 	it('keeps a diagram when the note it came from is deleted', async () => {
 		const { owner, project, note } = await seedNote('421');
-		const repository = new DiagramRecords(context.db);
+		const repository = new DiagramRecords(owner, context.db);
 		const stored = await repository.insert(
-			owner,
 			diagram('421', { userId: owner.userId, projectId: project.id, sourceNoteId: note.id })
 		);
-		const notes = new NoteRecords(context.db);
+		const notes = new NoteRecords(owner, context.db);
 		await replaceNoteFixture({ ...note, archivedAt: now });
-		await notes.deleteTrashed(owner, note.id);
-		expect(await repository.findById(owner, stored.id)).toMatchObject({
+		await notes.deleteTrashed(note.id);
+		expect(await repository.findById(stored.id)).toMatchObject({
 			id: stored.id,
 			sourceNoteId: undefined
 		});
@@ -214,23 +203,21 @@ describe('Project-owned diagram persistence invariants', () => {
 
 	it('lists a note-less diagram under its project', async () => {
 		const { owner, project } = await seedNote('423');
-		const repository = new DiagramRecords(context.db);
+		const repository = new DiagramRecords(owner, context.db);
 		const stored = await repository.insert(
-			owner,
 			diagram('423', { userId: owner.userId, projectId: project.id })
 		);
-		expect(
-			(await repository.listForProject(owner, project.id)).diagrams.map((item) => item.id)
-		).toEqual([stored.id]);
+		expect((await repository.listForProject(project.id)).diagrams.map((item) => item.id)).toEqual([
+			stored.id
+		]);
 	});
 
 	it('rejects a diagram naming a note that belongs to another actor', async () => {
 		const { project } = await seedNote('424');
 		const { note: foreign } = await seedNote('425');
-		const repository = new DiagramRecords(context.db);
+		const repository = new DiagramRecords(actor('424'), context.db);
 		await expect(
 			repository.insert(
-				actor('424'),
 				diagram('424', {
 					userId: actor('424').userId,
 					projectId: project.id,
@@ -244,9 +231,8 @@ describe('Project-owned diagram persistence invariants', () => {
 	// references live in note documents, so this is a jsonb scan, not a join.
 	it('counts a note whose document renders the diagram', async () => {
 		const { owner, project, note } = await seedNote('426');
-		const repository = new DiagramRecords(context.db);
+		const repository = new DiagramRecords(owner, context.db);
 		const stored = await repository.insert(
-			owner,
 			diagram('426', {
 				userId: owner.userId,
 				projectId: project.id,
@@ -261,14 +247,13 @@ describe('Project-owned diagram persistence invariants', () => {
 				content: [{ type: 'drawio', attrs: { diagramId: stored.id } }]
 			} as typeof note.document
 		});
-		expect(await repository.countReferencingNotes(owner, stored.id)).toBe(1);
+		expect(await repository.countReferencingNotes(stored.id)).toBe(1);
 	});
 
 	it('does not count a note that renders a different diagram', async () => {
 		const { owner, project, note } = await seedNote('427');
-		const repository = new DiagramRecords(context.db);
+		const repository = new DiagramRecords(owner, context.db);
 		const stored = await repository.insert(
-			owner,
 			diagram('427', {
 				userId: owner.userId,
 				projectId: project.id,
@@ -283,6 +268,6 @@ describe('Project-owned diagram persistence invariants', () => {
 				content: [{ type: 'drawio', attrs: { diagramId: '00000000-0000-4000-8000-00000000dead' } }]
 			} as typeof note.document
 		});
-		expect(await repository.countReferencingNotes(owner, stored.id)).toBe(0);
+		expect(await repository.countReferencingNotes(stored.id)).toBe(0);
 	});
 });

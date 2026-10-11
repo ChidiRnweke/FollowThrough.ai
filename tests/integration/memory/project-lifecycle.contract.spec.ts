@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MemoryChangePayload, MemoryEntryId } from '$lib/models/memory';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
@@ -9,10 +9,15 @@ import { context, now, seedNote, seedProvenance } from '../database-harness';
 const setup = async (suffix: string) => {
 	const { owner, project } = await seedNote(suffix);
 	const provenance = await seedProvenance(owner, suffix);
-	const entries = new MemoryRecords(context.db);
-	const projects = new ProjectRecords(context.db);
-	const library = new MemoryLibrary(entries, projects, new ProvenanceRecords(context.db));
-	const entry = await library.create(owner, {
+	const entries = new MemoryRecords(owner, context.db);
+	const projects = new ProjectRecords(owner, context.db);
+	const library = createMemoryServices(
+		owner,
+		entries,
+		projects,
+		new ProvenanceRecords(owner, context.db)
+	);
+	const entry = await library.creator.create({
 		id: crypto.randomUUID() as MemoryEntryId,
 		userId: owner.userId,
 		projectId: project.id,
@@ -21,20 +26,20 @@ const setup = async (suffix: string) => {
 		createdAt: now,
 		updatedAt: now
 	});
-	await projects.archive(owner, project.id);
+	await projects.archive(project.id);
 	return { owner, project, provenance, entries, library, entry };
 };
 
 describe('archived project memory boundaries', () => {
 	it('hides a retained project entry from the application reader', async () => {
-		const { owner, library, entry } = await setup('22101');
-		await expect(library.get(owner, entry.id)).rejects.toThrow('Memory project was not found');
+		const { library, entry } = await setup('22101');
+		await expect(library.reader.get(entry.id)).rejects.toThrow('Memory project was not found');
 	});
 
 	it.each(['update', 'remove'] as const)(
 		'refuses a pending %s without changing the retained entry',
 		async (operation) => {
-			const { owner, project, provenance, entries, library, entry } = await setup(
+			const { project, provenance, entries, library, entry } = await setup(
 				operation === 'update' ? '22102' : '22103'
 			);
 			const payload: MemoryChangePayload =
@@ -52,11 +57,11 @@ describe('archived project memory boundaries', () => {
 							operation,
 							memoryEntryId: entry.id
 						};
-			const outcome = await library.apply(owner, payload, provenance.id).then(
+			const outcome = await library.changes.apply(payload, provenance.id).then(
 				() => 'unexpected success',
 				(error: Error) => error.message
 			);
-			expect({ outcome, entries: await entries.list(owner, { projectId: project.id }) }).toEqual({
+			expect({ outcome, entries: await entries.list({ projectId: project.id }) }).toEqual({
 				outcome: 'Memory project was not found',
 				entries: [entry]
 			});
@@ -64,12 +69,12 @@ describe('archived project memory boundaries', () => {
 	);
 
 	it('rejects direct deletion while preserving the stored entry', async () => {
-		const { owner, entries, library, entry } = await setup('22104');
-		const outcome = await library.remove(owner, entry.id).then(
+		const { entries, library, entry } = await setup('22104');
+		const outcome = await library.deleter.remove(entry.id).then(
 			() => 'unexpected success',
 			(error: Error) => error.message
 		);
-		expect({ outcome, entry: await entries.findById(owner, entry.id) }).toEqual({
+		expect({ outcome, entry: await entries.findById(entry.id) }).toEqual({
 			outcome: 'Memory project was not found',
 			entry
 		});

@@ -1,9 +1,10 @@
-import type { ShellContext } from '$lib/client/shell/views';
-import {
-	agentPayloadItems,
-	isAgentPayloadObject,
-	type AgentPayload
-} from '$lib/models/agent/payload';
+import type { ShellContext } from '$lib/models/workspace-views';
+import { type AgentPayload } from '$lib/models/agent/payload';
+import { agentPayloadOperations } from '$lib/factories/agent/payload';
+const { agentPayloadItems } = agentPayloadOperations;
+
+const { isAgentPayloadObject } = agentPayloadOperations;
+
 import type { EntityKind, EntityRef } from '$lib/models/tool-display';
 
 import { toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';

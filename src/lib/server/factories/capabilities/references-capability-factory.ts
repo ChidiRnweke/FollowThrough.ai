@@ -1,6 +1,7 @@
-import { openRouterWebSearchTool, REFERENCE_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
+import type { ActorContext } from '$lib/models/identity';
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
-import { resolveWebResearch } from '$lib/services/agent/web-research';
+import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
+
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import type {
@@ -8,12 +9,22 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import { ReferenceRecords } from '$lib/server/repositories/references/postgres/references';
-import { ReferenceLibrary } from '$lib/server/services/references/library';
+import {
+	ReferenceReadingService,
+	ReferenceWritingService,
+	type ReferenceCreator,
+	type ReferenceLister,
+	type ReferenceContextReader
+} from '$lib/server/services/references/library';
+import type { ReferenceRepository } from '$lib/server/repositories/references/references';
 import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
-import { ReferenceResearch } from '$lib/server/repositories/references/web-research';
-import { ReferenceRanking } from '$lib/server/services/references/ranking';
-import type { ReferenceFinder } from '$lib/server/services/references/contracts';
-import { operationObserver } from '$lib/server/services/telemetry';
+import { ReferenceResearch } from '$lib/server/services/references/web-research';
+import { ReferenceRanking, type ReferenceRanker } from '$lib/server/services/references/ranking';
+import type { WebReferenceClient } from '$lib/server/services/references/web-research';
+import type { ReferenceCandidatePreparation } from '$lib/server/services/references/discovery';
+import type { AgentRunSettings } from '$lib/services/agent/run-settings';
+import type { WebResearchOptions } from '$lib/models/agent';
+import { operationObserver } from '$lib/server/infrastructure/telemetry/tracing';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 
 export interface ReferencesCapabilityInput {
@@ -25,41 +36,60 @@ export interface ReferencesCapabilityInput {
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
 	readonly defaultModel: string;
-	readonly finder?: ReferenceFinder;
+	readonly client?: WebReferenceClient;
 }
 
-export interface ReferencesCapability {
-	readonly ranking: ReferenceRanking;
+export interface ReferencesCapability extends ReferenceServices {
+	readonly ranking: ReferenceRanker;
 	readonly model: string;
-	readonly library: ReferenceLibrary;
-	readonly finder: ReferenceFinder;
+	readonly client: WebReferenceClient;
+	readonly candidates: ReferenceCandidatePreparation;
+	readonly settings: AgentRunSettings;
+	readonly overrides: WebResearchOptions;
 }
 
 export const createReferencesCapability = (
+	actor: ActorContext,
 	input: ReferencesCapabilityInput
 ): ReferencesCapability => ({
 	ranking: new ReferenceRanking(),
 	model: normalizeLanguageModelId(input.defaultModel),
-	library: new ReferenceLibrary(
-		new ReferenceRecords(input.db),
+	...createReferenceServices(
+		actor,
+		new ReferenceRecords(actor, input.db),
 		input.notes,
 		input.anchors,
 		input.provenance
 	),
-	finder:
-		input.finder ??
-		new ReferenceDiscovery(
-			new ReferenceResearch(input.openRouterApiKey, {
-				baseURL: input.openRouterBaseURL,
-				searchTool: openRouterWebSearchTool(
-					resolveWebResearch(
-						webSearchOptionsFromEnvironment(process.env),
-						REFERENCE_WEB_SEARCH_DEFAULTS
-					)
-				),
-				appURL: input.appURL,
-				defaultModel: normalizeLanguageModelId(input.defaultModel),
-				observer: operationObserver
-			})
-		)
+	client:
+		input.client ??
+		new ReferenceResearch(input.openRouterApiKey, {
+			baseURL: input.openRouterBaseURL,
+			appURL: input.appURL,
+			defaultModel: normalizeLanguageModelId(input.defaultModel),
+			observer: operationObserver
+		}),
+	candidates: new ReferenceDiscovery(),
+	settings: new AgentRunSettingsService(),
+	overrides: webSearchOptionsFromEnvironment(process.env)
 });
+
+export interface ReferenceServices {
+	readonly creator: ReferenceCreator;
+	readonly lister: ReferenceLister;
+	readonly contexts: ReferenceContextReader;
+}
+export const createReferenceServices = (
+	actor: ActorContext,
+	references: ReferenceRepository,
+	notes: NoteRepository,
+	anchors: SourceAnchorRepository,
+	provenance: ProvenanceRepository
+): ReferenceServices => {
+	const reading = new ReferenceReadingService(references, notes, anchors);
+	return {
+		creator: new ReferenceWritingService(actor, references, notes, anchors, provenance),
+		lister: reading,
+		contexts: reading
+	};
+};

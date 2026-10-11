@@ -35,13 +35,12 @@ it.each([
 		revision: 1,
 		createdAt: new Date(now)
 	});
-	await expect(new SourceAnchorRecords(context.db).findById(owner, id)).rejects.toThrow();
+	await expect(new SourceAnchorRecords(owner, context.db).findById(id)).rejects.toThrow();
 });
 
 it('preserves both offsets in the synchronized anchor', async () => {
 	const { owner, note } = await selectedNote('20704');
-	const anchor = await new SourceAnchorRecords(context.db).insert(
-		owner,
+	const anchor = await new SourceAnchorRecords(owner, context.db).insert(
 		anchorBuilder({
 			id: testAnchorId(20704),
 			noteId: note.id,
@@ -49,8 +48,7 @@ it('preserves both offsets in the synchronized anchor', async () => {
 			to: 4
 		})
 	);
-	const result = await new WorkspaceSyncObjects(context.db).read(
-		owner,
+	const result = await new WorkspaceSyncObjects(owner, context.db).read(
 		{ type: 'source_anchors', id: [anchor.id] },
 		null
 	);
@@ -66,10 +64,10 @@ it('preserves both offsets in the synchronized anchor', async () => {
 
 it('retains a quote anchor with no recorded range', async () => {
 	const { owner, note } = await selectedNote('20705');
-	const records = new SourceAnchorRecords(context.db);
+	const records = new SourceAnchorRecords(owner, context.db);
 	const id = testAnchorId(20705);
-	await records.insert(owner, { id, noteId: note.id, quote: 'Send', revision: 1, createdAt: now });
-	const value = await records.findById(owner, id);
+	await records.insert({ id, noteId: note.id, quote: 'Send', revision: 1, createdAt: now });
+	const value = await records.findById(id);
 	expect({ from: value?.from, to: value?.to, quote: value?.quote }).toEqual({
 		from: undefined,
 		to: undefined,

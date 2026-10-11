@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { PageData } from './$types';
 	import { WorkspacePanes } from '$lib/components/shell';
 
@@ -11,8 +12,8 @@
 	search included, renders through the same kind-agnostic host.
 -->
 <WorkspacePanes
-	shell={data.session.shell}
-	sessions={data.session.sessions}
+	shell={workspaceViews.currentShell}
+	sessions={workspaceViews.chatSessions}
 	agentPreferences={data.session.preferences}
 	agentModels={data.session.agentModels}
 	agentDefaults={data.session.agentDefaults}

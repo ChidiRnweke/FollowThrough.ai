@@ -1,20 +1,25 @@
-import { afterAll, describe, expect, it } from 'vitest';
-import { createHash } from 'node:crypto';
-import { Document, Packer, Paragraph } from 'docx';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
+import type { ActorContext } from '$lib/models/identity';
 import type { TemplateId } from '$lib/models/deliverables';
+import { DocxTemplateStyleReader } from '$lib/server/services/deliverables/template-styles';
 import {
 	Deliverables,
 	type DeliverablesDependencies
 } from '$lib/server/controllers/deliverables/controller';
-import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
-import { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
-import { TemplateRecords } from '$lib/server/repositories/deliverables/postgres/templates';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
 import * as schema from '$lib/server/db/schema';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
+import { TemplateRecords } from '$lib/server/repositories/deliverables/postgres/templates';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryAttachmentStorage } from '$lib/testing/attachments/fakes/in-memory-deliverables';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { Document, Packer, Paragraph } from 'docx';
+import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { createHash } from 'node:crypto';
+import postgres from 'postgres';
+import { afterAll, describe, expect, it } from 'vitest';
 import { actor, context, now, seedNote } from '../database-harness';
 
 const clients: ReturnType<typeof postgres>[] = [];
@@ -26,16 +31,25 @@ const setup = async (suffix: string) => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const transaction = createTransactionContext(drizzle(client, { schema }));
-	const repository = new TemplateRecords(transaction.database);
 	const storage = new InMemoryAttachmentStorage();
-	const controller = new Deliverables(
-		capabilityDependencies<DeliverablesDependencies>({
-			templates: new DocumentTemplates(repository, () => now),
-			templateStorage: storage,
-			templateStyles: verifiedTemplateStyles,
-			transactionRunner: transaction.transactionRunner
-		})
-	);
+	const controllerFor = (actor: ActorContext) =>
+		new Deliverables(
+			actor,
+			new WorkspaceCommandRulesService(),
+			capabilityDependencies<DeliverablesDependencies>({
+				...agentToolResultsFixture(),
+				...createTemplateServices(
+					actor,
+					new TemplateRecords(actor, transaction.database),
+					() => now
+				),
+				templateStorage: storage,
+				templateStyles: new DocxTemplateStyleReader(),
+				transactionRunner: transaction.transactionRunner
+			})
+		);
+	const repository = new TemplateRecords(owner, transaction.database);
+	const controller = controllerFor(owner);
 	const bytes = await Packer.toBuffer(
 		new Document({ sections: [{ children: [new Paragraph('Contract template')] }] })
 	);
@@ -46,41 +60,43 @@ const setup = async (suffix: string) => {
 		byteSize: bytes.length,
 		checksumSha256: createHash('sha256').update(bytes).digest('hex')
 	};
-	const upload = await controller.initiateTemplateUpload(owner, input);
+	const upload = await controller.initiateTemplateUpload(input);
 	await storage.put(
 		`staging/${owner.userId}/templates/${upload.templateId}`,
 		bytes,
 		input.mediaType
 	);
-	return { controller, repository, owner, project, upload, input, storage };
+	return { controller, controllerFor, repository, owner, project, upload, input, storage };
 };
 
 describe('durable template upload lifecycle', () => {
 	it('keeps a reservation invisible until completion', async () => {
-		const { controller, owner, project } = await setup('9761');
-		expect(await controller.listTemplates(owner, project.id)).toEqual([]);
+		const { controller, project } = await setup('9761');
+		expect(await controller.listTemplates(project.id)).toEqual([]);
 	});
 	it('publishes one usable template for concurrent completion deliveries', async () => {
-		const { controller, repository, owner, project, upload } = await setup('9762');
+		const { controller, repository, project, upload } = await setup('9762');
 		await Promise.all([
-			controller.completeTemplateUpload(owner, upload.templateId),
-			controller.completeTemplateUpload(owner, upload.templateId)
+			controller.completeTemplateUpload(upload.templateId),
+			controller.completeTemplateUpload(upload.templateId)
 		]);
-		const listed = await controller.listTemplates(owner, project.id);
+		const listed = await controller.listTemplates(project.id);
 		expect({
 			ids: listed.map((entry) => entry.id),
-			pending: await repository.findUpload(owner, upload.templateId)
+			pending: await repository.findUpload(upload.templateId)
 		}).toEqual({ ids: [upload.templateId], pending: undefined });
 	});
 	it('refuses completion by another account', async () => {
-		const { controller, upload } = await setup('9763');
+		const { controllerFor, upload } = await setup('9763');
 		await expect(
-			controller.completeTemplateUpload(actor('9764'), upload.templateId)
-		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+			controllerFor(actor('9764')).completeTemplateUpload(upload.templateId)
+		).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
 	});
 	it('refuses a reservation in another account’s project', async () => {
-		const { controller, input } = await setup('9765');
-		await expect(controller.initiateTemplateUpload(actor('9766'), input)).rejects.toMatchObject({
+		const { controllerFor, input } = await setup('9765');
+		await expect(controllerFor(actor('9766')).initiateTemplateUpload(input)).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});
@@ -96,8 +112,8 @@ describe('durable template upload lifecycle', () => {
 			mediaType: input.mediaType,
 			byteSize: input.byteSize
 		});
-		await controller.completeTemplateUpload(owner, upload.templateId);
-		expect((await controller.listTemplates(owner, project.id)).map((entry) => entry.id)).toEqual([
+		await controller.completeTemplateUpload(upload.templateId);
+		expect((await controller.listTemplates(project.id)).map((entry) => entry.id)).toEqual([
 			upload.templateId
 		]);
 	});
@@ -113,9 +129,31 @@ describe('durable template upload lifecycle', () => {
 			mediaType: input.mediaType,
 			byteSize: input.byteSize
 		});
-		await expect(controller.completeTemplateUpload(owner, legacyId)).rejects.toMatchObject({
+		await expect(controller.completeTemplateUpload(legacyId)).rejects.toMatchObject({
 			code: 'NOT_FOUND',
 			message: 'Template upload not found. Upload the file again.'
 		});
+	});
+});
+
+it('hides a reserved template after its project is archived and retains cleanup access', async () => {
+	const { repository, owner, project, upload } = await setup('32821');
+	await new ProjectRecords(owner, context.db).archive(project.id);
+	const hidden = await repository.findUpload(upload.templateId);
+	await repository.deleteUpload(upload.templateId);
+	expect({
+		hidden,
+		rows: await context.db
+			.select({ id: schema.templateUploads.id })
+			.from(schema.templateUploads)
+			.where(eq(schema.templateUploads.id, upload.templateId))
+	}).toEqual({ hidden: undefined, rows: [] });
+});
+
+it('rejects new template reservations in archived projects', async () => {
+	const { controller, owner, project, input } = await setup('32822');
+	await new ProjectRecords(owner, context.db).archive(project.id);
+	await expect(controller.initiateTemplateUpload(input)).rejects.toMatchObject({
+		code: 'NOT_FOUND'
 	});
 });

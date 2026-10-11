@@ -1,40 +1,45 @@
-import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
-import { describe, expect, it } from 'vitest';
-import {
-	DiagramProviderSession,
-	type DiagramGenerator
-} from '$lib/server/services/diagrams/generation';
+import { DiagramGenerationService } from '$lib/server/services/diagrams/generation';
+import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
 import {
 	InMemoryDiagramModel,
 	type DiagramCandidate
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-model';
-import { Diagrams, type DiagramsDependencies } from './controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	testActor,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Diagrams, type DiagramsDependencies } from './controller';
 
-const setup = (generator?: DiagramGenerator) => {
+const setup = (generator?: DiagramGenerationService) => {
+	// With a real generator, the production validator judges each draft too.
 	const fixture = diagramGenerationFixture();
 	const generation = generator
 		? { ...fixture, generation: { ...fixture.generation, generator } }
 		: fixture;
-	const notes = new InMemoryNoteContent();
+	const notes = new InMemoryNoteContent(testActor());
 	notes.notes = [noteBuilder({ plainText: 'Service A calls Service B' })];
-	const suggestions = new InMemorySuggestions();
-	const provenance = new InMemoryProvenanceRecorder();
+	const suggestions = new InMemorySuggestions(testActor());
+	const provenance = new InMemoryProvenanceRecorder(testActor());
 	const controller = new Diagrams(
+		testActor(),
 		capabilityDependencies<DiagramsDependencies>({
+			...agentToolResultsFixture(),
+			generationRules: new DiagramGenerationRuleService(),
 			selectionOrigins: new InMemorySelectionOrigins(notes, provenance),
 			...generation,
+			...(generator ? { mermaidValidator: new MermaidSubmissionValidator() } : {}),
 			suggestionCreator: suggestions,
 			transactionRunner: new InMemoryTransactionRunner([
 				notes,
@@ -62,7 +67,7 @@ const input = {
 describe('Generate Mermaid workflow invariants', () => {
 	it('returns a Mermaid suggestion rather than mutating a diagram directly', async () => {
 		const { controller } = setup();
-		const result = await controller.generateMermaid(testActor(), input);
+		const result = await controller.generateMermaid(input);
 		expect(result.suggestion.kind).toBe('diagram');
 
 		expect(
@@ -73,18 +78,18 @@ describe('Generate Mermaid workflow invariants', () => {
 	it('rolls back the source anchor when suggestion persistence fails', async () => {
 		const { controller, notes, suggestions } = setup();
 		suggestions.failCreation = true;
-		await controller.generateMermaid(testActor(), input).catch(() => undefined);
+		await controller.generateMermaid(input).catch(() => undefined);
 		expect(notes.anchors).toEqual([]);
 	});
 });
 
 /** The production submission protocol over a model that submits each candidate in turn. */
-const scripted = (candidates: readonly DiagramCandidate[]): DiagramGenerator => {
+const scripted = (candidates: readonly DiagramCandidate[]): DiagramGenerationService => {
 	const model = new InMemoryDiagramModel(candidates);
-	return {
-		open: (request, signal) =>
-			new DiagramProviderSession(new InMemoryModelProvider(model), request, signal)
-	};
+	return new DiagramGenerationService({
+		available: true,
+		models: () => new InMemoryModelProvider(model)
+	});
 };
 
 /**
@@ -101,7 +106,7 @@ describe('A diagram submission the model gets wrong is corrected, not fatal', ()
 				{ kind: 'mermaid', source: 'flowchart LR\nA --> B' }
 			])
 		);
-		const result = await controller.generateMermaid(testActor(), input);
+		const result = await controller.generateMermaid(input);
 		expect({
 			source: result.suggestion.kind === 'diagram' ? result.suggestion.payload.source : undefined,
 			attempts: conversations.messages

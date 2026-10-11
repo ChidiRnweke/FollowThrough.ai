@@ -12,11 +12,26 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { mergeProps } from '$lib/utils';
 	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
+	import { onDestroy } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import {
-		deleteArtifact,
 		downloadArtifact,
-		regenerateArtifact
+		regenerateArtifact,
+		deleteArtifact
 	} from '$lib/remote/deliverables/deliverables.remote';
+	// One action per artifact at a time; nothing lands after the library closes.
+	const working = new SvelteSet<ArtifactId>();
+	let closed = false;
+	onDestroy(() => (closed = true));
+	async function perform<T>(id: ArtifactId, work: () => Promise<T>): Promise<T> {
+		working.add(id);
+		try {
+			return await work();
+		} finally {
+			working.delete(id);
+		}
+	}
 	import { formatBytes, formatDateTime } from '$lib/components/shared/labels';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import * as InputGroup from '$lib/components/ui/input-group';
@@ -24,7 +39,6 @@
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import { goto } from '$app/navigation';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	export interface ArtifactLibraryData {
@@ -40,45 +54,34 @@
 	let { data }: { data: ArtifactLibraryData } = $props();
 
 	const artifacts = $derived<readonly ArtifactView[]>(data.artifacts);
-	let busyId = $state<ArtifactId | undefined>(undefined);
 	let searchValue = $derived(data.query);
 
-	async function download(id: ArtifactId): Promise<void> {
-		busyId = id;
+	async function download(id: ArtifactId): Promise<void | { kind: 'failure' }> {
+		let url: string;
 		try {
-			const { url } = await downloadArtifact({ artifactId: id });
-			window.location.assign(url);
-			// audit-allow: silent-catch — the toast tells the user that no download was prepared.
+			url = (await perform(id, () => downloadArtifact({ artifactId: id }))).url;
 		} catch {
-			toast.error('Could not prepare the download.');
-		} finally {
-			busyId = undefined;
+			if (!closed) toast.error('Could not prepare the download.');
+			return { kind: 'failure' };
 		}
+		if (!closed) window.location.assign(url);
 	}
 
 	async function regenerate(id: ArtifactId): Promise<void> {
-		busyId = id;
-		try {
-			const output = await regenerateArtifact({ artifactId: id });
-			window.location.assign(output.downloadUrl);
-			await workspaceSession.synchronize();
-			toast.success('Document regenerated');
-			// audit-allow: silent-catch — the toast reports regeneration failure and the artifact remains unchanged.
-		} catch {
-			toast.error('Could not regenerate the document.');
-		} finally {
-			busyId = undefined;
-		}
+		const result = await perform(id, () =>
+			workspaceSession.serverChange(regenerateArtifact({ artifactId: id }))
+		);
+		if (closed) return;
+		if (result.kind === 'failure') return void toast.error('Could not regenerate the document.');
+		window.location.assign(result.value.downloadUrl);
+		toast.success('Document regenerated');
 	}
 
 	async function remove(id: ArtifactId): Promise<void> {
-		try {
-			await deleteArtifact({ artifactId: id });
-			await workspaceSession.synchronize();
-			// audit-allow: silent-catch — the toast reports the failed deletion; the shared record remains available.
-		} catch {
-			toast.error('Could not delete the artifact.');
-		}
+		const result = await perform(id, () =>
+			workspaceSession.serverChange(deleteArtifact({ artifactId: id }))
+		);
+		if (!closed && result.kind === 'failure') toast.error('Could not delete the artifact.');
 	}
 
 	function urlFor(page: number, query = data.query): string {
@@ -228,7 +231,7 @@
 										variant="ghost"
 										size="icon-sm"
 										aria-label="Download"
-										disabled={busyId === artifact.id}
+										disabled={working.has(artifact.id)}
 										onclick={() => download(artifact.id)}
 									>
 										<Icon.Download />
@@ -242,7 +245,7 @@
 										variant="ghost"
 										size="icon-sm"
 										aria-label="Regenerate"
-										disabled={busyId === artifact.id}
+										disabled={working.has(artifact.id)}
 										onclick={() => regenerate(artifact.id)}
 									>
 										<Icon.Retry />
@@ -262,7 +265,7 @@
 												variant="ghost"
 												size="icon-sm"
 												aria-label="Delete"
-												disabled={busyId === artifact.id}
+												disabled={working.has(artifact.id)}
 											>
 												<Icon.Trash />
 											</Button>

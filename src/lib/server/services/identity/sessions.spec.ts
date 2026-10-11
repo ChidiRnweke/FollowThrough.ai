@@ -7,8 +7,8 @@ import { SessionRegistry } from './sessions';
 const day = 24 * 60 * 60 * 1000;
 const startedAt = Date.parse('2026-09-16T12:00:00Z');
 const setup = async () => {
-	const users = new InMemoryUserRepository();
-	await users.ensureLocal(testActor());
+	const users = new InMemoryUserRepository(testActor());
+	await users.ensureLocal();
 	const repository = new InMemorySessionRepository();
 	repository.users = users.users;
 	const clock = { now: startedAt };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SelectionOrigins } from './selection-origin';
-import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import {
 	InMemoryNoteRepository,
 	InMemoryAnchorRepository
@@ -13,24 +13,29 @@ import {
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
+	const notes = new InMemoryNoteRepository(testActor());
 	notes.notes = [noteBuilder({ plainText: 'Do the work.' })];
-	const anchors = new InMemoryAnchorRepository();
-	const provenance = new InMemoryProvenanceRepository();
-	return { notes, anchors, provenance, service: new SelectionOrigins(notes, anchors, provenance) };
+	const anchors = new InMemoryAnchorRepository(testActor());
+	const provenance = new InMemoryProvenanceRepository(testActor());
+	return {
+		notes,
+		anchors,
+		provenance,
+		service: new SelectionOrigins(testActor(), notes, anchors, provenance)
+	};
 };
 const selection = { noteId: testNoteId(), revision: 1, from: 0, to: 12, text: 'Do the work.' };
 describe('Selection origins', () => {
 	it('rejects selection offsets outside the note', async () => {
 		const { service } = setup();
-		await expect(service.resolve(testActor(), { ...selection, to: 99 })).rejects.toMatchObject({
+		await expect(service.resolve({ ...selection, to: 99 })).rejects.toMatchObject({
 			code: 'VALIDATION'
 		});
 	});
 	it('records provenance for the resolved source anchor', async () => {
 		const { service } = setup();
-		const source = await service.resolve(testActor(), selection);
-		const origin = await service.record(testActor(), source, {
+		const source = await service.resolve(selection);
+		const origin = await service.record(source, {
 			producerKind: 'user',
 			producerName: 'Create Skill From Selection',
 			metadata: {}
@@ -42,31 +47,32 @@ describe('Selection origins', () => {
 	});
 	it('refuses a stale selection before storing an anchor', async () => {
 		const { service, anchors } = setup();
-		await service.resolve(testActor(), { ...selection, revision: 2 }).catch(() => undefined);
+		await service.resolve({ ...selection, revision: 2 }).catch(() => undefined);
 		expect(anchors.anchors).toEqual([]);
 	});
 	it('refuses text that does not match the selected range', async () => {
 		const { service } = setup();
-		await expect(
-			service.resolve(testActor(), { ...selection, text: 'Wrong quote.' })
-		).rejects.toMatchObject({ code: 'VALIDATION' });
+		await expect(service.resolve({ ...selection, text: 'Wrong quote.' })).rejects.toMatchObject({
+			code: 'VALIDATION'
+		});
 	});
 	it('uses one source identity for the task proposal envelope and payload', async () => {
 		const { service, notes, anchors, provenance } = setup();
-		const source = await service.resolve(testActor(), selection);
-		const origin = await service.record(testActor(), source, {
+		const source = await service.resolve(selection);
+		const origin = await service.record(source, {
 			producerKind: 'pipeline',
 			producerName: 'Extract Promises',
 			pipeline: 'extract_promises',
 			metadata: {}
 		});
-		const inbox = new SuggestionInbox(
-			new InMemorySuggestionRepository(),
+		const inbox = createSuggestionServices(
+			testActor(),
+			new InMemorySuggestionRepository(testActor()),
 			notes,
 			provenance,
 			anchors
 		);
-		const suggestion = await inbox.createFromSelection(testActor(), origin, {
+		const suggestion = await inbox.creator.createFromSelection(origin, {
 			kind: 'todo',
 			payload: { title: 'Do the work', responsibility: 'mine' }
 		});

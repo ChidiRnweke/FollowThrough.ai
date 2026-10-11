@@ -4,11 +4,15 @@ import type {
 	InlineCompletionContext,
 	InlineSuggestionRequest
 } from '$lib/models/agent';
+import type { InlineCompletionService } from '$lib/server/services/inline-suggestions/completion';
 import type { AgentPreferencesRepository } from '$lib/server/repositories/agent';
-import type { InlineCompletionGenerator } from '$lib/server/services/agent/runs/contracts';
 
 export class InMemoryAgentPreferencesRepository implements AgentPreferencesRepository {
-	readonly entries = new Map<string, AgentPreferences>();
+	/** Pass another repository's `entries` to see the same table as a different user. */
+	constructor(
+		private readonly actor: ActorContext,
+		readonly entries = new Map<string, AgentPreferences>()
+	) {}
 	snapshot(): () => void {
 		const entries = structuredClone(this.entries);
 		return () => {
@@ -16,28 +20,36 @@ export class InMemoryAgentPreferencesRepository implements AgentPreferencesRepos
 			for (const [key, value] of entries) this.entries.set(key, value);
 		};
 	}
-	async getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined> {
-		return this.get(actor);
+	async getForWrite(_resourceKey: string): Promise<AgentPreferences | undefined> {
+		return this.get();
 	}
-	async get(actor: ActorContext): Promise<AgentPreferences | undefined> {
-		return this.entries.get(actor.userId);
+	async get(): Promise<AgentPreferences | undefined> {
+		return this.entries.get(this.actor.userId);
 	}
-	async upsert(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences> {
-		this.entries.set(actor.userId, preferences);
+	async upsert(preferences: AgentPreferences): Promise<AgentPreferences> {
+		this.entries.set(this.actor.userId, preferences);
 		return preferences;
 	}
 }
 
-export class InMemoryInlineCompletion implements InlineCompletionGenerator {
-	readonly contexts: InlineCompletionContext[] = [];
+/** Inline completion that records each request and answers with configured ghost text. */
+export class InMemoryInlineCompletion implements InlineCompletionService {
+	readonly requests: {
+		readonly request: InlineSuggestionRequest;
+		readonly context: InlineCompletionContext;
+		readonly model: string;
+		readonly signal: AbortSignal;
+	}[] = [];
 	text = ' window.';
 	failure?: Error;
 	async complete(
-		_request: InlineSuggestionRequest,
-		context: InlineCompletionContext
+		request: InlineSuggestionRequest,
+		context: InlineCompletionContext,
+		model: string,
+		signal: AbortSignal
 	): Promise<string> {
+		this.requests.push({ request, context, model, signal });
 		if (this.failure) throw this.failure;
-		this.contexts.push(context);
 		return this.text;
 	}
 }

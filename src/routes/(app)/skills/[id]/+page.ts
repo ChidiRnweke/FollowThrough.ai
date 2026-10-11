@@ -1,3 +1,4 @@
+import { workspacePresentation } from '$lib/factories/workspace/presentation';
 import { prepareRoute, requireRouteResource, routeResourceId } from '$lib/client/sync/route-access';
 import { noteRecordSchema } from '$lib/models/workspace-records';
 import type { PageLoad } from './$types';
@@ -9,7 +10,8 @@ export const load: PageLoad = async ({ parent, params }) => {
 			session.resources.open({ type: 'notes', id: [noteId] }),
 			session.resources.open({ type: 'skills', id: [noteId] })
 		]);
-		for (const result of opened) requireRouteResource(result, session.resources.online, 'skill');
+		for (const result of opened)
+			requireRouteResource(workspacePresentation, result, session.resources.online, 'skill');
 	});
 	return { routeReady, noteId };
 };

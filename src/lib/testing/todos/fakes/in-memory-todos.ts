@@ -10,7 +10,7 @@ import type {
 	TodoReader,
 	TodoContextReader,
 	WaitingOnFinder
-} from '$lib/server/services/todos/contracts';
+} from '$lib/server/services/todos/catalog';
 import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import type {
 	RestoreSnapshot,
@@ -28,11 +28,11 @@ export class InMemoryTodos
 		WaitingOnFinder,
 		SnapshotParticipant
 {
+	constructor(private readonly actor: ActorContext) {}
 	todos: Todo[] = [];
 	notes: Note[] = [];
 
 	async validateLinkedNote(
-		actor: ActorContext,
 		noteId: NonNullable<Todo['linkedNoteId']>,
 		projectId: Todo['projectId']
 	): Promise<void> {
@@ -40,7 +40,7 @@ export class InMemoryTodos
 			!this.notes.some(
 				(note) =>
 					note.id === noteId &&
-					note.userId === actor.userId &&
+					note.userId === this.actor.userId &&
 					note.projectId === projectId &&
 					note.kind === 'note' &&
 					!note.archivedAt
@@ -50,60 +50,61 @@ export class InMemoryTodos
 		}
 	}
 
-	findWaitingOn(actor: ActorContext): Promise<readonly Todo[]> {
-		return this.list(actor, { responsibility: 'waiting_on' });
+	findWaitingOn(): Promise<readonly Todo[]> {
+		return this.list({ responsibility: 'waiting_on' });
 	}
 
-	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
-		return (await this.list(actor, filter)).length;
+	async count(filter: TodoListFilter): Promise<number> {
+		return (await this.list(filter)).length;
 	}
 
-	async listCategories(actor: ActorContext): Promise<readonly string[]> {
+	async listCategories(): Promise<readonly string[]> {
 		return [
 			...new Set(
 				this.todos
-					.filter((todo) => todo.userId === actor.userId && !todo.deletedAt && todo.category)
+					.filter((todo) => todo.userId === this.actor.userId && !todo.deletedAt && todo.category)
 					.map((todo) => todo.category!)
 			)
 		].sort();
 	}
 
-	async create(actor: ActorContext, todo: Todo): Promise<Todo> {
-		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot create another user’s task');
+	async create(todo: Todo): Promise<Todo> {
+		if (todo.userId !== this.actor.userId)
+			throw new OwnershipError('Cannot create another user’s task');
 		this.todos.push(todo);
 		return todo;
 	}
 
-	async get(actor: ActorContext, todoId: TodoId): Promise<Todo> {
+	async get(todoId: TodoId): Promise<Todo> {
 		const todo = this.todos.find(
 			(candidate) =>
-				candidate.id === todoId && candidate.userId === actor.userId && !candidate.deletedAt
+				candidate.id === todoId && candidate.userId === this.actor.userId && !candidate.deletedAt
 		);
 		if (!todo) throw new NotFoundError('Todo was not found');
 		return todo;
 	}
 
-	getForEdit(actor: ActorContext, todoId: TodoId): Promise<Todo> {
-		return this.get(actor, todoId);
+	getForEdit(todoId: TodoId): Promise<Todo> {
+		return this.get(todoId);
 	}
 
-	async update(actor: ActorContext, updated: Todo): Promise<Todo> {
-		const current = await this.get(actor, updated.id);
+	async update(updated: Todo): Promise<Todo> {
+		const current = await this.get(updated.id);
 		if (!updated.title) throw new ValidationError('Todo title is required');
 		this.todos = this.todos.map((candidate) => (candidate.id === current.id ? updated : candidate));
 		return updated;
 	}
 
-	async softDelete(actor: ActorContext, todoId: TodoId): Promise<void> {
-		const current = await this.get(actor, todoId);
+	async softDelete(todoId: TodoId): Promise<void> {
+		const current = await this.get(todoId);
 		const deleted: Todo = { ...current, deletedAt: testNow, updatedAt: testNow };
 		this.todos = this.todos.map((candidate) => (candidate.id === todoId ? deleted : candidate));
 	}
 
-	async list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> {
+	async list(filter: TodoListFilter): Promise<readonly Todo[]> {
 		return this.todos.filter(
 			(todo) =>
-				todo.userId === actor.userId &&
+				todo.userId === this.actor.userId &&
 				!todo.deletedAt &&
 				(filter.projectId === undefined || todo.projectId === filter.projectId) &&
 				(filter.status === undefined || todo.status === filter.status) &&
@@ -114,11 +115,11 @@ export class InMemoryTodos
 		);
 	}
 
-	async readContexts(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoContext[]> {
-		return Promise.all(todos.map((todo) => this.readContext(actor, todo)));
+	async readContexts(todos: readonly Todo[]): Promise<readonly TodoContext[]> {
+		return Promise.all(todos.map((todo) => this.readContext(todo)));
 	}
 
-	async readContext(_actor: ActorContext, todo: Todo): Promise<TodoContext> {
+	async readContext(todo: Todo): Promise<TodoContext> {
 		return {
 			todo,
 			anchor: null,

@@ -29,6 +29,7 @@ import type {
 	EmbeddedChunk,
 	IndexSource,
 	PendingIndexSource,
+	RetrievalBacklogRepository,
 	RetrievalIndexRepository
 } from '$lib/server/repositories/knowledge-search';
 import type { Database } from '$lib/server/db';
@@ -103,19 +104,19 @@ const toDocument = (row: typeof schema.searchChunks.$inferSelect): SearchDocumen
 });
 
 export class KnowledgeIndexRecords implements RetrievalIndexRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async listForAttachment(
-		actor: ActorContext,
-		attachmentId: AttachmentId
-	): Promise<readonly SearchDocument[]> {
+	async listForAttachment(attachmentId: AttachmentId): Promise<readonly SearchDocument[]> {
 		return (
 			await this.database
 				.select()
 				.from(schema.searchChunks)
 				.where(
 					and(
-						eq(schema.searchChunks.userId, actor.userId),
+						eq(schema.searchChunks.userId, this.actor.userId),
 						eq(schema.searchChunks.attachmentId, attachmentId)
 					)
 				)
@@ -124,36 +125,35 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 	}
 
 	async replaceForAttachment(
-		actor: ActorContext,
 		attachmentId: AttachmentId,
 		documents: readonly SearchDocument[]
 	): Promise<void> {
-		await this.deleteForAttachment(actor, attachmentId);
+		await this.deleteForAttachment(attachmentId);
 		if (documents.length)
 			await this.database
 				.insert(schema.searchChunks)
-				.values(documents.map((document) => ({ ...this.toRow(actor)(document), attachmentId })));
+				.values(documents.map((document) => ({ ...this.toRow()(document), attachmentId })));
 	}
 
-	async deleteForAttachment(actor: ActorContext, attachmentId: AttachmentId): Promise<void> {
+	async deleteForAttachment(attachmentId: AttachmentId): Promise<void> {
 		await this.database
 			.delete(schema.searchChunks)
 			.where(
 				and(
-					eq(schema.searchChunks.userId, actor.userId),
+					eq(schema.searchChunks.userId, this.actor.userId),
 					eq(schema.searchChunks.attachmentId, attachmentId)
 				)
 			);
 	}
 
-	async listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly SearchDocument[]> {
+	async listForNote(noteId: NoteId): Promise<readonly SearchDocument[]> {
 		return (
 			await this.database
 				.select()
 				.from(schema.searchChunks)
 				.where(
 					and(
-						eq(schema.searchChunks.userId, actor.userId),
+						eq(schema.searchChunks.userId, this.actor.userId),
 						eq(schema.searchChunks.noteId, noteId),
 						isNull(schema.searchChunks.diagramId)
 					)
@@ -162,17 +162,14 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		).map(toDocument);
 	}
 
-	async listForDiagram(
-		actor: ActorContext,
-		diagramId: DiagramId
-	): Promise<readonly SearchDocument[]> {
+	async listForDiagram(diagramId: DiagramId): Promise<readonly SearchDocument[]> {
 		return (
 			await this.database
 				.select()
 				.from(schema.searchChunks)
 				.where(
 					and(
-						eq(schema.searchChunks.userId, actor.userId),
+						eq(schema.searchChunks.userId, this.actor.userId),
 						eq(schema.searchChunks.diagramId, diagramId)
 					)
 				)
@@ -180,27 +177,24 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		).map(toDocument);
 	}
 
-	async listForWidget(actor: ActorContext, widgetId: WidgetId): Promise<readonly SearchDocument[]> {
+	async listForWidget(widgetId: WidgetId): Promise<readonly SearchDocument[]> {
 		return (
 			await this.database
 				.select()
 				.from(schema.searchChunks)
-				.where(scopeOf(actor, { kind: 'widget', widgetId }))
+				.where(scopeOf(this.actor, { kind: 'widget', widgetId }))
 				.orderBy(asc(schema.searchChunks.chunkIndex))
 		).map(toDocument);
 	}
 
-	async listForMemoryEntry(
-		actor: ActorContext,
-		memoryEntryId: MemoryEntryId
-	): Promise<readonly SearchDocument[]> {
+	async listForMemoryEntry(memoryEntryId: MemoryEntryId): Promise<readonly SearchDocument[]> {
 		return (
 			await this.database
 				.select()
 				.from(schema.searchChunks)
 				.where(
 					and(
-						eq(schema.searchChunks.userId, actor.userId),
+						eq(schema.searchChunks.userId, this.actor.userId),
 						eq(schema.searchChunks.memoryEntryId, memoryEntryId)
 					)
 				)
@@ -208,52 +202,46 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		).map(toDocument);
 	}
 
-	async replaceForNote(
-		actor: ActorContext,
-		noteId: NoteId,
-		documents: readonly SearchDocument[]
-	): Promise<void> {
+	async replaceForNote(noteId: NoteId, documents: readonly SearchDocument[]): Promise<void> {
 		await this.database
 			.delete(schema.searchChunks)
 			.where(
 				and(
-					eq(schema.searchChunks.userId, actor.userId),
+					eq(schema.searchChunks.userId, this.actor.userId),
 					eq(schema.searchChunks.noteId, noteId),
 					isNull(schema.searchChunks.diagramId)
 				)
 			);
 		if (!documents.length) return;
-		await this.database.insert(schema.searchChunks).values(documents.map(this.toRow(actor)));
+		await this.database.insert(schema.searchChunks).values(documents.map(this.toRow()));
 	}
 
 	async replaceForDiagram(
-		actor: ActorContext,
 		diagramId: DiagramId,
 		documents: readonly SearchDocument[]
 	): Promise<void> {
-		await this.deleteForDiagram(actor, diagramId);
+		await this.deleteForDiagram(diagramId);
 		if (!documents.length) return;
 		await this.database
 			.insert(schema.searchChunks)
-			.values(documents.map((document) => ({ ...this.toRow(actor)(document), diagramId })));
+			.values(documents.map((document) => ({ ...this.toRow()(document), diagramId })));
 	}
 
 	async replaceForMemoryEntry(
-		actor: ActorContext,
 		memoryEntryId: MemoryEntryId,
 		documents: readonly SearchDocument[]
 	): Promise<void> {
-		await this.deleteForMemoryEntry(actor, memoryEntryId);
+		await this.deleteForMemoryEntry(memoryEntryId);
 		if (!documents.length) return;
 		await this.database
 			.insert(schema.searchChunks)
-			.values(documents.map((document) => ({ ...this.toRow(actor)(document), memoryEntryId })));
+			.values(documents.map((document) => ({ ...this.toRow()(document), memoryEntryId })));
 	}
 
-	private toRow(actor: ActorContext) {
+	private toRow() {
 		return (document: SearchDocument) => ({
 			id: document.id,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			projectId: document.projectId,
 			noteId: document.noteId,
 			memoryEntryId: document.memoryEntryId,
@@ -276,7 +264,6 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 	}
 
 	async search(
-		actor: ActorContext,
 		query: string,
 		limit: number,
 		projectId?: ProjectId,
@@ -285,8 +272,8 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		// Superseded chunks hold text the user has already edited away: correct to keep
 		// for semantic recall, wrong to surface as a literal match.
 		const conditions = [
-			eq(schema.searchChunks.userId, actor.userId),
-			activeProject(actor),
+			eq(schema.searchChunks.userId, this.actor.userId),
+			activeProject(this.actor),
 			isNull(schema.searchChunks.supersededAt),
 			sql`${schema.searchChunks.content} ilike ${`%${query}%`}`
 		];
@@ -306,7 +293,6 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 	}
 
 	async searchByEmbedding(
-		actor: ActorContext,
 		embedding: readonly number[],
 		limit: number,
 		projectId?: ProjectId,
@@ -316,8 +302,8 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		// Pending chunks have no vector, and a NULL distance sorts ahead of every real
 		// one — without this they would crowd out the matches they are meant to replace.
 		const conditions = [
-			eq(schema.searchChunks.userId, actor.userId),
-			activeProject(actor),
+			eq(schema.searchChunks.userId, this.actor.userId),
+			activeProject(this.actor),
 			isNotNull(schema.searchChunks.embedding)
 		];
 		if (projectId) conditions.push(eq(schema.searchChunks.projectId, projectId));
@@ -340,52 +326,48 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		}));
 	}
 
-	async deleteForNote(actor: ActorContext, noteId: NoteId): Promise<void> {
+	async deleteForNote(noteId: NoteId): Promise<void> {
 		await this.database
 			.delete(schema.searchChunks)
 			.where(
 				and(
-					eq(schema.searchChunks.userId, actor.userId),
+					eq(schema.searchChunks.userId, this.actor.userId),
 					eq(schema.searchChunks.noteId, noteId),
 					isNull(schema.searchChunks.diagramId)
 				)
 			);
 	}
 
-	async deleteForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<void> {
+	async deleteForDiagram(diagramId: DiagramId): Promise<void> {
 		await this.database
 			.delete(schema.searchChunks)
 			.where(
 				and(
-					eq(schema.searchChunks.userId, actor.userId),
+					eq(schema.searchChunks.userId, this.actor.userId),
 					eq(schema.searchChunks.diagramId, diagramId)
 				)
 			);
 	}
 
-	async deleteForWidget(actor: ActorContext, widgetId: WidgetId): Promise<void> {
+	async deleteForWidget(widgetId: WidgetId): Promise<void> {
 		await this.database
 			.delete(schema.searchChunks)
-			.where(scopeOf(actor, { kind: 'widget', widgetId }));
+			.where(scopeOf(this.actor, { kind: 'widget', widgetId }));
 	}
 
-	async deleteForMemoryEntry(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<void> {
+	async deleteForMemoryEntry(memoryEntryId: MemoryEntryId): Promise<void> {
 		await this.database
 			.delete(schema.searchChunks)
 			.where(
 				and(
-					eq(schema.searchChunks.userId, actor.userId),
+					eq(schema.searchChunks.userId, this.actor.userId),
 					eq(schema.searchChunks.memoryEntryId, memoryEntryId)
 				)
 			);
 	}
 
-	async stage(
-		actor: ActorContext,
-		source: IndexSource,
-		documents: readonly SearchDocument[]
-	): Promise<void> {
-		const scope = scopeOf(actor, source);
+	async stage(source: IndexSource, documents: readonly SearchDocument[]): Promise<void> {
+		const scope = scopeOf(this.actor, source);
 		const ownership = ownershipOf(source);
 		const existing = await this.database
 			.select({
@@ -397,7 +379,7 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 
 		const known = new Map(existing.map((row) => [row.id, row.embedded]));
 		const desired = new Set(documents.map((document) => document.id as string));
-		const toRow = this.toRow(actor);
+		const toRow = this.toRow();
 
 		for (const document of documents) {
 			const row = { ...toRow(document), ...ownership };
@@ -430,6 +412,50 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 				.delete(schema.searchChunks)
 				.where(inArray(schema.searchChunks.id, discard));
 	}
+
+	async listPending(source: IndexSource): Promise<readonly SearchDocument[]> {
+		return (
+			await this.database
+				.select()
+				.from(schema.searchChunks)
+				.where(and(scopeOf(this.actor, source), isNull(schema.searchChunks.embedding)))
+				.orderBy(asc(schema.searchChunks.chunkIndex))
+		).map(toDocument);
+	}
+
+	async completePending(
+		source: IndexSource,
+		embedded: readonly EmbeddedChunk[],
+		embeddingModel: string
+	): Promise<void> {
+		const scope = scopeOf(this.actor, source);
+		for (const chunk of embedded)
+			await this.database
+				.update(schema.searchChunks)
+				.set({ embedding: [...chunk.embedding], embeddingModel, updatedAt: new Date() })
+				// Scoped as well as keyed: a chunk that was re-staged out from under us
+				// no longer belongs to this source and must not be resurrected.
+				.where(and(scope, eq(schema.searchChunks.id, chunk.id)));
+
+		// Only retire the superseded rows once nothing is pending. If the source was
+		// edited again mid-tick, the rows we just superseded are the only embedded
+		// ones left — dropping them here would blind semantic search until the next tick.
+		const [stillPending] = await this.database
+			.select({ id: schema.searchChunks.id })
+			.from(schema.searchChunks)
+			.where(and(scope, isNull(schema.searchChunks.embedding)))
+			.limit(1);
+		if (stillPending) return;
+
+		await this.database
+			.delete(schema.searchChunks)
+			.where(and(scope, isNotNull(schema.searchChunks.supersededAt)));
+	}
+}
+
+/** Index sources waiting for vectors across every user. Rows carry their owner. */
+export class KnowledgeBacklogRecords implements RetrievalBacklogRepository {
+	constructor(private readonly database: Database) {}
 
 	async listPendingSources(limit: number, after?: string): Promise<readonly PendingIndexSource[]> {
 		const cursor = sql<string>`(concat(${schema.searchChunks.userId}::text, '/',
@@ -476,45 +502,5 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 									attachmentId: row.attachmentId as AttachmentId
 								}) satisfies IndexSource
 		}));
-	}
-
-	async listPending(actor: ActorContext, source: IndexSource): Promise<readonly SearchDocument[]> {
-		return (
-			await this.database
-				.select()
-				.from(schema.searchChunks)
-				.where(and(scopeOf(actor, source), isNull(schema.searchChunks.embedding)))
-				.orderBy(asc(schema.searchChunks.chunkIndex))
-		).map(toDocument);
-	}
-
-	async completePending(
-		actor: ActorContext,
-		source: IndexSource,
-		embedded: readonly EmbeddedChunk[],
-		embeddingModel: string
-	): Promise<void> {
-		const scope = scopeOf(actor, source);
-		for (const chunk of embedded)
-			await this.database
-				.update(schema.searchChunks)
-				.set({ embedding: [...chunk.embedding], embeddingModel, updatedAt: new Date() })
-				// Scoped as well as keyed: a chunk that was re-staged out from under us
-				// no longer belongs to this source and must not be resurrected.
-				.where(and(scope, eq(schema.searchChunks.id, chunk.id)));
-
-		// Only retire the superseded rows once nothing is pending. If the source was
-		// edited again mid-tick, the rows we just superseded are the only embedded
-		// ones left — dropping them here would blind semantic search until the next tick.
-		const [stillPending] = await this.database
-			.select({ id: schema.searchChunks.id })
-			.from(schema.searchChunks)
-			.where(and(scope, isNull(schema.searchChunks.embedding)))
-			.limit(1);
-		if (stillPending) return;
-
-		await this.database
-			.delete(schema.searchChunks)
-			.where(and(scope, isNotNull(schema.searchChunks.supersededAt)));
 	}
 }

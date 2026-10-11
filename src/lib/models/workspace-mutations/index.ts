@@ -1,3 +1,4 @@
+import type { AppliedWriteProof } from '$lib/models/outbox';
 import { z } from 'zod';
 import { appliedWriteProofSchema } from '$lib/models/outbox';
 import { exportSettingsSchema } from '$lib/models/deliverables';
@@ -315,9 +316,29 @@ export type WorkspaceWriteCancellation = z.infer<typeof workspaceWriteCancellati
 
 export type PreparedWorkspaceCommand = Exclude<WorkspaceCommand, { kind: 'discardNoteDraft' }>;
 
+/** The commands that bring a new resource into existence on this device. */
+export type WorkspaceCreation = Extract<
+	PreparedWorkspaceCommand,
+	{
+		kind:
+			| 'createProject'
+			| 'createNote'
+			| 'createFolder'
+			| 'createTodo'
+			| 'createMemory'
+			| 'createWidget';
+	}
+>;
+
 export interface WorkspaceCommandContext {
 	readonly userId: UserId;
 	readonly now: DateTime;
 	readonly records: ReadonlyMap<string, WorkspaceRecord>;
 	readonly inventory: 'complete' | 'partial';
 }
+
+export type ReceiptLookup =
+	| { readonly kind: 'missing' }
+	| { readonly kind: 'reused' }
+	| { readonly kind: 'cancelled' }
+	| { readonly kind: 'proven'; readonly proof: AppliedWriteProof };

@@ -1,7 +1,7 @@
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
 import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import {
 	InMemoryNoteRepository,
 	InMemoryAnchorRepository
@@ -15,13 +15,14 @@ import {
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 const setup = () => {
-	const records = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository(records);
+	const records = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor(), records);
 	projects.projects = [projectBuilder()];
 	return {
 		records,
 		creation: noteCreationControllers(
-			new NoteCatalog(records, new InMemoryAnchorRepository(), projects),
+			createNoteServices(testActor(), records, new InMemoryAnchorRepository(testActor()), projects)
+				.creator,
 			new InMemoryTransactionRunner([records, projects])
 		)
 	};
@@ -31,7 +32,7 @@ describe('Folder creation', () => {
 		const { records, creation } = setup();
 		records.notes = [noteBuilder({ id: testNoteId(2), kind: 'note' })];
 		await expect(
-			creation.projects.createFolder(testActor(), {
+			creation.projects.createFolder({
 				projectId: projectBuilder().id,
 				parentId: testNoteId(2),
 				name: 'Nested'
@@ -42,7 +43,7 @@ describe('Folder creation', () => {
 	it('appends a folder after stored siblings including archived entries', async () => {
 		const { records, creation } = setup();
 		records.notes = [noteBuilder({ archivedAt: testNow })];
-		const { folder } = await creation.projects.createFolder(testActor(), {
+		const { folder } = await creation.projects.createFolder({
 			projectId: projectBuilder().id,
 			name: 'New folder'
 		});
@@ -52,7 +53,7 @@ describe('Folder creation', () => {
 	it('creates an empty folder under another folder', async () => {
 		const { records, creation } = setup();
 		records.notes = [noteBuilder({ kind: 'folder' })];
-		const { folder } = await creation.projects.createFolder(testActor(), {
+		const { folder } = await creation.projects.createFolder({
 			projectId: projectBuilder().id,
 			parentId: testNoteId(),
 			name: 'Decisions'

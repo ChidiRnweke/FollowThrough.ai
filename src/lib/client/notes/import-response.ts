@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
 	importMarkdownArchiveOutputSchema,
-	type ImportMarkdownArchiveOutput
+	type ArchiveImportResponse
 } from '$lib/models/projects';
 
 const failureSchema = z.object({ message: z.string() });
@@ -9,9 +9,6 @@ const unreadableReport =
 	'The import finished, but its report could not be read. Reload to see what landed.';
 const unreadableError =
 	'The import returned an unreadable error. Check the project before trying again.';
-export type ArchiveImportResponse =
-	{ kind: 'report'; report: ImportMarkdownArchiveOutput } | { kind: 'failure'; message: string };
-
 /** Decode the server's report without treating a completed import as an unsent upload. */
 export async function readArchiveImportResponse(
 	response: Response

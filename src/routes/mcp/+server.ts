@@ -1,9 +1,7 @@
 // chisel-ignore-file error-flow:raw-http-status -- MCP bearer authentication and JSON-RPC method negotiation require protocol-level 401 and 405 responses.
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { RequestHandler } from './$types';
-import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
 import { AppFactory } from '$lib/server/factories/app-factory';
-import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-factory';
 
 const unauthorized = (detail: string): Response =>
 	new Response(JSON.stringify({ error: 'unauthorized', detail }), {
@@ -15,42 +13,24 @@ const unauthorized = (detail: string): Response =>
 	});
 
 /** Every MCP request requires an API token; its account and scope define access. */
-const authenticate = async (
-	request: Request
-): Promise<{ actor: ActorContext; scope: ApiTokenScope } | Response> => {
-	const verified = await AppFactory.accessTokens().verify(request.headers.get('authorization'));
-	if (!verified) return unauthorized('Provide a FollowThrough API token as a Bearer credential.');
-	return { actor: { userId: verified.user.id }, scope: verified.scope };
+const authenticate = async (request: Request) => {
+	const verified = await AppFactory.authentication().verifyBearer(
+		request.headers.get('authorization')
+	);
+	return verified ? AppFactory.access(verified.actor).attributeMcp(verified.scope) : null;
 };
 
 export const POST: RequestHandler = async ({ request }) => {
 	const authenticated = await authenticate(request);
-	if (authenticated instanceof Response) return authenticated;
-
-	// Every write through a tool is attributable to this request.
-	const provenance = await AppFactory.provenance().record(authenticated.actor, {
-		producerKind: 'agent',
-		producerName: 'MCP client',
-		pipeline: 'agent',
-		metadata: { scope: authenticated.scope }
-	});
+	if (!authenticated)
+		return unauthorized('Provide a FollowThrough API token as a Bearer credential.');
 
 	// An MCP client has no ambient project, so the user's workspace-wide tool
 	// selection is the whole story here; project overrides apply in-app only.
-	const controllers = AppFactory.controllers();
-	const preferences = await controllers.toolPreferences().list(authenticated.actor);
-	const disabled = new Set(
-		preferences.filter((preference) => !preference.enabled).map((preference) => preference.name)
-	);
-
-	const server = createMcpToolSurface({
-		controllers,
-		actor: authenticated.actor,
-		scope: authenticated.scope,
-		provenanceId: provenance.id,
-		toolRetriever: AppFactory.toolRetriever(),
-		toolAccess: { isEnabled: (toolName) => !disabled.has(toolName) }
-	});
+	const session = await AppFactory.forActor(authenticated.actor)
+		.agentHarness()
+		.openMcpTools(authenticated.scope, authenticated.provenanceId);
+	const server = AppFactory.mcpSurface(session).open();
 
 	// Stateless: no session to keep alive between requests, so this survives
 	// process restarts and multiple instances without sticky routing.

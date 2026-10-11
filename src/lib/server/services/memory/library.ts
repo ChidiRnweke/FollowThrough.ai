@@ -15,93 +15,161 @@ import type { ProjectRepository } from '$lib/server/repositories/projects/projec
 import type { ProvenanceRepository } from '$lib/server/repositories/provenance/provenance';
 import type { MemoryEntryListFilter } from '$lib/server/repositories/memory';
 
-const now = (): DateTime => new Date().toISOString() as DateTime;
+export interface MemoryEntryReader {
+	get(memoryEntryId: MemoryEntryId): Promise<MemoryEntry>;
+}
+export interface MemoryEntryLister {
+	list(filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]>;
+}
+export interface MemoryEntryCreator {
+	create(entry: MemoryEntry): Promise<MemoryEntry>;
+}
+export interface MemoryEntryEditor {
+	getForEdit(memoryEntryId: MemoryEntryId): Promise<MemoryEntry>;
+	update(entry: MemoryEntry): Promise<MemoryEntry>;
+}
+export interface MemoryEntryDeleter {
+	remove(memoryEntryId: MemoryEntryId): Promise<MemoryEntry>;
+}
+export interface MemoryChanges {
+	validate(payload: MemoryChangePayload): Promise<void>;
+	apply(
+		payload: MemoryChangePayload,
+		provenanceId: ProvenanceId
+	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>>;
+}
 
-export class MemoryLibrary {
+const now = (): DateTime => new Date().toISOString() as DateTime;
+async function requireProject(projects: ProjectRepository, projectId: ProjectId): Promise<void> {
+	if (!(await projects.findById(projectId)))
+		throw new NotFoundError('Memory project was not found');
+}
+async function readMemory(
+	entries: MemoryEntryRepository,
+	projects: ProjectRepository,
+	memoryEntryId: MemoryEntryId
+): Promise<MemoryEntry> {
+	const entry = await entries.findById(memoryEntryId);
+	if (!entry) throw new NotFoundError('Memory entry was not found', { memoryEntryId });
+	if (entry.projectId) await requireProject(projects, entry.projectId);
+	return entry;
+}
+async function readEditableMemory(
+	entries: MemoryEntryRepository,
+	projects: ProjectRepository,
+	memoryEntryId: MemoryEntryId
+): Promise<MemoryEntry> {
+	const entry = await entries.findByIdForUpdate(memoryEntryId);
+	if (!entry || entry.deletedAt)
+		throw new NotFoundError('Memory entry was not found', { memoryEntryId });
+	if (entry.projectId) await requireProject(projects, entry.projectId);
+	return entry;
+}
+async function deleteMemory(
+	entries: MemoryEntryRepository,
+	entry: MemoryEntry
+): Promise<MemoryEntry> {
+	const deleted = await entries.update({
+		...entry,
+		deletedAt: now(),
+		updatedAt: now()
+	});
+	return deleted;
+}
+export class MemoryReadingService implements MemoryEntryReader, MemoryEntryLister {
 	constructor(
 		private readonly entries: MemoryEntryRepository,
-		private readonly projects: ProjectRepository,
-		private readonly provenance: ProvenanceRepository
+		private readonly projects: ProjectRepository
 	) {}
-
-	async get(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
-		const entry = await this.entries.findById(actor, memoryEntryId);
-		if (!entry) throw new NotFoundError('Memory entry was not found', { memoryEntryId });
-		if (entry.projectId) await this.requireProject(actor, entry.projectId);
-		return entry;
+	get(id: MemoryEntryId): Promise<MemoryEntry> {
+		return readMemory(this.entries, this.projects, id);
 	}
-
-	async list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]> {
-		if (filter.projectId) await this.requireProject(actor, filter.projectId);
-		return this.entries.list(actor, filter);
+	async list(filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]> {
+		if (filter.projectId) await requireProject(this.projects, filter.projectId);
+		return this.entries.list(filter);
 	}
-
-	async create(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry> {
-		if (entry.userId !== actor.userId)
+}
+export class MemoryWritingService implements MemoryEntryCreator, MemoryEntryEditor {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly entries: MemoryEntryRepository,
+		private readonly projects: ProjectRepository
+	) {}
+	async create(entry: MemoryEntry): Promise<MemoryEntry> {
+		if (entry.userId !== this.actor.userId)
 			throw new OwnershipError('Cannot create another user’s memory');
-		if (entry.projectId) await this.requireProject(actor, entry.projectId);
-		return this.entries.insert(actor, entry);
+		if (entry.projectId) await requireProject(this.projects, entry.projectId);
+		return this.entries.insert(entry);
 	}
-
-	async update(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry> {
-		if (entry.userId !== actor.userId)
+	async update(entry: MemoryEntry): Promise<MemoryEntry> {
+		if (entry.userId !== this.actor.userId)
 			throw new OwnershipError('Cannot edit another user’s memory');
-		if (entry.projectId) await this.requireProject(actor, entry.projectId);
-		return this.entries.update(actor, entry);
+		if (entry.projectId) await requireProject(this.projects, entry.projectId);
+		return this.entries.update(entry);
 	}
-
-	async remove(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
-		const current = await this.getForEdit(actor, memoryEntryId);
-		const entry = await this.entries.update(actor, {
+	getForEdit(id: MemoryEntryId): Promise<MemoryEntry> {
+		return readEditableMemory(this.entries, this.projects, id);
+	}
+}
+export class MemoryLifecycleService implements MemoryEntryDeleter {
+	constructor(
+		private readonly entries: MemoryEntryRepository,
+		private readonly projects: ProjectRepository
+	) {}
+	async remove(memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
+		const current = await readEditableMemory(this.entries, this.projects, memoryEntryId);
+		const entry = await this.entries.update({
 			...current,
 			deletedAt: now(),
 			updatedAt: now()
 		});
 		return entry;
 	}
-
+}
+export class MemoryProposalService implements MemoryChanges {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly entries: MemoryEntryRepository,
+		private readonly projects: ProjectRepository,
+		private readonly provenance: ProvenanceRepository
+	) {}
 	async apply(
-		actor: ActorContext,
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
-		if (!(await this.provenance.findById(actor, provenanceId)))
+		if (!(await this.provenance.findById(provenanceId)))
 			throw new NotFoundError('Memory change provenance was not found');
 		switch (payload.operation) {
 			case 'add':
-				return this.applyAdd(actor, payload, provenanceId);
+				return this.applyAdd(payload, provenanceId);
 			case 'update':
-				return this.applyUpdate(actor, payload, provenanceId);
+				return this.applyUpdate(payload, provenanceId);
 			case 'remove':
-				return this.applyRemove(actor, payload);
+				return this.applyRemove(payload);
 		}
 	}
-
-	async validate(actor: ActorContext, payload: MemoryChangePayload): Promise<void> {
-		if (payload.scope === 'project') await this.requireProject(actor, payload.projectId);
+	async validate(payload: MemoryChangePayload): Promise<void> {
+		if (payload.scope === 'project') await requireProject(this.projects, payload.projectId);
 		if (payload.operation !== 'add') {
-			const target = await this.getActive(actor, payload.memoryEntryId);
+			const target = await this.getActive(payload.memoryEntryId);
 			this.requireScope(target, payload);
 		}
 	}
-
 	private requireScope(target: MemoryEntry, payload: MemoryChangePayload): void {
 		if (target.projectId !== payload.projectId)
 			throw new ValidationError('Memory target does not belong to the requested scope');
 	}
-
 	private async applyAdd(
-		actor: ActorContext,
 		payload: Extract<MemoryChangePayload, { operation: 'add' }>,
 		provenanceId: ProvenanceId
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
 		const content = payload.content.trim();
 		if (!content) throw new ValidationError('Memory entry content is required');
-		if (payload.projectId) await this.requireProject(actor, payload.projectId);
+		if (payload.projectId) await requireProject(this.projects, payload.projectId);
 		const timestamp = now();
-		const entry = await this.entries.insert(actor, {
+		const entry = await this.entries.insert({
 			id: crypto.randomUUID() as MemoryEntryId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			...(payload.projectId !== undefined ? { projectId: payload.projectId } : {}),
 			content,
 			shareWithAgents: payload.shareWithAgents ?? true,
@@ -111,20 +179,18 @@ export class MemoryLibrary {
 		});
 		return { entry, changes: [{ kind: 'created', after: entry }] };
 	}
-
 	private async applyUpdate(
-		actor: ActorContext,
 		payload: Extract<MemoryChangePayload, { operation: 'update' }>,
 		provenanceId: ProvenanceId
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
 		const content = payload.content.trim();
 		if (!content) throw new ValidationError('Memory entry content is required');
-		const target = await this.getForEdit(actor, payload.memoryEntryId);
+		const target = await readEditableMemory(this.entries, this.projects, payload.memoryEntryId);
 		this.requireScope(target, payload);
 		const timestamp = now();
-		const replacement = await this.entries.insert(actor, {
+		const replacement = await this.entries.insert({
 			id: crypto.randomUUID() as MemoryEntryId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			...(target.projectId !== undefined ? { projectId: target.projectId } : {}),
 			content,
 			type: target.type,
@@ -134,7 +200,7 @@ export class MemoryLibrary {
 			createdAt: timestamp,
 			updatedAt: timestamp
 		});
-		const deleted = await this.softDelete(actor, target);
+		const deleted = await deleteMemory(this.entries, target);
 		return {
 			entry: replacement,
 			changes: [
@@ -143,42 +209,17 @@ export class MemoryLibrary {
 			]
 		};
 	}
-
 	private async applyRemove(
-		actor: ActorContext,
 		payload: Extract<MemoryChangePayload, { operation: 'remove' }>
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
-		const target = await this.getForEdit(actor, payload.memoryEntryId);
+		const target = await readEditableMemory(this.entries, this.projects, payload.memoryEntryId);
 		this.requireScope(target, payload);
-		const entry = await this.softDelete(actor, target);
+		const entry = await deleteMemory(this.entries, target);
 		return { entry, changes: [{ kind: 'modified', before: target, after: entry }] };
 	}
-
-	async getForEdit(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
-		const entry = await this.entries.findByIdForUpdate(actor, memoryEntryId);
-		if (!entry || entry.deletedAt)
-			throw new NotFoundError('Memory entry was not found', { memoryEntryId });
-		if (entry.projectId) await this.requireProject(actor, entry.projectId);
-		return entry;
-	}
-
-	private async getActive(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
-		const entry = await this.get(actor, memoryEntryId);
+	private async getActive(memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
+		const entry = await readMemory(this.entries, this.projects, memoryEntryId);
 		if (entry.deletedAt) throw new NotFoundError('Memory entry was not found', { memoryEntryId });
 		return entry;
-	}
-
-	private async softDelete(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry> {
-		const deleted = await this.entries.update(actor, {
-			...entry,
-			deletedAt: now(),
-			updatedAt: now()
-		});
-		return deleted;
-	}
-
-	private async requireProject(actor: ActorContext, projectId: ProjectId): Promise<void> {
-		if (!(await this.projects.findById(actor, projectId)))
-			throw new NotFoundError('Memory project was not found');
 	}
 }

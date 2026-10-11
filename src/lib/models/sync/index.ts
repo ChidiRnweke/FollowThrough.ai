@@ -21,12 +21,6 @@ export const syncEtagSchema = z
 	.regex(/^sync-v1-[1-9][0-9]*$/)
 	.transform((value) => value as SyncEtag);
 
-/** Database sequence values are transported without JavaScript number rounding. */
-export const syncEtag = (version: bigint): SyncEtag => {
-	if (version <= 0n) throw new Error('A synchronization version must be positive');
-	return `sync-v1-${version}` as SyncEtag;
-};
-
 export const resourceChangeSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('upsert'), key: z.string().min(1), etag: syncEtagSchema }),
 	z.object({ kind: z.literal('delete'), key: z.string().min(1), etag: syncEtagSchema })
@@ -115,3 +109,61 @@ export type CacheAccess<T> =
 	| { readonly kind: 'unavailable' }
 	| { readonly kind: 'deleted' }
 	| { readonly kind: 'failure'; readonly message: string };
+
+/** Transient account synchronization results; never persisted as resource state. */
+export type SynchronizationResult =
+	| { readonly kind: 'idle' }
+	| { readonly kind: 'complete' }
+	| { readonly kind: 'offline' }
+	| { readonly kind: 'unavailable' }
+	| { readonly kind: 'stopped' }
+	| { readonly kind: 'failure'; readonly message: string };
+export type SubmissionResult = SynchronizationResult | { readonly kind: 'waiting' };
+export type SyncLane = 'pull' | 'writes';
+export interface SyncLaneState {
+	readonly requested: boolean;
+	readonly running: Promise<void> | null;
+	readonly retry: number | null;
+	readonly failures: number;
+	readonly result: SubmissionResult;
+}
+export interface SyncWriteRetry {
+	readonly attempts: number;
+	readonly at: number;
+}
+export interface SyncScheduler {
+	now(): number;
+	schedule(at: number, work: () => Promise<void>): () => void;
+}
+
+export interface CachedRecord<T> {
+	readonly key: string;
+	readonly entry: ResourceState<T>;
+}
+
+/** Where page replication stands; a targeted read never moves it. */
+export interface SyncCheckpoint {
+	readonly cursor: SyncCursor;
+	readonly inventoryComplete: boolean;
+}
+
+/** Resources merge by version, newest first; a checkpoint never moves backwards. */
+export interface CacheCommit<T> {
+	readonly put: readonly CachedRecord<T>[];
+	readonly checkpoint?: SyncCheckpoint;
+}
+
+export interface StoredCache<T> {
+	readonly inventoryComplete: boolean;
+	readonly records: readonly CachedRecord<T>[];
+	readonly cursor: SyncCursor | null;
+}
+
+/** Database sequence values are transported without JavaScript number rounding. */
+export const syncEtag = (version: bigint): SyncEtag => {
+	if (version <= 0n) throw new Error('A synchronization version must be positive');
+	return `sync-v1-${version}` as SyncEtag;
+};
+
+/** Where the user's work is, as the sync indicator shows it. */
+export type SyncIndicatorKind = 'synced' | 'saving' | 'offline' | 'downloading' | 'attention';

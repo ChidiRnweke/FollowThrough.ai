@@ -45,9 +45,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			archiveAdmissionLimits()
 		);
 		if (!archive.ok) throw new ValidationError(describeArchiveRejection(archive.rejection));
-		const report = await AppFactory.controllers()
+		const report = await AppFactory.forActor(AppFactory.actor(locals))
 			.notes()
-			.importMarkdownArchive(AppFactory.actor(locals), {
+			.importMarkdownArchive({
 				projectId: fields.data.projectId as ProjectId,
 				...(fields.data.parentId ? { parentId: fields.data.parentId as NoteId } : {}),
 				notes: archive.result.entries.map(parseMarkdownNote),

@@ -1,5 +1,6 @@
+import type { TokenCounter } from '$lib/models/tokenization';
 import { createHash } from 'node:crypto';
-import { z } from 'zod';
+import { readAgentResourcePath } from '$lib/server/repositories/agent-files/agent-files';
 import {
 	RE2JS,
 	RE2JSCompileException,
@@ -7,11 +8,9 @@ import {
 	RE2JSGroupException,
 	RE2JSSyntaxException
 } from 're2js';
-import { tokenEncoding } from '$lib/models/tokenization/token-encoding';
-import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentId } from '$lib/models/attachments';
-import type { Diagram, DiagramId } from '$lib/models/diagrams';
-import type { Note, NoteId } from '$lib/models/notes';
+import type { Diagram } from '$lib/models/diagrams';
+import type { Note } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments/attachments';
@@ -30,19 +29,18 @@ import type {
 	AgentSedResult
 } from '$lib/models/agent-files';
 
+export interface AgentNoteMarkdownWriter {
+	write(document: Note['document']): string;
+}
 export interface AgentVirtualFilesDependencies {
+	readonly tokens: TokenCounter;
 	readonly projects: ProjectRepository;
 	readonly notes: NoteRepository;
 	readonly attachments: AttachmentRepository;
 	readonly diagrams: DiagramRepository;
 	readonly stored: AgentFileRepository;
-	readonly noteMarkdown: (document: Note['document']) => string;
+	readonly noteMarkdown: AgentNoteMarkdownWriter;
 }
-
-const uuid = z.uuid();
-
-const validIds = (...values: readonly (string | undefined)[]): boolean =>
-	values.every((value) => value !== undefined && uuid.safeParse(value).success);
 
 const normalizePath = (input: string): string => {
 	const absolute = input === '.' ? '/' : input.startsWith('/') ? input : `/${input}`;
@@ -59,21 +57,29 @@ const lineCount = (content: string): number =>
 	content.length === 0 ? 0 : content.split('\n').length;
 
 /** Where an attachment's extracted text is mounted. */
-export const attachmentFilePath = (projectId: ProjectId, attachmentId: AttachmentId): string =>
+const attachmentFilePath = (projectId: ProjectId, attachmentId: AttachmentId): string =>
 	`/projects/${projectId}/attachments/${attachmentId}.txt`;
 
 /** Where a diagram's source is mounted; the extension says which language it is. */
-export const diagramFilePath = (diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string =>
+const diagramFilePath = (diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string =>
 	`/projects/${diagram.projectId}/diagrams/${diagram.id}.${diagram.kind === 'mermaid' ? 'mmd' : 'drawio'}`;
 
-export const agentFileOf = (path: string, mediaType: string, content: string): AgentFile => ({
+const noteFilePath = (note: Pick<Note, 'projectId' | 'id'>): string =>
+	`/projects/${note.projectId}/notes/${note.id}.md`;
+
+const agentFileOf = (
+	tokens: TokenCounter,
+	path: string,
+	mediaType: string,
+	content: string
+): AgentFile => ({
 	metadata: {
 		kind: 'file',
 		id: createHash('sha256').update(path).digest('hex') as AgentFileId,
 		path,
 		mediaType,
 		byteSize: Buffer.byteLength(content, 'utf8'),
-		tokenCount: tokenEncoding().encode(content).length,
+		tokenCount: tokens.count(content),
 		lineCount: lineCount(content),
 		checksumSha256: createHash('sha256').update(content).digest('hex')
 	},
@@ -99,62 +105,97 @@ const parentOf = (path: string): string => {
 	return index <= 0 ? '/' : path.slice(0, index);
 };
 
-export class AgentVirtualFiles {
+/** Where agent-readable resources are mounted, and how a mounted file is described. */
+export interface AgentFileReferences {
+	attachmentPath(projectId: ProjectId, attachmentId: AttachmentId): string;
+	diagramPath(diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string;
+	noteMetadata(note: Pick<Note, 'projectId' | 'id'>, markdown: string): AgentFile['metadata'];
+}
+
+export class AgentFileReferenceService implements AgentFileReferences {
+	constructor(private readonly tokens: TokenCounter) {}
+
+	attachmentPath(projectId: ProjectId, attachmentId: AttachmentId): string {
+		return attachmentFilePath(projectId, attachmentId);
+	}
+
+	diagramPath(diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string {
+		return diagramFilePath(diagram);
+	}
+
+	noteMetadata(note: Pick<Note, 'projectId' | 'id'>, markdown: string): AgentFile['metadata'] {
+		return agentFileOf(this.tokens, noteFilePath(note), 'text/markdown', markdown).metadata;
+	}
+}
+
+export interface AgentFileReader {
+	ls(path?: string): Promise<AgentLsResult>;
+	grep(input: {
+		readonly pattern: string;
+		readonly path: string;
+		readonly fixed: boolean;
+		readonly ignoreCase: boolean;
+	}): Promise<AgentGrepResult>;
+	sed(path: string, range: AgentSedRange): Promise<AgentSedResult>;
+}
+
+export class AgentVirtualFiles implements AgentFileReader {
 	constructor(private readonly dependencies: AgentVirtualFilesDependencies) {}
 
-	private async exactFile(actor: ActorContext, path: string): Promise<AgentFile | undefined> {
-		const stored = await this.dependencies.stored.findByPath(actor, path);
+	private async exactFile(path: string): Promise<AgentFile | undefined> {
+		const stored = await this.dependencies.stored.findByPath(path);
 		if (stored) return stored;
 
-		const note = path.match(/^\/projects\/([^/]+)\/notes\/([^/]+)\.md$/);
-		if (note) {
-			if (!validIds(note[1], note[2])) return undefined;
-			const found = await this.dependencies.notes.findById(actor, note[2] as NoteId);
-			if (!found || found.projectId !== (note[1] as ProjectId) || found.kind === 'folder')
+		const resource = readAgentResourcePath(path);
+		if (resource?.kind === 'note') {
+			const found = await this.dependencies.notes.findById(resource.noteId);
+			if (!found || found.projectId !== resource.projectId || found.kind === 'folder')
 				return undefined;
-			return agentFileOf(path, 'text/markdown', this.dependencies.noteMarkdown(found.document));
+			return agentFileOf(
+				this.dependencies.tokens,
+				path,
+				'text/markdown',
+				this.dependencies.noteMarkdown.write(found.document)
+			);
 		}
 
-		const version = path.match(/^\/projects\/([^/]+)\/notes\/([^/]+)\/versions\/(\d+)\.md$/);
-		if (version) {
-			if (!validIds(version[1], version[2])) return undefined;
-			const found = await this.dependencies.notes.findById(actor, version[2] as NoteId);
-			if (!found || found.projectId !== (version[1] as ProjectId)) return undefined;
-			const revision = (await this.dependencies.notes.listRevisions(actor, found.id)).find(
-				(candidate) => candidate.revision === Number(version[3])
+		if (resource?.kind === 'version') {
+			const found = await this.dependencies.notes.findById(resource.noteId);
+			if (!found || found.projectId !== resource.projectId) return undefined;
+			const revision = (await this.dependencies.notes.listRevisions(found.id)).find(
+				(candidate) => candidate.revision === resource.revision
 			);
 			return revision
-				? agentFileOf(path, 'text/markdown', this.dependencies.noteMarkdown(revision.document))
+				? agentFileOf(
+						this.dependencies.tokens,
+						path,
+						'text/markdown',
+						this.dependencies.noteMarkdown.write(revision.document)
+					)
 				: undefined;
 		}
 
-		const attachment = path.match(/^\/projects\/([^/]+)\/attachments\/([^/]+)\.txt$/);
-		if (attachment) {
-			if (!validIds(attachment[1], attachment[2])) return undefined;
-			const found = await this.dependencies.attachments.findById(
-				actor,
-				attachment[2] as AttachmentId
-			);
+		if (resource?.kind === 'attachment') {
+			const found = await this.dependencies.attachments.findById(resource.attachmentId);
 			if (
 				!found ||
-				found.attachment.projectId !== (attachment[1] as ProjectId) ||
+				found.attachment.projectId !== resource.projectId ||
 				found.version.extractedText === undefined
 			)
 				return undefined;
-			return agentFileOf(path, 'text/plain', found.version.extractedText);
+			return agentFileOf(this.dependencies.tokens, path, 'text/plain', found.version.extractedText);
 		}
 
-		const diagram = path.match(/^\/projects\/([^/]+)\/diagrams\/([^/]+)\.(mmd|drawio)$/);
-		if (diagram) {
-			if (!validIds(diagram[1], diagram[2])) return undefined;
-			const found = await this.dependencies.diagrams.findById(actor, diagram[2] as DiagramId);
+		if (resource?.kind === 'diagram') {
+			const found = await this.dependencies.diagrams.findById(resource.diagramId);
 			if (
 				!found ||
-				found.projectId !== (diagram[1] as ProjectId) ||
-				(found.kind === 'mermaid' ? 'mmd' : 'drawio') !== diagram[3]
+				found.projectId !== resource.projectId ||
+				(found.kind === 'mermaid' ? 'mmd' : 'drawio') !== resource.extension
 			)
 				return undefined;
 			return agentFileOf(
+				this.dependencies.tokens,
 				path,
 				found.kind === 'mermaid' ? 'text/vnd.mermaid' : 'application/vnd.jgraph.mxfile+xml',
 				found.source
@@ -163,28 +204,29 @@ export class AgentVirtualFiles {
 		return undefined;
 	}
 
-	private async files(actor: ActorContext): Promise<readonly AgentFile[]> {
+	private async files(): Promise<readonly AgentFile[]> {
 		const [projects, stored] = await Promise.all([
-			this.dependencies.projects.listActive(actor),
-			this.dependencies.stored.list(actor)
+			this.dependencies.projects.listActive(),
+			this.dependencies.stored.list()
 		]);
 		const files = await Promise.all(
 			projects.map(async (project) => {
 				const [notes, attachments, diagramPage] = await Promise.all([
-					this.dependencies.notes.listActive(actor, project.id),
-					this.dependencies.attachments.listForProject(actor, project.id),
-					this.dependencies.diagrams.listForProject(actor, project.id)
+					this.dependencies.notes.listActive(project.id),
+					this.dependencies.attachments.listForProject(project.id),
+					this.dependencies.diagrams.listForProject(project.id)
 				]);
 				const revisionFiles = (
 					await Promise.all(
 						notes
 							.filter((note) => note.kind !== 'folder')
 							.map(async (note) =>
-								(await this.dependencies.notes.listRevisions(actor, note.id)).map((revision) =>
+								(await this.dependencies.notes.listRevisions(note.id)).map((revision) =>
 									agentFileOf(
+										this.dependencies.tokens,
 										`/projects/${project.id}/notes/${note.id}/versions/${revision.revision}.md`,
 										'text/markdown',
-										this.dependencies.noteMarkdown(revision.document)
+										this.dependencies.noteMarkdown.write(revision.document)
 									)
 								)
 							)
@@ -195,9 +237,10 @@ export class AgentVirtualFiles {
 						.filter((note) => note.kind !== 'folder')
 						.map((note) =>
 							agentFileOf(
-								`/projects/${project.id}/notes/${note.id}.md`,
+								this.dependencies.tokens,
+								noteFilePath({ projectId: project.id, id: note.id }),
 								'text/markdown',
-								this.dependencies.noteMarkdown(note.document)
+								this.dependencies.noteMarkdown.write(note.document)
 							)
 						),
 					...revisionFiles,
@@ -207,6 +250,7 @@ export class AgentVirtualFiles {
 							? []
 							: [
 									agentFileOf(
+										this.dependencies.tokens,
 										attachmentFilePath(project.id, view.attachment.id),
 										'text/plain',
 										text
@@ -215,6 +259,7 @@ export class AgentVirtualFiles {
 					}),
 					...diagramPage.diagrams.map((diagram) =>
 						agentFileOf(
+							this.dependencies.tokens,
 							diagramFilePath(diagram),
 							diagram.kind === 'mermaid' ? 'text/vnd.mermaid' : 'application/vnd.jgraph.mxfile+xml',
 							diagram.source
@@ -245,11 +290,11 @@ export class AgentVirtualFiles {
 		return new Map([...children].map(([path, entries]) => [path, entries.size]));
 	}
 
-	async ls(actor: ActorContext, requestedPath = '.'): Promise<AgentLsResult> {
+	async ls(requestedPath = '.'): Promise<AgentLsResult> {
 		const path = normalizePath(requestedPath);
-		const resolved = await this.exactFile(actor, path);
+		const resolved = await this.exactFile(path);
 		if (resolved) return { kind: 'listed', path, entries: [resolved.metadata] };
-		const files = await this.files(actor);
+		const files = await this.files();
 		const directories = this.directories(files);
 		if (!directories.has(path)) return pathMissing(path, parentOf(path));
 		const prefix = path === '/' ? '/' : `${path}/`;
@@ -269,20 +314,19 @@ export class AgentVirtualFiles {
 		};
 	}
 
-	async grep(
-		actor: ActorContext,
-		input: {
-			readonly pattern: string;
-			readonly path: string;
-			readonly fixed: boolean;
-			readonly ignoreCase: boolean;
-		}
-	): Promise<AgentGrepResult> {
+	async grep(input: {
+		readonly pattern: string;
+		readonly path: string;
+		readonly fixed: boolean;
+		readonly ignoreCase: boolean;
+	}): Promise<AgentGrepResult> {
 		const path = normalizePath(input.path);
-		const files = await this.files(actor);
+		const files = await this.files();
 		const directories = this.directories(files);
 		const targets = files.filter(
-			(file) => file.metadata.path === path || file.metadata.path.startsWith(`${path}/`)
+			(file) =>
+				file.metadata.path === path ||
+				file.metadata.path.startsWith(path === '/' ? '/' : `${path}/`)
 		);
 		if (targets.length === 0 && !directories.has(path)) return pathMissing(path, parentOf(path));
 		let expression: RE2JS;
@@ -332,11 +376,11 @@ export class AgentVirtualFiles {
 		};
 	}
 
-	async sed(actor: ActorContext, pathInput: string, range: AgentSedRange): Promise<AgentSedResult> {
+	async sed(pathInput: string, range: AgentSedRange): Promise<AgentSedResult> {
 		const path = normalizePath(pathInput);
-		const file = await this.exactFile(actor, path);
+		const file = await this.exactFile(path);
 		if (!file) {
-			const files = await this.files(actor);
+			const files = await this.files();
 			if (this.directories(files).has(path))
 				return {
 					kind: 'error',

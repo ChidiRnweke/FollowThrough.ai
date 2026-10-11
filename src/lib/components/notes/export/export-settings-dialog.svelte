@@ -1,14 +1,16 @@
 <script lang="ts">
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { untrack } from 'svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 	import type { ExportSettings } from '$lib/models/deliverables';
+	import type { UserId } from '$lib/models/identity';
+	import type { ProjectId } from '$lib/models/projects';
+	import type { DateTime } from '$lib/models/workspace';
 	import { defaultExportSettings } from '$lib/models/deliverables';
 	import { toast } from 'svelte-sonner';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import ExportSettingsFields from './export-settings-fields.svelte';
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-	import type { DateTime } from '$lib/models/workspace';
-	import type { ProjectId } from '$lib/models/projects';
 
 	let {
 		open = $bindable(false),
@@ -19,76 +21,59 @@
 	} = $props();
 
 	let settings = $state<ExportSettings>({ ...defaultExportSettings });
+	let draft = $state<WorkspaceDraftController<'export_settings'> | null>(null);
 	let busy = $state(false);
-	let loaded = $state<WorkspaceDraft<'export_settings'> | null>(null);
+	const loaded = $derived(draft !== null);
 
 	$effect(() => {
-		loaded = null;
 		if (!open) return;
-		const id = projectId;
-		let cancelled = false;
-		void load(id)
-			.then((draft) => {
-				if (cancelled) return;
-				const value = draft.value;
-				if (!value) throw new Error('The export defaults are unavailable');
-				settings = { ...defaultExportSettings, ...value.settings };
-				loaded = draft;
-			})
-			.catch((error) => {
-				const message =
-					error instanceof Error ? error.message : 'Export defaults could not be loaded';
-				if (!cancelled) toast.error(message);
-				return { kind: 'failure', message };
-			});
+		const id = projectId as ProjectId;
+		let current = true;
+		void untrack(() => load(id, () => current));
 		return () => {
-			cancelled = true;
+			current = false;
+			draft = null;
 		};
 	});
 
-	async function load(id: string): Promise<WorkspaceDraft<'export_settings'>> {
-		const session = await workspaceSession.start();
-		const draft = session.resources.draft({
-			type: 'export_settings',
-			id: [session.bootstrap.accountId, id]
-		});
+	/** Open this project's defaults; a project without its own starts from the app defaults. */
+	async function load(id: ProjectId, current: () => boolean): Promise<void> {
+		const accountId = (await workspaceSession.start()).bootstrap.accountId as UserId;
 		const timestamp = new Date().toISOString() as DateTime;
-		const opened = await draft.readOrCreate({
-			type: 'export_settings',
-			value: {
-				userId: session.shell.user.id,
-				projectId: id as ProjectId,
-				settings: { ...defaultExportSettings },
-				createdAt: timestamp,
-				updatedAt: timestamp
+		const opened = await workspaceSession.openOrCreate(
+			{ type: 'export_settings', id: [accountId, id] },
+			{
+				type: 'export_settings',
+				value: {
+					userId: accountId,
+					projectId: id,
+					settings: { ...defaultExportSettings },
+					createdAt: timestamp,
+					updatedAt: timestamp
+				}
 			}
-		});
-		if (opened.kind !== 'ready')
-			throw new Error(draft.lastError ?? 'The export defaults are unavailable');
-		return draft;
+		);
+		if (!current()) return;
+		if (opened.kind === 'failure') return void toast.error(opened.message);
+		draft = opened.draft;
+		settings = { ...defaultExportSettings, ...opened.value.settings };
 	}
 
 	async function save(): Promise<void> {
-		const draft = loaded;
 		const value = draft?.value;
 		if (!draft || !value || busy) return;
 		busy = true;
-		try {
-			const result = await draft.stage({
-				kind: 'updateExportSettings',
-				userId: value.userId,
-				projectId: value.projectId,
-				settings: { ...settings }
-			});
-			if (result.kind === 'failure') throw new Error(result.message);
+		const saved = await draft.stage({
+			kind: 'updateExportSettings',
+			userId: value.userId,
+			projectId: value.projectId,
+			settings: { ...settings }
+		});
+		busy = false;
+		if (saved.kind === 'saved') {
 			toast.success('Export defaults saved on this device');
-			if (loaded === draft) open = false;
-			// audit-allow: silent-catch — save failure is reported and the dialog remains open with the entered values.
-		} catch {
-			toast.error('Could not save the export defaults.');
-		} finally {
-			busy = false;
-		}
+			open = false;
+		} else toast.error('Could not save the export defaults.');
 	}
 </script>
 

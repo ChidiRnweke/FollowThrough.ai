@@ -15,13 +15,21 @@ const cursorAfter = (request: Request, url: URL): string => {
 
 export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 	const actor = AppFactory.actor(locals);
-	const agent = AppFactory.controllers().agent();
-	const eventBus = AppFactory.eventBus();
+	const agent = AppFactory.forActor(actor).agentHarness();
 	const runId = params.runId as AgentRunId;
-	await agent.getRun(actor, runId);
+	// Subscribe before the stream starts, so a notification between the ownership check and the
+	// first replay still triggers a flush.
+	let changed = () => {};
+	const unsubscribe = await agent.observeRun(runId, () => changed());
+	const stopObserving = () => {
+		// audit-allow: silent-catch — the stream is already closing; a failed UNLISTEN only leaves an idle listener on the shared connection.
+		unsubscribe().catch((error: unknown) =>
+			console.error(`[agent-run] Could not stop observing ${runId}:`, error)
+		);
+	};
 	let cursor = cursorAfter(request, url);
 
-	let teardown = () => {};
+	let teardown = stopObserving;
 
 	const body = new ReadableStream<Uint8Array>({
 		start(controller) {
@@ -33,7 +41,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 				closed = true;
 				clearInterval(fallbackTimer);
 				clearInterval(keepaliveTimer);
-				unsubscribe();
+				stopObserving();
 			};
 			teardown = cleanup;
 
@@ -58,7 +66,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 				try {
 					do {
 						pendingFlush = false;
-						const records = await agent.listRunEvents(actor, runId, cursor);
+						const records = await agent.listRunEvents(runId, cursor);
 						for (const record of records) {
 							if (closed) return;
 							try {
@@ -74,7 +82,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 							}
 							cursor = record.cursor;
 						}
-						if (await agent.isRunStreamComplete(actor, runId, cursor)) {
+						if (await agent.isRunStreamComplete(runId, cursor)) {
 							close();
 							return;
 						}
@@ -98,8 +106,8 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 			// Initial replay from cursor
 			void flush();
 
-			// Push notifications from the event bus
-			const unsubscribe = eventBus.subscribe(runId, () => void flush());
+			// Push notifications from the run's event stream
+			changed = () => void flush();
 
 			// Defensive fallback poll every 5s in case a notification is missed
 			const fallbackTimer = setInterval(() => void flush(), 5_000);

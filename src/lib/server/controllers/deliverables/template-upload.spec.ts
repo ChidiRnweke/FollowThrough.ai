@@ -1,25 +1,30 @@
-import { describe, expect, it } from 'vitest';
-import { createHash } from 'node:crypto';
-import { Document, Packer, Paragraph } from 'docx';
-import { Deliverables, type DeliverablesDependencies } from './controller';
-import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
-import { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
+import { DocxTemplateStyleReader } from '$lib/server/services/deliverables/template-styles';
+import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryAttachmentStorage,
 	InMemoryTemplateRepository
 } from '$lib/testing/attachments/fakes/in-memory-deliverables';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { Document, Packer, Paragraph } from 'docx';
+import { createHash } from 'node:crypto';
+import { describe, expect, it } from 'vitest';
+import { Deliverables, type DeliverablesDependencies } from './controller';
 
 const setup = async () => {
 	const storage = new InMemoryAttachmentStorage();
-	const repository = new InMemoryTemplateRepository();
+	const repository = new InMemoryTemplateRepository(testActor());
 	const controller = new Deliverables(
+		testActor(),
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
-			templates: new DocumentTemplates(repository, () => testNow),
+			...agentToolResultsFixture(),
+			...createTemplateServices(testActor(), repository, () => testNow),
 			templateStorage: storage,
-			templateStyles: verifiedTemplateStyles,
+			templateStyles: new DocxTemplateStyleReader(),
 			// Object storage does not participate in the database transaction.
 			transactionRunner: new InMemoryTransactionRunner([repository])
 		})
@@ -34,11 +39,11 @@ const setup = async () => {
 		byteSize: bytes.length,
 		checksumSha256: createHash('sha256').update(bytes).digest('hex')
 	};
-	const result = await controller.initiateTemplateUpload(testActor(), input);
+	const result = await controller.initiateTemplateUpload(input);
 	const staging = `staging/${testActor().userId}/templates/${result.templateId}`;
 	const destination = `projects/${testProjectId()}/templates/${result.templateId}`;
 	await storage.put(staging, bytes, input.mediaType);
-	const complete = () => controller.completeTemplateUpload(testActor(), result.templateId);
+	const complete = () => controller.completeTemplateUpload(result.templateId);
 	return { storage, repository, controller, bytes, input, result, staging, destination, complete };
 };
 
@@ -59,24 +64,24 @@ describe('template upload completion', () => {
 	it('keeps completed templates scoped to their project', async () => {
 		const { controller, complete } = await setup();
 		await complete();
-		expect(await controller.listTemplates(testActor(), testProjectId(2))).toEqual([]);
+		expect(await controller.listTemplates(testProjectId(2))).toEqual([]);
 	});
 	it('deletes an owned completed template', async () => {
 		const { controller, complete, result } = await setup();
 		await complete();
-		await controller.deleteTemplate(testActor(), result.templateId);
-		expect(await controller.listTemplates(testActor(), testProjectId())).toEqual([]);
+		await controller.deleteTemplate(result.templateId);
+		expect(await controller.listTemplates(testProjectId())).toEqual([]);
 	});
 	it('rejects a completion whose reservation does not exist', async () => {
 		const { controller, result, repository } = await setup();
 		repository.uploads = [];
-		await expect(
-			controller.completeTemplateUpload(testActor(), result.templateId)
-		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+		await expect(controller.completeTemplateUpload(result.templateId)).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
 	});
 	it('keeps an unfinished upload out of the available template list', async () => {
 		const { controller } = await setup();
-		expect(await controller.listTemplates(testActor(), testProjectId())).toEqual([]);
+		expect(await controller.listTemplates(testProjectId())).toEqual([]);
 	});
 	it('stores the expected checksum with the upload contract', async () => {
 		const { repository, result, input } = await setup();
@@ -91,7 +96,7 @@ describe('template upload completion', () => {
 	it('publishes verified bytes and extracted styles before removing staging', async () => {
 		const { controller, complete, storage, staging, destination, bytes } = await setup();
 		await complete();
-		const available = await controller.listTemplates(testActor(), testProjectId());
+		const available = await controller.listTemplates(testProjectId());
 		expect({
 			names: available.map((template) => template.name),
 			styles: available[0]?.extractedStyles.fonts.body.name,
@@ -131,7 +136,7 @@ describe('template upload completion', () => {
 	it('retains the upload when style extraction fails', async () => {
 		const { controller, repository, storage } = await setup();
 		const bytes = Buffer.from('This is not a DOCX');
-		const upload = await controller.initiateTemplateUpload(testActor(), {
+		const upload = await controller.initiateTemplateUpload({
 			projectId: testProjectId(),
 			name: 'Invalid',
 			mediaType: 'application/octet-stream',
@@ -143,7 +148,7 @@ describe('template upload completion', () => {
 			bytes,
 			'application/octet-stream'
 		);
-		const failed = await controller.completeTemplateUpload(testActor(), upload.templateId).then(
+		const failed = await controller.completeTemplateUpload(upload.templateId).then(
 			() => false,
 			() => true
 		);

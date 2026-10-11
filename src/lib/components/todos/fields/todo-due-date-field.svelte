@@ -7,7 +7,7 @@
 	import * as Icon from '$lib/components/icons';
 	import { parseDate, type DateValue } from '@internationalized/date';
 	import { toast } from 'svelte-sonner';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from '../todo-updates';
 	import { formatDate } from '../../shared/labels';
 
 	let {

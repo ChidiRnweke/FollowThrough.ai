@@ -1,4 +1,4 @@
-import type { ShellContext } from '$lib/client/shell/views';
+import type { ShellContext } from '$lib/models/workspace-views';
 import { describe, expect, it } from 'vitest';
 import type { NoteSummary } from '$lib/models/notes';
 

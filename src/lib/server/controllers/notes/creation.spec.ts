@@ -1,7 +1,7 @@
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
 import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import {
 	InMemoryNoteRepository,
 	InMemoryAnchorRepository
@@ -13,13 +13,14 @@ import {
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 const setup = () => {
-	const records = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository(records);
+	const records = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor(), records);
 	projects.projects = [projectBuilder()];
 	return {
 		records,
 		creation: noteCreationControllers(
-			new NoteCatalog(records, new InMemoryAnchorRepository(), projects),
+			createNoteServices(testActor(), records, new InMemoryAnchorRepository(testActor()), projects)
+				.creator,
 			new InMemoryTransactionRunner([records, projects])
 		)
 	};
@@ -28,7 +29,7 @@ describe('Note creation', () => {
 	it('preserves the final identity assigned to a note before it was synchronized', async () => {
 		const { creation } = setup();
 		const id = testNoteId(501);
-		const { note } = await creation.notes.create(testActor(), {
+		const { note } = await creation.notes.create({
 			id,
 			projectId: projectBuilder().id,
 			title: 'Offline note'
@@ -44,7 +45,7 @@ describe('Note creation', () => {
 			projectId: projectBuilder().id,
 			title: 'Offline note'
 		};
-		const { note } = await creation.notes.create(testActor(), command);
+		const { note } = await creation.notes.create(command);
 		expect(note.kind).toBe('note');
 	});
 });

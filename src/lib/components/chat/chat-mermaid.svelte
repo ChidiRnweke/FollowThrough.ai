@@ -2,7 +2,8 @@
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
-	import { createMermaidRender } from './mermaid-render.svelte.js';
+	import { createMermaidRenderSession } from '$lib/factories/diagrams/mermaid-render';
+	import { mode } from 'mode-watcher';
 
 	let { source }: { source: string } = $props();
 
@@ -10,14 +11,17 @@
 	// real width arrives either shrunk or behind a scrollbar. Clicking it opens
 	// the same diagram at the size of the screen, the way a chat image does.
 	let enlarged = $state(false);
-	const inline = createMermaidRender(
-		() => source,
-		() => true
-	);
-	const full = createMermaidRender(
-		() => source,
-		() => enlarged
-	);
+
+	const inline = createMermaidRenderSession();
+	const full = createMermaidRenderSession();
+	$effect(() => {
+		void inline.draw(source, mode.current === 'dark');
+		return () => inline.cancel();
+	});
+	$effect(() => {
+		if (enlarged) void full.draw(source, mode.current === 'dark');
+		return () => full.cancel();
+	});
 </script>
 
 {#if inline.current.kind === 'ready'}

@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
@@ -9,8 +10,11 @@ import { RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definiti
 it('rolls back the Inbox, skill notes and revisions when metadata cannot be stored', async () => {
 	const state = builtInSkillsFixture();
 	state.skills.writeFailure = new Error('Skill storage unavailable');
-	const controller = new Skills(capabilityDependencies<SkillsDependencies>(state));
-	const failure = await controller.list(testActor()).then(
+	const controller = new Skills(
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<SkillsDependencies>(state)
+	);
+	const failure = await controller.list().then(
 		() => {
 			throw new Error('Expected provisioning to fail');
 		},
@@ -33,7 +37,7 @@ it('rolls back the Inbox, skill notes and revisions when metadata cannot be stor
 
 it('does not create missing built-ins while loading one by key', async () => {
 	const state = builtInSkillsFixture();
-	await state.builtInSkills.load(testActor(), 'diagramming').then(
+	await state.builtInSkills.load('diagramming').then(
 		() => {
 			throw new Error('Expected a missing skill');
 		},
@@ -52,10 +56,10 @@ it('preserves the released note and revision history when a built-in upgrade fai
 	const state = builtInSkillsFixture();
 	const released = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough')!;
 	await state.transactionRunner.run(() =>
-		new BuiltInSkills(state.projects, state.notes, state.skills, {
+		new BuiltInSkills(testActor(), state.projects, state.notes, state.skills, {
 			active: [released],
 			retired: []
-		}).ensure(testActor())
+		}).ensure()
 	);
 	const before = structuredClone({
 		notes: state.notes.notes,
@@ -63,8 +67,11 @@ it('preserves the released note and revision history when a built-in upgrade fai
 		skills: state.skills.skills
 	});
 	state.skills.writeFailure = new Error('Skill upgrade unavailable');
-	const controller = new Skills(capabilityDependencies<SkillsDependencies>(state));
-	await controller.list(testActor()).then(
+	const controller = new Skills(
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<SkillsDependencies>(state)
+	);
+	await controller.list().then(
 		() => {
 			throw new Error('Expected upgrade failure');
 		},
