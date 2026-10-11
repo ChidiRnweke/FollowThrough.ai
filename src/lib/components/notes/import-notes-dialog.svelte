@@ -92,8 +92,8 @@
 		{#if report}
 			<!-- The report is the feature, not its epilogue: an import is not all-or-nothing,
 			     so without this a partially failed import looks exactly like a clean one. -->
-			<div class="flex flex-col gap-6">
-				<div class="flex flex-col gap-2">
+			<div class="flex flex-col gap-group">
+				<div class="flex flex-col gap-item">
 					<p class="text-sm">
 						Imported {report.importedNoteIds.length}
 						{report.importedNoteIds.length === 1 ? 'note' : 'notes'}{report.createdFolderIds
@@ -109,9 +109,9 @@
 				</div>
 
 				{#if report.failed.length > 0}
-					<section class="flex flex-col gap-2">
+					<section class="flex flex-col gap-item">
 						<h3 class="eyebrow">Could not import</h3>
-						<ul class="flex flex-col gap-1 text-xs">
+						<ul class="flex flex-col gap-bind text-xs">
 							{#each report.failed as failure (failure.path)}
 								<li>
 									<span class="font-medium">{failure.path}</span>
@@ -123,12 +123,12 @@
 				{/if}
 
 				{#if report.unresolvedLinks.length > 0}
-					<section class="flex flex-col gap-2">
+					<section class="flex flex-col gap-item">
 						<h3 class="eyebrow">Links left unresolved</h3>
 						<p class="text-xs text-muted-foreground">
 							These links remain as written in the imported notes.
 						</p>
-						<ul class="flex max-h-40 flex-col gap-1 overflow-y-auto text-xs">
+						<ul class="flex max-h-40 flex-col gap-bind overflow-y-auto text-xs">
 							{#each report.unresolvedLinks as issue (issue)}
 								<li>
 									<span class="font-medium">{issue.path}: [[{issue.target}]]</span><span
@@ -143,9 +143,9 @@
 				{/if}
 
 				{#if report.skipped.length > 0}
-					<section class="flex flex-col gap-2">
+					<section class="flex flex-col gap-item">
 						<h3 class="eyebrow">Skipped</h3>
-						<ul class="flex max-h-40 flex-col gap-1 overflow-y-auto text-xs">
+						<ul class="flex max-h-40 flex-col gap-bind overflow-y-auto text-xs">
 							{#each report.skipped as skip (skip.path)}
 								<li>
 									<span class="font-medium">{skip.path}</span>
@@ -161,7 +161,7 @@
 				<Button size="sm" onclick={() => (open = false)}>Done</Button>
 			</Dialog.Footer>
 		{:else}
-			<div class="flex flex-col gap-2">
+			<div class="flex flex-col gap-item">
 				<FileDropzone
 					bind:file={archive}
 					accept=".zip,application/zip"

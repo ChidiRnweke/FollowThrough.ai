@@ -22,7 +22,7 @@
 	class={cn(
 		'grid',
 		COLUMNS[props.columns],
-		props.gap === 'lg' ? 'gap-4' : props.gap === 'sm' ? 'gap-1.5' : 'gap-3'
+		props.gap === 'lg' ? 'gap-row' : props.gap === 'sm' ? 'gap-bind' : 'gap-row'
 	)}
 >
 	{@render children?.()}

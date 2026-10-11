@@ -67,7 +67,7 @@
 {:else if form.kind === 'loading'}
 	<p role="status" class="text-sm text-muted-foreground">Loading preferences…</p>
 {:else}
-	<Form onsubmit={save} class="flex max-w-3xl flex-col gap-6">
+	<Form onsubmit={save} class="flex max-w-3xl flex-col gap-group">
 		<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-2">
 			<p class="text-sm text-muted-foreground">
 				Defaults for how documents read. A project or a single document can still choose its own.

@@ -119,7 +119,7 @@
 			class={cn(
 				'grid min-w-0',
 				layout === 'split' ? '@2xl/diff:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : '',
-				layout === 'stacked' ? 'gap-5' : ''
+				layout === 'stacked' ? 'gap-row' : ''
 			)}
 		>
 			{#if layout !== 'candidate'}

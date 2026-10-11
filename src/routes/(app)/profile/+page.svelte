@@ -8,7 +8,7 @@
 	<!-- Custom header, the Today-page pattern: a voice line under the title gives
 	     the page the identity the stock header lacked. -->
 	{#snippet header()}
-		<div class="flex flex-col gap-1">
+		<div class="flex flex-col gap-bind">
 			<h1 class="page-title">Profile</h1>
 			<p class="text-sm text-muted-foreground">
 				What the agent knows about you, and what it may propose remembering next.

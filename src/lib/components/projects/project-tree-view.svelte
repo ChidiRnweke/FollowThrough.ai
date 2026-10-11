@@ -620,7 +620,7 @@
 			<div class="tree-collapse" data-open={isOpen} data-transitions-ready={transitionsReady}>
 				<div class="min-h-0 overflow-hidden">
 					<div
-						class="mx-2 flex min-w-0 translate-x-px flex-col gap-1 border-l border-sidebar-border px-2 py-1 group-data-[collapsible=icon]:hidden"
+						class="mx-2 flex min-w-0 translate-x-px flex-col gap-bind border-l border-sidebar-border px-2 py-1 group-data-[collapsible=icon]:hidden"
 					>
 						<ul class="flex min-w-0 flex-col gap-0">
 							<Sidebar.MenuSubItem>
@@ -636,7 +636,7 @@
 						</ul>
 						<!-- As in a folder: an empty root list spans the empty-state box so the
 						     whole box accepts a drop. `pt-2.5` keeps the list's height plus gap. -->
-						<div class={cn('relative flex min-w-0 flex-col gap-1', showsEmptyState && 'pt-2.5')}>
+						<div class={cn('relative flex min-w-0 flex-col gap-bind', showsEmptyState && 'pt-2.5')}>
 							<ul
 								class={cn(
 									'flex min-h-1.5 min-w-0 flex-col gap-0',

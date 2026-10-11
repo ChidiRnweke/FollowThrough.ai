@@ -153,7 +153,7 @@
 				</Dialog.Description>
 			</Dialog.Header>
 			<Form
-				class="flex flex-col gap-4"
+				class="flex flex-col gap-row"
 				onsubmit={(event) => {
 					event.preventDefault();
 					if (draftName.trim()) step = 2;
@@ -184,7 +184,7 @@
 				</Dialog.Description>
 			</Dialog.Header>
 			<Form
-				class="flex flex-col gap-4"
+				class="flex flex-col gap-row"
 				onsubmit={(event) => {
 					event.preventDefault();
 					void submitCreate();

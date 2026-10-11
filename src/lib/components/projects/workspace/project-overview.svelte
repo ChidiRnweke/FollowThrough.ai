@@ -231,8 +231,8 @@
 	deliberately absent here — the documents list uses them, so withholding them
 	is what stops the spaces from reading as more documents.
 -->
-<div class="flex flex-col gap-6" role="navigation" aria-label="Project spaces">
-	<section class="flex flex-col gap-2">
+<div class="flex flex-col gap-group" role="navigation" aria-label="Project spaces">
+	<section class="flex flex-col gap-item">
 		<h2 class="eyebrow">Produced here</h2>
 		<ul class="-mx-3 flex flex-col">
 			<ResourceRow
@@ -265,7 +265,7 @@
 			/>
 		</ul>
 	</section>
-	<section class="flex flex-col gap-2">
+	<section class="flex flex-col gap-item">
 		<h2 class="eyebrow">What the agent works from</h2>
 		<ul class="-mx-3 flex flex-col">
 			<ResourceRow
@@ -395,7 +395,7 @@
 		label="Documents"
 	>
 		{#snippet action()}
-			<div class="flex w-full max-w-xs flex-col items-stretch gap-3">
+			<div class="flex w-full max-w-xs flex-col items-stretch gap-row">
 				<Button size="sm" class="w-full" onclick={oncreatenote}>
 					<Icon.DocumentPlus class="size-4" />
 					Create the first note
@@ -405,7 +405,7 @@
 					<span class="text-xs text-muted-foreground/70">or</span>
 					<Separator class="flex-1" />
 				</div>
-				<div class="flex flex-col items-center gap-1.5">
+				<div class="flex flex-col items-center gap-bind">
 					<Button variant="outline" size="sm" class="w-full" onclick={onimport}>
 						Import an existing project…
 					</Button>
@@ -424,7 +424,7 @@
 	-->
 	<!-- pt-6 on top of the shell's own gap puts a clear step between the spaces
 	     cluster above and the documents list — the two are different in kind. -->
-	<section class="flex flex-col gap-3 pt-6" aria-label="Documents">
+	<section class="flex flex-col gap-row pt-6" aria-label="Documents">
 		<div class="flex items-baseline justify-between gap-3">
 			<h2 class="eyebrow">
 				Documents · {countEntries(view.tree)}

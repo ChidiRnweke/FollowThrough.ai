@@ -216,17 +216,17 @@
 			<WidgetView widget={preview.change.after} sources={widgetSources(preview.change.after)} />
 		{:else}
 			<div
-				class={compact ? 'flex flex-col gap-3' : 'grid grid-cols-2 gap-4'}
+				class={compact ? 'flex flex-col gap-row' : 'grid grid-cols-2 gap-row'}
 				data-widget-approval-diff
 			>
-				<div class="flex min-w-0 flex-col gap-1.5">
+				<div class="flex min-w-0 flex-col gap-bind">
 					<p class="eyebrow">Now</p>
 					<WidgetView
 						widget={preview.change.before}
 						sources={widgetSources(preview.change.before)}
 					/>
 				</div>
-				<div class="flex min-w-0 flex-col gap-1.5">
+				<div class="flex min-w-0 flex-col gap-bind">
 					<p class="eyebrow">After approval</p>
 					<WidgetView widget={preview.change.after} sources={widgetSources(preview.change.after)} />
 				</div>
@@ -297,7 +297,7 @@
 		{@const items = fields.items ?? []}
 		{@const shown = compact ? items.slice(0, COMPACT_ITEM_CAP) : items}
 		{#each shown as item, index (index)}
-			<div class="flex flex-col gap-0.5 {shown.length > 1 ? 'border-l-2 border-border pl-2' : ''}">
+			<div class="flex flex-col gap-bind {shown.length > 1 ? 'border-l-2 border-border pl-2' : ''}">
 				{#if item.headline}
 					<p class="text-sm">{item.headline}</p>
 				{/if}
@@ -310,7 +310,7 @@
 			<p class="text-sm text-muted-foreground">…and {items.length - shown.length} more</p>
 		{/if}
 		{#each proseFields as field (field.key)}
-			<div class="flex flex-col gap-1">
+			<div class="flex flex-col gap-bind">
 				<p class="provenance-caption">{field.key}</p>
 				<ChatMarkdown content={field.text} />
 			</div>
@@ -323,7 +323,7 @@
 {/snippet}
 
 {#snippet fallback(error: App.Error, reset: () => void)}
-	<div class="flex flex-col gap-1.5">
+	<div class="flex flex-col gap-bind">
 		<p class="text-sm text-destructive" role="alert">
 			This change could not be previewed, so there is nothing to review. Reject it, or try again.
 		</p>
@@ -343,7 +343,7 @@
 	is about to happen to which thing. The ladder inside: 4px binds the title to its caption,
 	8px to the change, 24px to the actions.
 -->
-<div class="flex flex-col gap-2 {framed ? 'my-2 border-y border-brand/40 py-4' : ''}">
+<div class="flex flex-col gap-item {framed ? 'my-2 border-y border-brand/40 py-4' : ''}">
 	<div class="flex min-w-0 items-baseline gap-2">
 		<p class="min-w-0 flex-1 truncate text-sm font-medium">{heading}</p>
 		{#if expandable}
@@ -384,7 +384,7 @@
 	{:else}
 		<!-- Unreadable saved reviews remain rejectable and cannot be approved. -->
 		<ErrorBoundary label="this change preview" {fallback}>
-			<div class="flex flex-col gap-2">
+			<div class="flex flex-col gap-item">
 				{@render changeBody(true)}
 			</div>
 		</ErrorBoundary>
@@ -408,7 +408,7 @@
 			</Dialog.Header>
 			<!-- The dialog exists to give the comparison the width the panel cannot: the diff
 		     takes the height rather than sitting capped in the middle of it. -->
-			<div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+			<div class="flex min-h-0 flex-1 flex-col gap-row overflow-y-auto">
 				<ErrorBoundary label="this change preview" {fallback}>
 					{@render changeBody(false)}
 				</ErrorBoundary>

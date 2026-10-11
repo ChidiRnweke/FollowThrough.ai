@@ -667,6 +667,15 @@
 }
 
 @theme inline {
+	/* The spacing ladder — docs/design/design-system.md "Spacing is the hierarchy". Each rung
+	   names what it separates, so a stack states its grouping rather than a pixel count.
+	   Vertical stacks use only these (held in review, not by a checker); a step that is not
+	   a rung carries no level of its own. */
+	--spacing-bind: 0.25rem; /* 4px — label to value, title to caption */
+	--spacing-item: 0.5rem; /* 8px — items inside one group */
+	--spacing-row: 0.75rem; /* 12px — field to field, row to row */
+	--spacing-group: 1.5rem; /* 24px — group to group */
+	--spacing-section: 2.5rem; /* 40px — a different kind of content */
 	--font-sans: 'Inter Variable', sans-serif;
 	--font-mono: 'JetBrains Mono Variable', monospace;
 	/* Display face — page and note titles only. Never chrome, body, or metadata. */

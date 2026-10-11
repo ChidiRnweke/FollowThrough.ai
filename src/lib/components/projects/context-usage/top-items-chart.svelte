@@ -17,8 +17,8 @@
 	);
 </script>
 
-<figure class="flex min-w-0 flex-col gap-4">
-	<figcaption class="flex flex-col gap-1">
+<figure class="flex min-w-0 flex-col gap-row">
+	<figcaption class="flex flex-col gap-bind">
 		<span class="section-title">What the agent reads most</span>
 		<span class="text-sm text-muted-foreground"
 			>The notes, files and memory it went back to most often.</span

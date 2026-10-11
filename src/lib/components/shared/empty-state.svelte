@@ -48,7 +48,7 @@
 	</section>
 {:else}
 	<div
-		class={cn('flex flex-col items-center justify-center gap-1.5 py-6 text-center', props.class)}
+		class={cn('flex flex-col items-center justify-center gap-bind py-6 text-center', props.class)}
 	>
 		{#if Glyph}
 			<Glyph class="size-5 text-muted-foreground/50" />

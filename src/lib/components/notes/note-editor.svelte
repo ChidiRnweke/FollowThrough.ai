@@ -1231,7 +1231,7 @@
 
 {#snippet fallback(error: App.Error, reset: () => void)}
 	<div
-		class="flex min-h-96 flex-1 flex-col justify-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-6 text-sm"
+		class="flex min-h-96 flex-1 flex-col justify-center gap-row rounded-md border border-destructive/30 bg-destructive/5 p-6 text-sm"
 		role="alert"
 	>
 		<p class="font-medium text-destructive">The editor stopped rendering this note.</p>
@@ -1462,7 +1462,7 @@
 		</ContextMenu.Content>
 	</ContextMenu.Root>
 {:else}
-	<div class="space-y-3">
+	<div class="space-y-row">
 		<Skeleton class="h-5 w-3/4" />
 		<Skeleton class="h-5 w-full" />
 		<Skeleton class="h-5 w-2/3" />

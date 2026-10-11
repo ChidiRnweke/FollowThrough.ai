@@ -39,7 +39,7 @@
 <Dialog.Root {open} onOpenChange={changeOpen}>
 	<Dialog.Content
 		showCloseButton={false}
-		class="flex h-11/12 max-w-6xl flex-col gap-3 sm:max-w-6xl"
+		class="flex h-11/12 max-w-6xl flex-col gap-row sm:max-w-6xl"
 	>
 		<!--
 			The dialog's own header, rather than a second one drawn inside the editor:

@@ -44,7 +44,7 @@
 	}
 </script>
 
-<div class="mt-4 space-y-2">
+<div class="mt-4 space-y-item">
 	<div class="flex flex-wrap gap-3">
 		<Button variant="link" class="px-0" disabled={busy} onclick={() => void download()}
 			>Download saved data</Button
@@ -54,7 +54,7 @@
 		>
 	</div>
 	{#if confirming}
-		<div role="group" aria-label="Confirm workspace reset" class="space-y-2">
+		<div role="group" aria-label="Confirm workspace reset" class="space-y-item">
 			<p class="text-sm">
 				This removes this account’s downloaded content and unsent edits from this device, including
 				other tabs. Download a copy first if you need to keep your local edits. Changes already

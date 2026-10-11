@@ -65,7 +65,7 @@
 	<li>
 		<Button
 			variant="ghost"
-			class="flex h-auto w-full flex-col items-stretch justify-start gap-2 p-2 text-left font-normal whitespace-normal"
+			class="flex h-auto w-full flex-col items-stretch justify-start gap-item p-2 text-left font-normal whitespace-normal"
 			aria-label={label}
 			onclick={choose}
 		>
@@ -92,7 +92,7 @@
 				<Tabs.Trigger value="existing">In this project</Tabs.Trigger>
 			</Tabs.List>
 			<Tabs.Content value="templates">
-				<ul class="grid max-h-112 grid-cols-1 gap-4 overflow-y-auto pr-3 sm:grid-cols-2">
+				<ul class="grid max-h-112 grid-cols-1 gap-row overflow-y-auto pr-3 sm:grid-cols-2">
 					{#each previews as entry (entry.template)}
 						{@render preview(entry.widget, `New ${entry.widget.title}`, () =>
 							pick({ kind: 'template', template: entry.template })
@@ -108,7 +108,7 @@
 						hint="A widget you create from a template appears here."
 					/>
 				{:else}
-					<ul class="grid max-h-112 grid-cols-1 gap-4 overflow-y-auto pr-3 sm:grid-cols-2">
+					<ul class="grid max-h-112 grid-cols-1 gap-row overflow-y-auto pr-3 sm:grid-cols-2">
 						{#each existing as widget (widget.id)}
 							{@render preview(widget, `Show ${widget.title}`, () =>
 								pick({ kind: 'existing', widgetId: widget.id })

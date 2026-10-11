@@ -83,7 +83,7 @@
 	bind:this={menu}
 	role="dialog"
 	aria-label="Spelling and grammar suggestions"
-	class="fixed top-0 left-0 z-30 flex max-w-xs flex-col gap-2 rounded-lg border border-border bg-popover p-2"
+	class="fixed top-0 left-0 z-30 flex max-w-xs flex-col gap-item rounded-lg border border-border bg-popover p-2"
 >
 	<p class="px-1 text-xs text-muted-foreground">{selection.issue.message}</p>
 	{#if selection.issue.suggestions.length > 0}

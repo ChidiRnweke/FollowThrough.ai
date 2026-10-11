@@ -79,7 +79,7 @@
 				hint="Publishing this diagram takes its first snapshot."
 			/>
 		{:else}
-			<div class="grid min-h-0 flex-1 gap-4 sm:grid-cols-[14rem_minmax(0,1fr)]">
+			<div class="grid min-h-0 flex-1 gap-row sm:grid-cols-[14rem_minmax(0,1fr)]">
 				<ul class="min-h-0 divide-y divide-border overflow-y-auto pr-1" aria-label="Versions">
 					{#each revisions as revision (revision.id)}
 						<li>
@@ -107,7 +107,7 @@
 						</li>
 					{/each}
 				</ul>
-				<div class="grid min-h-0 gap-4 overflow-auto md:grid-cols-2">
+				<div class="grid min-h-0 gap-row overflow-auto md:grid-cols-2">
 					<section class="min-w-0">
 						<h3 class="mb-2 text-sm font-medium">Selected publication</h3>
 						{#if selectedFailure}

@@ -225,9 +225,9 @@
 				previews stay unboxed — the hairline belongs to the whole cell, and a
 				card around each one would nest same-weight rectangles.
 			-->
-			<ul class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+			<ul class="grid grid-cols-1 gap-x-6 gap-y-section sm:grid-cols-2 lg:grid-cols-3">
 				{#each diagrams as diagram (diagram.id)}
-					<li class="group flex min-w-0 flex-col gap-2">
+					<li class="group flex min-w-0 flex-col gap-item">
 						<a
 							href="/diagrams/{diagram.id}"
 							class="block overflow-hidden rounded-md ring-1 ring-inset ring-border"

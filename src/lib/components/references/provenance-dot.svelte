@@ -26,7 +26,7 @@
 	>
 		<span class="size-2 rounded-full bg-primary"></span>
 	</HoverCard.Trigger>
-	<HoverCard.Content class="w-72 space-y-1">
+	<HoverCard.Content class="w-72 space-y-bind">
 		<p class="provenance-caption">{provenanceCaption(provenanceOrigin(provenance), sourceTitle)}</p>
 		{#if anchor}
 			<blockquote class="border-l-2 border-border pl-2 text-sm text-muted-foreground">

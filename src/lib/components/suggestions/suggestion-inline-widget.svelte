@@ -40,7 +40,7 @@
 	<div class="suggestion-inline-widget suggestion-inline-widget--{suggestion.kind}">
 		<div class="flex items-start gap-2">
 			<span class="suggestion-inline-widget__glyph select-none" aria-hidden="true">+</span>
-			<div class="min-w-0 flex-1 space-y-0.5">
+			<div class="min-w-0 flex-1 space-y-bind">
 				{#if suggestion.kind === 'todo'}
 					<p class="text-sm">
 						<span class="font-medium">{suggestionKindLabels[suggestion.kind]}:</span>

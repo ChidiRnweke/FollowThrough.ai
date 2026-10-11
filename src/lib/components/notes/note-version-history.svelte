@@ -96,7 +96,7 @@
 				hint="Publishing this note takes its first snapshot."
 			/>
 		{:else}
-			<div class="grid min-h-0 flex-1 gap-4 sm:grid-cols-[14rem_minmax(0,1fr)]">
+			<div class="grid min-h-0 flex-1 gap-row sm:grid-cols-[14rem_minmax(0,1fr)]">
 				<ul class="min-h-0 divide-y divide-border overflow-y-auto pr-1" aria-label="Versions">
 					{#each revisions as revision (revision.id)}
 						<li>

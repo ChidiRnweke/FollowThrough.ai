@@ -179,9 +179,9 @@
 			/>
 		{:else}
 			<!-- A grid of live previews, as the diagram gallery is: the widget is the thing scanned. -->
-			<ul class="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+			<ul class="grid grid-cols-1 gap-x-6 gap-y-section sm:grid-cols-2 lg:grid-cols-3">
 				{#each data.widgets as widget (widget.id)}
-					<li class="group flex min-w-0 flex-col gap-2" data-widget-card={widget.id}>
+					<li class="group flex min-w-0 flex-col gap-item" data-widget-card={widget.id}>
 						<Button
 							variant="ghost"
 							class="block h-48 w-full overflow-hidden rounded-2xl p-0 text-left font-normal whitespace-normal hover:bg-transparent"

@@ -785,7 +785,7 @@
 
 <!-- chisel-ignore structural:inline-style-banned -- The header height is measured at run time and shared with the layout. -->
 <div
-	class="note-measure @container relative mx-auto flex w-full min-w-0 flex-1 flex-col gap-4"
+	class="note-measure @container relative mx-auto flex w-full min-w-0 flex-1 flex-col gap-row"
 	style:--note-header-h="{utilityHeaderHeight}px"
 >
 	<NoteOutlineRail

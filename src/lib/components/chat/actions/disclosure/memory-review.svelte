@@ -46,13 +46,13 @@
 	);
 </script>
 
-<div class="flex flex-col gap-2">
+<div class="flex flex-col gap-item">
 	<!-- What is being proposed leads: it is the thing the reader has to weigh, and the set
 	     underneath is the context for weighing it. -->
 	{#if content}
 		<div class="flex items-start gap-2 rounded-md bg-brand/10 px-2 py-1.5 dark:bg-brand/15">
 			<Icon.Plus class="{CHAT_ROW_ICON} mt-0.5 text-brand" />
-			<div class="flex min-w-0 flex-col gap-0.5">
+			<div class="flex min-w-0 flex-col gap-bind">
 				<p class="provenance-caption text-brand-muted-foreground">{verb}, about {scope}</p>
 				<p class="break-words text-xs text-foreground">{content}</p>
 			</div>
@@ -68,7 +68,7 @@
 	{:else if existing.length === 0}
 		<p class="text-xs text-muted-foreground">Nothing is remembered about {scope} yet.</p>
 	{:else}
-		<div class="flex flex-col gap-1">
+		<div class="flex flex-col gap-bind">
 			<p class="provenance-caption">Already remembered · {existing.length}</p>
 			<ul class="flex flex-col">
 				{#each existing as entry (entry.id)}

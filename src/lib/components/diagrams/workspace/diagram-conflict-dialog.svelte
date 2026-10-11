@@ -46,9 +46,9 @@
 				the reviewed version.
 			</Dialog.Description>
 		</Dialog.Header>
-		<div class="grid min-h-0 flex-1 gap-6 overflow-auto md:grid-cols-3">
+		<div class="grid min-h-0 flex-1 gap-group overflow-auto md:grid-cols-3">
 			{#each [{ label: 'Shared base', document: record.base }, { label: 'Your changes', document: record.local }, { label: 'Latest saved version', document: record.remote.kind === 'found' ? record.remote.value : null }] as comparison (comparison.label)}
-				<section aria-label={comparison.label} class="flex min-h-0 flex-col gap-3">
+				<section aria-label={comparison.label} class="flex min-h-0 flex-col gap-row">
 					<div class="border-b pb-3">
 						<h3 class="text-sm font-medium">{comparison.label}</h3>
 						<p class="text-sm text-muted-foreground">

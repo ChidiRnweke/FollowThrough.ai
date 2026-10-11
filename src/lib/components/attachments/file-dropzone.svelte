@@ -65,7 +65,7 @@
 	}
 </script>
 
-<div class="flex flex-col gap-2">
+<div class="flex flex-col gap-item">
 	{#if file}
 		<!-- Once a file is chosen the zone becomes a statement about it, not an invitation:
 		     a drop target that still says "drag it here" beside a filename reads as unset. -->
@@ -90,7 +90,7 @@
 		     that keeps keyboard and screen-reader behaviour the platform's, and the base
 		     layer already gives a file-input label its pointer. -->
 		<Label
-			class="tactile flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed px-4 py-6 text-center {dragging
+			class="tactile flex min-h-32 cursor-pointer flex-col items-center justify-center gap-item rounded-md border border-dashed px-4 py-6 text-center {dragging
 				? 'border-brand bg-brand/5'
 				: 'border-border hover:border-muted-foreground/40'} {disabled
 				? 'pointer-events-none opacity-50'

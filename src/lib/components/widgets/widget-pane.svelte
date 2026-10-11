@@ -32,7 +32,7 @@
 </script>
 
 <div class="min-h-0 w-full min-w-0 flex-1 overflow-y-auto px-6 pb-10" data-widget-pane={widgetId}>
-	<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 pt-10">
+	<div class="mx-auto flex w-full max-w-3xl flex-col gap-group pt-10">
 		<header class="flex items-baseline gap-3">
 			<h1 class="page-title min-w-0 flex-1 truncate">{widget?.title ?? 'Widget'}</h1>
 			{#if editor.status === 'pending' || editor.status === 'saving'}

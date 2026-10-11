@@ -133,8 +133,8 @@
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<Form class="flex flex-col gap-6" onsubmit={submit}>
-			<div class="flex flex-col gap-1">
+		<Form class="flex flex-col gap-group" onsubmit={submit}>
+			<div class="flex flex-col gap-bind">
 				<Label for="bulk-export-title" class="eyebrow">Name</Label>
 				<Input
 					id="bulk-export-title"
@@ -144,8 +144,8 @@
 				/>
 			</div>
 
-			<div class="flex flex-col gap-4">
-				<div class="flex flex-col gap-1">
+			<div class="flex flex-col gap-row">
+				<div class="flex flex-col gap-bind">
 					<span class="eyebrow">Format</span>
 					<div class="flex items-center gap-2">
 						<Button
@@ -169,7 +169,7 @@
 					</div>
 				</div>
 
-				<div class="flex flex-col gap-1">
+				<div class="flex flex-col gap-bind">
 					<span class="eyebrow">Bundle</span>
 					<div class="flex flex-wrap items-center gap-2">
 						<Button
@@ -194,7 +194,7 @@
 				</div>
 			</div>
 
-			<div class="flex flex-col gap-2">
+			<div class="flex flex-col gap-item">
 				<div class="flex items-baseline justify-between gap-3">
 					<span class="eyebrow">Documents · {selectedEntries.length} selected</span>
 					<Button
@@ -270,7 +270,7 @@
 			</Collapsible.Root>
 
 			{#if result}
-				<div class="flex flex-col items-center gap-2 rounded-md border p-3">
+				<div class="flex flex-col items-center gap-item rounded-md border p-3">
 					<p class="text-sm font-medium">
 						{result.fileCount === 1 ? 'Document ready' : `${result.fileCount} documents ready`}
 					</p>

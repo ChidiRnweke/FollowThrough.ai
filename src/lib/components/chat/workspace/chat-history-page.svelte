@@ -34,8 +34,8 @@
 	}
 </script>
 
-<main class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 md:px-8">
-	<header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+<main class="mx-auto flex w-full max-w-4xl flex-col gap-group px-4 py-8 md:px-8">
+	<header class="flex flex-col gap-group sm:flex-row sm:items-end sm:justify-between">
 		<div>
 			<p class="provenance-caption">Agent workspace</p>
 			<h1 class="page-title">Chats</h1>

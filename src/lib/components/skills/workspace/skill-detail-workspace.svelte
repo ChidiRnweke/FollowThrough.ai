@@ -128,9 +128,9 @@
 
 <WorkspaceWriteReview resources={session.resources} bind:open={metadataReview} />
 <div class="flex w-full min-w-0 flex-1 flex-col px-4 pt-6 pb-6 md:px-8">
-	<div class="note-measure mx-auto flex w-full min-w-0 flex-1 flex-col gap-4">
+	<div class="note-measure mx-auto flex w-full min-w-0 flex-1 flex-col gap-row">
 		<div
-			class="flex min-w-0 flex-col gap-2 sm:min-h-8 sm:flex-row sm:items-center"
+			class="flex min-w-0 flex-col gap-item sm:min-h-8 sm:flex-row sm:items-center"
 			data-testid="note-utility-header"
 		>
 			<div class="group/title flex min-w-0 items-center gap-1 sm:flex-1">
@@ -245,7 +245,7 @@
 		{#key `${noteId}:${editorEpoch}`}
 			<div class="flex flex-1 flex-col">
 				<section class="flex flex-col p-4 md:p-6">
-					<div class="flex flex-col gap-1">
+					<div class="flex flex-col gap-bind">
 						<h2 class="section-title">Describe your skill</h2>
 						<p class="text-sm text-muted-foreground">
 							When should your agent trigger it? This is what the agent reads to decide when to load
@@ -264,7 +264,7 @@
 				</section>
 				<Separator />
 				<section class="flex flex-1 flex-col p-4 md:p-6">
-					<div class="flex flex-col gap-1">
+					<div class="flex flex-col gap-bind">
 						<h2 class="section-title">What should the agent do?</h2>
 						<p class="text-sm text-muted-foreground">
 							Markdown instructions the agent follows when this skill loads.

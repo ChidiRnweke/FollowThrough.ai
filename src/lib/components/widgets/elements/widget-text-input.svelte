@@ -16,7 +16,7 @@
 	const id = $props.id();
 </script>
 
-<div data-slot="widget-text-input" class="flex flex-col gap-1.5">
+<div data-slot="widget-text-input" class="flex flex-col gap-bind">
 	<Label for={id}>{props.label}</Label>
 	<Input
 		{id}

@@ -49,7 +49,7 @@
 		{:else}
 			<div
 				class={cn(
-					'my-2 flex flex-col gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs',
+					'my-2 flex flex-col gap-item rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs',
 					className
 				)}
 				role="alert"

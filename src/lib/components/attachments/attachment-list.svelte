@@ -111,7 +111,7 @@
 
 <!-- The spacing ladder: a 24px step separates adding files from the files
      themselves, and 8px binds the list's heading to its rows. -->
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-group">
 	{#if loadError}<p role="alert">
 			{loadError}
 		</p>{:else if items.length === 0 && !ready}<p role="status">Still downloading attachments.</p>
@@ -148,7 +148,7 @@
 				>Refresh</Button
 			>
 		</div>
-		<section class="flex flex-col gap-2">
+		<section class="flex flex-col gap-item">
 			<h2 class="eyebrow">Files · {items.length}</h2>
 			<!-- Homogeneous rows, so a borderless divided list — never a bordered box
 			     wrapping same-weight rectangles. Bled 12px past the measure so filenames

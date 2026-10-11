@@ -35,7 +35,7 @@
 		strategy: 'absolute',
 		scrollTarget: editor.view.dom.parentElement ?? window
 	}}
-	class="bg-popover h-fit w-fit flex-col items-center gap-1 rounded-lg border shadow-md"
+	class="bg-popover h-fit w-fit flex-col items-center gap-bind rounded-lg border shadow-md"
 >
 	<Textarea
 		bind:value={latex}

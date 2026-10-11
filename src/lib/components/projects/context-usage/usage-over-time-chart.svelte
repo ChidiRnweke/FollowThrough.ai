@@ -23,8 +23,8 @@
 	);
 </script>
 
-<figure class="flex min-w-0 flex-col gap-4">
-	<figcaption class="flex flex-col gap-1">
+<figure class="flex min-w-0 flex-col gap-row">
+	<figcaption class="flex flex-col gap-bind">
 		<span class="section-title">How often the agent used this project</span>
 		<span class="text-sm text-muted-foreground">
 			Each bar is a week: how many times the agent read a note, file, memory entry or skill here.

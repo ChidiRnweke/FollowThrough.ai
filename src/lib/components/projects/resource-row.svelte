@@ -35,7 +35,7 @@
 		>
 			<Icon class="size-4.5" />
 		</span>
-		<span class="flex min-w-0 flex-col gap-0.5">
+		<span class="flex min-w-0 flex-col gap-bind">
 			<!-- A space outranks a document, so it sits one step up the ladder: base
 			     against the documents list's sm. -->
 			<span class="truncate text-base font-medium">{label}</span>

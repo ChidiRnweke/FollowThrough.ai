@@ -66,9 +66,9 @@
 	</Table.Head>
 {/snippet}
 
-<div class="flex flex-col gap-3 md:hidden">
+<div class="flex flex-col gap-row md:hidden">
 	{#each sortedTodos as view (view.todo.id)}
-		<section class="flex flex-col gap-3 rounded-lg border border-border p-4">
+		<section class="flex flex-col gap-row rounded-lg border border-border p-4">
 			<Button
 				variant="link"
 				class="h-auto min-h-11 justify-start whitespace-normal p-0 text-left font-medium text-foreground line-clamp-2"
@@ -76,40 +76,40 @@
 			>
 				{view.todo.title}
 			</Button>
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-				<div class="flex flex-col gap-1">
+			<div class="grid grid-cols-1 gap-row sm:grid-cols-2">
+				<div class="flex flex-col gap-bind">
 					<span class="eyebrow">Status</span><TodoStatusField
 						todoId={view.todo.id}
 						value={view.todo.status}
 					/>
 				</div>
-				<div class="flex flex-col gap-1">
+				<div class="flex flex-col gap-bind">
 					<span class="eyebrow">Priority</span><TodoPriorityField
 						todoId={view.todo.id}
 						value={view.todo.priority}
 					/>
 				</div>
-				<div class="flex flex-col gap-1">
+				<div class="flex flex-col gap-bind">
 					<span class="eyebrow">Category</span><TodoCategoryField
 						todoId={view.todo.id}
 						value={view.todo.category}
 						{categories}
 					/>
 				</div>
-				<div class="flex flex-col gap-1">
+				<div class="flex flex-col gap-bind">
 					<span class="eyebrow">Due</span><TodoDueDateField
 						todoId={view.todo.id}
 						value={view.todo.dueDate}
 					/>
 				</div>
-				<div class="flex flex-col gap-1">
+				<div class="flex flex-col gap-bind">
 					<span class="eyebrow">Responsibility</span><TodoResponsibilityField
 						todoId={view.todo.id}
 						value={view.todo.responsibility}
 					/>
 				</div>
 			</div>
-			<div class="flex flex-col gap-1">
+			<div class="flex flex-col gap-bind">
 				<span class="eyebrow">Source</span>
 				<TodoSourceField
 					todoId={view.todo.id}

@@ -67,7 +67,7 @@
 	</p>{:else if state && state.kind !== 'ready'}<p role="alert">
 		{accessMessage(state, 'todo')}
 	</p>{:else if view}
-	<div class="flex flex-col gap-5 pb-6">
+	<div class="flex flex-col gap-group pb-6">
 		<Field.FieldGroup>
 			<Field.Field>
 				<Field.FieldLabel for="todo-title">Title</Field.FieldLabel>
@@ -98,7 +98,7 @@
 		     the @md/field-group container query (448px), which this panel (max-w-sm,
 		     384px) can never reach — so every row stacked label-above-input. An
 		     explicit grid gives the label/value reading the width actually allows. -->
-		<dl class="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 text-sm">
+		<dl class="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-bind text-sm">
 			<dt class="text-muted-foreground">Status</dt>
 			<dd><TodoStatusField todoId={view.todo.id} value={view.todo.status} quiet /></dd>
 
@@ -152,7 +152,7 @@
 
 		{#if view.anchor}
 			<Separator />
-			<section class="flex flex-col gap-2" aria-labelledby="original-context-heading">
+			<section class="flex flex-col gap-item" aria-labelledby="original-context-heading">
 				<h3 id="original-context-heading" class="section-title">Original context</h3>
 				<blockquote class="border-l-2 border-border pl-3 text-sm text-muted-foreground">
 					{view.anchor.quote}

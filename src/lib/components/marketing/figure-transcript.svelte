@@ -195,7 +195,7 @@
 				<div
 					in:fade={{ duration: 300, delay: 120 }}
 					out:fade={{ duration: 200 }}
-					class="flex flex-col gap-3.5 px-5 py-5"
+					class="flex flex-col gap-row px-5 py-5"
 				>
 					{#each transcript as line, index (index)}
 						<p class="flex gap-3 text-sm leading-relaxed">
@@ -246,12 +246,12 @@
 				</ul>
 			{:else}
 				<div in:fade={{ duration: 300, delay: 120 }} out:fade={{ duration: 200 }}>
-					<div class="entered flex flex-col gap-5 px-5 py-5">
+					<div class="entered flex flex-col gap-group px-5 py-5">
 						<!-- chisel-ignore design-system:no-raw-font-family -- Marketing figure display heading sets Newsreader directly; page-title is app chrome capped at text-3xl. -->
 						<h3 class="font-serif text-2xl font-medium tracking-tight">Client brief standup</h3>
-						<div class="flex flex-col gap-2">
+						<div class="flex flex-col gap-item">
 							<p class="eyebrow">Decisions</p>
-							<ul class="flex flex-col gap-1.5 text-sm leading-relaxed">
+							<ul class="flex flex-col gap-bind text-sm leading-relaxed">
 								<li>The brief reaches marketing by <Carried derived>Friday 31 July</Carried>.</li>
 								<li>
 									Examples stay free of personal data, <Carried>as in the previous round</Carried>.
@@ -259,9 +259,9 @@
 								<li><Carried derived>Ana owns the brief</Carried>.</li>
 							</ul>
 						</div>
-						<div class="flex flex-col gap-2">
+						<div class="flex flex-col gap-item">
 							<p class="eyebrow">Open</p>
-							<ul class="flex flex-col gap-1.5 text-sm leading-relaxed">
+							<ul class="flex flex-col gap-bind text-sm leading-relaxed">
 								<li><Carried>The deck has no owner</Carried>.</li>
 							</ul>
 						</div>
@@ -277,7 +277,7 @@
 									>
 										<Icon.Check class="size-3 text-transparent" />
 									</span>
-									<div class="flex min-w-0 flex-col gap-2">
+									<div class="flex min-w-0 flex-col gap-item">
 										<span class="text-sm font-medium">Send the client brief to marketing</span>
 										<div class="flex flex-wrap items-center gap-1.5">
 											<Badge variant="brand">Acme rebrand</Badge>
@@ -296,7 +296,7 @@
 									>
 										<Icon.Check class="size-3 text-transparent" />
 									</span>
-									<div class="flex min-w-0 flex-col gap-2">
+									<div class="flex min-w-0 flex-col gap-item">
 										<span class="text-sm font-medium">Find an owner for the deck</span>
 										<div class="flex flex-wrap items-center gap-1.5">
 											<Badge variant="brand">Acme rebrand</Badge>

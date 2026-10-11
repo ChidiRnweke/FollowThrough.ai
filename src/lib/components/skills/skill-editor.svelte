@@ -68,7 +68,7 @@
 		</Tiptap>
 	</div>
 {:else}
-	<div class="space-y-3">
+	<div class="space-y-row">
 		<Skeleton class="h-5 w-3/4" />
 		<Skeleton class="h-5 w-full" />
 		{#if !compact}

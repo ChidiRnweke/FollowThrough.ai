@@ -511,7 +511,7 @@
 			</div>
 			{#if showAiRevision && onRevise}
 				<div class="flex items-start gap-2 border-b bg-muted/20 p-3">
-					<div class="min-w-0 flex-1 flex flex-col gap-1.5">
+					<div class="min-w-0 flex-1 flex flex-col gap-bind">
 						<Textarea
 							bind:value={revisionInstruction}
 							onkeydown={handleRevisionKeydown}
@@ -590,7 +590,7 @@
 							ontouchcancel={handlePreviewTouchEnd}
 						>
 							{#if error}
-								<div class="flex flex-col items-center gap-2 text-center max-w-xs">
+								<div class="flex flex-col items-center gap-item text-center max-w-xs">
 									<div class="bg-destructive/10 flex size-8 items-center justify-center rounded-lg">
 										<Icon.Warning class="text-destructive size-4" />
 									</div>
@@ -603,7 +603,7 @@
 									</p>
 								</div>
 							{:else if isRendering && !previewContainer?.innerHTML}
-								<div class="flex flex-col items-center gap-2">
+								<div class="flex flex-col items-center gap-item">
 									<div
 										class="size-5 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-primary"
 									></div>

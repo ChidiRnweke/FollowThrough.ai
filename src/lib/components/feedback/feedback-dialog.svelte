@@ -46,7 +46,7 @@
 			<Dialog.Title>Send feedback</Dialog.Title>
 			<Dialog.Description>Bug, suggestion, or anything else.</Dialog.Description>
 		</Dialog.Header>
-		<Form class="flex flex-col gap-4" onsubmit={submit}>
+		<Form class="flex flex-col gap-row" onsubmit={submit}>
 			<Textarea
 				bind:value={body}
 				placeholder="What's on your mind?"

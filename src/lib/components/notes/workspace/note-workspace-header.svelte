@@ -94,7 +94,7 @@
 {/snippet}
 
 <div
-	class="sticky top-0 z-20 flex min-w-0 flex-col gap-2 border-b border-border bg-background pb-2 @[48rem]:min-h-8 @[48rem]:flex-row @[48rem]:items-center dark:bg-card"
+	class="sticky top-0 z-20 flex min-w-0 flex-col gap-item border-b border-border bg-background pb-2 @[48rem]:min-h-8 @[48rem]:flex-row @[48rem]:items-center dark:bg-card"
 	data-testid="note-utility-header"
 	bind:clientHeight={height}
 >

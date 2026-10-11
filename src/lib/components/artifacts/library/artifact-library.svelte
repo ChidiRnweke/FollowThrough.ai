@@ -198,7 +198,7 @@
 							{:else}
 								<Icon.Export class="shrink-0" />
 							{/if}
-							<div class="flex min-w-0 flex-col gap-0.5">
+							<div class="flex min-w-0 flex-col gap-bind">
 								<span class="truncate text-sm font-medium">{artifact.title}</span>
 								<span class="text-xs text-muted-foreground">
 									{artifact.sourceNoteIds.length} note{artifact.sourceNoteIds.length !== 1
@@ -278,7 +278,7 @@
 				{/each}
 			</ul>
 			{#if data.total > data.pageSize}
-				<div class="mt-4 flex flex-col items-center gap-2">
+				<div class="mt-4 flex flex-col items-center gap-item">
 					<p class="text-sm text-muted-foreground">
 						{data.total}
 						{data.query ? 'matching ' : ''}artifacts

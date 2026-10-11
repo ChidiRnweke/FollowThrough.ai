@@ -6,7 +6,7 @@
 </script>
 
 <div class="flex min-h-screen items-center justify-center bg-background">
-	<div class="mx-auto max-w-md space-y-6 text-center">
+	<div class="mx-auto max-w-md space-y-group text-center">
 		<h1 class="text-2xl font-bold">Account Pending Approval</h1>
 		<p class="text-muted-foreground">
 			Hi {data.user.displayName}, your account has been created but is awaiting administrator

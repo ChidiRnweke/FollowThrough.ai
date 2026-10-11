@@ -115,7 +115,7 @@
 {:else if form.kind === 'loading'}
 	<p role="status" class="text-sm text-muted-foreground">Loading preferences…</p>
 {:else}
-	<Form onsubmit={save} class="flex max-w-3xl flex-col gap-6">
+	<Form onsubmit={save} class="flex max-w-3xl flex-col gap-group">
 		<!-- The preamble carries the submit action on its row, like the scope row on the
 	     tools panel, and the pb-2 steps the row out past the gap to the fields below. -->
 		<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-2">

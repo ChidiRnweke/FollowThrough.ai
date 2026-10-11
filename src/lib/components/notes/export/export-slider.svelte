@@ -38,7 +38,7 @@
 		of === min ? '' : of === max ? '-translate-x-full' : '-translate-x-1/2';
 </script>
 
-<div class="flex flex-col gap-1">
+<div class="flex flex-col gap-bind">
 	<!-- min-h-8 reserves two text-xs lines so a wrapped summary never shifts the track. -->
 	<div class="flex min-h-8 items-start gap-2 {showLabel ? 'justify-between' : 'justify-start'}">
 		{#if showLabel}

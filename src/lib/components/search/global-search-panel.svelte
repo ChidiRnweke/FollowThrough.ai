@@ -115,7 +115,7 @@
 	onMount(() => rightPanel.registerSearchInputFocus(() => searchInput?.focus()));
 </script>
 
-<div class="flex h-full min-h-0 flex-col gap-6">
+<div class="flex h-full min-h-0 flex-col gap-group">
 	<!--
 		Search and replace are separate groups, and the 24px ladder step between them says
 		so (DESIGN_SYSTEM: 8px inside a group, 24px between groups). Replace stays visible —
@@ -199,7 +199,7 @@
 			</Tip>
 		{/if}
 	</div>
-	<div class="flex flex-col gap-2">
+	<div class="flex flex-col gap-item">
 		<div class="flex items-center gap-1">
 			<Input
 				value={globalSearch.replacement}
@@ -292,7 +292,7 @@
 					<!-- The gap between documents is the grouping signal: clearly wider than the
 					     snippet spacing inside one document, no dividers. -->
 					<ul
-						class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200 ease-(--ease-standard) mt-1 flex flex-col gap-3"
+						class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200 ease-(--ease-standard) mt-1 flex flex-col gap-row"
 					>
 						{#each hits as hit (hit.noteId)}
 							{@const collapsed = globalSearch.collapsedNoteIds.has(hit.noteId)}
