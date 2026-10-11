@@ -111,7 +111,7 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		suggestionCreator: suggestions.creator,
 		suggestionAccepter: suggestions.accepter,
 		suggestionEffects: suggestions.effects,
-		todoCreator: todo.services.creator,
+		todoLibrary: todo.catalog,
 		trustPolicyEvaluator: trust
 	});
 	const agent = new AgentSdkHarness(

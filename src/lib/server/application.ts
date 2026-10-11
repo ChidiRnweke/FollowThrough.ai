@@ -173,7 +173,7 @@ export function createApplication(
 	const provenanceRepository = noteCapability.provenanceRepository;
 	const notes = noteCapability.services;
 	const provenance = noteCapability.provenance;
-	const todos = todoCapability.services;
+	const todos = todoCapability.catalog;
 	const knowledgeSearch = createKnowledgeSearchCapability(actor, {
 		db,
 		transactionRunner,
@@ -301,16 +301,11 @@ export function createApplication(
 			todoBatchReceipts: todoCapability.batchReceipts,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			todoLister: todos.lister,
-			todoContextReader: todos.context,
-			todoReader: todos.reader,
-			todoEditor: todos.editor,
-			todoDeleter: todos.deleter,
+			todoLibrary: todos,
 			selectionOrigins: noteCapability.selectionOrigins,
 			promiseExtractor: todoCapability.promiseExtractor,
 			suggestionCreator: suggestions.creator,
 			trustPolicyEvaluator: trust,
-			todoCreator: todos.creator,
 			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
 			transactionRunner,
@@ -389,7 +384,7 @@ export function createApplication(
 			suggestionFinder: suggestions.finder,
 			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
-			todoCreator: todos.creator,
+			todoCreator: todos,
 			relationshipCreator: relationships.creator,
 			referenceCreator: references.creator,
 			memoryChanges: memory.changes,
@@ -487,7 +482,7 @@ export function createApplication(
 			reader: attachmentCapability.reader,
 			storage: attachmentCapability.storage,
 			lifecycle: attachmentCapability.lifecycle,
-			todoReader: todos.reader,
+			todoReader: todos,
 			transactionRunner,
 			attachmentIndexer: knowledge
 		},
@@ -508,7 +503,7 @@ export function createApplication(
 			fetchImage: deliverables.fetchImage,
 			prepareExport: deliverables.prepareExport,
 			widgetReader: widgets.reader,
-			todoLister: todos.lister,
+			todoLister: todos,
 			noteLister: notes.library,
 			diagramReader: diagrams,
 			diagramRenderer: deliverables.diagramRenderer,
@@ -562,9 +557,9 @@ export function createApplication(
 			transactionRunner,
 			suggestionLister: suggestions.reader,
 			suggestionExpirer: suggestions.expirer,
-			todoLister: todos.lister,
-			waitingOnFinder: todos.waitingOn,
-			todoContextReader: todos.context
+			todoLister: todos,
+			waitingOnFinder: todos,
+			todoContextReader: todos
 		},
 		notes: {
 			agentFiles: agentFilesCapability.references,
@@ -594,8 +589,8 @@ export function createApplication(
 			noteLinkReconciler: relationships.reconciler,
 			referenceReader: references.reader,
 			diagramLister: diagrams,
-			todoLister: todos.lister,
-			todoContextReader: todos.context,
+			todoLister: todos,
+			todoContextReader: todos,
 			suggestionReader: suggestions.reader,
 			suggestionExpirer: suggestions.expirer,
 			noteAuthoring: notes.authoring,

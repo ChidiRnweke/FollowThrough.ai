@@ -24,7 +24,7 @@ const editor = (
 	const { database, transactionRunner } = createTransactionContext(connection.db);
 	const projects = new ProjectRecords(actor, database);
 	const notes = createNotesCapability(actor, { db: database, projects });
-	const { services: catalog } = createTodosCapability(actor, {
+	const { catalog } = createTodosCapability(actor, {
 		db: database,
 		projects,
 		notes: notes.repository,
@@ -40,8 +40,7 @@ const editor = (
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),
 			todoCreationRules: new TodoEditingRulesService(),
-			todoEditor: catalog.editor,
-			todoContextReader: catalog.context,
+			todoLibrary: catalog,
 			transactionRunner
 		})
 	);

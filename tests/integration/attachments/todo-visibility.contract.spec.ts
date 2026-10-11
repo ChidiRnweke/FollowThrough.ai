@@ -6,7 +6,7 @@ import {
 	type AttachmentsDependencies
 } from '$lib/server/controllers/attachments/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
+import { createTodoCatalog } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
@@ -43,7 +43,7 @@ const setup = async (identity: number) => {
 		attachment: { ...view.attachment, projectId: seeded.project.id }
 	});
 	const controllerFor = (actor: ActorContext) => {
-		const catalog = createTodoServices(
+		const catalog = createTodoCatalog(
 			actor,
 			new TodoRecords(actor, database),
 			new ProjectRecords(actor, database),
@@ -58,7 +58,7 @@ const setup = async (identity: number) => {
 				reader: attachments,
 				lifecycle: attachments,
 				storage: new InMemoryAttachmentStorage(),
-				todoReader: catalog.reader,
+				todoReader: catalog,
 				transactionRunner
 			})
 		);

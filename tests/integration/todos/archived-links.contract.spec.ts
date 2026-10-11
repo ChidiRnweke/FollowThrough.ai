@@ -1,6 +1,6 @@
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
+import { createTodoCatalog } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
@@ -19,7 +19,7 @@ const archivedLink = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const records = new TodoRecords(seeded.owner, database);
-	const catalog = createTodoServices(
+	const catalog = createTodoCatalog(
 		seeded.owner,
 		records,
 		new ProjectRecords(seeded.owner, database),
@@ -36,9 +36,7 @@ const archivedLink = async (suffix: string) => {
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),
 			todoCreationRules: new TodoEditingRulesService(),
-			todoCreator: catalog.creator,
-			todoEditor: catalog.editor,
-			todoContextReader: catalog.context,
+			todoLibrary: catalog,
 			transactionRunner
 		})
 	);
