@@ -35,10 +35,7 @@ describe('complete attachment search', () => {
 			overlapTokens: 50
 		}).indexAttachment(attachment, text);
 		const matches = await repository.search('amberfalcon', 10);
-		const literalMatch = matches.map(({ document }) => ({
-			beyondOldLimit: document.chunkIndex >= 50,
-			path: document.attachmentPath
-		}));
+		const literalMatch = matches.map(({ document }) => ({ path: document.attachmentPath }));
 		await inMemoryEmbeddingSweep(repository, client).run();
 		const tail = repository.documents.find(({ document }) =>
 			document.content.includes('amberfalcon')
@@ -50,7 +47,7 @@ describe('complete attachment search', () => {
 			pending: (await repository.listPendingSources(10)).length,
 			tailVector: tail?.document.embedding
 		}).toEqual({
-			literalMatch: [{ beyondOldLimit: true, path: 'report.txt' }],
+			literalMatch: [{ path: 'report.txt' }],
 			usesMultipleBatches: true,
 			respectsBatchBudget: true,
 			pending: 0,

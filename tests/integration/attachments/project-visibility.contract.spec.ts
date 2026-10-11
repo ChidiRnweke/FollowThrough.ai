@@ -165,3 +165,18 @@ it('still deletes reclaimed upload reservations in archived projects', async () 
 			.where(eq(attachmentUploads.id, pendingUpload.id))
 	).toEqual([]);
 });
+
+// ADR 0017: a reserved upload is not a file until it is completed.
+it('lists only completed attachments while another upload is still pending', async () => {
+	const { note, records, reader, attachment, pendingUpload } = await setup('34090');
+	expect({
+		forNote: (await records.list(note.id)).map((view) => view.attachment.id),
+		readPending: await reader.get(pendingUpload.id as unknown as AttachmentId).then(
+			() => 'found',
+			(error: Error) => error.message
+		)
+	}).toEqual({
+		forNote: [attachment.attachment.id],
+		readPending: 'Attachment was not found'
+	});
+});
