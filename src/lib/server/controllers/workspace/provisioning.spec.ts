@@ -27,7 +27,7 @@ it('returns the newly provisioned Inbox together with its skills on the first sh
 			memoryPresentation: new MemoryPresentationService(),
 			...state,
 			userReader: new UserDirectory(users),
-			projectLister: createProjectServices(testActor(), state.projects, state.projects).lister,
+			projectLister: createProjectServices(testActor(), state.projects, state.projects).catalog,
 			noteTreeReader: createNoteServices(
 				testActor(),
 				state.notes,

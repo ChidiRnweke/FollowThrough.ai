@@ -314,7 +314,7 @@ export function createApplication(
 			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
 			transactionRunner,
-			projectLister: projects.lister,
+			projectLister: projects.catalog,
 			markdownToContent: deliverables.markdownToContent,
 			exportPreparer: deliverables.prepareExport,
 			pdfGenerator: deliverables.pdfGenerator,
@@ -368,7 +368,7 @@ export function createApplication(
 		},
 		diagramStudio: {
 			projectChoice: projects.choice,
-			projectLister: projects.lister,
+			projectLister: projects.catalog,
 			diagramRules: diagramCapability.rules,
 			diagramSourceNotes: notes.reader,
 			syncMutations: synchronization.mutations,
@@ -455,7 +455,7 @@ export function createApplication(
 			contextFiles: agentFilesCapability.references,
 			builtInSkills: skillCapability.builtIns,
 			contextMemory: memory.lister,
-			contextProjects: projects.reader,
+			contextProjects: projects.catalog,
 			provenance
 		},
 		agentSettings: {
@@ -537,7 +537,7 @@ export function createApplication(
 		skills: {
 			markdown: noteCapability.markdown,
 			projectChoice: projects.choice,
-			projectLister: projects.lister,
+			projectLister: projects.catalog,
 			skillPortability: skillCapability.portability,
 			skillMetadataEditing: skillCapability.metadataEditing,
 			noteReferences: noteCapability.references,
@@ -572,7 +572,7 @@ export function createApplication(
 			writeRecovery: synchronization.mutations,
 			syncObjects: synchronization.objectReader,
 			userReader: identity.userReader,
-			projectLister: projects.lister,
+			projectLister: projects.catalog,
 			noteTreeReader: notes.treeReader,
 			skillFinder: skills.finder,
 			builtInSkills: skillCapability.builtIns,
@@ -586,7 +586,7 @@ export function createApplication(
 		notes: {
 			agentFiles: agentFilesCapability.references,
 			projectChoice: projects.choice,
-			projectLister: projects.lister,
+			projectLister: projects.catalog,
 			todoPresentation: todoCapability.presentation,
 			textSearch: noteCapability.textSearch,
 			sections: noteCapability.sections,
@@ -608,7 +608,7 @@ export function createApplication(
 			noteTextSearcher: notes.textSearcher,
 			noteCreation: notes.creator,
 			noteSectionNumbering: notes.sectionNumbering,
-			projectReader: projects.reader,
+			projectReader: projects.catalog,
 			userPreferences: identity.userPreferences,
 			relationshipFinder: relationships.finder,
 			backlinkContextReader: relationships.contexts,
@@ -658,7 +658,7 @@ export function createApplication(
 		},
 		widgets: {
 			projectChoice: projects.choice,
-			projectLister: projects.lister,
+			projectLister: projects.catalog,
 			catalogReader: widgets.catalogReader,
 			widgetEditingRules: widgets.widgetEditingRules,
 			widgetPatches: widgets.widgetPatches,
@@ -681,14 +681,8 @@ export function createApplication(
 			placement: projects.placement,
 			details: projects.details,
 			presentation: projects.presentation,
-			projectLifecycle: projects.lifecycle,
-			projectCreator: projects.creator,
-			projectReader: projects.reader,
-			projectLister: projects.lister,
-			projectEditor: projects.editor,
-			projectTreeReader: projects.treeReader,
+			projects: projects.catalog,
 			noteCreation: notes.creator,
-			entryWriter: projects.treeWriter,
 			transactionRunner
 		},
 		retrieval: {

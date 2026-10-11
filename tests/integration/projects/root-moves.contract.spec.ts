@@ -14,7 +14,7 @@ import { NotePresentationService } from '$lib/services/notes/presentation';
 import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteTextSearchService } from '$lib/services/notes/text-search';
-import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectRules } from '$lib/services/projects/rules';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { ReferencePresentationService } from '$lib/services/references/presentation';
@@ -58,13 +58,10 @@ it('keeps a folder at the project root after reloading a completed move', async 
 		capabilityDependencies<ProjectsDependencies>({
 			...agentToolResultsFixture(),
 			noteCreationRules: new NoteLifecycleRulesService(),
-			details: new ProjectDetailService(),
+			details: new ProjectRules(),
 			presentation: new ProjectTreePresentationService(),
 			placement: catalog.placement,
-			projectLifecycle: catalog.lifecycle,
-			projectReader: catalog.reader,
-			projectTreeReader: catalog.treeReader,
-			entryWriter: catalog.treeWriter,
+			projects: catalog.catalog,
 			transactionRunner
 		})
 	);

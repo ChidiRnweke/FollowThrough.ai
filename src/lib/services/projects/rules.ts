@@ -1,9 +1,31 @@
-import type { MoveProjectEntryInput, ProjectEntryReference } from '$lib/models/projects';
+import { ProjectChoiceRequiredError } from '$lib/errors';
 import type { NoteId } from '$lib/models/notes';
+import type {
+	MoveProjectEntryInput,
+	Project,
+	ProjectDetails,
+	ProjectEntryReference
+} from '$lib/models/projects';
+
+export interface ProjectChoiceRules {
+	/** Fails an operation that needs a project, naming every project the caller can choose. */
+	requireChoice(projects: readonly Project[], action: string): never;
+}
+
+type ProjectDetailDecision =
+	{ kind: 'invalid'; message: string } | ({ kind: 'details' } & ProjectDetails);
+
+export interface ProjectDetailRules {
+	decideDetails(input: {
+		readonly name: string;
+		readonly description?: string;
+	}): ProjectDetailDecision;
+}
+
+type PlacementEntry = Pick<ProjectEntryReference, 'id' | 'parentId' | 'kind' | 'position'>;
+
 /** A move rewrites both sibling lists while preserving their existing relative order. */
-function decideProjectEntryMove<
-	Entry extends Pick<ProjectEntryReference, 'id' | 'parentId' | 'kind' | 'position'>
->(
+function decideProjectEntryMove<Entry extends PlacementEntry>(
 	input: MoveProjectEntryInput,
 	entries: readonly Entry[]
 ):
@@ -92,13 +114,33 @@ function decideProjectEntryMove<
 }
 
 export interface ProjectPlacement {
-	decide<Entry extends Pick<ProjectEntryReference, 'id' | 'parentId' | 'kind' | 'position'>>(
+	decideMove<Entry extends PlacementEntry>(
 		input: MoveProjectEntryInput,
 		entries: readonly Entry[]
 	): ReturnType<typeof decideProjectEntryMove<Entry>>;
 }
-export class ProjectPlacementService implements ProjectPlacement {
-	decide<Entry extends Pick<ProjectEntryReference, 'id' | 'parentId' | 'kind' | 'position'>>(
+
+/** Project rules shared by browser and server: choosing, naming and placing. */
+export class ProjectRules implements ProjectChoiceRules, ProjectDetailRules, ProjectPlacement {
+	requireChoice(projects: readonly Project[], action: string): never {
+		// One project is still a choice: picking it silently would write somewhere the caller never named.
+		throw new ProjectChoiceRequiredError(
+			action,
+			projects.map((project) => ({ id: project.id, name: project.name }))
+		);
+	}
+
+	decideDetails(input: {
+		readonly name: string;
+		readonly description?: string;
+	}): ProjectDetailDecision {
+		const name = input.name.trim();
+		return name
+			? { kind: 'details', name, description: input.description?.trim() || undefined }
+			: { kind: 'invalid', message: 'Project name is required' };
+	}
+
+	decideMove<Entry extends PlacementEntry>(
 		input: MoveProjectEntryInput,
 		entries: readonly Entry[]
 	) {

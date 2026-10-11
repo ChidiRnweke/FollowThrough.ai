@@ -12,7 +12,7 @@ import { NotePresentationService } from '$lib/services/notes/presentation';
 import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteTextSearchService } from '$lib/services/notes/text-search';
-import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectRules } from '$lib/services/projects/rules';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { ReferencePresentationService } from '$lib/services/references/presentation';
@@ -57,7 +57,7 @@ export const noteCreationControllers = (
 		capabilityDependencies<ProjectsDependencies>({
 			...agentToolResultsFixture(),
 			noteCreationRules: new NoteLifecycleRulesService(),
-			details: new ProjectDetailService(),
+			details: new ProjectRules(),
 			presentation: new ProjectTreePresentationService(),
 			noteCreation: catalog,
 			transactionRunner

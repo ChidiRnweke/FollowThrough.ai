@@ -17,7 +17,7 @@ import type {
 	NoteTrashRules
 } from '$lib/services/notes/lifecycle';
 import type { NotePresentation } from '$lib/services/notes/presentation';
-import type { ProjectChoiceRules } from '$lib/services/projects/choice';
+import type { ProjectChoiceRules } from '$lib/services/projects/rules';
 import type { ProvenancePresentation } from '$lib/services/provenance/presentation';
 import type { ReferencePresentation } from '$lib/services/references/presentation';
 import type { BacklinkPresentation } from '$lib/services/relationships/presentation';

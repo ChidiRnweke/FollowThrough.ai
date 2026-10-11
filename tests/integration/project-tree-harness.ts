@@ -14,7 +14,7 @@ import { NoteEditingService as NoteEditingRulesService } from '$lib/services/not
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NotePresentationService } from '$lib/services/notes/presentation';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
-import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectRules } from '$lib/services/projects/rules';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { vi } from 'vitest';
 import postgres from 'postgres';
@@ -52,12 +52,10 @@ export const treeControllers = (
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<ProjectsDependencies>({
 				noteCreationRules: new NoteLifecycleRulesService(),
-				details: new ProjectDetailService(),
+				details: new ProjectRules(),
 				presentation: new ProjectTreePresentationService(),
 				placement: catalog.placement,
-				projectLifecycle: catalog.lifecycle,
-				entryWriter: catalog.treeWriter,
-				projectEditor: catalog.editor,
+				projects: catalog.catalog,
 				noteCreation: notes.creator,
 				transactionRunner
 			})

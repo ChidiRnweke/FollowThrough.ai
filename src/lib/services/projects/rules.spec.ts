@@ -1,11 +1,11 @@
 import { expect, it } from 'vitest';
 import { ProjectChoiceRequiredError } from '$lib/errors';
 import { projectBuilder, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { ProjectChoiceService } from './choice';
+import { ProjectRules } from './rules';
 
-const choice = (projects: Parameters<ProjectChoiceService['requireChoice']>[0], action: string) => {
+const choice = (projects: Parameters<ProjectRules['requireChoice']>[0], action: string) => {
 	try {
-		new ProjectChoiceService().requireChoice(projects, action);
+		new ProjectRules().requireChoice(projects, action);
 	} catch (error) {
 		if (error instanceof ProjectChoiceRequiredError) return error;
 		throw error;

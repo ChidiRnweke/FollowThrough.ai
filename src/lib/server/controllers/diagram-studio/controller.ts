@@ -6,7 +6,7 @@ import type { DiagramRevisionChange } from '$lib/models/diagrams';
 import type { IconSearch } from '$lib/server/services/diagrams/icons';
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
 import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
-import type { ProjectChoiceRules } from '$lib/services/projects/choice';
+import type { ProjectChoiceRules } from '$lib/services/projects/rules';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';

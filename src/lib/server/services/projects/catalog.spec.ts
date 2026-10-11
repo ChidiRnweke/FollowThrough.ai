@@ -12,16 +12,16 @@ const setup = () => {
 describe('Project management invariants', () => {
 	it('hides a project tree after the project is archived', async () => {
 		const { service } = setup();
-		await service.lifecycle.archive(projectBuilder().id);
-		await expect(service.treeReader.readEntries(projectBuilder().id)).rejects.toMatchObject({
+		await service.catalog.archive(projectBuilder().id);
+		await expect(service.catalog.readEntries(projectBuilder().id)).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});
 
 	it('allows an archived project name to be reused', async () => {
 		const { service } = setup();
-		await service.lifecycle.archive(projectBuilder().id);
-		const replacement = await service.creator.create({
+		await service.catalog.archive(projectBuilder().id);
+		const replacement = await service.catalog.create({
 			name: projectBuilder().name,
 			description: undefined
 		});
@@ -30,9 +30,9 @@ describe('Project management invariants', () => {
 
 	it('rejects renaming to another active project name', async () => {
 		const { service } = setup();
-		await service.creator.create({ name: 'Other', description: undefined });
+		await service.catalog.create({ name: 'Other', description: undefined });
 		await expect(
-			service.editor.rename({
+			service.catalog.rename({
 				projectId: projectBuilder().id,
 				name: 'other',
 				description: undefined

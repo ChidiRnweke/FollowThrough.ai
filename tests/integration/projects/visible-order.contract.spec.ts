@@ -7,7 +7,7 @@ import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
-import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectRules } from '$lib/services/projects/rules';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
@@ -36,13 +36,10 @@ const setup = async (suffix: string) => {
 		capabilityDependencies<ProjectsDependencies>({
 			...agentToolResultsFixture(),
 			noteCreationRules: new NoteLifecycleRulesService(),
-			details: new ProjectDetailService(),
+			details: new ProjectRules(),
 			presentation: new ProjectTreePresentationService(),
 			placement: catalog.placement,
-			projectLifecycle: catalog.lifecycle,
-			projectReader: catalog.reader,
-			projectTreeReader: catalog.treeReader,
-			entryWriter: catalog.treeWriter,
+			projects: catalog.catalog,
 			transactionRunner: tx.transactionRunner
 		})
 	);

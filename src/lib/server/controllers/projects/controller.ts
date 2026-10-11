@@ -2,8 +2,7 @@ import { NotFoundError, ValidationError } from '$lib/errors';
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteCreator } from '$lib/server/services/notes/catalog';
 import type { NoteCreationRules } from '$lib/services/notes/lifecycle';
-import type { ProjectDetailRules } from '$lib/services/projects/details';
-import type { ProjectPlacement } from '$lib/services/projects/placement';
+import type { ProjectDetailRules, ProjectPlacement } from '$lib/services/projects/rules';
 import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
@@ -30,15 +29,7 @@ import type {
 	ProjectMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type {
-	ProjectCreator,
-	ProjectEditor,
-	ProjectLifecycle,
-	ProjectLister,
-	ProjectReader,
-	ProjectTreeReader,
-	ProjectTreeWriter
-} from '$lib/server/services/projects/catalog';
+import type { ProjectLibrary } from '$lib/server/services/projects/catalog';
 import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /**
@@ -72,17 +63,11 @@ export interface ProjectsDependencies {
 	readonly noteCreationRules: NoteCreationRules;
 	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
-	projectCreator: ProjectCreator;
-	projectReader: ProjectReader;
-	projectLister: ProjectLister;
-	projectEditor: ProjectEditor;
-	projectLifecycle: ProjectLifecycle;
+	projects: ProjectLibrary;
 	placement: ProjectPlacement;
 	details: ProjectDetailRules;
 	presentation: ProjectTreePresentation;
-	projectTreeReader: ProjectTreeReader;
 	noteCreation: NoteCreator;
-	entryWriter: ProjectTreeWriter;
 	transactionRunner: TransactionRunner;
 }
 
@@ -136,22 +121,22 @@ export class Projects implements ProjectsController {
 	) {}
 
 	async list(): Promise<ListProjectsOutput> {
-		return { projects: await this.dependencies.projectLister.list() };
+		return { projects: await this.dependencies.projects.list() };
 	}
 
 	async get(input: GetProjectInput): Promise<GetProjectOutput> {
 		const [project, entries] = await Promise.all([
-			this.dependencies.projectReader.get(input.projectId),
-			this.dependencies.projectTreeReader.readEntries(input.projectId)
+			this.dependencies.projects.get(input.projectId),
+			this.dependencies.projects.readEntries(input.projectId)
 		]);
 		return { project, tree: this.dependencies.presentation.assemble(entries) };
 	}
 
 	async create(input: CreateProjectInput): Promise<CreateProjectOutput> {
-		const details = this.dependencies.details.decide(input);
+		const details = this.dependencies.details.decideDetails(input);
 		if (details.kind === 'invalid') throw new ValidationError(details.message);
 		return {
-			project: await this.dependencies.projectCreator.create({
+			project: await this.dependencies.projects.create({
 				...input,
 				name: details.name,
 				description: details.description
@@ -160,10 +145,10 @@ export class Projects implements ProjectsController {
 	}
 
 	async rename(input: RenameProjectInput): Promise<RenameProjectOutput> {
-		const details = this.dependencies.details.decide(input);
+		const details = this.dependencies.details.decideDetails(input);
 		if (details.kind === 'invalid') throw new ValidationError(details.message);
 		return {
-			project: await this.dependencies.projectEditor.rename({
+			project: await this.dependencies.projects.rename({
 				projectId: input.projectId,
 				name: details.name,
 				...(input.description !== undefined ? { description: details.description ?? null } : {})
@@ -172,14 +157,14 @@ export class Projects implements ProjectsController {
 	}
 
 	async archive(input: ArchiveProjectInput): Promise<ArchiveProjectOutput> {
-		return { project: await this.dependencies.projectLifecycle.archive(input.projectId) };
+		return { project: await this.dependencies.projects.archive(input.projectId) };
 	}
 
 	async setSectionNumberingDefault(
 		input: SetProjectSectionNumberingInput
 	): Promise<SetProjectSectionNumberingOutput> {
 		return {
-			project: await this.dependencies.projectEditor.setSectionNumberingDefault(input)
+			project: await this.dependencies.projects.setSectionNumberingDefault(input)
 		};
 	}
 
@@ -206,13 +191,13 @@ export class Projects implements ProjectsController {
 
 	async move(input: MoveProjectEntryInput): Promise<MoveProjectEntryOutput<Note>> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const entries = await this.dependencies.entryWriter.readForMove(input.projectId);
-			const decision = this.dependencies.placement.decide(input, entries);
+			const entries = await this.dependencies.projects.readForMove(input.projectId);
+			const decision = this.dependencies.placement.decideMove(input, entries);
 			if (decision.kind === 'invalid') {
 				if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
 				throw new ValidationError(decision.message);
 			}
-			await this.dependencies.entryWriter.persistOrder(decision.changes);
+			await this.dependencies.projects.persistOrder(decision.changes);
 			return {
 				entry: { ...decision.entry, parentId: decision.parentId, position: decision.position }
 			};

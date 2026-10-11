@@ -15,7 +15,7 @@ export const agentProjectsFixture = (projects: Project[] = []) => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
 			...agentToolResultsFixture(),
-			projectLister: services.lister
+			projects: services.catalog
 		})
 	);
 	const factory = capabilityDependencies<ControllerFactory>({ projects: () => controller });

@@ -24,7 +24,7 @@ import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { NoteLifecycleService } from '$lib/services/notes/lifecycle';
 import { NoteEditingService } from '$lib/services/notes/editing';
-import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectRules } from '$lib/services/projects/rules';
 import { MemoryEditingService } from '$lib/services/memory/edits';
 import { WidgetLifecycleService } from '$lib/services/widgets/trash';
 import { WidgetPatchService } from '$lib/services/widgets/patches';
@@ -78,7 +78,7 @@ export const createWorkspaceRules = (): WorkspaceRules => ({
 	widgetEditing: new WidgetEditingService(),
 	widgetLifecycle: new WidgetLifecycleService(),
 	memoryEditing: new MemoryEditingService(),
-	projectDetails: new ProjectDetailService(),
+	projectDetails: new ProjectRules(),
 	noteCreation: new NoteLifecycleService(),
 	noteTrash: new NoteLifecycleService(),
 	noteEditing: new NoteEditingService(),

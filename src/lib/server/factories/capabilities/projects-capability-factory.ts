@@ -3,35 +3,19 @@ import {
 	ProjectTreePresentationService,
 	type ProjectTreePresentation
 } from '$lib/services/projects/presentation';
-import { ProjectDetailService, type ProjectDetailRules } from '$lib/services/projects/details';
 import type { Database } from '$lib/server/db';
 import type { ProjectRepository, ProjectTreeRepository } from '$lib/server/repositories/projects';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { ProjectCatalog, type ProjectLibrary } from '$lib/server/services/projects/catalog';
 import {
-	ProjectCreationService,
-	type ProjectCreator,
-	ProjectReadingService,
-	type ProjectReader,
-	type ProjectLister,
-	ProjectEditingService,
-	type ProjectEditor,
-	ProjectLifecycleService,
-	type ProjectLifecycle,
-	ProjectTreeService,
-	type ProjectTreeReader,
-	type ProjectTreeWriter
-} from '$lib/server/services/projects/catalog';
-import { ProjectChoiceService, type ProjectChoiceRules } from '$lib/services/projects/choice';
-import { ProjectPlacementService, type ProjectPlacement } from '$lib/services/projects/placement';
+	ProjectRules,
+	type ProjectChoiceRules,
+	type ProjectDetailRules,
+	type ProjectPlacement
+} from '$lib/services/projects/rules';
 export interface ProjectServices {
-	readonly creator: ProjectCreator;
-	readonly reader: ProjectReader;
-	readonly lister: ProjectLister;
+	readonly catalog: ProjectLibrary;
 	readonly choice: ProjectChoiceRules;
-	readonly editor: ProjectEditor;
-	readonly lifecycle: ProjectLifecycle;
-	readonly treeReader: ProjectTreeReader;
-	readonly treeWriter: ProjectTreeWriter;
 	readonly placement: ProjectPlacement;
 	readonly details: ProjectDetailRules;
 	readonly presentation: ProjectTreePresentation;
@@ -41,20 +25,13 @@ export const createProjectServices = (
 	repository: ProjectRepository,
 	tree: ProjectTreeRepository
 ): ProjectServices => {
-	const reader = new ProjectReadingService(repository);
-	const entries = new ProjectTreeService(repository, tree);
+	const rules = new ProjectRules();
 	return {
-		creator: new ProjectCreationService(repository),
-		reader,
-		lister: reader,
-		choice: new ProjectChoiceService(),
-		editor: new ProjectEditingService(repository),
-		lifecycle: new ProjectLifecycleService(repository),
-		treeReader: entries,
-		treeWriter: entries,
-		details: new ProjectDetailService(),
+		catalog: new ProjectCatalog(repository, tree),
+		choice: rules,
+		details: rules,
 		presentation: new ProjectTreePresentationService(),
-		placement: new ProjectPlacementService()
+		placement: rules
 	};
 };
 export interface ProjectsCapabilityInput {
