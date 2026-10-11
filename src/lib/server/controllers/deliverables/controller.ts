@@ -11,14 +11,10 @@ import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool
 import type { DocumentBundlePacker } from '$lib/server/services/deliverables/bundle';
 import type { DocxRenderer } from '$lib/server/services/deliverables/docx';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
-import { WidgetExportService } from '$lib/services/widgets/export-blocks';
-import { WidgetSourceService } from '$lib/services/widgets/sources';
+import type { IWidgetExportService } from '$lib/services/widgets/export-blocks';
+import type { IWidgetSourceService } from '$lib/services/widgets/sources';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
-const widgetExporting = new WidgetExportService();
-const widgetSourcesRule = new WidgetSourceService();
-
-import { WidgetEvaluationService } from '$lib/services/widgets/edits';
-const widgetEvaluation = new WidgetEvaluationService();
+import type { IWidgetEvaluationService } from '$lib/services/widgets/edits';
 
 import type { Todo, TodoListFilter } from '$lib/models/todos';
 import type { Widget, WidgetExport, WidgetId, WidgetSourceRows } from '$lib/models/widgets';
@@ -270,6 +266,9 @@ export interface DeliverablesDependencies {
 		renderer: DiagramRasterRendering;
 	};
 	readonly mermaidThemes: MermaidThemeRules;
+	readonly widgetExports: IWidgetExportService;
+	readonly widgetSources: IWidgetSourceService;
+	readonly widgetEvaluation: IWidgetEvaluationService;
 	docxGenerator: DocxRenderer;
 	pdfGenerator: {
 		state: PdfFontCache;
@@ -560,9 +559,9 @@ export class Deliverables implements DeliverablesController {
 				const sources = await this.widgetSources(actor, widget);
 				widgets.set(
 					widgetId,
-					widgetExporting.prepare(
+					this.dependencies.widgetExports.prepare(
 						widget,
-						widgetEvaluation.resolve(widget.layout, widget.data, sources).state
+						this.dependencies.widgetEvaluation.resolve(widget.layout, widget.data, sources).state
 					)
 				);
 			}
@@ -703,7 +702,7 @@ export class Deliverables implements DeliverablesController {
 			this.dependencies.todoLister.list(actor, { projectId: widget.projectId }),
 			this.dependencies.noteLister.list(actor, widget.projectId)
 		]);
-		return widgetSourcesRule.rows(widget.layout.sources, {
+		return this.dependencies.widgetSources.rows(widget.layout.sources, {
 			projectId: widget.projectId,
 			today: new Date().toISOString().slice(0, 10) as LocalDate,
 			todos,

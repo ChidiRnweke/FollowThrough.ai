@@ -1,3 +1,6 @@
+import { WidgetExportService } from '$lib/services/widgets/export-blocks';
+import { WidgetSourceService } from '$lib/services/widgets/sources';
+import { WidgetEvaluationService } from '$lib/services/widgets/edits';
 import type { PreparedExport } from '$lib/models/deliverables';
 import { createPdfRendering } from '$lib/server/factories/capabilities/pdf-rendering-factory';
 import { InMemoryPdfDocument } from '$lib/testing/deliverables/fakes/pdf-document';
@@ -72,6 +75,9 @@ export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 			noteReader: notes,
 			provenanceRecorder: provenance,
 			prepareExport: new ExportPreparationService(),
+			widgetExports: new WidgetExportService(),
+			widgetSources: new WidgetSourceService(),
+			widgetEvaluation: new WidgetEvaluationService(),
 			widgetReader: new WidgetLibrary(
 				widgets,
 				new InMemoryProjectRepository(),

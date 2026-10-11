@@ -1,3 +1,4 @@
+import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import { expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { todos } from '$lib/server/db/schema/todos';
@@ -46,11 +47,14 @@ it.each(['done', 'open'] as const)(
 				? { ...before, status: 'open', completedAt: undefined }
 				: { ...before, status: 'done', completedAt: now }
 		);
-		await new SuggestionEffectRecords(context.db).restore(owner, {
-			kind: 'modified',
-			before: { type: 'todos', value: before },
-			after: { type: 'todos', value: after }
-		});
+		await new SuggestionEffectRecords(context.db, new WorkspaceSyncObjects(context.db)).restore(
+			owner,
+			{
+				kind: 'modified',
+				before: { type: 'todos', value: before },
+				after: { type: 'todos', value: after }
+			}
+		);
 		const restored = await records.findById(owner, before.id);
 		expect({ status: restored?.status, completedAt: restored?.completedAt }).toEqual({
 			status: before.status,

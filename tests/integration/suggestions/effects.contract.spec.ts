@@ -1,3 +1,4 @@
+import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -41,7 +42,7 @@ const application = (
 	const provenance = new ProvenanceRecords(database);
 	const anchors = new SourceAnchorRecords(database);
 	const inbox = createSuggestionServices(suggestions, notes, provenance, anchors);
-	const repository = new SuggestionEffectRecords(database);
+	const repository = new SuggestionEffectRecords(database, new WorkspaceSyncObjects(database));
 	const entries = new MemoryRecords(database);
 	const relationships = new RelationshipRecords(database);
 	const search = new KnowledgeIndexRecords(database);
