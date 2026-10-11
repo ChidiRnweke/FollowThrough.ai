@@ -13,7 +13,8 @@ export type ArchitectureRule =
 	| 'adapter-orchestration'
 	| 'retained-service-state'
 	| 'store-workflow'
-	| 'factory-workflow';
+	| 'factory-workflow'
+	| 'tool-operation';
 export interface ArchitectureViolation {
 	readonly file: string;
 	readonly line: number;
@@ -27,6 +28,7 @@ type Layer =
 	| 'controllers'
 	| 'stores'
 	| 'factories'
+	| 'tool-factory'
 	| 'repositories'
 	| 'remote'
 	| 'adapters'
@@ -38,6 +40,8 @@ type Layer =
 // operations as the outermost caller, but must not reach services, repositories or stores.
 const layer = (file: string): Layer => {
 	if (file === 'src/lib/server/application.ts') return 'factories';
+	// A tool is an entry point: its factory turns controller operations into tools (ADR 0007).
+	if (/^src\/lib\/server\/factories\/agent\/tools\//.test(file)) return 'tool-factory';
 	if (
 		/^src\/(?:hooks\.server|worker)\.ts$/.test(file) ||
 		/^src\/routes\/.*(?:\+server|\.server)\.ts$/.test(file)
@@ -272,7 +276,11 @@ export function analyzeArchitecture(
 			}
 		}
 	};
-	for (const source of projectFiles)
+	// Test fixtures stand in for production wiring; what they inject is not an application
+	// dependency, so a fake bound to a port does not make the port's callers depend on it.
+	const testCode = (source: ts.SourceFile): boolean =>
+		pathOf(source).startsWith('src/lib/testing/');
+	for (const source of projectFiles.filter((file) => !testCode(file)))
 		walk(source, (node) => {
 			if (!ts.isNewExpression(node) && !ts.isCallExpression(node)) return;
 			const signature = checker.getResolvedSignature(node);
@@ -360,6 +368,8 @@ export function analyzeArchitecture(
 			return ['services', 'controllers', 'remote', 'repositories', 'adapters'].includes(target);
 		if (owner === 'entry' || owner === 'remote')
 			return ['services', 'repositories', 'stores'].includes(target);
+		if (owner === 'tool-factory')
+			return ['services', 'repositories', 'stores', 'remote', 'adapters'].includes(target);
 		return false;
 	};
 	const callRule = (owner: Layer): ArchitectureRule =>
@@ -369,7 +379,9 @@ export function analyzeArchitecture(
 				? 'store-workflow'
 				: owner === 'factories'
 					? 'factory-workflow'
-					: 'indirect-dependency';
+					: owner === 'tool-factory'
+						? 'tool-operation'
+						: 'indirect-dependency';
 	const inspectDependency = (
 		site: ts.Node,
 		expression: ts.Node,
@@ -378,9 +390,16 @@ export function analyzeArchitecture(
 		trail: readonly ts.Node[] = []
 	): void => {
 		if (
-			!['components', 'services', 'stores', 'factories', 'controllers', 'entry', 'remote'].includes(
-				owner
-			)
+			![
+				'components',
+				'services',
+				'stores',
+				'factories',
+				'tool-factory',
+				'controllers',
+				'entry',
+				'remote'
+			].includes(owner)
 		)
 			return;
 		for (const origin of origins(expression)) {
@@ -419,7 +438,7 @@ export function analyzeArchitecture(
 					callRule(owner),
 					owner === 'controllers'
 						? 'Controllers must coordinate services, not invoke another controller operation.'
-						: owner === 'entry' || owner === 'remote'
+						: owner === 'entry' || owner === 'remote' || owner === 'tool-factory'
 							? `${owner} must call controller operations, not ${targetLayer} behavior.`
 							: `${owner} must not invoke or expose ${targetLayer} behavior. Move the operation to a controller.`,
 					trace
@@ -428,7 +447,7 @@ export function analyzeArchitecture(
 			}
 			// A controller is the intended component boundary. Do not traverse its implementation.
 			if (
-				['components', 'entry', 'remote'].includes(owner) &&
+				['components', 'entry', 'remote', 'tool-factory'].includes(owner) &&
 				['controllers', 'factories'].includes(targetLayer)
 			)
 				continue;

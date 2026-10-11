@@ -356,7 +356,7 @@ describe('tool lifecycle ownership', () => {
 	it('allows SDK construction in its designated adapter', () => {
 		expect(
 			analyzeSource(
-				'src/lib/server/adapters/agent/sdk-tool.ts',
+				'src/lib/server/factories/agent/tools/toolset.ts',
 				"import { tool } from '@openai/agents';"
 			)
 		).toEqual([]);
@@ -364,7 +364,7 @@ describe('tool lifecycle ownership', () => {
 	it('allows MCP construction in its designated adapter', () => {
 		expect(
 			analyzeSource(
-				'src/lib/server/adapters/agent/mcp-tools.ts',
+				'src/lib/server/factories/agent/tools/mcp.ts',
 				"import { Server } from '@modelcontextprotocol/sdk/server/index.js';"
 			)
 		).toEqual([]);
@@ -380,7 +380,7 @@ describe('tool lifecycle ownership', () => {
 	it('allows the separate diagram submission protocol', () => {
 		expect(
 			analyzeSource(
-				'src/lib/server/adapters/diagrams/generation.ts',
+				'src/lib/server/services/diagrams/generation.ts',
 				"import { tool } from '@openai/agents';"
 			)
 		).toEqual([]);

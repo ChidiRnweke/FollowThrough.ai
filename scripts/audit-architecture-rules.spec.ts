@@ -760,3 +760,47 @@ export class Notes implements NotesController { async save(): Promise<void> {} a
 		).toEqual(['indirect-dependency']);
 	});
 });
+
+describe('agent tool factories', () => {
+	const controller = `export interface NotesOperations { rename(id: string): Promise<string> }`;
+	it('allows a tool that wraps a controller operation', () => {
+		expect(
+			inspect({
+				'src/lib/server/controllers/notes/controller.ts': controller,
+				'src/lib/server/factories/agent/tools/notes.ts':
+					"import type { NotesOperations } from '$lib/server/controllers/notes/controller'; export const renameTool = (notes: NotesOperations) => ({ execute: (id: string) => notes.rename(id) });"
+			})
+		).toEqual([]);
+	});
+	it('rejects a tool that calls a service', () => {
+		expect(
+			rules({
+				[servicePath]: service,
+				'src/lib/server/factories/agent/tools/titles.ts':
+					"import { TitleRules } from '$lib/services/notes/titles'; export const titleTool = () => ({ execute: (value: string) => new TitleRules().title(value) });"
+			})
+		).toContain('tool-operation');
+	});
+	const rankingTool =
+		'export const searchTool = (rank: (query: string) => string) => ({ execute: (query: string) => rank(query) });';
+	it('does not follow a port that a test fixture binds to a service', () => {
+		expect(
+			rules({
+				[servicePath]: service,
+				'src/lib/server/factories/agent/tools/search.ts': rankingTool,
+				'src/lib/testing/agent/fixtures/search.ts':
+					"import { TitleRules } from '$lib/services/notes/titles'; import { searchTool } from '$lib/server/factories/agent/tools/search'; export const fixture = searchTool((query) => new TitleRules().title(query));"
+			})
+		).not.toContain('tool-operation');
+	});
+	it('follows the same port when production wiring binds it to a service', () => {
+		expect(
+			rules({
+				[servicePath]: service,
+				'src/lib/server/factories/agent/tools/search.ts': rankingTool,
+				'src/lib/server/search.ts':
+					"import { TitleRules } from '$lib/services/notes/titles'; import { searchTool } from '$lib/server/factories/agent/tools/search'; export const tool = searchTool((query) => new TitleRules().title(query));"
+			})
+		).toContain('tool-operation');
+	});
+});
