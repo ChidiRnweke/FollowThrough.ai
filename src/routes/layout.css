@@ -1110,6 +1110,24 @@
 	}
 }
 
+/* The workspace strip's identity wash — `bg-brand/10` (`/15` in dark) — laid over the
+   inset surface it sits on (`bg-background`, `dark:bg-card` in the app shell). The strip
+   is sticky, and the wash alone let the page text scroll visibly underneath it. */
+@utility strip-wash {
+	background-color: var(--color-background);
+	background-image: linear-gradient(
+		color-mix(in oklab, var(--color-brand) 10%, transparent),
+		color-mix(in oklab, var(--color-brand) 10%, transparent)
+	);
+	&:where(.dark *) {
+		background-color: var(--color-card);
+		background-image: linear-gradient(
+			color-mix(in oklab, var(--color-brand) 15%, transparent),
+			color-mix(in oklab, var(--color-brand) 15%, transparent)
+		);
+	}
+}
+
 @utility note-measure {
 	max-width: var(--note-content-width);
 }
