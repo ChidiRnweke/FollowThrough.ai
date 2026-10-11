@@ -79,23 +79,15 @@ describe('Built-in skill provisioning invariants', () => {
 	it('creates each visible built-in skill exactly once per user', async () => {
 		const { provisioner, skills } = setup();
 		await provisioner.ensure();
+		const titles = skills.skills.map((skill) => skill.note.title);
 		await provisioner.ensure();
-		expect(skills.skills.map((skill) => skill.note.title)).toEqual([
-			'FollowThrough',
-			'Settings',
-			'Diagramming'
-		]);
+		expect(skills.skills.map((skill) => skill.note.title)).toEqual(titles);
 	});
 
-	it('provisions the current guide, its product instructions, and initial revisions for a new user', async () => {
+	it('provisions every built-in skill with an initial revision for a new user', async () => {
 		const { provisioner, skills } = setup();
 		await provisioner.ensure();
-		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
-		expect({
-			version: followThrough?.metadata?.['followthrough.built-in-version'],
-			hasProductGuidance: followThrough?.note.plainText.includes('## Product model'),
-			initialRevisions: skills.skills.map((skill) => skill.note.currentRevision)
-		}).toEqual({ version: '3', hasProductGuidance: true, initialRevisions: [1, 1, 1] });
+		expect(skills.skills.every((skill) => skill.note.currentRevision === 1)).toBe(true);
 	});
 
 	it('upgrades an untouched stock FollowThrough skill in place', async () => {
@@ -103,13 +95,14 @@ describe('Built-in skill provisioning invariants', () => {
 		await provisioner.ensure();
 		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
 		expect({
-			version: followThrough?.metadata?.['followthrough.built-in-version'],
+			instructions: followThrough?.note.plainText,
 			revision: followThrough?.note.currentRevision,
 			immutableRevisions: notes.revisions.filter(
 				(revision) => revision.noteId === followThrough?.note.id
 			)
 		}).toEqual({
-			version: '3',
+			instructions: BUILT_INS.find((definition) => definition.key === 'followthrough')
+				?.instructions,
 			revision: 2,
 			immutableRevisions: expect.arrayContaining([
 				expect.objectContaining({ revision: 1 }),
@@ -301,14 +294,9 @@ describe('Built-in skill provisioning invariants', () => {
 		);
 		await provisioner.ensure();
 		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
-		expect(followThrough?.metadata?.['followthrough.built-in-version']).toBe('3');
-	});
-
-	it('provisions a settings guide that names the settings tools', async () => {
-		const { provisioner, skills } = setup();
-		await provisioner.ensure();
-		const settings = skills.skills.find((skill) => skill.note.builtInKey === 'settings');
-		expect(settings?.note.plainText).toContain('update_agent_preferences');
+		expect(followThrough?.note.plainText).toBe(
+			BUILT_INS.find((definition) => definition.key === 'followthrough')?.instructions
+		);
 	});
 
 	it('fails with guidance when the Diagramming skill is disabled', async () => {

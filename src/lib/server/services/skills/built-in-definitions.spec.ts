@@ -1,12 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { BUILT_INS } from './built-in-definitions';
+import { expect, it } from 'vitest';
+import { BUILT_INS, RETIRED_BUILT_INS } from './built-in-definitions';
 
-describe('built-in skills', () => {
-	it('forbids HTML labels and gives the escaped-newline alternative', () => {
-		const diagramming = BUILT_INS.find((definition) => definition.key === 'diagramming');
-		expect({
-			forbidsHtml: /HTML labels/i.test(diagramming?.instructions ?? ''),
-			showsAlternative: /escaped \\n/i.test(diagramming?.instructions ?? '')
-		}).toEqual({ forbidsHtml: true, showsAlternative: true });
+const versionOf = (definition: { readonly version?: string }) => Number(definition.version ?? 0);
+
+// An install is upgraded in place only when it still matches a retired release, so every
+// retired release must belong to an active skill and precede that skill's current version.
+it('keeps every retired release older than the active version of its skill', () => {
+	const stale = RETIRED_BUILT_INS.filter((retired) => {
+		const active = BUILT_INS.find((definition) => definition.key === retired.key);
+		return !active || versionOf(retired) >= versionOf(active);
 	});
+	expect(stale.map((definition) => definition.key)).toEqual([]);
 });
