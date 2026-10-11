@@ -33,7 +33,7 @@
 
 {#if words > 0}
 	<div
-		class="note-reading-stats sticky bottom-0 z-30 flex justify-end border-t border-border bg-background px-3"
+		class="note-reading-stats sticky bottom-0 z-30 flex justify-end border-t border-border bg-background px-3 dark:bg-card"
 	>
 		<span class="provenance-caption" aria-hidden="true">
 			{count}<span class="pl-1">· {minutes} min read</span>
