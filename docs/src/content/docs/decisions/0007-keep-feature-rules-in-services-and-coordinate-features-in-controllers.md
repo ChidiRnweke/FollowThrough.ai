@@ -40,8 +40,8 @@ be introduced.
 | Stores       | Browser only. Own reactive application state and controlled state updates, with no business rules, transport calls or orchestration.                                            |
 | Components   | Browser only. Render and handle UI interaction. They call controllers and observe readonly application state.                                                                   |
 
-Entry points call controllers: remote functions, API routes, form actions, server hooks and the
-worker. The entry point parses incoming data into a model before it calls a controller, and a
+Entry points call controllers: remote functions, API routes, form actions, server hooks, the
+worker and agent tools. The entry point parses incoming data into a model before it calls a controller, and a
 request that does not parse fails there; a user request receives a 422 response. An entry point
 may call several controller operations in an order the request genuinely needs. It does not call
 services, repositories or stores directly.
@@ -58,10 +58,15 @@ the operation that sequences them. Anything that must outlive an operation is a 
 A cache that the client needs belongs to the client, through synchronization.
 
 The agent is a harness. Its controller composes the agent runtime over an injected list of tools
-and knows no specific tool. Services do not know that a tool calls them. An agent tool factory
-builds each tool from service methods: it parses the tool's arguments into a model, may sequence
-several service calls in a private function, and never calls a controller. This is the only place
-a factory executes behavior; every other factory only constructs and connects.
+and knows no specific tool; it applies approval, discovery, review and tool preferences from each
+tool's metadata. A tool is an entry point, like a remote function. An agent tool factory turns one
+public controller operation into a tool: the tool parses its arguments into a model, calls that
+operation and converts the result into its output. It does not sequence operations or call
+services, repositories or stores. When a tool needs an operation no controller offers, that
+operation becomes an ordinary controller operation any entry point could call, not a tool-specific
+one. Controllers and services do not know that a tool calls them. The harness holds no transaction
+while a tool runs, so each tool's operation commits on its own. Factories, including tool factories,
+only construct and connect; a tool's call runs in the harness.
 
 A service may hold readonly references to injected collaborators and immutable configuration.
 Inputs, intermediate calculations and results remain local to each operation. Mutable state that

@@ -12,7 +12,7 @@ not an empty result. No baseline, suppression comment or migration allowance hid
 
 ADR 0007 closes the layer list: models, services, repositories, controllers and factories, plus
 browser stores and components, called from entry points. The `adapters` layer and server stores
-still exist while their code moves to repositories, services and agent tool factories. The rules
+still exist while their code moves to repositories, services, infrastructure and agent tool factories. The rules
 below that name adapters are transitional and are removed with the last of that code.
 
 ## Rules and corrections

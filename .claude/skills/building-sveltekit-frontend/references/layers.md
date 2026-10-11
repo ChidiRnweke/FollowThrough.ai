@@ -12,7 +12,7 @@ state ownership and controller boundary. ADRs 0037 and 0041 define parsing and s
 | `controllers/<domain>/` | Complete browser operations and coordination | Parsing external data or exposing mutable collaborators |
 | `server/controllers/<domain>/` | Complete server operations, transactions and sequencing over services | Parsing external data, repository access or leaking services through the public API |
 | `stores/<domain>/` (browser only) | Reactive state with an explicit lifetime and controlled updates | Transport, retries, business decisions or workflows |
-| `factories/`, `server/factories/` | Construction and dependency wiring with interface-typed results | Running application operations (agent tool factories excepted, below) |
+| `factories/`, `server/factories/` | Construction and dependency wiring with interface-typed results | Running application operations |
 | Entry points: remote functions, API routes, form actions, hooks, the worker | Parsing incoming data into models and calling controller operations | Service, repository or store access |
 | Components and adjacent TypeScript | Rendering, focus, DOM interaction and local form state | Service/remote/repository access or application workflows |
 
@@ -65,8 +65,9 @@ to an accepted ADR; record unresolved violations and correct the implementation 
 
 Entry points parse input and call controller operations; they may sequence several when the
 request needs that order. The agent controller is a harness over an injected tool list and knows
-no specific tool. Agent tool factories build tools from service methods, may sequence services in
-private functions and never call controllers; services do not know they back a tool.
+no specific tool. A tool is an entry point: an agent tool factory turns one public controller
+operation into a tool that parses its arguments, calls the operation and converts the result. It
+never sequences operations or calls services; controllers and services do not know they back a tool.
 
 Run `pnpm test:architecture:semantic` as well as Chisel. It follows symbol aliases, re-exports,
 callable objects and statically connected callback ports. A service calling another service
