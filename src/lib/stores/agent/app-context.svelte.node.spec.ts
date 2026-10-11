@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { DateTime } from '$lib/models/common';
+import type { DateTime } from '$lib/models/workspace';
 import type { UserId } from '$lib/models/identity';
 import type { ShellContext } from '$lib/models/workspace-views';
 import { InMemoryWorkbenchRouter } from '$lib/testing/workbench/fakes/in-memory-router';
 import { WorkbenchStore } from '../workbench/workbench.svelte';
-import { AppContextStore } from './app-context.svelte';
+import { createAppContext } from './app-context.svelte';
 
 const shell: ShellContext = {
 	user: {
@@ -28,7 +28,7 @@ globalThis.matchMedia = (query: string): MediaQueryList =>
 
 const surfaceFor = (path: string, params: URLSearchParams) => {
 	const url = new URL(`${path}?${params.toString()}`, 'http://localhost');
-	const appContext = new AppContextStore(
+	const appContext = createAppContext(
 		new WorkbenchStore(new InMemoryWorkbenchRouter(`${url.pathname}${url.search}`))
 	);
 	appContext.configure(shell, url, []);

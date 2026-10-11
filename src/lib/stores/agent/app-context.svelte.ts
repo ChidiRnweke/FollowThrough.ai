@@ -54,8 +54,8 @@ type PaneGetter = () => PaneContext | undefined;
 /** What a mounted chat pane reports about itself. */
 type ChatPaneGetter = () => { conversationId?: string; title: string };
 
-export class AppContextStore {
-	constructor(private readonly workbench: WorkbenchStore = appWorkbench) {}
+class AppContextStore {
+	constructor(private readonly workbench: WorkbenchStore) {}
 
 	private shell?: ShellContext;
 	/** The account's widgets, so a widget tab can name the project the agent is asked about. */
@@ -201,4 +201,7 @@ export class AppContextStore {
 	}
 }
 
-export const appContext = new AppContextStore();
+export const createAppContext = (workbench: WorkbenchStore): AppContextStore =>
+	new AppContextStore(workbench);
+
+export const appContext = createAppContext(appWorkbench);
