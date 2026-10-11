@@ -1572,3 +1572,29 @@ for diagnostic provenance, manual dependency reviews and observed verification.
   Topology, source, test quality and UI pass. No new diagnostic identities, checks or suppressions.
 - Browser migrations, indexing redesign, telemetry restructuring and the diagram SDK mismatch remain
   outside this slice. Keep the stacked PR draft while migration gates fail.
+
+## Five layers, no adapters, agent harness — 2026-10-11
+
+The server side of ADR 0007 is complete in the stacked drafts #386–#394. Server semantic findings
+are 0 and Chisel reports no server import errors. The browser side of this plan is not done.
+
+Dispositions:
+
+- **Adapters layer.** Removed. Provider clients moved into the services that own them (rendering, knowledge search, references, inline completion, attachments). Telemetry and the
+  worker scheduler moved to `server/infrastructure/`. The note Markdown codec and the widget
+  candidate reader are vendored-library wrappers in `src/lib/infrastructure/`, an accepted exception
+  documented in each file. Chisel now rejects `server/adapters/` and `server/stores/`.
+- **Server stores.** All removed. Maintenance cursors (#388) and the inline completion budget (#389)
+  are database rows. Run notifications and cancellation use Postgres LISTEN/NOTIFY (#390). The model
+  catalog is read from the provider without a server cache (#391), which supersedes #376. The
+  per-run agent stores became values local to one run in the agent harness (#392).
+- **Agent harness.** `AgentSdkHarness` composes the agents SDK over a tool list (#392). Tools wrap
+  public controller operations and controllers carry no agent methods (#393). See
+  `docs/architecture/agent-harness.md`.
+- **Controllers and repositories.** Controllers reach repositories and object storage only through
+  services, enforced by `controller-repository` (#394). Object storage is a provider service.
+- **Superseded.** #376 (catalog cache in a service) and #377 (scheduler under adapters).
+
+Remaining work: 341 semantic findings and 46 Chisel import errors, all in browser controllers,
+stores and components (sections E and F above). They are the next series, together with the
+actor-at-composition change (no `ActorContext` parameters; the request's factory binds the actor).
