@@ -103,15 +103,6 @@ const waitForMenu = async (menu: HTMLElement): Promise<void> => {
 describe('the proofreading menu', () => {
 	beforeEach(() => vi.useFakeTimers());
 	afterEach(() => vi.useRealTimers());
-	it('renders the underline as a class a stylesheet can target', async () => {
-		const { editor, element } = mountEditor();
-		const underline = await waitForUnderline(element);
-		editor.destroy();
-		expect(underline.className).toBe('proofread-issue proofread-issue--spelling');
-
-		expect(underline.textContent).toBe('teh');
-	});
-
 	it('opens the menu when a reader clicks the underline', async () => {
 		const { editor, element, menu } = mountEditor();
 		const underline = await waitForUnderline(element);

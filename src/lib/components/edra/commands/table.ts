@@ -2,7 +2,7 @@ import { NoteTable } from '$lib/infrastructure/notes/schema/tables';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 
 /** Class set on a `.tableWrapper` whose table is wider than the wrapper's content box. */
-export const tableOverflowClass = 'is-overflowing';
+const tableOverflowClass = 'is-overflowing';
 
 const tableOverflowKey = new PluginKey('tableOverflow');
 

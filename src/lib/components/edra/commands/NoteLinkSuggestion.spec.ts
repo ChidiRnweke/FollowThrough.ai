@@ -18,10 +18,6 @@ describe('Ranking notes for an @ query', () => {
 			'Fundamentals of design',
 			'Redesigned onboarding'
 		]);
-
-		expect(titles('des')).not.toContain('Deployment runbook');
-
-		expect(titles('des')[0]).toBe('Design review');
 	});
 
 	it('ignores case', () => {

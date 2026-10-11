@@ -33,7 +33,7 @@ const MARKDOWN_SIGNALS: readonly RegExp[] = [
  * Blank-line separation counts on its own: several paragraphs of prose is the most
  * common structured paste there is, and inserting it verbatim collapses it into one.
  */
-export const looksLikeMarkdown = (text: string): boolean => {
+const looksLikeMarkdown = (text: string): boolean => {
 	if (!text.trim()) return false;
 	if (/\n\s*\n/.test(text.trim())) return true;
 	return MARKDOWN_SIGNALS.some((pattern) => pattern.test(text));
@@ -55,7 +55,7 @@ export const withoutBoundaryBlankLines = (text: string): string =>
  * A result that is a single paragraph is handed back as its inline content so it merges
  * into the paragraph being pasted into, rather than splitting it in two.
  */
-export const markdownSlice = (
+const markdownSlice = (
 	schema: ProseMirrorNode['type']['schema'],
 	text: string
 ): Slice | undefined => {
@@ -92,7 +92,7 @@ const STRUCTURELESS_TAGS = new Set(['DIV', 'SPAN', 'BR', 'P', 'FONT', 'PRE', 'CO
  * characters, which is exactly the case the Markdown parser handles better than
  * ProseMirror's HTML parser does.
  */
-export const htmlCarriesStructure = (html: string): boolean => {
+const htmlCarriesStructure = (html: string): boolean => {
 	// A copy from this editor is always richer than a Markdown re-parse of its text.
 	if (html.includes('data-pm-slice')) return true;
 	// Without a parser there is nothing to judge, so keep the existing behaviour.

@@ -6,9 +6,11 @@ import { describe, expect, it } from 'vitest';
 import type { ReferenceId, Url } from '$lib/models/references';
 import type { SuggestionId } from '$lib/models/suggestions';
 import { anchorBuilder, testAnchorId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { EditorView } from '@tiptap/pm/view';
+import { EditorState } from '@tiptap/pm/state';
 import {
-	resolveReferenceLinkGroups,
-	resolveAuthoredLinkGroup,
+	createReferenceLinkPlugin,
+	type ResolvedReferenceLinkGroup,
 	type AcceptedReferenceLinkSource,
 	type AnchoredReferenceLink,
 	type PendingReferenceLinkSource,
@@ -55,26 +57,91 @@ const anchored = (
 	source
 });
 
+/** Hover every rendered reference link and return the groups the editor offered. */
+const hoveredGroups = (
+	doc: ReturnType<typeof documentWith>,
+	references: readonly AnchoredReferenceLink[],
+	revision: number
+): ResolvedReferenceLinkGroup[] => {
+	const host = document.createElement('div');
+	document.body.appendChild(host);
+	const offered: ResolvedReferenceLinkGroup[] = [];
+	const view = new EditorView(host, {
+		state: EditorState.create({
+			doc,
+			plugins: [
+				createReferenceLinkPlugin({
+					getReferences: () => references,
+					getRevision: () => revision,
+					onActivate: (group) => offered.push(group),
+					onDeactivate: () => undefined
+				})
+			]
+		})
+	});
+	for (const link of host.querySelectorAll('a[data-reference-key]'))
+		link.dispatchEvent(new Event('pointerover', { bubbles: true }));
+	view.destroy();
+	host.remove();
+	return offered;
+};
+
 describe('Inline reference link invariants', () => {
 	it('reads an authored ProseMirror link without changing its stored representation', () => {
-		const link = document.createElement('a');
-		link.href = 'https://en.wikipedia.org/wiki/Odysseus';
-		link.title = 'Odysseus';
-		link.textContent = 'Odysseus';
-		expect(resolveAuthoredLinkGroup(link)?.sources[0]?.title).toBe('Odysseus');
+		const host = document.createElement('div');
+		document.body.appendChild(host);
+		const offered: ResolvedReferenceLinkGroup[] = [];
+		const linked = schema.nodeFromJSON({
+			type: 'doc',
+			content: [
+				{
+					type: 'paragraph',
+					content: [
+						{
+							type: 'text',
+							text: 'Odysseus',
+							marks: [
+								{
+									type: 'link',
+									attrs: { href: 'https://en.wikipedia.org/wiki/Odysseus', title: 'Odysseus' }
+								}
+							]
+						}
+					]
+				}
+			]
+		});
+		const view = new EditorView(host, {
+			state: EditorState.create({
+				doc: linked,
+				plugins: [
+					createReferenceLinkPlugin({
+						getReferences: () => [],
+						getRevision: () => 1,
+						onActivate: (group) => offered.push(group),
+						onDeactivate: () => undefined
+					})
+				]
+			})
+		});
+		host.querySelector('a')!.dispatchEvent(new Event('pointerover', { bubbles: true }));
+		view.destroy();
+		host.remove();
+
+		expect(offered.map((group) => group.sources[0]?.title)).toEqual(['Odysseus']);
 	});
 
 	it('uses current-revision offsets when the same quote appears more than once', () => {
-		const groups = resolveReferenceLinkGroups(
+		const groups = hoveredGroups(
 			documentWith('OAuth and OAuth'),
 			[anchored(acceptedSource(), { quote: 'OAuth', from: 10, to: 15, revision: 1 })],
 			1
 		);
-		expect(groups[0]?.key).toBe('10:15');
+		expect(groups.map((group) => group.key)).toEqual(['10:15']);
 	});
 
 	it('hides a stale anchor when its quote is ambiguous', () => {
-		const groups = resolveReferenceLinkGroups(
+		const groups = hoveredGroups(
 			documentWith('OAuth and OAuth'),
 			[anchored(acceptedSource(), { quote: 'OAuth', revision: 1 })],
 			2
@@ -83,16 +150,16 @@ describe('Inline reference link invariants', () => {
 	});
 
 	it('repairs a stale anchor when its quote is unique', () => {
-		const groups = resolveReferenceLinkGroups(
+		const groups = hoveredGroups(
 			documentWith('Use OAuth for authorization'),
 			[anchored(acceptedSource(), { revision: 1 })],
 			2
 		);
-		expect(groups[0]?.key).toBe('4:9');
+		expect(groups.map((group) => group.key)).toEqual(['4:9']);
 	});
 
 	it('groups sources that resolve to the same words', () => {
-		const groups = resolveReferenceLinkGroups(
+		const groups = hoveredGroups(
 			documentWith('Use OAuth for authorization'),
 			[anchored(acceptedSource()), anchored(pendingSource(), { id: testAnchorId(2) })],
 			1
@@ -101,7 +168,7 @@ describe('Inline reference link invariants', () => {
 	});
 
 	it('keeps an accepted source primary while proposals remain pending', () => {
-		const groups = resolveReferenceLinkGroups(
+		const groups = hoveredGroups(
 			documentWith('Use OAuth for authorization'),
 			[
 				anchored(pendingSource(undefined, { tier: 'official' })),
@@ -113,7 +180,7 @@ describe('Inline reference link invariants', () => {
 	});
 
 	it('ranks authoritative pending sources before community sources', () => {
-		const groups = resolveReferenceLinkGroups(
+		const groups = hoveredGroups(
 			documentWith('Use OAuth for authorization'),
 			[
 				anchored(pendingSource('https://community.example' as Url, { tier: 'community' })),
@@ -121,13 +188,15 @@ describe('Inline reference link invariants', () => {
 			],
 			1
 		);
-		const primary = groups[0]?.sources[0];
-		expect(primary?.state === 'authored' ? undefined : primary?.tier).toBe('official');
+		expect(groups[0]?.sources.map((source) => source.url)).toEqual([
+			'https://official.example',
+			'https://community.example'
+		]);
 	});
 
 	it('deduplicates the same URL within one text range', () => {
 		const url = 'https://example.com/source' as Url;
-		const groups = resolveReferenceLinkGroups(
+		const groups = hoveredGroups(
 			documentWith('Use OAuth for authorization'),
 			[anchored(acceptedSource(url)), anchored(pendingSource(url))],
 			1
@@ -136,7 +205,7 @@ describe('Inline reference link invariants', () => {
 	});
 
 	it('hides a reference when its quote no longer exists', () => {
-		const groups = resolveReferenceLinkGroups(
+		const groups = hoveredGroups(
 			documentWith('Use another protocol'),
 			[anchored(acceptedSource())],
 			2

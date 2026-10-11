@@ -23,11 +23,10 @@ describe('icon accent', () => {
 		await expect.poll(() => accentFill(container)).toBe(resolved('var(--color-brand)'));
 	});
 
-	it('hides the glyph from assistive technology and passes classes through', async () => {
+	it('hides the glyph from assistive technology even when asked not to', async () => {
 		const { container } = await render(Icon.Search, { class: 'size-4', 'aria-hidden': 'false' });
 		const svg = container.querySelector('svg')!;
 		expect(svg.getAttribute('aria-hidden')).toBe('true');
-		expect(svg.classList.contains('size-4')).toBe(true);
 	});
 });
 

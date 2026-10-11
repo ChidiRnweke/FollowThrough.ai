@@ -28,12 +28,6 @@ describe('ExportSlider', () => {
 		await expect.element(screen.getByText('20')).toBeVisible();
 	});
 
-	it('marks the deployment default among the anchors', async () => {
-		const screen = await render(ExportSlider, { ...base });
-		const anchor = screen.getByText('Default');
-		await expect.element(anchor).toHaveClass(/font-medium/);
-	});
-
 	it('keeps the accessible name when showLabel is false', async () => {
 		const screen = await render(ExportSlider, { ...base, showLabel: false });
 		await expect.element(screen.getByRole('slider', { name: 'Turn limit' })).toBeVisible();

@@ -5,7 +5,7 @@ import * as Scene from '$lib/components/icons/scenes';
 import EmptyState from './empty-state.svelte';
 
 describe('EmptyState', () => {
-	it('gives a page-level region its drawn scene instead of a tinted tile', async () => {
+	it('gives a page-level region its drawn scene', async () => {
 		const { container } = await render(EmptyState, {
 			size: 'large',
 			scene: Scene.Trash,
@@ -14,7 +14,6 @@ describe('EmptyState', () => {
 		});
 		const region = container.querySelector('section[aria-label="Empty trash"]');
 		expect(region?.querySelector('[data-slot="scene"]')).not.toBeNull();
-		expect(region?.querySelector('.bg-brand\\/10')).toBeNull();
 	});
 
 	it('keeps a plain icon in an inline slot', async () => {

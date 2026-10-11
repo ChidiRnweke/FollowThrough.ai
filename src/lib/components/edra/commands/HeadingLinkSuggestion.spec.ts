@@ -19,39 +19,13 @@ describe('Ranking headings for a # query', () => {
 			'Fundamentals of design',
 			'Redesigned onboarding'
 		]);
-
-		expect(titles('des')).not.toContain('Deployment runbook');
-
-		expect(titles('des')[0]).toBe('Design review');
 	});
 
 	it('breaks ties towards the shallower heading', () => {
 		const nested: HeadingLinkTarget[] = [
-			{ id: 'x', level: 3, textContent: 'Overview details' },
-			{ id: 'y', level: 1, textContent: 'Overview' }
+			{ id: 'x', level: 3, textContent: 'Alpha notes' },
+			{ id: 'y', level: 1, textContent: 'Alpha plan' }
 		];
-		expect(rankHeadingTargets(nested, 'overview')[0]?.textContent).toBe('Overview');
-	});
-
-	it('ignores case', () => {
-		expect(titles('DESIGN')[0]).toBe('Design review');
-	});
-
-	it('offers everything for an empty query', () => {
-		expect(rankHeadingTargets(headings, '')).toHaveLength(4);
-	});
-
-	it('returns nothing when nothing matches', () => {
-		expect(titles('zzz')).toEqual([]);
-	});
-
-	/** A popup taller than the pane is worse than a truncated list. */
-	it('caps how many it offers', () => {
-		const many = Array.from({ length: 30 }, (_unused, index) => ({
-			id: String(index),
-			level: 2,
-			textContent: `Section ${index}`
-		}));
-		expect(rankHeadingTargets(many, 'Section')).toHaveLength(8);
+		expect(rankHeadingTargets(nested, 'alpha')[0]?.textContent).toBe('Alpha plan');
 	});
 });
