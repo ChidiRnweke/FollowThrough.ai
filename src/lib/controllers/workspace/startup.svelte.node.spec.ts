@@ -1,23 +1,25 @@
 import { afterEach, expect, it } from 'vitest';
-import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
 import {
 	projectBuilder,
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { syncEtag } from '$lib/models/sync';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import type { WorkspaceController } from './workspace';
+import { workspaceFixture } from '$lib/testing/workspace/fixtures/workspace';
 
-const fixtures: ReturnType<typeof workspaceResourcesFixture>[] = [];
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
+const started: WorkspaceController[] = [];
 afterEach(() => {
-	for (const fixture of fixtures.splice(0)) fixture.resources.stop();
+	for (const workspace of started.splice(0)) workspace.stop();
 });
-const setup = async () => {
+/** A fresh device: the server holds the account and its inbox, this tab has downloaded nothing. */
+const setup = () => {
 	const accountId = testActor().userId;
-	const fixture = workspaceResourcesFixture(accountId);
-	fixtures.push(fixture);
+	const fixture = workspaceFixture({ accountId });
+	started.push(fixture.workspace);
 	const user: WorkspaceRecord = {
 		type: 'users',
 		value: {
@@ -30,40 +32,48 @@ const setup = async () => {
 		}
 	};
 	const project: WorkspaceRecord = { type: 'projects', value: projectBuilder({ role: 'inbox' }) };
-	fixture.transport.records.set(workspaceResourceKey({ type: 'users', id: [accountId] }), {
+	const server = fixture.transport.reads;
+	server.records.set(workspaceResourceKey({ type: 'users', id: [accountId] }), {
 		etag: syncEtag(1n),
 		value: user
 	});
-	fixture.transport.records.set(
-		workspaceResourceKey({ type: 'projects', id: [project.value.id] }),
-		{ etag: syncEtag(1n), value: project }
-	);
-	await fixture.resources.initialize();
-	return { ...fixture, accountId };
+	server.records.set(workspaceResourceKey({ type: 'projects', id: [project.value.id] }), {
+		etag: syncEtag(1n),
+		value: project
+	});
+	/** The inventory download stays open until the test releases it. */
+	const inventory = server.pause('changes');
+	return { ...fixture, accountId, inventory };
 };
 
 it('exposes the account shell while the inventory response is still pending', async () => {
-	const fixture = await setup();
-	const pause = fixture.transport.pause('changes');
-	const pull = fixture.cache.refresh();
-	await pause.started;
-	await fixture.resources.open({ type: 'users', id: [fixture.accountId] });
-	const visibleName = fixture.resources.views.shell(fixture.accountId)?.user.displayName;
-	pause.release();
-	await pull;
+	const fixture = setup();
+	const resources = await fixture.start();
+	void resources.synchronize();
+	await fixture.inventory.started;
+	await resources.open({ type: 'users', id: [fixture.accountId] });
+	const visibleName = fixture.views.shell(fixture.accountId)?.user.displayName;
+	fixture.inventory.release();
 	expect(visibleName).toBe('Startup reader');
 });
 
 it('does not infer absent preferences from a targeted unavailable response', async () => {
-	const fixture = await setup();
-	await fixture.resources.open({ type: 'users', id: [fixture.accountId] });
-	await fixture.resources.open({ type: 'projects', id: [projectBuilder().id] });
-	await fixture.resources.open({ type: 'agent_preferences', id: [fixture.accountId] });
-	expect(fixture.resources.startupReadiness).toEqual({ kind: 'loading' });
+	const fixture = setup();
+	const resources = await fixture.start();
+	void resources.synchronize();
+	await fixture.inventory.started;
+	await resources.open({ type: 'users', id: [fixture.accountId] });
+	await resources.open({ type: 'projects', id: [projectBuilder().id] });
+	await resources.open({ type: 'agent_preferences', id: [fixture.accountId] });
+	const readiness = resources.startupReadiness;
+	fixture.inventory.release();
+	expect(readiness).toEqual({ kind: 'loading' });
 });
 
 it('permits preference defaults only after the complete inventory proves absence', async () => {
-	const fixture = await setup();
-	await fixture.resources.requireCollections();
-	expect(fixture.resources.startupReadiness).toEqual({ kind: 'ready' });
+	const fixture = setup();
+	const resources = await fixture.start();
+	fixture.inventory.release();
+	await resources.requireCollections();
+	expect(resources.startupReadiness).toEqual({ kind: 'ready' });
 });

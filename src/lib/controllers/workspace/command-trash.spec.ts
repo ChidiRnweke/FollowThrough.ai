@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { noteTrashWrite } from '$lib/testing/workspace/fixtures/commands';
-import { noteBuilder, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
+import {
+	noteBuilder,
+	projectBuilder,
+	testNoteId,
+	testNow
+} from '$lib/testing/workspace/fixtures/domain-builders';
+import { workspaceFixture } from '$lib/testing/workspace/fixtures/workspace';
+import { syncCursorSchema, syncEtag } from '$lib/models/sync';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceRecordIdentity, workspaceResourceKey } = new WorkspaceCommandRulesService();
 describe('local note trash actions', () => {
 	it('retains the note body when moving it to trash', async () => {
 		const note = noteBuilder();
 		expect(await noteTrashWrite(note, 'archive', [note], testNow)).toEqual({
 			command: { kind: 'archiveNote', noteId: note.id },
 			local: { type: 'notes', value: { ...note, archivedAt: testNow, updatedAt: testNow } },
-			coalesce: null,
-			references: []
+			coalesce: null
 		});
 	});
 	it('refuses to hide active children by archiving their folder', async () => {
@@ -35,24 +43,44 @@ describe('local note trash actions', () => {
 		});
 	});
 	it('restores into an active parent and waits for its local creation', async () => {
-		const folder = noteBuilder({
-			kind: 'folder',
-			document: { type: 'doc', content: [] },
-			plainText: ''
-		});
+		const folderId = testNoteId();
 		const child = noteBuilder({
 			id: testNoteId(2),
-			parentId: folder.id,
+			parentId: folderId,
 			archivedAt: testNow,
 			position: 3
 		});
+		const project = projectBuilder({ id: child.projectId });
+		const fixture = workspaceFixture({ accountId: child.userId });
+		fixture.replica.seed(
+			child.userId,
+			[
+				{ type: 'projects' as const, value: project },
+				{ type: 'notes' as const, value: child }
+			].map((value) => ({
+				key: workspaceResourceKey(workspaceRecordIdentity(value)),
+				entry: { kind: 'present' as const, snapshot: { etag: syncEtag(1n), value } }
+			})),
+			{ cursor: syncCursorSchema.parse('1'), inventoryComplete: true }
+		);
+		fixture.environment.fixedNow = testNow;
+		const resources = await fixture.start(false);
+		await resources.create({
+			kind: 'createFolder',
+			id: folderId,
+			projectId: project.id,
+			name: 'Folder'
+		});
+		const draft = resources.draft({ type: 'notes', id: [child.id] });
+		await draft.read();
+		await draft.stage({ kind: 'restoreNote', noteId: child.id });
+		const [creation, restore] = resources.pending;
+		fixture.workspace.stop();
 		const { archivedAt, ...restored } = child;
 		void archivedAt;
-		expect(await noteTrashWrite(child, 'restore', [folder, child], testNow)).toEqual({
-			command: { kind: 'restoreNote', noteId: child.id },
-			local: { type: 'notes', value: restored },
-			coalesce: null,
-			references: [JSON.stringify(['notes', folder.id])]
+		expect({ local: restore?.intent.local, waitsFor: restore?.intent.dependencies }).toEqual({
+			local: { type: 'notes', value: { ...restored, updatedAt: testNow } },
+			waitsFor: [creation?.intent.operationId]
 		});
 	});
 	it('restores a child of a trashed folder at the project root', async () => {

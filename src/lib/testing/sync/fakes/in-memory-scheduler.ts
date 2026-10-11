@@ -1,4 +1,4 @@
-import type { SyncScheduler } from '$lib/client/sync/scheduler';
+import type { SyncScheduler } from '$lib/models/sync';
 
 export class InMemorySyncScheduler implements SyncScheduler {
 	private time = 0;

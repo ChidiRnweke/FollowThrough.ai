@@ -1,12 +1,12 @@
-import { createWorkspaceCommands } from '$lib/factories/workspace/commands';
-import type { WorkspaceCommandSource } from '$lib/controllers/workspace/commands';
 import type {
 	WorkspaceCommand,
 	PreparedWorkspaceCommand,
 	WorkspaceCommandContext
 } from '$lib/models/workspace-mutations';
 import type { WorkspaceRecord, WorkspaceValues } from '$lib/models/workspace-records';
-import type { WriteContent, OutboxEntry } from '$lib/models/outbox';
+import type { WriteIntent } from '$lib/models/outbox';
+import type { WorkspaceResourcesController } from '$lib/controllers/workspace/workspace';
+import { syncCursorSchema, syncEtag } from '$lib/models/sync';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { Note, NoteId } from '$lib/models/notes';
 import type { Todo, UpdateTodoInput } from '$lib/models/todos';
@@ -23,33 +23,68 @@ import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 const { isWorkspaceRecord, workspaceRecordIdentity, workspaceResourceKey } =
 	new WorkspaceCommandRulesService();
 import { testActor, testNow } from './domain-builders';
+import { workspaceFixture } from './workspace';
 
-class InMemoryCommandInventory implements WorkspaceCommandSource {
-	readonly pending: readonly OutboxEntry<WorkspaceCommand, WorkspaceRecord>[] = [];
-	constructor(private readonly context: WorkspaceCommandContext) {}
-	get accountId() {
-		return this.context.userId;
-	}
-	get records() {
-		return this.context.records;
-	}
-	collectionReadiness(): 'ready' | 'unknown' {
-		return this.context.inventory === 'complete' ? 'ready' : 'unknown';
-	}
-	async requireCollections(): Promise<void> {
-		if (this.context.inventory !== 'complete')
-			throw new Error(
-				'Required workspace data is not available on this device. Reconnect and retry.'
-			);
-	}
-}
-const controller = createWorkspaceCommands();
-/** Exercise the complete controller operation with an explicitly available or unavailable inventory. */
-export const prepareWorkspaceCommand = (
+type Creation = Parameters<WorkspaceResourcesController['create']>[0];
+const creations: readonly string[] = [
+	'createProject',
+	'createNote',
+	'createFolder',
+	'createTodo',
+	'createMemory',
+	'createWidget'
+] satisfies readonly Creation['kind'][];
+const isCreation = (command: PreparedWorkspaceCommand): command is Creation =>
+	creations.includes(command.kind);
+
+/** The write a command queued: what it sends, the local version it shows, and how it coalesces. */
+export type QueuedWrite = Pick<
+	WriteIntent<WorkspaceCommand, WorkspaceRecord>,
+	'command' | 'local' | 'coalesce'
+>;
+
+/**
+ * Queue a command in an offline workspace whose device copy holds exactly the scenario's records,
+ * as a creation or as an edit of `observed`. A complete inventory is a finished download; a
+ * partial one is a download this tab has not finished. A refused command throws its message.
+ */
+export const prepareWorkspaceCommand = async (
 	command: PreparedWorkspaceCommand,
 	observed: WorkspaceRecord | null,
 	context: WorkspaceCommandContext
-) => controller.prepare(command, observed, new InMemoryCommandInventory(context), context.now);
+): Promise<QueuedWrite> => {
+	const fixture = workspaceFixture({ accountId: context.userId });
+	const stored = new Map(context.records);
+	if (observed) stored.set(workspaceResourceKey(workspaceRecordIdentity(observed)), observed);
+	fixture.replica.seed(
+		context.userId,
+		[...stored].map(([key, value]) => ({
+			key,
+			entry: { kind: 'present' as const, snapshot: { etag: syncEtag(1n), value } }
+		})),
+		{ cursor: syncCursorSchema.parse('1'), inventoryComplete: context.inventory === 'complete' }
+	);
+	fixture.environment.fixedNow = context.now;
+	const resources = await fixture.start(false);
+	try {
+		if (observed) {
+			const draft = resources.draft(workspaceRecordIdentity(observed));
+			await draft.read();
+			const staged = await draft.stage(command);
+			if (staged.kind === 'failure') throw new Error(staged.message);
+		} else if (isCreation(command)) await resources.create(command);
+		else throw new Error(`${command.kind} edits an existing resource`);
+		const [queued] = fixture.replica.entries(context.userId);
+		if (!queued) throw new Error('The command queued no write');
+		return {
+			command: queued.intent.command,
+			local: queued.intent.local,
+			coalesce: queued.intent.coalesce
+		};
+	} finally {
+		fixture.workspace.stop();
+	}
+};
 const context = (
 	userId: UserId,
 	now: DateTime,
@@ -64,7 +99,7 @@ const context = (
 });
 const value = <K extends WorkspaceRecord['type']>(
 	type: K,
-	write: WriteContent<WorkspaceCommand, WorkspaceRecord>
+	write: QueuedWrite
 ): WorkspaceValues[K] => {
 	if (!write.local || !isWorkspaceRecord(write.local, type))
 		throw new Error(`Expected prepared ${type}`);

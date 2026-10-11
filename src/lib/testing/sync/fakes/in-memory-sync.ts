@@ -1,85 +1,7 @@
-import {
-	type SyncSnapshot,
-	type SyncCursor,
-	type SyncPage,
-	type ResourceChange
-} from '$lib/models/sync';
-import { SyncResourceRulesService } from '$lib/services/sync/state';
-const { mergeResourceStates, resourceVersion } = new SyncResourceRulesService();
-import type {
-	CacheCommit,
-	CachedRecord,
-	StoredCache,
-	SyncCacheRepository,
-	SyncReadTransport,
-	ObjectRead
-} from '$lib/client/sync/contracts';
-
-export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
-	private readonly accounts = new Map<string, Map<string, CachedRecord<T>>>();
-	private readonly cursors = new Map<string, SyncCursor>();
-	private readonly inventories = new Map<string, boolean>();
-	writeFailure: string | null = null;
-	private nextLoad: { started(): void; ready: Promise<void> } | null = null;
-	pauseNextLoad(): { started: Promise<void>; release(): void } {
-		const started = Promise.withResolvers<void>();
-		const ready = Promise.withResolvers<void>();
-		this.nextLoad = { started: started.resolve, ready: ready.promise };
-		return { started: started.promise, release: ready.resolve };
-	}
-
-	async load(accountId: string): Promise<StoredCache<T>> {
-		const stored = {
-			inventoryComplete: this.inventories.get(accountId) ?? this.cursors.has(accountId),
-			records: [...(this.accounts.get(accountId)?.values() ?? [])],
-			cursor: this.cursors.get(accountId) ?? null
-		};
-		const paused = this.nextLoad;
-		this.nextLoad = null;
-		if (paused) {
-			paused.started();
-			await paused.ready;
-		}
-		return stored;
-	}
-
-	async commit(accountId: string, changes: CacheCommit<T>): Promise<void> {
-		if (this.writeFailure) throw new Error(this.writeFailure);
-		const keys = [
-			...changes.put.map((record) => record.key),
-			...changes.remove.map((record) => record.key)
-		];
-		if (new Set(keys).size !== keys.length)
-			throw new Error('A cache commit must touch each resource only once');
-		const records = this.accounts.get(accountId) ?? new Map<string, CachedRecord<T>>();
-		for (const proposed of changes.put) {
-			const previous = records.get(proposed.key);
-			const record = {
-				key: proposed.key,
-				entry: previous ? mergeResourceStates(previous.entry, proposed.entry) : proposed.entry
-			};
-			records.set(record.key, record);
-		}
-		for (const removal of changes.remove) {
-			const previous = records.get(removal.key);
-			if (!previous || resourceVersion(previous.entry) === removal.etag) {
-				records.delete(removal.key);
-			}
-		}
-		this.accounts.set(accountId, records);
-		const cursor = this.cursors.get(accountId);
-		if (
-			changes.cursor !== undefined &&
-			(cursor === undefined || BigInt(changes.cursor) > BigInt(cursor))
-		)
-			this.cursors.set(accountId, changes.cursor);
-		if (changes.inventoryComplete !== undefined)
-			this.inventories.set(accountId, changes.inventoryComplete);
-	}
-}
+import type { ResourceChange, SyncCursor, SyncObjectRead, SyncPage, SyncSnapshot } from '$lib/models/sync';
 
 /** A controllable network connection, with bodies delivered over that connection as evidence. */
-export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
+export class InMemorySyncTransport<T> {
 	readonly records = new Map<string, SyncSnapshot<T>>();
 	readonly deliveredBodies: string[] = [];
 	readonly readSnapshots = new Map<string, SyncSnapshot<T>>();
@@ -102,7 +24,7 @@ export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 	private readonly versions = new Map<string, SyncSnapshot<T>['etag']>();
 	private readonly changes = new Map<string, { cursor: bigint; change: ResourceChange }>();
 
-	async pull(since: SyncCursor) {
+	async pull(since: SyncCursor): Promise<SyncPage<T>> {
 		if (this.pullFailure) throw new Error(this.pullFailure);
 		for (const [key, snapshot] of this.records) {
 			if (this.versions.get(key) === snapshot.etag) continue;
@@ -143,7 +65,7 @@ export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 		return page;
 	}
 
-	async read(key: string, etag: SyncSnapshot<T>['etag'] | null): Promise<ObjectRead<T>> {
+	async read(key: string, etag: SyncSnapshot<T>['etag'] | null): Promise<SyncObjectRead<T>> {
 		if (--this.readBudget < 0) throw new Error('Transport capacity exhausted without progress');
 		const snapshot = this.readSnapshots.get(key) ?? this.records.get(key);
 		if (this.activeReads >= this.maxConcurrentReads) throw new Error('Download capacity exceeded');

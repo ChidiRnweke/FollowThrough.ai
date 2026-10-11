@@ -5,13 +5,13 @@ const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { type SyncEtag } from '$lib/models/sync';
 import { syncEtag } from '$lib/models/sync';
 import type { WriteOutcome } from '$lib/models/outbox';
-import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';
+import type { WorkspaceWriteServer } from '$lib/testing/workspace/fakes/in-memory-transport';
 import { InMemorySyncTransport } from './in-memory-sync';
 
 /** Version-guarded note writes against the same records exposed by the fake read transport. */
 export class InMemoryNoteWrites
 	extends InMemorySyncTransport<WorkspaceRecord>
-	implements OutboxTransport<WorkspaceCommand, WorkspaceRecord>
+	implements WorkspaceWriteServer
 {
 	async send(input: {
 		operationId: string;

@@ -6,7 +6,7 @@ import { type SyncEtag } from '$lib/models/sync';
 import { syncEtag } from '$lib/models/sync';
 import type { WriteOutcome } from '$lib/models/outbox';
 import type { DateTime } from '$lib/models/workspace';
-import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';
+import type { WorkspaceWriteServer } from '$lib/testing/workspace/fakes/in-memory-transport';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 const todoEditing = new TodoEditingRulesService();
 import { InMemorySyncTransport } from './in-memory-sync';
@@ -14,7 +14,7 @@ import { InMemorySyncTransport } from './in-memory-sync';
 /** Version-guarded todo edits, answering each request after the event loop turns like a network. */
 export class InMemoryTodoWrites
 	extends InMemorySyncTransport<WorkspaceRecord>
-	implements OutboxTransport<WorkspaceCommand, WorkspaceRecord>
+	implements WorkspaceWriteServer
 {
 	readonly requests: { readonly operationId: string; readonly baseEtag: SyncEtag | null }[] = [];
 	constructor(private readonly now: DateTime) {

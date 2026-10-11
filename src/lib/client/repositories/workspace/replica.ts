@@ -138,11 +138,11 @@ export class IndexedDbWorkspaceReplica<C, T> implements WorkspaceReplicaReposito
 		};
 	}
 
-	commitCache(accountId: string, commit: CacheCommit<T>): Promise<void> {
+	async commitCache(accountId: string, commit: CacheCommit<T>): Promise<void> {
 		const keys = commit.put.map((row) => row.key);
 		if (new Set(keys).size !== keys.length)
 			throw new Error('A cache commit must touch each resource only once');
-		return this.database(accountId).run('rw', ['records', 'meta'], async (tx) => {
+		await this.database(accountId).run('rw', ['records', 'meta'], async (tx) => {
 			const stored = await storedTable(tx, 'records').bulkGet(keys);
 			await storedTable(tx, 'records').bulkPut(
 				commit.put

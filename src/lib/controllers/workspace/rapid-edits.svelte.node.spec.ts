@@ -1,53 +1,33 @@
-import { describe, expect, it } from 'vitest';
-import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { UpdateTodoInput } from '$lib/models/todos';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { syncEtag } from '$lib/models/sync';
+import type { WorkspaceController } from './workspace';
 import { testNow, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
-import {
-	InMemoryOutbox,
-	InMemoryAccountWriterLock
-} from '$lib/testing/sync/fakes/in-memory-outbox';
-import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { InMemoryTodoWrites } from '$lib/testing/sync/fakes/in-memory-todo-writes';
-import { createResourceCache } from '$lib/factories/sync/cache';
-import { createMutationQueue } from '$lib/factories/sync/submission';
-import { workspaceRebase } from '$lib/factories/workspace/rebase';
-const rebaseWorkspaceRecord = workspaceRebase.rebase;
-import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
+import { InMemoryWorkspaceTransport } from '$lib/testing/workspace/fakes/in-memory-transport';
+import { workspaceFixture } from '$lib/testing/workspace/fixtures/workspace';
 
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
+const started: WorkspaceController[] = [];
+afterEach(() => {
+	for (const workspace of started.splice(0)) workspace.stop();
+});
+
+/** One todo saved at version 1 on the server and on this device, with the tab online. */
 const setup = async () => {
 	const todo = todoBuilder();
 	const key = workspaceResourceKey({ type: 'todos', id: [todo.id] });
 	const server = new InMemoryTodoWrites(testNow);
 	const snapshot = { etag: syncEtag(1n), value: { type: 'todos' as const, value: todo } };
 	server.records.set(key, snapshot);
-	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(
-		rebaseWorkspaceRecord,
-		new InMemorySyncCache()
-	);
-	const cache = createResourceCache(todo.userId, {
-		repository: outbox.projectedCache,
-		transport: server
+	const fixture = workspaceFixture({
+		accountId: todo.userId,
+		transport: new InMemoryWorkspaceTransport(server)
 	});
-	const { writes, execution } = createMutationQueue(todo.userId, {
-		repository: outbox,
-		transport: server,
-		scheduler: new InMemorySyncScheduler(),
-		writerLock: new InMemoryAccountWriterLock(),
-		pull: () => cache.refresh()
-	});
-	const resources = assembleWorkspaceResources(todo.userId, {
-		repository: outbox,
-		cache,
-		writes,
-		execution
-	});
-	await cache.accept(key, snapshot);
-	await resources.initialize();
+	started.push(fixture.workspace);
+	fixture.replica.seed(todo.userId, [{ key, entry: { kind: 'present', snapshot } }]);
+	const resources = await fixture.start();
 	/** Each quick action opens its own editor, as the todo list and menus do. */
 	const edit = async (patch: Omit<UpdateTodoInput, 'todoId'>) => {
 		const draft = resources.draft({ type: 'todos', id: [todo.id] });
@@ -65,7 +45,7 @@ const setup = async () => {
 			await new Promise((resolve) => setTimeout(resolve));
 		}
 	};
-	return { todo, key, server, resources, outbox, edit, settle };
+	return { todo, key, server, resources, edit, settle };
 };
 
 describe('quick successive edits to one resource', () => {

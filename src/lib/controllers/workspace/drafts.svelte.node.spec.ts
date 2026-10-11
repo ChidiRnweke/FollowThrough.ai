@@ -1,60 +1,48 @@
-import { workspaceRebase } from '$lib/factories/workspace/rebase';
-const rebaseWorkspaceRecord = workspaceRebase.rebase;
-import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import type { NoteRevisionId } from '$lib/models/notes';
+import { syncEtag, type SyncSnapshot } from '$lib/models/sync';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-const { noteCommand } = new WorkspaceCommandRulesService();
-import { type WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-
-const { workspaceResourceKey } = new WorkspaceCommandRulesService();
-import { syncEtag } from '$lib/models/sync';
+import type { WorkspaceController } from './workspace';
 import {
 	noteBuilder,
 	projectBuilder,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
-import {
-	InMemoryOutbox,
-	InMemoryAccountWriterLock
-} from '$lib/testing/sync/fakes/in-memory-outbox';
 import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
-import { createResourceCache } from '$lib/factories/sync/cache';
-import { createMutationQueue } from '$lib/factories/sync/submission';
-import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
+import { InMemoryWorkspaceTransport } from '$lib/testing/workspace/fakes/in-memory-transport';
+import { workspaceFixture } from '$lib/testing/workspace/fixtures/workspace';
+
+const { noteCommand, workspaceResourceKey } = new WorkspaceCommandRulesService();
+const started: WorkspaceController[] = [];
+afterEach(() => {
+	for (const workspace of started.splice(0)) workspace.stop();
+});
+
+/** One note saved at version 1 on the server and on this device; the tab starts offline. */
 const setup = async () => {
 	const note = noteBuilder({ plainText: 'Original' });
 	const key = workspaceResourceKey({ type: 'notes', id: [note.id] });
-	const repository = new InMemorySyncCache<WorkspaceRecord>();
-	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(
-		rebaseWorkspaceRecord,
-		repository
-	);
-	const transport = new InMemoryNoteWrites();
+	const server = new InMemoryNoteWrites();
+	const fixture = workspaceFixture({
+		accountId: note.userId,
+		transport: new InMemoryWorkspaceTransport(server)
+	});
+	started.push(fixture.workspace);
 	const snapshot = { etag: syncEtag(1n), value: { type: 'notes' as const, value: note } };
-	transport.records.set(key, snapshot);
-	const cache = createResourceCache(note.userId, { repository: outbox.projectedCache, transport });
-	const { writes, execution } = createMutationQueue(note.userId, {
-		repository: outbox,
-		transport,
-		scheduler: new InMemorySyncScheduler(),
-		writerLock: new InMemoryAccountWriterLock(),
-		pull: () => cache.refresh()
-	});
-	const resources = assembleWorkspaceResources(note.userId, {
-		repository: outbox,
-		cache,
-		writes,
-		execution
-	});
-	resources.setOnline(false);
-	await cache.accept(key, snapshot);
-	await resources.initialize();
+	server.records.set(key, snapshot);
+	fixture.replica.seed(note.userId, [{ key, entry: { kind: 'present', snapshot } }]);
+	const resources = await fixture.start(false);
 	const store = resources.draft({ type: 'notes', id: [note.id] });
-	return { note, key, cache, repository, outbox, transport, resources, store };
+	/** Another tab or a background page stored a version on this device. */
+	const accept = async (stored: SyncSnapshot<WorkspaceRecord>) => {
+		fixture.replica.seed(note.userId, [{ key, entry: { kind: 'present', snapshot: stored } }]);
+		await fixture.replica.read(note.userId);
+	};
+	const queued = () => fixture.replica.entries(note.userId);
+	return { ...fixture, note, key, server, resources, store, accept, queued };
 };
+
 describe('note editor using shared resource writes', () => {
 	it('opens an existing cached note while offline', async () => {
 		const { note, store } = await setup();
@@ -65,24 +53,21 @@ describe('note editor using shared resource writes', () => {
 		});
 	});
 	it('persists typing in the shared outbox before reporting a local save', async () => {
-		const { note, store, outbox } = await setup();
+		const { note, store, queued } = await setup();
 		await store.read();
 		await store.stage(noteCommand({ ...note, plainText: 'Offline draft' }));
-		expect((await outbox.list(note.userId))[0].intent.local).toEqual({
+		expect(queued()[0]?.intent.local).toEqual({
 			type: 'notes',
 			value: { ...note, plainText: 'Offline draft', updatedAt: expect.any(String) }
 		});
 	});
 	it('keeps the first observed base while unsent typing coalesces', async () => {
-		const { note, store, outbox } = await setup();
+		const { note, store, queued } = await setup();
 		await store.read();
 		await store.stage(noteCommand({ ...note, plainText: 'First edit' }));
 		await store.stage(noteCommand({ ...note, plainText: 'Later edit' }));
 		expect(
-			(await outbox.list(note.userId)).map((entry) => ({
-				base: entry.intent.base?.etag,
-				local: entry.intent.local
-			}))
+			queued().map((entry) => ({ base: entry.intent.base?.etag, local: entry.intent.local }))
 		).toEqual([
 			{
 				base: syncEtag(1n),
@@ -94,9 +79,9 @@ describe('note editor using shared resource writes', () => {
 		]);
 	});
 	it('keeps unsaved text recoverable when device storage rejects a save', async () => {
-		const { note, store, outbox } = await setup();
+		const { note, key, store, replica } = await setup();
 		await store.read();
-		outbox.appendFailure = 'Device full';
+		replica.transactionFailures.set(key, 'Device full');
 		expect({
 			result: await store.stage(noteCommand({ ...note, plainText: 'Keep this text' })),
 			status: store.status,
@@ -108,9 +93,9 @@ describe('note editor using shared resource writes', () => {
 		});
 	});
 	it('preserves a conflicting draft when another client changes the observed version', async () => {
-		const { note, key, store, transport, resources } = await setup();
+		const { note, key, store, server, resources } = await setup();
 		await store.read();
-		transport.records.set(key, {
+		server.records.set(key, {
 			etag: syncEtag(2n),
 			value: { type: 'notes', value: { ...note, plainText: 'Other client' } }
 		});
@@ -124,14 +109,14 @@ describe('note editor using shared resource writes', () => {
 		});
 	});
 	it('adopts an acknowledgement before submitting later typing from the same editor', async () => {
-		const { note, store, resources, transport, key } = await setup();
+		const { note, store, resources, server, key } = await setup();
 		await store.read();
 		await store.stage(noteCommand({ ...note, plainText: 'First edit' }));
 		resources.setOnline(true);
 		await resources.synchronize();
 		await store.stage(noteCommand({ ...note, plainText: 'Later typing' }));
 		await resources.synchronize();
-		expect({ status: store.status, saved: transport.records.get(key)?.value }).toEqual({
+		expect({ status: store.status, saved: server.records.get(key)?.value }).toEqual({
 			status: 'synced',
 			saved: { type: 'notes', value: { ...note, plainText: 'Later typing', currentRevision: 3 } }
 		});
@@ -140,23 +125,23 @@ describe('note editor using shared resource writes', () => {
 
 describe('shared note conflict decisions', () => {
 	it('does not resubmit a conflict when retrying synchronization', async () => {
-		const { note, key, store, transport, resources } = await setup();
+		const { note, key, store, server, resources } = await setup();
 		await store.read();
 		const remote = { ...note, plainText: 'Other client' };
-		transport.records.set(key, { etag: syncEtag(2n), value: { type: 'notes', value: remote } });
+		server.records.set(key, { etag: syncEtag(2n), value: { type: 'notes', value: remote } });
 		await store.stage(noteCommand({ ...note, plainText: 'My edit' }));
 		resources.setOnline(true);
 		await store.retry();
 		await store.retry();
-		expect({ status: store.status, remote: transport.records.get(key)?.value }).toEqual({
+		expect({ status: store.status, remote: server.records.get(key)?.value }).toEqual({
 			status: 'conflict',
 			remote: { type: 'notes', value: remote }
 		});
 	});
 	it('keeps later typing when the original conflicting edit is explicitly retained', async () => {
-		const { note, key, store, transport, resources } = await setup();
+		const { note, key, store, server, resources } = await setup();
 		await store.read();
-		transport.records.set(key, {
+		server.records.set(key, {
 			etag: syncEtag(2n),
 			value: { type: 'notes', value: { ...note, plainText: 'Other client' } }
 		});
@@ -165,16 +150,17 @@ describe('shared note conflict decisions', () => {
 		await store.retry();
 		await store.stage(noteCommand({ ...note, plainText: 'More typing' }));
 		await store.keep();
+		await resources.synchronize();
 		expect({ pending: resources.pending, text: store.value?.plainText }).toEqual({
 			pending: [],
 			text: 'More typing'
 		});
 	});
 	it('uses the authoritative server copy after the reviewed local edits are discarded', async () => {
-		const { note, key, store, transport, resources } = await setup();
+		const { note, key, store, server, resources } = await setup();
 		await store.read();
 		const remote = { ...note, plainText: 'Other client' };
-		transport.records.set(key, { etag: syncEtag(2n), value: { type: 'notes', value: remote } });
+		server.records.set(key, { etag: syncEtag(2n), value: { type: 'notes', value: remote } });
 		await store.stage(noteCommand({ ...note, plainText: 'My edit' }));
 		resources.setOnline(true);
 		await store.retry();
@@ -188,20 +174,26 @@ describe('shared note conflict decisions', () => {
 
 describe('shared draft identity and resource semantics', () => {
 	it('edits projects through the same durable draft path', async () => {
-		const { resources, cache, outbox, note } = await setup();
+		const { resources, replica, note, queued } = await setup();
 		const project = projectBuilder();
-		const identity = { type: 'projects', id: [project.id] } satisfies WorkspaceResourceIdentity;
-		await cache.accept(workspaceResourceKey(identity), {
-			etag: syncEtag(3n),
-			value: { type: 'projects', value: project }
-		});
+		const identity = { type: 'projects' as const, id: [project.id] as [string] };
+		replica.seed(note.userId, [
+			{
+				key: workspaceResourceKey(identity),
+				entry: {
+					kind: 'present',
+					snapshot: { etag: syncEtag(3n), value: { type: 'projects', value: project } }
+				}
+			}
+		]);
+		await replica.read(note.userId);
 		const draft = resources.draft(identity);
 		await draft.read();
 		await draft.stage({ kind: 'renameProject', projectId: project.id, name: 'Offline name' });
 		expect({
 			value: draft.value?.name,
 			status: draft.status,
-			base: (await outbox.list(note.userId))[0].intent.base?.etag
+			base: queued()[0]?.intent.base?.etag
 		}).toEqual({ value: 'Offline name', status: 'pending', base: syncEtag(3n) });
 	});
 	it('rejects a command addressed to a different resource before persisting it', async () => {
@@ -217,14 +209,14 @@ describe('shared draft identity and resource semantics', () => {
 
 describe('a rendered form base', () => {
 	it('retains the displayed version when synchronization updates the cache during typing', async () => {
-		const { store, cache, key, note, resources } = await setup();
+		const { store, accept, note, resources } = await setup();
 		store.capture();
-		await cache.accept(key, {
+		await accept({
 			etag: syncEtag(2n),
 			value: { type: 'notes', value: { ...note, plainText: 'Other client' } }
 		});
 		await store.stage(noteCommand({ ...note, plainText: 'Still typing' }));
-		expect(resources.pending[0].intent.base?.etag).toBe(syncEtag(1n));
+		expect(resources.pending[0]?.intent.base?.etag).toBe(syncEtag(1n));
 	});
 });
 
@@ -257,7 +249,7 @@ describe('a mounted editor after acknowledgement', () => {
 		});
 	});
 	it('never automatically resurrects an edit discarded by another surface', async () => {
-		const { note, store, resources, transport, key } = await setup();
+		const { note, store, resources, server, key } = await setup();
 		await store.read();
 		await store.stage(noteCommand({ ...note, plainText: 'Discarded edit' }));
 		await resources.discard(resources.pending.map((entry) => entry.intent.operationId));
@@ -267,7 +259,7 @@ describe('a mounted editor after acknowledgement', () => {
 		expect({
 			status: store.status,
 			local: store.value?.plainText,
-			server: transport.records.get(key)?.value
+			server: server.records.get(key)?.value
 		}).toEqual({
 			status: 'conflict',
 			local: 'Keep my buffer',
@@ -275,7 +267,7 @@ describe('a mounted editor after acknowledgement', () => {
 		});
 	});
 	it('rebases onto a later server revision that changed no field the edit changed', async () => {
-		const { note, key, store, transport, resources, cache } = await setup();
+		const { note, key, store, server, resources, accept } = await setup();
 		await store.read();
 		await store.stage(noteCommand({ ...note, plainText: 'My edit' }));
 		resources.setOnline(true);
@@ -287,19 +279,19 @@ describe('a mounted editor after acknowledgement', () => {
 				value: { ...note, plainText: 'My edit', currentRevision: 3 }
 			}
 		};
-		transport.records.set(key, changed);
-		await cache.accept(key, changed);
+		server.records.set(key, changed);
+		await accept(changed);
 		await store.stage(noteCommand({ ...note, plainText: 'Later typing' }));
 		await resources.synchronize();
-		expect({ status: store.status, server: transport.records.get(key)?.etag }).toEqual({
+		expect({ status: store.status, server: server.records.get(key)?.etag }).toEqual({
 			status: 'synced',
 			server: syncEtag(4n)
 		});
 	});
 	it('can save again after explicitly keeping its conflicting write', async () => {
-		const { note, key, store, transport, resources } = await setup();
+		const { note, key, store, server, resources } = await setup();
 		await store.read();
-		transport.records.set(key, {
+		server.records.set(key, {
 			etag: syncEtag(2n),
 			value: { type: 'notes', value: { ...note, plainText: 'Other client' } }
 		});
@@ -327,7 +319,7 @@ it('coalesces overlapping local saves using their serialized observed ancestry',
 
 // SYNC-DECISION: discard never authorizes submission.
 it('discards a queued edit without changing the authoritative note after reconnecting', async () => {
-	const { note, key, store, transport, resources } = await setup();
+	const { note, key, store, server, resources } = await setup();
 	await store.read();
 	await store.stage(noteCommand({ ...note, plainText: 'Do not submit this' }));
 	await resources.synchronize();
@@ -338,7 +330,7 @@ it('discards a queued edit without changing the authoritative note after reconne
 	);
 	expect({
 		outcome,
-		authoritative: transport.records.get(key)?.value,
+		authoritative: server.records.get(key)?.value,
 		pending: resources.pending
 	}).toEqual({
 		outcome: { kind: 'discarded', value: { kind: 'ready', value: note } },
@@ -348,7 +340,7 @@ it('discards a queued edit without changing the authoritative note after reconne
 });
 
 it('prepares overlapping commands against preceding local changes without replacing unseen metadata', async () => {
-	const { note, store, resources } = await setup();
+	const { note, store, views } = await setup();
 	await store.read();
 	await Promise.all([
 		store.stage({ kind: 'renameNote', noteId: note.id, title: 'Renamed' }),
@@ -359,16 +351,16 @@ it('prepares overlapping commands against preceding local changes without replac
 			plainText: 'Later text'
 		})
 	]);
-	expect(
-		resources.views.all('notes').map(({ title, plainText }) => ({ title, plainText }))
-	).toEqual([{ title: 'Renamed', plainText: 'Later text' }]);
+	expect(views.all('notes').map(({ title, plainText }) => ({ title, plainText }))).toEqual([
+		{ title: 'Renamed', plainText: 'Later text' }
+	]);
 });
 
 it('rejects a published body from another note before queuing a discard', async () => {
 	const { note, store, resources } = await setup();
 	await store.read();
 	const result = await store.discardPublished({
-		id: 'a0000000-0000-4000-8000-000000000091' as import('$lib/models/notes').NoteRevisionId,
+		id: 'a0000000-0000-4000-8000-000000000091' as NoteRevisionId,
 		noteId: testNoteId(2),
 		revision: note.publishedRevision,
 		title: note.title,
@@ -383,7 +375,7 @@ it('rejects a published body from another note before queuing a discard', async 
 });
 
 it('creates an offline note and waits for its locally created project', async () => {
-	const { note, resources, outbox } = await setup();
+	const { resources, queued } = await setup();
 	const project = projectBuilder();
 	await resources.create({ kind: 'createProject', id: project.id, name: project.name });
 	const created = await resources.create({
@@ -392,11 +384,11 @@ it('creates an offline note and waits for its locally created project', async ()
 		projectId: project.id,
 		title: '  Captured offline  '
 	});
-	const entries = await outbox.list(note.userId);
+	const entries = queued();
 	expect({
 		title: created.type === 'notes' ? created.value.title : null,
-		dependencies: entries[1].intent.dependencies
-	}).toEqual({ title: 'Captured offline', dependencies: [entries[0].intent.operationId] });
+		dependencies: entries[1]?.intent.dependencies
+	}).toEqual({ title: 'Captured offline', dependencies: [entries[0]?.intent.operationId] });
 });
 
 describe('an open editor and versions made elsewhere', () => {
@@ -422,34 +414,34 @@ describe('an open editor and versions made elsewhere', () => {
 		expect(store.newer).toBeNull();
 	});
 	it('reports a revision made elsewhere after its own save was acknowledged', async () => {
-		const { note, key, store, transport, cache } = await savedOnline();
-		transport.records.set(key, elsewhere(note, 3n));
-		await cache.refresh();
+		const { note, key, store, server, resources } = await savedOnline();
+		server.records.set(key, elsewhere(note, 3n));
+		await resources.synchronize();
 		expect(store.newer).toEqual({ ...note, plainText: 'Other client' });
 	});
 	it('does not report a newer version while its own edit is unsent', async () => {
-		const { note, key, store, cache } = await setup();
+		const { note, store, accept } = await setup();
 		await store.open();
 		await store.stage(noteCommand({ ...note, plainText: 'My edit' }));
-		await cache.accept(key, elsewhere(note, 2n));
+		await accept(elsewhere(note, 2n));
 		expect(store.newer).toBeNull();
 	});
 	it('observes the newer version once it adopts it', async () => {
-		const { note, key, store, transport, cache } = await savedOnline();
-		transport.records.set(key, elsewhere(note, 3n));
-		await cache.refresh();
+		const { note, key, store, server, resources } = await savedOnline();
+		server.records.set(key, elsewhere(note, 3n));
+		await resources.synchronize();
 		store.adopt();
 		expect(store.newer).toBeNull();
 	});
 });
 
 it('does not publish a delayed local save into a stopped account', async () => {
-	const { note, store, outbox, resources } = await setup();
+	const { note, store, replica, resources, workspace } = await setup();
 	await store.read();
-	const gate = outbox.pauseAppend();
+	const gate = replica.pauseTransaction();
 	const saving = store.stage(noteCommand({ ...note, plainText: 'Saved during teardown' }));
 	await gate.started;
-	resources.stop();
+	workspace.stop();
 	gate.release();
 	const result = await saving;
 	expect({ result, value: store.value, records: [...resources.records.values()] }).toEqual({
