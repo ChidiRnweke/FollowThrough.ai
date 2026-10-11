@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { DiagramLibraryService } from '$lib/server/services/diagrams/library';
 import { DiagramRuleService } from '$lib/services/diagrams/editing';
 import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
@@ -46,7 +47,8 @@ const setup = (
 		new InMemoryNoteRepository(testActor()),
 		new InMemoryAnchorRepository(testActor()),
 		new InMemoryProvenanceRepository(testActor()),
-		projects
+		projects,
+		testClock
 	);
 	return {
 		diagrams,
@@ -119,6 +121,7 @@ describe('Creating a diagram', () => {
 			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
+				now: testClock,
 				...agentToolResultsFixture(),
 				diagramRules: new DiagramRuleService(),
 				drawio: {

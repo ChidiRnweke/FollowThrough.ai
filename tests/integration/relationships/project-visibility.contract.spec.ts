@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import type { NoteId } from '$lib/models/notes';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -17,6 +18,7 @@ it('hides a retained backlink after built-in recovery moves its source out of an
 	const notes = new NoteRecords(owner, tx.database);
 	const provenance = new ProvenanceRecords(owner, tx.database);
 	const { builtIns } = createSkillsCapability(owner, {
+		now: testClock,
 		db: tx.database,
 		projects,
 		notes,
@@ -38,7 +40,8 @@ it('hides a retained backlink after built-in recovery moves its source out of an
 		relationships,
 		notes,
 		new SourceAnchorRecords(owner, tx.database),
-		provenance
+		provenance,
+		testClock
 	);
 	const edge = await tx.transactionRunner.run(() =>
 		graph.creator

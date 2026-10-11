@@ -12,8 +12,6 @@ import type { ProjectRepository } from '$lib/server/repositories/projects/projec
 import type { SkillRepository } from '$lib/server/repositories/skills/skills';
 import type { BuiltInSkillDefinition } from '$lib/models/skills/built-ins';
 
-const now = (): DateTime => new Date().toISOString() as DateTime;
-
 export interface BuiltInSkillProvisioner {
 	ensure(): Promise<void>;
 	load(key: string): Promise<Skill<Note>>;
@@ -30,7 +28,8 @@ export class BuiltInSkills implements BuiltInSkillProvisioner, BuiltInSkillSelec
 		private readonly definitions: {
 			readonly active: readonly BuiltInSkillDefinition[];
 			readonly retired: readonly BuiltInSkillDefinition[];
-		}
+		},
+		private readonly now: () => DateTime
 	) {}
 
 	forSurface(kind: AppSurfaceKind): readonly string[] {
@@ -180,7 +179,7 @@ export class BuiltInSkills implements BuiltInSkillProvisioner, BuiltInSkillSelec
 		skill: Skill<Note>,
 		definition: BuiltInSkillDefinition
 	): Promise<void> {
-		const timestamp = now();
+		const timestamp = this.now();
 		const updated = await this.notes.updateIfRevision(
 			{
 				...note,
@@ -216,7 +215,7 @@ export class BuiltInSkills implements BuiltInSkillProvisioner, BuiltInSkillSelec
 		definition: BuiltInSkillDefinition,
 		projectId: ProjectId
 	): Promise<Note> {
-		const timestamp = now();
+		const timestamp = this.now();
 		const note = await this.notes.insert({
 			id: crypto.randomUUID() as NoteId,
 			userId: this.actor.userId,

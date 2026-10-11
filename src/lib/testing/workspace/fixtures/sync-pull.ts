@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import type { Database } from '$lib/server/db';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -19,6 +20,7 @@ export function workspacePullFixture(actor: ActorContext, db: Database): Workspa
 	const { database, transactionRunner } = createTransactionContext(db);
 	const synchronization = createSyncCapability(actor, { db: database });
 	const skills = createSkillsCapability(actor, {
+		now: testClock,
 		db: database,
 		projects: new ProjectRecords(actor, database),
 		notes: new NoteRecords(actor, database),

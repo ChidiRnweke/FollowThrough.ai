@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { ValidationError } from '$lib/errors';
 import type { ProposeMemoryChangeInput } from '$lib/models/memory';
@@ -62,7 +63,13 @@ const setup = () => {
 	const search = new InMemorySearchRepository(testActor());
 	const indexEmbeddings = new InMemoryRetrievalProvider();
 	const indexWriter = createContentIndex(search, undefined, undefined, false, indexEmbeddings);
-	const memory = createMemoryServices(testActor(), entries, projects, provenanceRepository);
+	const memory = createMemoryServices(
+		testActor(),
+		entries,
+		projects,
+		provenanceRepository,
+		testClock
+	);
 	const controller = new Memory(
 		testActor(),
 		new WorkspaceCommandRulesService(),

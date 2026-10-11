@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
@@ -27,7 +28,7 @@ const setup = async (scope: 'project' | 'user' = 'project') => {
 		metadata: {},
 		createdAt: testNow
 	});
-	const library = createMemoryServices(actor, entries, projects, provenance);
+	const library = createMemoryServices(actor, entries, projects, provenance, testClock);
 	const entry = await library.library.create(
 		memoryEntryBuilder({ projectId: scope === 'project' ? testProjectId() : undefined })
 	);

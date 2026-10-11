@@ -1,3 +1,4 @@
+import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import { AttachmentExtraction } from '$lib/server/services/attachments/extraction';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
@@ -66,6 +67,7 @@ export interface AttachmentsCapabilityInput {
 	readonly ocrModel?: string;
 	readonly s3?: ObjectStorageConfig;
 	readonly storage?: IAttachmentStorage;
+	readonly now: () => DateTime;
 }
 
 export interface AttachmentsCapability {
@@ -101,7 +103,7 @@ export const createAttachmentsCapability = (
 	return {
 		repository,
 		storage,
-		uploads: new AttachmentUploadService(actor, repository, input.notes),
+		uploads: new AttachmentUploadService(actor, repository, input.notes, input.now),
 		reader: new AttachmentReadingService(repository),
 		lifecycle: new AttachmentLifecycleService(repository, input.notes),
 		processing: new AttachmentProcessing({
@@ -115,7 +117,8 @@ export const createAttachmentsCapability = (
 			preferences: input.preferences,
 			indexer: input.indexer,
 			transactionRunner: input.transactionRunner,
-			visionModel: input.visionModel
+			visionModel: input.visionModel,
+			now: input.now
 		})
 	};
 };

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
@@ -48,12 +49,13 @@ export const diagramGenerationFixture = () => {
 		contextNotes: notes,
 		contextSkills: skills.skillFinder,
 		contextMemory: new InMemoryMemoryEntryRepository(testActor()),
-		conversations: new ConversationArchive(testActor(), conversations),
-		conversationMessages: new ConversationArchive(testActor(), conversations),
+		conversations: new ConversationArchive(testActor(), conversations, testClock),
+		conversationMessages: new ConversationArchive(testActor(), conversations, testClock),
 		toolActivity: new ToolActivityProjection(),
 		preferences: new AgentPreferenceCatalog(
 			testActor(),
-			new InMemoryAgentPreferencesRepository(testActor())
+			new InMemoryAgentPreferencesRepository(testActor()),
+			testClock
 		),
 		models,
 		runs: new AgentRunLedger(testActor(), persistence),

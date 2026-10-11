@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { noteEtag } from '$lib/models/notes';
 import type { SkillEditInput } from '$lib/models/skills';
 import { readSkillManifest } from '$lib/remote/skills/manifest-reader.server';
@@ -50,13 +51,15 @@ const setup = () => {
 		testActor(),
 		skills,
 		notes,
-		new InMemoryProvenanceRepository(testActor())
+		new InMemoryProvenanceRepository(testActor()),
+		testClock
 	);
 	const catalog = createNoteServices(
 		testActor(),
 		notes,
 		new InMemoryAnchorRepository(testActor()),
-		projects
+		projects,
+		testClock
 	);
 	const content = new InMemoryNoteContent(testActor());
 	const transactionRunner = new InMemoryTransactionRunner([notes, skills]);

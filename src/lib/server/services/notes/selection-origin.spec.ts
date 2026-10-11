@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { SelectionOrigins } from './selection-origin';
 import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
@@ -70,7 +71,8 @@ describe('Selection origins', () => {
 			new InMemorySuggestionRepository(testActor()),
 			notes,
 			provenance,
-			anchors
+			anchors,
+			{ now: testClock }
 		);
 		const suggestion = await inbox.creator.createFromSelection(origin, {
 			kind: 'todo',

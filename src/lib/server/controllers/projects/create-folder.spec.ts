@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
 import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
@@ -21,8 +22,13 @@ const setup = () => {
 	return {
 		records,
 		creation: noteCreationControllers(
-			createNoteServices(testActor(), records, new InMemoryAnchorRepository(testActor()), projects)
-				.creator,
+			createNoteServices(
+				testActor(),
+				records,
+				new InMemoryAnchorRepository(testActor()),
+				projects,
+				testClock
+			).creator,
 			new InMemoryTransactionRunner([records, projects])
 		)
 	};

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
@@ -19,7 +20,8 @@ it('stores the existing classification on the active replacement entry', async (
 		owner,
 		entries,
 		new ProjectRecords(owner, database),
-		new ProvenanceRecords(owner, database)
+		new ProvenanceRecords(owner, database),
+		testClock
 	);
 	const original = await library.library.create(
 		memoryEntryBuilder({

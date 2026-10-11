@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import type { NoteId, NoteRevisionId } from '$lib/models/notes';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
@@ -34,7 +35,13 @@ const controller = (
 	const projects = new ProjectRecords(actor, database);
 	const notes = new NoteRecords(actor, database);
 	const skills = new SkillRecords(actor, database);
-	const library = createSkillServices(actor, skills, notes, new ProvenanceRecords(actor, database));
+	const library = createSkillServices(
+		actor,
+		skills,
+		notes,
+		new ProvenanceRecords(actor, database),
+		testClock
+	);
 	return new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
@@ -45,7 +52,7 @@ const controller = (
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
-			builtInSkills: new BuiltInSkills(actor, projects, notes, skills, definitions),
+			builtInSkills: new BuiltInSkills(actor, projects, notes, skills, definitions, testClock),
 			skillFinder: library.finder,
 			skillEditor: library.editor,
 			skillUsageLister: library.usageLister

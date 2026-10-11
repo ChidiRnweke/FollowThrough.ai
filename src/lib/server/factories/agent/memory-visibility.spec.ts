@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
@@ -65,7 +66,8 @@ const setup = (scope: 'user' | 'project') => {
 		testActor(),
 		entries,
 		projects,
-		new InMemoryProvenanceRepository(testActor())
+		new InMemoryProvenanceRepository(testActor()),
+		testClock
 	);
 	const controller = new Memory(
 		testActor(),

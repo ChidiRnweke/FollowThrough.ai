@@ -14,12 +14,11 @@ export interface TrustPolicyStore {
 }
 
 const supported = new Set<PipelineKind>(PROPOSAL_AUTO_ACCEPT_PIPELINES);
-const now = (): DateTime => new Date().toISOString() as DateTime;
-
 export class ToolTrust implements TrustPolicyStore, TrustPolicyEvaluator {
 	constructor(
 		private readonly actor: ActorContext,
-		private readonly policies: TrustPolicyRepository
+		private readonly policies: TrustPolicyRepository,
+		private readonly now: () => DateTime
 	) {}
 	async list(): Promise<readonly TrustPolicy[]> {
 		const stored = new Map((await this.policies.list()).map((policy) => [policy.pipeline, policy]));
@@ -29,8 +28,8 @@ export class ToolTrust implements TrustPolicyStore, TrustPolicyEvaluator {
 					userId: this.actor.userId,
 					pipeline,
 					autoAcceptEnabled: false,
-					createdAt: now(),
-					updatedAt: now()
+					createdAt: this.now(),
+					updatedAt: this.now()
 				}
 		);
 	}
@@ -40,7 +39,7 @@ export class ToolTrust implements TrustPolicyStore, TrustPolicyEvaluator {
 				'Auto-accept policies apply only to extracted tasks and memory proposals. Chat tool approvals use the chat execution mode; note links and external references require review.'
 			);
 		const existing = await this.policies.find(input.pipeline);
-		const timestamp = now();
+		const timestamp = this.now();
 		return this.policies.upsert({
 			userId: this.actor.userId,
 			pipeline: input.pipeline,

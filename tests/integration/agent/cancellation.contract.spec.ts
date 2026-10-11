@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentSessionRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
@@ -65,6 +66,7 @@ const cancellationController = (actor: ActorContext, db: typeof context.db) => {
 		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
+			now: testClock,
 			...agentRulesFixture(),
 			records: new AgentRunHarnessRecords(
 				runs,
@@ -75,11 +77,13 @@ const cancellationController = (actor: ActorContext, db: typeof context.db) => {
 			transitions: new RunTransitions(runs),
 			conversationMessages: new ConversationArchive(
 				actor,
-				new ConversationRecords(actor, database)
+				new ConversationRecords(actor, database),
+				testClock
 			),
 			conversationSessions: new ConversationArchive(
 				actor,
-				new ConversationRecords(actor, database)
+				new ConversationRecords(actor, database),
+				testClock
 			),
 			transactionRunner,
 			settlements: new RunSettlements(runs, events),

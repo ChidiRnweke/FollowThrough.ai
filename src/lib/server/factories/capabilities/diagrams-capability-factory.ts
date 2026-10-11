@@ -57,6 +57,8 @@ import type { ProjectRepository } from '$lib/server/repositories/projects';
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 export interface DiagramsCapabilityInput {
 	readonly db: Database;
+	/** One clock for every diagram write, services and controller alike. */
+	readonly now: () => DateTime;
 	readonly notes: NoteRepository;
 	readonly anchors: SourceAnchorRepository;
 	readonly provenanceRepository: ProvenanceRepository;
@@ -93,8 +95,6 @@ export interface DiagramsCapability {
 	readonly canvasSource: CanvasSourceReader;
 	readonly labelPresentation: DiagramLabelPresentation;
 	readonly generationRules: DiagramGenerationRules;
-	/** One clock for every diagram write, services and controller alike. */
-	readonly now: () => DateTime;
 }
 
 export const createDiagramsCapability = (
@@ -108,7 +108,8 @@ export const createDiagramsCapability = (
 			input.notes,
 			input.anchors,
 			input.provenanceRepository,
-			input.projects
+			input.projects,
+			input.now
 		),
 		rules: new DiagramRuleService(),
 		mermaid: new MermaidDocumentService(),
@@ -117,7 +118,6 @@ export const createDiagramsCapability = (
 		canvasSource: new PresentedCanvasSource(input.sessions),
 		labelPresentation: new DiagramLabelPresentationService(),
 		generationRules: new DiagramGenerationRuleService(),
-		now: () => new Date().toISOString() as DateTime,
 		generation: {
 			contextFormatter: input.context,
 			contextNotes: input.contextNotes,

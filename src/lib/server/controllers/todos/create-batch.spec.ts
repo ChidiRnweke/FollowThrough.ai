@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createTodoBatchSchema } from '$lib/models/todos';
 import { createTodoCatalog } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
@@ -35,12 +36,14 @@ const setup = () => {
 		projects,
 		new InMemoryAnchorRepository(testActor()),
 		new InMemoryNoteRepository(testActor()),
-		new InMemoryProvenanceRepository(testActor())
+		new InMemoryProvenanceRepository(testActor()),
+		testClock
 	);
 	const controller = new Todos(
 		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
+			now: testClock,
 			...agentToolResultsFixture(),
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),

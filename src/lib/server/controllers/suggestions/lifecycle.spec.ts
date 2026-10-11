@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
 import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
@@ -48,6 +49,7 @@ describe('Pending memory review invariants', () => {
 			testActor(),
 			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
+				now: testClock,
 				...agentToolResultsFixture(),
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
@@ -89,6 +91,7 @@ describe('Pending memory review invariants', () => {
 			testActor(),
 			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
+				now: testClock,
 				...agentToolResultsFixture(),
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),

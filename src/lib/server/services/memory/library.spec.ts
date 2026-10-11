@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	memoryEntryBuilder,
 	testMemoryEntryId
@@ -33,7 +34,7 @@ const setup = async () => {
 		createdAt: testNow
 	};
 	await provenance.insert(record);
-	const service = createMemoryServices(testActor(), entries, projects, provenance);
+	const service = createMemoryServices(testActor(), entries, projects, provenance, testClock);
 	return { entries, projects, provenance, service };
 };
 

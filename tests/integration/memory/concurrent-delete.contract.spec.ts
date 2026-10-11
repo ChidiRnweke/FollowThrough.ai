@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
@@ -30,7 +31,8 @@ it('deletes the latest memory version after a concurrent edit commits', async ()
 		owner,
 		new MemoryRecords(owner, database),
 		new ProjectRecords(owner, database),
-		new ProvenanceRecords(owner, database)
+		new ProvenanceRecords(owner, database),
+		testClock
 	);
 	const blocker = postgres(context.url, { max: 2 });
 	const locked = Promise.withResolvers<void>();

@@ -1,3 +1,4 @@
+import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import { SkillPortabilityService, type SkillPortability } from '$lib/services/skills/manifest';
 import {
@@ -33,6 +34,7 @@ export interface SkillsCapabilityInput {
 	readonly projects: ProjectRepository;
 	readonly notes: NoteRepository;
 	readonly provenance: ProvenanceRepository;
+	readonly now: () => DateTime;
 }
 
 export interface SkillsCapability {
@@ -48,11 +50,18 @@ export const createSkillsCapability = (
 	input: SkillsCapabilityInput
 ): SkillsCapability => {
 	const repository = new SkillRecords(actor, input.db);
-	const services = createSkillServices(actor, repository, input.notes, input.provenance);
-	const builtIns = new BuiltInSkills(actor, input.projects, input.notes, repository, {
-		active: BUILT_INS,
-		retired: RETIRED_BUILT_INS
-	});
+	const services = createSkillServices(actor, repository, input.notes, input.provenance, input.now);
+	const builtIns = new BuiltInSkills(
+		actor,
+		input.projects,
+		input.notes,
+		repository,
+		{
+			active: BUILT_INS,
+			retired: RETIRED_BUILT_INS
+		},
+		input.now
+	);
 	return {
 		portability: new SkillPortabilityService(),
 		metadataEditing: new SkillMetadataEditingService(),
@@ -73,9 +82,10 @@ export function createSkillServices(
 	actor: ActorContext,
 	skills: SkillRepository,
 	notes: NoteRepository,
-	provenance: ProvenanceRepository
+	provenance: ProvenanceRepository,
+	now: () => DateTime
 ): SkillServices {
-	const usage = new SkillUsageService(skills, notes, provenance);
+	const usage = new SkillUsageService(skills, notes, provenance, now);
 	const authoring = new SkillAuthoringService(skills, notes);
 	return {
 		creator: authoring,

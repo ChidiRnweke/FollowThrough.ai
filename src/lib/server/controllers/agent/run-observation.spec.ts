@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import type { ActorContext } from '$lib/models/identity';
@@ -35,6 +36,7 @@ const setup = (viewer: ActorContext = testActor()) => {
 		viewer,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
+			now: testClock,
 			...agentRulesFixture(),
 			records: new AgentRunHarnessRecords(runs, runs, runs, new InMemoryAgentSessionRepository()),
 			runSignals: new RunSignalService(runs, runs)

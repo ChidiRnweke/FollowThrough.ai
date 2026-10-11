@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import { expect, it } from 'vitest';
 import { DiagramLibraryService } from '$lib/server/services/diagrams/library';
@@ -32,7 +33,8 @@ const setup = (viewer: ActorContext = testActor()) => {
 		new InMemoryNoteRepository(viewer),
 		new InMemoryAnchorRepository(viewer),
 		new InMemoryProvenanceRepository(viewer),
-		new InMemoryProjectRepository(viewer)
+		new InMemoryProjectRepository(viewer),
+		testClock
 	);
 	const write: DiagramContentWrite = {
 		kind: 'drawio',

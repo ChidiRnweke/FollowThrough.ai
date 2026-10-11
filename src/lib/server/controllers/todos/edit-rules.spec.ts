@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createTodoCatalog } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
@@ -32,11 +33,20 @@ const setup = () => {
 	const notes = new InMemoryNoteRepository(testActor());
 	const provenance = new InMemoryProvenanceRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const service = createTodoCatalog(testActor(), todos, projects, anchors, notes, provenance);
+	const service = createTodoCatalog(
+		testActor(),
+		todos,
+		projects,
+		anchors,
+		notes,
+		provenance,
+		testClock
+	);
 	const controller = new Todos(
 		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
+			now: testClock,
 			...agentToolResultsFixture(),
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),

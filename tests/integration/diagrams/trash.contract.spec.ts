@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { DiagramId } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/models/diagrams';
 import {
@@ -44,14 +45,15 @@ it.each([
 		const blocker = postgres(context.url, { max: 2 });
 		const { database, transactionRunner } = createTransactionContext(writer.db);
 		const projects = new ProjectRecords(owner, database);
-		const notes = createNotesCapability(owner, { db: database, projects });
+		const notes = createNotesCapability(owner, { now: testClock, db: database, projects });
 		const library = new DiagramLibraryService(
 			owner,
 			new DiagramRecords(owner, database),
 			notes.repository,
 			notes.anchors,
 			notes.provenanceRepository,
-			projects
+			projects,
+			testClock
 		);
 		const controller = new DiagramStudio(
 			owner,

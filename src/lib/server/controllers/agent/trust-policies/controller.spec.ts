@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { PipelineKind, TrustPolicy, UpdateTrustPolicyInput } from '$lib/models/agent';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -24,7 +25,7 @@ describe('trust policy controller behavior', () => {
 			policy({ userId: testActor(2).userId, autoAcceptEnabled: true }),
 			policy()
 		];
-		const trustPolicyStore = new ToolTrust(testActor(), repository);
+		const trustPolicyStore = new ToolTrust(testActor(), repository, testClock);
 		const controller = new TrustPolicies(
 			testActor(),
 			new WorkspaceCommandRulesService(),
@@ -47,7 +48,8 @@ describe('trust policy controller behavior', () => {
 	it('returns the updated policy', async () => {
 		const trustPolicyStore = new ToolTrust(
 			testActor(),
-			new InMemoryTrustPolicyRepository(testActor())
+			new InMemoryTrustPolicyRepository(testActor()),
+			testClock
 		);
 		const controller = new TrustPolicies(
 			testActor(),

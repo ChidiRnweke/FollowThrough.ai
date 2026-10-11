@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { MemoryEditingService } from '$lib/services/memory/edits';
@@ -29,7 +30,8 @@ const setup = () => {
 		testActor(),
 		entries,
 		projects,
-		new InMemoryProvenanceRepository(testActor())
+		new InMemoryProvenanceRepository(testActor()),
+		testClock
 	);
 	const controller = new Memory(
 		testActor(),

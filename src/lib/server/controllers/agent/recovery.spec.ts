@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
@@ -35,6 +36,7 @@ const recover = async (status: 'running' | 'cancelling') => {
 		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
+			now: testClock,
 			...agentRulesFixture(),
 			records: new AgentRunHarnessRecords(runs, runs, runs, new InMemoryAgentSessionRepository()),
 			settlements,

@@ -23,8 +23,6 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 
-const now = (): DateTime => new Date().toISOString() as DateTime;
-
 export interface DiagramFinder {
 	get(diagramId: DiagramId): Promise<Diagram>;
 }
@@ -84,7 +82,8 @@ export class DiagramLibraryService implements DiagramLibrary {
 		private readonly notes: NoteRepository,
 		private readonly anchors: SourceAnchorRepository,
 		private readonly provenance: ProvenanceRepository,
-		private readonly projects: ProjectRepository
+		private readonly projects: ProjectRepository,
+		private readonly now: () => DateTime
 	) {}
 	async get(diagramId: DiagramId): Promise<Diagram> {
 		const diagram = await this.diagrams.findById(diagramId);
@@ -153,7 +152,7 @@ export class DiagramLibraryService implements DiagramLibrary {
 			source: diagram.source,
 			renderedSvg: diagram.renderedSvg,
 			searchableText: diagram.searchableText,
-			createdAt: now()
+			createdAt: this.now()
 		});
 	}
 	revisions(diagramId: DiagramId): Promise<readonly DiagramRevision[]> {

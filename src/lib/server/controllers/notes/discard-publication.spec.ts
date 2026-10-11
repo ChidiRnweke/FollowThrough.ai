@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { Note } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -45,7 +46,8 @@ it('discards against the publication that committed before it acquired the note'
 		testActor(),
 		records,
 		new InMemoryAnchorRepository(testActor()),
-		projects
+		projects,
+		testClock
 	);
 	const effects = new InMemoryNoteContent(testActor());
 	const controller = new Notes(

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { DiagramLibraryService } from '$lib/server/services/diagrams/library';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
@@ -33,7 +34,15 @@ const setup = () => {
 		anchors,
 		provenance,
 		projects,
-		service: new DiagramLibraryService(testActor(), diagrams, notes, anchors, provenance, projects)
+		service: new DiagramLibraryService(
+			testActor(),
+			diagrams,
+			notes,
+			anchors,
+			provenance,
+			projects,
+			testClock
+		)
 	};
 };
 

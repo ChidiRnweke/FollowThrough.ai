@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import type { NoteRelationship } from '$lib/models/notes';
 import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
@@ -32,7 +33,8 @@ const setup = () => {
 		new InMemoryRelationshipRepository(testActor()),
 		notes,
 		new InMemoryAnchorRepository(testActor()),
-		new InMemoryProvenanceRepository(testActor())
+		new InMemoryProvenanceRepository(testActor()),
+		testClock
 	);
 	return { notes, source, target, graph };
 };

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import { InMemoryAttachmentStorage } from '$lib/testing/attachments/fakes/in-memory-deliverables';
 import { NotFoundError } from '$lib/errors';
@@ -49,7 +50,8 @@ const setup = async (identity: number) => {
 			new ProjectRecords(actor, database),
 			new SourceAnchorRecords(actor, database),
 			new NoteRecords(actor, database),
-			new ProvenanceRecords(actor, database)
+			new ProvenanceRecords(actor, database),
+			testClock
 		);
 		return new Attachments(
 			capabilityDependencies<AttachmentsDependencies>({

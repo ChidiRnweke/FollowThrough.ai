@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { NoteId } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
@@ -43,6 +44,7 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 	const blocker = postgres(context.url, { max: 2 });
 	const { database, transactionRunner } = createTransactionContext(writer.db);
 	const { services: catalog } = createNotesCapability(owner, {
+		now: testClock,
 		db: database,
 		projects: new ProjectRecords(owner, database)
 	});
@@ -110,6 +112,7 @@ it('archives the authoritative note after a concurrent note edit commits', async
 	const blocker = postgres(context.url, { max: 2 });
 	const { database, transactionRunner } = createTransactionContext(writer.db);
 	const { services: catalog } = createNotesCapability(owner, {
+		now: testClock,
 		db: database,
 		projects: new ProjectRecords(owner, database)
 	});

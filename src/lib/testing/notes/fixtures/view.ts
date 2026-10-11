@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createReferenceServices } from '$lib/server/factories/capabilities/references-capability-factory';
@@ -51,14 +52,16 @@ export const noteViewFixture = (note = noteBuilder()) => {
 		new InMemoryRelationshipRepository(testActor()),
 		notes,
 		anchors,
-		provenance
+		provenance,
+		testClock
 	);
 	const library = createReferenceServices(
 		testActor(),
 		new InMemoryReferenceRepository(testActor()),
 		notes,
 		anchors,
-		provenance
+		provenance,
+		testClock
 	);
 	const todos = new InMemoryTodos(testActor());
 	const suggestions = createSuggestionServices(
@@ -66,7 +69,8 @@ export const noteViewFixture = (note = noteBuilder()) => {
 		new InMemorySuggestionRepository(testActor()),
 		notes,
 		provenance,
-		anchors
+		anchors,
+		{ now: testClock }
 	);
 	const controller = new Notes(
 		testActor(),

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
@@ -56,10 +57,17 @@ it('preserves the released note and revision history when a built-in upgrade fai
 	const state = builtInSkillsFixture();
 	const released = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough')!;
 	await state.transactionRunner.run(() =>
-		new BuiltInSkills(testActor(), state.projects, state.notes, state.skills, {
-			active: [released],
-			retired: []
-		}).ensure()
+		new BuiltInSkills(
+			testActor(),
+			state.projects,
+			state.notes,
+			state.skills,
+			{
+				active: [released],
+				retired: []
+			},
+			testClock
+		).ensure()
 	);
 	const before = structuredClone({
 		notes: state.notes.notes,

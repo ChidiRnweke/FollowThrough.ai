@@ -9,8 +9,6 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import type { TodoRepository } from '$lib/server/repositories/todos/todos';
-const now = (): DateTime => new Date().toISOString() as DateTime;
-
 export interface TodoCreator {
 	create(todo: Todo): Promise<Todo>;
 }
@@ -61,7 +59,7 @@ export class TodoCatalog implements TodoLibrary {
 		private readonly anchors: SourceAnchorRepository,
 		private readonly notes: NoteRepository,
 		private readonly provenance: ProvenanceRepository,
-		private readonly clock: () => DateTime = now
+		private readonly now: () => DateTime
 	) {}
 
 	async create(todo: Todo): Promise<Todo> {
@@ -114,7 +112,7 @@ export class TodoCatalog implements TodoLibrary {
 
 	async softDelete(todoId: TodoId): Promise<void> {
 		await this.get(todoId);
-		await this.todos.softDelete(todoId, this.clock());
+		await this.todos.softDelete(todoId, this.now());
 	}
 
 	async readContext(todo: Todo): Promise<TodoContext> {

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import type { ExternalReference, ReferenceId, Url } from '$lib/models/references';
 import { createReferenceServices } from '$lib/server/factories/capabilities/references-capability-factory';
@@ -28,7 +29,7 @@ const setup = () => {
 		references,
 		anchors,
 		provenance,
-		service: createReferenceServices(testActor(), references, notes, anchors, provenance)
+		service: createReferenceServices(testActor(), references, notes, anchors, provenance, testClock)
 	};
 };
 

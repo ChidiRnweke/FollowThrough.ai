@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
@@ -28,7 +29,7 @@ const replace = async (type?: MemoryEntryType) => {
 			metadata: { scope: 'full' }
 		}
 	];
-	const library = createMemoryServices(testActor(), entries, projects, provenance);
+	const library = createMemoryServices(testActor(), entries, projects, provenance, testClock);
 	const original = await library.library.create(
 		memoryEntryBuilder({ type, content: 'Original convention' })
 	);

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -40,7 +41,8 @@ it('keeps a folder at the project root after reloading a completed move', async 
 			owner,
 			new NoteRecords(owner, database),
 			new SourceAnchorRecords(owner, database),
-			repository
+			repository,
+			testClock
 		).creator,
 		transactionRunner
 	);
@@ -80,7 +82,8 @@ it('restores a note at the root when its previous folder is archived', async () 
 		owner,
 		repository,
 		new SourceAnchorRecords(owner, database),
-		projects
+		projects,
+		testClock
 	);
 	const creation = noteCreationControllers(catalog.creator, transactionRunner);
 	const { folder: parent } = await creation.projects.createFolder({

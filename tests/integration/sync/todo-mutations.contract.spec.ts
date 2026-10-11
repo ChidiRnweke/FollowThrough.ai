@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { TodoId } from '$lib/models/todos';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -20,8 +21,9 @@ const setup = async (suffix: string) => {
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const sync = createSyncCapability(actor, { db: database });
 	const projects = new ProjectRecords(actor, database);
-	const notes = createNotesCapability(actor, { db: database, projects });
+	const notes = createNotesCapability(actor, { now: testClock, db: database, projects });
 	const { catalog } = createTodosCapability(actor, {
+		now: testClock,
 		db: database,
 		projects,
 		notes: notes.repository,
@@ -32,6 +34,7 @@ const setup = async (suffix: string) => {
 		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
+			now: testClock,
 			...agentToolResultsFixture(),
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),

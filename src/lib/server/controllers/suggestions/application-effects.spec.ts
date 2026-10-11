@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
 import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
@@ -123,6 +124,7 @@ describe('Proposal effect coordination', () => {
 			testActor(),
 			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
+				now: testClock,
 				...agentToolResultsFixture(),
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),

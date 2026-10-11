@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -45,7 +46,7 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 	const projects = new InMemoryProjects(testActor());
 	const memory = new InMemoryMemoryEntryRepository(testActor());
 	const conversations = new InMemoryConversationRepository(testActor());
-	const journal = new ConversationArchive(testActor(), conversations);
+	const journal = new ConversationArchive(testActor(), conversations, testClock);
 	const runs = new InMemoryAgentRunPersistence(testActor());
 	const turns = new InMemoryAgentTurns();
 	const sessions = new InMemoryAgentSessionRepository();
@@ -81,6 +82,7 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
+			now: testClock,
 			...dependencies,
 			...agentRulesFixture(),
 			...overrides

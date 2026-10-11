@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { attachmentUploads } from '$lib/server/db/schema/attachments';
@@ -58,7 +59,8 @@ const setup = async (suffix: string, noteOwned = true) => {
 	const uploads = new AttachmentUploadService(
 		seed.owner,
 		records,
-		new NoteRecords(seed.owner, context.db)
+		new NoteRecords(seed.owner, context.db),
+		testClock
 	);
 	return { ...seed, records, reader, uploads, attachment, pendingUpload, archive };
 };

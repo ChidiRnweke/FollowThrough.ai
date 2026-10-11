@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import { describe, expect, it } from 'vitest';
 import type { NoteId } from '$lib/models/notes';
@@ -23,7 +24,8 @@ const graphFor = (
 			records,
 			new NoteRecords(actor, database),
 			new SourceAnchorRecords(actor, database),
-			new ProvenanceRecords(actor, database)
+			new ProvenanceRecords(actor, database),
+			testClock
 		)
 	};
 };

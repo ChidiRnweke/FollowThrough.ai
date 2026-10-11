@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import { BuiltInSkills } from './built-ins';
 import { BUILT_INS, RETIRED_BUILT_INS } from './built-in-definitions';
@@ -18,10 +19,17 @@ const setup = async () => {
 	projects.projects = [projectBuilder({ role: 'inbox' })];
 	const notes = new InMemoryNoteRepository(testActor());
 	const skills = new InMemorySkillRepository(notes);
-	const provisioner = new BuiltInSkills(testActor(), projects, notes, skills, {
-		active: BUILT_INS,
-		retired: RETIRED_BUILT_INS
-	});
+	const provisioner = new BuiltInSkills(
+		testActor(),
+		projects,
+		notes,
+		skills,
+		{
+			active: BUILT_INS,
+			retired: RETIRED_BUILT_INS
+		},
+		testClock
+	);
 	await provisioner.ensure();
 	// Older releases installed these notes in General before Inbox became a project role.
 	const legacy = projectBuilder({ id: testProjectId(2), name: 'General', role: 'workspace' });

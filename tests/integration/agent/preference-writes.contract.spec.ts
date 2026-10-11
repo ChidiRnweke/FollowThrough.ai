@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	AgentSettings,
 	type AgentSettingsDependencies
@@ -44,7 +45,8 @@ it.each([false, true])(
 					...agentRulesFixture(),
 					preferences: new AgentPreferenceCatalog(
 						owner,
-						new AgentPreferenceRecords(owner, database)
+						new AgentPreferenceRecords(owner, database),
+						testClock
 					),
 					transactionRunner,
 					now: () => now

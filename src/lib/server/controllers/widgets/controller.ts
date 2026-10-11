@@ -72,6 +72,8 @@ export interface WidgetsController {
 }
 
 export interface WidgetsDependencies {
+	/** The process clock, shared by every capability that stamps time. */
+	readonly now: () => DateTime;
 	readonly projectChoice: ProjectChoiceRules;
 	readonly projectLister: ProjectLister;
 
@@ -91,8 +93,6 @@ export interface WidgetsDependencies {
 	widgetIndexer: WidgetIndexing;
 	transactionRunner: TransactionRunner;
 }
-
-const now = (): DateTime => new Date().toISOString() as DateTime;
 
 /** The decided widget, or the domain failure the caller reports. */
 const decided = (result: WidgetEditResult): Widget => {
@@ -134,7 +134,12 @@ export class Widgets implements WidgetsController {
 							break;
 						case 'editWidget':
 							await this.write(command.widgetId, (current) =>
-								this.applyWidgetChange(current, command.change, widgetCatalog, now())
+								this.applyWidgetChange(
+									current,
+									command.change,
+									widgetCatalog,
+									this.dependencies.now()
+								)
 							);
 							break;
 						case 'archiveWidget':
@@ -196,7 +201,7 @@ export class Widgets implements WidgetsController {
 						userId: this.actor.userId,
 						projectId,
 						...(input.sourceNoteId ? { sourceNoteId: input.sourceNoteId } : {}),
-						now: now()
+						now: this.dependencies.now()
 					},
 					widgetCatalog
 				)
@@ -210,7 +215,7 @@ export class Widgets implements WidgetsController {
 	async edit(input: EditWidgetInput): Promise<{ widget: Widget }> {
 		return {
 			widget: await this.write(input.widgetId, (current) =>
-				this.applyWidgetEdit(current, input.edit, widgetCatalog, now())
+				this.applyWidgetEdit(current, input.edit, widgetCatalog, this.dependencies.now())
 			)
 		};
 	}
@@ -234,7 +239,7 @@ export class Widgets implements WidgetsController {
 
 	private async moveTrash(widgetId: WidgetId, action: 'archive' | 'restore'): Promise<Widget> {
 		return this.write(widgetId, (current) => {
-			const change = this.dependencies.lifecycle.change(action, current, now());
+			const change = this.dependencies.lifecycle.change(action, current, this.dependencies.now());
 			return change.kind === 'change'
 				? { kind: 'applied', widget: change.widget }
 				: { kind: 'invalid', issues: [{ path: '/archivedAt', message: change.message }] };

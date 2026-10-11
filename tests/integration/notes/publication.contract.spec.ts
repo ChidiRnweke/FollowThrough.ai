@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { DomainError } from '$lib/errors';
 import { noteEtag } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -37,6 +38,7 @@ it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 	});
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const { services: catalog } = createNotesCapability(owner, {
+		now: testClock,
 		db: database,
 		projects: new ProjectRecords(owner, database)
 	});
@@ -98,6 +100,7 @@ it.each([
 		const blocker = postgres(context.url, { max: 2 });
 		const { database, transactionRunner } = createTransactionContext(writer.db);
 		const { services: catalog } = createNotesCapability(owner, {
+			now: testClock,
 			db: database,
 			projects: new ProjectRecords(owner, database)
 		});

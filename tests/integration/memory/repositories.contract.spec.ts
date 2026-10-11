@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import type { MemoryEntryId } from '$lib/models/memory';
 import type { SearchDocumentId } from '$lib/models/knowledge-search';
@@ -37,7 +38,8 @@ describe('Postgres memory-entry repository invariants', () => {
 			owner,
 			repository,
 			new ProjectRecords(owner, context.db),
-			new ProvenanceRecords(owner, context.db)
+			new ProvenanceRecords(owner, context.db),
+			testClock
 		);
 		const outcome = await service.changes
 			.apply(

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { DateTime } from '$lib/models/workspace';
 import { DiagramLibraryService } from '$lib/server/services/diagrams/library';
 import { DiagramRuleService } from '$lib/services/diagrams/editing';
@@ -40,7 +41,8 @@ const setup = () => {
 		notes,
 		new InMemoryAnchorRepository(testActor()),
 		new InMemoryProvenanceRepository(testActor()),
-		new InMemoryProjectRepository(testActor())
+		new InMemoryProjectRepository(testActor()),
+		testClock
 	);
 	const controller = new DiagramStudio(
 		testActor(),

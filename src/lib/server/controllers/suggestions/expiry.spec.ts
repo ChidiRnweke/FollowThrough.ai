@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
@@ -32,6 +33,7 @@ const setup = () => {
 		testActor(),
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
+			now: testClock,
 			...agentToolResultsFixture(),
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),

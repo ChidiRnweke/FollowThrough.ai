@@ -1,3 +1,4 @@
+import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import type { TokenCodec } from '$lib/models/tokenization';
 import type { RetrievalProvider } from './factories/retrieval-providers';
@@ -60,6 +61,8 @@ export interface ApplicationOverrides {
 
 export interface ApplicationConfig {
 	readonly attachmentClaims: AttachmentClaims;
+	/** The one wall clock; every capability that stamps time receives it from here. */
+	readonly now: () => DateTime;
 	readonly db: Database;
 	/** Postgres LISTEN, through which run changes reach every process. */
 	readonly notifications: NotificationChannel;
@@ -108,6 +111,7 @@ export function createApplication(
 	config: ApplicationConfig
 ): ProductionApplication {
 	const db = config.db;
+	const now = config.now;
 	const transactionRunner = config.transactionRunner;
 	const overrides = config.overrides ?? {};
 	const openRouterApiKey = config.openRouterApiKey;
@@ -123,10 +127,12 @@ export function createApplication(
 	const synchronization = createSyncCapability(actor, { db, deferEmbedding });
 	const projectCapability = createProjectsCapability(actor, { db });
 	const noteCapability = createNotesCapability(actor, {
+		now,
 		db,
 		projects: projectCapability.repository
 	});
 	const todoCapability = createTodosCapability(actor, {
+		now,
 		db,
 		projects: projectCapability.repository,
 		notes: noteCapability.repository,
@@ -134,6 +140,7 @@ export function createApplication(
 		provenance: noteCapability.provenanceRepository
 	});
 	const relationshipCapability = createRelationshipsCapability(actor, {
+		now,
 		db,
 		notes: noteCapability.repository,
 		anchors: noteCapability.anchors,
@@ -144,6 +151,7 @@ export function createApplication(
 		defaultModel: DEFAULT_GENERATION_MODEL
 	});
 	const referenceCapability = createReferencesCapability(actor, {
+		now,
 		db,
 		notes: noteCapability.repository,
 		anchors: noteCapability.anchors,
@@ -155,12 +163,14 @@ export function createApplication(
 		client: overrides.referenceClient
 	});
 	const suggestionCapability = createSuggestionsCapability(actor, {
+		now,
 		db,
 		notes: noteCapability.repository,
 		anchors: noteCapability.anchors,
 		provenance: noteCapability.provenanceRepository
 	});
 	const skillCapability = createSkillsCapability(actor, {
+		now,
 		db,
 		projects: projectCapability.repository,
 		notes: noteCapability.repository,
@@ -202,11 +212,13 @@ export function createApplication(
 		notes: noteRepository
 	});
 	const memory = createMemoryCapability(actor, {
+		now,
 		db,
 		projects: projectRepository,
 		provenance: provenanceRepository
 	});
 	const agentCapability = createAgentCapability(actor, {
+		now,
 		tokens: knowledgeSearch.tokenizer,
 		db,
 		notifications: config.notifications,
@@ -236,8 +248,9 @@ export function createApplication(
 	} = agentCapability;
 	const finalizedKnowledgeSearch = knowledgeSearch.finalize({ preferences });
 	const feedback = createFeedbackCapability(actor, { db });
-	const contextUsage = createContextUsageCapability(actor, { db });
+	const contextUsage = createContextUsageCapability(actor, { db, now });
 	const attachmentCapability = createAttachmentsCapability(actor, {
+		now,
 		claims: config.attachmentClaims,
 		transactionRunner,
 		visionModel: defaultVisionModel,
@@ -257,6 +270,7 @@ export function createApplication(
 	const attachmentStorage = attachmentCapability.storage;
 	const deliverables = createDeliverablesCapability(actor, {
 		db,
+		now,
 		storage: attachmentStorage
 	});
 	const templates = deliverables.templates;
@@ -267,6 +281,7 @@ export function createApplication(
 	const suggestions = suggestionCapability;
 	const skills = skillCapability.services;
 	const diagramCapability = createDiagramsCapability(actor, {
+		now,
 		contextNotes: notes.library,
 		contextSkills: skills.finder,
 		contextMemory: memory.library,
@@ -296,6 +311,7 @@ export function createApplication(
 			reader: agentFilesCapability.reader
 		},
 		todos: {
+			now,
 			boardExport: todoCapability.boardExport,
 			todoPresentation: todoCapability.presentation,
 			todoEditingRules: todoCapability.editingRules,
@@ -355,7 +371,7 @@ export function createApplication(
 			transactionRunner,
 			diagrams,
 			mermaid: diagramCapability.mermaid,
-			now: diagramCapability.now,
+			now,
 			drawio: diagramCapability.drawio,
 			diagramIndexer,
 			noteActionRequests: agentCapability.noteActionRequests,
@@ -376,7 +392,7 @@ export function createApplication(
 			diagramLabelPresentation: diagramCapability.labelPresentation,
 			iconSearch: diagramCapability.iconSearch,
 			canvasSource: diagramCapability.canvasSource,
-			now: diagramCapability.now
+			now
 		},
 		suggestions: {
 			todoCreationRules: todoCapability.creationRules,
@@ -396,12 +412,13 @@ export function createApplication(
 			diagramWriter: diagrams,
 			drawio: diagramCapability.drawio,
 			diagramLabelPresentation: diagramCapability.labelPresentation,
-			now: diagramCapability.now,
+			now,
 			transactionRunner,
 			suggestionRejecter: suggestions.rejecter,
 			suggestionReverter: suggestions.reverter
 		},
 		agentHarness: {
+			now,
 			runStatus: agentCapability.runStatus,
 			streamPresentation: agentCapability.streamPresentation,
 			conversationHistory: agentCapability.conversationHistory,
@@ -454,7 +471,7 @@ export function createApplication(
 			runSettings: agentCapability.runSettings,
 			webSearchOverrides: agentCapability.webSearchOverrides,
 			agentAvailable: agentCapability.agentAvailable,
-			now: agentCapability.now,
+			now,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner,
@@ -622,6 +639,7 @@ export function createApplication(
 			transactionRunner
 		},
 		widgets: {
+			now,
 			projectChoice: projects.choice,
 			projectLister: projects.catalog,
 			catalogReader: widgets.catalogReader,

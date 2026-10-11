@@ -18,6 +18,8 @@ import type {
 } from '$lib/server/services/attachments/records';
 
 interface AttachmentProcessingDependencies {
+	/** The process clock, shared by every capability that stamps time. */
+	readonly now: () => DateTime;
 	readonly modelSelection: IAgentModelSelectionService;
 	records: AttachmentVersions;
 	claims: AttachmentProcessingClaims;
@@ -30,8 +32,6 @@ interface AttachmentProcessingDependencies {
 	transactionRunner: AtomicOperation;
 	visionModel: string;
 }
-const now = () => new Date().toISOString() as DateTime;
-
 /** Extracts and indexes one of the user's attachment versions. */
 export interface AttachmentProcessingController {
 	process(
@@ -125,7 +125,7 @@ export class AttachmentProcessing implements AttachmentProcessingController {
 					...current.version,
 					processingStatus: 'failed',
 					processingFailure: result.message,
-					processedAt: now()
+					processedAt: this.dependencies.now()
 				});
 				return;
 			}
@@ -133,7 +133,7 @@ export class AttachmentProcessing implements AttachmentProcessingController {
 			if (current.attachment.currentVersionId === current.version.id)
 				await this.dependencies.indexer.indexAttachment(current.attachment, extraction?.text ?? '');
 			await this.dependencies.records.updateVersion(
-				this.dependencies.processing.complete(current.version, extraction, now())
+				this.dependencies.processing.complete(current.version, extraction, this.dependencies.now())
 			);
 		});
 	}

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	AgentSettings,
 	type AgentSettingsDependencies
@@ -31,7 +32,11 @@ it('serializes synchronized creation behind an ordinary absent-row preference wr
 				...agentToolResultsFixture(),
 				...agentRulesFixture(),
 				preferenceEditing: new AgentPreferenceEditingService(),
-				preferences: new AgentPreferenceCatalog(owner, new AgentPreferenceRecords(owner, database)),
+				preferences: new AgentPreferenceCatalog(
+					owner,
+					new AgentPreferenceRecords(owner, database),
+					testClock
+				),
 				transactionRunner,
 				now: () => now,
 				syncMutations: sync.mutations,

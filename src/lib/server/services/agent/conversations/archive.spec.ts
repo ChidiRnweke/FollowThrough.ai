@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
 import {
@@ -26,7 +27,8 @@ describe('Conversation visibility invariants', () => {
 	it('does not list workflow conversations as chat sessions', async () => {
 		const journal = new ConversationArchive(
 			testActor(),
-			new InMemoryConversationRepository(testActor())
+			new InMemoryConversationRepository(testActor()),
+			testClock
 		);
 		await journal.getOrCreate({ prompt: 'Hello' });
 		await journal.createWorkflow({
@@ -39,7 +41,8 @@ describe('Conversation visibility invariants', () => {
 	it('marks background diagram conversations as workflows', async () => {
 		const journal = new ConversationArchive(
 			testActor(),
-			new InMemoryConversationRepository(testActor())
+			new InMemoryConversationRepository(testActor()),
+			testClock
 		);
 		const conversation = await journal.createWorkflow({
 			title: 'Generate Mermaid diagram'
@@ -50,7 +53,8 @@ describe('Conversation visibility invariants', () => {
 	it('captures the project that triggered a new chat', async () => {
 		const journal = new ConversationArchive(
 			testActor(),
-			new InMemoryConversationRepository(testActor())
+			new InMemoryConversationRepository(testActor()),
+			testClock
 		);
 		const conversation = await journal.getOrCreate({
 			prompt: 'Summarise this project',
@@ -62,7 +66,8 @@ describe('Conversation visibility invariants', () => {
 	it('trims a renamed chat title', async () => {
 		const journal = new ConversationArchive(
 			testActor(),
-			new InMemoryConversationRepository(testActor())
+			new InMemoryConversationRepository(testActor()),
+			testClock
 		);
 		const conversation = await journal.getOrCreate({ prompt: 'Original' });
 		const renamed = await journal.rename(conversation.id, '  Decision notes  ');
@@ -72,7 +77,8 @@ describe('Conversation visibility invariants', () => {
 	it('discards the rewound question and later turns while keeping the earlier exchange', async () => {
 		const journal = new ConversationArchive(
 			testActor(),
-			new InMemoryConversationRepository(testActor())
+			new InMemoryConversationRepository(testActor()),
+			testClock
 		);
 		const conversation = await journal.getOrCreate({ prompt: 'First' });
 		await journal.recordUserPrompt(conversation.id, 'First');
@@ -90,7 +96,8 @@ describe('Conversation visibility invariants', () => {
 	it('leaves the transcript alone when the ordinal is past the last question', async () => {
 		const journal = new ConversationArchive(
 			testActor(),
-			new InMemoryConversationRepository(testActor())
+			new InMemoryConversationRepository(testActor()),
+			testClock
 		);
 		const conversation = await journal.getOrCreate({ prompt: 'Only' });
 		await journal.recordUserPrompt(conversation.id, 'Only');
@@ -101,7 +108,8 @@ describe('Conversation visibility invariants', () => {
 	it('stores pasted images on the journaled user message', async () => {
 		const journal = new ConversationArchive(
 			testActor(),
-			new InMemoryConversationRepository(testActor())
+			new InMemoryConversationRepository(testActor()),
+			testClock
 		);
 		const conversation = await journal.getOrCreate({ prompt: 'Look at this' });
 		const images = [
@@ -120,7 +128,8 @@ describe('Conversation visibility invariants', () => {
 	it('leaves a text-only turn without an images key', async () => {
 		const journal = new ConversationArchive(
 			testActor(),
-			new InMemoryConversationRepository(testActor())
+			new InMemoryConversationRepository(testActor()),
+			testClock
 		);
 		const conversation = await journal.getOrCreate({ prompt: 'Hello' });
 		await journal.recordUserPrompt(conversation.id, 'Hello');
@@ -133,7 +142,8 @@ describe('journaling tool outcomes', () => {
 	it('journals a succeeded call without output as null rather than raising', async () => {
 		const journal = new ConversationArchive(
 			testActor(),
-			new InMemoryConversationRepository(testActor())
+			new InMemoryConversationRepository(testActor()),
+			testClock
 		);
 		const conversation = await journal.getOrCreate({ prompt: 'Hello' });
 		await journal.recordToolActivity(conversation.id, {
@@ -155,7 +165,8 @@ describe('journaling tool outcomes', () => {
 	it('journals a succeeded call output as the value it was given', async () => {
 		const journal = new ConversationArchive(
 			testActor(),
-			new InMemoryConversationRepository(testActor())
+			new InMemoryConversationRepository(testActor()),
+			testClock
 		);
 		const conversation = await journal.getOrCreate({ prompt: 'Hello' });
 		await journal.recordToolActivity(conversation.id, {
@@ -174,7 +185,8 @@ describe('Journalled note review', () => {
 	it('retains the domain review when saving the approval transcript', async () => {
 		const journal = new ConversationArchive(
 			testActor(),
-			new InMemoryConversationRepository(testActor())
+			new InMemoryConversationRepository(testActor()),
+			testClock
 		);
 		const conversation = await journal.getOrCreate({ prompt: 'Change launch day' });
 		const noteReview = noteReviewBuilder();

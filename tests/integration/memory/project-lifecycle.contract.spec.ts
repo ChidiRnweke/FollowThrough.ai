@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import type { MemoryChangePayload, MemoryEntryId } from '$lib/models/memory';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
@@ -15,7 +16,8 @@ const setup = async (suffix: string) => {
 		owner,
 		entries,
 		projects,
-		new ProvenanceRecords(owner, context.db)
+		new ProvenanceRecords(owner, context.db),
+		testClock
 	);
 	const entry = await library.library.create({
 		id: crypto.randomUUID() as MemoryEntryId,

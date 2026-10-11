@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { UpdateTrustPolicyInput } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
@@ -88,7 +89,8 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 		actor,
 		entries,
 		new InMemoryProjectRepository(actor),
-		provenance
+		provenance,
+		testClock
 	);
 	const records = new InMemorySuggestionRepository(actor);
 	const inbox = createSuggestionServices(
@@ -96,14 +98,15 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 		records,
 		new InMemoryNoteRepository(actor),
 		provenance,
-		new InMemoryAnchorRepository(actor)
+		new InMemoryAnchorRepository(actor),
+		{ now: testClock }
 	);
 	const policies = new InMemoryTrustPolicyRepository(actor);
-	const trust = new ToolTrust(actor, policies);
+	const trust = new ToolTrust(actor, policies, testClock);
 	if (scenario.policy) {
 		// The scenario's account writes its policy; the policy table is shared by every account.
 		const written = new InMemoryTrustPolicyRepository(scenario.policy.actor);
-		await new ToolTrust(scenario.policy.actor, written).upsert(scenario.policy.input);
+		await new ToolTrust(scenario.policy.actor, written, testClock).upsert(scenario.policy.input);
 		policies.policies = written.policies;
 	}
 	const effects = new InMemorySuggestionEffects();

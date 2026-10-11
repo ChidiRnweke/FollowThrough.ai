@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	AgentSettings,
 	type AgentSettingsDependencies
@@ -26,7 +27,8 @@ const setup = async (suffix: string) => {
 	const sync = createSyncCapability(owner, { db: database });
 	const preferences = new AgentPreferenceCatalog(
 		owner,
-		new AgentPreferenceRecords(owner, database)
+		new AgentPreferenceRecords(owner, database),
+		testClock
 	);
 	const agent = new AgentSettings(
 		owner,

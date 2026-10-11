@@ -14,8 +14,6 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import type { ReferenceRepository } from '$lib/server/repositories/references/references';
-const now = (): DateTime => new Date().toISOString() as DateTime;
-
 export interface ReferenceCreator {
 	create(input: CreateReferenceInput): Promise<ExternalReference>;
 }
@@ -34,7 +32,8 @@ export class ReferenceLibrary implements ReferenceCreator, ReferenceReader {
 		private readonly references: ReferenceRepository,
 		private readonly notes: NoteRepository,
 		private readonly anchors: SourceAnchorRepository,
-		private readonly provenance: ProvenanceRepository
+		private readonly provenance: ProvenanceRepository,
+		private readonly now: () => DateTime
 	) {}
 	async create(input: CreateReferenceInput): Promise<ExternalReference> {
 		const note = await this.notes.findById(input.noteId);
@@ -50,7 +49,7 @@ export class ReferenceLibrary implements ReferenceCreator, ReferenceReader {
 			id: crypto.randomUUID() as ReferenceId,
 			userId: this.actor.userId,
 			...input,
-			createdAt: now()
+			createdAt: this.now()
 		});
 	}
 	async listForNote(noteId: NoteId): Promise<readonly ExternalReference[]> {

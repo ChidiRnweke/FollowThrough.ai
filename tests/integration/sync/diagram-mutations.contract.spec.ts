@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { DiagramId } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/models/diagrams';
@@ -31,6 +32,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 	const sync = createSyncCapability(seeded.owner, { db: database });
 	const projects = createProjectsCapability(seeded.owner, { db: database });
 	const notes = createNotesCapability(seeded.owner, {
+		now: testClock,
 		db: database,
 		projects: projects.repository
 	});
@@ -41,7 +43,8 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 		notes.repository,
 		notes.anchors,
 		notes.provenanceRepository,
-		projects.repository
+		projects.repository,
+		testClock
 	);
 	const diagram = drawioBuilder({
 		title: title ?? undefined,

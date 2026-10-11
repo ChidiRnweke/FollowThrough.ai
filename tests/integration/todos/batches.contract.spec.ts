@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createTodoBatchSchema } from '$lib/models/todos';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -18,8 +19,9 @@ const setup = async (suffix: string) => {
 	const actor = seeded.owner;
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const projects = new ProjectRecords(actor, database);
-	const notes = createNotesCapability(actor, { db: database, projects });
+	const notes = createNotesCapability(actor, { now: testClock, db: database, projects });
 	const capability = createTodosCapability(actor, {
+		now: testClock,
 		db: database,
 		projects,
 		notes: notes.repository,
@@ -30,6 +32,7 @@ const setup = async (suffix: string) => {
 		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
+			now: testClock,
 			...agentToolResultsFixture(),
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),

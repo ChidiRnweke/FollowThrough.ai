@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryModelCatalog } from '$lib/testing/agent/fakes/in-memory-model-catalog';
@@ -14,6 +15,7 @@ const setup = () => {
 		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentSettingsDependencies>({
+			now: testClock,
 			...agentToolResultsFixture(),
 			preferenceEditing: new AgentPreferenceEditingService(),
 			...agentRulesFixture(),

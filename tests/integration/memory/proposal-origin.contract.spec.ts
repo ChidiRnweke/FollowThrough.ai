@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -36,13 +37,15 @@ const setup = async (suffix: string) => {
 		suggestions,
 		new NoteRecords(owner, database),
 		provenance,
-		new SourceAnchorRecords(owner, database)
+		new SourceAnchorRecords(owner, database),
+		{ now: testClock }
 	);
 	const library = createMemoryServices(
 		owner,
 		new MemoryRecords(owner, database),
 		new ProjectRecords(owner, database),
-		provenance
+		provenance,
+		testClock
 	);
 	const controller = new Memory(
 		owner,

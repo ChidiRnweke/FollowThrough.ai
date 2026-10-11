@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import { syncCursorSchema } from '$lib/models/sync';
@@ -37,6 +38,7 @@ const setup = (actor: ActorContext) => {
 	const projects = new ProjectRecords(actor, database);
 	const notes = new NoteRecords(actor, database);
 	const capability = createSkillsCapability(actor, {
+		now: testClock,
 		db: database,
 		projects,
 		notes,

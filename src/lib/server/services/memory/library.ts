@@ -46,7 +46,6 @@ export interface MemoryChanges {
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>>;
 }
 
-const now = (): DateTime => new Date().toISOString() as DateTime;
 async function requireProject(projects: ProjectRepository, projectId: ProjectId): Promise<void> {
 	if (!(await projects.findById(projectId)))
 		throw new NotFoundError('Memory project was not found');
@@ -74,12 +73,13 @@ async function readEditableMemory(
 }
 async function deleteMemory(
 	entries: MemoryEntryRepository,
-	entry: MemoryEntry
+	entry: MemoryEntry,
+	deletedAt: DateTime
 ): Promise<MemoryEntry> {
 	const deleted = await entries.update({
 		...entry,
-		deletedAt: now(),
-		updatedAt: now()
+		deletedAt,
+		updatedAt: deletedAt
 	});
 	return deleted;
 }
@@ -87,7 +87,8 @@ export class MemoryLibraryService implements MemoryLibrary {
 	constructor(
 		private readonly actor: ActorContext,
 		private readonly entries: MemoryEntryRepository,
-		private readonly projects: ProjectRepository
+		private readonly projects: ProjectRepository,
+		private readonly now: () => DateTime
 	) {}
 	get(id: MemoryEntryId): Promise<MemoryEntry> {
 		return readMemory(this.entries, this.projects, id);
@@ -114,7 +115,8 @@ export class MemoryLibraryService implements MemoryLibrary {
 	async remove(memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
 		return deleteMemory(
 			this.entries,
-			await readEditableMemory(this.entries, this.projects, memoryEntryId)
+			await readEditableMemory(this.entries, this.projects, memoryEntryId),
+			this.now()
 		);
 	}
 }
@@ -123,7 +125,8 @@ export class MemoryProposalService implements MemoryChanges {
 		private readonly actor: ActorContext,
 		private readonly entries: MemoryEntryRepository,
 		private readonly projects: ProjectRepository,
-		private readonly provenance: ProvenanceRepository
+		private readonly provenance: ProvenanceRepository,
+		private readonly now: () => DateTime
 	) {}
 	async apply(
 		payload: MemoryChangePayload,
@@ -158,7 +161,7 @@ export class MemoryProposalService implements MemoryChanges {
 		const content = payload.content.trim();
 		if (!content) throw new ValidationError('Memory entry content is required');
 		if (payload.projectId) await requireProject(this.projects, payload.projectId);
-		const timestamp = now();
+		const timestamp = this.now();
 		const entry = await this.entries.insert({
 			id: crypto.randomUUID() as MemoryEntryId,
 			userId: this.actor.userId,
@@ -179,7 +182,7 @@ export class MemoryProposalService implements MemoryChanges {
 		if (!content) throw new ValidationError('Memory entry content is required');
 		const target = await readEditableMemory(this.entries, this.projects, payload.memoryEntryId);
 		this.requireScope(target, payload);
-		const timestamp = now();
+		const timestamp = this.now();
 		const replacement = await this.entries.insert({
 			id: crypto.randomUUID() as MemoryEntryId,
 			userId: this.actor.userId,
@@ -192,7 +195,7 @@ export class MemoryProposalService implements MemoryChanges {
 			createdAt: timestamp,
 			updatedAt: timestamp
 		});
-		const deleted = await deleteMemory(this.entries, target);
+		const deleted = await deleteMemory(this.entries, target, this.now());
 		return {
 			entry: replacement,
 			changes: [
@@ -206,7 +209,7 @@ export class MemoryProposalService implements MemoryChanges {
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
 		const target = await readEditableMemory(this.entries, this.projects, payload.memoryEntryId);
 		this.requireScope(target, payload);
-		const entry = await deleteMemory(this.entries, target);
+		const entry = await deleteMemory(this.entries, target, this.now());
 		return { entry, changes: [{ kind: 'modified', before: target, after: entry }] };
 	}
 	private async getActive(memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {

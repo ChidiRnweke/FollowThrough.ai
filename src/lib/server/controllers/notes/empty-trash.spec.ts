@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
@@ -41,7 +42,8 @@ const setup = () => {
 		testActor(),
 		notes,
 		new InMemoryAnchorRepository(testActor()),
-		projects
+		projects,
+		testClock
 	);
 	const controller = new Notes(
 		testActor(),

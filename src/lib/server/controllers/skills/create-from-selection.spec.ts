@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
@@ -45,10 +46,10 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
 	const anchors = new InMemoryAnchorRepository(testActor());
-	const catalog = createNoteServices(testActor(), repository, anchors, projects);
+	const catalog = createNoteServices(testActor(), repository, anchors, projects, testClock);
 	const skills = new InMemorySkillRepository(repository);
 	const provenance = new InMemoryProvenanceRepository(testActor());
-	const library = createSkillServices(testActor(), skills, repository, provenance);
+	const library = createSkillServices(testActor(), skills, repository, provenance, testClock);
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({

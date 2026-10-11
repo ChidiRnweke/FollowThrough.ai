@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryStorage } from '$lib/testing/attachments/fakes/processing';
 import {
 	AttachmentClaimService,
@@ -78,6 +79,7 @@ const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapToke
 	const extraction = new InMemoryAttachmentExtraction();
 	extraction.results.text = { text: 'Extracted document', parserKind: 'text' };
 	const worker = new AttachmentProcessing({
+		now: testClock,
 		modelSelection: new AgentModelSelectionService(),
 		records: new AttachmentVersionService(records),
 		claims: new AttachmentClaimService(

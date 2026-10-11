@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
@@ -29,7 +30,7 @@ const setup = () => {
 		createdAt: testNow,
 		updatedAt: testNow
 	});
-	const preferences = new AgentPreferenceCatalog(testActor(), repository);
+	const preferences = new AgentPreferenceCatalog(testActor(), repository, testClock);
 	const models = new InMemoryModelCatalog();
 	models.models = [
 		{

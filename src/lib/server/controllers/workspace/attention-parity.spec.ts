@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
 import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
@@ -90,7 +91,8 @@ it('shows the same profile and visible-project memory attention from server and 
 				actor,
 				new InMemorySkillRepository(new InMemoryNoteRepository(actor)),
 				new InMemoryNoteRepository(actor),
-				new InMemoryProvenanceRepository(actor)
+				new InMemoryProvenanceRepository(actor),
+				testClock
 			).finder
 		})
 	);

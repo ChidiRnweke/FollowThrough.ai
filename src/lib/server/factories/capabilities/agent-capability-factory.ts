@@ -127,6 +127,7 @@ export interface AgentCapabilityInput {
 	readonly defaultVisionModel: string;
 	readonly recommendedModels: readonly string[];
 	readonly modelCatalog?: AgentModelCatalog;
+	readonly now: () => DateTime;
 }
 
 export interface AgentCapability {
@@ -136,7 +137,6 @@ export interface AgentCapability {
 	readonly imagePreparation: AgentImagePreparation;
 	readonly preferenceEditing: AgentPreferenceEditing;
 	readonly mcpSurface: McpSurfaceFactory;
-	readonly now: () => DateTime;
 	readonly runSettings: AgentRunSettings;
 	readonly webSearchOverrides: WebResearchOptions;
 	readonly agentAvailable: boolean;
@@ -173,10 +173,11 @@ export const createAgentCapability = (
 	input: AgentCapabilityInput
 ): AgentCapability => {
 	const conversationRepository = new ConversationRecords(actor, input.db);
-	const conversations = new ConversationArchive(actor, conversationRepository);
+	const conversations = new ConversationArchive(actor, conversationRepository, input.now);
 	const preferences = new AgentPreferenceCatalog(
 		actor,
-		new AgentPreferenceRecords(actor, input.db)
+		new AgentPreferenceRecords(actor, input.db),
+		input.now
 	);
 	const models =
 		input.modelCatalog ??
@@ -209,7 +210,6 @@ export const createAgentCapability = (
 		runSettings: new AgentRunSettingsService(),
 		webSearchOverrides: webSearchOptionsFromEnvironment(process.env),
 		agentAvailable: Boolean(input.openRouterApiKey.trim()),
-		now: () => new Date().toISOString() as DateTime,
 		conversations,
 		conversationMessages: conversations,
 		toolActivity: new ToolActivityProjection(),
@@ -222,7 +222,7 @@ export const createAgentCapability = (
 		modelChoices: new AgentModelChoiceService(),
 		toolPreferences,
 		toolCatalog: new AgentToolCatalogService(),
-		trust: new ToolTrust(actor, new TrustPolicyRecords(actor, input.db)),
+		trust: new ToolTrust(actor, new TrustPolicyRecords(actor, input.db), input.now),
 		transitions: new RunTransitions(runs),
 		runLedger,
 		sessions,

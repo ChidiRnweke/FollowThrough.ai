@@ -1,3 +1,4 @@
+import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
 import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
@@ -36,6 +37,7 @@ export interface ReferencesCapabilityInput {
 	readonly appURL: string;
 	readonly defaultModel: string;
 	readonly client?: WebReferenceClient;
+	readonly now: () => DateTime;
 }
 
 export interface ReferencesCapability extends ReferenceServices {
@@ -56,7 +58,8 @@ export const createReferencesCapability = (
 		new ReferenceRecords(actor, input.db),
 		input.notes,
 		input.anchors,
-		input.provenance
+		input.provenance,
+		input.now
 	),
 	client:
 		input.client ??
@@ -80,8 +83,9 @@ export const createReferenceServices = (
 	references: ReferenceRepository,
 	notes: NoteRepository,
 	anchors: SourceAnchorRepository,
-	provenance: ProvenanceRepository
+	provenance: ProvenanceRepository,
+	now: () => DateTime
 ): ReferenceServices => {
-	const library = new ReferenceLibrary(actor, references, notes, anchors, provenance);
+	const library = new ReferenceLibrary(actor, references, notes, anchors, provenance, now);
 	return { creator: library, reader: library };
 };

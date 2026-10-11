@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
@@ -28,7 +29,7 @@ const setup = async (suffix: string) => {
 	const { owner } = await seedNote(suffix);
 	const tx = createTransactionContext(context.db);
 	const conversations = new ConversationRecords(owner, tx.database);
-	const journal = new ConversationArchive(owner, conversations);
+	const journal = new ConversationArchive(owner, conversations, testClock);
 	const runs = new AgentRunRecords(owner, tx.database);
 	const conversation = await conversations.insert({
 		id: crypto.randomUUID() as ConversationId,
@@ -41,6 +42,7 @@ const setup = async (suffix: string) => {
 		owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
+			now: testClock,
 			...agentRulesFixture(),
 			conversationMessages: journal,
 			conversationSessions: journal,
@@ -75,7 +77,8 @@ it('preserves a newly submitted run when deletion waits for submission to commit
 	const submitted = submission.transactionRunner.run(async () => {
 		const journal = new ConversationArchive(
 			owner,
-			new ConversationRecords(owner, submission.database)
+			new ConversationRecords(owner, submission.database),
+			testClock
 		);
 		await journal.getOrCreate({
 			conversationId: conversation.id,

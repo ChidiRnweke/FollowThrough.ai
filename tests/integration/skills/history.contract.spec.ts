@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { noteEtag } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -29,6 +30,7 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const skills = skillController(owner, database, transactionRunner);
 	const { services: catalog } = createNotesCapability(owner, {
+		now: testClock,
 		db: database,
 		projects: new ProjectRecords(owner, database)
 	});

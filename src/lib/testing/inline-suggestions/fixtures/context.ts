@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -31,7 +32,8 @@ export const inlineSuggestionFixture = (
 	const generator = new InMemoryInlineCompletion();
 	const preferences = new AgentPreferenceCatalog(
 		viewer,
-		new InMemoryAgentPreferencesRepository(viewer)
+		new InMemoryAgentPreferencesRepository(viewer),
+		testClock
 	);
 	const attempts = new InMemoryInlineAttempts();
 	const controller = new InlineSuggestions(

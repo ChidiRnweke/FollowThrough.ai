@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import {
@@ -18,7 +19,7 @@ const setup = () => {
 	const anchors = new InMemoryAnchorRepository(testActor());
 	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const service = createNoteServices(testActor(), notes, anchors, projects);
+	const service = createNoteServices(testActor(), notes, anchors, projects, testClock);
 	return { service, notes, anchors };
 };
 

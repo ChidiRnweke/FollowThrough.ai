@@ -14,8 +14,6 @@ import type {
 	ProvenanceRepository,
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
-const now = (): DateTime => new Date().toISOString() as DateTime;
-
 export interface RelationshipCreator {
 	createWithChange(input: CreateRelationshipInput): Promise<AppliedChange<NoteRelationship>>;
 }
@@ -39,7 +37,8 @@ export class RelationshipGraph
 		private readonly relationships: NoteRelationshipRepository,
 		private readonly notes: NoteRepository,
 		private readonly anchors: SourceAnchorRepository,
-		private readonly provenance: ProvenanceRepository
+		private readonly provenance: ProvenanceRepository,
+		private readonly now: () => DateTime
 	) {}
 	async createWithChange(input: CreateRelationshipInput): Promise<AppliedChange<NoteRelationship>> {
 		if (input.sourceNoteId === input.targetNoteId)
@@ -58,7 +57,7 @@ export class RelationshipGraph
 		}
 		if (input.provenanceId && !(await this.provenance.findById(input.provenanceId)))
 			throw new NotFoundError('Relationship provenance was not found');
-		const timestamp = now();
+		const timestamp = this.now();
 		return this.write({
 			id: crypto.randomUUID() as RelationshipId,
 			userId: this.actor.userId,
@@ -81,7 +80,7 @@ export class RelationshipGraph
 			if (current.has(target)) continue;
 			const targetNote = await this.notes.findById(target);
 			if (!targetNote || targetNote.projectId !== note.projectId) continue;
-			const timestamp = now();
+			const timestamp = this.now();
 			await this.write({
 				id: crypto.randomUUID() as RelationshipId,
 				userId: this.actor.userId,
