@@ -3,11 +3,7 @@ import {
 	Suggestions,
 	type SuggestionsDependencies
 } from '$lib/server/controllers/suggestions/controller';
-import {
-	DrawioLabelReader,
-	DrawioSvgSanitizer,
-	DrawioXmlValidator
-} from '$lib/server/services/diagrams/drawio';
+import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
 import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
 import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
@@ -61,10 +57,8 @@ export const diagramSuggestionFixture = (source = VALID_DRAWIO_XML) => {
 			diagramWriter: diagrams,
 			diagramIndexer: diagrams,
 			sourceNotes: notes,
-			drawioXmlValidator: new DrawioXmlValidator(),
-			drawioSvgSanitizer: new DrawioSvgSanitizer(),
+			drawio: new DrawioDocumentService(),
 			diagramLabelPresentation: new DiagramLabelPresentationService(),
-			drawioLabels: new DrawioLabelReader(),
 			now: () => testNow,
 			transactionRunner: new InMemoryTransactionRunner([diagrams, suggestions, effects])
 		})

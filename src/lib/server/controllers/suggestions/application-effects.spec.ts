@@ -1,10 +1,6 @@
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
-import {
-	DrawioLabelReader,
-	DrawioSvgSanitizer,
-	DrawioXmlValidator
-} from '$lib/server/services/diagrams/drawio';
+import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
 import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
 import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
@@ -70,10 +66,8 @@ describe('Proposal effect coordination', () => {
 				suggestionEffects: effects,
 				sourceNotes: notes,
 				diagramWriter: diagrams,
-				drawioXmlValidator: new DrawioXmlValidator(),
-				drawioSvgSanitizer: new DrawioSvgSanitizer(),
+				drawio: new DrawioDocumentService(),
 				diagramLabelPresentation: new DiagramLabelPresentationService(),
-				drawioLabels: new DrawioLabelReader(),
 				now: () => testNow,
 				diagramIndexer: diagrams,
 				transactionRunner: new InMemoryTransactionRunner([suggestions, effects, diagrams])

@@ -72,7 +72,7 @@ export const edge = ({
 /**
  * A cell whose label lives on a rich-text wrapper rather than on the cell.
  *
- * The id stays on the inner `mxCell` because `DrawioXmlValidator` requires one
+ * The id stays on the inner `mxCell` because `DrawioDocumentService` requires one
  * there, so this is the wrapped shape production actually accepts.
  */
 export const wrappedVertex = ({ id, value = '', ...geometry }: VertexFixture): string =>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DrawioXmlValidator } from './drawio';
+import { DrawioDocumentService } from './drawio';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 describe('draw.io named character references', () => {
 	it.each([
@@ -16,13 +16,13 @@ describe('draw.io named character references', () => {
 			'</root>',
 			`<mxCell id="entity" parent="1" value="A${reference}B"/></root>`
 		);
-		expect(new DrawioXmlValidator().validate(xml)).toBe(xml);
+		expect(new DrawioDocumentService().validate(xml)).toBe(xml);
 	});
 	it('rejects an unknown name even when its prefix is a known HTML entity', () => {
 		const xml = VALID_DRAWIO_XML.replace(
 			'</root>',
 			'<mxCell id="entity" parent="1" value="&notARealEntity;"/></root>'
 		);
-		expect(() => new DrawioXmlValidator().validate(xml)).toThrow('malformed');
+		expect(() => new DrawioDocumentService().validate(xml)).toThrow('malformed');
 	});
 });

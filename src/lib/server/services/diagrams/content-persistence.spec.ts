@@ -1,6 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
 import { expect, it } from 'vitest';
-import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
+import { DiagramLibraryService } from '$lib/server/services/diagrams/library';
 import type { DiagramContentWrite } from '$lib/models/diagrams';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
@@ -26,7 +26,7 @@ const setup = (viewer: ActorContext = testActor()) => {
 		publishedAt: undefined
 	});
 	diagrams.diagrams = [current];
-	const library = createDiagramServices(
+	const library = new DiagramLibraryService(
 		viewer,
 		diagrams,
 		new InMemoryNoteRepository(viewer),
@@ -50,7 +50,7 @@ const setup = (viewer: ActorContext = testActor()) => {
 
 it('preserves placement, provenance and publication state when storing reviewed content', async () => {
 	const { current, library, write } = setup();
-	expect(await library.writer.persistContent(write)).toEqual({
+	expect(await library.persistContent(write)).toEqual({
 		...current,
 		source: write.source,
 		renderedSvg: write.renderedSvg,
@@ -60,7 +60,7 @@ it('preserves placement, provenance and publication state when storing reviewed 
 
 it('refuses content writes for another actor', async () => {
 	const { library, write } = setup(testActor(2));
-	await expect(library.writer.persistContent(write)).rejects.toMatchObject({
+	await expect(library.persistContent(write)).rejects.toMatchObject({
 		code: 'STALE_REVISION'
 	});
 });
@@ -75,7 +75,7 @@ it('refuses content writes after publication state changes', async () => {
 			currentRevision: current.currentRevision + 1
 		}
 	];
-	await expect(library.writer.persistContent(write)).rejects.toMatchObject({
+	await expect(library.persistContent(write)).rejects.toMatchObject({
 		code: 'STALE_REVISION'
 	});
 });
@@ -84,7 +84,7 @@ it('refuses Mermaid content without owned provenance', async () => {
 	const { current, library, write, diagrams } = setup();
 	diagrams.diagrams = [mermaidBuilder({ id: current.id })];
 	await expect(
-		library.writer.persistContent({
+		library.persistContent({
 			kind: 'mermaid',
 			diagramId: current.id,
 			source: 'flowchart LR\nA --> C',

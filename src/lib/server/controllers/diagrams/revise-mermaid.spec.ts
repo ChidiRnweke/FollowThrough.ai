@@ -1,4 +1,5 @@
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { InMemoryMermaidDocuments } from '$lib/testing/diagrams/fakes/mermaid-documents';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	drawioBuilder,
@@ -34,11 +35,9 @@ const setup = (drawio = false) => {
 					generation.conversations
 				]),
 				diagramSourceNotes: sourceNotes,
-				diagramFinder: diagrams,
+				diagrams: diagrams,
 				...generation,
-				mermaidRenderer: diagrams,
-				textExtractor: diagrams,
-				diagramWriter: diagrams,
+				mermaid: new InMemoryMermaidDocuments(),
 				diagramIndexer: diagrams
 			})
 		)

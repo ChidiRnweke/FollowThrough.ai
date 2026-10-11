@@ -1,4 +1,4 @@
-import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
+import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
@@ -27,9 +27,9 @@ const setup = (drawio = false) => {
 			capabilityDependencies<DiagramsDependencies>({
 				...agentToolResultsFixture(),
 				generationRules: new DiagramGenerationRuleService(),
-				diagramFinder: diagrams,
+				diagrams: diagrams,
 				...generation,
-				drawioXmlValidator: new DrawioXmlValidator(),
+				drawio: new DrawioDocumentService(),
 				suggestionCreator: suggestions,
 				transactionRunner: new InMemoryTransactionRunner([
 					suggestions,

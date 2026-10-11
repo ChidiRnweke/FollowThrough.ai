@@ -1,5 +1,5 @@
 import { JSDOM } from 'jsdom';
-import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
+import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
 
 /**
  * A draw.io document read as geometry rather than as text.
@@ -304,7 +304,7 @@ const leavingPoint = (centre: Point, towards: Point, box: Bounds): Point => {
 export const buildDiagramGraph = (source: string): DiagramGraph => {
 	let validated: string;
 	try {
-		validated = new DrawioXmlValidator().validate(source);
+		validated = new DrawioDocumentService().validate(source);
 	} catch (error) {
 		return { kind: 'failure', reason: error instanceof Error ? error.message : String(error) };
 	}

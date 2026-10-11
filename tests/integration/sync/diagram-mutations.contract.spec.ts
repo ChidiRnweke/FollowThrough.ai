@@ -6,20 +6,15 @@ import {
 	type DiagramStudioDependencies
 } from '$lib/server/controllers/diagram-studio/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
+import { DiagramLibraryService } from '$lib/server/services/diagrams/library';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createProjectsCapability } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import {
-	DrawioLabelReader,
-	DrawioSvgSanitizer,
-	DrawioXmlValidator
-} from '$lib/server/services/diagrams/drawio';
-import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
+import { DiagramRuleService } from '$lib/services/diagrams/editing';
 import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
-import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
@@ -40,7 +35,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 		projects: projects.repository
 	});
 	const records = new DiagramRecords(seeded.owner, database);
-	const library = createDiagramServices(
+	const library = new DiagramLibraryService(
 		seeded.owner,
 		records,
 		notes.repository,
@@ -70,16 +65,12 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
 			...agentToolResultsFixture(),
-			diagramEditing: new DiagramEditingService(),
-			diagramLifecycle: new DiagramLifecycleService(),
+			diagramRules: new DiagramRuleService(),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			transactionRunner,
-			diagramFinder: library.finder,
+			diagrams: library,
 			diagramSourceNotes: notes.services.reader,
-			diagramDraftWriter: library.draftWriter,
-			diagramRevisionReader: library.revisionReader,
-			diagramTrash: library.lifecycle,
 			now: () => new Date().toISOString() as typeof diagram.updatedAt,
 			diagramIndexer: {
 				diagramContextRequirement: (diagram) => index.diagramContextRequirement(diagram),
@@ -89,10 +80,8 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 					return result;
 				}
 			},
-			drawioXmlValidator: new DrawioXmlValidator(),
-			drawioSvgSanitizer: new DrawioSvgSanitizer(),
-			diagramLabelPresentation: new DiagramLabelPresentationService(),
-			drawioLabels: new DrawioLabelReader()
+			drawio: new DrawioDocumentService(),
+			diagramLabelPresentation: new DiagramLabelPresentationService()
 		})
 	);
 	const base = await sync.objects.read({ type: 'diagrams', id: [diagram.id] }, null);

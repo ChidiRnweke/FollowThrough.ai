@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Diagrams } from './controller';
-import { InMemoryMermaidValidator } from '$lib/testing/diagrams/fakes/mermaid-validator';
+import { InMemoryMermaidDocuments } from '$lib/testing/diagrams/fakes/mermaid-documents';
 import {
 	durableDiagramFixture,
 	diagramSelection
@@ -14,11 +14,11 @@ const setup = (candidates = [draft]) => {
 	const provider = fixture.provider;
 	provider.submissions = candidates;
 	if (!candidates.length) provider.failure = new Error('No diagram candidates remain.');
-	const syntax = new InMemoryMermaidValidator();
+	const syntax = new InMemoryMermaidDocuments();
 	syntax.rejections.set(fenced.source, 'Submit Mermaid source without code fences.');
 	const controller = new Diagrams(testActor(), {
 		...fixture.dependencies,
-		mermaidValidator: syntax,
+		mermaid: syntax,
 		generation: {
 			...fixture.generation,
 			generator: provider

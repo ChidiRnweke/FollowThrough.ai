@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { DrawioLabelReader, DrawioSvgSanitizer, DrawioXmlValidator } from './drawio';
+import { DrawioDocumentService } from './drawio';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
 describe('Untrusted draw.io XML invariants', () => {
 	it('accepts uncompressed mxfile graph XML', () => {
-		expect(new DrawioXmlValidator().validate(VALID_DRAWIO_XML)).toBe(VALID_DRAWIO_XML);
+		expect(new DrawioDocumentService().validate(VALID_DRAWIO_XML)).toBe(VALID_DRAWIO_XML);
 	});
 
 	it('accepts the HTML entities draw.io puts in rich-text labels', () => {
 		expect(
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replace('</root>', '<mxCell id="e" parent="1" value="A&nbsp;B"/></root>')
 			)
 		).toContain('&nbsp;');
@@ -17,7 +17,7 @@ describe('Untrusted draw.io XML invariants', () => {
 
 	it('rejects an entity name with no HTML meaning', () => {
 		expect(() =>
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replace(
 					'</root>',
 					'<mxCell id="e" parent="1" value="&bogusname;"/></root>'
@@ -27,7 +27,7 @@ describe('Untrusted draw.io XML invariants', () => {
 	});
 
 	it('rejects malformed XML', () => {
-		expect(() => new DrawioXmlValidator().validate('<mxfile>')).toThrow('malformed');
+		expect(() => new DrawioDocumentService().validate('<mxfile>')).toThrow('malformed');
 	});
 
 	// The failure this check exists for: a model that escapes its own output sends
@@ -35,7 +35,7 @@ describe('Untrusted draw.io XML invariants', () => {
 	// "text data outside of root node" at 1:1 — true, and no help to anyone.
 	it('says so when the whole document arrived HTML-escaped', () => {
 		expect(() =>
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 			)
 		).toThrow('HTML-escaped');
@@ -43,7 +43,7 @@ describe('Untrusted draw.io XML invariants', () => {
 
 	it('still accepts escaped markup inside a label', () => {
 		expect(
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replace(
 					'</root>',
 					'<mxCell id="e" parent="1" value="&lt;b&gt;A&lt;/b&gt;"/></root>'
@@ -53,26 +53,26 @@ describe('Untrusted draw.io XML invariants', () => {
 	});
 
 	it('rejects document type declarations', () => {
-		expect(() => new DrawioXmlValidator().validate(`<!DOCTYPE mxfile>${VALID_DRAWIO_XML}`)).toThrow(
-			'declarations'
-		);
+		expect(() =>
+			new DrawioDocumentService().validate(`<!DOCTYPE mxfile>${VALID_DRAWIO_XML}`)
+		).toThrow('declarations');
 	});
 
 	it('rejects script elements', () => {
 		expect(() =>
-			new DrawioXmlValidator().validate(VALID_DRAWIO_XML.replace('</root>', '<script/></root>'))
+			new DrawioDocumentService().validate(VALID_DRAWIO_XML.replace('</root>', '<script/></root>'))
 		).toThrow('scripts');
 	});
 
 	it('rejects event handlers', () => {
 		expect(() =>
-			new DrawioXmlValidator().validate(VALID_DRAWIO_XML.replace('id="2"', 'id="2" onclick="x"'))
+			new DrawioDocumentService().validate(VALID_DRAWIO_XML.replace('id="2"', 'id="2" onclick="x"'))
 		).toThrow('event handlers');
 	});
 
 	it('rejects encoded scripts in cell values', () => {
 		expect(() =>
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replace('API &amp; worker', '&lt;script&gt;alert(1)&lt;/script&gt;')
 			)
 		).toThrow('scripts');
@@ -80,7 +80,7 @@ describe('Untrusted draw.io XML invariants', () => {
 
 	it('rejects encoded event handlers in cell values', () => {
 		expect(() =>
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replace('API &amp; worker', '&lt;img onerror=&quot;x&quot;&gt;')
 			)
 		).toThrow('event handlers');
@@ -88,13 +88,13 @@ describe('Untrusted draw.io XML invariants', () => {
 
 	it('rejects unsafe URLs', () => {
 		expect(() =>
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replace('id="2"', 'id="2" href="javascript:alert(1)"')
 			)
 		).toThrow('unsafe URL');
 
 		expect(() =>
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replace('id="2"', 'id="2" href="javascript:alert(1)"')
 			)
 		).toThrow('cell "2"');
@@ -102,7 +102,7 @@ describe('Untrusted draw.io XML invariants', () => {
 
 	it('accepts the raster image draw.io writes into a style when a picture is pasted', () => {
 		expect(
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replace(
 					'</root>',
 					'<mxCell id="p" parent="1" style="shape=image;image=data:image/png,iVBORw0KGgo="/></root>'
@@ -113,7 +113,7 @@ describe('Untrusted draw.io XML invariants', () => {
 
 	it('accepts a raster image spelled with the base64 marker the style separator splits on', () => {
 		expect(
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replace(
 					'</root>',
 					'<mxCell id="b" parent="1" style="image=data:image/png;base64,iVBORw0KGgo="/></root>'
@@ -124,7 +124,7 @@ describe('Untrusted draw.io XML invariants', () => {
 
 	it('accepts a label that merely reads like a scheme', () => {
 		expect(
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replace(
 					'</root>',
 					'<mxCell id="d" parent="1" value="Data: user records"/></root>'
@@ -135,7 +135,7 @@ describe('Untrusted draw.io XML invariants', () => {
 
 	it('rejects a document scheme smuggled into a style', () => {
 		expect(() =>
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replace(
 					'</root>',
 					'<mxCell id="h" parent="1" style="image=data:text/html,PGltZyBzcmM9eD4="/></root>'
@@ -146,7 +146,7 @@ describe('Untrusted draw.io XML invariants', () => {
 
 	it('refuses a pasted SVG by name, because an SVG can carry script', () => {
 		expect(() =>
-			new DrawioXmlValidator().validate(
+			new DrawioDocumentService().validate(
 				VALID_DRAWIO_XML.replace(
 					'</root>',
 					'<mxCell id="s" parent="1" style="shape=image;image=data:image/svg+xml,PHN2Zy8+"/></root>'
@@ -157,20 +157,20 @@ describe('Untrusted draw.io XML invariants', () => {
 
 	it('rejects missing cell references', () => {
 		expect(() =>
-			new DrawioXmlValidator().validate(VALID_DRAWIO_XML.replace('target="2"', 'target="99"'))
+			new DrawioDocumentService().validate(VALID_DRAWIO_XML.replace('target="2"', 'target="99"'))
 		).toThrow('invalid target');
 	});
 
 	it('rejects non-finite geometry', () => {
 		expect(() =>
-			new DrawioXmlValidator().validate(VALID_DRAWIO_XML.replace('width="120"', 'width="NaN"'))
+			new DrawioDocumentService().validate(VALID_DRAWIO_XML.replace('width="120"', 'width="NaN"'))
 		).toThrow('must be finite');
 	});
 });
 
 describe('Draw.io preview and retrieval invariants', () => {
 	it('removes scripts from exported SVG previews', () => {
-		const result = new DrawioSvgSanitizer().sanitize(
+		const result = new DrawioDocumentService().sanitize(
 			'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><a href="https://tracker.example"><text>Safe</text></a><rect fill="url(https://tracker.example/pixel)" /></svg>'
 		);
 		expect(result).not.toContain('<script');
@@ -178,7 +178,7 @@ describe('Draw.io preview and retrieval invariants', () => {
 	});
 
 	it('extracts searchable labels from draw.io cells', () => {
-		expect(new DrawioLabelReader().read(VALID_DRAWIO_XML)).toEqual(['API & worker']);
+		expect(new DrawioDocumentService().read(VALID_DRAWIO_XML)).toEqual(['API & worker']);
 	});
 });
 
@@ -187,5 +187,5 @@ it('validates complete diagram XML beyond two million characters', () => {
 		'</root>',
 		`<mxCell id="long-label" parent="1" value="${'a'.repeat(2_000_001)}"/></root>`
 	);
-	expect(new DrawioXmlValidator().validate(source)).toBe(source);
+	expect(new DrawioDocumentService().validate(source)).toBe(source);
 });
