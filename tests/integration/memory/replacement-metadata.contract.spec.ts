@@ -21,7 +21,7 @@ it('stores the existing classification on the active replacement entry', async (
 		new ProjectRecords(owner, database),
 		new ProvenanceRecords(owner, database)
 	);
-	const original = await library.creator.create(
+	const original = await library.library.create(
 		memoryEntryBuilder({
 			id: testMemoryEntryId(22901),
 			userId: owner.userId,

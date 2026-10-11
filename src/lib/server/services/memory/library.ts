@@ -31,6 +31,13 @@ export interface MemoryEntryEditor {
 export interface MemoryEntryDeleter {
 	remove(memoryEntryId: MemoryEntryId): Promise<MemoryEntry>;
 }
+export interface MemoryLibrary
+	extends
+		MemoryEntryReader,
+		MemoryEntryLister,
+		MemoryEntryCreator,
+		MemoryEntryEditor,
+		MemoryEntryDeleter {}
 export interface MemoryChanges {
 	validate(payload: MemoryChangePayload): Promise<void>;
 	apply(
@@ -76,8 +83,9 @@ async function deleteMemory(
 	});
 	return deleted;
 }
-export class MemoryReadingService implements MemoryEntryReader, MemoryEntryLister {
+export class MemoryLibraryService implements MemoryLibrary {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly entries: MemoryEntryRepository,
 		private readonly projects: ProjectRepository
 	) {}
@@ -88,13 +96,6 @@ export class MemoryReadingService implements MemoryEntryReader, MemoryEntryListe
 		if (filter.projectId) await requireProject(this.projects, filter.projectId);
 		return this.entries.list(filter);
 	}
-}
-export class MemoryWritingService implements MemoryEntryCreator, MemoryEntryEditor {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly entries: MemoryEntryRepository,
-		private readonly projects: ProjectRepository
-	) {}
 	async create(entry: MemoryEntry): Promise<MemoryEntry> {
 		if (entry.userId !== this.actor.userId)
 			throw new OwnershipError('Cannot create another user’s memory');
@@ -110,20 +111,11 @@ export class MemoryWritingService implements MemoryEntryCreator, MemoryEntryEdit
 	getForEdit(id: MemoryEntryId): Promise<MemoryEntry> {
 		return readEditableMemory(this.entries, this.projects, id);
 	}
-}
-export class MemoryLifecycleService implements MemoryEntryDeleter {
-	constructor(
-		private readonly entries: MemoryEntryRepository,
-		private readonly projects: ProjectRepository
-	) {}
 	async remove(memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
-		const current = await readEditableMemory(this.entries, this.projects, memoryEntryId);
-		const entry = await this.entries.update({
-			...current,
-			deletedAt: now(),
-			updatedAt: now()
-		});
-		return entry;
+		return deleteMemory(
+			this.entries,
+			await readEditableMemory(this.entries, this.projects, memoryEntryId)
+		);
 	}
 }
 export class MemoryProposalService implements MemoryChanges {

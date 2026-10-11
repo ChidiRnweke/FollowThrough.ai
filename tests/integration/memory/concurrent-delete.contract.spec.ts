@@ -44,7 +44,7 @@ it('deletes the latest memory version after a concurrent edit commits', async ()
 	try {
 		await locked.promise;
 		const [backend] = await connection.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const removing = transactionRunner.run(() => memory.deleter.remove(entry.id));
+		const removing = transactionRunner.run(() => memory.library.remove(entry.id));
 		await vi.waitFor(async () => {
 			const waiting = await blocker<
 				{ pid: number }[]

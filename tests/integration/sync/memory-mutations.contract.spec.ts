@@ -40,9 +40,7 @@ const setup = async (suffix: string) => {
 			presentation: new MemoryPresentationService(),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
-			memoryCreator: memory.creator,
-			memoryEditor: memory.editor,
-			memoryDeleter: memory.deleter,
+			memoryLibrary: memory.library,
 			transactionRunner,
 			memoryIndexer: indexWriter
 		})

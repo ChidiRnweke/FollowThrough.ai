@@ -38,9 +38,7 @@ const setup = () => {
 			...agentToolResultsFixture(),
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),
-			memoryCreator: memory.creator,
-			memoryEditor: memory.editor,
-			memoryDeleter: memory.deleter,
+			memoryLibrary: memory.library,
 			memoryIndexer: indexWriter,
 			transactionRunner: new InMemoryTransactionRunner([entries, search])
 		})

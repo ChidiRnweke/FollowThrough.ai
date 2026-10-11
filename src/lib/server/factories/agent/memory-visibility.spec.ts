@@ -74,7 +74,7 @@ const setup = (scope: 'user' | 'project') => {
 			...agentToolResultsFixture(),
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),
-			memoryLister: library.lister
+			memoryLibrary: library.library
 		})
 	);
 	const factory = capabilityDependencies<ControllerFactory>({ memory: () => controller });

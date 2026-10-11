@@ -24,13 +24,7 @@ import type {
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
-import type {
-	MemoryChanges,
-	MemoryEntryCreator,
-	MemoryEntryDeleter,
-	MemoryEntryEditor,
-	MemoryEntryLister
-} from '$lib/server/services/memory/library';
+import type { MemoryChanges, MemoryLibrary } from '$lib/server/services/memory/library';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type { SuggestionAccepter, SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
@@ -75,10 +69,7 @@ export interface MemoryDependencies {
 	memoryIndexer: MemoryIndexer;
 	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
-	memoryLister: MemoryEntryLister;
-	memoryCreator: MemoryEntryCreator;
-	memoryEditor: MemoryEntryEditor;
-	memoryDeleter: MemoryEntryDeleter;
+	memoryLibrary: MemoryLibrary;
 	memoryChanges: MemoryChanges;
 	suggestionCreator: SuggestionCreator;
 	suggestionAccepter: SuggestionAccepter;
@@ -130,7 +121,7 @@ export class Memory implements MemoryController {
 	) {}
 
 	async list(input: ListMemoryInput): Promise<ListMemoryOutput> {
-		const entries = await this.dependencies.memoryLister.list({
+		const entries = await this.dependencies.memoryLibrary.list({
 			projectId: input.projectId
 		});
 		return {
@@ -146,7 +137,7 @@ export class Memory implements MemoryController {
 				timestamp: new Date().toISOString() as DateTime
 			});
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-			const entry = await this.dependencies.memoryCreator.create(decision.entry);
+			const entry = await this.dependencies.memoryLibrary.create(decision.entry);
 			await this.dependencies.memoryIndexer.indexMemory(entry);
 			return { entry };
 		});
@@ -154,14 +145,14 @@ export class Memory implements MemoryController {
 
 	async update(input: UpdateMemoryEntryInput): Promise<{ entry: MemoryEntry }> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.memoryEditor.getForEdit(input.memoryEntryId);
+			const current = await this.dependencies.memoryLibrary.getForEdit(input.memoryEntryId);
 			const decision = this.dependencies.editing.edit(
 				current,
 				input,
 				new Date().toISOString() as DateTime
 			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-			const entry = await this.dependencies.memoryEditor.update(decision.entry);
+			const entry = await this.dependencies.memoryLibrary.update(decision.entry);
 			await this.dependencies.memoryIndexer.indexMemory(entry);
 			return { entry };
 		});
@@ -169,7 +160,7 @@ export class Memory implements MemoryController {
 
 	async remove(input: DeleteMemoryEntryInput): Promise<void> {
 		await this.dependencies.transactionRunner.run(async () => {
-			const entry = await this.dependencies.memoryDeleter.remove(input.memoryEntryId);
+			const entry = await this.dependencies.memoryLibrary.remove(input.memoryEntryId);
 			await this.dependencies.memoryIndexer.indexMemory(entry);
 		});
 	}

@@ -48,7 +48,7 @@ describe('Memory entry management invariants', () => {
 	it('rejects a memory entry for an unknown project', async () => {
 		const { service } = await setup();
 		await expect(
-			service.creator.create(
+			service.library.create(
 				memoryEntryBuilder({
 					id: testMemoryEntryId(1),
 					projectId: testProjectId(99),
@@ -60,18 +60,18 @@ describe('Memory entry management invariants', () => {
 
 	it('hides a removed entry from the project list', async () => {
 		const { service } = await setup();
-		const entry = await service.creator.create(
+		const entry = await service.library.create(
 			memoryEntryBuilder({ id: testMemoryEntryId(2), projectId: testProjectId(), content: 'Fact' })
 		);
-		await service.deleter.remove(entry.id);
-		expect(await service.lister.list({ projectId: testProjectId() })).toEqual([]);
+		await service.library.remove(entry.id);
+		expect(await service.library.list({ projectId: testProjectId() })).toEqual([]);
 	});
 });
 
 describe('User profile memory invariants', () => {
 	it('creates a profile entry without any project', async () => {
 		const { service } = await setup();
-		const entry = await service.creator.create(
+		const entry = await service.library.create(
 			memoryEntryBuilder({
 				id: testMemoryEntryId(3),
 				projectId: undefined,
@@ -83,33 +83,33 @@ describe('User profile memory invariants', () => {
 
 	it('lists profile entries without project entries', async () => {
 		const { service } = await setup();
-		await service.creator.create(
+		await service.library.create(
 			memoryEntryBuilder({
 				id: testMemoryEntryId(4),
 				projectId: testProjectId(),
 				content: 'Project fact'
 			})
 		);
-		const profile = await service.creator.create(
+		const profile = await service.library.create(
 			memoryEntryBuilder({
 				id: testMemoryEntryId(5),
 				projectId: undefined,
 				content: 'I prefer short answers.'
 			})
 		);
-		expect((await service.lister.list({})).map((item) => item.id)).toEqual([profile.id]);
+		expect((await service.library.list({})).map((item) => item.id)).toEqual([profile.id]);
 	});
 
 	it('lists project entries without profile entries', async () => {
 		const { service } = await setup();
-		const project = await service.creator.create(
+		const project = await service.library.create(
 			memoryEntryBuilder({
 				id: testMemoryEntryId(6),
 				projectId: testProjectId(),
 				content: 'Project fact'
 			})
 		);
-		await service.creator.create(
+		await service.library.create(
 			memoryEntryBuilder({
 				id: testMemoryEntryId(7),
 				projectId: undefined,
@@ -117,7 +117,7 @@ describe('User profile memory invariants', () => {
 			})
 		);
 		expect(
-			(await service.lister.list({ projectId: testProjectId() })).map((item) => item.id)
+			(await service.library.list({ projectId: testProjectId() })).map((item) => item.id)
 		).toEqual([project.id]);
 	});
 
@@ -153,7 +153,7 @@ describe('Memory change application invariants', () => {
 	);
 	it('rejects a project replacement targeting profile memory', async () => {
 		const { service } = await setup();
-		const target = await service.creator.create(
+		const target = await service.library.create(
 			memoryEntryBuilder({
 				id: testMemoryEntryId(8),
 				projectId: undefined,
@@ -230,7 +230,7 @@ describe('Memory application effects', () => {
 		expect({
 			changes: result.changes,
 			replacesEntryId: result.entry.replacesEntryId,
-			oldTargetDeletedAt: (await service.reader.get(original.id)).deletedAt
+			oldTargetDeletedAt: (await service.library.get(original.id)).deletedAt
 		}).toEqual({
 			changes: [
 				{
@@ -258,7 +258,7 @@ describe('Memory application effects', () => {
 		);
 		expect({
 			changes: result.changes,
-			visibleEntries: await service.lister.list({ projectId: testProjectId() })
+			visibleEntries: await service.library.list({ projectId: testProjectId() })
 		}).toEqual({
 			changes: [{ kind: 'modified', before: original, after: result.entry }],
 			visibleEntries: []

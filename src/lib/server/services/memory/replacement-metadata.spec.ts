@@ -29,7 +29,7 @@ const replace = async (type?: MemoryEntryType) => {
 		}
 	];
 	const library = createMemoryServices(testActor(), entries, projects, provenance);
-	const original = await library.creator.create(
+	const original = await library.library.create(
 		memoryEntryBuilder({ type, content: 'Original convention' })
 	);
 	if (!original.projectId) throw new Error('The fixture must have a project');

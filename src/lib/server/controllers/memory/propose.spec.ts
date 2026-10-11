@@ -70,11 +70,8 @@ const setup = () => {
 			...agentToolResultsFixture(),
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),
-			memoryLister: memory.lister,
+			memoryLibrary: memory.library,
 			memoryIndexer: indexWriter,
-			memoryCreator: memory.creator,
-			memoryEditor: memory.editor,
-			memoryDeleter: memory.deleter,
 			memoryChanges: memory.changes,
 			suggestionCreator: suggestions,
 			suggestionAccepter: suggestions,
@@ -137,7 +134,7 @@ describe('Memory proposal orchestration invariants', () => {
 
 	it('rejects a profile proposal targeting project memory before recording a suggestion', async () => {
 		const { controller, memory, suggestions } = setup();
-		const target = await memory.creator.create(
+		const target = await memory.library.create(
 			memoryEntryBuilder({
 				id: testMemoryEntryId(1),
 				projectId: testProjectId(),
@@ -163,7 +160,7 @@ describe('Memory proposal orchestration invariants', () => {
 	it('rejects a project proposal targeting another project', async () => {
 		const { controller, memory, projects } = setup();
 		projects.projects.push(projectBuilder({ id: testProjectId(2) }));
-		const target = await memory.creator.create(
+		const target = await memory.library.create(
 			memoryEntryBuilder({
 				id: testMemoryEntryId(2),
 				projectId: testProjectId(2),

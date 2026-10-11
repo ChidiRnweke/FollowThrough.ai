@@ -29,7 +29,7 @@ const setup = async (scope: 'project' | 'user' = 'project') => {
 		createdAt: testNow
 	});
 	const library = createMemoryServices(actor, entries, projects, provenance);
-	const entry = await library.creator.create(
+	const entry = await library.library.create(
 		memoryEntryBuilder({ projectId: scope === 'project' ? testProjectId() : undefined })
 	);
 	return { actor, entries, projects, library, entry };
@@ -43,9 +43,9 @@ describe('memory owned by an archived project', () => {
 			await projects.archive(testProjectId());
 			await expect(
 				{
-					get: () => library.reader.get(entry.id),
-					getForEdit: () => library.editor.getForEdit(entry.id),
-					remove: () => library.deleter.remove(entry.id)
+					get: () => library.library.get(entry.id),
+					getForEdit: () => library.library.getForEdit(entry.id),
+					remove: () => library.library.remove(entry.id)
 				}[operation]()
 			).rejects.toThrow('Memory project was not found');
 		}
@@ -85,7 +85,7 @@ describe('memory owned by an archived project', () => {
 	it('preserves a resolved edit when its project has since been archived', async () => {
 		const { entries, projects, library, entry } = await setup();
 		await projects.archive(testProjectId());
-		const outcome = await library.editor.update({ ...entry, content: 'Replacement' }).then(
+		const outcome = await library.library.update({ ...entry, content: 'Replacement' }).then(
 			() => 'unexpected success',
 			(error: Error) => error.message
 		);
@@ -104,7 +104,7 @@ describe('memory owned by an archived project', () => {
 	it('allows profile memory edits after an unrelated project is archived', async () => {
 		const { projects, library, entry } = await setup('user');
 		await projects.archive(testProjectId());
-		const updated = await library.editor.update({
+		const updated = await library.library.update({
 			...entry,
 			content: 'Profile replacement'
 		});
@@ -113,8 +113,8 @@ describe('memory owned by an archived project', () => {
 
 	it('allows edits while the project remains active', async () => {
 		const { library, entry } = await setup();
-		const current = await library.editor.getForEdit(entry.id);
-		const updated = await library.editor.update({
+		const current = await library.library.getForEdit(entry.id);
+		const updated = await library.library.update({
 			...current,
 			content: 'Active replacement'
 		});
