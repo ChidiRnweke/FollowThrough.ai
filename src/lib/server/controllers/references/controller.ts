@@ -1,3 +1,4 @@
+import type { WebReferenceClient } from '$lib/server/services/references/web-research';
 import { DuplicateNoteActionRequest } from '$lib/errors';
 import type {
 	AgentRunId,
@@ -293,13 +294,4 @@ export class References implements ReferencesController {
 			this.dependencies.toolResults.arguments(input)
 		);
 	}
-}
-
-/** Low-level adapter contract; the owning controller coordinates the application operation. */
-export interface WebReferenceClient {
-	search(
-		text: string,
-		research: import('$lib/models/agent').WebResearchSettings,
-		options?: ReferenceSearchOptions
-	): Promise<readonly import('$lib/models/references').ReferenceSource[] | undefined>;
 }

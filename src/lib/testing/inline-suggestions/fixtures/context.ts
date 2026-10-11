@@ -1,4 +1,3 @@
-import { InlineCompletionRules } from '$lib/server/services/inline-suggestions/completion-rules';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { InlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
 import {
@@ -33,8 +32,7 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 			noteReader: notes,
 			memory,
 			knowledge: createTestContentIndex(search, undefined, undefined, false, provider),
-			inlineCompletionGenerator: generator,
-			completionRules: new InlineCompletionRules(),
+			completion: generator,
 			defaultCompletionModel: 'default-inline-model',
 			admissionRules: new InlineAdmissionRules(),
 			admissions,

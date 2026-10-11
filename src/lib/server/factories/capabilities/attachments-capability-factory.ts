@@ -1,5 +1,4 @@
-import { ImageDescriptionService } from '$lib/server/services/attachments/image-description';
-import { TextAttachmentReader } from '$lib/server/adapters/attachments/text-reader';
+import { AttachmentExtraction } from '$lib/server/services/attachments/extraction';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/retrieval';
 import type { ScheduledTask } from '$lib/models/maintenance';
@@ -14,12 +13,7 @@ import type { NoteRepository } from '$lib/server/repositories/notes';
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
 import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
 import { AttachmentFormatService } from '$lib/server/services/attachments/formats';
-import {
-	AttachmentContent,
-	AttachmentProcessingService
-} from '$lib/server/services/attachments/content';
-import { ImageDescription } from '$lib/server/adapters/attachments/image-description';
-import type { IImageDescription } from '$lib/server/controllers/attachment-processing/controller';
+import { AttachmentProcessingService } from '$lib/server/services/attachments/content';
 import {
 	AttachmentUploadService,
 	type AttachmentUploads,
@@ -30,8 +24,6 @@ import {
 	AttachmentLifecycleService,
 	type AttachmentLifecycle
 } from '$lib/server/services/attachments/library';
-import { MistralOcr } from '$lib/server/adapters/attachments/mistral-ocr';
-import type { ITextRecognition } from '$lib/server/controllers/attachment-processing/controller';
 import { UploadRetention } from '$lib/server/controllers/attachments/retention';
 import {
 	AttachmentStorage,
@@ -62,8 +54,6 @@ export interface AttachmentsCapabilityInput {
 	readonly ocrModel?: string;
 	readonly s3?: ObjectStorageConfig;
 	readonly storage?: IAttachmentStorage;
-	readonly ocrEngine?: ITextRecognition;
-	readonly imageDescriber?: IImageDescription;
 }
 
 export interface AttachmentsCapability {
@@ -94,19 +84,22 @@ export const createAttachmentsCapability = (
 				forcePathStyle: true
 			}
 		);
-	const ocrEngine =
-		input.ocrEngine ??
-		new MistralOcr(input.mistralApiKey, {
-			baseURL: input.mistralBaseURL ?? DEFAULT_MISTRAL_BASE_URL,
+	const extraction = new AttachmentExtraction({
+		storage,
+		ocr: {
+			url: `${input.mistralBaseURL ?? DEFAULT_MISTRAL_BASE_URL}/ocr`,
 			model: input.ocrModel ?? DEFAULT_OCR_MODEL,
-			observer: operationObserver
-		});
-	const imageDescriber =
-		input.imageDescriber ??
-		new ImageDescription(input.openRouterApiKey, {
-			baseURL: input.openRouterBaseURL,
-			appURL: input.appURL
-		});
+			headers: { authorization: `Bearer ${input.mistralApiKey}` },
+			fetch: globalThis.fetch
+		},
+		vision: {
+			url: `${input.openRouterBaseURL}/chat/completions`,
+			headers: { authorization: `Bearer ${input.openRouterApiKey}` },
+			fetch: globalThis.fetch
+		},
+		observer: operationObserver,
+		logger: console
+	});
 	return {
 		repository,
 		storage,
@@ -118,12 +111,7 @@ export const createAttachmentsCapability = (
 			modelSelection: new AgentModelSelectionService(),
 			records: repository,
 			claims: input.claims,
-			storage,
-			textReader: new TextAttachmentReader(),
-			ocr: ocrEngine,
-			imageDescriber,
-			content: new AttachmentContent(),
-			imageInstructions: new ImageDescriptionService(),
+			extraction,
 			processing: new AttachmentProcessingService(),
 			formats: new AttachmentFormatService(),
 			preferences: input.preferences,

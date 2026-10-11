@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { withReasoning } from './reasoning-transport';
+import { withReasoning } from '$lib/server/infrastructure/openrouter/reasoning';
 
 class RecordingFetch {
 	body: unknown;

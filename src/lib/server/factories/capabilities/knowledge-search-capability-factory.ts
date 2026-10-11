@@ -1,9 +1,5 @@
 import type { OperationObserver, WorkflowObserver } from '$lib/models/telemetry';
-import type { InlineCompletionGenerator } from '$lib/models/agent';
-import {
-	InlineCompletionRules,
-	type IInlineCompletionRules
-} from '$lib/server/services/inline-suggestions/completion-rules';
+import type { InlineCompletionService } from '$lib/server/services/inline-suggestions/completion';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { TokenCodec } from '$lib/models/tokenization';
@@ -76,8 +72,7 @@ export interface KnowledgeSearchFinalizeInput {
 
 export interface KnowledgeSearchFinalized {
 	readonly preferences: AgentPreferenceEditor;
-	readonly inlineCompletion: InlineCompletionGenerator;
-	readonly completionRules: IInlineCompletionRules;
+	readonly completion: InlineCompletionService;
 	readonly defaultCompletionModel: string;
 	readonly inlineContext: IInlineContextService;
 	readonly observer: OperationObserver;
@@ -132,17 +127,19 @@ export const createKnowledgeSearchCapability = (
 		finalize: ({ preferences }) => ({
 			inlineContext: new InlineContextService(tokenizer),
 			preferences,
-			completionRules: new InlineCompletionRules(),
 			defaultCompletionModel: normalizeLanguageModelId(
 				process.env.OPENROUTER_INLINE_COMPLETION_MODEL ??
 					process.env.OPENROUTER_INLINE_MODEL ??
 					'deepseek/deepseek-v4-flash'
 			),
-			inlineCompletion: createInlineCompletion({
-				apiKey: input.openRouterApiKey,
-				baseURL: input.openRouterBaseURL,
-				appURL: input.appURL
-			}),
+			completion: createInlineCompletion(
+				{
+					apiKey: input.openRouterApiKey,
+					baseURL: input.openRouterBaseURL,
+					appURL: input.appURL
+				},
+				operationObserver
+			),
 			observer: operationObserver,
 			workflow: workflowObserver,
 			admissionRules: new InlineAdmissionRules(),

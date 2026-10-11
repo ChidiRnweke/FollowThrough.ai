@@ -1,5 +1,5 @@
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
-import { ImageDescriptionService } from '$lib/server/services/attachments/image-description';
+import { InMemoryAttachmentExtraction } from '$lib/testing/attachments/fakes/extraction';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -13,17 +13,8 @@ import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
-import {
-	InMemoryTextParser,
-	InMemoryStorage,
-	InMemoryOcrEngine,
-	InMemoryImageDescriber
-} from '$lib/testing/attachments/fakes/processing';
 import { AttachmentFormatService } from '$lib/server/services/attachments/formats';
-import {
-	AttachmentContent,
-	AttachmentProcessingService
-} from '$lib/server/services/attachments/content';
+import { AttachmentProcessingService } from '$lib/server/services/attachments/content';
 import type {
 	AttachmentId,
 	AttachmentUploadId,
@@ -76,8 +67,8 @@ const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapToke
 			});
 		});
 	const view = await finalize();
-	const parser = new InMemoryTextParser();
-	parser.text = 'Extracted document';
+	const extraction = new InMemoryAttachmentExtraction();
+	extraction.results.text = { text: 'Extracted document', parserKind: 'text' };
 	const worker = new AttachmentProcessing({
 		modelSelection: new AgentModelSelectionService(),
 		records,
@@ -85,12 +76,7 @@ const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapToke
 			{ open: () => postgres(context.url, { max: 1, idle_timeout: 0, max_lifetime: 0 }) },
 			transaction.connectionScope
 		),
-		storage: new InMemoryStorage(),
-		textReader: parser,
-		ocr: new InMemoryOcrEngine(),
-		imageDescriber: new InMemoryImageDescriber(),
-		content: new AttachmentContent(),
-		imageInstructions: new ImageDescriptionService(),
+		extraction,
 		processing: new AttachmentProcessingService(),
 		formats: new AttachmentFormatService(),
 		preferences: {
@@ -107,11 +93,11 @@ const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapToke
 		visionModel: 'test/model',
 		logger: { error: () => {} }
 	});
-	return { owner, records, search, view, parser, worker, finalize, transaction };
+	return { owner, records, search, view, extraction, worker, finalize, transaction };
 };
 describe('attachment processing persistence', () => {
 	it('recovers an old truncated index from saved extraction without parsing again', async () => {
-		const { owner, records, search, view, parser, worker } = await setup('9751', {
+		const { owner, records, search, view, extraction, worker } = await setup('9751', {
 			targetTokens: 30,
 			overlapTokens: 5
 		});
@@ -126,7 +112,7 @@ describe('attachment processing persistence', () => {
 			parserKind: 'text',
 			extractedText: text
 		});
-		parser.beforeParse = async () => {
+		extraction.beforeExtract = async () => {
 			throw new Error('Parsing is unavailable');
 		};
 		await worker.run();
@@ -150,8 +136,8 @@ describe('attachment processing persistence', () => {
 		}).toEqual({ status: 'ready', text: ['Extracted document'] });
 	});
 	it('does not publish older text when another upload becomes current during extraction', async () => {
-		const { owner, records, search, view, parser, worker, finalize } = await setup('9712');
-		parser.beforeParse = async () => {
+		const { owner, records, search, view, extraction, worker, finalize } = await setup('9712');
+		extraction.beforeExtract = async () => {
 			await finalize();
 		};
 		await worker.process(owner, view.version.id);
@@ -193,8 +179,8 @@ describe('attachment processing persistence', () => {
 });
 
 it('preserves successful empty extraction when the version is read back', async () => {
-	const { owner, records, view, parser, worker } = await setup('21701');
-	parser.text = '';
+	const { owner, records, view, extraction, worker } = await setup('21701');
+	extraction.results.text = { text: '', parserKind: 'text' };
 	await worker.process(owner, view.version.id);
 	expect((await records.findById(owner, view.attachment.id))?.version).toMatchObject({
 		processingStatus: 'ready',

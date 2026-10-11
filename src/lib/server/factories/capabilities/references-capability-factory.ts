@@ -17,9 +17,9 @@ import {
 } from '$lib/server/services/references/library';
 import type { ReferenceRepository } from '$lib/server/repositories/references/references';
 import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
-import { ReferenceResearch } from '$lib/server/adapters/references/web-research';
+import { ReferenceResearch } from '$lib/server/services/references/web-research';
 import { ReferenceRanking, type ReferenceRanker } from '$lib/server/services/references/ranking';
-import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
+import type { WebReferenceClient } from '$lib/server/services/references/web-research';
 import type { ReferenceCandidatePreparation } from '$lib/server/services/references/discovery';
 import type { AgentRunSettings } from '$lib/services/agent/run-settings';
 import type { WebResearchOptions } from '$lib/models/agent';

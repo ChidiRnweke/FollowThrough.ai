@@ -7,10 +7,8 @@ import {
 	type InlineCompletionContext
 } from '$lib/models/agent';
 import { type Note } from '$lib/models/notes';
-import { ExternalServiceError } from '$lib/errors';
 import type { AgentPreferencesStore } from '$lib/server/services/agent/runs/preferences';
-import type { InlineCompletionGenerator } from '$lib/models/agent';
-import type { IInlineCompletionRules } from '$lib/server/services/inline-suggestions/completion-rules';
+import type { InlineCompletionService } from '$lib/server/services/inline-suggestions/completion';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 
 import type { OperationObserver, WorkflowObserver } from '$lib/models/telemetry';
@@ -40,8 +38,7 @@ export interface InlineSuggestionsController {
 
 export interface InlineSuggestionsDependencies {
 	context: IInlineContextService;
-	inlineCompletionGenerator: InlineCompletionGenerator;
-	completionRules: IInlineCompletionRules;
+	completion: InlineCompletionService;
 	defaultCompletionModel: string;
 	knowledge: KnowledgeSearch;
 	memory: MemoryEntryLister;
@@ -98,22 +95,14 @@ export class InlineSuggestions implements InlineSuggestionsController {
 					const context = await this.buildContext(actor, authoritativeRequest, note, signal);
 					const budget = this.consume(actor.userId);
 					if (!budget.allowed) return { outcome: budget.reason, retryAfterMs: budget.retryAfterMs };
-					let text: string;
-					try {
-						text = await this.generate(
-							authoritativeRequest,
-							context,
-							signal,
-							preferences.inlineModel === undefined
-								? this.dependencies.defaultCompletionModel
-								: normalizeLanguageModelId(preferences.inlineModel)
-						);
-					} catch (error) {
-						if (signal.aborted) throw error;
-						throw new ExternalServiceError('Inline completion provider failed', {
-							cause: error instanceof Error ? error.message : String(error)
-						});
-					}
+					const text = await this.dependencies.completion.complete(
+						authoritativeRequest,
+						context,
+						preferences.inlineModel === undefined
+							? this.dependencies.defaultCompletionModel
+							: normalizeLanguageModelId(preferences.inlineModel),
+						signal
+					);
 					if (!text) return { outcome: 'no_suggestion', reason: 'empty_model' };
 					return {
 						outcome: 'suggested',
@@ -148,35 +137,6 @@ export class InlineSuggestions implements InlineSuggestionsController {
 		);
 		this.dependencies.admissions.replaceRecent(userId, result.recent);
 		return result.admission;
-	}
-
-	private async generate(
-		request: InlineSuggestionRequest,
-		context: InlineCompletionContext,
-		signal: AbortSignal,
-		model: string
-	): Promise<string> {
-		const { completionRules, inlineCompletionGenerator, observer } = this.dependencies;
-		const prompt = completionRules.prepare(request, context);
-		const result = await observer.run(
-			'inline.generate',
-			{
-				input: prompt.user,
-				kind: OpenInferenceSpanKind.LLM,
-				metadata: { model },
-				tags: ['inline', 'generation']
-			},
-			async () => {
-				const completion = await inlineCompletionGenerator.complete(prompt, signal, model);
-				return {
-					text: completionRules.sanitize(request.prefix, completion.raw),
-					attributes: completion.attributes
-				};
-			},
-			(output) => output.text,
-			(output) => output.attributes
-		);
-		return result.text;
 	}
 
 	private async buildContext(

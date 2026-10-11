@@ -42,11 +42,10 @@ const fixtureFor = (baseURL: string) => {
 	const fixture = inlineSuggestionFixture({
 		observer: operationObserver,
 		workflow: workflowObserver,
-		inlineCompletionGenerator: createInlineCompletion({
-			apiKey: 'local-key',
-			baseURL,
-			appURL: 'https://followthrough.example'
-		})
+		completion: createInlineCompletion(
+			{ apiKey: 'local-key', baseURL, appURL: 'https://followthrough.example' },
+			operationObserver
+		)
 	});
 	fixture.notes.notes = [noteBuilder()];
 	return fixture;

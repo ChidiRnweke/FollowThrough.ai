@@ -1,5 +1,5 @@
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
-import { ImageDescriptionService } from '$lib/server/services/attachments/image-description';
+import { InMemoryAttachmentExtraction } from '../fakes/extraction';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import {
@@ -9,22 +9,13 @@ import {
 	AttachmentLifecycleService
 } from '$lib/server/services/attachments/library';
 import { AttachmentFormatService } from '$lib/server/services/attachments/formats';
-import {
-	AttachmentContent,
-	AttachmentProcessingService
-} from '$lib/server/services/attachments/content';
+import { AttachmentProcessingService } from '$lib/server/services/attachments/content';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import {
-	InMemoryAttachmentRepository,
-	InMemoryTextParser,
-	InMemoryOcrEngine,
-	InMemoryImageDescriber,
-	InMemoryStorage
-} from '../fakes/processing';
+import { InMemoryAttachmentRepository, InMemoryStorage } from '../fakes/processing';
 import { InMemoryAttachmentClaims } from '../fakes/claims';
 import type { AttachmentView } from '$lib/models/attachments';
 export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 480 }) => {
@@ -32,9 +23,7 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 	const notes = new InMemoryNoteRepository();
 	const search = new InMemorySearchRepository();
 	const claims = new InMemoryAttachmentClaims();
-	const textParser = new InMemoryTextParser();
-	const ocr = new InMemoryOcrEngine();
-	const describer = new InMemoryImageDescriber();
+	const extraction = new InMemoryAttachmentExtraction();
 	const storage = new InMemoryStorage();
 	const uploads = new AttachmentUploadService(repository, notes, storage);
 	const reader = new AttachmentReadingService(repository);
@@ -44,12 +33,7 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 		modelSelection: new AgentModelSelectionService(),
 		records: repository,
 		claims,
-		storage,
-		textReader: textParser,
-		ocr,
-		imageDescriber: describer,
-		content: new AttachmentContent(),
-		imageInstructions: new ImageDescriptionService(),
+		extraction,
 		processing: new AttachmentProcessingService(),
 		formats: new AttachmentFormatService(),
 		preferences: {
@@ -76,9 +60,7 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 		search,
 		claims,
 		worker,
-		textParser,
-		ocr,
-		describer,
+		extraction,
 		storage,
 		process: async (view: AttachmentView) => {
 			repository.found = view;

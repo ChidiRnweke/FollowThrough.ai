@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { withWebResearch } from './web-research-transport';
+import { withWebResearch } from '$lib/server/infrastructure/openrouter/web-research';
 
 class RecordingFetch {
 	body: unknown;

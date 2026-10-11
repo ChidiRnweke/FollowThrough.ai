@@ -17,8 +17,8 @@ import type {
 	AgentProviderTurn,
 	AgentProviderTurnInput
 } from '$lib/server/controllers/agent/execution';
-import { withWebResearch } from './web-research-transport';
-import { withReasoning } from './reasoning-transport';
+import { withWebResearch } from '$lib/server/infrastructure/openrouter/web-research';
+import { withReasoning } from '$lib/server/infrastructure/openrouter/reasoning';
 export class AgentSdkInfrastructure implements AgentExecutionInfrastructure {
 	async calledTools(session: Session): Promise<readonly string[]> {
 		return (await session.getItems()).flatMap((item) =>

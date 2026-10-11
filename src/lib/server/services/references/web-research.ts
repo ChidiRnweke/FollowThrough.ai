@@ -1,4 +1,3 @@
-import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
 import type { ReferenceSearchOptions } from '$lib/models/references';
 import OpenAI from 'openai';
 import {
@@ -7,7 +6,7 @@ import {
 	type Url
 } from '$lib/models/references';
 import type { WebResearchSettings } from '$lib/models/agent';
-import { withWebResearch } from '$lib/server/adapters/agent/web-research-transport';
+import { withWebResearch } from '$lib/server/infrastructure/openrouter/web-research';
 import type { OperationObserver } from '$lib/models/telemetry';
 import { ExternalServiceError } from '$lib/errors';
 
@@ -16,6 +15,15 @@ Prefer standards and official documentation, then vendor documentation, then com
 Perform one focused search and cite directly relevant sources.
 Do not write a guide or tutorial. Cite every source so its citation metadata is included in the response.
 Return no sources when nothing is sufficiently relevant. Do not pad the result.`;
+
+/** Web sources that support or clarify a passage, found by a web-searching model. */
+export interface WebReferenceClient {
+	search(
+		text: string,
+		research: WebResearchSettings,
+		options?: ReferenceSearchOptions
+	): Promise<readonly ReferenceSource[] | undefined>;
+}
 
 export class ReferenceResearch implements WebReferenceClient {
 	constructor(

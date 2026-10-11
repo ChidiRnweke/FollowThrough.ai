@@ -1,7 +1,7 @@
 import type { KnowledgeRetrievalCapabilities } from './services/knowledge-search/retrieval';
 import type { ToolRanking, ToolSeeding } from './services/agent/tools/tool-search';
 import type { ScheduledTask } from '$lib/models/maintenance';
-import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
+import type { WebReferenceClient } from '$lib/server/services/references/web-research';
 import { createAgentToolResults } from '$lib/server/factories/agent/tool-result-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import {
@@ -14,10 +14,6 @@ import {
 	DEFAULT_LANGUAGE_MODEL_BASE_URL,
 	optionalProperty
 } from './config';
-import type {
-	IImageDescription,
-	ITextRecognition
-} from './controllers/attachment-processing/controller';
 import type { ToolDiscoveryController } from './controllers/tool-discovery/controller';
 import type { Database } from './db';
 import type { McpSurfaceFactory } from './factories/agent/mcp-tool-factory';
@@ -60,8 +56,6 @@ export interface ApplicationOverrides {
 	readonly attachmentStorage?: IAttachmentStorage;
 	readonly referenceClient?: WebReferenceClient;
 	readonly modelCatalog?: AgentModelCatalog;
-	readonly ocrEngine?: ITextRecognition;
-	readonly imageDescriber?: IImageDescription;
 }
 
 export interface ApplicationConfig {
@@ -258,9 +252,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		mistralBaseURL: config.mistralBaseURL,
 		ocrModel: config.ocrModel,
 		s3: config.s3,
-		storage: overrides.attachmentStorage,
-		ocrEngine: overrides.ocrEngine,
-		imageDescriber: overrides.imageDescriber
+		storage: overrides.attachmentStorage
 	});
 	const attachmentStorage = attachmentCapability.storage;
 	const deliverables = createDeliverablesCapability({
@@ -732,8 +724,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			context: finalizedKnowledgeSearch.inlineContext,
 			noteReader: notes.reader,
 			preferences: finalizedKnowledgeSearch.preferences,
-			inlineCompletionGenerator: finalizedKnowledgeSearch.inlineCompletion,
-			completionRules: finalizedKnowledgeSearch.completionRules,
+			completion: finalizedKnowledgeSearch.completion,
 			defaultCompletionModel: finalizedKnowledgeSearch.defaultCompletionModel,
 			knowledge,
 			memory: memory.lister,

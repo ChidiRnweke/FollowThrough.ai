@@ -1,13 +1,13 @@
 import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
 import { References } from './controller';
 import { referenceSearchFixture } from '$lib/testing/references/fixtures/search';
-import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
+import type { WebReferenceClient } from '$lib/server/services/references/web-research';
 import type { WebResearchOptions } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
 import type { TextSelection } from '$lib/models/notes';
 import type { Url } from '$lib/models/references';
 import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
-import { ReferenceResearch } from '$lib/server/adapters/references/web-research';
+import { ReferenceResearch } from '$lib/server/services/references/web-research';
 import { InMemoryWebReferenceClient } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 

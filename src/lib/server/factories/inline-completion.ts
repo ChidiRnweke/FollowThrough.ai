@@ -1,6 +1,9 @@
 import OpenAI from 'openai';
-import type { InlineCompletionGenerator } from '$lib/models/agent';
-import { InlineSuggestionCompletion } from '$lib/server/adapters/inline-suggestions/completion';
+import type { OperationObserver } from '$lib/models/telemetry';
+import {
+	InlineCompletion,
+	type InlineCompletionService
+} from '$lib/server/services/inline-suggestions/completion';
 
 export interface InlineCompletionClientConfiguration {
 	readonly apiKey: string;
@@ -9,15 +12,17 @@ export interface InlineCompletionClientConfiguration {
 }
 
 export const createInlineCompletion = (
-	configuration: InlineCompletionClientConfiguration
-): InlineCompletionGenerator =>
-	new InlineSuggestionCompletion(
-		new OpenAI({
+	configuration: InlineCompletionClientConfiguration,
+	observer: OperationObserver
+): InlineCompletionService =>
+	new InlineCompletion({
+		provider: new OpenAI({
 			apiKey: configuration.apiKey,
 			baseURL: configuration.baseURL,
 			defaultHeaders: {
 				'HTTP-Referer': configuration.appURL,
 				'X-OpenRouter-Title': 'FollowThrough'
 			}
-		})
-	);
+		}),
+		observer
+	});

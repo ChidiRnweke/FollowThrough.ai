@@ -26,3 +26,21 @@ export interface ExtractedAttachmentContent {
 	readonly parserKind: string;
 	readonly processingFailure?: string;
 }
+
+/** An HTTP provider endpoint an attachment extraction calls. */
+export interface AttachmentProviderEndpoint {
+	readonly url: string;
+	readonly headers: Readonly<Record<string, string>>;
+	readonly fetch: typeof globalThis.fetch;
+}
+
+/** How a stored attachment yields searchable text. */
+export type AttachmentExtractionKind = 'text' | 'document' | 'image';
+
+/** The stored object an extraction reads. */
+export interface AttachmentExtractionSource {
+	readonly objectKey: string;
+	readonly byteSize: number;
+	readonly path: string;
+	readonly kind: AttachmentExtractionKind;
+}

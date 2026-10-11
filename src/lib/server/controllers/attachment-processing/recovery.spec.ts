@@ -22,10 +22,10 @@ describe('durable attachment processing', () => {
 		expect(repository.found.version.processingStatus).toBe('queued');
 	});
 	it('does not save extraction or search results after losing the claim', async () => {
-		const { repository, worker, claims, ocr, search } = setupAttachments();
+		const { repository, worker, claims, extraction, search } = setupAttachments();
 		repository.found = view('application/pdf');
 		const versionId = repository.found.version.id;
-		ocr.beforeParse = async () => claims.lose(versionId);
+		extraction.beforeExtract = async () => claims.lose(versionId);
 		await worker.process(testActor(), versionId);
 		expect(repository.found.version.processingStatus).toBe('processing');
 		expect(search.documents).toEqual([]);
@@ -55,12 +55,12 @@ describe('durable attachment processing', () => {
 		).toEqual([{ content: 'ocr text', embedding: undefined }]);
 	});
 	it('resumes extraction after a lost owner releases the version', async () => {
-		const { repository, worker, claims, ocr } = setupAttachments();
+		const { repository, worker, claims, extraction } = setupAttachments();
 		repository.found = view('application/pdf');
 		const versionId = repository.found.version.id;
-		ocr.beforeParse = async () => claims.lose(versionId);
+		extraction.beforeExtract = async () => claims.lose(versionId);
 		await worker.process(testActor(), versionId);
-		ocr.beforeParse = async () => {};
+		extraction.beforeExtract = async () => {};
 		await worker.run();
 		expect(repository.found.version.processingStatus).toBe('ready');
 	});

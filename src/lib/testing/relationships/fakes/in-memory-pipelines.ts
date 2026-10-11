@@ -14,7 +14,7 @@ import type {
 	StructuredPromiseResult
 } from '$lib/server/repositories/todos/classification';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
-import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
+import type { WebReferenceClient } from '$lib/server/services/references/web-research';
 import type { ReferenceSearchOptions } from '$lib/models/references';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import { testNow, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';

@@ -1,4 +1,3 @@
-import type { Attributes } from '@opentelemetry/api';
 import { z } from 'zod';
 export type AgentRunExecutionOutcome = 'completed' | 'awaiting_approval' | 'cancelled';
 import type { PersistedSessionItem } from './session-item';
@@ -2070,16 +2069,4 @@ export type AgentToolOutcome =
 export interface InlineCompletionPrompt {
 	readonly system: string;
 	readonly user: string;
-}
-export interface InlineCompletionResult {
-	readonly raw: string;
-	readonly attributes: Attributes;
-}
-/** The owner resolves the user preference or environment default before calling the provider. */
-export interface InlineCompletionGenerator {
-	complete(
-		prompt: InlineCompletionPrompt,
-		signal: AbortSignal,
-		model: string
-	): Promise<InlineCompletionResult>;
 }

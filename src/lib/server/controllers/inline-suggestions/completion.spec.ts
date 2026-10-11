@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-	OpenInferenceSpanKind,
-	SemanticConventions as S
-} from '@arizeai/openinference-semantic-conventions';
 import type { InlineSuggestionRequest } from '$lib/models/agent';
 import { inlineSuggestionFixture } from '$lib/testing/inline-suggestions/fixtures/context';
-import { inlineCompletionProvider } from '$lib/testing/inline-suggestions/fixtures/provider';
 import { InMemoryOperationObserver } from '$lib/testing/telemetry/fakes/in-memory-operation-observer';
-import { createInlineCompletion } from '$lib/server/factories/inline-completion';
 import {
 	noteBuilder,
 	testActor,
@@ -50,44 +44,35 @@ describe('inline completion ownership', () => {
 			{ model: 'provider/chosen-model', signal }
 		]);
 	});
-	it('sanitizes raw provider text before publishing a suggestion', async () => {
+	it('publishes the completion with the grounding it used', async () => {
 		const fixture = setup();
-		fixture.generator.text = '" replicas. Then fail over. Third sentence."';
+		fixture.generator.text = ' replicas. Then fail over.';
 		expect(await fixture.controller.suggest(actor, request, new AbortController().signal)).toEqual({
 			outcome: 'suggested',
 			text: ' replicas. Then fail over.',
 			grounding: { currentNote: true, userMemoryCount: 0, projectPassageCount: 0 }
 		});
 	});
-	it('reports empty sanitized text as no suggestion', async () => {
+	it('reports an empty completion as no suggestion', async () => {
 		const fixture = setup();
-		fixture.generator.text = '   ';
+		fixture.generator.text = '';
 		expect(await fixture.controller.suggest(actor, request, new AbortController().signal)).toEqual({
 			outcome: 'no_suggestion',
 			reason: 'empty_model'
 		});
 	});
-	it('records the provider failure before normalizing the operation error', async () => {
+	it('propagates a completion failure and releases admission', async () => {
 		const fixture = setup();
-		fixture.generator.failure = new Error('provider down');
+		fixture.generator.failure = new Error('Inline completion provider failed');
 		const outcome = await fixture.controller
 			.suggest(actor, request, new AbortController().signal)
 			.then(
 				(result) => result.outcome,
 				(error) => error.message
 			);
-		expect({
-			outcome,
-			trace: fixture.observer.operations.filter((event) => event.name === 'inline.generate')
-		}).toMatchObject({
+		expect({ outcome, inFlight: fixture.admissions.hasRequest(actor.userId) }).toEqual({
 			outcome: 'Inline completion provider failed',
-			trace: [
-				{
-					kind: 'failed',
-					error: 'provider down',
-					context: { metadata: { model: 'default-inline-model' } }
-				}
-			]
+			inFlight: false
 		});
 	});
 	it('preserves cancellation errors and releases admission after a provider abort', async () => {
@@ -114,45 +99,5 @@ describe('inline completion ownership', () => {
 			outcome: failure,
 			inFlight: false
 		});
-	});
-	it('retains raw provider attributes and sanitized output in the generation span', async () => {
-		const provider = await inlineCompletionProvider(
-			JSON.stringify({
-				model: 'provider-model',
-				choices: [{ message: { content: '" replicas."' }, finish_reason: 'stop' }]
-			})
-		);
-		try {
-			const observer = new InMemoryOperationObserver();
-			const fixture = inlineSuggestionFixture({
-				observer,
-				inlineCompletionGenerator: createInlineCompletion({
-					apiKey: 'local-key',
-					baseURL: provider.baseURL,
-					appURL: 'https://followthrough.example'
-				})
-			});
-			fixture.notes.notes = [noteBuilder()];
-			await fixture.controller.suggest(actor, request, new AbortController().signal);
-			expect(observer.operations.filter((event) => event.name === 'inline.generate')).toMatchObject(
-				[
-					{
-						kind: 'completed',
-						output: ' replicas.',
-						context: {
-							kind: OpenInferenceSpanKind.LLM,
-							metadata: { model: 'default-inline-model' },
-							tags: ['inline', 'generation']
-						},
-						attributes: {
-							[S.LLM_MODEL_NAME]: 'provider-model',
-							'llm.output_messages.0.message.content': '" replicas."'
-						}
-					}
-				]
-			);
-		} finally {
-			await provider.close();
-		}
 	});
 });

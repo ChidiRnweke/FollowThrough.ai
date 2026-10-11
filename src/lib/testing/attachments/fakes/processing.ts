@@ -1,4 +1,3 @@
-import type { AttachmentTextReader } from '$lib/server/controllers/attachment-processing/controller';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AttachmentId,
@@ -19,9 +18,8 @@ import {
 	type StoredObjectInfo
 } from '$lib/server/repositories/attachments/object-storage';
 import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { ITextRecognition as OcrEngineClient } from '$lib/server/controllers/attachment-processing/controller';
-import type { IImageDescription as ImageDescriber } from '$lib/server/controllers/attachment-processing/controller';
 import type { RecognizedContent as OcrContentPart } from '$lib/models/attachments/ocr';
+import { z } from 'zod';
 
 export const ATTACHMENT_ID = '00000000-0000-4000-8000-0000000000a1' as AttachmentId;
 const VERSION_ID = '00000000-0000-4000-8000-0000000000b1' as AttachmentVersionId;
@@ -181,8 +179,14 @@ export class InMemoryStorage implements IAttachmentStorage {
 	async stat(): Promise<StoredObjectInfo> {
 		return { byteSize: UPLOAD_BYTES, checksumSha256: UPLOAD_CHECKSUM };
 	}
+	/** The stored text a text attachment decodes to. */
+	text = 'decoded text';
+	reads = 0;
+	beforeRead: () => Promise<void> = async () => {};
 	async read(): Promise<Uint8Array> {
-		return new Uint8Array([1, 2, 3]);
+		this.reads += 1;
+		await this.beforeRead();
+		return new TextEncoder().encode(this.text);
 	}
 	async promote(): Promise<void> {}
 	async remove(objectKey: string): Promise<void> {
@@ -191,44 +195,71 @@ export class InMemoryStorage implements IAttachmentStorage {
 	}
 }
 
-export class InMemoryTextParser implements AttachmentTextReader {
-	text = 'decoded text';
-	beforeParse: () => Promise<void> = async () => {};
-	readonly kind = 'text';
-	calls = 0;
+const ocrRequestSchema = z.object({
+	document: z.union([
+		z.object({ type: z.literal('document_url'), document_url: z.string() }),
+		z.object({ type: z.literal('image_url'), image_url: z.string() })
+	])
+});
 
-	async parse(): Promise<string> {
-		this.calls += 1;
-		await this.beforeParse();
-		return this.text;
-	}
-}
-
-export class InMemoryOcrEngine implements OcrEngineClient {
-	calls: Parameters<OcrEngineClient['ocr']>[0][] = [];
+/** Mistral Document AI over `fetch`: one page whose markdown places each image part. */
+export class InMemoryOcrEngine {
+	calls: { readonly documentUrl: string; readonly kind: 'document' | 'image' }[] = [];
 	parts: readonly OcrContentPart[] = [{ kind: 'markdown', text: 'ocr text' }];
 	beforeParse: () => Promise<void> = async () => {};
 	failure?: Error;
-	async ocr(input: Parameters<OcrEngineClient['ocr']>[0]) {
-		this.calls.push(input);
+	readonly fetch: typeof globalThis.fetch = async (_url, init) => {
+		const { document } = ocrRequestSchema.parse(JSON.parse(String(init?.body)));
+		this.calls.push(
+			document.type === 'image_url'
+				? { documentUrl: document.image_url, kind: 'image' }
+				: { documentUrl: document.document_url, kind: 'document' }
+		);
 		await this.beforeParse();
 		if (this.failure) throw this.failure;
-		return { parts: this.parts };
-	}
+		const images = this.parts.flatMap((part, index) =>
+			part.kind === 'image' ? [{ id: `img-${index}`, image_base64: part.dataUrl }] : []
+		);
+		const markdown = this.parts
+			.map((part, index) => (part.kind === 'image' ? `![img-${index}](img-${index})` : part.text))
+			.join('\n\n');
+		return Response.json({ pages: [{ index: 0, markdown, images }] });
+	};
 }
 
-export class InMemoryImageDescriber implements ImageDescriber {
+const visionRequestSchema = z.object({
+	model: z.string(),
+	messages: z.tuple([
+		z.object({
+			content: z.tuple([
+				z.object({ text: z.string() }),
+				z.object({ image_url: z.object({ url: z.string() }) })
+			])
+		})
+	])
+});
+
+/** The vision chat endpoint over `fetch`, describing each image by its data URL. */
+export class InMemoryImageDescriber {
 	failure?: Error;
-	calls: Parameters<ImageDescriber['describe']>[0][] = [];
-	beforeDescribe: (input: Parameters<ImageDescriber['describe']>[0]) => Promise<void> =
-		async () => {};
+	calls: { readonly imageDataUrl: string; readonly prompt: string; readonly model: string }[] = [];
+	beforeDescribe: (input: { readonly imageDataUrl: string }) => Promise<void> = async () => {};
 	descriptions = new Map<string, string>();
-	async describe(input: Parameters<ImageDescriber['describe']>[0]): Promise<string> {
-		this.calls.push(input);
-		await this.beforeDescribe(input);
+	readonly fetch: typeof globalThis.fetch = async (_url, init) => {
+		const request = visionRequestSchema.parse(JSON.parse(String(init?.body)));
+		const [text, image] = request.messages[0].content;
+		const call = { imageDataUrl: image.image_url.url, prompt: text.text, model: request.model };
+		this.calls.push(call);
+		await this.beforeDescribe(call);
 		if (this.failure) throw this.failure;
-		return this.descriptions.get(input.imageDataUrl) ?? 'a factual description';
-	}
+		return Response.json({
+			choices: [
+				{
+					message: { content: this.descriptions.get(call.imageDataUrl) ?? 'a factual description' }
+				}
+			]
+		});
+	};
 }
 
 export const finalUpdate = (repository: InMemoryAttachmentRepository): AttachmentVersion => {
