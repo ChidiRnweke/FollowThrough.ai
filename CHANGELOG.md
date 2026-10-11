@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.3.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.2.1...v5.3.0) (2026-10-11)
+
+
+### Features
+
+* **todos:** draw a scene in each empty board column ([#449](https://github.com/ChidiRnweke/FollowThrough.ai/issues/449)) ([c22d66d](https://github.com/ChidiRnweke/FollowThrough.ai/commit/c22d66d5c89a489b70ceaa147dfface36753fe93))
+
 ## [5.2.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.2.0...v5.2.1) (2026-10-11)
 
 
