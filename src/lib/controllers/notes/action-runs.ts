@@ -5,9 +5,7 @@ import type {
 	NoteActionKind
 } from '$lib/models/agent';
 import type { NoteActionResult, NoteActionEventRecord } from '$lib/models/note-actions';
-import type { SessionSynchronization } from '$lib/controllers/workspace/workspace';
 import type { NoteId } from '$lib/models/notes';
-import type { NoteActionSession } from './actions';
 import type { NoteActionRunStore } from '$lib/stores/notes/note-action-runs.svelte';
 
 export interface NoteActionRun extends StoredNoteActionRun {
@@ -37,15 +35,16 @@ export interface NoteActionRunStorage {
 	load(): readonly StoredNoteActionRun[];
 	save(runs: readonly StoredNoteActionRun[]): void;
 }
-export interface NoteActionRunWorkspace {
-	readonly current: NoteActionSession | null;
-	synchronize(): Promise<SessionSynchronization>;
-}
 export interface NoteActionRunsController {
 	readonly running: readonly NoteActionRun[];
 	readonly activeSelectionAction: NoteActionRun | undefined;
 	find(action: NoteActionKind): NoteActionRun | undefined;
 	on(action: NoteActionKind, handler: NoteActionHandler): void;
+	/**
+	 * Refresh this device's copy when a run changed server records. A result is applied only
+	 * after the refresh, so its handler reads the records the run produced.
+	 */
+	refreshWith(refresh: () => Promise<void>): void;
 	track(
 		receipt: { readonly runId: AgentRunId; readonly latestCursor: string },
 		run: { readonly action: NoteActionKind; readonly context?: NoteActionContext }
@@ -60,14 +59,12 @@ export interface NoteActionRunsController {
 export class NoteActionRuns implements NoteActionRunsController {
 	constructor(
 		private readonly noteId: NoteId,
-		private readonly binding: NoteActionSession,
-		private readonly workspace: NoteActionRunWorkspace,
 		private readonly state: NoteActionRunStore,
 		private readonly transport: NoteActionRunTransport,
 		private readonly storage: NoteActionRunStorage
 	) {}
 	private get active(): boolean {
-		return !this.state.detached && this.workspace.current === this.binding;
+		return !this.state.detached;
 	}
 	get running(): readonly NoteActionRun[] {
 		return this.active ? this.state.running : [];
@@ -81,6 +78,10 @@ export class NoteActionRuns implements NoteActionRunsController {
 	on(action: NoteActionKind, handler: NoteActionHandler): void {
 		this.requireActive();
 		this.state.setHandler(action, handler);
+	}
+	refreshWith(refresh: () => Promise<void>): void {
+		this.requireActive();
+		this.state.setRefresh(refresh);
 	}
 	track(
 		receipt: { readonly runId: AgentRunId; readonly latestCursor: string },
@@ -153,7 +154,9 @@ export class NoteActionRuns implements NoteActionRunsController {
 			record.event.type === 'workflow_result' ||
 			record.event.type === 'resources_stale'
 		) {
-			await this.workspace.synchronize();
+			const refresh = this.state.refresh;
+			if (!refresh) throw new Error('The note editor has not said how to refresh its records');
+			await refresh();
 			if (!this.active) return;
 		}
 		if (record.kind === 'unreadable') {
@@ -200,19 +203,15 @@ export class NoteActionRuns implements NoteActionRunsController {
 }
 
 export interface NoteActionRunsFactory {
-	create(noteId: NoteId, session: NoteActionSession): NoteActionRunsController;
+	create(noteId: NoteId, accountId: string): NoteActionRunsController;
 }
 export interface NoteActionTrackingController {
-	open(noteId: NoteId): NoteActionRunsController;
+	/** The runs of one note editor; recovery reads only the account's own saved runs. */
+	open(noteId: NoteId, accountId: string): NoteActionRunsController;
 }
 export class NoteActionTracking implements NoteActionTrackingController {
-	constructor(
-		private readonly workspace: NoteActionRunWorkspace,
-		private readonly editors: NoteActionRunsFactory
-	) {}
-	open(noteId: NoteId): NoteActionRunsController {
-		const session = this.workspace.current;
-		if (!session) throw new Error('The workspace is not ready to track note actions');
-		return this.editors.create(noteId, session);
+	constructor(private readonly editors: NoteActionRunsFactory) {}
+	open(noteId: NoteId, accountId: string): NoteActionRunsController {
+		return this.editors.create(noteId, accountId);
 	}
 }

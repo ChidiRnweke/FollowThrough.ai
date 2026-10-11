@@ -14,24 +14,29 @@
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import type { DrawioDiagram } from '$lib/models/diagrams';
-	import type {
-		NoteId,
-		NoteRevisionId,
-		SectionNumberingLevel,
-		TextSelection
+	import {
+		sectionNumberingSettings,
+		type NoteDraftInput,
+		type NoteDraftSave,
+		type NoteId,
+		type NoteRevisionId,
+		type SectionNumberingLevel,
+		type TextSelection
 	} from '$lib/models/notes';
+	import type { PreparedWorkspaceCommand } from '$lib/models/workspace-mutations';
 
 	import type { SuggestionId } from '$lib/models/suggestions';
-	import { createNoteDraftEditing } from '$lib/factories/notes/draft-editing';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
 	import { askAgent } from '$lib/client/shell/responsive-surfaces';
 	import { agentActions } from '$lib/components/agent';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { noteActions } from '$lib/factories/notes/actions';
+	import { noteSubmissions } from '$lib/factories/notes/submissions';
+	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 	import { noteActionTracking } from '$lib/factories/notes/action-runs';
 	import type { NoteActionContext } from '$lib/models/agent';
-	import { projectActions } from '$lib/factories/projects/actions';
+	import type { DiagramActionInput } from '$lib/models/diagrams';
+	import { moveEntry as moveOnServer } from '$lib/remote/projects/projects.remote';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import type { PerNoteEditorSlot } from '../editor-context';
 	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
@@ -94,8 +99,33 @@
 	const saveFailed = $derived(editorSession.failure !== null);
 	// Keyed by note id rather than shared: in a split, the sibling pane's work must
 	// not show up as this note's.
-	const draftEditing = untrack(() => createNoteDraftEditing(view.note.id, draft));
-	const actionRuns = noteActionTracking.open(untrack(() => view.note.id));
+	/** Stage one edit of this note against the editor's captured base. */
+	async function stage(
+		command: Extract<PreparedWorkspaceCommand, { kind: 'saveNote' | 'noteNumbering' }>
+	): Promise<NoteDraftSave> {
+		if (!draft.active) return { kind: 'failure', message: 'The note editor is no longer active' };
+		const result = await draft.stage(command);
+		if (!draft.active) return { kind: 'failure', message: 'The note editor is no longer active' };
+		if (result.kind === 'failure') return result;
+		return result.value
+			? { kind: 'saved', value: result.value }
+			: { kind: 'failure', message: 'The note no longer exists' };
+	}
+	const saveNote = (input: NoteDraftInput) =>
+		stage({
+			kind: 'saveNote',
+			noteId: input.id,
+			document: input.document,
+			plainText: input.plainText,
+			title: input.title,
+			isPinned: input.isPinned
+		});
+	const editorAccount = untrack(() => workspaceSession.current?.bootstrap.accountId);
+	if (!editorAccount) throw new Error('Open the workspace before mounting an editor');
+	const actionRuns = noteActionTracking.open(
+		untrack(() => view.note.id),
+		editorAccount
+	);
 	const activeAction = $derived(
 		actionRuns.activeSelectionAction?.action as NoteAiAction | undefined
 	);
@@ -109,7 +139,11 @@
 	const sectionNumbering = $derived(view.sectionNumbering);
 
 	async function changeSectionNumbering(level: SectionNumberingLevel): Promise<void> {
-		const result = await draftEditing.numbering(level);
+		const result = await stage({
+			kind: 'noteNumbering',
+			noteId: note.id,
+			enabled: sectionNumberingSettings[level]
+		});
 		if (result.kind === 'failure') toast.error(result.message);
 		else note = { ...note, sectionNumbering: result.value.sectionNumbering };
 	}
@@ -239,7 +273,7 @@
 			.save(
 				async () => {
 					if (!editorRef) return { kind: 'failure', message: 'The editor is unavailable' };
-					return draftEditing.save({
+					return saveNote({
 						...note,
 						title: note.title.trim(),
 						document: editorRef.getDocument(),
@@ -274,8 +308,9 @@
 			if (dirty) return;
 		}
 		const isCurrent = editorSession.checkpoint();
-		const record = await draftEditing.togglePin({
+		const record = await saveNote({
 			...note,
+			isPinned: !note.isPinned,
 			document: editorRef.getDocument(),
 			plainText: editorRef.getPlainText()
 		});
@@ -300,14 +335,21 @@
 				(entry.parentId ?? undefined) === parentId &&
 				!entry.archivedAt
 		);
-		const output = await projectActions.moveEntry(
-			note.projectId,
-			note.id,
-			parentId,
-			siblings.length
+		const moved = await workspaceSession.serverChange(
+			moveOnServer({
+				projectId: note.projectId,
+				entryId: note.id,
+				parentId,
+				position: siblings.length
+			})
 		);
-		if (!output) toast.error('Could not move the note. Try again.');
-		else note = { ...note, parentId: output.entry.parentId, position: output.entry.position };
+		if (moved.kind === 'failure') toast.error('Could not move the note. Try again.');
+		else
+			note = {
+				...note,
+				parentId: moved.value.entry.parentId,
+				position: moved.value.entry.position
+			};
 	}
 
 	async function archive(): Promise<void> {
@@ -316,8 +358,11 @@
 			toast.error('Save or resolve the note before moving it to trash.');
 			return;
 		}
-		const output = await projectActions.archiveNote(note.id);
-		if (!output) {
+		const archived = await workspaceSession.edit(
+			{ type: 'notes', id: [note.id] },
+			{ kind: 'archiveNote', noteId: note.id }
+		);
+		if (archived.kind === 'failure') {
 			toast.error('Could not delete the note. Try again.');
 			return;
 		}
@@ -340,18 +385,20 @@
 		}
 		if (!(await ensureSynchronized('Sync the note before running an AI action.'))) return;
 		const selection = { ...capturedSelection, revision: note.currentRevision };
-		const receipt =
-			action === 'promises'
-				? await noteActions.extractPromises(selection)
-				: action === 'relate'
-					? await noteActions.relate(selection)
-					: action === 'reference'
-						? await noteActions.findReferences(selection)
-						: await noteActions.generateDiagram(selection);
-		if (!receipt) {
-			toast.error(noteActions.lastError ?? 'The action could not be started. Try again.');
+		const accountId = workspaceSession.current?.bootstrap.accountId;
+		if (!accountId) {
+			toast.error('The workspace is not ready. Try again.');
 			return;
 		}
+		const started =
+			action === 'diagram'
+				? await noteSubmissions.diagram(accountId, { operation: 'generate', selection })
+				: await noteSubmissions.selection(accountId, action, selection);
+		if (started.kind === 'failure') {
+			toast.error(started.message);
+			return;
+		}
+		const receipt = started.receipt;
 		// The insertion point is captured now: the selection may move or clear
 		// while the diagram is generated, and a refresh loses it entirely. The
 		// editor holds it and maps it through every edit the author makes in
@@ -373,6 +420,9 @@
 	 * still has to land in the same place.
 	 */
 	function registerActionHandlers(): void {
+		actionRuns.refreshWith(async () => {
+			await workspaceSession.synchronize();
+		});
 		actionRuns.on('promises', async (result) => {
 			if (result.action !== 'promises') throw new Error('Unexpected note action result');
 			const output = result.output;
@@ -455,13 +505,15 @@
 	): Promise<{ readonly source: string; readonly title?: string }> {
 		if (!(await ensureSynchronized('Sync the note before revising its diagram.')))
 			throw new Error('Sync the note before revising its diagram.');
-		const receipt = await noteActions.reviseDiagram(
-			note.id,
+		const started = await submitDiagram({
+			operation: 'revise',
+			noteId: note.id,
 			source,
 			instruction,
 			renderedPngDataUrl
-		);
-		if (!receipt) throw new Error(noteActions.lastError ?? 'Diagram revision failed. Try again.');
+		});
+		if (started.kind === 'failure') throw new Error(started.message);
+		const receipt = started.receipt;
 		// `source` travels as context so a refresh can still find the node this
 		// revision belongs to and apply it there.
 		const outcome = await actionRuns.track(receipt, { action: 'revise', context: { source } });
@@ -476,8 +528,14 @@
 	async function convertMermaid(source: string, instruction?: string): Promise<DiagramSuggestion> {
 		if (!(await ensureSynchronized('Sync the note before converting its diagram.')))
 			throw new Error('Sync the note before converting its diagram.');
-		const receipt = await noteActions.convertDiagram(note.id, source, instruction);
-		if (!receipt) throw new Error(noteActions.lastError ?? 'Diagram conversion failed. Try again.');
+		const started = await submitDiagram({
+			operation: 'convert',
+			noteId: note.id,
+			source,
+			instruction
+		});
+		if (started.kind === 'failure') throw new Error(started.message);
+		const receipt = started.receipt;
 		const outcome = await actionRuns.track(receipt, { action: 'convert', context: { source } });
 		if (outcome.status === 'cancelled') throw new Error('Diagram conversion cancelled.');
 		if (outcome.status !== 'completed')
@@ -497,19 +555,39 @@
 	): Promise<DrawioDiagram> {
 		if (!(await ensureSynchronized('Sync the note before accepting its diagram.')))
 			throw new Error('Sync the note before accepting its diagram.');
-		const diagram = await noteActions.acceptDrawio(note.id, suggestionId, source, renderedSvg);
-		if (!diagram) throw new Error(noteActions.lastError ?? 'The diagram could not be accepted.');
-		await workspaceSession.synchronize();
+		const accepted = await workspaceSession.serverChange(
+			acceptSuggestion({
+				suggestionId,
+				drawioReview: { noteId: note.id, source, renderedSvg }
+			})
+		);
+		if (accepted.kind === 'failure') throw new Error(accepted.message);
+		const diagram = accepted.value.artifact;
+		if (
+			accepted.value.suggestion.kind !== 'diagram' ||
+			accepted.value.suggestion.payload.kind !== 'drawio' ||
+			!('kind' in diagram) ||
+			diagram.kind !== 'drawio'
+		)
+			throw new Error('The accepted suggestion did not create the expected draw.io diagram.');
 		toast.success('draw.io diagram accepted');
 		return diagram;
 	}
 
 	async function rejectDrawio(suggestionId: SuggestionId): Promise<void> {
-		const rejected = await noteActions.rejectDrawio(suggestionId);
-		if (!rejected)
-			throw new Error(noteActions.lastError ?? 'The conversion could not be dismissed.');
-		await workspaceSession.synchronize();
+		const rejected = await workspaceSession.serverChange(rejectSuggestion({ suggestionId }));
+		if (rejected.kind === 'failure') throw new Error(rejected.message);
 		toast.success('draw.io conversion dismissed');
+	}
+
+	function submitDiagram(input: DiagramActionInput) {
+		const accountId = workspaceSession.current?.bootstrap.accountId;
+		return accountId
+			? noteSubmissions.diagram(accountId, input)
+			: Promise.resolve({
+					kind: 'failure',
+					message: 'The workspace is not ready. Try again.'
+				} as const);
 	}
 
 	function runSkill(skillName: string): void {

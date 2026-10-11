@@ -39,6 +39,14 @@ export class NoteActionRunStore {
 			entry.runId === runId ? { ...entry, cursor } : entry
 		);
 	}
+	private refreshValue: (() => Promise<void>) | null = null;
+	/** How the editor refreshes this device's copy after a run changed server records. */
+	get refresh(): (() => Promise<void>) | null {
+		return this.refreshValue;
+	}
+	setRefresh(refresh: () => Promise<void>): void {
+		this.refreshValue = refresh;
+	}
 	setHandler(action: NoteActionKind, handler: NoteActionHandler): void {
 		this.handlers.set(action, handler);
 	}
@@ -66,6 +74,7 @@ export class NoteActionRunStore {
 		this.closed = true;
 		this.streams.clear();
 		this.handlers.clear();
+		this.refreshValue = null;
 		this.waiters.clear();
 		this.entries = [];
 		return streams;

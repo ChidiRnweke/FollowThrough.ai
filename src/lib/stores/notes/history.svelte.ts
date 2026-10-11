@@ -4,7 +4,6 @@ import type {
 	NoteRevisionSummary,
 	NoteHistoryReadState
 } from '$lib/models/notes';
-import type { NoteActionSession } from '$lib/controllers/notes/actions';
 
 export class NoteHistoryStore {
 	private request = 0;
@@ -12,12 +11,8 @@ export class NoteHistoryStore {
 	private selectedIdValue = $state<NoteRevisionId | undefined>();
 	private selectedValue = $state<NoteRevision | undefined>();
 	private readStateValue = $state<NoteHistoryReadState>({ kind: 'ready' });
-	private bindingValue = $state.raw<NoteActionSession | null>(null);
 	get generation(): number {
 		return this.request;
-	}
-	get binding(): NoteActionSession | null {
-		return this.bindingValue;
 	}
 	get revisions(): readonly NoteRevisionSummary[] {
 		return this.revisionsValue;
@@ -34,8 +29,7 @@ export class NoteHistoryStore {
 	invalidate(): void {
 		this.request++;
 	}
-	begin(binding: NoteActionSession | null, selectedId?: NoteRevisionId): number {
-		this.bindingValue = binding;
+	begin(selectedId?: NoteRevisionId): number {
 		this.selectedIdValue = selectedId;
 		this.selectedValue = undefined;
 		this.readStateValue = { kind: 'loading' };

@@ -97,7 +97,8 @@
 		selectionPlainText,
 		type SelectedRange
 	} from '$lib/components/edra/commands/clipboard-payload';
-	import { noteClipboard } from '$lib/stores/notes/clipboard';
+	import { noteClipboard } from '$lib/factories/notes/clipboard';
+	import type { ClipboardSource, ClipboardTransferReport } from '$lib/models/clipboard';
 	import NoteReadingStats from './note-reading-stats.svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import ActionProgress from '$lib/components/shared/action-progress.svelte';
@@ -152,6 +153,27 @@
 			offset = fullText.indexOf(selectedText, offset + 1);
 		}
 		return nearest;
+	}
+
+	/** Copy, then say what did not make it onto the clipboard. */
+	async function copySelection(source: ClipboardSource): Promise<ClipboardTransferReport> {
+		const report = await noteClipboard.copy(source);
+		if (report.kind === 'failure')
+			toast.error('The selection could not be copied.', { description: report.message });
+		if (report.kind === 'degraded') {
+			const textOnly = report.issues.some((issue) => issue.kind === 'formatting');
+			toast.warning(
+				textOnly
+					? 'Copied text only. Formatting could not be copied.'
+					: `Copied with ${report.issues.length} unavailable ${report.issues.length === 1 ? 'image or diagram' : 'images or diagrams'}.`,
+				{
+					description: textOnly
+						? 'Only the selection’s text is on the clipboard.'
+						: 'Missing media is marked in the copied content.'
+				}
+			);
+		}
+		return report;
 	}
 
 	let {
@@ -391,7 +413,7 @@
 			ariaLabel: 'Note body',
 			mermaidView: MermaidNodeView,
 			onCut: async (selection) => {
-				const report = await noteClipboard.copy(selection);
+				const report = await copySelection(selection);
 				if (report.kind !== 'complete')
 					toast.warning(
 						'The selection was kept in the note because it could not be copied completely.'
@@ -403,7 +425,7 @@
 					'Copied the selection, but kept it in the note because the note changed during copying.'
 				),
 			onCopy: (selection) => {
-				void noteClipboard.copy(selection);
+				void copySelection(selection);
 			},
 			onTocUpdate: (headings) => {
 				onoutline?.(noteDocuments.outline(headings));
@@ -647,7 +669,7 @@
 		// A direct call, not a `copy` event, so it misses the editor's own handler —
 		// it shares the payload builder instead, and pastes the same pictures.
 		try {
-			await noteClipboard.copy(clipboardSource(state));
+			await copySelection(clipboardSource(state));
 			// audit-allow: silent-catch — formatted clipboard write failure is reported while the selection remains intact.
 		} catch {
 			toast.error('The clipboard could not be written');

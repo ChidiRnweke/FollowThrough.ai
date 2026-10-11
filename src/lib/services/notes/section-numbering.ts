@@ -1,7 +1,8 @@
-import type {
-	SectionNumberingSetting,
-	SectionNumberingLevel,
-	SectionNumberingView
+import {
+	sectionNumberingSettings,
+	type SectionNumberingSetting,
+	type SectionNumberingLevel,
+	type SectionNumberingView
 } from '$lib/models/notes';
 
 const resolveSectionNumbering = (
@@ -35,7 +36,7 @@ export class NoteSectionNumberingService implements NoteSectionNumbering {
 		};
 	}
 	fromMenu(level: SectionNumberingLevel): SectionNumberingSetting {
-		return level === 'default' ? undefined : level === 'on';
+		return sectionNumberingSettings[level];
 	}
 	toMenu(override: SectionNumberingSetting): SectionNumberingLevel {
 		return override === undefined ? 'default' : override ? 'on' : 'off';

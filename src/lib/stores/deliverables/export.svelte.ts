@@ -3,16 +3,12 @@ import type { ExportDownload } from '$lib/models/deliverables';
 /** A mounted export dialog owns its generation, progress and preview URL. */
 export class DocumentExportStore {
 	private revision = 0;
-	private status = $state<'closed' | 'loading' | 'ready'>('closed');
 	private working = $state(false);
 	private failure = $state('');
 	private download = $state<ExportDownload | null>(null);
 	private preview = $state('');
 	get generation(): number {
 		return this.revision;
-	}
-	get ready(): boolean {
-		return this.status === 'ready';
 	}
 	get busy(): boolean {
 		return this.working;
@@ -28,14 +24,10 @@ export class DocumentExportStore {
 	}
 	open(): number {
 		this.revision += 1;
-		this.status = 'loading';
 		this.working = false;
 		this.failure = '';
 		this.download = null;
 		return this.revision;
-	}
-	loaded(): void {
-		this.status = 'ready';
 	}
 	begin(): void {
 		this.working = true;
@@ -55,7 +47,6 @@ export class DocumentExportStore {
 	}
 	close(): void {
 		this.revision += 1;
-		this.status = 'closed';
 		this.working = false;
 		this.preview = '';
 	}

@@ -18,13 +18,17 @@ export interface NoteSubmissionRemote {
 export interface NoteSubmissionIdentity {
 	create(): string;
 }
+/** A started agent run, or why the request was not accepted. */
+export type NoteSubmission =
+	| { readonly kind: 'started'; readonly receipt: AgentRunReceipt }
+	| { readonly kind: 'failure'; readonly message: string };
 export interface NoteSubmissionController {
 	selection(
 		accountId: string,
 		action: SelectionAction,
 		input: TextSelection
-	): Promise<AgentRunReceipt>;
-	diagram(accountId: string, input: DiagramActionInput): Promise<AgentRunReceipt>;
+	): Promise<NoteSubmission>;
+	diagram(accountId: string, input: DiagramActionInput): Promise<NoteSubmission>;
 }
 /** Persist before sending; only a returned durable receipt releases an uncertain identity. */
 export class NoteSubmissions implements NoteSubmissionController {
@@ -35,7 +39,27 @@ export class NoteSubmissions implements NoteSubmissionController {
 		private readonly remote: NoteSubmissionRemote,
 		private readonly identity: NoteSubmissionIdentity
 	) {}
-	async selection(
+	private async started(send: () => Promise<AgentRunReceipt>): Promise<NoteSubmission> {
+		try {
+			return { kind: 'started', receipt: await send() };
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message: error instanceof Error ? error.message : 'The request failed.'
+			};
+		}
+	}
+	selection(
+		accountId: string,
+		action: SelectionAction,
+		input: TextSelection
+	): Promise<NoteSubmission> {
+		return this.started(() => this.sendSelection(accountId, action, input));
+	}
+	diagram(accountId: string, input: DiagramActionInput): Promise<NoteSubmission> {
+		return this.started(() => this.sendDiagram(accountId, input));
+	}
+	private async sendSelection(
 		accountId: string,
 		action: SelectionAction,
 		input: TextSelection
@@ -52,7 +76,10 @@ export class NoteSubmissions implements NoteSubmissionController {
 		);
 		return receipt;
 	}
-	async diagram(accountId: string, input: DiagramActionInput): Promise<AgentRunReceipt> {
+	private async sendDiagram(
+		accountId: string,
+		input: DiagramActionInput
+	): Promise<AgentRunReceipt> {
 		const saved = this.diagrams.read(accountId);
 		const candidate = this.diagrams.candidate(input, this.identity.create());
 		const request = this.identities.diagram(saved, candidate);

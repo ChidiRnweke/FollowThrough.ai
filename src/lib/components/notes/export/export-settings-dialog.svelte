@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { createProjectExportSettings } from '$lib/factories/deliverables/settings';
-	const defaults = createProjectExportSettings();
+	import { workspaceSession } from '$lib/factories/workspace/session';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 	import type { ExportSettings } from '$lib/models/deliverables';
+	import type { UserId } from '$lib/models/identity';
+	import type { ProjectId } from '$lib/models/projects';
+	import type { DateTime } from '$lib/models/workspace';
 	import { defaultExportSettings } from '$lib/models/deliverables';
 	import { toast } from 'svelte-sonner';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -18,25 +21,59 @@
 	} = $props();
 
 	let settings = $state<ExportSettings>({ ...defaultExportSettings });
-	const busy = $derived(defaults.busy);
-	const loaded = $derived(defaults.ready);
+	let draft = $state<WorkspaceDraftController<'export_settings'> | null>(null);
+	let busy = $state(false);
+	const loaded = $derived(draft !== null);
 
 	$effect(() => {
 		if (!open) return;
-		const id = projectId;
-		void untrack(() => defaults.open(id)).then((result) => {
-			if (result.kind === 'ready') settings = { ...result.settings };
-			else if (result.kind === 'failure') toast.error(result.message);
-		});
-		return () => defaults.close();
+		const id = projectId as ProjectId;
+		let current = true;
+		void untrack(() => load(id, () => current));
+		return () => {
+			current = false;
+			draft = null;
+		};
 	});
 
+	/** Open this project's defaults; a project without its own starts from the app defaults. */
+	async function load(id: ProjectId, current: () => boolean): Promise<void> {
+		const accountId = (await workspaceSession.start()).bootstrap.accountId as UserId;
+		const timestamp = new Date().toISOString() as DateTime;
+		const opened = await workspaceSession.openOrCreate(
+			{ type: 'export_settings', id: [accountId, id] },
+			{
+				type: 'export_settings',
+				value: {
+					userId: accountId,
+					projectId: id,
+					settings: { ...defaultExportSettings },
+					createdAt: timestamp,
+					updatedAt: timestamp
+				}
+			}
+		);
+		if (!current()) return;
+		if (opened.kind === 'failure') return void toast.error(opened.message);
+		draft = opened.draft;
+		settings = { ...defaultExportSettings, ...opened.value.settings };
+	}
+
 	async function save(): Promise<void> {
-		const result = await defaults.save(settings);
-		if (result.kind === 'saved') {
+		const value = draft?.value;
+		if (!draft || !value || busy) return;
+		busy = true;
+		const saved = await draft.stage({
+			kind: 'updateExportSettings',
+			userId: value.userId,
+			projectId: value.projectId,
+			settings: { ...settings }
+		});
+		busy = false;
+		if (saved.kind === 'saved') {
 			toast.success('Export defaults saved on this device');
 			open = false;
-		} else if (result.kind === 'failure') toast.error(result.message);
+		} else toast.error('Could not save the export defaults.');
 	}
 </script>
 

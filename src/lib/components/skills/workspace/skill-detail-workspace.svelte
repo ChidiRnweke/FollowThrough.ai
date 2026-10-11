@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { createSkillEditor } from '$lib/factories/skills/editor';
-	import type { SkillEditorOutcome } from '$lib/controllers/skills/editor';
 	import { Input } from '$lib/components/ui/input';
 	import { onMount, untrack } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -9,7 +7,11 @@
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import SkillEditor from '../skill-editor.svelte';
 	import { NoteConflictDialog, NoteSyncStatus, NoteTitleInlineInput } from '$lib/components/notes';
-	import { workspaceSession } from '$lib/factories/workspace/session';
+	import { workspaceSession, workspaceViews } from '$lib/factories/workspace/session';
+	import { createEditorSession } from '$lib/factories/workspace/editor-session';
+	import { importSkillMarkdown } from '$lib/remote/skills/skills.remote';
+	import type { EditorSave } from '$lib/models/outbox';
+	import type { Note } from '$lib/models/notes';
 	import {
 		FtDownload as Download,
 		FtEdit as Pencil,
@@ -22,68 +24,216 @@
 	let { skill }: { skill: WorkspaceSkill } = $props();
 	let describeRef: SkillEditor | undefined = $state();
 	let bodyRef: SkillEditor | undefined = $state();
+	const AUTOSAVE_DELAY = 2000;
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before mounting an editor');
-	const controller = untrack(() =>
-		createSkillEditor(skill, session, () =>
-			bodyRef && describeRef
-				? {
-						description: describeRef.getMarkdown(),
-						document: bodyRef.getDocument(),
-						plainText: bodyRef.getMarkdown()
-					}
-				: undefined
-		)
+	// The skill is two resources: its instructions are a note, its description is skill metadata.
+	const draft = untrack(() => session.resources.draft({ type: 'notes', id: [skill.note.id] }));
+	const metadata = untrack(() => session.resources.draft({ type: 'skills', id: [skill.note.id] }));
+	const edits = untrack(() =>
+		createEditorSession(() => workspaceSession.current === session && draft.active)
 	);
-	controller.initialize();
-	const note = $derived(controller.note);
+	draft.adopt();
+	metadata.adopt();
+	let note = $state<Note>(untrack(() => skill.note));
+	let savedDescription = $state(untrack(() => skill.description));
+	let editorEpoch = $state(0);
+	let importing = $state(false);
+	let exporting = $state(false);
+	let closed = false;
+	let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
 	const noteId = $derived(note.id);
-	const dirty = $derived(controller.dirty);
-	const saving = $derived(controller.saving);
-	const saveFailed = $derived(controller.failure !== null);
-	const importing = $derived(controller.importing);
-	const exporting = $derived(controller.exporting);
-	const unsynced = $derived(controller.unsynced);
-	const status = $derived(controller.status);
-	const savedDescription = $derived(controller.savedDescription);
-	const editorEpoch = $derived(controller.epoch);
-	let conflictOpen = $state(untrack(() => controller.conflict !== undefined));
+	const dirty = $derived(edits.dirty);
+	const saving = $derived(edits.saving);
+	const saveFailed = $derived(edits.failure !== null);
+	const unsynced = $derived([draft.status, metadata.status].some((status) => status !== 'synced'));
+	const status = $derived.by(() => {
+		const drafts = [draft, metadata];
+		const selected =
+			drafts.find((item) => item.status === 'conflict') ??
+			drafts.find((item) => item.status === 'error') ??
+			drafts.find((item) => item.status !== 'synced') ??
+			draft;
+		return {
+			kind: selected === metadata ? ('metadata' as const) : ('document' as const),
+			value: selected.status,
+			error: selected.lastError
+		};
+	});
+	let conflictOpen = $state(untrack(() => draft.conflict !== undefined));
 	let metadataReview = $state(false);
 	let editingTitle = $state(false);
 	let fileInput: HTMLInputElement | undefined = $state();
-	onMount(() => () => controller.close());
-	$effect(() => {
-		if (controller.conflict) conflictOpen = true;
+	const active = () =>
+		!closed &&
+		workspaceSession.current === session &&
+		session.resources.active &&
+		draft.active &&
+		metadata.active;
+	onMount(() => () => {
+		clearTimeout(autosaveTimer);
+		closed = true;
+		edits.close();
 	});
-	function report(result: SkillEditorOutcome): void {
-		if (result.kind === 'failure') toast.error(result.message);
-		else if (result.kind === 'info') toast.info(result.message);
-		else if (result.kind === 'success') toast.success(result.message);
-	}
+	$effect(() => {
+		if (draft.conflict) conflictOpen = true;
+	});
 	function markDirty(): void {
-		controller.changed();
+		if (!active()) return;
+		edits.changed();
+		clearTimeout(autosaveTimer);
+		autosaveTimer = setTimeout(() => void save({ auto: true }), AUTOSAVE_DELAY);
 	}
-	async function save(): Promise<void> {
-		report(await controller.save());
+	/** Store the description, then the instructions; both are queued on this device first. */
+	async function persist(): Promise<EditorSave<Note>> {
+		if (!bodyRef || !describeRef) return { kind: 'failure', message: 'The editor is unavailable' };
+		const details = metadata.value;
+		if (!details)
+			return { kind: 'failure', message: 'The skill details are unavailable. Reopen the skill.' };
+		const description = describeRef.getMarkdown().trim();
+		const current = note;
+		if (description !== savedDescription) {
+			const result = await metadata.stage({
+				kind: 'updateSkill',
+				noteId: details.noteId,
+				description
+			});
+			if (!active()) return { kind: 'failure', message: 'The skill editor is no longer active' };
+			if (result.kind === 'failure') return result;
+			if (!result.value) return { kind: 'failure', message: 'The skill no longer exists' };
+			savedDescription = result.value.description;
+		}
+		const result = await draft.stage({
+			kind: 'saveNote',
+			noteId: current.id,
+			title: current.title,
+			isPinned: current.isPinned,
+			document: bodyRef.getDocument(),
+			plainText: bodyRef.getMarkdown()
+		});
+		if (result.kind === 'failure') return result;
+		return result.value
+			? { kind: 'saved', value: result.value }
+			: { kind: 'failure', message: 'The skill no longer exists' };
+	}
+	async function save(options: { readonly auto?: boolean } = {}): Promise<void> {
+		if (!active() || !bodyRef || !describeRef) return;
+		if (!dirty) {
+			if (!options.auto && unsynced) await retrySync();
+			return;
+		}
+		clearTimeout(autosaveTimer);
+		await edits.save(persist, (value, unchanged) => {
+			if (!active()) return;
+			note = unchanged
+				? { ...value }
+				: { ...note, currentRevision: value.currentRevision, updatedAt: value.updatedAt };
+		});
+		if (active() && edits.failure && !options.auto) toast.error(edits.failure);
 	}
 	async function retrySync(): Promise<void> {
-		report(await controller.retry());
+		if (!active()) return;
+		const current = edits.checkpoint();
+		await Promise.all([draft.retry(), metadata.retry()]);
+		if (!active()) return;
+		const local = draft.value;
+		if (!local) {
+			toast.error(draft.lastError ?? 'This resource is unavailable');
+			return;
+		}
+		if (current() && !edits.dirty) note = { ...local };
+		if (draft.lastError) toast.error(draft.lastError);
 	}
 	async function useRemoteVersion(): Promise<void> {
-		await controller.useRemote();
+		if (!active()) return;
+		const remote = await draft.discard(edits.checkpoint());
+		if (!active() || remote.kind === 'superseded') return;
+		if (remote.kind !== 'ready') throw new Error('The server copy is unavailable');
+		note = { ...remote.value };
+		editorEpoch += 1;
+		edits.accept();
 	}
 	async function keepLocalVersion(): Promise<void> {
-		await controller.keepLocal();
+		if (!active()) return;
+		const current = edits.checkpoint();
+		await draft.keep();
+		if (!active() || !current() || edits.dirty) return;
+		const local = draft.value;
+		if (!local) throw new Error('The local edit is unavailable');
+		note = { ...local };
+		editorEpoch += 1;
+	}
+	/** A file operation reads the server's copy, so every edit must be sent first. */
+	async function synchronized(message: string): Promise<boolean> {
+		if (edits.dirty) await save({ auto: true });
+		if (!active()) return false;
+		if (edits.dirty || unsynced) {
+			toast.error(message);
+			return false;
+		}
+		return true;
 	}
 	async function exportSkill(): Promise<void> {
-		report(await controller.export());
+		if (!active() || exporting) return;
+		exporting = true;
+		try {
+			if (!(await synchronized('Save the skill before exporting.'))) return;
+			const sync = await workspaceSession.synchronize();
+			if (!active() || sync.kind === 'stopped') return;
+			if (sync.kind === 'failure') return void toast.error(sync.message);
+			const file = workspaceViews.skillFile(note.id, note.plainText);
+			if (file.kind === 'failure') return void toast.error(file.message);
+			download(file.content, file.filename);
+		} finally {
+			exporting = false;
+		}
+	}
+	function download(content: string, filename: string): void {
+		const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown;charset=utf-8' }));
+		const anchor = document.createElement('a');
+		try {
+			anchor.href = url;
+			anchor.download = filename;
+			anchor.click();
+		} finally {
+			anchor.remove();
+			URL.revokeObjectURL(url);
+		}
 	}
 	async function importSkill(file: File): Promise<void> {
-		report(await controller.import(file));
+		if (!active()) return;
+		importing = true;
+		try {
+			if (!(await synchronized('Save and synchronize the skill before importing.'))) return;
+			const current = edits.checkpoint();
+			const raw = await file.text();
+			if (!active()) return;
+			if (!current()) return void toast.error('Save the latest edits before importing.');
+			const imported = await workspaceSession.serverChange(
+				importSkillMarkdown({ noteId: note.id, raw, baseRevision: note.currentRevision })
+			);
+			if (!active()) return;
+			if (imported.kind === 'failure') return void toast.error(imported.message);
+			const [opened, details] = await Promise.all([draft.read(current), metadata.read(current)]);
+			if (!active()) return;
+			if (opened.kind === 'superseded' || details.kind === 'superseded')
+				return void toast.info('The import completed. Your later edits are retained for review.');
+			if (opened.kind !== 'ready' || details.kind !== 'ready')
+				return void toast.error('The imported skill could not be reopened');
+			note = { ...opened.value };
+			savedDescription = details.value.description;
+			editorEpoch += 1;
+			edits.accept();
+			toast.success('Skill imported');
+		} finally {
+			importing = false;
+		}
 	}
 	function commitTitle(title: string): void {
 		editingTitle = false;
-		controller.rename(title);
+		if (!active() || !title || title === note.title) return;
+		note = { ...note, title };
+		markDirty();
 	}
 	function onkeydown(event: KeyboardEvent): void {
 		if ((event.metaKey || event.ctrlKey) && event.key === 's') {
@@ -150,9 +300,7 @@
 			</div>
 			<div class="flex min-w-0 items-center gap-1 sm:ml-auto sm:gap-2">
 				{#if saveFailed}
-					<Tip
-						text={controller.failure ?? 'The skill could not be saved. Your text is still here.'}
-					>
+					<Tip text={edits.failure ?? 'The skill could not be saved. Your text is still here.'}>
 						{#snippet children({ props })}
 							<span
 								{...props}
@@ -271,10 +419,10 @@
 	</div>
 </div>
 
-{#if controller.conflict}
+{#if draft.conflict}
 	<NoteConflictDialog
 		bind:open={conflictOpen}
-		record={controller.conflict}
+		record={draft.conflict}
 		onUseRemote={useRemoteVersion}
 		onKeepLocal={keepLocalVersion}
 	/>

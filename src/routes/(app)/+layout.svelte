@@ -15,7 +15,6 @@
 	import { IndexedDbWorkbenchLayout } from '$lib/client/workbench/indexeddb-layout';
 	import { proofreading } from '$lib/factories/notes/proofreading';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { projectActions } from '$lib/factories/projects/actions';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 	import { cn } from '$lib/utils';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
@@ -97,8 +96,7 @@
 	// workbench can resolve the focused tab's project without re-scanning.
 	const projectOfTab = $derived.by(() => (tabId: TabId): ProjectId | undefined => {
 		const ref = parseTabId(tabId);
-		if (ref?.kind === 'diagram')
-			return workspaceViews.diagram(ref.diagramId)?.projectId;
+		if (ref?.kind === 'diagram') return workspaceViews.diagram(ref.diagramId)?.projectId;
 		if (ref?.kind === 'widget') return workspaceViews.widget(ref.widgetId)?.projectId;
 		return shell?.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.projectId;
 	});
@@ -212,8 +210,14 @@
 			toast.error('This workspace has no inbox yet. Open Today to create your first note.');
 			return;
 		}
-		const output = await projectActions.createNote('Untitled', projectId);
-		if (output) await workbench.openTab(output.note.id);
+		const id = crypto.randomUUID() as NoteId;
+		const created = await workspaceSession.create({
+			kind: 'createNote',
+			id,
+			projectId,
+			title: 'Untitled'
+		});
+		if (created.kind === 'saved') await workbench.openTab(id);
 	}
 </script>
 

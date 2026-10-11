@@ -28,9 +28,9 @@ import { CatalogWidgetCandidateReader } from '$lib/infrastructure/widgets/candid
 import {
 	Workspace,
 	type WorkspaceController,
-	type WorkspaceRules,
-	type WorkspaceStores
+	type WorkspaceRules
 } from '$lib/controllers/workspace/workspace';
+import type { WorkspaceStores } from '$lib/stores/workspace/stores';
 import type { WorkspaceViewsController } from '$lib/controllers/workspace/views';
 import { WorkspaceSessionStore } from '$lib/stores/workspace/session.svelte';
 import { WorkspaceResourceStore } from '$lib/stores/workspace/resources.svelte';
@@ -83,12 +83,15 @@ export const createWorkspaceRules = (): WorkspaceRules => ({
 	modelChoices: new AgentModelChoiceService()
 });
 
-export const createWorkspaceStores = (
-	session = new WorkspaceSessionStore(),
-	projection = new WorkspaceProjectionStore(new Map())
-): WorkspaceStores => ({
-	session,
-	projection,
+/** One account-bound workspace and the read models over the projection it replicates into. */
+export interface WorkspaceGraph {
+	readonly workspace: WorkspaceController;
+	readonly views: WorkspaceViewsController;
+}
+
+const workspaceStores = (): WorkspaceStores => ({
+	session: new WorkspaceSessionStore(),
+	projection: new WorkspaceProjectionStore(new Map()),
 	account: () => ({
 		resources: new WorkspaceResourceStore(),
 		cache: new ResourceCacheStore<WorkspaceRecord>(),
@@ -100,19 +103,20 @@ export const createWorkspaceStores = (
 });
 
 /** One workspace graph: tests supply their own storage, transport and environment. */
-export const createWorkspace = (
-	stores: WorkspaceStores,
+export const createWorkspaceGraph = (
 	storage: WorkspaceStorage,
 	transport: WorkspaceTransport,
 	environment: WorkspaceEnvironment
-): WorkspaceController =>
-	new Workspace(stores, storage, transport, environment, createWorkspaceRules());
+): WorkspaceGraph => {
+	const stores = workspaceStores();
+	return {
+		workspace: new Workspace(stores, storage, transport, environment, createWorkspaceRules()),
+		views: createWorkspaceViews(stores.projection, stores.session)
+	};
+};
 
-const stores = createWorkspaceStores();
-
-/** One browser application graph. Construction does not start the account. */
-export const workspaceSession: WorkspaceController = createWorkspace(
-	stores,
+/** The browser application graph. Construction does not start the account. */
+const application = createWorkspaceGraph(
 	new WorkspaceStorageService(
 		new IndexedDbWorkspaceReplica(workspaceCommandSchema, workspaceRecordSchema),
 		new LocalStorageBootstrap()
@@ -121,8 +125,7 @@ export const workspaceSession: WorkspaceController = createWorkspace(
 	new BrowserWorkspaceEnvironment()
 );
 
+export const workspaceSession: WorkspaceController = application.workspace;
+
 /** The signed-in account's read models, over the same projection the workspace replicates into. */
-export const workspaceViews: WorkspaceViewsController = createWorkspaceViews(
-	stores.projection,
-	stores.session
-);
+export const workspaceViews: WorkspaceViewsController = application.views;

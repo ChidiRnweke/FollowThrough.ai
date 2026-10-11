@@ -16,9 +16,6 @@ export class BrowserAttachmentFiles implements AttachmentBrowserPort {
 		const detail = (await response.text()).match(/<Message>([^<]+)<\/Message>/)?.[1];
 		return { kind: 'failure', status: response.status, ...(detail ? { detail } : {}) };
 	}
-	open(url: string): void {
-		window.open(url, '_blank', 'noopener,noreferrer');
-	}
 	identity(): string {
 		return crypto.randomUUID();
 	}

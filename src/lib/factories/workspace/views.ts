@@ -1,3 +1,4 @@
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
 import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
 import { ReferencePresentationService } from '$lib/services/references/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -31,5 +32,6 @@ export const createWorkspaceViews = (
 		new ProjectTreePresentationService(),
 		new NotePresentationService(),
 		new NoteSectionNumberingService(),
-		session
+		session,
+		new SkillPortabilityService()
 	);

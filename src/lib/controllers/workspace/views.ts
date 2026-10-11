@@ -1,3 +1,7 @@
+import type { SkillPortability } from '$lib/services/skills/manifest';
+export type SkillFile =
+	| { readonly kind: 'file'; readonly filename: string; readonly content: string }
+	| { readonly kind: 'failure'; readonly message: string };
 import type { BacklinkPresentation } from '$lib/services/relationships/presentation';
 import type { ReferencePresentation } from '$lib/services/references/presentation';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
@@ -61,6 +65,8 @@ export interface WorkspaceViewsController {
 	messages(id: ConversationId): readonly StoredMessage[];
 	latestRun(id: ConversationId): WorkspaceValues['agent_runs'] | null;
 	skill(noteId: NoteId): WorkspaceSkill | null;
+	/** The skill as a portable SKILL.md with the given instructions. */
+	skillFile(noteId: NoteId, instructions: string): SkillFile;
 	skills(projectId?: ProjectId): readonly SkillSummary[];
 	shell(userId: string): ShellContext | null;
 	memories(projectId?: ProjectId): readonly MemoryEntry[];
@@ -115,7 +121,8 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		private readonly projectPresentation: ProjectTreePresentation,
 		private readonly notePresentation: NotePresentation,
 		private readonly sections: NoteSectionNumbering,
-		private readonly session: WorkspaceSessionStore
+		private readonly session: WorkspaceSessionStore,
+		private readonly portability: SkillPortability
 	) {}
 	get currentShell(): ShellContext {
 		const accountId = this.session.current?.bootstrap.accountId;
@@ -199,6 +206,19 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		return project && !project.archivedAt && metadata
 			? { ...metadata, name: note.title, note }
 			: null;
+	}
+
+	skillFile(noteId: NoteId, instructions: string): SkillFile {
+		const skill = this.skill(noteId);
+		if (!skill) return { kind: 'failure', message: 'The skill no longer exists' };
+		try {
+			return { kind: 'file', ...this.portability.export({ ...skill, instructions }) };
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message: error instanceof Error ? error.message : 'Skill could not be exported'
+			};
+		}
 	}
 
 	skills(projectId?: ProjectId): readonly SkillSummary[] {

@@ -2,7 +2,8 @@
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import { Form } from '$lib/components/ui/form';
 	import { goto } from '$app/navigation';
-	import { projectActions } from '$lib/factories/projects/actions';
+	import { workspaceSession } from '$lib/factories/workspace/session';
+	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import { FtArrowRight as ArrowRight } from '$lib/components/icons';
 
@@ -21,13 +22,14 @@
 		busy = true;
 		error = null;
 		try {
-			const result = await projectActions.createNote(title, projectId);
-			if (!result) {
-				error = projectActions.lastError ?? 'The note could not be saved on this device';
+			const id = crypto.randomUUID() as NoteId;
+			const created = await workspaceSession.create({ kind: 'createNote', id, projectId, title });
+			if (created.kind === 'failure') {
+				error = created.message;
 				return;
 			}
 			title = '';
-			await goto(`/notes/${result.note.id}`);
+			await goto(`/notes/${id}`);
 		} finally {
 			busy = false;
 		}

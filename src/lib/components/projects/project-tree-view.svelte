@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { projectActions } from '$lib/factories/projects/actions';
-	import type { ProjectNameEditor } from '$lib/controllers/projects/actions';
+	import { workspaceSession } from '$lib/factories/workspace/session';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 	import type { NoteId, NoteSummary } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import { dndzone, dragHandle, dragHandleZone, type DndEvent } from 'svelte-dnd-action';
@@ -34,7 +34,7 @@
 				mode: 'rename';
 				entryId: NoteId;
 				current: string;
-				draft: ProjectNameEditor<'notes'>;
+				draft: WorkspaceDraftController<'notes'> | null;
 		  };
 
 	let {
@@ -162,7 +162,7 @@
 				mode: 'rename',
 				entryId: entry.id,
 				current: entry.title,
-				draft: projectActions.editor('notes', entry.id)
+				draft: workspaceSession.capture({ type: 'notes', id: [entry.id] })
 			})}
 	>
 		Rename

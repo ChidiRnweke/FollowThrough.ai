@@ -3,12 +3,10 @@ import { NoteHistoryStore } from '$lib/stores/notes/history.svelte';
 import { RemoteNoteHistory } from '$lib/client/notes/history-reader';
 import { NotePresentationService } from '$lib/services/notes/presentation';
 import type { NoteId } from '$lib/models/notes';
-import { workspaceSession } from '$lib/factories/workspace/session';
 export const createNoteHistory = (noteId: NoteId): NoteHistoryController =>
 	new NoteHistory(
 		noteId,
 		new NoteHistoryStore(),
-		workspaceSession,
 		new RemoteNoteHistory(),
 		new NotePresentationService()
 	);

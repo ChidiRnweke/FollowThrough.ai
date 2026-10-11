@@ -1,6 +1,5 @@
 import { SvelteSet } from 'svelte/reactivity';
 import type { NoteId, SearchNoteTextInput, ReplaceNoteTextOutput } from '$lib/models/notes';
-import type { WorkspaceResourcesController } from '$lib/controllers/workspace/workspace';
 
 /** Mutable search inputs and pending work; the controller owns search and replacement. */
 export class GlobalSearchStore {
@@ -10,8 +9,6 @@ export class GlobalSearchStore {
 	searching = $state(false);
 	searchError = $state<string | undefined>(undefined);
 	lastReplace = $state<ReplaceNoteTextOutput | undefined>(undefined);
-	resultWorkspace = $state.raw<WorkspaceResourcesController | undefined>(undefined);
-	pendingWorkspace = $state.raw<WorkspaceResourcesController | undefined>(undefined);
 	readonly collapsedNoteIds = new SvelteSet<NoteId>();
 	cancelTimer: (() => void) | undefined;
 	setInput(input: SearchNoteTextInput): void {
@@ -23,31 +20,20 @@ export class GlobalSearchStore {
 	setTimer(cancel: (() => void) | undefined): void {
 		this.cancelTimer = cancel;
 	}
-	setSearching(value: boolean, workspace: WorkspaceResourcesController | undefined): void {
-		this.pendingWorkspace = workspace;
+	setSearching(value: boolean): void {
 		this.searching = value;
 	}
 	clearReplacement(): void {
 		this.lastReplace = undefined;
 	}
-	submit(
-		input: SearchNoteTextInput | null,
-		error: string | undefined,
-		workspace: WorkspaceResourcesController | undefined
-	): void {
+	submit(input: SearchNoteTextInput | null, error: string | undefined): void {
 		this.submitted = input;
 		this.searchError = error;
-		this.resultWorkspace = workspace;
 		this.searching = false;
 	}
-	completeReplacement(
-		result: ReplaceNoteTextOutput | undefined,
-		error: string | undefined,
-		workspace: WorkspaceResourcesController | undefined
-	): void {
+	completeReplacement(result: ReplaceNoteTextOutput | undefined, error: string | undefined): void {
 		this.lastReplace = result;
 		this.searchError = error;
-		this.resultWorkspace = workspace;
 	}
 	setCollapsed(noteId: NoteId, collapsed: boolean): void {
 		if (collapsed) this.collapsedNoteIds.add(noteId);

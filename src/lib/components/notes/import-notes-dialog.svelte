@@ -1,7 +1,11 @@
 <script lang="ts">
-	import type { ProjectId, ArchiveLinkIssue } from '$lib/models/projects';
-	import { createArchiveImports } from '$lib/factories/notes/archive-import';
-	const imports = createArchiveImports();
+	import type {
+		ProjectId,
+		ArchiveLinkIssue,
+		ImportMarkdownArchiveOutput
+	} from '$lib/models/projects';
+	import { uploadArchive } from '$lib/client/notes/archive-import';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { NoteId } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -29,24 +33,45 @@
 	} = $props();
 
 	let archive = $state<File | undefined>(undefined);
-	const busy = $derived(imports.busy);
-	const error = $derived(imports.error);
-	const report = $derived(imports.report);
+	let busy = $state(false);
+	let error = $state('');
+	let report = $state<ImportMarkdownArchiveOutput>();
+	// An in-flight import belongs to the dialog destination it started in.
+	let generation = 0;
 
 	$effect(() => {
-		// An in-flight import belongs to this dialog destination.
 		const scope = { open, projectId, parentId };
 		if (!scope.open) return;
-		return () => imports.reset();
+		return () => clear();
 	});
 
-	function run(): void {
-		if (archive) void imports.import(archive, projectId, parentId);
+	/** Upload, then refresh this device's copy so the imported notes are in the tree. */
+	async function run(): Promise<void> {
+		if (!archive || busy) return;
+		const scope = generation;
+		busy = true;
+		error = '';
+		const imported = await workspaceSession.serverChange(
+			uploadArchive(archive, projectId, parentId)
+		);
+		if (scope !== generation) return;
+		busy = false;
+		if (imported.kind === 'failure')
+			error = 'The import outcome could not be confirmed. Check the project before trying again.';
+		else if (imported.value.kind === 'failure') error = imported.value.message;
+		else report = imported.value.report;
+	}
+
+	function clear(): void {
+		generation += 1;
+		busy = false;
+		error = '';
+		report = undefined;
 	}
 
 	function reset(): void {
 		archive = undefined;
-		imports.reset();
+		clear();
 	}
 </script>
 

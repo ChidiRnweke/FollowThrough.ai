@@ -1,5 +1,9 @@
-import type { MermaidRender, MermaidTheme } from '$lib/models/diagrams/mermaid-theme';
-import type { MermaidController } from './mermaid';
+import type {
+	MermaidRender,
+	MermaidSvgRenderer,
+	MermaidTheme
+} from '$lib/models/diagrams/mermaid-theme';
+import type { MermaidThemeRules } from '$lib/services/diagrams/mermaid-theme';
 import type { MermaidRenderStore } from '$lib/stores/diagrams/mermaid-render.svelte';
 export interface MermaidRenderController {
 	readonly current: MermaidRender;
@@ -10,7 +14,8 @@ export interface MermaidRenderController {
 export class MermaidRenderSession implements MermaidRenderController {
 	constructor(
 		private readonly state: MermaidRenderStore,
-		private readonly diagrams: Pick<MermaidController, 'render'>
+		private readonly themes: MermaidThemeRules,
+		private readonly renderer: MermaidSvgRenderer
 	) {}
 	get current(): MermaidRender {
 		return this.state.current;
@@ -20,8 +25,13 @@ export class MermaidRenderSession implements MermaidRenderController {
 	}
 	async draw(source: string, theme: MermaidTheme | boolean): Promise<void> {
 		const generation = this.state.begin();
-		const result: MermaidRender = await this.diagrams
-			.render(`chat-mermaid-${crypto.randomUUID()}`, source, theme)
+		const result: MermaidRender = await this.renderer
+			.render(
+				`chat-mermaid-${crypto.randomUUID()}`,
+				source,
+				this.themes.resolve(theme).config,
+				'screen'
+			)
 			.then(
 				(svg) => ({ kind: 'ready' as const, svg }),
 				(): { kind: 'failure' } => {

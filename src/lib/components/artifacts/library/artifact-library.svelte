@@ -21,9 +21,25 @@
 	import { mergeProps } from '$lib/utils';
 	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
 	import { onDestroy } from 'svelte';
-	import { createArtifactActions } from '$lib/factories/deliverables/artifacts';
-	const artifactActions = createArtifactActions();
-	onDestroy(() => artifactActions.close());
+	import { SvelteSet } from 'svelte/reactivity';
+	import { workspaceSession } from '$lib/factories/workspace/session';
+	import {
+		downloadArtifact,
+		regenerateArtifact,
+		deleteArtifact
+	} from '$lib/remote/deliverables/deliverables.remote';
+	// One action per artifact at a time; nothing lands after the library closes.
+	const working = new SvelteSet<ArtifactId>();
+	let closed = false;
+	onDestroy(() => (closed = true));
+	async function perform<T>(id: ArtifactId, work: () => Promise<T>): Promise<T> {
+		working.add(id);
+		try {
+			return await work();
+		} finally {
+			working.delete(id);
+		}
+	}
 	import { formatBytes, formatDateTime } from '$lib/components/shared/labels';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import * as InputGroup from '$lib/components/ui/input-group';
@@ -49,19 +65,32 @@
 	let searchValue = $derived(data.query);
 
 	async function download(id: ArtifactId): Promise<void> {
-		const result = await artifactActions.download(id);
-		if (result.kind === 'failure') toast.error(result.message);
+		const prepared = await perform(id, () =>
+			downloadArtifact({ artifactId: id }).then(
+				(result) => ({ kind: 'ready' as const, url: result.url }),
+				() => ({ kind: 'failure' as const })
+			)
+		);
+		if (closed) return;
+		if (prepared.kind === 'failure') toast.error('Could not prepare the download.');
+		else window.location.assign(prepared.url);
 	}
 
 	async function regenerate(id: ArtifactId): Promise<void> {
-		const result = await artifactActions.regenerate(id);
-		if (result.kind === 'failure') toast.error(result.message);
-		else if (result.kind === 'complete') toast.success('Document regenerated');
+		const result = await perform(id, () =>
+			workspaceSession.serverChange(regenerateArtifact({ artifactId: id }))
+		);
+		if (closed) return;
+		if (result.kind === 'failure') return void toast.error('Could not regenerate the document.');
+		window.location.assign(result.value.downloadUrl);
+		toast.success('Document regenerated');
 	}
 
 	async function remove(id: ArtifactId): Promise<void> {
-		const result = await artifactActions.remove(id);
-		if (result.kind === 'failure') toast.error(result.message);
+		const result = await perform(id, () =>
+			workspaceSession.serverChange(deleteArtifact({ artifactId: id }))
+		);
+		if (!closed && result.kind === 'failure') toast.error('Could not delete the artifact.');
 	}
 
 	function urlFor(page: number, query = data.query): string {
@@ -209,7 +238,7 @@
 										variant="ghost"
 										size="icon-sm"
 										aria-label="Download"
-										disabled={artifactActions.busy(artifact.id)}
+										disabled={working.has(artifact.id)}
 										onclick={() => download(artifact.id)}
 									>
 										<Download />
@@ -223,7 +252,7 @@
 										variant="ghost"
 										size="icon-sm"
 										aria-label="Regenerate"
-										disabled={artifactActions.busy(artifact.id)}
+										disabled={working.has(artifact.id)}
 										onclick={() => regenerate(artifact.id)}
 									>
 										<RefreshCw />
@@ -243,7 +272,7 @@
 												variant="ghost"
 												size="icon-sm"
 												aria-label="Delete"
-												disabled={artifactActions.busy(artifact.id)}
+												disabled={working.has(artifact.id)}
 											>
 												<Trash2 />
 											</Button>

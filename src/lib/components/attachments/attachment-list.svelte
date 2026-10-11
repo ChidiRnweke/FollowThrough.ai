@@ -11,7 +11,12 @@
 	import { attachmentStatusStyle, formatBytes } from '../shared/labels';
 	import { toast } from 'svelte-sonner';
 	import { FtAttachments as Paperclip, FtEllipsis as Ellipsis } from '$lib/components/icons';
-	import { userFacingMessage } from '$lib/errors';
+	import { workspaceSession, workspaceViews } from '$lib/factories/workspace/session';
+	import {
+		downloadAttachment,
+		removeAttachment,
+		retryAttachment
+	} from '$lib/remote/attachments/attachments.remote';
 
 	let {
 		owner,
@@ -23,11 +28,13 @@
 	let blockedByNote = $state<{ id: string; title: string } | undefined>(undefined);
 	let removeOpen = $state(false);
 
-	const items = $derived(attachmentsController.list(owner));
+	const items = $derived(workspaceViews.attachments(owner));
+	const ready = $derived(workspaceSession.current?.resources.collectionReadiness() === 'ready');
 	let loadError = $state<string | null>(null);
 	$effect(() => {
-		if (!attachmentsController.available) return;
-		void attachmentsController.prepare().catch((error) => {
+		const session = workspaceSession.current;
+		if (!session) return;
+		void session.resources.prepare().catch((error) => {
 			loadError = error instanceof Error ? error.message : 'Could not load attachments';
 			return { kind: 'failure', message: loadError };
 		});
@@ -35,33 +42,24 @@
 
 	async function upload(file: File): Promise<void> {
 		busy = true;
-		try {
-			await attachmentsController.upload(owner, file);
-			toast.success('Attachment queued for processing');
-			// audit-allow: silent-catch — the upload remains in place for retry and the failure is shown to the user.
-		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Upload failed');
-		} finally {
-			busy = false;
-		}
+		const uploaded = await workspaceSession.serverChange(attachmentsController.upload(owner, file));
+		busy = false;
+		if (uploaded.kind === 'failure') toast.error(uploaded.message);
+		else toast.success('Attachment queued for processing');
 	}
 
 	async function download(attachmentId: string): Promise<void> {
-		try {
-			await attachmentsController.download(attachmentId);
-			// audit-allow: silent-catch — the attachment action failure is reported in a toast.
-		} catch {
-			toast.error('The attachment action failed');
-		}
+		const prepared = await downloadAttachment({ attachmentId }).then(
+			(result) => ({ kind: 'ready' as const, url: result.url }),
+			() => ({ kind: 'failure' as const })
+		);
+		if (prepared.kind === 'failure') toast.error('The attachment action failed');
+		else window.open(prepared.url, '_blank', 'noopener,noreferrer');
 	}
 
 	async function retry(attachmentId: string): Promise<void> {
-		try {
-			await attachmentsController.retry(attachmentId);
-			// audit-allow: silent-catch — retry failure is reported while the failed attachment remains retryable.
-		} catch {
-			toast.error('The attachment action failed');
-		}
+		const retried = await workspaceSession.serverChange(retryAttachment({ attachmentId }));
+		if (retried.kind === 'failure') toast.error('The attachment action failed');
 	}
 
 	function askRemove(item: AttachmentView): void {
@@ -83,14 +81,10 @@
 	}
 
 	async function remove(attachmentId: string) {
-		try {
-			const result = await attachmentsController.remove(attachmentId);
-			return result;
-			// audit-allow: silent-catch — removal failure is reported and the attachment stays in the list.
-		} catch (error) {
-			toast.error(userFacingMessage(error, 'The attachment could not be removed.'));
-			return undefined;
-		}
+		const removed = await workspaceSession.serverChange(removeAttachment({ attachmentId }));
+		if (removed.kind === 'saved') return removed.value;
+		toast.error(removed.message || 'The attachment could not be removed.');
+		return undefined;
 	}
 </script>
 
@@ -117,9 +111,7 @@
 <div class="flex flex-col gap-6">
 	{#if loadError}<p role="alert">
 			{loadError}
-		</p>{:else if items.length === 0 && !attachmentsController.ready}<p role="status">
-			Still downloading attachments.
-		</p>
+		</p>{:else if items.length === 0 && !ready}<p role="status">Still downloading attachments.</p>
 		{@render uploadButton()}{:else if items.length === 0}
 		<!-- An empty region is an invitation, not dead text: the one action the
 		     space exists for sits inside the empty state. -->
@@ -137,7 +129,7 @@
 	{:else}
 		<div class="flex flex-wrap items-center gap-2">
 			{@render uploadButton()}
-			<Button variant="ghost" size="sm" onclick={() => void attachmentsController.refresh()}
+			<Button variant="ghost" size="sm" onclick={() => void workspaceSession.synchronize()}
 				>Refresh</Button
 			>
 		</div>

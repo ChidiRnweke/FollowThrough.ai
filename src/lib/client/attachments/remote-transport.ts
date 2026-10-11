@@ -1,10 +1,7 @@
 import {
 	initiateAttachmentUpload,
 	completeAttachmentUpload,
-	completeTodoScreenshotUpload,
-	downloadAttachment,
-	retryAttachment,
-	removeAttachment
+	completeTodoScreenshotUpload
 } from '$lib/remote/attachments/attachments.remote';
 import type { AttachmentRemotePort } from '$lib/controllers/attachments/controller';
 import type { AttachmentUploadRequest } from '$lib/models/attachments';
@@ -18,14 +15,5 @@ export class RemoteAttachments implements AttachmentRemotePort {
 	}
 	completeScreenshot(uploadId: string, todoId: TodoId) {
 		return completeTodoScreenshotUpload({ uploadId, todoId });
-	}
-	download(attachmentId: string) {
-		return downloadAttachment({ attachmentId });
-	}
-	retry(attachmentId: string) {
-		return retryAttachment({ attachmentId });
-	}
-	remove(attachmentId: string) {
-		return removeAttachment({ attachmentId });
 	}
 }

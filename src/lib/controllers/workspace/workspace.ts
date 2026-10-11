@@ -1,3 +1,4 @@
+import { isHttpError } from '@sveltejs/kit';
 import type { WorkspaceReadinessRules } from '$lib/services/workspace/startup';
 import type {
 	SyncResourceRules,
@@ -26,6 +27,7 @@ import type {
 	OutboxUnitOfWork
 } from '$lib/client/services/workspace/storage';
 import type { WorkspaceTransport } from '$lib/client/services/workspace/transport';
+import type { WorkspaceStores } from '$lib/stores/workspace/stores';
 import type { WorkspaceSessionStore } from '$lib/stores/workspace/session.svelte';
 import type { WorkspaceResourceStore } from '$lib/stores/workspace/resources.svelte';
 import type {
@@ -72,7 +74,9 @@ import type { WorkspaceLocalProjection } from '$lib/models/workspace-local';
 import type {
 	StagedWrite,
 	WorkspaceEditContext,
-	WorkspaceSave
+	WorkspaceSave,
+	WorkspaceChange,
+	WorkspaceBatch
 } from '$lib/models/workspace-editing';
 import type { WorkspaceReadiness } from '$lib/models/workspace-startup';
 import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
@@ -80,7 +84,8 @@ import type { WorkspaceValues, WorkspaceRecord } from '$lib/models/workspace-rec
 import type {
 	PreparedWorkspaceCommand,
 	WorkspaceCommand,
-	WorkspaceCommandContext
+	WorkspaceCommandContext,
+	WorkspaceCreation
 } from '$lib/models/workspace-mutations';
 import type { WorkspaceResourceType, WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import {
@@ -173,20 +178,6 @@ export interface WorkspaceRules {
 	readonly modelChoices: IAgentModelChoiceService;
 }
 
-/** Explicit state owners: the tab's binding and, per account, its replica and runtime state. */
-export interface WorkspaceStores {
-	readonly session: WorkspaceSessionStore;
-	readonly projection: WorkspaceProjectionStore;
-	account(): {
-		readonly resources: WorkspaceResourceStore;
-		readonly cache: ResourceCacheStore<WorkspaceRecord>;
-		readonly queue: MutationQueueStore<WorkspaceCommand, WorkspaceRecord>;
-		readonly execution: SyncExecutionStore;
-	};
-	draft(): WorkspaceDraftStore;
-	observation(): ResourceObservationStore;
-}
-
 export interface WorkspaceSession {
 	readonly resources: WorkspaceResourcesController;
 	readonly bootstrap: WorkspaceBootstrap;
@@ -196,6 +187,20 @@ export interface WorkspaceSession {
 	readonly agentDefaults: WorkspaceBootstrap['agentDefaults'];
 	readonly agentModels: readonly AgentModel[];
 }
+
+export type WorkspaceOpened<K extends WorkspaceResourceType> =
+	| {
+			readonly kind: 'ready';
+			readonly draft: WorkspaceDraftController<K>;
+			readonly value: WorkspaceValues[K];
+	  }
+	| { readonly kind: 'failure'; readonly message: string };
+
+/** One resource as a read sees it: present, proven absent, or not readable now. */
+export type WorkspaceRead<K extends WorkspaceResourceType> =
+	| { readonly kind: 'ready'; readonly value: WorkspaceValues[K] }
+	| { readonly kind: 'absent' }
+	| { readonly kind: 'failure'; readonly message: string };
 
 export type SessionSynchronization =
 	| { readonly kind: 'complete' | 'stopped' }
@@ -209,6 +214,63 @@ export interface WorkspaceController {
 	): Promise<{ draft: WorkspaceDraftController<K>; value: WorkspaceValues[K] }>;
 	start(): Promise<WorkspaceSession>;
 	synchronize(force?: boolean): Promise<SessionSynchronization>;
+	/**
+	 * Apply one command to a resource and store it durably on this device. The edit is sent when
+	 * the account is online; a conflict waits for review in the resource's editors.
+	 */
+	edit<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K },
+		command: PreparedWorkspaceCommand
+	): Promise<WorkspaceChange<WorkspaceValues[K]>>;
+	/** Create one resource on this device; it is sent when the account is online. */
+	create(command: WorkspaceCreation): Promise<WorkspaceChange<WorkspaceRecord>>;
+	/**
+	 * Apply edits to several resources in order. Every base is captured before the first
+	 * write, so a change made elsewhere meanwhile is reviewed rather than overwritten.
+	 */
+	editAll(
+		edits: readonly {
+			readonly identity: WorkspaceResourceIdentity;
+			readonly command: PreparedWorkspaceCommand;
+		}[]
+	): Promise<WorkspaceBatch>;
+	/**
+	 * Read one resource of the signed-in account: the device copy with local edits applied,
+	 * downloading it first when this device has never seen it.
+	 */
+	read<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K },
+		name: string
+	): Promise<WorkspaceRead<K>>;
+	/**
+	 * Like `read`, but "absent" is proven by the account's complete inventory, so a setting
+	 * the user never saved reads as absent rather than as not downloaded yet.
+	 */
+	find<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K },
+		name: string
+	): Promise<WorkspaceRead<K>>;
+	/**
+	 * An editor of a per-account setting, created locally from `initial` when the account has
+	 * none yet. A setting proven absent is a value the user simply has not changed.
+	 */
+	openOrCreate<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K },
+		initial: WorkspaceRecord
+	): Promise<WorkspaceOpened<K>>;
+	/**
+	 * Wait for a change made directly on the server, such as a move or a permanent deletion,
+	 * then refresh this device's copy so the result is on screen before the caller continues.
+	 * A refusal carries the server's explanation.
+	 */
+	serverChange<T>(request: Promise<T>): Promise<WorkspaceChange<T>>;
+	/**
+	 * An editor of one resource of the open account whose base is the version on screen now, so
+	 * a later change made elsewhere is reviewed instead of overwritten. Null before startup.
+	 */
+	capture<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K }
+	): WorkspaceDraftController<K> | null;
 	stop(): void;
 	signOut(): void;
 	downloadLocalWrites(): Promise<Blob>;
@@ -249,20 +311,7 @@ export interface WorkspaceResourcesController {
 	refreshConflict(operationId: string): Promise<void>;
 	keepLocal(operationId: string): Promise<string>;
 	discard(operationIds: readonly string[]): Promise<void>;
-	create(
-		command: Extract<
-			PreparedWorkspaceCommand,
-			{
-				kind:
-					| 'createProject'
-					| 'createNote'
-					| 'createFolder'
-					| 'createTodo'
-					| 'createMemory'
-					| 'createWidget';
-			}
-		>
-	): Promise<WorkspaceRecord>;
+	create(command: WorkspaceCreation): Promise<WorkspaceRecord>;
 	setOnline(online: boolean): void;
 	synchronize(force?: boolean): Promise<void>;
 	stop(): void;
@@ -419,7 +468,7 @@ export class Workspace implements WorkspaceController {
 		if (stored.kind === 'stored') void this.refreshBootstrap();
 		return session;
 	}
-	private session(resources: AccountReplica, bootstrap: WorkspaceBootstrap): WorkspaceSession {
+	private session(resources: AccountWorkspace, bootstrap: WorkspaceBootstrap): WorkspaceSession {
 		const rules = this.rules;
 		return {
 			resources,
@@ -449,10 +498,10 @@ export class Workspace implements WorkspaceController {
 		};
 	}
 	/** One account's replica, with its own state; nothing it does outlives its stop. */
-	private account(accountId: string): AccountReplica {
+	private account(accountId: string): AccountWorkspace {
 		this.storage.open(accountId);
 		const stores = this.stores.account();
-		const execution: ReplicaExecution = new ReplicaExecution(
+		const execution: AccountExecution = new ReplicaExecution(
 			this.environment,
 			stores.execution,
 			this.rules.scheduling,
@@ -518,6 +567,180 @@ export class Workspace implements WorkspaceController {
 		return { draft, value: opened.value };
 	}
 
+	read<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K },
+		name: string
+	): Promise<WorkspaceRead<K>> {
+		return this.reading<K>(identity, name, (resources, target) => resources.open(target));
+	}
+	find<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K },
+		name: string
+	): Promise<WorkspaceRead<K>> {
+		return this.reading<K>(identity, name, (resources, target) => resources.lookup(target));
+	}
+	private async reading<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K },
+		name: string,
+		access: (
+			resources: WorkspaceResourcesController,
+			target: WorkspaceResourceIdentity
+		) => Promise<CacheAccess<WorkspaceRecord> | { kind: 'absent' }>
+	): Promise<WorkspaceRead<K>> {
+		try {
+			const session = await this.start();
+			// Widening to the constraint: TypeScript cannot distribute `K` over the identity union.
+			const found = await access(session.resources, identity as WorkspaceResourceIdentity);
+			if (this.state.current !== session)
+				return { kind: 'failure', message: 'The workspace account changed while reading.' };
+			if (found.kind === 'absent' || found.kind === 'deleted') return { kind: 'absent' };
+			if (found.kind !== 'ready')
+				return { kind: 'failure', message: this.rules.sync.accessMessage(found, name) };
+			if (!this.rules.commands.isWorkspaceRecord(found.value, identity.type))
+				return { kind: 'failure', message: `The ${name} has the wrong resource type` };
+			return { kind: 'ready', value: found.value.value };
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message: error instanceof Error ? error.message : `The ${name} could not be read`
+			};
+		}
+	}
+	async editAll(
+		edits: readonly {
+			readonly identity: WorkspaceResourceIdentity;
+			readonly command: PreparedWorkspaceCommand;
+		}[]
+	): Promise<WorkspaceBatch> {
+		const session = this.state.current;
+		if (!session) return { kind: 'failure', saved: 0, message: 'Open the workspace first' };
+		const drafts = edits.map(({ identity, command }) => {
+			const draft = session.resources.draft(identity);
+			draft.capture();
+			return { draft, command };
+		});
+		for (const [saved, { draft, command }] of drafts.entries()) {
+			if (this.state.current !== session)
+				return {
+					kind: 'failure',
+					saved,
+					message: 'The workspace account changed during the edits'
+				};
+			const staged = await draft
+				.stage(command)
+				.catch((error): WorkspaceSave<WorkspaceResourceType> => ({
+					kind: 'failure',
+					message: error instanceof Error ? error.message : 'Device storage is unavailable'
+				}));
+			if (staged.kind === 'failure') return { kind: 'failure', saved, message: staged.message };
+		}
+		return { kind: 'complete', saved: drafts.length };
+	}
+	async openOrCreate<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K },
+		initial: WorkspaceRecord
+	): Promise<WorkspaceOpened<K>> {
+		try {
+			const session = await this.start();
+			const draft = session.resources.draft<K>(identity);
+			const opened = await draft.readOrCreate(initial);
+			if (this.state.current !== session)
+				return { kind: 'failure', message: 'The workspace account changed while opening.' };
+			if (opened.kind !== 'ready')
+				return { kind: 'failure', message: draft.lastError ?? 'This setting is unavailable' };
+			return { kind: 'ready', draft, value: opened.value };
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message: error instanceof Error ? error.message : 'This setting could not be loaded'
+			};
+		}
+	}
+	async edit<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K },
+		command: PreparedWorkspaceCommand
+	): Promise<WorkspaceChange<WorkspaceValues[K]>> {
+		try {
+			const session = await this.start();
+			// A restore lands in its parent folder, so the folder must be known on this device.
+			if (command.kind === 'restoreNote') {
+				const opened = await session.resources.open({ type: 'notes', id: [command.noteId] });
+				const parentId =
+					opened.kind === 'ready' && opened.value.type === 'notes'
+						? opened.value.value.parentId
+						: null;
+				const parent = parentId
+					? await session.resources.lookup({ type: 'notes', id: [parentId] })
+					: null;
+				if (parent && !['ready', 'absent', 'deleted'].includes(parent.kind))
+					return { kind: 'failure', message: 'The parent folder is unavailable on this device' };
+			}
+			const draft = session.resources.draft<K>(identity);
+			const opened = await draft.read();
+			if (opened.kind !== 'ready')
+				return { kind: 'failure', message: draft.lastError ?? 'The resource is unavailable' };
+			const staged = await draft.stage(command);
+			if (this.state.current !== session)
+				return { kind: 'failure', message: 'The workspace account changed during the edit.' };
+			if (staged.kind === 'failure') return staged;
+			if (!staged.value)
+				return { kind: 'failure', message: 'The edited resource no longer exists' };
+			return { kind: 'saved', value: staged.value };
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message: error instanceof Error ? error.message : 'The edit could not be saved'
+			};
+		}
+	}
+	async serverChange<T>(request: Promise<T>): Promise<WorkspaceChange<T>> {
+		const accountId = this.environment.accountId;
+		try {
+			const value = await request;
+			if (this.environment.accountId !== accountId)
+				return { kind: 'failure', message: 'The workspace account changed during the action.' };
+			await this.synchronize();
+			return { kind: 'saved', value };
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message: isHttpError(error)
+					? error.body.message
+					: error instanceof Error
+						? error.message
+						: 'The action could not be saved'
+			};
+		}
+	}
+	capture<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K }
+	): WorkspaceDraftController<K> | null {
+		const session = this.state.current;
+		if (!session) return null;
+		const draft = session.resources.draft<K>(identity);
+		draft.capture();
+		return draft;
+	}
+	async create(command: WorkspaceCreation): Promise<WorkspaceChange<WorkspaceRecord>> {
+		try {
+			const session = await this.start();
+			// A new entry takes its place among its project's entries, so read the project first.
+			if (command.kind === 'createNote' || command.kind === 'createFolder') {
+				await session.resources.open({ type: 'projects', id: [command.projectId] });
+				await session.resources.prepare();
+			}
+			const record = await session.resources.create(command);
+			if (this.state.current !== session)
+				return { kind: 'failure', message: 'The workspace account changed during the edit.' };
+			return { kind: 'saved', value: record };
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message: error instanceof Error ? error.message : 'The item could not be saved'
+			};
+		}
+	}
+
 	start(): Promise<WorkspaceSession> {
 		const starting = this.state.starting;
 		if (starting) return starting;
@@ -546,6 +769,86 @@ export class Workspace implements WorkspaceController {
 	}
 }
 
+// ===== The parts of one account, as their collaborators see them =====
+
+/** The account's downloaded copy of the server and its replication lane. */
+interface AccountCache {
+	readonly status: SynchronizationResult;
+	readonly downloadProgress: { completed: number; total: number; inventoryComplete: boolean };
+	readonly failedDownloads: number;
+	readonly availability: 'unknown' | 'complete';
+	subscribe(listener: () => void): () => void;
+	setOnline(online: boolean): void;
+	stop(): void;
+	refresh(): Promise<SynchronizationResult>;
+	open(key: string): Promise<CacheAccess<WorkspaceRecord>>;
+	transfer(key: string): TransferState | undefined;
+	applyStored(stored: StoredCache<WorkspaceRecord>, notify?: boolean): void;
+	/** The complete server version of one resource, as conflict review needs it. */
+	observe(
+		key: string
+	): Promise<Exclude<Awaited<ReturnType<WorkspaceTransport['read']>>, { kind: 'unchanged' }>>;
+}
+
+/** When the account's lanes run, and which writes wait for a retry deadline. */
+interface AccountExecution {
+	readonly online: boolean;
+	readonly stopped: boolean;
+	readonly writeStatus: SubmissionResult;
+	readonly failure: string | null;
+	setOnline(online: boolean): void;
+	stop(): void;
+	retryNow(): void;
+	excludedWrites(): ReadonlySet<string>;
+	deferWrite(id: string): void;
+	clearWriteRetry(id: string): void;
+	retainWriteRetries(ids: ReadonlySet<string>): void;
+	flushWrites(force?: boolean): Promise<SubmissionResult>;
+	synchronize(force?: boolean): Promise<void>;
+	committed(): void;
+	changed(): void;
+}
+
+/** Sends the account's queued writes and applies what the server decided. */
+interface AccountSubmission {
+	readonly status: SubmissionResult;
+	reviewDependents(operationId: string): readonly Entry[];
+	subscribe(listener: () => void): () => void;
+	setOnline(online: boolean): void;
+	stop(): void;
+	applyStored(state: OutboxProjection<WorkspaceCommand, WorkspaceRecord>, notify?: boolean): void;
+	append(draft: Draft): Promise<string>;
+	refreshConflict(operationId: string): Promise<void>;
+	keepLocal(operationId: string): Promise<string>;
+	discard(operationIds: readonly string[]): Promise<void>;
+	submit(): Promise<SubmissionResult>;
+	notify(): void;
+}
+
+/** The account's durable queue; every decision runs inside one storage transaction. */
+interface AccountOutbox {
+	list(): Promise<readonly Entry[]>;
+	snapshot(): Promise<OutboxProjection<WorkspaceCommand, WorkspaceRecord>>;
+	append(draft: Draft): Promise<string>;
+	resolveBase(operationId: string, resolution: WriteBaseResolution<WorkspaceRecord>): Promise<void>;
+	keepLocal(operationId: string, replacementId: string): Promise<void>;
+	discard(operationIds: readonly string[]): Promise<void>;
+	take(excluded?: ReadonlySet<string>): Promise<Entry | null>;
+	retry(operationId: string, message: string): Promise<void>;
+	recover(): Promise<void>;
+	settle(sent: Entry, outcome: WriteOutcome<WorkspaceRecord>): Promise<void>;
+}
+
+/** Turns a command and the version it edits into the write the outbox stores. */
+interface AccountCommands {
+	prepare(
+		command: PreparedWorkspaceCommand,
+		observed: WorkspaceRecord | null,
+		workspace: WorkspaceCommandSource,
+		now: DateTime
+	): Promise<WriteContent<WorkspaceCommand, WorkspaceRecord>>;
+}
+
 // ===== One account =====
 
 /** Internal coordination used by editor controllers, never returned to components. */
@@ -561,8 +864,14 @@ interface WorkspaceEditorCoordinator extends WorkspaceResourcesController {
 	stage(draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>): Promise<StagedWrite>;
 }
 
+/** One account's workspace as the session that owns it sees it. */
+interface AccountWorkspace extends WorkspaceResourcesController {
+	/** The account's agent preferences; they fail until downloaded or proven absent. */
+	readonly preferences: AgentPreferenceValues;
+}
+
 /** Features share resource identity, local overlays, and the same explicit-open read barrier. */
-class AccountReplica implements WorkspaceResourcesController, WorkspaceEditorCoordinator {
+class AccountReplica implements AccountWorkspace, WorkspaceEditorCoordinator {
 	private get revision() {
 		return this.data.revision;
 	}
@@ -603,10 +912,10 @@ class AccountReplica implements WorkspaceResourcesController, WorkspaceEditorCoo
 		private readonly data: WorkspaceResourceStore,
 		private readonly stores: WorkspaceStores,
 		private readonly environment: WorkspaceEnvironment,
-		private readonly commands: ReplicaCommands,
-		private readonly cache: ReplicaCache,
-		private readonly writes: ReplicaSubmission,
-		private readonly execution: ReplicaExecution
+		private readonly commands: AccountCommands,
+		private readonly cache: AccountCache,
+		private readonly writes: AccountSubmission,
+		private readonly execution: AccountExecution
 	) {}
 	private observe(): void {
 		this.data.addSubscriptions(
@@ -876,20 +1185,7 @@ class AccountReplica implements WorkspaceResourcesController, WorkspaceEditorCoo
 		return this.commands.prepare(command, observed, this, now);
 	}
 
-	async create(
-		command: Extract<
-			PreparedWorkspaceCommand,
-			{
-				kind:
-					| 'createProject'
-					| 'createNote'
-					| 'createFolder'
-					| 'createTodo'
-					| 'createMemory'
-					| 'createWidget';
-			}
-		>
-	): Promise<WorkspaceRecord> {
+	async create(command: WorkspaceCreation): Promise<WorkspaceRecord> {
 		const input = this.environment.snapshot(command);
 		const now = this.environment.now();
 		await this.initialize();
@@ -1361,7 +1657,7 @@ class WorkspaceDraft<K extends WorkspaceResourceType> implements WorkspaceDraftC
 // ===== Replication =====
 
 /** Replication of one account's resources: page pulls, targeted downloads and accepted writes. */
-class ReplicaCache {
+class ReplicaCache implements AccountCache {
 	constructor(
 		readonly accountId: string,
 		private readonly storage: WorkspaceStorage,
@@ -1632,7 +1928,7 @@ class ReplicaCache {
 }
 
 /** Coordinates the independent replication and submission lanes for one account. */
-class ReplicaExecution {
+class ReplicaExecution implements AccountExecution {
 	constructor(
 		private readonly environment: WorkspaceEnvironment,
 		private readonly state: SyncExecutionStore,
@@ -1789,7 +2085,7 @@ class ReplicaExecution {
 }
 
 /** Submissions are serialized per account; the durable queue owns ordering and recovery. */
-class ReplicaSubmission {
+class ReplicaSubmission implements AccountSubmission {
 	private get online() {
 		return this.execution.online;
 	}
@@ -1798,12 +2094,12 @@ class ReplicaSubmission {
 	}
 	constructor(
 		readonly accountId: string,
-		private readonly outbox: ReplicaOutbox,
-		private readonly cache: ReplicaCache,
+		private readonly outbox: AccountOutbox,
+		private readonly cache: AccountCache,
 		private readonly transport: WorkspaceTransport,
 		private readonly environment: WorkspaceEnvironment,
 		private readonly state: MutationQueueStore<WorkspaceCommand, WorkspaceRecord>,
-		private readonly execution: ReplicaExecution,
+		private readonly execution: AccountExecution,
 		private readonly rules: WorkspaceRules
 	) {}
 
@@ -2071,7 +2367,7 @@ const validateWidget = (
  * Every outbox transition: each reads the stored queue, decides and writes inside one IndexedDB
  * transaction, so another tab cannot interleave a write between the decision and its result.
  */
-class ReplicaOutbox {
+class ReplicaOutbox implements AccountOutbox {
 	constructor(
 		private readonly accountId: string,
 		private readonly storage: WorkspaceStorage,
@@ -2530,7 +2826,7 @@ interface WorkspaceCommandSource {
 }
 
 /** Resolve required inventory and prepare the complete optimistic command from observed facts. */
-class ReplicaCommands {
+class ReplicaCommands implements AccountCommands {
 	constructor(private readonly rules: WorkspaceRules) {}
 	async prepare(
 		command: PreparedWorkspaceCommand,

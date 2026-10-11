@@ -8,7 +8,7 @@
 		widgetTrashEntry,
 		type TrashEntry
 	} from '$lib/components/shared/trash-entry';
-	import { projectActions } from '$lib/factories/projects/actions';
+	import { deleteNoteForever, emptyNoteTrash } from '$lib/remote/projects/projects.remote';
 	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import { workspaceSession } from '$lib/factories/workspace/session';
@@ -44,8 +44,11 @@
 			toast.success('Restored');
 			return;
 		}
-		const output = await projectActions.restoreNote(entry.id);
-		if (!output) toast.error(projectActions.lastError ?? 'Could not restore the note. Try again.');
+		const restored = await workspaceSession.edit(
+			{ type: 'notes', id: [entry.id] },
+			{ kind: 'restoreNote', noteId: entry.id }
+		);
+		if (restored.kind === 'failure') toast.error(restored.message);
 		else toast.success('Restored');
 	}
 
@@ -60,10 +63,11 @@
 			toast.success('Deleted permanently');
 			return;
 		}
-		const output = await projectActions.deleteNoteForever(entry.id);
-		if (!output) toast.error(projectActions.lastError ?? 'Could not delete the note. Try again.');
+		const deleted = await workspaceSession.serverChange(deleteNoteForever({ noteId: entry.id }));
+		if (deleted.kind === 'failure') toast.error(deleted.message);
 		// A folder takes its contents with it, so the count is what actually went.
-		else toast.success(output.deletedNoteIds.length === 1 ? 'Deleted' : 'Deleted permanently');
+		else
+			toast.success(deleted.value.deletedNoteIds.length === 1 ? 'Deleted' : 'Deleted permanently');
 	}
 
 	/**
@@ -77,9 +81,10 @@
 			if (entry.kind === 'diagram') await changeDiagramTrash(entry.id, 'delete');
 			if (entry.kind === 'widget') await widgetEdits.changeTrash(entry.id, 'delete');
 		}
-		const output = await projectActions.emptyNoteTrash();
-		await workspaceSession.synchronize();
-		if (!output) toast.error(projectActions.lastError ?? 'Could not empty the trash. Try again.');
+		const emptied = await workspaceSession.serverChange(emptyNoteTrash({}));
+		// Part of the trash may have gone before the failure; show what is left.
+		if (emptied.kind === 'failure') await workspaceSession.synchronize();
+		if (emptied.kind === 'failure') toast.error(emptied.message);
 		else toast.success('Trash emptied');
 	}
 </script>

@@ -316,6 +316,20 @@ export type WorkspaceWriteCancellation = z.infer<typeof workspaceWriteCancellati
 
 export type PreparedWorkspaceCommand = Exclude<WorkspaceCommand, { kind: 'discardNoteDraft' }>;
 
+/** The commands that bring a new resource into existence on this device. */
+export type WorkspaceCreation = Extract<
+	PreparedWorkspaceCommand,
+	{
+		kind:
+			| 'createProject'
+			| 'createNote'
+			| 'createFolder'
+			| 'createTodo'
+			| 'createMemory'
+			| 'createWidget';
+	}
+>;
+
 export interface WorkspaceCommandContext {
 	readonly userId: UserId;
 	readonly now: DateTime;

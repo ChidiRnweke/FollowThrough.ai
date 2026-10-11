@@ -1,7 +1,6 @@
 import { WorkspaceStorageService } from '$lib/client/services/workspace/storage';
 import { LocalStorageBootstrap } from '$lib/client/repositories/workspace/bootstrap';
-import { createWorkspace, createWorkspaceStores } from '$lib/factories/workspace/session';
-import { createWorkspaceViews } from '$lib/factories/workspace/views';
+import { createWorkspaceGraph } from '$lib/factories/workspace/session';
 import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
@@ -41,9 +40,7 @@ export const workspaceTab = (
 	const values = memoryStorage();
 	const storage = new WorkspaceStorageService(replica, new LocalStorageBootstrap(() => values));
 	storage.saveBootstrap(testBootstrap(accountId));
-	const stores = createWorkspaceStores();
-	const workspace = createWorkspace(stores, storage, transport, environment);
-	const views = createWorkspaceViews(stores.projection, stores.session);
+	const { workspace, views } = createWorkspaceGraph(storage, transport, environment);
 	/** Starts the account offline, then reports connectivity as the test asks. */
 	const start = async (online = true) => {
 		environment.online = false;
@@ -52,7 +49,7 @@ export const workspaceTab = (
 		session.resources.setOnline(online);
 		return session.resources;
 	};
-	return { environment, browserStorage: values, storage, stores, workspace, views, start };
+	return { environment, browserStorage: values, storage, workspace, views, start };
 };
 
 /**

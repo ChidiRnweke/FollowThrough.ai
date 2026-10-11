@@ -5,7 +5,6 @@ import type {
 	NoteRevisionSummary,
 	NoteHistoryReadState
 } from '$lib/models/notes';
-import type { NoteActionWorkspace } from './actions';
 import type { NoteHistoryStore } from '$lib/stores/notes/history.svelte';
 import type { NotePresentation } from '$lib/services/notes/presentation';
 export interface NoteHistoryReader {
@@ -25,21 +24,17 @@ export class NoteHistory implements NoteHistoryController {
 	constructor(
 		private readonly noteId: NoteId,
 		private readonly state: NoteHistoryStore,
-		private readonly workspace: NoteActionWorkspace,
 		private readonly reader: NoteHistoryReader,
 		private readonly presentation: NotePresentation
 	) {}
-	private get active(): boolean {
-		return this.state.binding === this.workspace.current;
-	}
 	get revisions(): readonly NoteRevisionSummary[] {
-		return this.active ? this.state.revisions : [];
+		return this.state.revisions;
 	}
 	get selectedId(): NoteRevisionId | undefined {
-		return this.active ? this.state.selectedId : undefined;
+		return this.state.selectedId;
 	}
 	get selected(): NoteRevision | undefined {
-		return this.active ? this.state.selected : undefined;
+		return this.state.selected;
 	}
 	get readState(): NoteHistoryReadState {
 		return this.state.readState;
@@ -48,7 +43,7 @@ export class NoteHistory implements NoteHistoryController {
 		this.state.invalidate();
 	}
 	async open(): Promise<void> {
-		const request = this.state.begin(this.workspace.current);
+		const request = this.state.begin();
 		this.state.setRevisions([]);
 		const result = await this.reader.list(this.noteId).then(
 			(revisions) => ({ kind: 'ready' as const, revisions }),
@@ -59,7 +54,7 @@ export class NoteHistory implements NoteHistoryController {
 				};
 			}
 		);
-		if (!this.active || request !== this.state.generation) return;
+		if (request !== this.state.generation) return;
 		if (result.kind === 'failure') {
 			this.state.setReadState(result);
 			return;
@@ -70,7 +65,7 @@ export class NoteHistory implements NoteHistoryController {
 		else this.state.setReadState({ kind: 'ready' });
 	}
 	async select(revisionId: NoteRevisionId): Promise<void> {
-		const request = this.state.begin(this.workspace.current, revisionId);
+		const request = this.state.begin(revisionId);
 		const result = await this.reader.read(this.noteId, revisionId).then(
 			(revision) => ({ kind: 'ready' as const, revision }),
 			(): { kind: 'failure'; message: string } => {
@@ -80,7 +75,7 @@ export class NoteHistory implements NoteHistoryController {
 				};
 			}
 		);
-		if (!this.active || request !== this.state.generation) return;
+		if (request !== this.state.generation) return;
 		if (result.kind === 'failure') {
 			this.state.setReadState(result);
 			return;

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { NoteSearchContentMatch, NoteSearchHit, NoteTextMatch } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
+	import type { NoteId } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import * as Select from '$lib/components/ui/select';
@@ -18,6 +19,7 @@
 	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { globalSearch as defaultSearch } from '$lib/factories/search/global-search';
+	import { workspaceSession, workspaceViews } from '$lib/factories/workspace/session';
 	import type { GlobalSearchController } from '$lib/controllers/search/global-search';
 	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
@@ -62,7 +64,19 @@
 	// contract, so newlines flatten to a space, matching how VS Code renders its hits.
 	const inline = (text: string): string => text.replace(/\n+/g, ' ');
 
-	const hits = $derived(globalSearch.hits);
+	const notes = $derived(workspaceViews.notes);
+	const hits = $derived(globalSearch.hits(notes));
+	const totalMatches = $derived(
+		hits.reduce((count, hit) => count + hit.titleMatches.length + hit.matches.length, 0)
+	);
+	/** Rewrite the planned notes on this device, then report how far the replacement got. */
+	async function replace(noteId?: NoteId): Promise<void> {
+		const plan = globalSearch.plan(notes, noteId);
+		const outcome = await workspaceSession.editAll(
+			plan.map(({ noteId, command }) => ({ identity: { type: 'notes', id: [noteId] }, command }))
+		);
+		globalSearch.replaced(plan, outcome);
+	}
 	const projectFilter = $derived(globalSearch.projectId ?? 'all');
 	const replaceableNotes = $derived(hits.filter((hit) => hit.matches.length > 0));
 	const replaceableMatches = $derived(
@@ -202,7 +216,7 @@
 				confirmLabel="Replace all"
 				confirmVariant="default"
 				onconfirm={async () => {
-					await globalSearch.replaceAll();
+					await replace();
 				}}
 			>
 				{#snippet trigger(props)}
@@ -212,7 +226,7 @@
 				{/snippet}
 			</ConfirmDelete>
 		</div>
-		{#if globalSearch.partial}
+		{#if workspaceSession.current?.resources.availability !== 'complete'}
 			<p class="text-xs text-muted-foreground" role="status">
 				Search includes only notes saved on this device. Some workspace content is unavailable.
 			</p>
@@ -261,8 +275,8 @@
 						<Spinner class="size-3.5" /> Searching…
 					</span>
 				{:else}
-					{globalSearch.totalMatches}
-					{globalSearch.totalMatches === 1 ? 'result' : 'results'} in
+					{totalMatches}
+					{totalMatches === 1 ? 'result' : 'results'} in
 					{hits.length}
 					{hits.length === 1 ? 'note' : 'notes'}
 				{/if}
@@ -335,7 +349,7 @@
 													size="sm"
 													class="ml-auto h-6 shrink-0 px-1.5 text-xs"
 													aria-label="Replace in {hit.title}"
-													onclick={() => void globalSearch.replaceInNote(hit.noteId)}
+													onclick={() => void replace(hit.noteId)}
 												>
 													Replace
 												</Button>

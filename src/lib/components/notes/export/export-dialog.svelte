@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { createDocumentExports } from '$lib/factories/deliverables/export';
+	import { loadExportDefaults } from './export-defaults';
 	const exports = createDocumentExports();
 
 	import { Form } from '$lib/components/ui/form';
@@ -38,11 +39,12 @@
 	let format = $state<'docx' | 'pdf'>('pdf');
 	let settings = $state<ExportSettings>({ ...defaultExportSettings });
 	const busy = $derived(exports.busy);
-	const settingsReady = $derived(exports.ready);
+	let settingsReady = $state(false);
+	let readError = $state('');
 	let previewOpen = $state(false);
 	const previewUrl = $derived(exports.previewUrl);
 	const result = $derived(exports.result);
-	const error = $derived(exports.error);
+	const error = $derived(readError || exports.error);
 
 	$effect(() => {
 		if (!open) {
@@ -52,10 +54,20 @@
 		title = defaultTitle;
 		format = 'pdf';
 		const id = projectId;
-		void untrack(() => exports.open(id)).then((loaded) => {
-			if (loaded.kind === 'ready') settings = { ...loaded.settings };
+		let current = true;
+		settingsReady = false;
+		readError = '';
+		untrack(() => exports.open());
+		void loadExportDefaults(id).then((loaded) => {
+			if (!current) return;
+			if (loaded.kind === 'failure') return void (readError = loaded.message);
+			settings = { ...loaded.settings };
+			settingsReady = true;
 		});
-		return () => exports.close();
+		return () => {
+			current = false;
+			exports.close();
+		};
 	});
 
 	// Colour controls only earn their space when there is a diagram to colour, and the

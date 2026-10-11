@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { createDocumentExports } from '$lib/factories/deliverables/export';
+	import { loadExportDefaults } from './export-defaults';
+	import { workspaceSession, workspaceViews } from '$lib/factories/workspace/session';
 	const exports = createDocumentExports();
 
 	import { Form } from '$lib/components/ui/form';
@@ -36,13 +38,16 @@
 	let bundle = $state<'zip' | 'merged'>('zip');
 	let settings = $state<ExportSettings>({ ...defaultExportSettings });
 	const busy = $derived(exports.busy);
-	const settingsReady = $derived(exports.ready);
-	const error = $derived(exports.error);
+	let settingsReady = $state(false);
+	let readError = $state('');
+	const error = $derived(readError || exports.error);
 	const result = $derived(exports.result);
 
 	const selected = new SvelteSet<string>();
 
-	const documents = $derived(exports.documents(entries.map((entry) => entry.id)));
+	const documents = $derived(
+		workspaceViews.all('notes').filter((note) => entries.some((entry) => entry.id === note.id))
+	);
 
 	$effect(() => {
 		if (!open) return;
@@ -52,10 +57,20 @@
 		selected.clear();
 		for (const entry of entries) selected.add(entry.id);
 		const id = projectId;
-		void untrack(() => exports.open(id)).then((loaded) => {
-			if (loaded.kind === 'ready') settings = { ...loaded.settings };
+		let current = true;
+		settingsReady = false;
+		readError = '';
+		untrack(() => exports.open());
+		void loadExportDefaults(id).then((loaded) => {
+			if (!current) return;
+			if (loaded.kind === 'failure') return void (readError = loaded.message);
+			settings = { ...loaded.settings };
+			settingsReady = true;
 		});
-		return () => exports.close();
+		return () => {
+			current = false;
+			exports.close();
+		};
 	});
 
 	const selectedEntries = $derived(entries.filter((entry) => selected.has(entry.id)));
@@ -82,7 +97,30 @@
 
 	function submit(event: SubmitEvent): void {
 		event.preventDefault();
-		void exports.bundle({ projectId, entries: selectedEntries, title, settings, format, bundle });
+		void exportSelection();
+	}
+
+	/** Every selected note must be on this device before its diagrams can be drawn. */
+	async function exportSelection(): Promise<void> {
+		readError = '';
+		const chosen = selectedEntries;
+		const read = await Promise.all(
+			chosen.map((entry) => workspaceSession.read({ type: 'notes', id: [entry.id] }, 'note'))
+		);
+		const failed = read.find((note) => note.kind !== 'ready');
+		if (failed)
+			return void (readError =
+				failed.kind === 'failure' ? failed.message : 'A selected note is no longer available');
+		const notes = read.flatMap((note) => (note.kind === 'ready' ? [note.value] : []));
+		await exports.bundle({
+			projectId,
+			entries: chosen,
+			title,
+			settings,
+			format,
+			bundle,
+			documents: notes
+		});
 	}
 </script>
 
