@@ -138,3 +138,24 @@ describe('KanbanBoard status drops', () => {
 		expect(moves).toHaveLength(0);
 	});
 });
+
+describe('KanbanBoard empty columns', () => {
+	const scenesIn = (status: TodoStatus): number =>
+		document
+			.querySelector(`[data-todo-status="${status}"]`)
+			?.closest('section')
+			?.querySelectorAll('[data-slot="scene"]').length ?? 0;
+
+	it('draws one scene in each empty column', async () => {
+		await render(KanbanBoard, { todos: [] });
+		expect(document.querySelectorAll('[data-slot="scene"]')).toHaveLength(4);
+	});
+
+	it('drops the scene from a column once it holds a todo', async () => {
+		await render(KanbanBoard, { todos: [view(1, 'open')] });
+		expect({ open: scenesIn('open'), backlog: scenesIn('backlog') }).toEqual({
+			open: 0,
+			backlog: 1
+		});
+	});
+});
