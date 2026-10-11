@@ -1,12 +1,11 @@
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import type { ActorContext } from '$lib/models/identity';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
-import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
-import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { InMemoryAgentTurns } from '$lib/testing/agent/fakes/in-memory-agent-turns';
 import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
@@ -28,7 +27,6 @@ import {
 } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import {
 	AgentSdkHarness,
@@ -81,9 +79,13 @@ const approvalController = (actor: ActorContext, db: typeof context.db) => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
-			runs,
-			approvals: new RunApprovals(runs),
-			sessions: new AgentSessionRecords(actor, database),
+			records: new AgentRunHarnessRecords(
+				runs,
+				events,
+				new AgentRunDecisionRecords(actor, database),
+				new AgentSessionRecords(actor, database)
+			),
+			transitions: new RunTransitions(runs),
 			...harnessTurnDependencies(
 				runner,
 				new ConversationHistoryService(
@@ -100,14 +102,9 @@ const approvalController = (actor: ActorContext, db: typeof context.db) => {
 				actor,
 				new ConversationRecords(actor, database)
 			),
-			events,
 			transactionRunner,
-			cancellations: new RunCancellation(runs),
-			preparation: new RunPreparation(runs),
-			checkpoints: new RunCheckpoints(runs),
 			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			settlements: new RunSettlements(runs, events),
-			decisions: new AgentRunDecisionRecords(actor, database),
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);

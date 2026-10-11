@@ -1,3 +1,6 @@
+import { AgentSessionRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { type AgentRunId } from '$lib/models/agent';
@@ -18,7 +21,6 @@ import {
 import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { AgentRunStatusService } from '$lib/services/agent/run-status';
@@ -117,10 +119,13 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
-			runs,
-			cancellations: new RunCancellation(runs),
-			events,
-			decisions: new AgentRunDecisionRecords(seeded.owner, database),
+			records: new AgentRunHarnessRecords(
+				runs,
+				events,
+				new AgentRunDecisionRecords(seeded.owner, database),
+				new AgentSessionRecords(seeded.owner, database)
+			),
+			transitions: new RunTransitions(runs),
 			settlements,
 			transactionRunner,
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)

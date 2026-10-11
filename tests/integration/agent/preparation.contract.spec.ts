@@ -1,6 +1,7 @@
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { expect, it } from 'vitest';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -20,8 +21,6 @@ import {
 	type AgentHarnessDependencies
 } from '$lib/server/controllers/agent/controller';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { agentContextFixture } from '$lib/testing/agent/fixtures/context';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
@@ -69,16 +68,16 @@ const setup = async (
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			...fixture.dependencies,
-			runs,
-			events,
+			records: new AgentRunHarnessRecords(
+				runs,
+				events,
+				new AgentRunDecisionRecords(owner, database),
+				new AgentSessionRecords(owner, database)
+			),
+			transitions: new RunTransitions(runs),
 			transactionRunner,
 			contextMemory: memory,
-			preparation: new RunPreparation(runs),
-			checkpoints: new RunCheckpoints(runs),
-			cancellations: new RunCancellation(runs),
 			settlements: new RunSettlements(runs, events),
-			decisions: new AgentRunDecisionRecords(owner, database),
-			sessions: new AgentSessionRecords(owner, database),
 			conversationMessages: new ConversationArchive(owner, conversations),
 			conversationSessions: new ConversationArchive(owner, conversations)
 		})

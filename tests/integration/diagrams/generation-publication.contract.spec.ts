@@ -1,3 +1,6 @@
+import { AgentSessionRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { InMemoryMermaidDocuments } from '$lib/testing/diagrams/fakes/mermaid-documents';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
@@ -27,7 +30,6 @@ import { ConversationRecords } from '$lib/server/repositories/agent/postgres/con
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
@@ -265,12 +267,15 @@ it('does not publish a direct result after cancellation settles its run', async 
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentHarnessDependencies>({
 				...agentRulesFixture(),
-				runs,
-				events,
+				records: new AgentRunHarnessRecords(
+					runs,
+					events,
+					new AgentRunDecisionRecords(state.owner, database),
+					new AgentSessionRecords(state.owner, database)
+				),
+				transitions: new RunTransitions(runs),
 				transactionRunner,
-				cancellations: new RunCancellation(runs),
 				settlements: new RunSettlements(runs, events),
-				decisions: new AgentRunDecisionRecords(state.owner, database),
 				runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 			})
 		);

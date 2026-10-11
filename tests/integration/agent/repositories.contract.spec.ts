@@ -1,12 +1,12 @@
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 
-import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
 import { testDiagramId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentStreamPresentationService } from '$lib/server/services/agent/runs/stream-presentation';
 const streamPresentation = new AgentStreamPresentationService();
-import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
@@ -345,7 +345,7 @@ describe('Postgres durable agent run repository invariants', () => {
 			sql`update agent_run_events set event = '{"type":"future_completion"}'::jsonb where cursor = ${terminal.cursor}`
 		);
 		const runs = new AgentRunRecords(owner, context.db);
-		await new RunPreparation(runs).claim(run.id, now);
+		await new RunTransitions(runs).claim(run.id, now);
 		await new RunSettlements(runs, events).claim(run.id, {
 			kind: 'completed',
 			conversationId: run.conversationId,
@@ -356,8 +356,12 @@ describe('Postgres durable agent run repository invariants', () => {
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentHarnessDependencies>({
 				...agentRulesFixture(),
-				events,
-				runs
+				records: new AgentRunHarnessRecords(
+					runs,
+					events,
+					new AgentRunDecisionRecords(owner, context.db),
+					new AgentSessionRecords(owner, context.db)
+				)
 			})
 		);
 		const replay = await controller.listRunEvents(run.id, '0');
@@ -382,7 +386,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		const run = await seedQueuedRun('17901');
 		const other = await seedQueuedRun('17902');
 		const runs = new AgentRunRecords(actor('17901'), context.db);
-		await new RunPreparation(runs).claim(run.id, now);
+		await new RunTransitions(runs).claim(run.id, now);
 		const events = new AgentRunEventRecords(actor('17901'), context.db);
 		const first = await events.append(run.id, 1, { type: 'text_delta', text: 'Before.' });
 		await events.append(run.id, 2, { type: 'text_delta', text: 'Another attempt.' });
@@ -420,8 +424,12 @@ describe('Postgres durable agent run repository invariants', () => {
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentHarnessDependencies>({
 				...agentRulesFixture(),
-				runs: new AgentRunRecords(actor('17804'), context.db),
-				events: new AgentRunEventRecords(actor('17804'), context.db)
+				records: new AgentRunHarnessRecords(
+					new AgentRunRecords(actor('17804'), context.db),
+					new AgentRunEventRecords(actor('17804'), context.db),
+					new AgentRunDecisionRecords(actor('17804'), context.db),
+					new AgentSessionRecords(actor('17804'), context.db)
+				)
 			})
 		);
 		await expect(controller.isRunStreamComplete(run.id, '0')).rejects.toThrow('not found');
@@ -438,11 +446,15 @@ describe('Postgres durable agent run repository invariants', () => {
 			review
 		};
 		const runs = new AgentRunRecords(owner, context.db);
-		await new RunPreparation(runs).claim(run.id, now);
-		const checkpoints = new RunCheckpoints(runs);
-		await checkpoints.persist(
+		await new RunTransitions(runs).claim(run.id, now);
+		const checkpoints = new RunTransitions(runs);
+		await checkpoints.persistCheckpoint(
 			run.id,
-			checkpoints.prepare(run, { serializedState: 'checkpoint', pendingDecisions: [pending] }, now)
+			checkpoints.prepareCheckpoint(
+				run,
+				{ serializedState: 'checkpoint', pendingDecisions: [pending] },
+				now
+			)
 		);
 		const events = new AgentRunEventRecords(owner, context.db);
 		await events.append(run.id, 1, {
@@ -523,11 +535,15 @@ describe('Postgres durable agent run repository invariants', () => {
 			toolName: 'archive_note' as const,
 			arguments: { noteId: '40000000-0000-4000-8000-000000000103' }
 		};
-		await new RunPreparation(runs).claim(run.id, now);
-		const checkpoints = new RunCheckpoints(runs);
-		await checkpoints.persist(
+		await new RunTransitions(runs).claim(run.id, now);
+		const checkpoints = new RunTransitions(runs);
+		await checkpoints.persistCheckpoint(
 			run.id,
-			checkpoints.prepare(run, { serializedState: 'checkpoint', pendingDecisions: [parked] }, now)
+			checkpoints.prepareCheckpoint(
+				run,
+				{ serializedState: 'checkpoint', pendingDecisions: [parked] },
+				now
+			)
 		);
 		const reread = await runs.findById(run.id);
 		expect(reread?.pendingDecisions).toEqual([parked]);

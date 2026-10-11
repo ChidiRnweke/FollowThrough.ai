@@ -27,24 +27,6 @@ export interface AgentRuns {
 	/** Inserts the run unless its request id exists; answers undefined when it already does. */
 	insertIdempotent(run: AgentRun): Promise<AgentRun | undefined>;
 }
-export class AgentRunService implements AgentRuns {
-	constructor(private readonly repository: AgentRunRepository) {}
-	findById(id: AgentRunId) {
-		return this.repository.findById(id);
-	}
-	findAgentById(id: AgentRunId) {
-		return this.repository.findAgentById(id);
-	}
-	findByRequestId(requestId: string) {
-		return this.repository.findByRequestId(requestId);
-	}
-	findActiveByConversation(conversationId: ConversationId) {
-		return this.repository.findActiveByConversation(conversationId);
-	}
-	insertIdempotent(run: AgentRun) {
-		return this.repository.insertIdempotent(run);
-	}
-}
 
 /** A run's append-only event log, which a client reads by cursor. */
 export interface AgentRunEvents {
@@ -52,21 +34,6 @@ export interface AgentRunEvents {
 	replay(runId: AgentRunId, after: string): Promise<readonly StoredAgentRunEventRecord[]>;
 	latestCursor(runId: AgentRunId): Promise<string>;
 	listAttempt(runId: AgentRunId, attempt: number): Promise<readonly StoredAgentRunEventRecord[]>;
-}
-export class AgentRunEventService implements AgentRunEvents {
-	constructor(private readonly repository: AgentRunEventRepository) {}
-	append(runId: AgentRunId, attempt: number, event: AgentEvent) {
-		return this.repository.append(runId, attempt, event);
-	}
-	replay(runId: AgentRunId, after: string) {
-		return this.repository.replay(runId, after);
-	}
-	latestCursor(runId: AgentRunId) {
-		return this.repository.latestCursor(runId);
-	}
-	listAttempt(runId: AgentRunId, attempt: number) {
-		return this.repository.listAttempt(runId, attempt);
-	}
 }
 
 /** The user's decisions on parked tool calls, recorded before the run resumes. */
@@ -81,33 +48,71 @@ export interface AgentRunDecisions {
 	consume(runId: AgentRunId, callId: string, at: Date): Promise<boolean>;
 	clearPending(runId: AgentRunId): Promise<void>;
 }
-export class AgentRunDecisionService implements AgentRunDecisions {
-	constructor(private readonly repository: AgentRunDecisionRepository) {}
-	record(input: Parameters<AgentRunDecisions['record']>[0]) {
-		return this.repository.record(input);
-	}
-	loadUnconsumed(runId: AgentRunId) {
-		return this.repository.loadUnconsumed(runId);
-	}
-	consume(runId: AgentRunId, callId: string, at: Date) {
-		return this.repository.consume(runId, callId, at);
-	}
-	clearPending(runId: AgentRunId) {
-		return this.repository.clearPending(runId);
-	}
-}
 
 /** The provider session items a conversation replays. */
 export interface AgentSessions {
 	list(conversationId: ConversationId, limit?: number): Promise<readonly AgentSessionItem[]>;
 	replace(conversationId: ConversationId, items: readonly PersistedSessionItem[]): Promise<void>;
 }
-export class AgentSessionService implements AgentSessions {
-	constructor(private readonly repository: AgentSessionRepository) {}
+
+/** Everything the agent harness reads and writes about a run, its events, decisions and sessions. */
+export interface AgentHarnessRecords
+	extends AgentRuns, AgentRunEvents, AgentRunDecisions, AgentSessions {}
+
+export class AgentRunHarnessRecords implements AgentHarnessRecords {
+	constructor(
+		private readonly runs: AgentRunRepository,
+		private readonly events: AgentRunEventRepository,
+		private readonly decisions: AgentRunDecisionRepository,
+		private readonly sessions: AgentSessionRepository
+	) {}
+
+	findById(id: AgentRunId) {
+		return this.runs.findById(id);
+	}
+	findAgentById(id: AgentRunId) {
+		return this.runs.findAgentById(id);
+	}
+	findByRequestId(requestId: string) {
+		return this.runs.findByRequestId(requestId);
+	}
+	findActiveByConversation(conversationId: ConversationId) {
+		return this.runs.findActiveByConversation(conversationId);
+	}
+	insertIdempotent(run: AgentRun) {
+		return this.runs.insertIdempotent(run);
+	}
+
+	append(runId: AgentRunId, attempt: number, event: AgentEvent) {
+		return this.events.append(runId, attempt, event);
+	}
+	replay(runId: AgentRunId, after: string) {
+		return this.events.replay(runId, after);
+	}
+	latestCursor(runId: AgentRunId) {
+		return this.events.latestCursor(runId);
+	}
+	listAttempt(runId: AgentRunId, attempt: number) {
+		return this.events.listAttempt(runId, attempt);
+	}
+
+	record(input: Parameters<AgentRunDecisions['record']>[0]) {
+		return this.decisions.record(input);
+	}
+	loadUnconsumed(runId: AgentRunId) {
+		return this.decisions.loadUnconsumed(runId);
+	}
+	consume(runId: AgentRunId, callId: string, at: Date) {
+		return this.decisions.consume(runId, callId, at);
+	}
+	clearPending(runId: AgentRunId) {
+		return this.decisions.clearPending(runId);
+	}
+
 	list(conversationId: ConversationId, limit?: number) {
-		return this.repository.list(conversationId, limit);
+		return this.sessions.list(conversationId, limit);
 	}
 	replace(conversationId: ConversationId, items: readonly PersistedSessionItem[]) {
-		return this.repository.replace(conversationId, items);
+		return this.sessions.replace(conversationId, items);
 	}
 }

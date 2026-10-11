@@ -1,12 +1,10 @@
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
-import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
-import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { describe, expect, it } from 'vitest';
 import type { AgentRunId, ConversationId, PersistedSessionItem } from '$lib/models/agent';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -75,15 +73,10 @@ const setup = async (suffix: string) => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
-			runs,
-			cancellations: new RunCancellation(runs),
-			preparation: new RunPreparation(runs),
-			checkpoints: new RunCheckpoints(runs),
+			records: new AgentRunHarnessRecords(runs, events, decisions, sessions),
+			transitions: new RunTransitions(runs),
 			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
-			events,
-			sessions,
 			transactionRunner: transaction.transactionRunner,
-			decisions,
 			settlements: new RunSettlements(runs, events),
 			conversationMessages: new ConversationArchive(owner, conversations),
 			conversationSessions: new ConversationArchive(owner, conversations),
@@ -136,16 +129,16 @@ describe('atomic execution settlement', () => {
 		};
 		await controller.execute(run.id, new AbortController().signal);
 		await transactionRunner.run(async () => {
-			const approvals = new RunApprovals(runs);
+			const approvals = new RunTransitions(runs);
 			const current = await approvals.getForWrite(run.id);
-			const change = approvals.plan(current, ['create-1'], now);
+			const change = approvals.planApproval(current, ['create-1'], now);
 			if (!change) throw new Error('Expected a reviewed checkpoint');
 			await decisions.record({
 				runId: run.id,
 				callId: 'create-1',
 				decision: 'approve'
 			});
-			await approvals.persist(run.id, change);
+			await approvals.persistApproval(run.id, change);
 		});
 		runner.outcome = { type: 'completed', sessionItems: [] };
 		await controller.execute(run.id, new AbortController().signal);
@@ -289,11 +282,11 @@ describe('atomic execution settlement', () => {
 		const execution = controller.execute(run.id, new AbortController().signal);
 		await runner.started.promise;
 		await transactionRunner.run(async () => {
-			const cancellations = new RunCancellation(runs);
+			const cancellations = new RunTransitions(runs);
 			const current = await cancellations.getForWrite(run.id);
-			const change = cancellations.plan(current.status, now);
+			const change = cancellations.planCancellation(current.status, now);
 			if (!change) throw new Error('Expected an active run');
-			await cancellations.persist(run.id, change);
+			await cancellations.persistCancellation(run.id, change);
 		});
 		completion.resolve();
 		await Promise.all([execution, controller.finishCancellation(run.id)]);

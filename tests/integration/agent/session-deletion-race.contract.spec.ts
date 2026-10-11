@@ -1,3 +1,4 @@
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { expect, it, vi } from 'vitest';
@@ -8,8 +9,14 @@ import {
 	AgentSdkHarness,
 	type AgentHarnessDependencies
 } from '$lib/server/controllers/agent/controller';
-import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
-import { AgentRunEventRecords } from '$lib/server/repositories/agent/postgres/agent-runs';
+import {
+	AgentRunRecords,
+	AgentSessionRecords
+} from '$lib/server/repositories/agent/postgres/agent-settings';
+import {
+	AgentRunDecisionRecords,
+	AgentRunEventRecords
+} from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -37,7 +44,12 @@ const setup = async (suffix: string) => {
 			...agentRulesFixture(),
 			conversationMessages: journal,
 			conversationSessions: journal,
-			runs,
+			records: new AgentRunHarnessRecords(
+				runs,
+				new AgentRunEventRecords(owner, tx.database),
+				new AgentRunDecisionRecords(owner, tx.database),
+				new AgentSessionRecords(owner, tx.database)
+			),
 			transactionRunner: tx.transactionRunner
 		})
 	);

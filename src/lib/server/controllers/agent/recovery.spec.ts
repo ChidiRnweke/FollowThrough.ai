@@ -1,3 +1,5 @@
+import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
@@ -34,7 +36,7 @@ const recover = async (status: 'running' | 'cancelling') => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
-			runs,
+			records: new AgentRunHarnessRecords(runs, runs, runs, new InMemoryAgentSessionRepository()),
 			settlements,
 			runSignals: new RunSignalService(runs, runs),
 			transactionRunner: new InMemoryTransactionRunner([runs])
