@@ -203,8 +203,9 @@ export const controllerSurfaces = {
 		update: true,
 		setPinned: true
 	},
-	agent: {
+	agentHarness: {
 		execute: true,
+		openMcpTools: true,
 		finishCancellation: true,
 		failRun: true,
 		recoverInterruptedRuns: true,
@@ -351,22 +352,6 @@ export const controllerSurfaces = {
 } satisfies {
 	[K in keyof ControllerFactory]: ControllerSurface<ReturnType<ControllerFactory[K]>>;
 };
-
-export const agentToolAuthoritySurface = {
-	approvalRequired: false,
-	select: false,
-	appPlan: false,
-	mcpPlan: false,
-	offered: false,
-	available: false,
-	authorize: false,
-	isEnabled: false,
-	discover: true,
-	catalog: false
-} satisfies ControllerSurface<import('../controllers/agent/tool-authority').AgentToolAuthority>;
-export const agentToolSessionSurface = { authority: true } satisfies ControllerSurface<
-	import('../controllers/agent/tool-sessions').AgentToolSessionControl
->;
 
 export const localIdentitySurface = { initializeLocal: true } satisfies ControllerSurface<
 	import('../controllers/identity/local').LocalIdentityController

@@ -1,7 +1,10 @@
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import type { WebResearchSettings } from '$lib/models/agent';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
@@ -20,17 +23,17 @@ export const agentSubmissionFixture = (
 		readonly webSearchOverrides?: WebResearchSettings;
 	} = {}
 ) => {
-	const { dependencies, runs } = agentContextFixture();
-	const { sessions, runner } = dependencies;
+	const { dependencies, runs, turns } = agentContextFixture();
+	const { sessions } = dependencies;
 	let claim = Promise.withResolvers<void>();
 	const completion = Promise.withResolvers<void>();
 	runs.executionClaim = claim.promise;
-	runner.completion = completion.promise;
-	runner.abortable = phase === 'abortable';
+	turns.completion = completion.promise;
+	turns.abortable = phase === 'abortable';
 	if (phase !== 'queued') claim.resolve();
 	if (phase === 'approval') {
 		completion.resolve();
-		runner.outcome = {
+		turns.outcome = {
 			type: 'approval_checkpoint',
 			serializedState: 'provider-checkpoint',
 			sessionItems: [],
@@ -44,9 +47,9 @@ export const agentSubmissionFixture = (
 	const models = new InMemoryModelCatalog();
 	const preferenceRecords = new InMemoryAgentPreferencesRepository();
 	const preferences = new AgentPreferenceCatalog(preferenceRecords);
-	const controller = new Agent(
+	const controller = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			...dependencies,
 			conversationMessages: journal,
@@ -69,7 +72,7 @@ export const agentSubmissionFixture = (
 		conversations,
 		runs,
 		sessions,
-		runner,
+		turns,
 		pauseExecution: () => {
 			claim = Promise.withResolvers<void>();
 			runs.executionClaim = claim.promise;

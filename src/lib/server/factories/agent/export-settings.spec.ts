@@ -11,7 +11,7 @@ import {
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
-import { createAgentToolSurface } from './agent-tool-factory';
+import { createAgentToolSurface } from '$lib/testing/agent/fixtures/tool-surface';
 
 describe('agent export settings', () => {
 	it('persists the full palette and title choice supplied by the tool', async () => {

@@ -1,7 +1,10 @@
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { describe, expect, it } from 'vitest';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -28,9 +31,9 @@ const setup = async (suffix: string) => {
 	});
 	if (parsed.type !== 'conversations') throw new Error('Expected a conversation');
 	const conversation = await records.insert(owner, parsed.value);
-	const controller = new Agent(
+	const controller = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			conversationMessages: new ConversationArchive(records),
 			conversationSessions: new ConversationArchive(records),

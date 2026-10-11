@@ -1,7 +1,10 @@
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { type AgentRunId, type DiagramActionInput } from '$lib/models/agent';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -92,9 +95,9 @@ const setup = async (suffix: string) => {
 		runSettlements: settlements,
 		runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 	});
-	const agent = new Agent(
+	const agent = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),

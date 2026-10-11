@@ -21,7 +21,6 @@ import { SuggestionPresentationService } from '$lib/services/suggestions/present
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -29,8 +28,10 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { RunContext } from '@openai/agents';
 import { describe, expect, it } from 'vitest';
-import type { AgentToolSurface } from './agent-tool-factory';
-import { createAgentToolSurface } from './agent-tool-factory';
+import {
+	createAgentToolSurface,
+	type AgentToolSurface
+} from '$lib/testing/agent/fixtures/tool-surface';
 const noteMarkdown = new NoteMarkdownCodec();
 
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
@@ -62,7 +63,7 @@ const setup = () => {
 			{ completed: async () => {} },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
-			restoredToolReviews(fixture.factory, testActor(), pending)
+			pending
 		);
 	const call: PendingAgentDecision = {
 		callId: 'note-edit-1',
@@ -279,11 +280,7 @@ describe('A note change that fails while it is being prepared', () => {
 			{ completed: async () => {} },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
-			restoredToolReviews(
-				capabilityDependencies<ControllerFactory>({ notes: () => controller }),
-				testActor(),
-				[]
-			)
+			[]
 		);
 		const args = { noteId: note.id, markdown: '# Plan\n\n---\n\nBody.\n' };
 		const tool = tools.tools().find((item) => item.name === 'save_note');

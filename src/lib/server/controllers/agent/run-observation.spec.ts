@@ -6,7 +6,7 @@ import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import { Agent, type AgentDependencies } from './controller';
+import { AgentSdkHarness, type AgentHarnessDependencies } from './controller';
 
 const runId = '31000000-0000-4000-8000-000000000001' as AgentRunId;
 
@@ -27,9 +27,9 @@ const setup = () => {
 		updatedAt: testNow
 	};
 	runs.runs.push(run);
-	const agent = new Agent(
+	const agent = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			runSignals: new RunSignalService(runs, runs)

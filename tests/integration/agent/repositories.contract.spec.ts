@@ -11,7 +11,10 @@ import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import type {
 	Conversation,
@@ -347,9 +350,9 @@ describe('Postgres durable agent run repository invariants', () => {
 			conversationId: run.conversationId,
 			model: run.model
 		});
-		const controller = new Agent(
+		const controller = new AgentSdkHarness(
 			new WorkspaceCommandRulesService(),
-			capabilityDependencies<AgentDependencies>({
+			capabilityDependencies<AgentHarnessDependencies>({
 				...agentRulesFixture(),
 				events,
 				runs
@@ -410,9 +413,9 @@ describe('Postgres durable agent run repository invariants', () => {
 
 	it('does not expose another actor’s run through event-stream completion', async () => {
 		const run = await seedQueuedRun('17803');
-		const controller = new Agent(
+		const controller = new AgentSdkHarness(
 			new WorkspaceCommandRulesService(),
-			capabilityDependencies<AgentDependencies>({
+			capabilityDependencies<AgentHarnessDependencies>({
 				...agentRulesFixture(),
 				runs: new AgentRunRecords(context.db),
 				events: new AgentRunEventRecords(context.db)

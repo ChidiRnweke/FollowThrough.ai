@@ -27,7 +27,7 @@ export const pushWorkspaceMutation = command(
 		const command = mutation.command;
 		switch (command.kind) {
 			case 'renameConversation':
-				return controllers.agent().synchronize(actor, { ...mutation, command });
+				return controllers.agentHarness().synchronize(actor, { ...mutation, command });
 			case 'setToolPreference':
 			case 'setProjectToolOverride':
 			case 'resetProjectToolOverride':

@@ -1,7 +1,7 @@
 import type { AgentToolContractMap } from '$lib/models/agent';
 import { type ToolName } from '$lib/models/agent/tool-catalog';
 import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
-import type { AgentController } from '$lib/server/controllers/agent/controller';
+import type { AgentHarness } from '$lib/server/controllers/agent/controller';
 import type { AgentSettingsController } from '$lib/server/controllers/agent/settings/controller';
 import type { ToolPreferencesController } from '$lib/server/controllers/agent/tool-preferences/controller';
 import type { TrustPoliciesController } from '$lib/server/controllers/agent/trust-policies/controller';
@@ -22,7 +22,7 @@ import type { TodosController } from '$lib/server/controllers/todos/controller';
 import type { WidgetsController } from '$lib/server/controllers/widgets/controller';
 import type { WorkspaceController } from '$lib/server/controllers/workspace/controller';
 interface CoveredAgentControllers {
-	readonly agent: AgentController;
+	readonly agentHarness: AgentHarness;
 	readonly agentFiles: AgentFilesController;
 	readonly workspace: WorkspaceController;
 	readonly projects: ProjectsController;
@@ -59,7 +59,11 @@ const WIDGET_GESTURE =
 	'Moving a widget to or from the trash is a user gesture in the gallery and the trash.';
 
 export const agentToolCoverage = {
-	agent: {
+	agentHarness: {
+		openMcpTools: {
+			kind: 'excluded',
+			reason: 'The harness serves tools to MCP; it is not a tool itself.'
+		},
 		execute: {
 			kind: 'excluded',
 			reason: 'Chat run control belongs to the user and application lifecycle.'

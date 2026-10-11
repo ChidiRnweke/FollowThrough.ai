@@ -3,7 +3,10 @@ import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/post
 import { DomainError } from '$lib/errors';
 import type { AgentRunId } from '$lib/models/agent';
 import type { DiagramId } from '$lib/models/diagrams';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
 import { isPermanentWriteConstraint } from '$lib/server/db/postgres-errors';
 import {
@@ -251,9 +254,9 @@ it('does not publish a direct result after cancellation settles its run', async 
 		const { database, transactionRunner } = createTransactionContext(context.db);
 		const runs = new AgentRunRecords(database);
 		const events = new AgentRunEventRecords(database);
-		const agent = new Agent(
+		const agent = new AgentSdkHarness(
 			new WorkspaceCommandRulesService(),
-			capabilityDependencies<AgentDependencies>({
+			capabilityDependencies<AgentHarnessDependencies>({
 				...agentRulesFixture(),
 				runs,
 				events,

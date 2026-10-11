@@ -27,7 +27,10 @@ import {
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
-import { createAgentToolSurface, createMcpToolDefinitions } from './agent-tool-factory';
+import {
+	createAgentToolSurface,
+	createMcpToolDefinitions
+} from '$lib/testing/agent/fixtures/tool-surface';
 
 const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 	const actor = testActor();

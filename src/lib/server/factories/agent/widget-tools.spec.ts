@@ -2,7 +2,7 @@ import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/i
 import { createWidgetRules } from '$lib/factories/widgets/rules';
 import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
 import { widgetTemplates } from '$lib/models/widgets';
-import { jsonObjectSchema } from '$lib/server/adapters/agent/tool-call';
+import { jsonObjectSchema } from '$lib/server/factories/agent/tools/arguments';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
@@ -27,7 +27,7 @@ import {
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
-import { createAgentToolSurface } from './agent-tool-factory';
+import { createAgentToolSurface } from '$lib/testing/agent/fixtures/tool-surface';
 const noteMarkdown = new NoteMarkdownCodec();
 
 import { NoteReferenceService } from '$lib/services/notes/references';

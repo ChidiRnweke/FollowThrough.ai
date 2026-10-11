@@ -218,6 +218,9 @@ export class InMemoryAgentRunPersistence
 	): Promise<AgentRun> {
 		const run = await this.findById(actor, runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
+		// Postgres holds the row lock from the cancel's read to this write, so a run cannot
+		// settle in between; here it can, and a settled run must stay settled.
+		if (['completed', 'failed', 'cancelled'].includes(run.status)) return run;
 		const updated = { ...run, ...change };
 		this.replace(updated);
 		return updated;
@@ -287,6 +290,9 @@ export class InMemoryAgentRunPersistence
 	): Promise<AgentRun> {
 		const run = await this.findById(actor, runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
+		// Postgres holds the row lock from the cancel's read to this write, so a run cannot
+		// settle in between; here it can, and a settled run must stay settled.
+		if (['completed', 'failed', 'cancelled'].includes(run.status)) return run;
 		const updated = { ...run, ...change };
 		this.replace(updated);
 		return updated;

@@ -1,5 +1,4 @@
 import { createWidgetRules } from '$lib/factories/widgets/rules';
-import type { AgentToolSessionInput } from '$lib/models/agent-tool-session';
 import type { TextSelection } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
@@ -12,7 +11,6 @@ import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/con
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
 import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
 import { AccessTokens } from '$lib/server/services/identity/api-tokens';
 import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
@@ -22,7 +20,6 @@ import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
-import { InMemoryToolPreferenceRepository } from '$lib/testing/agent/fakes/in-memory-tool-preferences';
 import { agentProjectsFixture } from '$lib/testing/agent/fixtures/projects';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { resultItem } from '$lib/testing/agent/session-items';
@@ -60,13 +57,11 @@ import { projectBuilder, testNoteId } from '$lib/testing/workspace/fixtures/doma
 import type { FunctionTool, Tool } from '@openai/agents';
 import { RunContext } from '@openai/agents';
 import { describe, expect, it } from 'vitest';
-import type { AgentToolSurface } from './agent-tool-factory';
 const noteMarkdown = new NoteMarkdownCodec();
 
 import type { AgentToolContractBinding } from '$lib/models/agent';
 import { LOCKED_TOOL_NAMES, TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
 import { toolFailureSchema } from '$lib/models/agent/tool-failure';
-import type { AgentToolCompletionObserver } from '$lib/server/services/agent/runs/contracts';
 import {
 	appContextBuilder,
 	noteBuilder,
@@ -76,15 +71,16 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { agentToolCoverage } from './agent-tool-factory';
 import {
-	agentToolCoverage,
-	agentToolRegistry,
 	createAgentToolSurface,
 	createMcpToolDefinitions,
-	type ToolAccessPolicy
-} from './agent-tool-factory';
+	type AgentToolSurface,
+	type ToolAccessPolicy,
+	type ToolCompletionRecorder
+} from '$lib/testing/agent/fixtures/tool-surface';
 
-const executeDirectly: AgentToolCompletionObserver = {
+const executeDirectly: ToolCompletionRecorder = {
 	completed: async () => {}
 };
 const allTools: ToolAccessPolicy = { isEnabled: () => true };
@@ -94,7 +90,7 @@ const createAgentTools = (
 	actor: Parameters<typeof createAgentToolSurface>[2],
 	mode: Parameters<typeof createAgentToolSurface>[3],
 	context: Parameters<typeof createAgentToolSurface>[4],
-	executor: AgentToolCompletionObserver = executeDirectly,
+	executor: ToolCompletionRecorder = executeDirectly,
 	retriever: InMemoryToolRetriever = new InMemoryToolRetriever(),
 	access: ToolAccessPolicy = allTools
 ): AgentToolSurface =>
@@ -695,24 +691,21 @@ describe('Agent tool coverage invariants', () => {
 	it('threads the run provenanceId into load_skill even when the context omits it', async () => {
 		const { note, controller, skills } = loadedSkillFixture();
 		const factory = capabilityDependencies<ControllerFactory>({ skills: () => controller });
-		const run: AgentToolSessionInput['run'] = {
-			executionMode: 'auto_accept',
-			model: 'openai/gpt-5.6',
-			provenanceId: testProvenanceId(),
-			pendingDecisions: []
-		};
-		const registry = await agentToolRegistry(
-			() => factory,
-			new InMemoryToolRetriever(),
+		const run = { provenanceId: testProvenanceId() };
+		const registry = createAgentToolSurface(
 			testTokenizer,
-			new ToolAccess(new InMemoryToolPreferenceRepository())
-		)({
-			actor: testActor(),
-			request: { prompt: 'Help', conversationId: testConversationId() },
-			run,
-			executor: { completed: async () => {} },
-			signal: new AbortController().signal
-		});
+			factory,
+			testActor(),
+			'auto_accept',
+			{
+				provenanceId: run.provenanceId,
+				input: { prompt: 'Help', conversationId: testConversationId() },
+				model: 'openai/gpt-5.6'
+			},
+			{ completed: async () => {} },
+			new InMemoryToolRetriever(),
+			{ isEnabled: () => true }
+		);
 		const loadSkill = registry.agentTools().find((candidate) => candidate.name === 'load_skill');
 		if (!loadSkill || loadSkill.type !== 'function')
 			throw new Error('Expected load_skill function tool');
@@ -1239,7 +1232,7 @@ describe('Agent tool coverage invariants', () => {
  */
 describe('The provider call id', () => {
 	const recordedCallIds = (): {
-		executor: AgentToolCompletionObserver;
+		executor: ToolCompletionRecorder;
 		seen: { readonly callId?: string }[];
 	} => {
 		const seen: { readonly callId?: string }[] = [];
@@ -1254,7 +1247,7 @@ describe('The provider call id', () => {
 	};
 
 	const invokeListProjects = async (
-		executor: AgentToolCompletionObserver,
+		executor: ToolCompletionRecorder,
 		details?: Parameters<FunctionTool['invoke']>[2]
 	): Promise<void> => {
 		const { factory } = agentProjectsFixture();

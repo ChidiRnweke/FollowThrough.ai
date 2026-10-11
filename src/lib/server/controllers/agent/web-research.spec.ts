@@ -63,8 +63,8 @@ it('executes the frozen budget after injected deployment defaults change', async
 	});
 	defaults.maxResults = 25;
 	fixture.release();
-	await fixture.runner.started.promise;
-	expect(fixture.runner.researchSettings[0]).toEqual({
+	await fixture.turns.started.promise;
+	expect(fixture.turns.researchSettings[0]).toEqual({
 		...CHAT_WEB_SEARCH_DEFAULTS,
 		maxResults: 7
 	});
@@ -102,8 +102,8 @@ it('resolves missing fields of a legacy saved request before provider execution'
 			: run
 	);
 	fixture.release();
-	await fixture.runner.started.promise;
-	expect(fixture.runner.researchSettings[0]).toEqual({
+	await fixture.turns.started.promise;
+	expect(fixture.turns.researchSettings[0]).toEqual({
 		engine: 'firecrawl',
 		maxResults: 5,
 		maxTotalResults: 34

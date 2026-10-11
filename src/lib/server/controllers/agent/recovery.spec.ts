@@ -9,7 +9,7 @@ import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import { Agent, type AgentDependencies } from './controller';
+import { AgentSdkHarness, type AgentHarnessDependencies } from './controller';
 
 const recover = async (status: 'running' | 'cancelling') => {
 	const runs = new InMemoryAgentRunPersistence();
@@ -29,9 +29,9 @@ const recover = async (status: 'running' | 'cancelling') => {
 	};
 	runs.runs.push(run);
 	const settlements = new RunSettlements(runs, runs);
-	await new Agent(
+	await new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			settlements,

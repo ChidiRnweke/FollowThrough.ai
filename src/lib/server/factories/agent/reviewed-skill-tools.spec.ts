@@ -1,13 +1,14 @@
 import type { AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
 import { noteChangeReviewSchema } from '$lib/models/notes';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
-import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { RunContext } from '@openai/agents';
 import { describe, expect, it } from 'vitest';
-import type { AgentToolSurface } from './agent-tool-factory';
-import { createAgentToolSurface } from './agent-tool-factory';
+import {
+	createAgentToolSurface,
+	type AgentToolSurface
+} from '$lib/testing/agent/fixtures/tool-surface';
 const noteMarkdown = new NoteMarkdownCodec();
 
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
@@ -42,7 +43,7 @@ const setup = (kind: 'skill' | 'note' = 'skill', operation: 'replace' | 'patch' 
 			{ completed: async () => {} },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
-			restoredToolReviews(fixture.factory, testActor(), pending)
+			pending
 		);
 	const call: PendingAgentDecision = {
 		callId: 'skill-change-1',

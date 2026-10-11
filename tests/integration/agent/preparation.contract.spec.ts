@@ -15,7 +15,10 @@ import {
 } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
@@ -57,9 +60,9 @@ const setup = async (suffix: string, memory = new InMemoryMemoryEntryRepository(
 		updatedAt: now
 	});
 	const fixture = agentContextFixture();
-	const controller = new Agent(
+	const controller = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			...fixture.dependencies,
 			runs,

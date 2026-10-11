@@ -2,7 +2,10 @@ import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { type AgentRunId } from '$lib/models/agent';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import {
 	Relationships,
 	type RelationshipsDependencies
@@ -124,9 +127,9 @@ const setup = async (suffix: string) => {
 		selectionOrigins: notes.selectionOrigins,
 		suggestionCreator: suggestions.creator
 	};
-	const agent = new Agent(
+	const agent = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),

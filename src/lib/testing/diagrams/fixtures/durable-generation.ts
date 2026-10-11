@@ -1,5 +1,8 @@
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
@@ -53,9 +56,9 @@ export const durableDiagramFixture = () => {
 		runSettlements: settlements,
 		runSignals: new RunSignalService(state.persistence, state.persistence)
 	});
-	const agent = new Agent(
+	const agent = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs: state.persistence,
 			cancellations: new RunCancellation(state.persistence),

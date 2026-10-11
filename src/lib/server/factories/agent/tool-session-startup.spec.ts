@@ -1,18 +1,8 @@
 import { ToolLifecycleError } from '$lib/errors';
 import type { PendingAgentDecision } from '$lib/models/agent';
-import type { AgentToolSessionInput } from '$lib/models/agent-tool-session';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
-import {
-	ToolPreferences,
-	type ToolPreferencesDependencies
-} from '$lib/server/controllers/agent/tool-preferences/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
-import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
-import { InMemoryToolPreferenceRepository } from '$lib/testing/agent/fakes/in-memory-tool-preferences';
-import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -20,57 +10,36 @@ import {
 	noteBuilder,
 	testActor,
 	testConversationId,
-	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunContext } from '@openai/agents';
 import { describe, expect, it } from 'vitest';
-import { agentToolRegistry } from './agent-tool-factory';
+import { createAgentToolSurface } from '$lib/testing/agent/fixtures/tool-surface';
 
 const setup = () => {
 	const note = noteBuilder({ ...new NoteMarkdownCodec().read('Launch Monday.') });
 	const fixture = reviewedNoteFixture(note);
-	const preferences = new InMemoryToolPreferenceRepository();
-	const settings = new ToolPreferences(
-		new WorkspaceCommandRulesService(),
-		capabilityDependencies<ToolPreferencesDependencies>({
-			...agentToolResultsFixture(),
-			preferences: new ToolAccess(preferences),
-			catalog: new AgentToolCatalogService()
-		})
-	);
-	const factory = capabilityDependencies<ControllerFactory>({
-		notes: () => fixture.controller,
-		toolPreferences: () => settings
-	});
-	const open = agentToolRegistry(
-		() => factory,
-		new InMemoryToolRetriever(),
-		testTokenizer,
-		new ToolAccess(preferences)
-	);
-	const input = (
-		pendingDecisions: readonly PendingAgentDecision[] = []
-	): AgentToolSessionInput => ({
-		actor: testActor(),
-		request: {
-			prompt: 'Change launch day',
-			conversationId: testConversationId(),
-			projectId: testProjectId()
-		},
-		run: {
-			executionMode: 'approval_required',
-			model: 'test-model',
-			provenanceId: testProvenanceId(),
-			pendingDecisions
-		},
-		executor: { completed: async () => {} },
-		signal: new AbortController().signal
-	});
-	return { ...fixture, note, preferences, open, input };
+	const factory = capabilityDependencies<ControllerFactory>({ notes: () => fixture.controller });
+	const open = (parked: readonly PendingAgentDecision[] = []) =>
+		createAgentToolSurface(
+			testTokenizer,
+			factory,
+			testActor(),
+			'approval_required',
+			{
+				provenanceId: testProvenanceId(),
+				input: { prompt: 'Change launch day', conversationId: testConversationId() },
+				model: 'test-model'
+			},
+			{ completed: async () => {} },
+			new InMemoryToolRetriever(),
+			{ isEnabled: () => true },
+			parked
+		);
+	return { ...fixture, note, open };
 };
 
-describe('Agent tool session startup', () => {
+describe('Resuming reviewed tool calls', () => {
 	it('restores the saved preparation before resumed execution can write', async () => {
 		const fixture = setup();
 		const review = await fixture.controller.prepareChange(
@@ -88,7 +57,7 @@ describe('Agent tool session startup', () => {
 			arguments: { noteId: fixture.note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] },
 			review: { kind: 'note_change', content: JSON.stringify(review) }
 		};
-		const registry = await fixture.open(fixture.input([pending]));
+		const registry = fixture.open([pending]);
 		const tool = registry.agentTools().find((tool) => tool.name === 'edit_note');
 		if (!tool || tool.type !== 'function') throw new Error('Expected edit_note function tool');
 		await tool.invoke(new RunContext(), JSON.stringify(pending.arguments), {
@@ -103,9 +72,9 @@ describe('Agent tool session startup', () => {
 	});
 	it('refuses to open a saved body approval without its preparation', async () => {
 		const fixture = setup();
-		await expect(
-			fixture.open(
-				fixture.input([
+		expect(() =>
+			fixture
+				.open([
 					{
 						callId: 'missing-review',
 						toolName: 'edit_note',
@@ -115,16 +84,7 @@ describe('Agent tool session startup', () => {
 						}
 					}
 				])
-			)
-		).rejects.toThrow(ToolLifecycleError);
-	});
-	it('uses current project authority when opening the registry', async () => {
-		const fixture = setup();
-		await fixture.preferences.upsertForProject(testActor(), testProjectId(), {
-			toolName: 'get_note',
-			enabled: false
-		});
-		const registry = await fixture.open(fixture.input());
-		expect(registry.agentTools().map((tool) => tool.name)).not.toContain('get_note');
+				.agentTools()
+		).toThrow(ToolLifecycleError);
 	});
 });

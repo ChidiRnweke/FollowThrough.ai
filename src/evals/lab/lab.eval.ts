@@ -33,18 +33,18 @@ describe('eval lab smoke', () => {
 
 	it('submits a run through the production graph', async () => {
 		actor = await seedActor(lab);
-		const receipt = await lab.controllers.agent().submit(actor, {
+		const receipt = await lab.controllers.agentHarness().submit(actor, {
 			requestId: randomUUID(),
 			input: 'Smoke test, no answer needed.'
 		});
 		runId = receipt.runId;
 		// Stop before the provider call can cost anything.
-		await lab.controllers.agent().cancel(actor, receipt.runId);
+		await lab.controllers.agentHarness().cancel(actor, receipt.runId);
 		const deadline = Date.now() + 15_000;
-		let status = (await lab.controllers.agent().getRun(actor, runId)).run.status;
+		let status = (await lab.controllers.agentHarness().getRun(actor, runId)).run.status;
 		while (!TERMINAL.includes(status) && Date.now() < deadline) {
 			await new Promise((resolve) => setTimeout(resolve, 100));
-			status = (await lab.controllers.agent().getRun(actor, runId)).run.status;
+			status = (await lab.controllers.agentHarness().getRun(actor, runId)).run.status;
 		}
 		expect({ submitted: receipt.status, settled: TERMINAL.includes(status) }).toEqual({
 			submitted: 'queued',

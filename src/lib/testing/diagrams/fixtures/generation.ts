@@ -1,8 +1,7 @@
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
-import { DiagramGenerationStore } from '$lib/server/stores/diagrams/generation';
-import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import { AgentStreamPresentationService } from '$lib/server/services/agent/runs/stream-presentation';
 import { InMemoryMermaidValidator } from '$lib/testing/diagrams/fakes/mermaid-validator';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
@@ -60,9 +59,8 @@ export const diagramGenerationFixture = () => {
 		defaultModel: 'test/model',
 		defaultVisionModel: 'test/vision',
 		modelSelection: new AgentModelSelectionService(),
-		createStream: createAgentStream,
+		streamPresentation: new AgentStreamPresentationService(),
 		observeWorkflow: (_name, _context, operation) => operation(),
-		createGenerationState: () => new DiagramGenerationStore(),
 		generator: provider
 	};
 	return {

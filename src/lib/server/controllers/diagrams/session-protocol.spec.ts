@@ -96,7 +96,7 @@ describe('Diagram provider submission through its owning operation', () => {
 });
 
 it('preserves the existing unknown submission-tool failure at the SDK boundary', async () => {
-	const { AgentSdkDiagramProvider } = await import('$lib/server/adapters/diagrams/generation');
+	const { DiagramGenerationService } = await import('$lib/server/services/diagrams/generation');
 	const { InMemoryModelProvider } =
 		await import('$lib/testing/agent/fakes/in-memory-model-provider');
 	const { InMemoryDiagramModel } =
@@ -107,7 +107,7 @@ it('preserves the existing unknown submission-tool failure at the SDK boundary',
 		...fixture.dependencies,
 		generation: {
 			...fixture.generation,
-			generator: { create: () => new AgentSdkDiagramProvider(provider) }
+			generator: new DiagramGenerationService({ available: true, models: () => provider })
 		}
 	});
 	const result = await controller

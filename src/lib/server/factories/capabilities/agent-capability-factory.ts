@@ -2,20 +2,25 @@ import type { WebResearchOptions } from '$lib/models/agent';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import type { TokenCounter } from '$lib/models/tokenization';
 import type { DateTime } from '$lib/models/workspace';
-import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
-import { AgentExecution } from '$lib/server/controllers/agent/execution';
 import type { Database } from '$lib/server/db';
 import { createAgentContext } from '$lib/server/factories/agent-context';
-import { agentToolRegistry } from '$lib/server/factories/agent/agent-tool-factory';
 import {
-	createConversationSession,
-	createReplayVirtualizer
-} from '$lib/server/factories/agent/conversation-factory';
+	createAgentToolConstruction,
+	type AgentToolConstruction
+} from '$lib/server/factories/agent/agent-tool-factory';
+import { createAgentProviders } from '$lib/server/factories/agent/agent-providers';
+import { AgentTurnService, type AgentTurns } from '$lib/server/services/agent/runs/turns';
+import type { AgentPromptPreparation } from '$lib/server/services/agent/runs/instructions';
+import type { AgentToolRecovery } from '$lib/server/services/agent/runs/tool-recovery';
+import {
+	AgentToolApprovalRules,
+	type AgentToolApprovalPolicy
+} from '$lib/services/agent/tool-approval';
+import type { AgentTurnObserver } from '$lib/server/controllers/agent/controller';
 import {
 	createMcpToolSurface,
 	type McpSurfaceFactory
 } from '$lib/server/factories/agent/mcp-tool-factory';
-import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import type { AgentToolDiscoveryServices } from '$lib/server/factories/agent/tool-discovery-factory';
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
@@ -57,7 +62,6 @@ import {
 	type RunCheckpointWriter
 } from '$lib/server/services/agent/runs/checkpoints';
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
-import type { AgentRunner } from '$lib/server/services/agent/runs/contracts';
 import {
 	AgentImagePreparationService,
 	type AgentImagePreparation
@@ -135,8 +139,8 @@ export interface AgentCapabilityInput {
 
 export interface AgentCapability {
 	readonly runStatus: AgentRunStatusRules;
-	readonly streamPresentation: Pick<AgentStreamPresentation, 'segments'>;
-	readonly conversationHistory: Pick<ConversationHistory, 'rewind'>;
+	readonly streamPresentation: AgentStreamPresentation;
+	readonly conversationHistory: ConversationHistory;
 	readonly imagePreparation: AgentImagePreparation;
 	readonly preferenceEditing: AgentPreferenceEditing;
 	readonly mcpSurface: McpSurfaceFactory;
@@ -165,7 +169,12 @@ export interface AgentCapability {
 	readonly runDecisions: AgentRunDecisionRepository;
 	readonly sessions: AgentSessionRepository;
 	readonly context: IAgentContext;
-	readonly runner: AgentRunner;
+	readonly turns: AgentTurns;
+	readonly prompts: AgentPromptPreparation;
+	readonly toolRecovery: AgentToolRecovery;
+	readonly toolApproval: AgentToolApprovalPolicy;
+	readonly toolConstruction: AgentToolConstruction;
+	readonly observeTurn: AgentTurnObserver;
 	readonly settlements: RunSettlement;
 	readonly noteActionRequests: NoteActionSubmission;
 	readonly runSignals: RunSignals;
@@ -198,39 +207,8 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	);
 	const context = createAgentContext(tokens);
 	const toolPreferences = new ToolAccess(new ToolPreferenceRecords(input.db));
-	const runner = new AgentExecution(
-		new AgentPromptService(),
-		new AgentToolRecoveryService(),
-		createAgentStream,
-		agentToolRegistry(input.controllers, input.toolRetriever, tokens, toolPreferences),
-		{
-			create: (actor, conversationId) =>
-				createConversationSession(
-					sessions,
-					actor,
-					conversationId,
-					createReplayVirtualizer(input.files, tokens)
-				)
-		},
-		Boolean(input.openRouterApiKey),
-		new AgentSdkInfrastructure(
-			input.openRouterApiKey,
-			input.openRouterBaseURL,
-			input.appURL,
-			undefined,
-			undefined
-		),
-		traceAgentTurn
-	);
-
 	return {
-		mcpSurface: (context) =>
-			createMcpToolSurface({
-				...context,
-				controllers: input.controllers(),
-				tokens,
-				toolRetriever: input.toolRetriever
-			}),
+		mcpSurface: createMcpToolSurface,
 		imagePreparation: new AgentImagePreparationService(),
 		runStatus: new AgentRunStatusService(),
 		streamPresentation: new AgentStreamPresentationService(),
@@ -242,7 +220,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		conversationMessages: conversations,
 		toolActivity: new ToolActivityProjection(),
 		traceContext: traceContextReader,
-		conversationHistory: new ConversationHistoryService(sessions),
+		conversationHistory: new ConversationHistoryService(sessions, input.files, tokens),
 		preferences,
 		models,
 		preferenceEditing: new AgentPreferenceEditingService(),
@@ -261,7 +239,18 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		runDecisions,
 		sessions,
 		context,
-		runner,
+		turns: new AgentTurnService(
+			createAgentProviders({
+				apiKey: input.openRouterApiKey,
+				baseURL: input.openRouterBaseURL,
+				appURL: input.appURL
+			})
+		),
+		prompts: new AgentPromptService(),
+		toolRecovery: new AgentToolRecoveryService(),
+		toolApproval: new AgentToolApprovalRules(),
+		toolConstruction: createAgentToolConstruction(input.controllers),
+		observeTurn: traceAgentTurn,
 		settlements,
 		noteActionRequests: new NoteActionRequests(runs, runEvents, conversationRepository),
 		runSignals

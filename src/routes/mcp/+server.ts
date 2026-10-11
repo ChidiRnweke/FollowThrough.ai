@@ -28,18 +28,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	// An MCP client has no ambient project, so the user's workspace-wide tool
 	// selection is the whole story here; project overrides apply in-app only.
-	const controllers = AppFactory.controllers();
-	const preferences = await controllers.toolPreferences().list(authenticated.actor);
-	const disabled = new Set(
-		preferences.filter((preference) => !preference.enabled).map((preference) => preference.name)
-	);
-
-	const server = AppFactory.mcpSurface({
-		actor: authenticated.actor,
-		scope: authenticated.scope,
-		provenanceId: authenticated.provenanceId,
-		toolAccess: { isEnabled: (toolName) => !disabled.has(toolName) }
-	}).open();
+	const session = await AppFactory.controllers()
+		.agentHarness()
+		.openMcpTools(authenticated.actor, authenticated.scope, authenticated.provenanceId);
+	const server = AppFactory.mcpSurface(session).open();
 
 	// Stateless: no session to keep alive between requests, so this survives
 	// process restarts and multiple instances without sticky routing.

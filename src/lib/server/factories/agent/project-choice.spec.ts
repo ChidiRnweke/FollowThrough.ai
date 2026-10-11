@@ -17,7 +17,7 @@ import {
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
-import { createAgentToolSurface } from './agent-tool-factory';
+import { createAgentToolSurface } from '$lib/testing/agent/fixtures/tool-surface';
 
 const toolsFor = (hasProject: boolean) => {
 	const projects = new InMemoryProjectRepository();

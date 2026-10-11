@@ -15,7 +15,7 @@ const cursorAfter = (request: Request, url: URL): string => {
 
 export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 	const actor = AppFactory.actor(locals);
-	const agent = AppFactory.controllers().agent();
+	const agent = AppFactory.controllers().agentHarness();
 	const runId = params.runId as AgentRunId;
 	// Subscribe before the stream starts, so a notification between the ownership check and the
 	// first replay still triggers a flush.

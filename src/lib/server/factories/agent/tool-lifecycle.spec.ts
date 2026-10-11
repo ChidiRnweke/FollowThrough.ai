@@ -1,16 +1,15 @@
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { streamExecutionFixture } from '$lib/testing/agent/fixtures/stream-execution';
 import type { ProviderStreamEvent } from '$lib/models/agent';
-import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { Agent, Runner, RunState } from '@openai/agents';
 import { describe, expect, it } from 'vitest';
-import { createAgentToolSurface } from './agent-tool-factory';
+import { createAgentToolSurface } from '$lib/testing/agent/fixtures/tool-surface';
 const noteMarkdown = new NoteMarkdownCodec();
 
 import type { NotesDependencies } from '$lib/server/controllers/notes/controller';
-import type { AgentToolCompletionObserver } from '$lib/server/services/agent/runs/contracts';
+import type { ToolCompletionRecorder } from '$lib/testing/agent/fixtures/tool-surface';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {
 	InMemoryToolBatchModel,
@@ -18,7 +17,7 @@ import {
 } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
 
 import type { AgentEvent, AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
-import { parseProviderStreamEvent } from '$lib/server/adapters/agent/provider-events';
+import { parseProviderStreamEvent } from '$lib/server/infrastructure/agents/provider-events';
 import {
 	noteBuilder,
 	testActor,
@@ -30,7 +29,7 @@ const scenario = (
 	count: number,
 	mode: AgentExecutionMode,
 	options: {
-		executor?: AgentToolCompletionObserver;
+		executor?: ToolCompletionRecorder;
 		signal?: AbortSignal;
 		markdown?: NotesDependencies['markdown'];
 	} = {}
@@ -51,7 +50,7 @@ const scenario = (
 			options.executor ?? { completed: async () => {} },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
-			restoredToolReviews(fixture.factory, testActor(), pending),
+			pending,
 			options.signal ?? new AbortController().signal
 		);
 	const registry = createRegistry();

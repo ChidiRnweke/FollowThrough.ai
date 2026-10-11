@@ -1,84 +1,36 @@
-import type {
-	AgentRunId,
-	ConversationId,
-	AgentEvent,
-	AgentRunContext,
-	PreparedAgentRun,
-	ProviderStreamEvent
-} from '$lib/models/agent';
-import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import type { DateTime } from '$lib/models/workspace';
-import { AgentExecution } from '$lib/server/controllers/agent/execution';
-import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
-import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
-import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemoryExecutionInfrastructure } from '$lib/testing/agent/fakes/in-memory-execution';
-const timestamp = '2026-01-01T00:00:00.000Z' as DateTime;
-const resolvedContext: AgentRunContext = {
-	contextNotes: [],
-	contextResources: [],
-	skills: { items: [] }
-};
-const run: PreparedAgentRun = {
-	kind: 'agent',
-	id: '00000000-0000-4000-8000-000000000098' as AgentRunId,
-	userId: testActor().userId,
-	conversationId: '00000000-0000-4000-8000-000000000099' as ConversationId,
-	model: 'local/test',
-	executionMode: 'approval_required',
-	status: 'running',
-	requestId: 'request-provider-test',
-	pendingDecisions: [],
-	contextSnapshot: resolvedContext,
-	inputSnapshot: {
-		conversationId: '00000000-0000-4000-8000-000000000099' as ConversationId,
-		prompt: 'Help'
-	},
-	createdAt: timestamp,
-	updatedAt: timestamp
-};
+import type { AgentEvent, ConversationId, ProviderStreamEvent } from '$lib/models/agent';
+import { agentContextFixture } from '$lib/testing/agent/fixtures/context';
+import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 
+/** The run lifecycle events the harness records around a turn's own events. */
+const LIFECYCLE: ReadonlySet<AgentEvent['type']> = new Set([
+	'run_queued',
+	'run_started',
+	'completed',
+	'failed',
+	'cancelled',
+	'resources_stale'
+]);
+
+/** Runs complete agent runs whose provider streams `events`, and reads back what each recorded. */
 export const streamExecutionFixture = (events: readonly ProviderStreamEvent[]) => {
-	const infrastructure = new InMemoryExecutionInfrastructure(events);
-	const execution = new AgentExecution(
-		new AgentPromptService(),
-		new AgentToolRecoveryService(),
-		createAgentStream,
-		async () => ({
-			agentTools: () => [],
-			offeredToolNames: () => [],
-			reviewDecision: (pending) => pending,
-			catalog: () => []
-		}),
-		{
-			create: () => ({
-				getSessionId: async () => run.conversationId,
-				getItems: async () => [],
-				addItems: async () => {},
-				popItem: async () => undefined,
-				clearSession: async () => {},
-				snapshot: async () => []
-			})
-		},
-		true,
-		infrastructure
-	);
+	const fixture = agentContextFixture();
+	fixture.turns.events = [...events];
 	const collect = async (): Promise<AgentEvent[]> => {
-		const result: AgentEvent[] = [];
-		for await (const update of execution.execute({
-			actor: testActor(),
-			run,
-			request: run.inputSnapshot,
-			imageInput: { kind: 'none' },
-			webSearch: CHAT_WEB_SEARCH_DEFAULTS,
-			context: resolvedContext,
-			signal: new AbortController().signal,
-			toolExecutor: { completed: async () => {} }
-		})) {
-			if (update.type === 'event') result.push(update.event);
-		}
-		return result;
+		const before = new Set(fixture.runs.runs.map((run) => run.id));
+		const recorded = () => {
+			const run = fixture.runs.runs.find((candidate) => !before.has(candidate.id));
+			return fixture.runs.events
+				.filter((record) => record.runId === run?.id)
+				.map((record) => record.event)
+				.filter((event) => !LIFECYCLE.has(event.type));
+		};
+		await fixture.builder.build(
+			testActor(),
+			{ conversationId: crypto.randomUUID() as ConversationId, prompt: 'Help' },
+			{ provenanceId: testProvenanceId() }
+		);
+		return recorded();
 	};
-	return { collect, infrastructure };
+	return { collect, turns: fixture.turns };
 };

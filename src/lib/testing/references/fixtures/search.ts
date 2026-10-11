@@ -1,7 +1,10 @@
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
 import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import {
 	References,
 	type ReferencesDependencies
@@ -66,9 +69,9 @@ export const referenceSearchFixture = () => {
 		suggestionCreator: suggestions,
 		transactionRunner: transactions
 	};
-	const agent = new Agent(
+	const agent = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),

@@ -1,7 +1,10 @@
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { type AgentRunId } from '$lib/models/agent';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -104,9 +107,9 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		todoCreator: todo.services.creator,
 		trustPolicyEvaluator: trust
 	});
-	const agent = new Agent(
+	const agent = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),

@@ -23,7 +23,7 @@ export const init: ServerInit = async () => {
 	const controllers = AppFactory.controllers();
 	// Agent recovery first: it fails every interrupted run, and the workflow
 	// recoveries below move queued runs to running.
-	const interrupted = await controllers.agent().recoverInterruptedRuns();
+	const interrupted = await controllers.agentHarness().recoverInterruptedRuns();
 	const queued =
 		(await controllers.todos().recoverQueuedPromiseRuns()) +
 		(await controllers.references().recoverQueuedReferenceRuns()) +

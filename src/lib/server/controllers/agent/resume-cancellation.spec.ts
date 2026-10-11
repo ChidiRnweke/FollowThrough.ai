@@ -6,7 +6,7 @@ const runStatus = new AgentRunStatusService();
 
 it('still aborts the resumed provider after separate decisions reach the queued run', async () => {
 	const fixture = agentSubmissionFixture('approval');
-	fixture.runner.outcome = {
+	fixture.turns.outcome = {
 		type: 'approval_checkpoint',
 		serializedState: 'provider-checkpoint',
 		sessionItems: [],
@@ -26,9 +26,9 @@ it('still aborts the resumed provider after separate decisions reach the queued 
 				throw new Error('Approval is not parked');
 		});
 		fixture.pauseExecution();
-		fixture.runner.completion = completion.promise;
-		fixture.runner.abortable = true;
-		fixture.runner.outcome = { type: 'completed', sessionItems: [] };
+		fixture.turns.completion = completion.promise;
+		fixture.turns.abortable = true;
+		fixture.turns.outcome = { type: 'completed', sessionItems: [] };
 		await fixture.controller.decide(testActor(), {
 			runId: receipt.runId,
 			callId: 'call-a',
@@ -41,10 +41,10 @@ it('still aborts the resumed provider after separate decisions reach the queued 
 		});
 		fixture.release();
 		await vi.waitFor(() => {
-			if (fixture.runner.signals.length !== 2) throw new Error('Provider has not resumed');
+			if (fixture.turns.signals.length !== 2) throw new Error('Provider has not resumed');
 		});
 		await fixture.controller.cancel(testActor(), receipt.runId);
-		expect(fixture.runner.signals.at(-1)?.aborted).toBe(true);
+		expect(fixture.turns.signals.at(-1)?.aborted).toBe(true);
 	} finally {
 		completion.resolve();
 		fixture.release();

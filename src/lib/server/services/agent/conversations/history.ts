@@ -2,12 +2,14 @@ import type { ActorContext } from '$lib/models/identity';
 import type {
 	ConversationId,
 	PersistedSessionItem,
-	FunctionCallResultSessionItem,
 	UserContentPart,
-	UserMessageSessionItem,
-	SessionJsonObject
+	UserMessageSessionItem
 } from '$lib/models/agent';
+import { sessionJsonSchema, type ReplayContent, type ReplayPreparation } from '$lib/models/agent';
+import type { TokenCounter } from '$lib/models/tokenization';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
+import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
+import { createHash } from 'node:crypto';
 const INLINE_IMAGE_PLACEHOLDER = '[image omitted from history; ask the user to re-attach it]';
 
 const isInlineImage = (value: string): boolean =>
@@ -42,16 +44,16 @@ const withoutInlineImages = (item: PersistedSessionItem): PersistedSessionItem =
 	return repaired;
 };
 
-const sessionOutputText = (item: FunctionCallResultSessionItem): string | undefined => {
-	const { output } = item;
-	if (typeof output === 'string') return output;
-	return 'type' in output ? output.text : undefined;
-};
-
+/** Reuses the measured boundary already enforced for attached context notes. */
+const REPLAY_FILE_THRESHOLD_TOKENS = 4000;
 const isDiagramWrite = (name: string): boolean =>
 	name === 'create_diagram' || name === 'edit_diagram';
-const DIAGRAM_SOURCE_PLACEHOLDER =
-	'[source omitted from history; call read_canvas_diagram to read the current diagram]';
+
+const safeSegment = (value: string): string => {
+	const safe = value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
+	return safe.length > 0 ? safe : 'content';
+};
+
 export interface ConversationHistory {
 	rewind(
 		items: readonly PersistedSessionItem[],
@@ -61,22 +63,23 @@ export interface ConversationHistory {
 		actor: ActorContext,
 		conversationId: ConversationId
 	): Promise<readonly PersistedSessionItem[]>;
-	persistable(items: readonly PersistedSessionItem[]): readonly PersistedSessionItem[];
-	diagramResults(
+	/**
+	 * The items to store after a turn: inline images are dropped, and large replay content
+	 * moves into agent files the model can read back with grep or sed.
+	 */
+	snapshot(
+		actor: ActorContext,
+		conversationId: ConversationId,
 		items: readonly PersistedSessionItem[]
-	): readonly { readonly callId: string; readonly text: string }[];
-	replaySources(
-		items: readonly PersistedSessionItem[],
-		failed: ReadonlySet<string>
-	): readonly { readonly index: number; readonly json: string }[];
-	present(
-		items: readonly PersistedSessionItem[],
-		documents: ReadonlyMap<number, SessionJsonObject | undefined>
-	): readonly PersistedSessionItem[];
+	): Promise<readonly PersistedSessionItem[]>;
 }
-/** Prepares stored history for provider replay while preserving complete persisted diagrams. */
+/** Stored agent conversation history, kept small enough to replay to the provider. */
 export class ConversationHistoryService implements ConversationHistory {
-	constructor(private readonly repository: AgentSessionRepository) {}
+	constructor(
+		private readonly repository: AgentSessionRepository,
+		private readonly files: AgentFileRepository,
+		private readonly tokens: TokenCounter
+	) {}
 	rewind(
 		items: readonly PersistedSessionItem[],
 		ordinal: number
@@ -90,42 +93,113 @@ export class ConversationHistoryService implements ConversationHistory {
 		const rows = await this.repository.list(actor, conversationId);
 		return rows.map((row) => withoutInlineImages(row.item));
 	}
-	persistable(items: readonly PersistedSessionItem[]): readonly PersistedSessionItem[] {
-		return items.map(withoutInlineImages);
-	}
-	diagramResults(
+	snapshot(
+		actor: ActorContext,
+		conversationId: ConversationId,
 		items: readonly PersistedSessionItem[]
-	): readonly { readonly callId: string; readonly text: string }[] {
-		return items.flatMap((item) => {
-			if (item.type !== 'function_call_result' || !isDiagramWrite(item.name)) return [];
-			const text = sessionOutputText(item);
-			return text === undefined ? [] : [{ callId: item.callId, text }];
-		});
+	): Promise<readonly PersistedSessionItem[]> {
+		return Promise.all(
+			items.map(withoutInlineImages).map((item) => this.virtualize(actor, conversationId, item))
+		);
 	}
-	replaySources(
-		items: readonly PersistedSessionItem[],
-		failed: ReadonlySet<string>
-	): readonly { readonly index: number; readonly json: string }[] {
-		return items.flatMap((item, index) => {
-			if (item.type !== 'function_call' && item.type !== 'function_call_result') return [];
-			if (!isDiagramWrite(item.name) || failed.has(item.callId)) return [];
-			const json = item.type === 'function_call' ? item.arguments : sessionOutputText(item);
-			return json === undefined ? [] : [{ index, json }];
-		});
+
+	private virtualize(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		item: PersistedSessionItem
+	): Promise<PersistedSessionItem> | PersistedSessionItem {
+		const prepared = this.prepare(item);
+		if (prepared.kind === 'unchanged') return prepared.item;
+		return this.apply(
+			actor,
+			conversationId,
+			prepared.kind === 'arguments'
+				? { ...prepared, value: sessionJsonSchema.parse(JSON.parse(prepared.item.arguments)) }
+				: prepared
+		);
 	}
-	present(
-		items: readonly PersistedSessionItem[],
-		documents: ReadonlyMap<number, SessionJsonObject | undefined>
-	): readonly PersistedSessionItem[] {
-		return items.map((item, index) => {
-			const parsed = documents.get(index);
-			if (!parsed || typeof parsed.source !== 'string') return item;
-			const json = JSON.stringify({ ...parsed, source: DIAGRAM_SOURCE_PLACEHOLDER });
-			if (item.type === 'function_call') return { ...item, arguments: json };
-			if (item.type !== 'function_call_result') return item;
-			if (typeof item.output === 'string') return { ...item, output: json };
-			return 'type' in item.output ? { ...item, output: { ...item.output, text: json } } : item;
-		});
+
+	private prepare(item: PersistedSessionItem): ReplayPreparation {
+		switch (item.type) {
+			case 'function_call':
+				return isDiagramWrite(item.name)
+					? { kind: 'unchanged', item }
+					: { kind: 'arguments', item };
+			case 'function_call_result':
+				return isDiagramWrite(item.name) ? { kind: 'unchanged', item } : { kind: 'record', item };
+			case 'user_message':
+			case 'assistant_message':
+				return { kind: 'record', item };
+			default:
+				return { kind: 'unchanged', item };
+		}
+	}
+	private async apply(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		content: ReplayContent
+	): Promise<PersistedSessionItem> {
+		if (content.kind === 'arguments')
+			return {
+				...content.item,
+				arguments: JSON.stringify(
+					await this.walk(
+						actor,
+						conversationId,
+						content.value,
+						safeSegment(content.item.callId),
+						'arguments'
+					)
+				)
+			};
+		const item = content.item;
+		if (item.type === 'function_call_result')
+			return this.walk(actor, conversationId, item, safeSegment(item.callId), 'item');
+		// A message has no call id; its content hash is the stable storage identity.
+		return this.walk(
+			actor,
+			conversationId,
+			item,
+			safeSegment(createHash('sha256').update(JSON.stringify(item)).digest('hex').slice(0, 16)),
+			'message'
+		);
+	}
+
+	private async walk<T>(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		value: T,
+		callId: string,
+		location: string
+	): Promise<T> {
+		if (typeof value === 'string') {
+			if (this.tokens.count(value) <= REPLAY_FILE_THRESHOLD_TOKENS) return value;
+			const checksum = createHash('sha256').update(value).digest('hex');
+			const category = location.startsWith('message.') ? 'history' : 'tool-results';
+			const path = `/conversations/${conversationId}/${category}/${callId}/${safeSegment(location)}-${checksum.slice(0, 12)}.txt`;
+			const stored = await this.files.store(actor, {
+				conversationId,
+				path,
+				mediaType: 'text/plain',
+				content: value
+			});
+			return `[content stored at ${path}; ${stored.metadata.byteSize} bytes, ${stored.metadata.tokenCount} tokens, ${stored.metadata.lineCount} lines; use grep or sed]` as T;
+		}
+		if (Array.isArray(value)) {
+			return (await Promise.all(
+				value.map((entry, index) =>
+					this.walk(actor, conversationId, entry, callId, `${location}.${index}`)
+				)
+			)) as T;
+		}
+		if (value === null || typeof value !== 'object') return value;
+		const entries = await Promise.all(
+			Object.entries(value).map(async ([key, entry]) => [
+				key,
+				await this.walk(actor, conversationId, entry, callId, `${location}.${key}`)
+			])
+		);
+		return Object.fromEntries(entries) as T;
 	}
 }
 

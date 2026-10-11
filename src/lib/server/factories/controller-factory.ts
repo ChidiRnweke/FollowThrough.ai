@@ -1,4 +1,4 @@
-import type { AgentController } from '../controllers/agent/controller';
+import type { AgentHarness } from '../controllers/agent/controller';
 import type { AgentFilesController } from '../controllers/agent-files/controller';
 import type { AgentSettingsController } from '../controllers/agent/settings/controller';
 import type { ToolPreferencesController } from '../controllers/agent/tool-preferences/controller';
@@ -35,7 +35,7 @@ export interface ControllerFactory {
 	diagramStudio(): DiagramStudioController;
 	suggestions(): SuggestionsController;
 	skills(): SkillsController;
-	agent(): AgentController;
+	agentHarness(): AgentHarness;
 	agentSettings(): AgentSettingsController;
 	userSettings(): UserSettingsController;
 	apiTokens(): ApiTokensController;

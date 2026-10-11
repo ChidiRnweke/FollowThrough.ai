@@ -7,7 +7,11 @@ import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { InMemoryAgentRunner } from '$lib/testing/agent/fakes/in-memory-agent';
+import { InMemoryAgentTurns } from '$lib/testing/agent/fakes/in-memory-agent-turns';
+import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
+import { harnessTurnDependencies } from '$lib/testing/agent/fixtures/harness';
+import { ConversationHistoryService } from '$lib/server/services/agent/conversations/history';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
@@ -25,7 +29,10 @@ import { ConversationRecords } from '$lib/server/repositories/agent/postgres/con
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { actor, context, now, seedProvenance, notifications } from '../database-harness';
 
@@ -64,18 +71,25 @@ const approvalController = (db: typeof context.db) => {
 	const { database, transactionRunner } = createTransactionContext(db);
 	const runs = new AgentRunRecords(database);
 	const events = new AgentRunEventRecords(database);
-	const runner = new InMemoryAgentRunner();
+	const runner = new InMemoryAgentTurns();
 	const completion = Promise.withResolvers<void>();
 	runner.completion = completion.promise;
 	runner.abortable = true;
-	const controller = new Agent(
+	const controller = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			approvals: new RunApprovals(runs),
-			runner,
 			sessions: new AgentSessionRecords(database),
+			...harnessTurnDependencies(
+				runner,
+				new ConversationHistoryService(
+					new AgentSessionRecords(database),
+					new InMemoryAgentFiles(),
+					testTokenizer
+				)
+			),
 			conversationMessages: new ConversationArchive(new ConversationRecords(database)),
 			conversationSessions: new ConversationArchive(new ConversationRecords(database)),
 			events,

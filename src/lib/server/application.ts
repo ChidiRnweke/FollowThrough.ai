@@ -233,7 +233,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		runDecisions,
 		sessions: agentSessions,
 		context: agentContext,
-		runner: agentRunner,
 		settlements: runSettlements,
 		runSignals
 	} = agentCapability;
@@ -432,7 +431,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionRejecter: suggestions.rejecter,
 			suggestionReverter: suggestions.reverter
 		},
-		agent: {
+		agentHarness: {
 			runStatus: agentCapability.runStatus,
 			streamPresentation: agentCapability.streamPresentation,
 			conversationHistory: agentCapability.conversationHistory,
@@ -460,7 +459,16 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner,
 			defaultModel: defaultAgentModel,
 			defaultVisionModel,
-			runner: agentRunner,
+			turns: agentCapability.turns,
+			prompts: agentCapability.prompts,
+			toolRecovery: agentCapability.toolRecovery,
+			agentAvailable: agentCapability.agentAvailable,
+			...agentCapability.toolConstruction,
+			toolPreferences: agentCapability.toolPreferences,
+			toolCatalog: agentCapability.toolCatalog,
+			toolApproval: agentCapability.toolApproval,
+			toolSearch: knowledgeSearch.toolDiscovery,
+			observeTurn: agentCapability.observeTurn,
 			settlements: runSettlements,
 			runSignals,
 			contextFormatter: agentContext,

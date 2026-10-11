@@ -5,7 +5,7 @@ import { ReferencePresentationService } from '$lib/services/references/presentat
 import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { RelationshipCandidatesService } from '$lib/services/relationships/candidates';
 import { controllerSurfaces } from './controller-surfaces';
-import { Agent, type AgentDependencies } from '../controllers/agent/controller';
+import { AgentSdkHarness, type AgentHarnessDependencies } from '../controllers/agent/controller';
 import { AgentFiles, type AgentFilesDependencies } from '../controllers/agent-files/controller';
 import {
 	AgentSettings,
@@ -68,7 +68,7 @@ export interface ProductionControllerDependencies {
 	diagramStudio: DiagramStudioDependencies;
 	suggestions: SuggestionsDependencies;
 	skills: SkillsDependencies;
-	agent: AgentDependencies;
+	agentHarness: AgentHarnessDependencies;
 	agentSettings: AgentSettingsDependencies;
 	userSettings: UserSettingsDependencies;
 	apiTokens: ApiTokensDependencies;
@@ -170,11 +170,11 @@ export class ProductionControllerFactory implements ControllerFactory {
 			controllerSurfaces.skills
 		);
 	}
-	agent(): ReturnType<ControllerFactory['agent']> {
+	agentHarness(): ReturnType<ControllerFactory['agentHarness']> {
 		return instrumentedController(
-			'agent',
-			new Agent(new WorkspaceCommandRulesService(), this.dependencies.agent),
-			controllerSurfaces.agent
+			'agentHarness',
+			new AgentSdkHarness(new WorkspaceCommandRulesService(), this.dependencies.agentHarness),
+			controllerSurfaces.agentHarness
 		);
 	}
 	agentSettings(): ReturnType<ControllerFactory['agentSettings']> {

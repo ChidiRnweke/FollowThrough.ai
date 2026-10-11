@@ -33,7 +33,7 @@ afterEach(async () => {
 
 const awaitingApproval = async (pendingDecisions: readonly PendingAgentDecision[]) => {
 	const fixture = setup('approval');
-	fixture.runner.outcome = {
+	fixture.turns.outcome = {
 		type: 'approval_checkpoint',
 		serializedState: 'provider-checkpoint',
 		sessionItems: [],
@@ -325,14 +325,14 @@ describe('durable agent lifecycle commands', () => {
 	});
 
 	it('marks a running run as cancelling and aborts its in-flight execution', async () => {
-		const { controller, runner } = setup('running');
+		const { controller, turns } = setup('running');
 		const receipt = await controller.submit(testActor(), {
 			requestId: '10000000-0000-4000-8000-00000000000c',
 			input: 'Stop mid-stream'
 		});
-		await runner.started.promise;
+		await turns.started.promise;
 		const snapshot = await controller.cancel(testActor(), receipt.runId);
-		expect({ status: snapshot.run.status, aborted: runner.signals.at(-1)?.aborted }).toEqual({
+		expect({ status: snapshot.run.status, aborted: turns.signals.at(-1)?.aborted }).toEqual({
 			status: 'cancelling',
 			aborted: true
 		});
@@ -382,12 +382,12 @@ describe('durable agent lifecycle commands', () => {
 		it('settles the run when the executor never unwinds', async () => {
 			vi.useFakeTimers();
 			try {
-				const { controller, runs, runner } = setup('running');
+				const { controller, runs, turns } = setup('running');
 				const receipt = await controller.submit(testActor(), {
 					requestId: '10000000-0000-4000-8000-00000000000f',
 					input: 'Hang forever'
 				});
-				await runner.started.promise;
+				await turns.started.promise;
 				await controller.cancel(testActor(), receipt.runId);
 				await vi.advanceTimersByTimeAsync(10_000);
 				expect(runs.runs.find((run) => run.id === receipt.runId)?.status).toBe('cancelled');
@@ -399,12 +399,12 @@ describe('durable agent lifecycle commands', () => {
 		it('appends exactly one cancelled event when the executor beats the backstop', async () => {
 			vi.useFakeTimers();
 			try {
-				const { controller, runs, runner } = setup('abortable');
+				const { controller, runs, turns } = setup('abortable');
 				const receipt = await controller.submit(testActor(), {
 					requestId: '10000000-0000-4000-8000-000000000010',
 					input: 'Settle promptly'
 				});
-				await runner.started.promise;
+				await turns.started.promise;
 				await controller.cancel(testActor(), receipt.runId);
 				await vi.advanceTimersByTimeAsync(10_000);
 				expect(
@@ -542,12 +542,12 @@ describe('durable agent lifecycle commands', () => {
 	});
 
 	it('manual retry creates ancestry without another prompt', async () => {
-		const { controller, conversations, runner, runs } = setup('running');
+		const { controller, conversations, turns, runs } = setup('running');
 		const receipt = await controller.submit(testActor(), {
 			requestId: '10000000-0000-4000-8000-000000000009',
 			input: 'Try this once'
 		});
-		await runner.started.promise;
+		await turns.started.promise;
 		await controller.failRun(receipt.runId, new Error('Provider unavailable'));
 		const retried = await controller.retry(
 			testActor(),

@@ -1,5 +1,4 @@
 import { NotFoundError } from '$lib/errors';
-import type { AgentEvent, AgentExecutionUpdate, WebResearchSettings } from '$lib/models/agent';
 import type { ToolDescriptor } from '$lib/models/agent/tool-index';
 import type { ActorContext } from '$lib/models/identity';
 import type { Note, NoteId, TextSelection } from '$lib/models/notes';
@@ -7,43 +6,11 @@ import type { ProjectId } from '$lib/models/projects';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { Skill, SkillSummary } from '$lib/models/skills';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
-import type { AgentToolDiscoveryServices } from '$lib/server/factories/agent/tool-discovery-factory';
-import type { AgentRunner, AgentWorkflowToolbox } from '$lib/server/services/agent/runs/contracts';
+import type { ToolRanking } from '$lib/server/services/agent/tools/tool-search';
+import type { AgentWorkflowToolbox } from '$lib/server/services/agent/runs/contracts';
 import type { SkillFinder, SkillUsageRecorder } from '$lib/server/services/skills/library';
 
-export class InMemoryAgentRunner implements AgentRunner {
-	events: AgentEvent[] = [];
-	readonly started = Promise.withResolvers<void>();
-	completion: Promise<void> = Promise.resolve();
-	readonly signals: AbortSignal[] = [];
-	readonly researchSettings: WebResearchSettings[] = [];
-	abortable = false;
-	outcome: Extract<AgentExecutionUpdate, { type: 'completed' | 'approval_checkpoint' }> = {
-		type: 'completed',
-		sessionItems: []
-	};
-
-	async *execute(
-		input: Parameters<AgentRunner['execute']>[0]
-	): AsyncIterable<AgentExecutionUpdate> {
-		this.signals.push(input.signal);
-		this.researchSettings.push(input.webSearch);
-		this.started.resolve();
-		for (const event of this.events) yield { type: 'event', event };
-		const aborted = Promise.withResolvers<void>();
-		const onAbort = () => aborted.resolve();
-		if (input.signal.aborted) onAbort();
-		input.signal.addEventListener('abort', onAbort, { once: true });
-		try {
-			await (this.abortable ? Promise.race([this.completion, aborted.promise]) : this.completion);
-		} finally {
-			input.signal.removeEventListener('abort', onAbort);
-		}
-		yield this.outcome;
-	}
-}
-
-export class InMemoryToolRetriever implements ToolRetriever, AgentToolDiscoveryServices {
+export class InMemoryToolRetriever implements ToolRetriever, ToolRanking {
 	names: string[] = [];
 
 	async rank(_names: readonly string[], _query: string, _limit: number): Promise<string[]> {

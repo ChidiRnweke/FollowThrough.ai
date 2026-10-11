@@ -11,6 +11,7 @@ import type { ApiTokenScope } from '$lib/models/identity';
 import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { createMcpToolDefinitions } from '$lib/testing/agent/fixtures/tool-surface';
 import {
 	noteBuilder,
 	testActor,
@@ -28,15 +29,15 @@ const connect = async (
 		disabled?: readonly string[];
 	} = {}
 ): Promise<Client> => {
-	const server = createMcpToolSurface({
-		tokens: testTokenizer,
-		controllers: options.factory ?? ({} as ControllerFactory),
-		actor: testActor(),
-		scope,
-		provenanceId: testProvenanceId(),
-		toolRetriever: options.retriever ?? new InMemoryToolRetriever(),
-		toolAccess: { isEnabled: (name) => !(options.disabled ?? []).includes(name) }
-	}).open();
+	const session = createMcpToolDefinitions(
+		testTokenizer,
+		options.factory ?? ({} as ControllerFactory),
+		testActor(),
+		{ provenanceId: testProvenanceId() },
+		{ isEnabled: (name) => !(options.disabled ?? []).includes(name) },
+		options.retriever ?? new InMemoryToolRetriever()
+	).open(scope);
+	const server = createMcpToolSurface(session).open();
 	const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 	const client = new Client({ name: 'test', version: '1.0.0' });
 	await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);

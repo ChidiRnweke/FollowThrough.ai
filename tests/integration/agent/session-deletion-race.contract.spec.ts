@@ -4,7 +4,10 @@ import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { AgentRunEventRecords } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
@@ -27,9 +30,9 @@ const setup = async (suffix: string) => {
 		createdAt: now,
 		updatedAt: now
 	});
-	const controller = new Agent(
+	const controller = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			conversationMessages: journal,
 			conversationSessions: journal,

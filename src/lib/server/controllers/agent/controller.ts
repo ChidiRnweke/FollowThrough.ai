@@ -1,5 +1,9 @@
 import { RunPreparationCancelled } from '$lib/errors';
-import { CHAT_WEB_SEARCH_DEFAULTS, type WebResearchOptions } from '$lib/models/agent';
+import {
+	CHAT_WEB_SEARCH_DEFAULTS,
+	DEFAULT_AGENT_MAX_TURNS,
+	type WebResearchOptions
+} from '$lib/models/agent';
 import type { RunApprovalDecisions } from '$lib/server/services/agent/runs/approvals';
 import type { RunCancellationDecisions } from '$lib/server/services/agent/runs/cancellation';
 import type { RunCheckpointWriter } from '$lib/server/services/agent/runs/checkpoints';
@@ -30,6 +34,12 @@ import type {
 	PersistedSessionItem,
 	ResolvedAgentRun,
 	RunAgentInput,
+	AgentExecutionUpdate,
+	AgentRunImages,
+	WebResearchSettings,
+	AgentRunDecisionRecord,
+	ProviderToolCall,
+	AgentExecutionMode,
 	StagedAgentRunInput,
 	StoredAgentRunEventRecord,
 	SubmitAgentRunInput
@@ -71,9 +81,26 @@ import type {
 } from '$lib/server/services/agent/conversations/archive';
 import type { ToolActivityReader } from '$lib/server/services/agent/conversations/tool-activity';
 import type {
-	AgentRunner,
-	AgentToolCompletionObserver
-} from '$lib/server/services/agent/runs/contracts';
+	McpToolSession,
+	AgentTool,
+	AgentToolCompletion,
+	AgentToolPlan,
+	AgentToolPolicy,
+	AgentToolset
+} from '$lib/models/agent-tool-protocol';
+import type { AgentToolContext, McpToolContext } from '$lib/models/agent-tool-context';
+import type { AgentPayload } from '$lib/models/agent/payload';
+import { FIRST_CLASS_TOOL_NAMES, type ToolName } from '$lib/models/agent/tool-catalog';
+import type { ApiTokenScope } from '$lib/models/identity';
+import type { ProjectId } from '$lib/models/projects';
+import type { ProvenanceId } from '$lib/models/provenance';
+import type { AgentPromptPreparation } from '$lib/server/services/agent/runs/instructions';
+import type { AgentToolRecovery } from '$lib/server/services/agent/runs/tool-recovery';
+import type { AgentProviderTurn, AgentTurns } from '$lib/server/services/agent/runs/turns';
+import type { ToolPreferenceCapability } from '$lib/server/services/agent/tools/preferences';
+import type { ToolRanking } from '$lib/server/services/agent/tools/tool-search';
+import type { AgentToolApprovalPolicy } from '$lib/services/agent/tool-approval';
+import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
 import type {
 	AgentRunDecisionRepository,
 	AgentRunEventRepository,
@@ -96,13 +123,39 @@ const CANCELLATION_GRACE_MS = 10_000;
 
 class DuplicateSubmission extends Error {}
 
+interface AgentTurnContext {
+	readonly input: string;
+	readonly sessionId: string;
+	readonly model: string;
+	readonly userId?: string;
+	readonly runId?: string;
+	readonly parentTraceparent?: string;
+	readonly onRoot?: (traceparent: string) => void;
+}
+
+/** Wraps one model turn in an observation; the turn's output text is read when it ends. */
+export type AgentTurnObserver = <T>(
+	context: AgentTurnContext,
+	operation: () => AsyncIterable<T>,
+	output: () => string
+) => AsyncIterable<T>;
+
 /**
  * Application boundary for the agent: submitting runs, streaming their events, and
  * managing the conversations (chats) they happen in. Controllers know nothing about
  * transports; this one deals in run receipts, snapshots, and event cursors.
  */
-export interface AgentController {
+export interface AgentHarness {
 	execute(runId: AgentRunId, signal: AbortSignal): Promise<AgentRunExecutionOutcome>;
+	/**
+	 * The tools an MCP request may call: the user's tool selection applies, and a read-scoped
+	 * token reaches only read tools.
+	 */
+	openMcpTools(
+		actor: ActorContext,
+		scope: ApiTokenScope,
+		provenanceId: ProvenanceId
+	): Promise<McpToolSession>;
 	finishCancellation(runId: AgentRunId): Promise<AgentRun | undefined>;
 	failRun(runId: AgentRunId, error: Error): Promise<void>;
 	recoverInterruptedRuns(): Promise<number>;
@@ -227,13 +280,13 @@ export interface AgentController {
 }
 
 /**
- * Everything the {@link AgentController} needs to do its work, injected so the
+ * Everything the {@link AgentHarness} needs to do its work, injected so the
  * controller can be built and tested with repository and provider fakes.
  */
-export interface AgentDependencies {
+export interface AgentHarnessDependencies {
 	readonly runStatus: AgentRunStatusRules;
-	readonly streamPresentation: Pick<AgentStreamPresentation, 'segments'>;
-	readonly conversationHistory: Pick<ConversationHistory, 'rewind'>;
+	readonly streamPresentation: AgentStreamPresentation;
+	readonly conversationHistory: ConversationHistory;
 	readonly imagePreparation: AgentImagePreparation;
 	readonly modelSelection: IAgentModelSelectionService;
 	readonly modelChoices: IAgentModelChoiceService;
@@ -294,14 +347,34 @@ export interface AgentDependencies {
 
 	readonly provenance: ProvenanceRecorder;
 
-	readonly runner: AgentRunner;
+	/** The model provider's turns through the agents SDK. */
+	readonly turns: AgentTurns;
+	readonly prompts: AgentPromptPreparation;
+	readonly toolRecovery: AgentToolRecovery;
+	/** False until the deployment configures a model provider key. */
+	readonly agentAvailable: boolean;
+	/** Every tool an in-app run may call; the harness decides which it offers and how. */
+	readonly tools: (actor: ActorContext, context: AgentToolContext) => readonly AgentTool[];
+	/** Every tool an MCP client may call. */
+	readonly mcpTools: (actor: ActorContext, context: McpToolContext) => readonly AgentTool[];
+	/** Turns a run's tools and the harness's policy into the tools the SDK calls. */
+	readonly toolset: (tools: readonly AgentTool[], policy: AgentToolPolicy) => AgentToolset;
+	readonly toolPreferences: Pick<ToolPreferenceCapability, 'view'>;
+	readonly toolCatalog: AgentToolCatalog;
+	readonly toolApproval: Pick<AgentToolApprovalPolicy, 'requirement'>;
+	readonly toolSearch: ToolRanking;
+	/** Wraps each model turn in its trace. */
+	readonly observeTurn: AgentTurnObserver;
 
 	/** Run changes are published by the database on commit; this listens for them. */
 	readonly runSignals: RunSignals;
 }
 
-/** Concrete {@link AgentController} orchestrating the run lifecycle against its injected repositories and the background execution engine. */
-export class Agent implements AgentController {
+/**
+ * The agent harness on the OpenAI agents SDK: it runs each turn over the injected tool list,
+ * applying discovery, approval, review and tool preferences, and owns the run lifecycle.
+ */
+export class AgentSdkHarness implements AgentHarness {
 	async synchronize(
 		actor: ActorContext,
 		input: ConversationMutationRequest
@@ -334,7 +407,7 @@ export class Agent implements AgentController {
 	}
 	constructor(
 		private readonly workspaceCommandRules: WorkspaceCommandRules,
-		private readonly dependencies: AgentDependencies
+		private readonly dependencies: AgentHarnessDependencies
 	) {}
 
 	listSessions(
@@ -883,16 +956,11 @@ export class Agent implements AgentController {
 			const actor: ActorContext = { userId: run.userId };
 			const request = run.inputSnapshot;
 			const decisions = await this.dependencies.decisions.loadUnconsumed(run.id);
-			const toolExecutor: AgentToolCompletionObserver = {
-				completed: async (input, _output) => {
-					if (input.classification !== 'mutation') return;
-					await this.persistEvent(run, actor, {
-						type: 'resources_stale',
-						resources: ['workspace']
-					});
-				}
+			const completed = async (call: AgentToolCompletion, _output: AgentPayload) => {
+				if (call.classification !== 'mutation') return;
+				await this.persistEvent(run, actor, { type: 'resources_stale', resources: ['workspace'] });
 			};
-			for await (const update of this.dependencies.runner.execute({
+			for await (const update of this.turnUpdates({
 				actor,
 				run,
 				request,
@@ -907,7 +975,7 @@ export class Agent implements AgentController {
 				context: run.contextSnapshot,
 				...(decisions.length > 0 ? { decisions } : {}),
 				signal,
-				toolExecutor
+				completed
 			})) {
 				// A runner that swallows the abort and keeps yielding still settles
 				// here, at the next boundary, instead of wedging in `cancelling`.
@@ -978,6 +1046,291 @@ export class Agent implements AgentController {
 			if (signal.aborted || settled || error instanceof RunPreparationCancelled) return 'cancelled';
 			throw error;
 		}
+	}
+
+	async openMcpTools(
+		actor: ActorContext,
+		scope: ApiTokenScope,
+		provenanceId: ProvenanceId
+	): Promise<McpToolSession> {
+		const tools = this.dependencies.mcpTools(actor, { provenanceId });
+		const disabled = await this.disabledTools(actor);
+		const permitted = this.permittedTools(tools, disabled, scope === 'read' ? ['read'] : undefined);
+		const plan = this.toolPlan(permitted, []);
+		return {
+			tools,
+			plan,
+			discover: (query, limit) =>
+				this.rankTools(
+					permitted,
+					permitted.map((tool) => tool.name),
+					query,
+					limit
+				),
+			failed: (value) =>
+				this.dependencies.turns.toolOutcome({ kind: 'value', value }).kind === 'reported_failure'
+		};
+	}
+
+	/** One model turn of a run: its events as they stream, then a checkpoint or completion. */
+	private async *turnUpdates(input: {
+		readonly actor: ActorContext;
+		readonly run: ResolvedAgentRun;
+		readonly request: RunAgentInput;
+		readonly imageInput: AgentRunImages;
+		readonly webSearch: WebResearchSettings;
+		readonly context: AgentRunContext;
+		readonly decisions?: readonly AgentRunDecisionRecord[];
+		readonly signal: AbortSignal;
+		readonly completed: AgentToolPolicy['completed'];
+	}): AsyncIterable<AgentExecutionUpdate> {
+		const { actor, run, request, imageInput, webSearch, context, decisions = [], signal } = input;
+		signal.throwIfAborted();
+		if (!this.dependencies.agentAvailable)
+			throw new AgentProviderFailure(
+				'Agent chat is disabled until OPENROUTER_API_KEY is configured',
+				'CONFIGURATION',
+				false
+			);
+		const preparation = new AbortController();
+		const preparationSignal = AbortSignal.any([signal, preparation.signal]);
+		let turn: AgentProviderTurn | undefined;
+		try {
+			const tools = this.dependencies.tools(actor, {
+				provenanceId: run.provenanceId as ProvenanceId,
+				input: request,
+				model: run.model
+			});
+			const disabled = await this.disabledTools(actor, request.projectId);
+			signal.throwIfAborted();
+			const history = await this.dependencies.conversationHistory.load(actor, run.conversationId);
+			// The app's own images are described too when the chat model cannot see: a
+			// render left out here would simply vanish on a text-only model.
+			const visionDescriptions =
+				imageInput.kind === 'describe'
+					? await this.dependencies.turns.describeImages(
+							imageInput.images,
+							imageInput.model,
+							preparationSignal
+						)
+					: [];
+			const permitted = this.permittedTools(tools, disabled);
+			const catalog = this.discoveryCatalog(disabled);
+			const promoted = this.dependencies.toolRecovery.promoted(
+				this.dependencies.turns.calledTools(history),
+				run.pendingDecisions.map((decision) => decision.toolName),
+				catalog
+			);
+			// `promoted` re-enables tools an earlier turn of the conversation discovered. Without
+			// it the model's own transcript shows it calling a tool the run no longer offers, so it
+			// repeats the call and gets `Tool not found`.
+			const discovered = new Set<string>(promoted);
+			const plan = this.toolPlan(permitted, this.approvalRequired(run.executionMode));
+			const toolset = this.dependencies.toolset(tools, {
+				plan,
+				mode: run.executionMode,
+				isDiscovered: (name) => discovered.has(name),
+				discover: async (query, limit) => {
+					const found = await this.rankTools(permitted, catalog, query, limit);
+					for (const name of found) discovered.add(name);
+					return found;
+				},
+				completed: input.completed,
+				parked: run.pendingDecisions,
+				signal
+			});
+			// Only the tools the model can actually see this generation: the long tail is
+			// registered but gated, so naming it here would report an undiscovered tool as callable.
+			const offered = permitted
+				.map((tool) => tool.name)
+				.filter(
+					(name) => this.dependencies.toolCatalog.isFirstClass(name) || promoted.includes(name)
+				);
+			const recovery = this.dependencies.toolRecovery.configuration(offered, catalog);
+			let outputText = '';
+			// Captured by the turn observer before the first update is yielded, so the
+			// checkpoint below can hand the next resume the trace this run belongs to.
+			let traceparent = run.traceparent;
+			const { skills: instructionSkills, ...instructionContext } = context;
+			const instructions = this.dependencies.prompts.instructions(
+				instructionContext,
+				instructionSkills
+			);
+			const prompt = this.dependencies.prompts.message(
+				context,
+				request.prompt ?? '',
+				imageInput,
+				visionDescriptions
+			);
+			const dependencies = this.dependencies;
+			const started = await dependencies.turns.turn({
+				model: run.model,
+				instructions,
+				webSearch,
+				tools: toolset.tools,
+				conversationId: run.conversationId,
+				history,
+				prompt,
+				maxTurns: request.maxTurns ?? DEFAULT_AGENT_MAX_TURNS,
+				signal,
+				recovery,
+				decisions,
+				serializedState: run.serializedState
+			});
+			turn = started;
+			const runTurn = async function* (): AsyncGenerator<AgentExecutionUpdate> {
+				const activeCalls = new Map<string, ProviderToolCall>();
+				let streamed = false;
+				for await (const event of started.events) {
+					if (event.type === 'tool_called') {
+						const call = dependencies.streamPresentation.start(event.call);
+						activeCalls.set(call.callId, call);
+						yield {
+							type: 'event',
+							event: {
+								type: 'tool_started',
+								callId: call.callId,
+								name: dependencies.turns.toolName(call.name),
+								arguments: call.arguments
+							}
+						};
+					}
+					if (event.type === 'tool_output') {
+						const resolved = dependencies.streamPresentation.completed(event.call, activeCalls);
+						if (resolved.callId !== undefined) activeCalls.delete(resolved.callId);
+						yield {
+							type: 'event',
+							event: dependencies.streamPresentation.outcome(
+								{
+									...(resolved.callId === undefined ? {} : { callId: resolved.callId }),
+									name: dependencies.turns.toolName(resolved.name)
+								},
+								dependencies.turns.toolOutcome(event.call.output)
+							)
+						};
+					}
+					const reasoning = dependencies.streamPresentation.reasoning(event, streamed);
+					streamed = reasoning.streamed;
+					if (reasoning.event) yield { type: 'event', event: reasoning.event };
+					if (event.type === 'text_delta') {
+						outputText += event.text;
+						yield { type: 'event', event: { type: 'text_delta', text: event.text } };
+					}
+				}
+				const outcome = await started.outcome();
+				const sessionItems = await dependencies.conversationHistory.snapshot(
+					actor,
+					run.conversationId,
+					outcome.sessionItems
+				);
+				if (outcome.kind === 'approval') {
+					yield {
+						type: 'approval_checkpoint',
+						serializedState: outcome.serialize(),
+						...(traceparent ? { traceparent } : {}),
+						pendingDecisions: outcome.pending.map((pending) => toolset.checkpoint(pending)),
+						sessionItems
+					};
+					return;
+				}
+				yield { type: 'completed', sessionItems };
+			};
+			yield* this.dependencies.observeTurn(
+				{
+					input: request.prompt ?? '',
+					sessionId: run.conversationId,
+					model: run.model,
+					userId: actor.userId,
+					runId: run.id,
+					...(run.traceparent ? { parentTraceparent: run.traceparent } : {}),
+					onRoot: (value: string) => {
+						traceparent ??= value;
+					}
+				},
+				runTurn,
+				() => outputText
+			);
+		} catch (error) {
+			if (signal.aborted) throw error;
+			throw this.dependencies.turns.failure(error);
+		} finally {
+			preparation.abort();
+			await turn?.close();
+		}
+	}
+
+	/** The tools a user has switched off, for the whole workspace or for one project. */
+	private async disabledTools(
+		actor: ActorContext,
+		projectId?: ProjectId
+	): Promise<ReadonlySet<string>> {
+		const preferences = await this.dependencies.toolPreferences.view(
+			actor,
+			this.dependencies.toolCatalog.entries(),
+			projectId
+		);
+		return new Set(preferences.filter((preference) => !preference.enabled).map((p) => p.name));
+	}
+
+	/**
+	 * The one place the user's tool selection applies, so a switched-off tool disappears from
+	 * the in-app agent, from `search_tools`, from direct dispatch and from MCP at once.
+	 */
+	private permittedTools(
+		tools: readonly AgentTool[],
+		disabled: ReadonlySet<string>,
+		classifications?: readonly AgentTool['classification'][]
+	): readonly AgentTool[] {
+		return tools.filter(
+			(tool) =>
+				(!classifications || classifications.includes(tool.classification)) &&
+				(this.dependencies.toolCatalog.isLocked(tool.name) || !disabled.has(tool.name))
+		);
+	}
+
+	private toolPlan(
+		permitted: readonly AgentTool[],
+		approvalRequired: readonly ToolName[]
+	): AgentToolPlan {
+		const names = permitted.map((tool) => tool.name);
+		return {
+			initial: FIRST_CLASS_TOOL_NAMES.filter((name) => names.includes(name)),
+			discoverable: names.filter((name) => !this.dependencies.toolCatalog.isFirstClass(name)),
+			approvalRequired
+		};
+	}
+
+	private approvalRequired(mode: AgentExecutionMode): readonly ToolName[] {
+		return this.dependencies.toolCatalog
+			.entries()
+			.filter(
+				(entry) =>
+					this.dependencies.toolApproval.requirement(entry.classification, mode) ===
+					'approval_required'
+			)
+			.map((entry) => entry.name);
+	}
+
+	/** The long-tail tools `search_tools` ranks for an in-app run. */
+	private discoveryCatalog(disabled: ReadonlySet<string>): readonly string[] {
+		return this.dependencies.toolCatalog
+			.discoverable()
+			.filter(
+				(entry) => this.dependencies.toolCatalog.isLocked(entry.name) || !disabled.has(entry.name)
+			)
+			.map((entry) => entry.name);
+	}
+
+	private async rankTools(
+		permitted: readonly { readonly name: ToolName }[],
+		catalog: readonly string[],
+		query: string,
+		limit: number
+	): Promise<readonly ToolName[]> {
+		const candidates = catalog.filter((name) => !this.dependencies.toolCatalog.isFirstClass(name));
+		if (!candidates.length) return [];
+		const ranked = await this.dependencies.toolSearch.rank(candidates, query, limit);
+		return ranked.flatMap((name) => permitted.find((tool) => tool.name === name)?.name ?? []);
 	}
 
 	/**

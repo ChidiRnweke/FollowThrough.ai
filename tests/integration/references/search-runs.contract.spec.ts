@@ -4,7 +4,10 @@ import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
 import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
 import { type AgentRunId } from '$lib/models/agent';
 import type { Url } from '$lib/models/references';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import {
 	References,
 	type ReferencesDependencies
@@ -97,9 +100,9 @@ const setup = async (suffix: string) => {
 		selectionOrigins: notes.selectionOrigins,
 		suggestionCreator: suggestions.creator
 	};
-	const agent = new Agent(
+	const agent = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),

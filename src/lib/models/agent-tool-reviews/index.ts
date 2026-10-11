@@ -1,23 +1,5 @@
-import type { AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
-import type { PreparedAction, ToolPreparation } from '$lib/models/agent-tool-protocol';
-import type { AgentPayloadObject } from '$lib/models/agent/payload';
+import type { AgentExecutionMode } from '$lib/models/agent';
 import type { NoteChangeRequest, NoteChangeReview } from '$lib/models/notes';
-export interface ToolReviewReader {
-	review(content: string): NoteChangeReview;
-	request(args: AgentPayloadObject, kind: 'replace' | 'patch'): NoteChangeRequest;
-}
-export interface AgentToolReviewControl {
-	restore(pending: readonly PendingAgentDecision[]): void;
-	checkpoint(pending: PendingAgentDecision): PendingAgentDecision;
-	prepare(
-		name: string,
-		requirement: 'ready' | 'approval_required',
-		mode: AgentExecutionMode,
-		action: PreparedAction,
-		callId: string | undefined,
-		phase: 'approval' | 'execute'
-	): Promise<ToolPreparation>;
-}
 
 export type AgentNoteReviewPreparation =
 	| {
@@ -34,10 +16,6 @@ export interface AgentNoteReviewRequest {
 	readonly saved?: NoteChangeReview;
 }
 
-export interface ToolReviewState {
-	get(callId: string): NoteChangeReview | undefined;
-	save(callId: string, review: NoteChangeReview): void;
-}
 /** Protocol routes for tools that carry a serialized note review through approval. */
 export const reviewedNoteTools: readonly {
 	readonly name: string;

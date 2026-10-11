@@ -1,6 +1,6 @@
 import { AgentProviderFailure } from '$lib/errors';
 import type { ProviderStreamEvent } from '$lib/models/agent';
-import { parseProviderStreamEvent } from '$lib/server/adapters/agent/provider-events';
+import { parseProviderStreamEvent } from '$lib/server/infrastructure/agents/provider-events';
 import { streamExecutionFixture } from '$lib/testing/agent/fixtures/stream-execution';
 import { describe, expect, it } from 'vitest';
 const streamedItem = (
@@ -258,17 +258,18 @@ it('delivers the complete tool, reasoning and text sequence in provider order', 
 		{ type: 'text_delta', text: 'Done' }
 	]);
 });
-it('keeps simultaneous executions on one owner from sharing correlation state', async () => {
+it('keeps one execution’s open calls out of the next execution', async () => {
 	const fixture = streamExecutionFixture([]);
-	fixture.infrastructure.queuedEvents.push(
+	fixture.turns.queuedEvents.push(
 		[toolCalled({ callId: 'left', name: 'search' })],
 		[toolOutput({ name: 'get_note' })]
 	);
-	const [left, right] = await Promise.all([fixture.collect(), fixture.collect()]);
+	const left = await fixture.collect();
+	const right = await fixture.collect();
 	expect({
 		left,
 		right,
-		closed: fixture.infrastructure.providers.map((provider) => provider.closed)
+		closed: fixture.turns.closed
 	}).toEqual({
 		left: [{ type: 'tool_started', callId: 'left', name: 'search', arguments: {} }],
 		right: [{ type: 'tool_succeeded', name: 'get_note' }],

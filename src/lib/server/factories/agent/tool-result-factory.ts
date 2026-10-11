@@ -1,5 +1,5 @@
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
-import { ToolResultBoundary } from '$lib/server/adapters/agent/read-tool';
+import { ToolResultBoundary } from '$lib/server/factories/agent/tools/results';
 import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import { AgentToolPresentationService } from '$lib/server/services/agent/runs/tool-views';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';

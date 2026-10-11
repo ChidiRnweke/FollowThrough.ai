@@ -85,7 +85,7 @@ export async function runCase(
 	input: RunCaseInput
 ): Promise<AgentRunResult> {
 	const startedAt = Date.now();
-	const agent = lab.controllers.agent();
+	const agent = lab.controllers.agentHarness();
 	const receipt = await agent.submit(actor, {
 		requestId: randomUUID(),
 		input: input.prompt,
@@ -170,7 +170,7 @@ function waitForTerminalStatus(
 		const check = () => {
 			// audit-allow: silent-catch — the polling Promise propagates lookup failure through its reject continuation.
 			lab.controllers
-				.agent()
+				.agentHarness()
 				.getRun(actor, runId)
 				.then((snapshot) => {
 					if (TERMINAL.includes(snapshot.run.status)) finish(() => resolve(snapshot.run.status));
@@ -180,7 +180,7 @@ function waitForTerminalStatus(
 
 		// audit-allow: silent-catch — a failed subscription rejects the wait through `finish`.
 		lab.controllers
-			.agent()
+			.agentHarness()
 			.observeRun(actor, runId, check)
 			.then(
 				(stop) => {

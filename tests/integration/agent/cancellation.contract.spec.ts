@@ -20,7 +20,10 @@ import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { actor, context, now, seedProvenance, notifications } from '../database-harness';
 
@@ -58,9 +61,9 @@ const cancellationController = (db: typeof context.db) => {
 	const { database, transactionRunner } = createTransactionContext(db);
 	const runs = new AgentRunRecords(database);
 	const events = new AgentRunEventRecords(database);
-	return new Agent(
+	return new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			conversationMessages: new ConversationArchive(new ConversationRecords(database)),

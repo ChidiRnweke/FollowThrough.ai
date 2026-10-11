@@ -23,8 +23,15 @@ import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
-import { InMemoryAgentRunner } from '$lib/testing/agent/fakes/in-memory-agent';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
+import { InMemoryAgentTurns } from '$lib/testing/agent/fakes/in-memory-agent-turns';
+import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
+import { harnessTurnDependencies } from '$lib/testing/agent/fixtures/harness';
+import { ConversationHistoryService } from '$lib/server/services/agent/conversations/history';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { actor, context, now, seedProvenance, notifications } from '../database-harness';
 
@@ -61,11 +68,11 @@ const setup = async (suffix: string) => {
 		createdAt: now,
 		updatedAt: now
 	});
-	const runner = new InMemoryAgentRunner();
+	const runner = new InMemoryAgentTurns();
 	runner.events = [{ type: 'text_delta', text: 'Done' }];
-	const controller = new Agent(
+	const controller = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
@@ -80,7 +87,10 @@ const setup = async (suffix: string) => {
 			conversationMessages: new ConversationArchive(conversations),
 			conversationSessions: new ConversationArchive(conversations),
 			toolActivity: new ToolActivityProjection(),
-			runner,
+			...harnessTurnDependencies(
+				runner,
+				new ConversationHistoryService(sessions, new InMemoryAgentFiles(), testTokenizer)
+			),
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);

@@ -1,5 +1,8 @@
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import {
+	AgentSdkHarness,
+	type AgentHarnessDependencies
+} from '$lib/server/controllers/agent/controller';
 import {
 	Relationships,
 	type RelationshipsDependencies
@@ -73,9 +76,9 @@ export const relatedNoteFixture = () => {
 		runSettlements: settlements,
 		runSignals: new RunSignalService(runs, runs)
 	};
-	const agent = new Agent(
+	const agent = new AgentSdkHarness(
 		new WorkspaceCommandRulesService(),
-		capabilityDependencies<AgentDependencies>({
+		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),

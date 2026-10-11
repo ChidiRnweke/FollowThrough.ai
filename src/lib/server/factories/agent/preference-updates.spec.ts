@@ -71,7 +71,7 @@ import {
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ControllerFactory } from '../controller-factory';
-import { createAgentToolSurface } from './agent-tool-factory';
+import { createAgentToolSurface } from '$lib/testing/agent/fixtures/tool-surface';
 const settingsTool = (controller: AgentSettings) => {
 	const tool = createAgentToolSurface(
 		testTokenizer,
