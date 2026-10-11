@@ -1,4 +1,4 @@
-import { NOTE_REVISION_HISTORY_LIMIT, noteEtag } from '$lib/models/notes';
+import { noteEtag } from '$lib/models/notes';
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
@@ -109,18 +109,6 @@ describe('Note revision history invariants', () => {
 		await publishRepeatedly(content, controller, 2);
 		const result = await controller.listRevisions({ noteId: testNoteId() });
 		expect(result.revisions.filter((revision) => revision.isPublished)).toHaveLength(1);
-	});
-
-	// The whole point of snapshotting at publish rather than per keystroke is that history
-	// costs a bounded amount; without the cap a long-lived note grows without limit.
-	it('caps the history at the retention limit', async () => {
-		const { content, controller } = setup();
-		content.notes = [noteBuilder()];
-		await publishRepeatedly(content, controller, NOTE_REVISION_HISTORY_LIMIT + 5);
-		const result = await controller.listRevisions({ noteId: testNoteId() });
-		expect(result.revisions).toHaveLength(NOTE_REVISION_HISTORY_LIMIT);
-
-		expect(result.revisions.at(-1)?.revision).toBe(6);
 	});
 
 	it('reads one snapshot in full for the diff', async () => {

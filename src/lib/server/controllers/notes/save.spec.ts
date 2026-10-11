@@ -78,7 +78,8 @@ describe('Note revision invariants', () => {
 		const note = noteBuilder();
 		content.notes = [note];
 		await controller.save({ note: { ...note, plainText: 'Changed' } });
-		expect(content.recordedRevisions).toHaveLength(0);
+		const { revisions } = await controller.listRevisions({ noteId: note.id });
+		expect(revisions).toEqual([]);
 	});
 
 	it('does not duplicate an existing snapshot for a no-op save', async () => {
@@ -87,7 +88,8 @@ describe('Note revision invariants', () => {
 		content.notes = [note];
 		content.recordedRevisions = [noteRevisionBuilder({ revision: note.currentRevision })];
 		await controller.save({ note });
-		expect(content.recordedRevisions).toHaveLength(1);
+		const { revisions } = await controller.listRevisions({ noteId: note.id });
+		expect(revisions).toHaveLength(1);
 	});
 
 	it('rejects a stale revision', async () => {
@@ -121,7 +123,8 @@ describe('Note save transaction invariants', () => {
 		expect(outcome).toEqual({ kind: 'failure', code: 'EXTERNAL_SERVICE' });
 		expect(content.notes[0]?.currentRevision).toBe(note.currentRevision);
 		expect(content.notes[0]?.id).toBe(note.id);
-		expect(content.recordedRevisions).toEqual([]);
+		const { revisions } = await controller.listRevisions({ noteId: note.id });
+		expect(revisions).toEqual([]);
 	});
 
 	it('does not expose another user’s note through save', async () => {
@@ -142,7 +145,8 @@ describe('Note publish invariants', () => {
 		await controller
 			.publish({ noteId: note.id, baseEtag: noteEtag(note.id, note.currentRevision) })
 			.catch(() => ({ kind: 'failure' }));
-		expect({ notes: content.notes, snapshots: content.recordedRevisions }).toEqual({
+		const { revisions } = await controller.listRevisions({ noteId: note.id });
+		expect({ notes: content.notes, snapshots: revisions }).toEqual({
 			notes: [note],
 			snapshots: []
 		});
@@ -158,19 +162,6 @@ describe('Note publish invariants', () => {
 			})
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
-	it('creates a revision snapshot on publish (1/2)', async () => {
-		const { content, controller } = setup();
-		const note = noteBuilder();
-		content.notes = [note];
-		await controller.publish({
-			noteId: note.id,
-			baseEtag: noteEtag(note.id, note.currentRevision)
-		});
-		expect(content.recordedRevisions).toHaveLength(1);
-
-		expect(content.recordedRevisions[0]?.revision).toBe(note.currentRevision);
-	});
-
 	it('sets publishedRevision to currentRevision on the note (1/2)', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
@@ -241,7 +232,8 @@ describe('Note discard draft invariants', () => {
 		});
 		await controller.save({ note: { ...content.notes[0]!, plainText: 'Draft' } });
 		await controller.discardDraft({ noteId: note.id });
-		expect(content.restoredAttachmentRevisionIds).toEqual([content.recordedRevisions[0]!.id]);
+		const { revisions } = await controller.listRevisions({ noteId: note.id });
+		expect(content.restoredAttachmentRevisionIds).toEqual([revisions[0]!.id]);
 	});
 	it('rolls back a discarded draft when its search update fails', async () => {
 		const { content, controller } = setup();

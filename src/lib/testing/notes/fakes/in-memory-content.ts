@@ -8,7 +8,6 @@ import type {
 	NoteSearchTarget,
 	SetNoteSectionNumberingInput
 } from '$lib/models/notes';
-import { NOTE_REVISION_HISTORY_LIMIT } from '$lib/models/notes';
 import type { SourceAnchor } from '$lib/models/provenance';
 import {
 	ExternalServiceError,
@@ -130,15 +129,6 @@ export class InMemoryNoteContent
 				plainText: note.plainText,
 				createdAt: note.updatedAt
 			})
-		);
-		// Mirrors the real catalog: history is bounded, so a spec that publishes past the
-		// limit sees the same eviction production would.
-		const kept = this.recordedRevisions
-			.filter((revision) => revision.noteId === note.id)
-			.sort((left, right) => right.revision - left.revision)
-			.slice(0, NOTE_REVISION_HISTORY_LIMIT);
-		this.recordedRevisions = this.recordedRevisions.filter(
-			(revision) => revision.noteId !== note.id || kept.includes(revision)
 		);
 	}
 

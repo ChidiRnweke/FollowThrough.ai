@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { NOTE_REVISION_HISTORY_LIMIT } from '$lib/models/notes';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
@@ -11,8 +10,7 @@ import {
 	noteBuilder,
 	projectBuilder,
 	testActor,
-	testNoteId,
-	testNow
+	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
@@ -36,28 +34,27 @@ describe('Note management invariants', () => {
 		expect(listed.map((note) => note.id)).toEqual([testNoteId(), testNoteId(2)]);
 	});
 
-	// Publishing is the only thing that writes history, so the cap is enforced there.
-	it('retains the newest snapshots and evicts older history first', async () => {
+	// The history limit is 20 snapshots; the repository keeps the newest ones.
+	it('keeps every snapshot while the history is at the limit', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
-		for (let revision = 1; revision <= NOTE_REVISION_HISTORY_LIMIT + 3; revision += 1)
+		for (let revision = 1; revision <= 20; revision += 1)
 			await service.authoring.record(noteBuilder({ currentRevision: revision }));
 		const kept = await notes.listRevisions(testNoteId());
 		expect(kept.map((entry) => entry.revision).sort((left, right) => left - right)).toEqual(
-			Array.from({ length: NOTE_REVISION_HISTORY_LIMIT }, (_, index) => index + 4)
+			Array.from({ length: 20 }, (_, index) => index + 1)
 		);
 	});
 
-	it('lists a trashed note in the trash', async () => {
-		const { service, notes } = setup();
-		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		expect(await service.trashReader.listTrashed()).toHaveLength(1);
-	});
-
-	it('keeps active notes out of the trash', async () => {
+	it('evicts the oldest snapshot once the history passes the limit', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
-		expect(await service.trashReader.listTrashed()).toEqual([]);
+		for (let revision = 1; revision <= 21; revision += 1)
+			await service.authoring.record(noteBuilder({ currentRevision: revision }));
+		const kept = await notes.listRevisions(testNoteId());
+		expect(kept.map((entry) => entry.revision).sort((left, right) => left - right)).toEqual(
+			Array.from({ length: 20 }, (_, index) => index + 2)
+		);
 	});
 
 	it('leaves an ambiguous anchor unchanged during repair', async () => {

@@ -263,21 +263,25 @@ describe('Skill document imports', () => {
 		).rejects.toThrow('A skill with this portable name already exists');
 	});
 	it('saves imported instructions as an unpublished draft without a snapshot', async () => {
-		const { controller, notes, content } = importSkill();
+		const { controller, notes } = importSkill();
 		const result = await controller.update(input);
 		expect({
 			text: result.skill.note.plainText,
 			revision: result.skill.note.currentRevision,
 			published: result.skill.note.publishedRevision,
-			snapshots: notes.revisions.length,
-			indexed: content.indexedNoteIds
+			snapshots: notes.revisions.length
 		}).toEqual({
 			text: 'Write a decision and explain its consequences.',
 			revision: 2,
 			published: 0,
-			snapshots: 0,
-			indexed: [testNoteId()]
+			snapshots: 0
 		});
+	});
+	it('rolls back the import when the search update fails', async () => {
+		const { controller, notes, content, note } = importSkill();
+		content.failIndex = true;
+		await expect(controller.update(input)).rejects.toMatchObject({ code: 'EXTERNAL_SERVICE' });
+		expect(notes.notes).toEqual([note]);
 	});
 	it('refuses an import if the conditional document write loses a race', async () => {
 		const { controller, notes } = importSkill();

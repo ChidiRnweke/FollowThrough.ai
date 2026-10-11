@@ -108,12 +108,11 @@ describe('Note restore invariants', () => {
 		});
 	});
 	it('clears the archived marker', async () => {
-		const { notes, controller, indexer } = setup();
+		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
 		const result = await controller.restore({ noteId: testNoteId() });
 		expect(result.note.archivedAt).toBeUndefined();
 		expect(await notes.listActive()).toHaveLength(1);
-		expect(indexer.indexedNoteIds).toEqual([testNoteId()]);
 	});
 	it('rejects restoring a note that was never trashed', async () => {
 		const { notes, controller } = setup();

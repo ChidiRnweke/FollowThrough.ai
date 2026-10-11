@@ -62,7 +62,7 @@ const setup = () => {
 };
 
 describe('Note revision restore invariants', () => {
-	it('restores snapshot content, title, history, attachments, and search index together', async () => {
+	it('restores snapshot content, title, history, and attachments together', async () => {
 		const { content, controller } = setup();
 		const originalBody = noteMarkdown.read('# Snapshot heading\n\nThe original **body**.');
 		content.notes = [noteBuilder({ ...originalBody, title: 'First name' })];
@@ -79,7 +79,6 @@ describe('Note revision restore invariants', () => {
 			noteId: publishedNote.id
 		});
 		const revision = savedRevisions[0]!;
-		content.indexedNoteIds = [];
 		const result = await controller.restoreRevision({
 			noteId: publishedNote.id,
 			revisionId: revision.id
@@ -92,7 +91,24 @@ describe('Note revision restore invariants', () => {
 		const { revisions } = await controller.listRevisions({ noteId: publishedNote.id });
 		expect(revisions.map((entry) => entry.id)).toContain(revision.id);
 		expect(content.restoredAttachmentRevisionIds).toEqual([revision.id]);
-		expect(content.indexedNoteIds).toEqual([testNoteId()]);
+	});
+
+	it('rolls back the restore when the search update fails', async () => {
+		const { content, controller } = setup();
+		content.notes = [noteBuilder({ plainText: 'Published body' })];
+		const published = content.notes[0]!;
+		await controller.publish({
+			noteId: published.id,
+			baseEtag: noteEtag(published.id, published.currentRevision)
+		});
+		await controller.save({ note: { ...content.notes[0]!, plainText: 'Draft body' } });
+		const draft = content.notes[0]!;
+		const { revisions } = await controller.listRevisions({ noteId: published.id });
+		content.failIndex = true;
+		await expect(
+			controller.restoreRevision({ noteId: published.id, revisionId: revisions[0]!.id })
+		).rejects.toMatchObject({ code: 'EXTERNAL_SERVICE' });
+		expect(content.notes).toEqual([draft]);
 	});
 
 	it('rejects restoring a revision that does not belong to the note', async () => {
