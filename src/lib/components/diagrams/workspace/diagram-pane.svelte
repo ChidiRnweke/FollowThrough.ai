@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { onMount, untrack } from 'svelte';
 	import { diagramEtag } from '$lib/models/diagrams';
@@ -15,7 +16,7 @@
 
 	const { workspaceResourceKey } = workspacePresentation;
 
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -52,10 +53,10 @@
 	let reviewSource = $state<string | null>(null);
 	let selectedRevisionId = $state<DiagramRevisionId>();
 	const candidate = $derived(
-		draft.state.kind === 'ready' ? (resources.views.diagram(diagramId) ?? draft.state.value) : null
+		draft.state.kind === 'ready' ? (workspaceViews.diagram(diagramId) ?? draft.state.value) : null
 	);
 	const archivedProject = $derived(
-		candidate ? resources.views.get('projects', candidate.projectId)?.archivedAt : undefined
+		candidate ? workspaceViews.get('projects', candidate.projectId)?.archivedAt : undefined
 	);
 	// Keep a mounted canvas available for recovery, but do not open a new archived-project canvas.
 	let opened = $state(false);

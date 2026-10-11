@@ -23,8 +23,8 @@ import type { PreparedWorkspaceCommand } from '$lib/models/workspace-mutations';
 
 import type { WorkspaceValues } from '$lib/models/workspace-records';
 
-import type { SessionSynchronization } from '$lib/controllers/workspace/session';
-import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
+import type { SessionSynchronization } from '$lib/controllers/workspace/workspace';
+import type { WorkspaceResourcesController } from '$lib/controllers/workspace/workspace';
 import type { ProjectActionStore } from '$lib/stores/projects/project-actions.svelte';
 
 export interface ProjectNameEditor<K extends 'notes' | 'projects'> {

@@ -1,6 +1,6 @@
 import { NoteActionEventReader } from '$lib/client/notes/action-event-reader';
 import type { NoteActionEventRecord } from '$lib/models/note-actions';
-import type { SessionSynchronization } from '$lib/controllers/workspace/session';
+import type { SessionSynchronization } from '$lib/controllers/workspace/workspace';
 import type {
 	NoteActionRunWorkspace,
 	NoteActionRunTransport,

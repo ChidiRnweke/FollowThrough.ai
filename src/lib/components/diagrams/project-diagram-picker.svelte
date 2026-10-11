@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { DiagramId } from '$lib/models/diagrams';
 	import type { ProjectId } from '$lib/models/projects';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -24,7 +25,7 @@
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before choosing a diagram');
 	const resources = session.resources;
-	const diagrams = $derived(resources.views.diagrams(projectId));
+	const diagrams = $derived(workspaceViews.diagrams(projectId));
 	let ready = $state(false);
 	let failure = $state<string | null>(null);
 	async function prepare(): Promise<void | { kind: 'failure' }> {

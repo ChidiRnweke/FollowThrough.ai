@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { WidgetGallery } from '$lib/components/widgets';
 	let { data } = $props();
 	const entries = $derived(
 		data.selectedProjectId
-			? data.session.resources.views.widgets(data.selectedProjectId, data.query)
+			? workspaceViews.widgets(data.selectedProjectId, data.query)
 			: []
 	);
 	const page = $derived(
@@ -15,7 +16,7 @@
 		total: entries.length,
 		widgets: entries.slice((page - 1) * data.pageSize, page * data.pageSize),
 		project: data.selectedProjectId
-			? data.session.resources.views.get('projects', data.selectedProjectId)
+			? workspaceViews.get('projects', data.selectedProjectId)
 			: undefined
 	});
 </script>

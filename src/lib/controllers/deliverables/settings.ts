@@ -8,8 +8,8 @@ import type { UserId } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type {
 	WorkspaceSession,
-	WorkspaceSessionController
-} from '$lib/controllers/workspace/session';
+	WorkspaceController
+} from '$lib/controllers/workspace/workspace';
 import type { ExportSettingsStore } from '$lib/stores/deliverables/settings.svelte';
 export type ExportSettingsSave =
 	| { readonly kind: 'saved' | 'superseded' }
@@ -24,7 +24,7 @@ export interface ProjectExportSettingsController {
 export class ProjectExportSettings implements ProjectExportSettingsController {
 	constructor(
 		private readonly state: ExportSettingsStore,
-		private readonly workspace: WorkspaceSessionController
+		private readonly workspace: WorkspaceController
 	) {}
 	get ready(): boolean {
 		return this.state.binding !== null;

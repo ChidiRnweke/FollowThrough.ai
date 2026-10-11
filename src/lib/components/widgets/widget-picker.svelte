@@ -1,4 +1,5 @@
 <script lang="ts" module>
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { WidgetId, WidgetTemplateName } from '$lib/models/widgets';
 
 	/** What the user chose: a new widget from a template, or one this project already has. */
@@ -32,7 +33,7 @@
 
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before choosing a widget');
-	const existing = $derived(session.resources.views.widgets(projectId));
+	const existing = $derived(workspaceViews.widgets(projectId));
 
 	// A preview is the template as `createWidget` would save it, so what is shown is what is made.
 	const previews = (Object.keys(widgetTemplates) as WidgetTemplateName[]).flatMap(

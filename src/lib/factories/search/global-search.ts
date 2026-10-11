@@ -7,7 +7,7 @@ import { NoteReplacements } from '$lib/controllers/notes/replace';
 import { browserSyncScheduler } from '$lib/client/sync/scheduler';
 import { SvelteSearchDraftCopy } from '$lib/client/search/draft-copy.svelte';
 import { workspaceSession } from '$lib/factories/workspace/session';
-import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
+import type { WorkspaceResourcesController } from '$lib/controllers/workspace/workspace';
 export const createGlobalSearch = (
 	workspace: () => WorkspaceResourcesController | undefined,
 	scheduler: SyncScheduler = browserSyncScheduler

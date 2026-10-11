@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ToolClassification, ToolPreference } from '$lib/models/agent';
@@ -40,7 +41,7 @@
 	if (!current) throw new Error('Open the workspace before editing settings');
 	const session = current;
 	const preferences = $derived(
-		session.resources.views.toolPreferences(session.bootstrap.accountId, projectId)
+		workspaceViews.toolPreferences(session.bootstrap.accountId, projectId)
 	);
 	const filtered = $derived(matching(preferences, search.trim().toLowerCase()));
 	const start = $derived((page - 1) * PAGE_SIZE);
@@ -135,7 +136,7 @@
 	async function toggle(preference: ToolPreference, enabled: boolean): Promise<void> {
 		busy = preference.name;
 		try {
-			const userId = session.shell.user.id;
+			const userId = workspaceViews.currentShell.user.id;
 			const timestamp = new Date().toISOString() as DateTime;
 			const common = {
 				userId,
@@ -178,7 +179,7 @@
 		if (!projectId) return;
 		busy = preference.name;
 		try {
-			const userId = session.shell.user.id;
+			const userId = workspaceViews.currentShell.user.id;
 			const draft = session.resources.draft({
 				type: 'project_tool_overrides',
 				id: [userId, projectId, preference.name]

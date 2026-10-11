@@ -5,7 +5,7 @@ import type {
 	NoteActionKind
 } from '$lib/models/agent';
 import type { NoteActionResult, NoteActionEventRecord } from '$lib/models/note-actions';
-import type { SessionSynchronization } from '$lib/controllers/workspace/session';
+import type { SessionSynchronization } from '$lib/controllers/workspace/workspace';
 import type { NoteId } from '$lib/models/notes';
 import type { NoteActionSession } from './actions';
 import type { NoteActionRunStore } from '$lib/stores/notes/note-action-runs.svelte';

@@ -2,8 +2,8 @@ import type { ImportMarkdownArchiveOutput, ProjectId } from '$lib/models/project
 import type { NoteId } from '$lib/models/notes';
 import type {
 	WorkspaceSession,
-	WorkspaceSessionController
-} from '$lib/controllers/workspace/session';
+	WorkspaceController
+} from '$lib/controllers/workspace/workspace';
 import type { ArchiveImportStore } from '$lib/stores/notes/archive-import.svelte';
 import type { ArchiveImportResponse } from '$lib/models/projects';
 export interface ArchiveImportUpload {
@@ -27,7 +27,7 @@ export interface ArchiveImportController {
 export class ArchiveImports implements ArchiveImportController {
 	constructor(
 		private readonly state: ArchiveImportStore,
-		private readonly workspace: WorkspaceSessionController,
+		private readonly workspace: WorkspaceController,
 		private readonly upload: ArchiveImportUpload
 	) {}
 	get busy(): boolean {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { workspacePresentation } from '$lib/factories/workspace/presentation';
 	const { accessMessage } = workspacePresentation;
 
@@ -27,7 +28,7 @@
 	import type {
 		WorkspaceDraftController,
 		WorkspaceResourcesController
-	} from '$lib/controllers/workspace/resources';
+	} from '$lib/controllers/workspace/workspace';
 
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 	import { formatRelativeTime, memoryEntryTypeLabels } from '../shared/labels';
@@ -73,8 +74,8 @@
 			addOpen = false;
 		}
 	});
-	const entries = $derived(resources?.views.memories(projectId) ?? []);
-	const pending = $derived(resources?.views.memorySuggestions(projectId) ?? []);
+	const entries = $derived(workspaceViews.memories(projectId) ?? []);
+	const pending = $derived(workspaceViews.memorySuggestions(projectId) ?? []);
 	let loadError = $state<string | null>(null);
 	let loading = $state(false);
 	let busyIds = $state<SuggestionId[]>([]);

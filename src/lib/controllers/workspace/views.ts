@@ -45,6 +45,7 @@ import type { SkillSummary } from '$lib/models/skills';
 import type { WorkspaceSkill } from '$lib/models/workspace-views';
 
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
+import type { WorkspaceSessionStore } from '$lib/stores/workspace/session.svelte';
 
 /** Coordinates feature views from the normalized records, including local write overlays. */
 export interface WorkspaceViewsController {
@@ -94,6 +95,10 @@ export interface WorkspaceViewsController {
 	todos(filter?: TodoListFilter): readonly TodoView[];
 	readonly categories: readonly string[];
 	today(today: LocalDate): TodayView;
+	/** The bound account's shell; it fails until the account's records are on this device. */
+	readonly currentShell: ShellContext;
+	/** The bound account's chats, most recently updated first. */
+	readonly chatSessions: readonly Conversation[];
 }
 
 export class WorkspaceViews implements WorkspaceViewsController {
@@ -109,8 +114,20 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		private readonly memoryPresentation: IMemoryPresentationService,
 		private readonly projectPresentation: ProjectTreePresentation,
 		private readonly notePresentation: NotePresentation,
-		private readonly sections: NoteSectionNumbering
+		private readonly sections: NoteSectionNumbering,
+		private readonly session: WorkspaceSessionStore
 	) {}
+	get currentShell(): ShellContext {
+		const accountId = this.session.current?.bootstrap.accountId;
+		const shell = accountId ? this.shell(accountId) : null;
+		if (!shell) throw new Error('This account’s workspace has not been downloaded to this device');
+		return shell;
+	}
+	get chatSessions(): readonly Conversation[] {
+		return this.all('conversations')
+			.filter((conversation) => conversation.kind === 'chat')
+			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+	}
 	private get records() {
 		return this.state.records;
 	}

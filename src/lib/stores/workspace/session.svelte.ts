@@ -1,4 +1,4 @@
-import type { WorkspaceSession } from '$lib/controllers/workspace/session';
+import type { WorkspaceSession } from '$lib/controllers/workspace/workspace';
 import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
 interface SessionRecord extends WorkspaceSession {
 	bootstrap: WorkspaceBootstrap;

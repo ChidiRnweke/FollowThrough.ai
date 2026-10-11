@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { onMount, onDestroy, untrack } from 'svelte';
@@ -35,10 +36,10 @@
 	const draft = untrack(() => resources.draft({ type: 'notes', id: [noteId] }));
 	const editorSelection = untrack(() => editorSelectionRegistry.for(noteId));
 
-	const projection = $derived(resources.views.note(noteId));
+	const projection = $derived(workspaceViews.note(noteId));
 	const archivedProject = $derived.by(() => {
-		const current = resources.views.get('notes', noteId);
-		return current ? resources.views.get('projects', current.projectId)?.archivedAt : undefined;
+		const current = workspaceViews.get('notes', noteId);
+		return current ? workspaceViews.get('projects', current.projectId)?.archivedAt : undefined;
 	});
 	// A server deletion removes the projection; the open document stays so its work can be kept.
 	let view = $state(untrack(() => projection?.view));

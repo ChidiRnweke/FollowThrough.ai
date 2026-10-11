@@ -1,3 +1,4 @@
+import { workspaceViews } from '$lib/factories/workspace/session';
 import type { SyncResourceRules } from '$lib/services/sync/state';
 import {
 	defaultExportSettings,
@@ -14,8 +15,8 @@ import type { ProseMirrorDocument, NoteId, NoteDocument } from '$lib/models/note
 import type { ProjectId, ProjectExportEntry } from '$lib/models/projects';
 import type {
 	WorkspaceSession,
-	WorkspaceSessionController
-} from '$lib/controllers/workspace/session';
+	WorkspaceController
+} from '$lib/controllers/workspace/workspace';
 import type { DiagramExportController } from './diagrams';
 import type { DocumentExportStore } from '$lib/stores/deliverables/export.svelte';
 
@@ -65,7 +66,7 @@ export class DocumentExports implements DocumentExportController {
 	constructor(
 		private readonly syncResourceRules: SyncResourceRules,
 		private readonly state: DocumentExportStore,
-		private readonly workspace: WorkspaceSessionController,
+		private readonly workspace: WorkspaceController,
 		private readonly diagrams: DiagramExportController,
 		private readonly remote: DocumentExportRemote,
 		private readonly urls: DocumentPreviewUrls
@@ -130,7 +131,7 @@ export class DocumentExports implements DocumentExportController {
 	}
 	documents(ids: readonly string[]): readonly NoteDocument[] {
 		return (
-			this.workspace.current?.resources.views
+			workspaceViews
 				.all('notes')
 				.filter((note) => ids.includes(note.id)) ?? []
 		);

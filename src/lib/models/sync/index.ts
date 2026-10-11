@@ -141,11 +141,16 @@ export interface CachedRecord<T> {
 	readonly entry: ResourceState<T>;
 }
 
+/** Where page replication stands; a targeted read never moves it. */
+export interface SyncCheckpoint {
+	readonly cursor: SyncCursor;
+	readonly inventoryComplete: boolean;
+}
+
+/** Resources merge by version, newest first; a checkpoint never moves backwards. */
 export interface CacheCommit<T> {
 	readonly put: readonly CachedRecord<T>[];
-	readonly remove: readonly { readonly key: string; readonly etag: SyncEtag | null }[];
-	readonly cursor?: SyncCursor;
-	readonly inventoryComplete?: boolean;
+	readonly checkpoint?: SyncCheckpoint;
 }
 
 export interface StoredCache<T> {

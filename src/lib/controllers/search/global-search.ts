@@ -1,3 +1,4 @@
+import { workspaceViews } from '$lib/factories/workspace/session';
 import type {
 	Note,
 	NoteId,
@@ -9,7 +10,7 @@ import type { ProjectId } from '$lib/models/projects';
 import type { SyncScheduler } from '$lib/models/sync';
 import type { NoteTextSearch } from '$lib/services/notes/text-search';
 import type { NoteReplacementController } from '$lib/controllers/notes/replace';
-import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
+import type { WorkspaceResourcesController } from '$lib/controllers/workspace/workspace';
 import type { GlobalSearchStore } from '$lib/stores/search/global-search.svelte';
 export interface SearchDraftCopy {
 	copy(note: Note): Note;
@@ -64,7 +65,7 @@ export class GlobalSearch implements GlobalSearchController {
 		const resources = this.currentWorkspace();
 		if (!input || !resources?.active) return [];
 		return this.rules.search(
-			resources.views.notes.filter(
+			workspaceViews.notes.filter(
 				(note) => !input.projectId || note.projectId === input.projectId
 			),
 			input.query,

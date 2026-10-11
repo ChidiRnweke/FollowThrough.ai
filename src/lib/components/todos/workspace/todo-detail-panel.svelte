@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import * as Field from '$lib/components/ui/field';
 	import { Button } from '$lib/components/ui/button';
@@ -39,7 +40,7 @@
 	);
 	const view = $derived(
 		state?.kind === 'ready' && todo?.state.kind === 'ready'
-			? resources?.views.todo(todo.state.value)
+			? workspaceViews.todo(todo.state.value)
 			: undefined
 	);
 

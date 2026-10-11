@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { NodeViewProps } from '@tiptap/core';
 	import { untrack } from 'svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -29,7 +30,7 @@
 				? draft.value
 				: null
 			: widgetId
-				? (workspaceSession.current?.resources.views.get('widgets', widgetId) ?? null)
+				? (workspaceViews.get('widgets', widgetId) ?? null)
 				: null
 	);
 </script>

@@ -1,6 +1,6 @@
 import { SvelteSet } from 'svelte/reactivity';
 import type { NoteId, SearchNoteTextInput, ReplaceNoteTextOutput } from '$lib/models/notes';
-import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
+import type { WorkspaceResourcesController } from '$lib/controllers/workspace/workspace';
 
 /** Mutable search inputs and pending work; the controller owns search and replacement. */
 export class GlobalSearchStore {

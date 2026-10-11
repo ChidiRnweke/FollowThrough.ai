@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { onMount, tick, untrack } from 'svelte';
@@ -337,13 +338,13 @@
 	function openResourceChip(): ResourceChip | undefined {
 		if (!openResource) return undefined;
 		if (openResource.kind === 'widget') {
-			const widget = resources.views.widget(openResource.id);
+			const widget = workspaceViews.widget(openResource.id);
 			return widget ? { kind: 'widget', id: widget.id, name: widget.title } : undefined;
 		}
 		// A studio conversation already works on its canvas; attaching that same diagram again
 		// would hand the agent two copies of the drawing it is editing.
 		if (canvas?.diagramId === openResource.id) return undefined;
-		const diagram = resources.views.diagram(openResource.id);
+		const diagram = workspaceViews.diagram(openResource.id);
 		return diagram && !diagram.archivedAt
 			? { kind: 'diagram', id: diagram.id, name: agentContext.diagramName(diagram) }
 			: undefined;
@@ -390,7 +391,7 @@
 					shell.noteTree,
 					shell.skills,
 					resources.availability,
-					resources.views.mentionableResources(mentionQuery, activeProjectId)
+					workspaceViews.mentionableResources(mentionQuery, activeProjectId)
 				)
 	);
 	const visibleChips = $derived(

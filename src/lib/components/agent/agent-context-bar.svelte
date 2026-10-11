@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { fly, slide } from 'svelte/transition';
@@ -47,7 +48,7 @@
 	const counts = $derived.by(() => {
 		const resources = workspaceSession.current?.resources;
 		if (!resources) return { memory: null, notes: null, todos: null, attachments: null };
-		const values = resources.views.capabilityCounts(activeProjectId);
+		const values = workspaceViews.capabilityCounts(activeProjectId);
 		return {
 			memory: resources.collectionReadiness() === 'ready' ? values.memory : null,
 			notes: resources.collectionReadiness() === 'ready' ? values.notes : null,

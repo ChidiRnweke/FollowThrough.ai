@@ -8,7 +8,7 @@
 	import { workspacePresentation } from '$lib/factories/workspace/presentation';
 	const { syncIndicator } = workspacePresentation;
 
-	import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
+	import type { WorkspaceResourcesController } from '$lib/controllers/workspace/workspace';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';

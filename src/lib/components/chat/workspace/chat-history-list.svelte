@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ShellContext } from '$lib/models/workspace-views';
 
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { goto } from '$app/navigation';
 	import type { Conversation } from '$lib/models/agent';

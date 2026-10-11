@@ -1,4 +1,5 @@
-import type { WorkspaceSession } from '$lib/controllers/workspace/session';
+import { workspaceViews } from '$lib/factories/workspace/session';
+import type { WorkspaceSession } from '$lib/controllers/workspace/workspace';
 import {
 	SkillEditor,
 	type SkillEditorController,
@@ -28,7 +29,7 @@ export function createSkillEditor(
 				return workspaceSession.current === session && session.resources.active;
 			},
 			synchronize: () => workspaceSession.synchronize(),
-			skill: () => session.resources.views.skill(skill.note.id)
+			skill: () => workspaceViews.skill(skill.note.id)
 		},
 		buffer,
 		new SkillPortabilityService(),

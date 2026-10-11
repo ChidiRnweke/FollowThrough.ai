@@ -1,5 +1,5 @@
-import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
-import type { WorkspaceSession } from '$lib/controllers/workspace/session';
+import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
+import type { WorkspaceSession } from '$lib/controllers/workspace/workspace';
 export interface ExportSettingsBinding {
 	readonly session: WorkspaceSession;
 	readonly draft: WorkspaceDraftController<'export_settings'>;

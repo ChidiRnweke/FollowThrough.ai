@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { SuggestionId, SuggestionView } from '$lib/models/suggestions';
 	import { toast } from 'svelte-sonner';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
@@ -8,7 +9,7 @@
 
 	const projection = $derived(
 		workbench.focusedNoteId
-			? workspaceSession.current?.resources.views.note(workbench.focusedNoteId)
+			? workspaceViews.note(workbench.focusedNoteId)
 			: undefined
 	);
 	const items = $derived(projection?.view.pendingSuggestions ?? []);

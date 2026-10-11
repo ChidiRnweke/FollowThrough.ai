@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { ProjectNameEditor } from '$lib/controllers/projects/actions';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { NameDialog, ProjectOverview } from '$lib/components/projects';
@@ -23,7 +24,7 @@
 
 	let { data } = $props();
 
-	const views = $derived(data.session.resources.views);
+	const views = $derived(workspaceViews);
 	const view = $derived(views.project(data.projectId));
 	const project = $derived(view?.project);
 	const todos = $derived(views.todos({ projectId: data.projectId, status: 'open' }));

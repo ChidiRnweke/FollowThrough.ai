@@ -9,7 +9,7 @@ import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-schedul
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { syncEtag } from '$lib/models/sync';
-import type { SessionSynchronization } from '$lib/controllers/workspace/session';
+import type { SessionSynchronization } from '$lib/controllers/workspace/workspace';
 import type { WorkspaceValues } from '$lib/models/workspace-records';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 const setup = async () => {

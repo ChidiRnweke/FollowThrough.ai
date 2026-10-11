@@ -1,7 +1,7 @@
 import { afterEach, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import TrashPage from './+page.svelte';
-import type { WorkspaceSession } from '$lib/controllers/workspace/session';
+import type { WorkspaceSession } from '$lib/controllers/workspace/workspace';
 import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
 import {
 	noteBuilder,

@@ -2,8 +2,8 @@ import type { ArtifactId } from '$lib/models/deliverables';
 import type { ArtifactActionStore } from '$lib/stores/deliverables/artifacts.svelte';
 import type {
 	WorkspaceSession,
-	WorkspaceSessionController
-} from '$lib/controllers/workspace/session';
+	WorkspaceController
+} from '$lib/controllers/workspace/workspace';
 export interface ArtifactActionsRemote {
 	download(id: ArtifactId): Promise<{ readonly url: string }>;
 	regenerate(id: ArtifactId): Promise<{ readonly downloadUrl: string }>;
@@ -25,7 +25,7 @@ export interface ArtifactActionsController {
 export class ArtifactActions implements ArtifactActionsController {
 	constructor(
 		private readonly state: ArtifactActionStore,
-		private readonly workspace: WorkspaceSessionController,
+		private readonly workspace: WorkspaceController,
 		private readonly remote: ArtifactActionsRemote,
 		private readonly navigation: ArtifactDownloadNavigation
 	) {}

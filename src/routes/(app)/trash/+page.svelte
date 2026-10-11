@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import TrashList from '$lib/components/shared/trash-list.svelte';
 	import {
@@ -20,13 +21,13 @@
 	// kind it was. Sorting per kind would bury a diagram under older notes.
 	const entries = $derived(
 		[
-			...data.session.resources.views.trashedNotes().map(noteTrashEntry),
-			...data.session.resources.views.trashedDiagrams().flatMap((diagram) => {
-				const project = data.session.resources.views.get('projects', diagram.projectId);
+			...workspaceViews.trashedNotes().map(noteTrashEntry),
+			...workspaceViews.trashedDiagrams().flatMap((diagram) => {
+				const project = workspaceViews.get('projects', diagram.projectId);
 				return project ? [diagramTrashEntry(diagram, project.name)] : [];
 			}),
-			...data.session.resources.views.trashedWidgets().flatMap((widget) => {
-				const project = data.session.resources.views.get('projects', widget.projectId);
+			...workspaceViews.trashedWidgets().flatMap((widget) => {
+				const project = workspaceViews.get('projects', widget.projectId);
 				return project ? [widgetTrashEntry(widget, project.name)] : [];
 			})
 		].sort((left, right) => right.archivedAt.localeCompare(left.archivedAt))

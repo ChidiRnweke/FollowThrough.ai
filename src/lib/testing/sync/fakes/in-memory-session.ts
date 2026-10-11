@@ -3,7 +3,7 @@ import type {
 	WorkspaceSessionEnvironment,
 	WorkspaceSessionEvents,
 	WorkspaceRecovery
-} from '$lib/controllers/workspace/session';
+} from '$lib/controllers/workspace/workspace';
 
 export class InMemoryWorkspaceSessionEnvironment implements WorkspaceSessionEnvironment {
 	accountId: string | null;

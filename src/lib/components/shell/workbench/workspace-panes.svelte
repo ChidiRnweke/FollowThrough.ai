@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { untrack } from 'svelte';
@@ -74,11 +75,11 @@
 		const diagramId = diagramIdOf(tabId);
 		if (diagramId !== undefined)
 			return (
-				workspaceSession.current?.resources.views.diagram(diagramId)?.title ?? 'Untitled diagram'
+				workspaceViews.diagram(diagramId)?.title ?? 'Untitled diagram'
 			);
 		const widgetId = widgetIdOf(tabId);
 		if (widgetId !== undefined)
-			return workspaceSession.current?.resources.views.widget(widgetId)?.title ?? 'Widget';
+			return workspaceViews.widget(widgetId)?.title ?? 'Widget';
 		const sessionKey = chatKeyOf(tabId);
 		if (sessionKey !== undefined) {
 			const conversationId = chatRegistry.peek(sessionKey)?.conversationId;

@@ -1,8 +1,9 @@
+import { workspaceViews } from '$lib/factories/workspace/session';
 import { SvelteSet } from 'svelte/reactivity';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId, TodoStatus, UpdateTodoInput } from '$lib/models/todos';
 
-import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
+import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 import { workspaceSession } from '$lib/factories/workspace/session';
 import { rightPanel } from '../shell/right-panel.svelte';
 
@@ -62,7 +63,7 @@ class TodoUpdatesStore {
 		try {
 			const session = await workspaceSession.start();
 			const target =
-				projectId ?? session.shell.projects.find((project) => project.role === 'inbox')?.id;
+				projectId ?? workspaceViews.currentShell.projects.find((project) => project.role === 'inbox')?.id;
 			if (!target) throw new Error('The inbox is not available on this device');
 			const id = crypto.randomUUID() as TodoId;
 			await session.resources.create({

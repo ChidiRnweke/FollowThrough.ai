@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { NodeViewProps } from '@tiptap/core';
 	import { untrack } from 'svelte';
 	import { workspaceSession } from '$lib/factories/workspace/session';
@@ -21,7 +22,7 @@
 
 	const perNote = $derived(editor.perNote);
 	const todoId = $derived(node.attrs.todoId as TodoId | null);
-	const views = $derived(workspaceSession.current?.resources.views);
+	const views = $derived(workspaceViews);
 	const todo = $derived(todoId && perNote ? views?.get('todos', todoId) : undefined);
 	const view = $derived(todo ? views?.todo(todo) : undefined);
 	const done = $derived(view?.todo.status === 'done');

@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { SkillDetailWorkspace } from '$lib/components/skills';
 
 	let { data } = $props();
-	const skill = $derived(data.session.resources.views.skill(data.noteId));
+	const skill = $derived(workspaceViews.skill(data.noteId));
 </script>
 
 {#if skill}

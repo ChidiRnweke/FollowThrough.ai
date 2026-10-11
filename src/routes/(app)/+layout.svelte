@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { WorkspaceStartup, WorkspaceRouteOutlet } from '$lib/components/shell';
 	import type { RouteReadiness } from '$lib/client/sync/route-access';
 	import type { NoteId } from '$lib/models/notes';
@@ -34,7 +35,7 @@
 	let { data, children } = $props();
 	const shell = $derived(
 		workspaceSession.current === data.session
-			? data.session.resources.views.shell(data.session.bootstrap.accountId)
+			? workspaceViews.shell(data.session.bootstrap.accountId)
 			: null
 	);
 
@@ -97,8 +98,8 @@
 	const projectOfTab = $derived.by(() => (tabId: TabId): ProjectId | undefined => {
 		const ref = parseTabId(tabId);
 		if (ref?.kind === 'diagram')
-			return data.session.resources.views.diagram(ref.diagramId)?.projectId;
-		if (ref?.kind === 'widget') return data.session.resources.views.widget(ref.widgetId)?.projectId;
+			return workspaceViews.diagram(ref.diagramId)?.projectId;
+		if (ref?.kind === 'widget') return workspaceViews.widget(ref.widgetId)?.projectId;
 		return shell?.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.projectId;
 	});
 
@@ -286,7 +287,7 @@
 		{#if shell && prerequisitesReady}
 			<WorkspaceTabs
 				{shell}
-				sessions={data.session.sessions}
+				sessions={workspaceViews.chatSessions}
 				hidden={workbench.stripHidden}
 				oncreateNote={inventoryLoading ? undefined : () => void createNoteFromStrip()}
 				ontoggleHidden={() => workbench.toggleStripHidden()}
@@ -305,7 +306,7 @@
 	{#if shell && prerequisitesReady && !inventoryLoading}
 		<RightPanel
 			{shell}
-			sessions={data.session.sessions}
+			sessions={workspaceViews.chatSessions}
 			agentPreferences={data.session.preferences}
 			agentModels={data.session.agentModels}
 			agentDefaults={data.session.agentDefaults}

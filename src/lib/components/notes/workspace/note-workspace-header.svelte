@@ -6,7 +6,7 @@
 	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import type { ProjectId } from '$lib/models/projects';
 
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';

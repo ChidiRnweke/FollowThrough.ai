@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
@@ -73,7 +74,7 @@
 		<Tabs.Content value="tools" class="pt-6">
 			{#if data.tab === 'tools'}
 				<SettingsTools
-					projects={data.session.resources.views.projects}
+					projects={workspaceViews.projects}
 					projectId={toolProjectId}
 					onscopechange={selectToolScope}
 				/>

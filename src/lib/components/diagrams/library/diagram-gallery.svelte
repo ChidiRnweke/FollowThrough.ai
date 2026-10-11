@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { goto } from '$app/navigation';
 	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
@@ -52,7 +53,7 @@
 		const resources = workspaceSession.current?.resources;
 		if (!resources || resources.availability !== 'complete') return null;
 		const id = removeTarget.id;
-		return resources.views
+		return workspaceViews
 			.all('notes')
 			.filter((note) => noteDocuments.diagramReferences([note]).includes(id)).length;
 	});

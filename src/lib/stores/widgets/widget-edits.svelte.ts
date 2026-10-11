@@ -6,7 +6,7 @@ import {
 	type WidgetId,
 	type WidgetTemplateName
 } from '$lib/models/widgets';
-import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
+import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 import { workspaceSession } from '$lib/factories/workspace/session';
 import { toast } from 'svelte-sonner';
 

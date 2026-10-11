@@ -29,7 +29,7 @@ import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 import type {
 	WorkspaceResourcesController,
 	ResourceViewController
-} from '$lib/controllers/workspace/resources';
+} from '$lib/controllers/workspace/workspace';
 
 const project = workspaceRecordSchema.parse({
 	type: 'projects',

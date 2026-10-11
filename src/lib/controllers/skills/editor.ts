@@ -1,11 +1,11 @@
-import type { SessionSynchronization } from '$lib/controllers/workspace/session';
+import type { SessionSynchronization } from '$lib/controllers/workspace/workspace';
 import type { Note, NoteId, ProseMirrorDocument } from '$lib/models/notes';
 import type { DraftStatus, WriteConflictView, EditorSave } from '$lib/models/outbox';
 import type { WorkspaceSkill } from '$lib/models/workspace-views';
 import type { SyncScheduler } from '$lib/models/sync';
 import type { SkillPortability } from '$lib/services/skills/manifest';
 import type { SkillEditorStore } from '$lib/stores/skills/editor.svelte';
-import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
+import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 import type { EditorSessionController } from '$lib/controllers/workspace/editor-session';
 export interface SkillEditorBuffer {
 	readonly description: string;

@@ -15,7 +15,7 @@ import {
 	InMemoryDocumentPreviewUrls,
 	InMemoryExportDiagramImages
 } from '$lib/testing/deliverables/fakes/browser-export';
-import { WorkspaceSessions } from '$lib/controllers/workspace/session';
+import { WorkspaceSessions } from '$lib/controllers/workspace/workspace';
 import { WorkspaceSessionStore } from '$lib/stores/workspace/session.svelte';
 import {
 	InMemoryWorkspaceSessionEnvironment,

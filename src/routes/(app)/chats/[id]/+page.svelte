@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { ChatWorkspace } from '$lib/components/chat';
 	import { WorkspacePanes } from '$lib/components/shell';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	let { data } = $props();
-	const conversation = $derived(data.session.resources.views.conversation(data.conversationId));
+	const conversation = $derived(workspaceViews.conversation(data.conversationId));
 </script>
 
 <!--
@@ -13,8 +14,8 @@
 -->
 {#if workbench.isWorkbenchPath}
 	<WorkspacePanes
-		shell={data.session.shell}
-		sessions={data.session.sessions}
+		shell={workspaceViews.currentShell}
+		sessions={workspaceViews.chatSessions}
 		agentPreferences={data.session.preferences}
 		agentModels={data.session.agentModels}
 		agentDefaults={data.session.agentDefaults}
@@ -22,8 +23,8 @@
 	/>
 {:else if conversation}
 	<ChatWorkspace
-		shell={data.session.shell}
-		sessions={data.session.sessions}
+		shell={workspaceViews.currentShell}
+		sessions={workspaceViews.chatSessions}
 		{conversation}
 		agentPreferences={data.session.preferences}
 		agentModels={data.session.agentModels}

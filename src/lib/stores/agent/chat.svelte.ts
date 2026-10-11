@@ -1,3 +1,4 @@
+import { workspaceViews } from '$lib/factories/workspace/session';
 import { readNoteReview } from './chat-tools';
 import type {
 	AgentEvent,
@@ -22,7 +23,7 @@ import type {
 } from '$lib/client/agent/runs/contracts';
 import { RemoteAgentRunTransport } from '$lib/client/agent/runs/remote-transport';
 import { SessionAgentRunStorage } from '$lib/client/agent/runs/session-storage';
-import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
+import type { WorkspaceResourcesController } from '$lib/controllers/workspace/workspace';
 import type { WorkspaceValues } from '$lib/models/workspace-records';
 import { workspacePresentation } from '$lib/factories/workspace/presentation';
 const { accessMessage } = workspacePresentation;
@@ -532,12 +533,12 @@ export class ChatStore {
 			}
 			await resources.prepare();
 			if (generation !== this.generation || !resources.active) return;
-			const conversation = resources.views.conversation(conversationId);
+			const conversation = workspaceViews.conversation(conversationId);
 			if (!conversation) throw new Error('This chat is no longer available');
-			const run = resources.views.latestRun(conversationId);
+			const run = workspaceViews.latestRun(conversationId);
 			const data = {
 				conversation,
-				messages: resources.views.messages(conversationId),
+				messages: workspaceViews.messages(conversationId),
 				latestRun: run ? { run, pendingDecisions: run.pendingDecisions } : null
 			};
 			// The conversation's own settings, not the ones the last chat left behind.

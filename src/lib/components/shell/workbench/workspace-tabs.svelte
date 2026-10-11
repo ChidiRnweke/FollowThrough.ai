@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import type { ProjectId } from '$lib/models/projects';
@@ -56,11 +57,11 @@
 				return 'Search notes';
 			case 'diagram':
 				return (
-					workspaceSession.current?.resources.views.diagram(ref.diagramId)?.title ??
+					workspaceViews.diagram(ref.diagramId)?.title ??
 					'Untitled diagram'
 				);
 			case 'widget':
-				return workspaceSession.current?.resources.views.widget(ref.widgetId)?.title ?? 'Widget';
+				return workspaceViews.widget(ref.widgetId)?.title ?? 'Widget';
 			case 'chat': {
 				const conversationId = chatRegistry.peek(ref.sessionKey)?.conversationId;
 				return sessions.find((entry) => entry.id === conversationId)?.title ?? 'New chat';

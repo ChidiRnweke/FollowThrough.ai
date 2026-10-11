@@ -1,3 +1,4 @@
+import { workspaceViews } from '$lib/factories/workspace/session';
 import { WidgetSourceService } from '$lib/services/widgets/sources';
 const widgetSourcesRule = new WidgetSourceService();
 import type { Widget, WidgetSources } from '$lib/models/widgets';
@@ -13,7 +14,7 @@ import { workspaceSession } from '$lib/factories/workspace/session';
  */
 export const widgetSources = (widget: Widget): WidgetSources => {
 	if (!widget.layout.sources) return { kind: 'rows', rows: {} };
-	const views = workspaceSession.current?.resources.views;
+	const views = workspaceViews;
 	if (!views) return { kind: 'unavailable' };
 	return {
 		kind: 'rows',

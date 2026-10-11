@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readStoredBootstrap, workspaceAccountHint } from './bootstrap-storage';
+import { readStoredBootstrap } from './bootstrap';
 const accountId = 'a0000000-0000-4000-8000-000000000001';
 const bootstrap = {
 	accountId,
@@ -36,8 +36,5 @@ describe('offline startup account binding', () => {
 	});
 	it('reports corrupt persisted metadata instead of inventing deployment settings', () => {
 		expect(readStoredBootstrap('{broken', accountId)).toMatchObject({ kind: 'corrupt' });
-	});
-	it('reads the non-secret account hint independently of the authentication cookie', () => {
-		expect(workspaceAccountHint(`theme=dark; workspace_account=${accountId}`)).toBe(accountId);
 	});
 });

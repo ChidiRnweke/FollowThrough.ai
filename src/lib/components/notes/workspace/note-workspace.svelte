@@ -34,7 +34,7 @@
 	import { projectActions } from '$lib/factories/projects/actions';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import type { PerNoteEditorSlot } from '../editor-context';
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import type { EditorSelectionState } from '$lib/stores/notes/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';

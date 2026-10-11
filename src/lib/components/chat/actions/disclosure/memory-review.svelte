@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { FtMemory, FtPlus } from '$lib/components/icons';
 	import { CHAT_ROW, CHAT_ROW_ICON } from '../chat-row';
@@ -26,7 +27,7 @@
 
 	const resources = $derived(workspaceSession.current?.resources);
 	const existing = $derived(
-		resources?.views
+		workspaceViews
 			.all('memory_entries')
 			.filter((entry) => !entry.deletedAt && entry.projectId === projectId)
 	);

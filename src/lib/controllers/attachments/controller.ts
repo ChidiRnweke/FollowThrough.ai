@@ -1,3 +1,4 @@
+import { workspaceViews } from '$lib/factories/workspace/session';
 import type {
 	AttachmentView,
 	AttachmentUploadOwner,
@@ -11,7 +12,7 @@ import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 import type { AttachmentUploadPreparation } from '$lib/services/attachments/uploads';
-import type { SessionSynchronization } from '$lib/controllers/workspace/session';
+import type { SessionSynchronization } from '$lib/controllers/workspace/workspace';
 export interface AttachmentRemotePort {
 	initiate(input: AttachmentUploadRequest): Promise<AttachmentUploadIntent>;
 	complete(uploadId: string): Promise<AttachmentView>;
@@ -31,7 +32,6 @@ export interface AttachmentWorkspaceSession {
 	readonly resources: {
 		prepare(): Promise<void>;
 		collectionReadiness(): 'unknown' | 'ready';
-		readonly views: { attachments(owner: AttachmentUploadOwner): readonly AttachmentView[] };
 	};
 }
 export interface AttachmentWorkspace {
@@ -66,7 +66,7 @@ export class Attachments implements AttachmentsController {
 		return this.workspace.current?.resources.collectionReadiness() === 'ready';
 	}
 	list(owner: AttachmentUploadOwner): readonly AttachmentView[] {
-		return this.workspace.current?.resources.views.attachments(owner) ?? [];
+		return workspaceViews.attachments(owner) ?? [];
 	}
 	async prepare(): Promise<void> {
 		const session = this.workspace.current;

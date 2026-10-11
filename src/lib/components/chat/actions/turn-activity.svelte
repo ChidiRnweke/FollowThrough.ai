@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
@@ -73,7 +74,7 @@
 	});
 	const titleOf = (subject: SubjectActivity): string =>
 		(subject.entity.kind === 'todo' && subject.entity.id
-			? resources?.views.get('todos', subject.entity.id)?.title
+			? workspaceViews.get('todos', subject.entity.id)?.title
 			: undefined) ??
 		(subject.entity.kind === 'todo' && titleError
 			? 'Todo title unavailable'

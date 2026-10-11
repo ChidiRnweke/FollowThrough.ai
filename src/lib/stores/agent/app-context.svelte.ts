@@ -1,3 +1,4 @@
+import { workspaceViews } from '$lib/factories/workspace/session';
 import type { ShellContext } from '$lib/models/workspace-views';
 import type { AppContextSnapshotV1, PaneContext, SemanticInteraction } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
@@ -138,7 +139,7 @@ class AppContextStore {
 			widgetIdOf(focusedNoteId) ??
 			(this.pathname.startsWith('/widgets/') ? this.pathname.split('/')[2] : undefined);
 		const focusedWidget = widgetId
-			? workspaceSession.current?.resources.views.widget(widgetId)
+			? workspaceViews.widget(widgetId)
 			: undefined;
 		const pathProjectId = this.pathname.startsWith('/projects/')
 			? (this.pathname.split('/')[2] as ProjectId | undefined)

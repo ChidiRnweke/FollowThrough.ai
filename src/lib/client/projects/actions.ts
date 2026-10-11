@@ -1,4 +1,4 @@
-import { workspaceAccountHint } from '$lib/client/sync/bootstrap-storage';
+import { workspaceAccountHint } from '$lib/client/workspace/account-hint';
 import { isHttpError } from '@sveltejs/kit';
 import type {
 	ProjectActionRemote,
