@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { AgentModels } from './preferences';
-import { ModelCatalogStore } from '$lib/server/stores/agent/model-catalog';
 import { InMemoryAgentModelReader } from '$lib/testing/agent/fakes/in-memory-agent-model-reader';
 
 const entry = {
@@ -10,37 +9,24 @@ const entry = {
 	architecture: { inputModalities: ['text'] }
 };
 
-const setup = (ttlMs = 300_000) => {
-	const source = new InMemoryAgentModelReader([entry]);
-	return {
-		source,
-		catalog: new AgentModels(source, new Set(), new ModelCatalogStore(), ttlMs, () => 1000)
-	};
-};
-const ids = async (catalog: AgentModels) => (await catalog.list()).map((model) => model.id);
-
-describe('model catalog refresh', () => {
-	it('keeps a successful catalog until its refresh expires', async () => {
-		const { source, catalog } = setup();
-		await catalog.list();
+describe('model catalog reads', () => {
+	it('reads the provider catalog on every call', async () => {
+		const source = new InMemoryAgentModelReader([entry]);
+		const catalog = new AgentModels(source, new Set());
+		const first = (await catalog.list()).map((model) => model.id);
 		source.entries = [];
-		expect(await ids(catalog)).toEqual(['vendor/model']);
+		expect({ first, second: await catalog.list() }).toEqual({
+			first: ['vendor/model'],
+			second: []
+		});
 	});
-	it('retains stale models during a transient refresh failure', async () => {
-		const { source, catalog } = setup(0);
-		await catalog.list();
-		source.failure = new Error('Temporary provider failure');
-		expect(await ids(catalog)).toEqual(['vendor/model']);
-	});
-	it('reports the initial provider failure without manufacturing a catalog', async () => {
-		const { source, catalog } = setup();
+	it('reports a provider failure as an external service error with its cause', async () => {
+		const source = new InMemoryAgentModelReader([entry]);
 		source.failure = new Error('Provider unavailable');
-		await expect(catalog.list()).rejects.toThrow('Provider unavailable');
-	});
-	it('replaces the retained catalog after expiration', async () => {
-		const { source, catalog } = setup(0);
-		await catalog.list();
-		source.entries = [];
-		expect(await ids(catalog)).toEqual([]);
+		await expect(new AgentModels(source, new Set()).list()).rejects.toMatchObject({
+			name: 'ExternalServiceError',
+			message: 'The model catalog could not be read.',
+			cause: 'Provider unavailable'
+		});
 	});
 });

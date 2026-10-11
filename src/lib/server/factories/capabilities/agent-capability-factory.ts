@@ -97,7 +97,6 @@ import { traceAgentTurn, traceContextReader } from '$lib/server/infrastructure/t
 import { RunSignalService, type RunSignals } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import type { NotificationChannel } from '$lib/server/db';
-import { ModelCatalogStore } from '$lib/server/stores/agent/model-catalog';
 import {
 	AgentModelChoiceService,
 	AgentModelSelectionService,
@@ -184,8 +183,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 				httpReferer: input.appURL,
 				xTitle: 'FollowThrough'
 			}).models,
-			new Set(input.recommendedModels.map(normalizeLanguageModelId)),
-			new ModelCatalogStore()
+			new Set(input.recommendedModels.map(normalizeLanguageModelId))
 		);
 	const tokens = input.tokens;
 	const runs = new AgentRunRecords(input.db);
