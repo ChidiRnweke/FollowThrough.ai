@@ -31,6 +31,17 @@
   neutral `--chart-2` to `--chart-5` ramp, darkest last; `--chart-1` is too light for a line on
   paper. A chart with more than one series always shows its legend, so colour is never the only
   key. Value-axis ticks are compact (`120K`), and a chart with no rows says so in muted text.
+  The series helpers (`chartConfigOf`, `layerSeriesOf`, `valueTick`, `countTick`) live in
+  `components/ui/chart`; an axis of counts uses `countTick`, which leaves fractional ticks blank.
+- **Dashboards** (the project's Agent activity page) speak to someone who does not know how the
+  agent works. They read top to bottom as three questions: how is it going (stat tiles, then
+  charts), what should I fix ("Needs your attention"), and where did that come from (the full
+  ranking and the chats). A stat tile is a bordered card — a self-contained unit, not a row —
+  with a label, one number and a sentence saying what the number counts; a bare number with a
+  two-word label is a riddle. Only a number that asks for action takes the destructive tone.
+  Every chart carries a title and a one-line plain caption. Use everyday words ("lookups",
+  "files it can't read", "searches with no answer"), never internal ones ("context", "tool
+  call", "touch").
 - **Project identity:** Projects are identified by the brand teal, never per-project hues: the
   sidebar project icon, `Badge variant="brand"`, breadcrumb links, chat origin lines, artifact
   format badges, and overview resource chips use `--brand` text on the shared `bg-brand/10` wash

@@ -3,12 +3,7 @@
 	import { LineChart } from 'layerchart';
 	import * as Chart from '$lib/components/ui/chart';
 	import ChartFrame from '../charts/chart-frame.svelte';
-	import {
-		chartPadding,
-		layerSeriesOf,
-		valueTick,
-		type WidgetChartProps
-	} from '../charts/chart-series';
+	import { chartPadding, type WidgetChartProps } from '../charts/chart-series';
 
 	let { props }: BaseComponentProps<WidgetChartProps> = $props();
 </script>
@@ -17,10 +12,10 @@
 	<LineChart
 		data={props.rows}
 		x={props.x}
-		series={layerSeriesOf(props.series)}
+		series={Chart.layerSeriesOf(props.series)}
 		legend={props.series.length > 1}
 		padding={chartPadding(props.series)}
-		props={{ spline: { strokeWidth: 2 }, yAxis: { format: valueTick } }}
+		props={{ spline: { strokeWidth: 2 }, yAxis: { format: Chart.valueTick } }}
 	>
 		{#snippet tooltip()}
 			<Chart.Tooltip />

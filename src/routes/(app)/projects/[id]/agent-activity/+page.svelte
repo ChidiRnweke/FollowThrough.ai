@@ -10,8 +10,8 @@
 
 {#if project && !project.archivedAt}
 	<PageShell
-		title="Agent context"
-		description="What the agent read in {project.name}, what it never has, and what it could not find."
+		title="Agent activity"
+		description="How the agent has used {project.name} in your chats."
 	>
 		<!-- Ancestors only: the trailing crumb would restate the h1 directly beneath it. -->
 		{#snippet breadcrumb()}

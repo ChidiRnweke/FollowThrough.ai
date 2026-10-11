@@ -61,7 +61,9 @@ const summarise = (log: Partial<ToolContextLog>, over: Partial<ProjectHoldings> 
 			...log
 		})
 	};
-	return new ProjectContextUsageService(repository).summarise(PROJECT, holdings(over));
+	// A Wednesday, three weeks after the first fixture touch.
+	const now = () => '2026-10-22T12:00:00.000Z' as DateTime;
+	return new ProjectContextUsageService(repository, now).summarise(PROJECT, holdings(over));
 };
 
 describe('Most-used context', () => {
@@ -235,6 +237,41 @@ describe('Chats and searches', () => {
 		expect(result.missedSearches).toEqual([
 			{ query: 'Launch  Brief', times: 2, lastAt: at(3), conversationId: OTHER_CHAT },
 			{ query: 'SEO checklist', times: 1, lastAt: at(2), conversationId: CHAT }
+		]);
+	});
+
+	it('counts lookups per week by kind, from the first lookup to this week', async () => {
+		const day = (date: string) => `${date}T10:00:00.000Z` as DateTime;
+		const result = await summarise({
+			touches: [
+				// 2026-10-01 is a Thursday, in the week of Monday 2026-09-28.
+				{ ...touch('note', brief.id, 0), at: day('2026-10-01') },
+				{ ...touch('attachment', contract.attachment.id, 0), at: day('2026-10-02') },
+				// The week of 2026-10-05 has no lookups; the week of 2026-10-12 has one.
+				{ ...touch('note', brief.id, 0), at: day('2026-10-12') }
+			]
+		});
+		expect(
+			result.activity.map((week) => [week.weekStart.slice(0, 10), week.note, week.attachment])
+		).toEqual([
+			['2026-09-28', 1, 1],
+			['2026-10-05', 0, 0],
+			['2026-10-12', 1, 0],
+			['2026-10-19', 0, 0]
+		]);
+	});
+
+	it('has no weeks before the agent ever looked anything up', async () => {
+		const result = await summarise({});
+		expect(result.activity).toEqual([]);
+	});
+
+	it('states how much of each kind of content has been looked up', async () => {
+		const result = await summarise({ touches: [touch('note', brief.id, 1)] });
+		expect(result.coverage).toEqual([
+			{ kind: 'note', used: 1, total: 2 },
+			{ kind: 'attachment', used: 0, total: 1 },
+			{ kind: 'memory', used: 0, total: 1 }
 		]);
 	});
 

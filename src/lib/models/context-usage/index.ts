@@ -107,6 +107,23 @@ export interface ChatUsage {
 	readonly items: readonly ContextItem[];
 }
 
+/** Lookups in one week, by the kind of thing looked up. */
+export interface WeeklyLookups {
+	/** Monday, 00:00 UTC. */
+	readonly weekStart: DateTime;
+	readonly note: number;
+	readonly attachment: number;
+	readonly memory: number;
+	readonly skill: number;
+}
+
+/** How much of one kind of project content the agent has looked up at least once. */
+export interface KindCoverage {
+	readonly kind: ProjectItem['kind'];
+	readonly used: number;
+	readonly total: number;
+}
+
 export interface ProjectContextUsageSummary {
 	/** Most-used first; ties go to the most recently used. */
 	readonly mostUsed: readonly UsageRow[];
@@ -116,6 +133,10 @@ export interface ProjectContextUsageSummary {
 	readonly hiddenAttachments: readonly HiddenAttachment[];
 	/** Most-repeated first, then most recent. */
 	readonly missedSearches: readonly MissedSearch[];
+	/** Every week from the first lookup to this one, empty weeks included; none without lookups. */
+	readonly activity: readonly WeeklyLookups[];
+	/** Notes, files and memory, in that order. */
+	readonly coverage: readonly KindCoverage[];
 	readonly unreadableCalls: number;
 }
 

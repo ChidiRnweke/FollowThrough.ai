@@ -104,4 +104,22 @@ describe('The tool context log reads what the conversation archive journals', ()
 			unreadableCalls: 1
 		});
 	});
+
+	it('settles a call whose rows are read in the opposite order', async () => {
+		const reversed = await journal('c3', (project): ToolActivity[][] => [
+			[
+				{ callId: 'late', name: 'search', input: {}, status: 'succeeded', output: [] },
+				{
+					callId: 'late',
+					name: 'search',
+					input: { query: 'pricing tiers', projectId: project },
+					status: 'running'
+				}
+			]
+		]);
+
+		const log = await new ToolContextLogRecords(reversed.owner, context.db).read();
+
+		expect(log.emptySearches.map(({ query }) => query)).toEqual(['pricing tiers']);
+	});
 });

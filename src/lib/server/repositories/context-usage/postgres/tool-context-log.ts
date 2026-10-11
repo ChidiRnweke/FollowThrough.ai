@@ -47,6 +47,9 @@ interface Call {
 	readonly status: string;
 }
 
+/** Statuses a call passes through before it settles. */
+const inFlight = new Set(['running', 'approval_required']);
+
 const projectFile = /^\/projects\/([^/]+)\/(notes|attachments)\/([^/.]+)(?:[./].*)?$/;
 
 /** A virtual file path names its project and its record; any other path is not one of ours. */
@@ -202,7 +205,9 @@ export class ToolContextLogRecords implements ToolContextLogRepository {
 				conversationId,
 				name: content.name,
 				at: earlier?.at ?? (row.createdAt.toISOString() as DateTime),
-				status: content.status,
+				// A settled status wins whichever row arrives first: the two rows of one call can
+				// share a timestamp, and ordering by it then says nothing about which came last.
+				status: earlier && !inFlight.has(earlier.status) ? earlier.status : content.status,
 				...(input ? { input } : {}),
 				...(output !== undefined ? { output } : {})
 			});

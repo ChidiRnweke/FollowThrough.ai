@@ -3,6 +3,8 @@ import type {
 	ContextItem,
 	ContextTouch,
 	HiddenAttachment,
+	KindCoverage,
+	WeeklyLookups,
 	MissedSearch,
 	ProjectContextUsageSummary,
 	ProjectItem,
@@ -12,6 +14,7 @@ import type { AttachmentView } from '$lib/models/attachments';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { Note } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
+import type { DateTime } from '$lib/models/workspace';
 import type { ToolContextLogRepository } from '$lib/server/repositories/context-usage';
 
 /** What the project holds, as its own services return it. */
@@ -29,6 +32,23 @@ const keyOf = (item: { readonly kind: string; readonly id: string }) => `${item.
 
 const fileName = (path: string) => path.split('/').at(-1) ?? path;
 
+const DAY = 24 * 60 * 60 * 1000;
+
+const emptyWeek = (week: number): WeeklyLookups => ({
+	weekStart: new Date(week).toISOString() as DateTime,
+	note: 0,
+	attachment: 0,
+	memory: 0,
+	skill: 0
+});
+
+/** Monday 00:00 UTC of the week an instant falls in. */
+const weekOf = (instant: string): number => {
+	const day = new Date(instant);
+	const midnight = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate());
+	return midnight - ((day.getUTCDay() + 6) % 7) * DAY;
+};
+
 /**
  * Text the search index holds. `partial` is searchable for what was extracted, so it is
  * both something the agent can use and something it cannot fully see.
@@ -36,7 +56,10 @@ const fileName = (path: string) => path.split('/').at(-1) ?? path;
 const searchable = new Set(['ready', 'partial']);
 
 export class ProjectContextUsageService implements ProjectContextUsage {
-	constructor(private readonly log: ToolContextLogRepository) {}
+	constructor(
+		private readonly log: ToolContextLogRepository,
+		private readonly now: () => DateTime
+	) {}
 
 	async summarise(
 		projectId: ProjectId,
@@ -79,9 +102,13 @@ export class ProjectContextUsageService implements ProjectContextUsage {
 
 		const usage = new Map<string, { item: ContextItem; uses: number; lastUsedAt: string }>();
 		const chats = new Map<string, { lastUsedAt: string; items: Map<string, ContextItem> }>();
+		const weeks = new Map<number, WeeklyLookups>();
 		for (const touch of log.touches) {
 			const item = resolve(touch);
 			if (!item) continue;
+			const week = weekOf(touch.at);
+			const counts = weeks.get(week) ?? emptyWeek(week);
+			weeks.set(week, { ...counts, [item.kind]: counts[item.kind] + 1 });
 			const key = keyOf(item);
 			const row = usage.get(key);
 			usage.set(key, {
@@ -149,12 +176,27 @@ export class ProjectContextUsageService implements ProjectContextUsage {
 						]
 		);
 
+		// Every week from the first lookup to this one, so a quiet week reads as a gap, not as
+		// nothing between two neighbours.
+		const activity: WeeklyLookups[] = [];
+		if (weeks.size > 0)
+			for (let week = Math.min(...weeks.keys()); week <= weekOf(this.now()); week += 7 * DAY)
+				activity.push(weeks.get(week) ?? emptyWeek(week));
+
+		const coverage = (['note', 'attachment', 'memory'] as const).map((kind): KindCoverage => ({
+			kind,
+			used: items.filter((item) => item.kind === kind && usage.has(keyOf(item))).length,
+			total: items.filter((item) => item.kind === kind).length
+		}));
+
 		return {
 			mostUsed,
 			neverUsed: items.filter((item) => !usage.has(keyOf(item))),
 			chats: chatRows,
 			hiddenAttachments,
 			missedSearches,
+			activity,
+			coverage,
 			unreadableCalls: log.unreadableCalls
 		};
 	}
