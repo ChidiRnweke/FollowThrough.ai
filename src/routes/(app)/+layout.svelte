@@ -14,10 +14,13 @@
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { IndexedDbWorkbenchLayout } from '$lib/client/workbench/indexeddb-layout';
 	import { proofreading } from '$lib/factories/notes/proofreading';
-	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 	import { cn } from '$lib/utils';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
+	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { createChat } from '$lib/factories/agent/chat';
+	// The app is composed here: chats are built by the factory, held by the registry.
+	chatRegistry.provide(createChat);
 	import { workspacePresentation } from '$lib/factories/workspace/presentation';
 	const { effectiveSidebarWidth } = workspacePresentation;
 
@@ -135,7 +138,7 @@
 	$effect(() => {
 		void page.url;
 		if (!shell) return;
-		appContext.configure(shell, page.url);
+		appContext.configure(shell, page.url, workspaceViews.all('widgets'));
 		workbench.syncFromUrl();
 		workbench.refreshActiveProjectId(projectOfTab);
 		void pruneClosedTabs();

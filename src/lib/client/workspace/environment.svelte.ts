@@ -3,6 +3,7 @@ import type { WorkspaceEnvironment, WorkspaceEvents } from '$lib/controllers/wor
 import type { DateTime } from '$lib/models/workspace';
 import { workspaceBootstrapKey } from '$lib/models/workspace-bootstrap';
 import { workspaceAccountHint } from './account-hint';
+import { isHttpError } from '@sveltejs/kit';
 
 /** Browser events, clocks, Web Locks and the Svelte proxy boundary for the workspace. */
 export class BrowserWorkspaceEnvironment implements WorkspaceEnvironment {
@@ -11,6 +12,10 @@ export class BrowserWorkspaceEnvironment implements WorkspaceEnvironment {
 	}
 	get online(): boolean {
 		return navigator.onLine;
+	}
+	explain(error: unknown, fallback: string): string {
+		if (isHttpError(error)) return error.body.message;
+		return error instanceof Error ? error.message : fallback;
 	}
 	reload(): void {
 		window.location.reload();

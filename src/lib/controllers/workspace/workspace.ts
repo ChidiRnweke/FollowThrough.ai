@@ -1,4 +1,3 @@
-import { isHttpError } from '@sveltejs/kit';
 import type { WorkspaceReadinessRules } from '$lib/services/workspace/startup';
 import type {
 	SyncResourceRules,
@@ -129,6 +128,8 @@ export interface WorkspaceEvents {
 
 /** Browser mechanics: clocks, timers, locks, events and the Svelte input boundary. */
 export interface WorkspaceEnvironment {
+	/** What a failed server request says to the person who made it. */
+	explain(error: unknown, fallback: string): string;
 	/** The account the server's readable cookie names; never authentication. */
 	readonly accountId: string | null;
 	readonly online: boolean;
@@ -704,11 +705,7 @@ export class Workspace implements WorkspaceController {
 		} catch (error) {
 			return {
 				kind: 'failure',
-				message: isHttpError(error)
-					? error.body.message
-					: error instanceof Error
-						? error.message
-						: 'The action could not be saved'
+				message: this.environment.explain(error, 'The action could not be saved')
 			};
 		}
 	}

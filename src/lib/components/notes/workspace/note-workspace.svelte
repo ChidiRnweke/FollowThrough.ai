@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { decideSuggestion } from '$lib/components/suggestions/decide';
 	import { createNoteHistory } from '$lib/factories/notes/history';
 	import type { DiagramSuggestion } from '$lib/models/suggestions';
 
@@ -466,7 +467,7 @@
 				return;
 			}
 			markDirty();
-			await suggestionActions.decide(output.suggestion.id, 'accept');
+			await decideSuggestion(output.suggestion.id, 'accept');
 			toast.success('Diagram inserted — undo with Ctrl+Z');
 		});
 		actionRuns.on('convert', (result) => {

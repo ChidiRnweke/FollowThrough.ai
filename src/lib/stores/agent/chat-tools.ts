@@ -17,50 +17,9 @@ import {
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
 import { agentReviewSchema, type AgentReview, agentToolNameSchema } from '$lib/models/agent';
-import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 
-export type ChatToolStatus =
-	'running' | 'approval_required' | 'succeeded' | 'reported_failure' | 'failed' | 'rejected';
-
-/** What every tool row carries, whatever became of the call. */
-export interface ChatToolActivityBase {
-	/** Absent when the provider reported the outcome without one; see `matchToolActivity`. */
-	readonly callId?: string;
-	readonly name: AgentToolName;
-	readonly arguments: AgentPayloadObject;
-	/** The run that produced it. Restored rows from before a run existed have none. */
-	readonly runId?: string;
-}
-
-/**
- * One tool call as the transcript shows it.
- *
- * The client twin of `ToolActivity`, with one extra arm: `rejected` is what the
- * user just did to a parked approval, applied here before the run has caught up.
- *
- * Discriminated on `status` for the reason the model type gives — the payload
- * belongs to the arm that can have it. Two consequences worth knowing:
- * `tool.failure` does not typecheck until `status === 'failed'` has been
- * established, which is what retires the hand-written
- * `tool is ChatToolActivity & { failure: string }` predicate in `turn-activity`;
- * and a row cannot be moved from one arm to another by assignment, so a call
- * that settles replaces its row rather than being edited in place.
- */
-export type ChatToolActivity =
-	| (ChatToolActivityBase & { readonly status: 'running' })
-	| (ChatToolActivityBase & {
-			readonly status: 'approval_required';
-			readonly noteReview?: NoteChangeReview;
-	  })
-	| (ChatToolActivityBase & { readonly status: 'succeeded'; readonly output?: AgentPayload })
-	/** The tool returned, and what it returned says it failed (ADR 0035). */
-	| (ChatToolActivityBase & {
-			readonly status: 'reported_failure';
-			readonly failure: string;
-			readonly output: AgentPayload;
-	  })
-	| (ChatToolActivityBase & { readonly status: 'failed'; readonly failure: string })
-	| (ChatToolActivityBase & { readonly status: 'rejected' });
+export type { ChatToolStatus, ChatToolActivityBase, ChatToolActivity } from '$lib/models/chat';
+import type { ChatToolActivity, ChatToolActivityBase } from '$lib/models/chat';
 
 /**
  * Arguments, or none recorded.

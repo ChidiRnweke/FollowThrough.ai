@@ -1,11 +1,10 @@
-import { workspaceViews } from '$lib/factories/workspace/session';
 import type { ShellContext } from '$lib/models/workspace-views';
+import type { Widget } from '$lib/models/widgets';
 import type { AppContextSnapshotV1, PaneContext, SemanticInteraction } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import { workbench } from '../workbench/workbench.svelte';
 import { chatKeyOf, noteIdOf, widgetIdOf } from '../workbench/tab-ref';
-import { workspaceSession } from '$lib/factories/workspace/session';
 
 export function surfaceFor(
 	pathname: string,
@@ -60,6 +59,8 @@ type ChatPaneGetter = () => { conversationId?: string; title: string };
 
 class AppContextStore {
 	private shell?: ShellContext;
+	/** The account's widgets, so a widget tab can name the project the agent is asked about. */
+	private widgets: readonly Widget[] = [];
 	private pathname = '/';
 	private search = '';
 	private panes = new Map<NoteId, PaneGetter>();
@@ -71,8 +72,9 @@ class AppContextStore {
 	private chatPanes = new Map<string, ChatPaneGetter>();
 	private interactions: SemanticInteraction[] = [];
 
-	configure(shell: ShellContext, url: URL): void {
+	configure(shell: ShellContext, url: URL, widgets: readonly Widget[]): void {
 		this.shell = shell;
+		this.widgets = widgets;
 		this.pathname = url.pathname;
 		this.search = url.search;
 	}
@@ -139,7 +141,11 @@ class AppContextStore {
 			widgetIdOf(focusedNoteId) ??
 			(this.pathname.startsWith('/widgets/') ? this.pathname.split('/')[2] : undefined);
 		const focusedWidget = widgetId
-			? workspaceViews.widget(widgetId)
+			? this.widgets.find(
+					(widget) =>
+						widget.id === widgetId &&
+						this.shell?.projects.some((project) => project.id === widget.projectId)
+				)
 			: undefined;
 		const pathProjectId = this.pathname.startsWith('/projects/')
 			? (this.pathname.split('/')[2] as ProjectId | undefined)

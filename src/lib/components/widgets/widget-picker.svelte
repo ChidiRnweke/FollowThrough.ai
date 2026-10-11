@@ -23,7 +23,9 @@
 	import { FtWidget as WidgetIcon } from '$lib/components/icons';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import WidgetView from './widget-view.svelte';
-	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
+	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
+	import { todayLocalDate } from '$lib/client/todos/local-date';
+	const widgetSources = (widget: Widget) => sourceViews.widgetSources(widget, todayLocalDate());
 
 	let {
 		open = $bindable(false),

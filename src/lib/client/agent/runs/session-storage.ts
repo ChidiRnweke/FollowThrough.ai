@@ -2,7 +2,7 @@ import type {
 	AgentRunClientStorage,
 	StoredAgentRunClientState,
 	StoredAgentRunClientStateResult
-} from './contracts';
+} from '$lib/controllers/agent/chat.svelte';
 import { agentRunCursorSchema, type AgentRunId } from '$lib/models/agent';
 import { z } from 'zod';
 

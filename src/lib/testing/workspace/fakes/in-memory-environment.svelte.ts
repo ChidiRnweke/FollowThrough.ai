@@ -15,6 +15,9 @@ export class InMemoryWorkspaceEnvironment implements WorkspaceEnvironment {
 		/** Tabs that share this map share the account writer lock. */
 		private readonly waiting = new Map<string, Promise<void>>()
 	) {}
+	explain(error: unknown, fallback: string): string {
+		return error instanceof Error ? error.message : fallback;
+	}
 	reload(): void {
 		this.reloads++;
 	}

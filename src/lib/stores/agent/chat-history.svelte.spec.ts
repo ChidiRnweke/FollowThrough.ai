@@ -31,7 +31,7 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
-import type { AgentRunTransport } from '$lib/client/agent/runs/contracts';
+import type { AgentRunTransport } from '$lib/controllers/agent/chat.svelte';
 import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 import { ChatStore, entryTools } from './chat.svelte';
 

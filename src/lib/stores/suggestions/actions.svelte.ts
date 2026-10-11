@@ -1,24 +1,14 @@
-import { workspaceSession } from '$lib/factories/workspace/session';
 import type { SuggestionId } from '$lib/models/suggestions';
-import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 
+/** Which suggestion awaits review and which decisions are in flight. */
 export class SuggestionActions {
 	reviewRequested = $state<SuggestionId | null>(null);
 	busyIds = $state<SuggestionId[]>([]);
-
-	async decide(suggestionId: SuggestionId, decision: 'accept' | 'reject'): Promise<boolean> {
+	begin(suggestionId: SuggestionId): void {
 		this.busyIds = [...this.busyIds, suggestionId];
-		try {
-			if (decision === 'accept') await acceptSuggestion({ suggestionId });
-			else await rejectSuggestion({ suggestionId });
-			await workspaceSession.synchronize();
-			return true;
-			// audit-allow: silent-catch — false is the tray's typed outcome; the suggestion stays visible and actionable.
-		} catch {
-			return false;
-		} finally {
-			this.busyIds = this.busyIds.filter((id) => id !== suggestionId);
-		}
+	}
+	finish(suggestionId: SuggestionId): void {
+		this.busyIds = this.busyIds.filter((id) => id !== suggestionId);
 	}
 	requestReview(suggestionId: SuggestionId): void {
 		this.reviewRequested = suggestionId;

@@ -5,7 +5,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from 'svelte-sonner';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from '$lib/components/todos/todo-updates';
 
 	let {
 		todoId,

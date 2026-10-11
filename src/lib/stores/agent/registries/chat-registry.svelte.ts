@@ -1,16 +1,16 @@
 import type { ConversationId } from '$lib/models/agent';
 import { Registry } from '$lib/stores/notes/registries/registry';
 import {
-	ChatStore,
 	mintChatSessionKey,
 	rememberConversation,
+	type ChatSession,
 	type ChatSessionKey
 } from '../chat.svelte';
 
 /**
- * Per-session registry of `ChatStore` instances.
+ * Per-session registry of `ChatSession` instances.
  *
- * `ChatStore` used to be a module singleton, which capped the app at one live
+ * `ChatSession` used to be a module singleton, which capped the app at one live
  * conversation: the docked panel and `/chats/[id]` imported the same instance
  * and fought over its transcript. The server has never had that limit — the
  * `agent_runs_active_conversation_unique` index is scoped per conversation, not
@@ -20,9 +20,13 @@ import {
  * session calls `for` and releases on destroy. Releasing detaches the session's
  * EventSource, because a stream must not outlive the surface showing it.
  */
-const registry = new Registry<ChatSessionKey, ChatStore>(
-	(key) => new ChatStore(key),
-	(_key, store) => store.detach()
+let create: ((key: ChatSessionKey) => ChatSession) | null = null;
+const registry = new Registry<ChatSessionKey, ChatSession>(
+	(key) => {
+		if (!create) throw new Error('The chat registry was opened before the app provided chats');
+		return create(key);
+	},
+	(_key, chat) => chat.detach()
 );
 
 /**
@@ -36,6 +40,11 @@ const registry = new Registry<ChatSessionKey, ChatStore>(
 export const MAX_CONCURRENT_STREAMS = 4;
 
 export class ChatRegistry {
+	/** How the application builds a chat; supplied once, where the app is composed. */
+	provide(build: (key: ChatSessionKey) => ChatSession): void {
+		create = build;
+	}
+
 	/** A fresh session, with no conversation behind it until its first send. */
 	mint(): ChatSessionKey {
 		return mintChatSessionKey();
@@ -71,7 +80,7 @@ export class ChatRegistry {
 	}
 
 	/** The open session showing `conversationId`, for callers that need the store. */
-	sessionForConversation(conversationId: ConversationId): ChatStore | undefined {
+	sessionForConversation(conversationId: ConversationId): ChatSession | undefined {
 		const key = this.keyForConversation(conversationId);
 		return key === undefined ? undefined : registry.peek(key);
 	}
@@ -88,7 +97,7 @@ export class ChatRegistry {
 		return this.streamingCount() >= MAX_CONCURRENT_STREAMS;
 	}
 
-	for(key: ChatSessionKey): ChatStore {
+	for(key: ChatSessionKey): ChatSession {
 		return registry.for(key);
 	}
 
@@ -97,7 +106,7 @@ export class ChatRegistry {
 	 * once. Idempotent, so it is safe to call from a `$derived` that re-runs —
 	 * unlike `for`, which would bump the refcount on every read.
 	 */
-	resident(key: ChatSessionKey): ChatStore {
+	resident(key: ChatSessionKey): ChatSession {
 		return registry.peek(key) ?? registry.for(key);
 	}
 
@@ -105,7 +114,7 @@ export class ChatRegistry {
 		registry.release(key);
 	}
 
-	peek(key: ChatSessionKey): ChatStore | undefined {
+	peek(key: ChatSessionKey): ChatSession | undefined {
 		return registry.peek(key);
 	}
 

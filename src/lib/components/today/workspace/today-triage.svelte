@@ -10,7 +10,7 @@
 	import EmptyState from '../../shared/empty-state.svelte';
 	import { openTodoSurface } from '$lib/client/shell/responsive-surfaces';
 	import { page } from '$app/state';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from '$lib/components/todos/todo-updates';
 	import TodoCard from '../../todos/todo-card.svelte';
 	import { formatDateTime } from '../../shared/labels';
 

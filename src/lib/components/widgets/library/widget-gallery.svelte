@@ -26,9 +26,11 @@
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { widgetTab } from '$lib/stores/workbench/tab-ref';
-	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
+	import { widgetEdits } from '$lib/components/widgets/widget-edits';
 	import WidgetView from '../widget-view.svelte';
-	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
+	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
+	import { todayLocalDate } from '$lib/client/todos/local-date';
+	const widgetSources = (widget: Widget) => sourceViews.widgetSources(widget, todayLocalDate());
 
 	export interface WidgetGalleryData {
 		readonly widgets: readonly Widget[];

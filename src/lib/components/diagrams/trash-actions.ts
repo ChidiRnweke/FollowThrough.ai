@@ -9,10 +9,8 @@ export const changeDiagramTrash = async (
 	action: 'archive' | 'restore' | 'delete'
 ): Promise<void> => {
 	try {
-		const session = workspaceSession.current;
-		if (!session) throw new Error('Open the workspace before changing a diagram');
-		const draft = session.resources.draft({ type: 'diagrams', id: [diagramId] });
-		draft.capture();
+		const draft = workspaceSession.capture({ type: 'diagrams', id: [diagramId] });
+		if (!draft) throw new Error('Open the workspace before changing a diagram');
 		const result = await draft.stage({
 			kind:
 				action === 'archive'

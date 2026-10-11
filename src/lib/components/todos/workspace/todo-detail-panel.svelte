@@ -5,7 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import { FtExternal as ExternalLink } from '$lib/components/icons';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from '$lib/components/todos/todo-updates';
 	import TodoTextField from '../fields/todo-text-field.svelte';
 	import TodoDescriptionField from '../fields/todo-description-field.svelte';
 	import TodoStatusField from '../fields/todo-status-field.svelte';

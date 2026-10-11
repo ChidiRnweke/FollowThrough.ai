@@ -12,12 +12,12 @@
 		noteTrashEntry,
 		type TrashEntry
 	} from '$lib/components/shared/trash-entry';
-	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
+	import { changeDiagramTrash } from '$lib/components/diagrams/trash-actions';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import type { Diagram } from '$lib/models/diagrams';
 	import type { Widget } from '$lib/models/widgets';
-	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
+	import { widgetEdits } from '$lib/components/widgets/widget-edits';
 	import { toast } from 'svelte-sonner';
 	import {
 		FtMemory as Brain,

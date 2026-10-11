@@ -1,10 +1,4 @@
 import { z } from 'zod';
-import { readWorkspaceBootstrap } from '$lib/remote/workspace/bootstrap.remote';
-import { pullWorkspaceChangePage, readWorkspaceResource } from '$lib/remote/workspace/sync.remote';
-import {
-	cancelWorkspaceMutation,
-	pushWorkspaceMutation
-} from '$lib/remote/workspace/mutations.remote';
 import { workspaceBootstrapSchema, type WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
 import {
 	syncPageSchema,
@@ -14,7 +8,10 @@ import {
 	type SyncPage
 } from '$lib/models/sync';
 import type { WriteOutcome, WriteRecovery } from '$lib/models/outbox';
-import { workspaceResourceIdentitySchema } from '$lib/models/workspace-sync';
+import {
+	workspaceResourceIdentitySchema,
+	type WorkspaceResourceIdentity
+} from '$lib/models/workspace-sync';
 import {
 	workspaceObjectReadSchema,
 	workspaceRecordSchema,
@@ -45,13 +42,27 @@ export interface WorkspaceTransport {
 	cancel(accountId: string, input: WorkspaceSubmission): Promise<WriteRecovery<WorkspaceRecord>>;
 }
 
+/** The server's remote functions as they answer: unparsed until this service reads them. */
+export interface WorkspaceRemoteFunctions {
+	bootstrap(): Promise<unknown>;
+	pull(input: { accountId: string; since: SyncCursor }): Promise<unknown>;
+	read(input: {
+		accountId: string;
+		identity: WorkspaceResourceIdentity;
+		etag: SyncEtag | null;
+	}): Promise<unknown>;
+	push(input: WorkspaceSubmission & { accountId: string }): Promise<unknown>;
+	cancel(input: { operationId: string; request: string; accountId: string }): Promise<unknown>;
+}
+
 export class RemoteWorkspaceTransport implements WorkspaceTransport {
+	constructor(private readonly remote: WorkspaceRemoteFunctions) {}
 	async bootstrap(): Promise<WorkspaceBootstrap> {
-		return workspaceBootstrapSchema.parse(await readWorkspaceBootstrap({}));
+		return workspaceBootstrapSchema.parse(await this.remote.bootstrap());
 	}
 	async pull(accountId: string, since: SyncCursor): Promise<SyncPage<WorkspaceRecord>> {
 		return syncPageSchema(workspaceRecordSchema).parse(
-			await pullWorkspaceChangePage({ accountId, since })
+			await this.remote.pull({ accountId, since })
 		);
 	}
 	async read(
@@ -61,24 +72,20 @@ export class RemoteWorkspaceTransport implements WorkspaceTransport {
 	): Promise<SyncObjectRead<WorkspaceRecord>> {
 		const [type, ...id] = z.array(z.string()).min(2).parse(JSON.parse(key));
 		const identity = workspaceResourceIdentitySchema.parse({ type, id });
-		return workspaceObjectReadSchema.parse(
-			await readWorkspaceResource({ accountId, identity, etag })
-		);
+		return workspaceObjectReadSchema.parse(await this.remote.read({ accountId, identity, etag }));
 	}
 	async send(
 		accountId: string,
 		input: WorkspaceSubmission
 	): Promise<WriteOutcome<WorkspaceRecord>> {
-		return workspaceMutationResultSchema.parse(
-			await pushWorkspaceMutation({ ...input, accountId })
-		);
+		return workspaceMutationResultSchema.parse(await this.remote.push({ ...input, accountId }));
 	}
 	async cancel(
 		accountId: string,
 		input: WorkspaceSubmission
 	): Promise<WriteRecovery<WorkspaceRecord>> {
 		return workspaceWriteRecoverySchema.parse(
-			await cancelWorkspaceMutation({
+			await this.remote.cancel({
 				operationId: input.operationId,
 				request: JSON.stringify(input),
 				accountId

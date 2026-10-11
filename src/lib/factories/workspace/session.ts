@@ -1,3 +1,9 @@
+import { readWorkspaceBootstrap } from '$lib/remote/workspace/bootstrap.remote';
+import { pullWorkspaceChangePage, readWorkspaceResource } from '$lib/remote/workspace/sync.remote';
+import {
+	cancelWorkspaceMutation,
+	pushWorkspaceMutation
+} from '$lib/remote/workspace/mutations.remote';
 import {
 	AgentModelSelectionService,
 	AgentModelChoiceService
@@ -53,7 +59,7 @@ import { BrowserWorkspaceEnvironment } from '$lib/client/workspace/environment.s
 import { workspaceRecordSchema, type WorkspaceRecord } from '$lib/models/workspace-records';
 import { workspaceCommandSchema, type WorkspaceCommand } from '$lib/models/workspace-mutations';
 import type { WorkspaceEnvironment } from '$lib/controllers/workspace/workspace';
-import { createWorkspaceViews } from './views';
+import { workspaceViewsOver } from './views';
 
 export const createWorkspaceRules = (): WorkspaceRules => ({
 	readiness: new WorkspaceReadinessRulesService(),
@@ -111,7 +117,7 @@ export const createWorkspaceGraph = (
 	const stores = workspaceStores();
 	return {
 		workspace: new Workspace(stores, storage, transport, environment, createWorkspaceRules()),
-		views: createWorkspaceViews(stores.projection, stores.session)
+		views: workspaceViewsOver(stores.projection, stores.session)
 	};
 };
 
@@ -121,7 +127,13 @@ const application = createWorkspaceGraph(
 		new IndexedDbWorkspaceReplica(workspaceCommandSchema, workspaceRecordSchema),
 		new LocalStorageBootstrap()
 	),
-	new RemoteWorkspaceTransport(),
+	new RemoteWorkspaceTransport({
+		bootstrap: () => readWorkspaceBootstrap({}),
+		pull: (input) => pullWorkspaceChangePage(input),
+		read: (input) => readWorkspaceResource(input),
+		push: (input) => pushWorkspaceMutation(input),
+		cancel: (input) => cancelWorkspaceMutation(input)
+	}),
 	new BrowserWorkspaceEnvironment()
 );
 

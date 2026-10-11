@@ -2,7 +2,7 @@ import type {
 	AgentRunClientStorage,
 	StoredAgentRunClientState,
 	StoredAgentRunClientStateResult
-} from '$lib/client/agent/runs/contracts';
+} from '$lib/controllers/agent/chat.svelte';
 
 export class InMemoryRunClientStorage implements AgentRunClientStorage {
 	state: StoredAgentRunClientStateResult = { kind: 'missing' };

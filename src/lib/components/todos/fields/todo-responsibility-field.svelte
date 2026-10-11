@@ -2,7 +2,7 @@
 	import type { TodoId, TodoResponsibility } from '$lib/models/todos';
 	import * as Select from '$lib/components/ui/select';
 	import { toast } from 'svelte-sonner';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from '$lib/components/todos/todo-updates';
 
 	let {
 		todoId,

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { decideSuggestion } from '$lib/components/suggestions/decide';
 	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { SuggestionId, SuggestionView } from '$lib/models/suggestions';
 	import { toast } from 'svelte-sonner';
@@ -8,14 +9,12 @@
 	import SuggestionCard from '../suggestion-card.svelte';
 
 	const projection = $derived(
-		workbench.focusedNoteId
-			? workspaceViews.note(workbench.focusedNoteId)
-			: undefined
+		workbench.focusedNoteId ? workspaceViews.note(workbench.focusedNoteId) : undefined
 	);
 	const items = $derived(projection?.view.pendingSuggestions ?? []);
 
 	async function decide(id: SuggestionId, decision: 'accept' | 'reject'): Promise<void> {
-		const ok = await suggestionActions.decide(id, decision);
+		const ok = await decideSuggestion(id, decision);
 		if (ok) toast.success(decision === 'accept' ? 'Accepted' : 'Dismissed');
 		else toast.error('That did not go through. Try again.');
 	}

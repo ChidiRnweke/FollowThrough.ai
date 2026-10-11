@@ -19,7 +19,11 @@
 	import { approvalPreview, isNoteBodyTool, type ApprovalBaseline } from './tool-approval-preview';
 	import { approvalFields, argumentLabel } from './tool-approval-fields';
 	import { WidgetView } from '$lib/components/widgets';
-	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
+	import type { Widget } from '$lib/models/widgets';
+	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
+	import { todayLocalDate } from '$lib/client/todos/local-date';
+	const widgetSources = (widget: import('$lib/models/widgets').Widget) =>
+		sourceViews.widgetSources(widget, todayLocalDate());
 
 	let {
 		tool,

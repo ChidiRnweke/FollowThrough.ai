@@ -14,7 +14,7 @@ import type {
 	AgentRunTransport,
 	StoredAgentRunClientState,
 	StoredAgentRunClientStateResult
-} from '$lib/client/agent/runs/contracts';
+} from '$lib/controllers/agent/chat.svelte';
 import type { NoteId } from '$lib/models/notes';
 import {
 	ChatStore,

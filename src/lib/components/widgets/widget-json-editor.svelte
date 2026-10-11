@@ -9,7 +9,9 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import WidgetView from './widget-view.svelte';
-	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
+	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
+	import { todayLocalDate } from '$lib/client/todos/local-date';
+	const widgetSources = (widget: Widget) => sourceViews.widgetSources(widget, todayLocalDate());
 
 	/**
 	 * Edit a widget as JSON. What is typed becomes changes through `widgetChangesBetween`, the

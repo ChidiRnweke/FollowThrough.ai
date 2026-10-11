@@ -10,7 +10,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { openTodoSurface } from '$lib/client/shell/responsive-surfaces';
 	import { page } from '$app/state';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from '$lib/components/todos/todo-updates';
 	import { formatDate, todayLocalDate } from '../shared/labels';
 
 	let { node, editor }: NodeViewProps = $props();

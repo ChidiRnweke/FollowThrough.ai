@@ -1,3 +1,4 @@
+import { WidgetSourceService } from '$lib/services/widgets/sources';
 import { SkillPortabilityService } from '$lib/services/skills/manifest';
 import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
 import { ReferencePresentationService } from '$lib/services/references/presentation';
@@ -14,10 +15,10 @@ import { WorkspaceViews, type WorkspaceViewsController } from '$lib/controllers/
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import { WorkspaceProjectionStore } from '$lib/stores/workspace/projection.svelte';
 import { WorkspaceSessionStore } from '$lib/stores/workspace/session.svelte';
-/** Views over a projection; the workspace's own views share its projection and session. */
-export const createWorkspaceViews = (
-	records: ReadonlyMap<string, WorkspaceRecord> | WorkspaceProjectionStore,
-	session: WorkspaceSessionStore = new WorkspaceSessionStore()
+/** Views over the projection the workspace replicates into, for its signed-in session. */
+export const workspaceViewsOver = (
+	projection: WorkspaceProjectionStore,
+	session: WorkspaceSessionStore
 ): WorkspaceViewsController =>
 	new WorkspaceViews(
 		new BacklinkPresentationService(),
@@ -26,12 +27,19 @@ export const createWorkspaceViews = (
 		new ProvenancePresentationService(),
 		new TodayPresentationService(),
 		new TodoPresentationService(),
-		records instanceof WorkspaceProjectionStore ? records : new WorkspaceProjectionStore(records),
+		projection,
 		new SuggestionPresentationService(),
 		new MemoryPresentationService(),
 		new ProjectTreePresentationService(),
 		new NotePresentationService(),
 		new NoteSectionNumberingService(),
 		session,
-		new SkillPortabilityService()
+		new SkillPortabilityService(),
+		new WidgetSourceService()
 	);
+
+/** Views over a fixed set of records, as a server parity check or a scenario supplies them. */
+export const createWorkspaceViews = (
+	records: ReadonlyMap<string, WorkspaceRecord>
+): WorkspaceViewsController =>
+	workspaceViewsOver(new WorkspaceProjectionStore(records), new WorkspaceSessionStore());

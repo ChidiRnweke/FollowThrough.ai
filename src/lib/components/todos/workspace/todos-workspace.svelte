@@ -9,7 +9,7 @@
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
 	import { openTodoSurface } from '$lib/client/shell/responsive-surfaces';
-	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
+	import { todoUpdates } from '$lib/components/todos/todo-updates';
 	import KanbanBoard from '../kanban-board.svelte';
 	import TodoTable from '../todo-table.svelte';
 	import TodoExport from '../todo-export.svelte';

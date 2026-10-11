@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { decideSuggestion } from '$lib/components/suggestions/decide';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import * as HoverCard from '$lib/components/ui/hover-card';
 	import { Badge } from '$lib/components/ui/badge';
@@ -41,7 +42,7 @@
 	}
 
 	async function decide(suggestionId: SuggestionId, decision: 'accept' | 'reject'): Promise<void> {
-		const ok = await suggestionActions.decide(suggestionId, decision);
+		const ok = await decideSuggestion(suggestionId, decision);
 		if (!ok) {
 			toast.error('Could not apply the decision. Try again.');
 			return;

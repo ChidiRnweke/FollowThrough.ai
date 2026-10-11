@@ -1,6 +1,6 @@
 <script lang="ts" module>
 	import type { WidgetChange } from '$lib/models/widgets';
-	import type { WidgetEditOutcome } from '$lib/stores/widgets/widget-edits.svelte';
+	import type { WidgetEditOutcome } from '$lib/components/widgets/widget-edits';
 
 	export type WidgetChangeHandler = (change: WidgetChange) => Promise<WidgetEditOutcome>;
 </script>

@@ -1,3 +1,5 @@
+import type { IWidgetSourceService } from '$lib/services/widgets/sources';
+import type { WidgetSources } from '$lib/models/widgets';
 import type { SkillPortability } from '$lib/services/skills/manifest';
 export type SkillFile =
 	| { readonly kind: 'file'; readonly filename: string; readonly content: string }
@@ -83,6 +85,11 @@ export interface WorkspaceViewsController {
 	trashedNotes(projectId?: ProjectId): readonly TrashedNote[];
 	trashedDiagrams(projectId?: ProjectId): readonly Diagram[];
 	widget(widgetId: string): Widget | null;
+	/**
+	 * The rows a widget's sources show on this device. Without a loaded workspace they are
+	 * unavailable rather than empty, so a dashboard never reads "0 overdue" from nothing.
+	 */
+	widgetSources(widget: Widget, today: LocalDate): WidgetSources;
 	widgets(projectId: ProjectId, query?: string): readonly Widget[];
 	trashedWidgets(projectId?: ProjectId): readonly Widget[];
 	diagram(diagramId: string): Diagram | null;
@@ -122,7 +129,8 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		private readonly notePresentation: NotePresentation,
 		private readonly sections: NoteSectionNumbering,
 		private readonly session: WorkspaceSessionStore,
-		private readonly portability: SkillPortability
+		private readonly portability: SkillPortability,
+		private readonly sourceRows: IWidgetSourceService
 	) {}
 	get currentShell(): ShellContext {
 		const accountId = this.session.current?.bootstrap.accountId;
@@ -388,6 +396,19 @@ export class WorkspaceViews implements WorkspaceViewsController {
 			.sort((a, b) => b.archivedAt!.localeCompare(a.archivedAt!));
 	}
 	/** A widget in an active project (ADR 0009), or null. */
+	widgetSources(widget: Widget, today: LocalDate): WidgetSources {
+		if (!widget.layout.sources) return { kind: 'rows', rows: {} };
+		if (!this.session.current) return { kind: 'unavailable' };
+		return {
+			kind: 'rows',
+			rows: this.sourceRows.rows(widget.layout.sources, {
+				projectId: widget.projectId,
+				today,
+				todos: this.all('todos'),
+				notes: this.all('notes')
+			})
+		};
+	}
 	widget(widgetId: string): Widget | null {
 		const widget = this.get('widgets', widgetId);
 		if (!widget || !this.isActiveProject(widget.projectId)) return null;

@@ -9,8 +9,8 @@
 		type TrashEntry
 	} from '$lib/components/shared/trash-entry';
 	import { deleteNoteForever, emptyNoteTrash } from '$lib/remote/projects/projects.remote';
-	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
-	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
+	import { changeDiagramTrash } from '$lib/components/diagrams/trash-actions';
+	import { widgetEdits } from '$lib/components/widgets/widget-edits';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { toast } from 'svelte-sonner';
 

@@ -40,8 +40,8 @@ class WidgetEdits {
 		widgetId: WidgetId,
 		action: 'archive' | 'restore' | 'delete'
 	): Promise<WidgetEditOutcome> {
-		const editor = this.editor(widgetId);
-		editor.capture();
+		const editor = workspaceSession.capture({ type: 'widgets', id: [widgetId] });
+		if (!editor) return { kind: 'failure', message: 'Open the workspace before changing a widget' };
 		const kind =
 			action === 'archive'
 				? 'archiveWidget'
@@ -61,15 +61,15 @@ class WidgetEdits {
 		/** Absent for a widget started in the gallery rather than in a note. */
 		readonly sourceNoteId?: NoteId;
 	}): Promise<WidgetId> {
-		const session = await workspaceSession.start();
 		const id = crypto.randomUUID() as WidgetId;
-		await session.resources.create({
+		const created = await workspaceSession.create({
 			kind: 'createWidget',
 			id,
 			projectId: input.projectId,
 			...(input.sourceNoteId ? { sourceNoteId: input.sourceNoteId } : {}),
 			draft: widgetTemplates[input.template]
 		});
+		if (created.kind === 'failure') throw new Error(created.message);
 		return id;
 	}
 }

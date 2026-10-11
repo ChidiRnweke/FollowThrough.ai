@@ -1,4 +1,4 @@
-import type { AgentRunTransport } from '$lib/client/agent/runs/contracts';
+import type { AgentRunTransport } from '$lib/controllers/agent/chat.svelte';
 import type {
 	AgentRunReceipt,
 	AgentRunSnapshot,

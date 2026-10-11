@@ -16,19 +16,14 @@ export class RightPanelStore {
 	 * mount: `ChatPanel` lives inside the panel's `{#if}`, so acquiring on mount
 	 * would throw the transcript away every time the panel was closed.
 	 *
-	 * Acquired once here rather than on first open, which also bounds it during
-	 * SSR — the store is a module singleton, so the server takes exactly one
-	 * registry entry for the process rather than one per request.
+	 * Acquired once by the panel's first render (`chatRegistry.resident`), after the
+	 * app has said how chats are built, and held from then on.
 	 */
 	chatSessionKey = $state<ChatSessionKey>(chatRegistry.mint());
 	private focusChatComposer: (() => void) | undefined;
 	private chatComposerFocusPending = false;
 	private focusSearchInput: (() => void) | undefined;
 	private searchInputFocusPending = false;
-
-	constructor() {
-		chatRegistry.for(this.chatSessionKey);
-	}
 
 	/**
 	 * Start over. The old session is released — dropping its transcript and its
@@ -38,9 +33,7 @@ export class RightPanelStore {
 	 */
 	newChat(): void {
 		chatRegistry.release(this.chatSessionKey);
-		const next = chatRegistry.mint();
-		chatRegistry.for(next);
-		this.chatSessionKey = next;
+		this.chatSessionKey = chatRegistry.mint();
 	}
 
 	openChat(trigger?: HTMLElement): void {

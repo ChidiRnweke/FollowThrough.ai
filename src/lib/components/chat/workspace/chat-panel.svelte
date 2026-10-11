@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { decideSuggestion } from '$lib/components/suggestions/decide';
+	import { workspaceChatHistory } from './chat-history';
 	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { ShellContext } from '$lib/models/workspace-views';
 
@@ -20,7 +22,7 @@
 	import {
 		entryText,
 		type ChatEntry,
-		type ChatStore,
+		type ChatSession,
 		type ContextChip,
 		type ResourceChip
 	} from '$lib/stores/agent/chat.svelte';
@@ -72,7 +74,7 @@
 		 * conversations run at once, each with its own store, and a module
 		 * singleton would make every mounted panel share one transcript.
 		 */
-		chat: ChatStore;
+		chat: ChatSession;
 		shell?: ShellContext;
 		sessions: readonly Conversation[];
 		activeNoteId?: NoteId;
@@ -109,6 +111,7 @@
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before opening a chat');
 	const resources = session.resources;
+	const history = workspaceChatHistory(session);
 	$effect(() => {
 		const online = resources.online;
 		untrack(() => {
@@ -148,10 +151,10 @@
 		chat.initialize(agentPreferences.executionMode);
 		if (initialConversationId === null) {
 			chat.clear();
-			void chat.hydrate(resources);
+			void chat.hydrate(history);
 		} else if (initialConversationId)
-			void openConversation(chat.switchToConversation(initialConversationId, resources));
-		else void openConversation(chat.hydrate(resources));
+			void openConversation(chat.switchToConversation(initialConversationId, history));
+		else void openConversation(chat.hydrate(history));
 		const staged = consumeChatHandoff();
 		if (staged) prefill(staged);
 		else replacePrompt(sessionStorage.getItem(draftKey()) ?? '');
@@ -689,9 +692,9 @@
 			.uuid()
 			.transform((value) => value as SuggestionId)
 			.parse(id);
-		const ok = await chat.decideSuggestion(suggestionId, decision, (id, choice) =>
-			suggestionActions.decide(id, choice)
-		);
+		const ok = await decideSuggestion(suggestionId, decision);
+		// The tray drops its own card; a decision from the panel must drop this one.
+		if (ok) chat.resolveSuggestion(suggestionId);
 		if (ok) toast.success(decision === 'accept' ? 'Accepted' : 'Dismissed');
 		else toast.error('That did not go through. Try again.');
 	}
@@ -728,7 +731,7 @@
 	{#if chat.historyError}
 		<div role="alert" class="mb-4 text-sm text-destructive">
 			{chat.historyError}
-			<Button variant="outline" onclick={() => void chat.hydrate(resources)}>Retry</Button>
+			<Button variant="outline" onclick={() => void chat.hydrate(history)}>Retry</Button>
 		</div>
 	{/if}
 	{#if chat.persistenceError}
@@ -771,7 +774,7 @@
 			bind:questionRef
 			bind:anchorSpacer
 			{showJumpToLatest}
-			onswitchconversation={(id) => void openConversation(chat.switchToConversation(id, resources))}
+			onswitchconversation={(id) => void openConversation(chat.switchToConversation(id, history))}
 			onstarter={useStarter}
 			oneditkeydown={handleEditKeydown}
 			onresubmit={(entry, text) => void resubmit(entry, text)}

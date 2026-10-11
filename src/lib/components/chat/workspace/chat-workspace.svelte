@@ -7,7 +7,7 @@
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import ChatPanel from './chat-panel.svelte';
 	import { onDestroy, untrack } from 'svelte';
-	import { ChatStore } from '$lib/stores/agent/chat.svelte';
+	import { createChat } from '$lib/factories/agent/chat';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 
 	let {
@@ -44,7 +44,7 @@
 	// Registry references are a browser concern. The registry is a module-level
 	// map shared by every SSR request, so holding a freshly-minted key there
 	// would leak one entry per render.
-	const chat = untrack(() => (browser ? chatRegistry.for(sessionKey) : new ChatStore(sessionKey)));
+	const chat = untrack(() => (browser ? chatRegistry.for(sessionKey) : createChat(sessionKey)));
 	onDestroy(() => {
 		if (browser) chatRegistry.release(sessionKey);
 	});

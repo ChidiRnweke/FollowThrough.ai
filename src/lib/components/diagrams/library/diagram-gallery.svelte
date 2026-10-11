@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { goto } from '$app/navigation';
-	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
+	import { changeDiagramTrash } from '$lib/components/diagrams/trash-actions';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { Diagram } from '$lib/models/diagrams';
 	import type { Project, ProjectId } from '$lib/models/projects';
