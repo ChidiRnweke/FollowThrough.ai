@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateProjectInput,
 	Project,
@@ -15,7 +14,6 @@ import type {
 } from '$lib/server/repositories/projects/projects';
 const requireProject = async (
 	projects: ProjectRepository,
-	actor: ActorContext,
 	projectId: ProjectId
 ): Promise<Project> => {
 	const project = await projects.findById(projectId);
@@ -39,10 +37,7 @@ export interface ProjectLister {
 	list(): Promise<readonly Project[]>;
 }
 export class ProjectReadingService implements ProjectReader, ProjectLister {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly projects: ProjectRepository
-	) {}
+	constructor(private readonly projects: ProjectRepository) {}
 
 	async get(projectId: ProjectId): Promise<Project> {
 		const project = await this.projects.findById(projectId);
@@ -59,18 +54,15 @@ export interface ProjectEditor {
 	setSectionNumberingDefault(input: SetProjectSectionNumberingInput): Promise<Project>;
 }
 export class ProjectEditingService implements ProjectEditor {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly projects: ProjectRepository
-	) {}
+	constructor(private readonly projects: ProjectRepository) {}
 
 	async rename(input: ProjectRename): Promise<Project> {
-		await requireProject(this.projects, this.actor, input.projectId);
+		await requireProject(this.projects, input.projectId);
 		return this.projects.update(input);
 	}
 
 	async setSectionNumberingDefault(input: SetProjectSectionNumberingInput): Promise<Project> {
-		await requireProject(this.projects, this.actor, input.projectId);
+		await requireProject(this.projects, input.projectId);
 		return this.projects.setSectionNumberingDefault(input.projectId, input.enabled ?? null);
 	}
 }
@@ -78,13 +70,10 @@ export interface ProjectLifecycle {
 	archive(projectId: ProjectId): Promise<Project>;
 }
 export class ProjectLifecycleService implements ProjectLifecycle {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly projects: ProjectRepository
-	) {}
+	constructor(private readonly projects: ProjectRepository) {}
 
 	async archive(projectId: ProjectId): Promise<Project> {
-		await requireProject(this.projects, this.actor, projectId);
+		await requireProject(this.projects, projectId);
 		return this.projects.archive(projectId);
 	}
 }
@@ -99,13 +88,12 @@ export interface ProjectTreeWriter {
 }
 export class ProjectTreeService implements ProjectTreeReader, ProjectTreeWriter {
 	constructor(
-		private readonly actor: ActorContext,
 		private readonly projects: ProjectRepository,
 		private readonly tree: ProjectTreeRepository
 	) {}
 
 	async readEntries(projectId: ProjectId): Promise<readonly Note[]> {
-		await requireProject(this.projects, this.actor, projectId);
+		await requireProject(this.projects, projectId);
 		return this.tree.list(projectId);
 	}
 

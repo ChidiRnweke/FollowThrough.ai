@@ -1,8 +1,4 @@
-import type {
-	ActorContext,
-	UpdateUserPreferencesInput,
-	UserPreferences
-} from '$lib/models/identity';
+import type { UpdateUserPreferencesInput, UserPreferences } from '$lib/models/identity';
 import type { UserPreferencesRepository } from '$lib/server/repositories/identity';
 
 export interface UserPreferencesReader {

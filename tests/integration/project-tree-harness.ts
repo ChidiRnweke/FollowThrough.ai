@@ -1,4 +1,4 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
 import { ReferencePresentationService } from '$lib/services/references/presentation';
@@ -32,14 +32,18 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { context } from './database-harness';
 
-export const treeControllers = (database: Database, transactionRunner: TransactionRunner) => {
-	const projects = new ProjectRecords(testActor(), database);
-	const catalog = createProjectServices(testActor(), projects, projects);
-	const records = new NoteRecords(testActor(), database);
+export const treeControllers = (
+	actor: ActorContext,
+	database: Database,
+	transactionRunner: TransactionRunner
+) => {
+	const projects = new ProjectRecords(actor, database);
+	const catalog = createProjectServices(actor, projects, projects);
+	const records = new NoteRecords(actor, database);
 	const notes = createNoteServices(
-		testActor(),
+		actor,
 		records,
-		new SourceAnchorRecords(testActor(), database),
+		new SourceAnchorRecords(actor, database),
 		projects
 	);
 	return {
@@ -59,7 +63,7 @@ export const treeControllers = (database: Database, transactionRunner: Transacti
 			})
 		),
 		notes: new Notes(
-			testActor(),
+			actor,
 			new BacklinkPresentationService(),
 			new ReferencePresentationService(),
 			new WorkspaceCommandRulesService(),
@@ -81,7 +85,7 @@ export const treeControllers = (database: Database, transactionRunner: Transacti
 				noteCreation: notes.creator,
 				noteTrash: notes.trash,
 				noteDeletion: notes.deletion,
-				noteIndexer: new InMemoryNoteContent(testActor()),
+				noteIndexer: new InMemoryNoteContent(actor),
 				transactionRunner
 			})
 		)
@@ -90,6 +94,7 @@ export const treeControllers = (database: Database, transactionRunner: Transacti
 
 /** Hold an actual controller write open until the competing connection reaches its lock. */
 export const competingTreeWrites = async <T>(
+	actor: ActorContext,
 	first: (api: ReturnType<typeof treeControllers>) => Promise<void>,
 	second: (api: ReturnType<typeof treeControllers>) => Promise<T>
 ) => {
@@ -101,7 +106,7 @@ export const competingTreeWrites = async <T>(
 	const locked = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
 	const holding = heldContext.transactionRunner.run(async () => {
-		await first(treeControllers(heldContext.database, heldContext.transactionRunner));
+		await first(treeControllers(actor, heldContext.database, heldContext.transactionRunner));
 		locked.resolve();
 		await release.promise;
 	});
@@ -114,7 +119,7 @@ export const competingTreeWrites = async <T>(
 		await locked.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
 		const writing = second(
-			treeControllers(writeContext.database, writeContext.transactionRunner)
+			treeControllers(actor, writeContext.database, writeContext.transactionRunner)
 		).then(
 			(value) => ({ kind: 'success' as const, value }),
 			(error: Error) => ({ kind: 'failure' as const, error })

@@ -6,8 +6,11 @@ import type {
 import type { UserPreferencesRepository } from '$lib/server/repositories/identity';
 
 export class InMemoryUserPreferencesRepository implements UserPreferencesRepository {
-	constructor(private readonly actor: ActorContext) {}
-	private readonly byUser = new Map<string, UserPreferences>();
+	/** Pass another repository's `byUser` to see the same table as a different user. */
+	constructor(
+		private readonly actor: ActorContext,
+		readonly byUser = new Map<string, UserPreferences>()
+	) {}
 
 	async get(): Promise<UserPreferences> {
 		return this.byUser.get(this.actor.userId) ?? {};

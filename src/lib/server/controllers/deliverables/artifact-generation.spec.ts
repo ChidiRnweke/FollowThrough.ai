@@ -83,7 +83,7 @@ describe('artifact generation behavior', () => {
 	});
 
 	it('does not reveal an artifact belonging to another actor', async () => {
-		const { service, notes } = setup();
+		const { service, notes, artifacts } = setup();
 		notes.notes = [noteBuilder()];
 		const generated = await service.generateDocument({
 			projectId: testProjectId(),
@@ -91,6 +91,11 @@ describe('artifact generation behavior', () => {
 			title: 'Private export',
 			format: 'pdf'
 		});
+		// The same artifact, as another account generated it.
+		artifacts.artifacts = artifacts.artifacts.map((artifact) => ({
+			...artifact,
+			userId: testActor(2).userId
+		}));
 		expect(await service.getArtifact(generated.artifact.id)).toBeUndefined();
 	});
 

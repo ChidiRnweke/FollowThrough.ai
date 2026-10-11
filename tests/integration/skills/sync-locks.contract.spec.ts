@@ -48,7 +48,7 @@ it('checks a skill sync base after a competing note rename without reversing the
 	try {
 		await ready.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const writing = skillController(tx.database, tx.transactionRunner).synchronize({
+		const writing = skillController(owner, tx.database, tx.transactionRunner).synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: before.snapshot.etag,
 			command: { kind: 'updateSkill', noteId: note.id, description: 'Offline description' }

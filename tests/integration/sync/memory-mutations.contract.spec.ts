@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { MemoryEntryId } from '$lib/models/memory';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
@@ -19,20 +18,21 @@ import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
+	const actor = seeded.owner;
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability(testActor(), { db: database });
-	const memory = createMemoryCapability(testActor(), {
+	const sync = createSyncCapability(actor, { db: database });
+	const memory = createMemoryCapability(actor, {
 		db: database,
-		projects: new ProjectRecords(testActor(), database),
-		provenance: new ProvenanceRecords(testActor(), database)
+		projects: new ProjectRecords(actor, database),
+		provenance: new ProvenanceRecords(actor, database)
 	});
 	const indexEmbeddings = new InMemoryRetrievalProvider();
 	const indexWriter = createContentIndex(
-		new InMemorySearchRepository(testActor()),
+		new InMemorySearchRepository(actor),
 		indexEmbeddings.model
 	);
 	const controller = new Memory(
-		testActor(),
+		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
 			...agentToolResultsFixture(),
@@ -52,7 +52,7 @@ const setup = async (suffix: string) => {
 
 describe('guarded memory mutations', () => {
 	it('creates a stable local identity only once after a lost response', async () => {
-		const { owner, controller } = await setup('9371');
+		const { controller } = await setup('9371');
 		const id = crypto.randomUUID() as MemoryEntryId;
 		const input = {
 			operationId: crypto.randomUUID(),
@@ -71,7 +71,7 @@ describe('guarded memory mutations', () => {
 		]);
 	});
 	it('retains a competing edit when the submitted base is stale', async () => {
-		const { owner, controller, sync } = await setup('9372');
+		const { controller, sync } = await setup('9372');
 		const { entry } = await controller.create({ content: 'Original' });
 		const base = await sync.objects.read({ type: 'memory_entries', id: [entry.id] }, null);
 		if (base.kind !== 'found') throw new Error('The created memory must exist');
@@ -87,7 +87,7 @@ describe('guarded memory mutations', () => {
 		}).toEqual({ kind: 'conflict', rows: [{ content: 'Other client' }] });
 	});
 	it('keeps the domain’s soft deletion in the authoritative resource', async () => {
-		const { owner, controller, sync } = await setup('9373');
+		const { controller, sync } = await setup('9373');
 		const { entry } = await controller.create({ content: 'Remove me' });
 		const base = await sync.objects.read({ type: 'memory_entries', id: [entry.id] }, null);
 		if (base.kind !== 'found') throw new Error('The created memory must exist');

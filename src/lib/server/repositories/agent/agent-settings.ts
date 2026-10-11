@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { CanvasSessionResult } from '$lib/models/diagrams';
 import type {
 	AgentPreferences,

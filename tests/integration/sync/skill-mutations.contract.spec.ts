@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -20,9 +19,9 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const source = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const notes = createNotesCapability(testActor(), {
+	const notes = createNotesCapability(source.owner, {
 		db: database,
-		projects: new ProjectRecords(testActor(), database)
+		projects: new ProjectRecords(source.owner, database)
 	});
 	const note = await storedNote(notes.services.creator, source.owner, {
 		projectId: source.note.projectId,
@@ -30,10 +29,10 @@ const setup = async (suffix: string) => {
 		kind: 'skill'
 	});
 	const seeded = { ...source, note };
-	const sync = createSyncCapability(testActor(), { db: database });
-	const { services: library } = createSkillsCapability(testActor(), {
+	const sync = createSyncCapability(seeded.owner, { db: database });
+	const { services: library } = createSkillsCapability(seeded.owner, {
 		db: database,
-		projects: new ProjectRecords(testActor(), database),
+		projects: new ProjectRecords(seeded.owner, database),
 		notes: notes.repository,
 		provenance: notes.provenanceRepository
 	});
@@ -66,7 +65,7 @@ const setup = async (suffix: string) => {
 
 describe('guarded skill metadata writes', () => {
 	it('replays a description write without changing its note body version', async () => {
-		const { owner, note, controller, base } = await setup('9381');
+		const { note, controller, base } = await setup('9381');
 		const before =
 			await context.client`select document, current_revision from notes where id = ${note.id}`;
 		const input = {
@@ -83,7 +82,7 @@ describe('guarded skill metadata writes', () => {
 		}).toEqual({ notes: before, skills: [{ description: 'Offline description' }] });
 	});
 	it('preserves a concurrent description instead of overwriting it with a stale toggle', async () => {
-		const { owner, note, controller, base } = await setup('9382');
+		const { note, controller, base } = await setup('9382');
 		await context.client`update skills set description = 'Other client' where note_id = ${note.id}`;
 		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),

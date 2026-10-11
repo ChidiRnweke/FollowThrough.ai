@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { expect, it } from 'vitest';
 import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import type { DiagramContentWrite } from '$lib/models/diagrams';
@@ -15,8 +16,8 @@ import {
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 
-const setup = () => {
-	const diagrams = new InMemoryDiagramRepository(testActor());
+const setup = (viewer: ActorContext = testActor()) => {
+	const diagrams = new InMemoryDiagramRepository(viewer);
 	const current = drawioBuilder({
 		provenanceId: testProvenanceId(),
 		source: VALID_DRAWIO_XML.replace('API &amp; worker', 'Before'),
@@ -26,12 +27,12 @@ const setup = () => {
 	});
 	diagrams.diagrams = [current];
 	const library = createDiagramServices(
-		testActor(),
+		viewer,
 		diagrams,
-		new InMemoryNoteRepository(testActor()),
-		new InMemoryAnchorRepository(testActor()),
-		new InMemoryProvenanceRepository(testActor()),
-		new InMemoryProjectRepository(testActor())
+		new InMemoryNoteRepository(viewer),
+		new InMemoryAnchorRepository(viewer),
+		new InMemoryProvenanceRepository(viewer),
+		new InMemoryProjectRepository(viewer)
 	);
 	const write: DiagramContentWrite = {
 		kind: 'drawio',
@@ -58,7 +59,7 @@ it('preserves placement, provenance and publication state when storing reviewed 
 });
 
 it('refuses content writes for another actor', async () => {
-	const { library, write } = setup();
+	const { library, write } = setup(testActor(2));
 	await expect(library.writer.persistContent(write)).rejects.toMatchObject({
 		code: 'STALE_REVISION'
 	});

@@ -3,7 +3,6 @@ import type { DateTime } from '$lib/models/workspace';
 import type { MaintenanceProgress } from '$lib/server/services/maintenance/progress';
 import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
 import type { AttachmentBacklog } from '$lib/server/services/attachments/records';
-import type { ActorContext } from '$lib/models/identity';
 import type { OwnedAttachmentUpload } from '$lib/models/attachments';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;

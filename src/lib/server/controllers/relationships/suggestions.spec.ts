@@ -4,11 +4,7 @@ import {
 	relatedSelection as selection
 } from '$lib/testing/relationships/fixtures/discovery';
 import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
-import {
-	testActor,
-	testNoteId,
-	testProjectId
-} from '$lib/testing/workspace/fixtures/domain-builders';
+import { testNoteId, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 describe('related-note proposal workflow', () => {
 	it('creates one proposal from duplicate passages and preserves its relationship label', async () => {

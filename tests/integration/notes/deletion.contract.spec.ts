@@ -10,6 +10,7 @@ it('refuses individual deletion after a concurrent restore commits', async () =>
 	const records = new NoteRecords(owner, context.db);
 	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
 			await api.notes.restore({ noteId: note.id });
 		},
@@ -26,6 +27,7 @@ it('keeps a concurrently restored note when emptying project trash', async () =>
 	const records = new NoteRecords(owner, context.db);
 	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
 			await api.notes.restore({ noteId: note.id });
 		},
@@ -42,6 +44,7 @@ it('refuses restoring a note after its permanent deletion commits', async () => 
 	const records = new NoteRecords(owner, context.db);
 	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
 			await api.notes.deleteForever({ noteId: note.id });
 		},
@@ -65,6 +68,7 @@ it('preserves a restored child while permanently deleting its previous folder', 
 		archivedAt: now
 	});
 	await competingTreeWrites(
+		owner,
 		async (api) => {
 			await api.notes.restore({ noteId: child.id });
 		},
@@ -84,6 +88,7 @@ it('guards storage deletion against a restoration even without the controller pr
 	const records = new NoteRecords(owner, context.db);
 	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
 			await api.notes.restore({ noteId: note.id });
 		},
@@ -111,7 +116,7 @@ it('rolls back child deletion when PostgreSQL refuses the folder deletion', asyn
 		archivedAt: now
 	});
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const api = treeControllers(database, transactionRunner);
+	const api = treeControllers(owner, database, transactionRunner);
 	await context.client`create function reject_contract_note_deletion() returns trigger language plpgsql as $$
 	begin
 		if old.title = 'Purge rollback contract' then

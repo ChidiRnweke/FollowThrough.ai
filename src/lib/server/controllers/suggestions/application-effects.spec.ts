@@ -36,7 +36,7 @@ import { Suggestions, type SuggestionsDependencies } from './controller';
 describe('Proposal effect coordination', () => {
 	it('records the final reviewed diagram instead of the generated preview', async () => {
 		const suggestions = new InMemorySuggestions(testActor());
-		const effects = new InMemorySuggestionEffects(testActor());
+		const effects = new InMemorySuggestionEffects();
 		const proposal: DiagramSuggestion = {
 			id: testSuggestionId(),
 			userId: testActor().userId,
@@ -94,7 +94,7 @@ describe('Proposal effect coordination', () => {
 	});
 	it('reindexes the restored memory and removes the replacement from search', async () => {
 		const suggestions = new InMemorySuggestions(testActor());
-		const effects = new InMemorySuggestionEffects(testActor());
+		const effects = new InMemorySuggestionEffects();
 		const search = new InMemorySearchRepository(testActor());
 		const indexWriter = createContentIndex(
 			search,

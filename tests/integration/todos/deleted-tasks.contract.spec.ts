@@ -21,17 +21,17 @@ const setup = async (suffix: string, identity: number) => {
 };
 
 it('does not return a deleted task through its identity', async () => {
-	const { owner, repository, task } = await setup('14801', 14801);
+	const { repository, task } = await setup('14801', 14801);
 	expect(await repository.findById(task.id)).toBeUndefined();
 });
 
 it('does not list a deleted task', async () => {
-	const { owner, repository } = await setup('14804', 14804);
+	const { repository } = await setup('14804', 14804);
 	expect(await repository.list({})).toEqual([]);
 });
 
 it('rejects a stale edit without restoring a deleted task', async () => {
-	const { owner, repository, task } = await setup('14802', 14802);
+	const { repository, task } = await setup('14802', 14802);
 	const outcome = await repository.update({ ...task, title: 'Late edit' }).then(
 		() => 'saved',
 		(error: Error) => error.message
@@ -45,6 +45,6 @@ it('rejects a stale edit without restoring a deleted task', async () => {
 });
 
 it('does not return a deleted task through the locking edit read', async () => {
-	const { owner, repository, task } = await setup('14803', 14803);
+	const { repository, task } = await setup('14803', 14803);
 	expect(await repository.findForUpdate(task.id)).toBeUndefined();
 });

@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { describe, expect, it } from 'vitest';
@@ -10,8 +11,9 @@ import { AgentSdkHarness, type AgentHarnessDependencies } from './controller';
 
 const runId = '31000000-0000-4000-8000-000000000001' as AgentRunId;
 
-const setup = () => {
-	const runs = new InMemoryAgentRunPersistence(testActor());
+/** The run belongs to `testActor()`; `viewer` is the account the controller acts for. */
+const setup = (viewer: ActorContext = testActor()) => {
+	const runs = new InMemoryAgentRunPersistence(viewer);
 	const run: WorkflowAgentRun = {
 		kind: 'workflow',
 		id: runId,
@@ -28,7 +30,7 @@ const setup = () => {
 	};
 	runs.runs.push(run);
 	const agent = new AgentSdkHarness(
-		testActor(),
+		viewer,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
@@ -53,7 +55,7 @@ describe('run observation', () => {
 	});
 
 	it('does not let another actor observe a run', async () => {
-		const { agent } = setup();
+		const { agent } = setup(testActor(2));
 		await expect(agent.observeRun(runId, () => {})).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});

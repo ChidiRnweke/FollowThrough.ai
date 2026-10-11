@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { SyncEtag, SyncObjectRead } from '$lib/models/sync';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';

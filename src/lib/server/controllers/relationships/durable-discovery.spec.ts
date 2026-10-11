@@ -5,7 +5,7 @@ import {
 	relatedSelection
 } from '$lib/testing/relationships/fixtures/discovery';
 import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
-import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const prepare = async (
 	generation: SelectionGeneration = { kind: 'model', model: 'test/model' }
@@ -52,7 +52,7 @@ it('keeps rules for a queued request after a model becomes configured', async ()
 
 it('resumes a queued discovery from its persisted selection', async () => {
 	const state = await prepare();
-	await state.controller.recoverQueuedRelatedNoteRuns();
+	await state.controller.resumeQueuedRelatedNoteRun(state.receipt.runId);
 	await vi.waitFor(() => {
 		if (state.runs.runs[0].status !== 'completed') throw new Error('Discovery has not settled');
 	});

@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import type { TemplateId } from '$lib/models/deliverables';
 import { DocxTemplateStyleReader } from '$lib/server/services/deliverables/template-styles';
 import {
@@ -30,19 +31,25 @@ const setup = async (suffix: string) => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const transaction = createTransactionContext(drizzle(client, { schema }));
-	const repository = new TemplateRecords(owner, transaction.database);
 	const storage = new InMemoryAttachmentStorage();
-	const controller = new Deliverables(
-		owner,
-		new WorkspaceCommandRulesService(),
-		capabilityDependencies<DeliverablesDependencies>({
-			...agentToolResultsFixture(),
-			...createTemplateServices(owner, repository, () => now),
-			templateStorage: storage,
-			templateStyles: new DocxTemplateStyleReader(),
-			transactionRunner: transaction.transactionRunner
-		})
-	);
+	const controllerFor = (actor: ActorContext) =>
+		new Deliverables(
+			actor,
+			new WorkspaceCommandRulesService(),
+			capabilityDependencies<DeliverablesDependencies>({
+				...agentToolResultsFixture(),
+				...createTemplateServices(
+					actor,
+					new TemplateRecords(actor, transaction.database),
+					() => now
+				),
+				templateStorage: storage,
+				templateStyles: new DocxTemplateStyleReader(),
+				transactionRunner: transaction.transactionRunner
+			})
+		);
+	const repository = new TemplateRecords(owner, transaction.database);
+	const controller = controllerFor(owner);
 	const bytes = await Packer.toBuffer(
 		new Document({ sections: [{ children: [new Paragraph('Contract template')] }] })
 	);
@@ -59,16 +66,16 @@ const setup = async (suffix: string) => {
 		bytes,
 		input.mediaType
 	);
-	return { controller, repository, owner, project, upload, input, storage };
+	return { controller, controllerFor, repository, owner, project, upload, input, storage };
 };
 
 describe('durable template upload lifecycle', () => {
 	it('keeps a reservation invisible until completion', async () => {
-		const { controller, owner, project } = await setup('9761');
+		const { controller, project } = await setup('9761');
 		expect(await controller.listTemplates(project.id)).toEqual([]);
 	});
 	it('publishes one usable template for concurrent completion deliveries', async () => {
-		const { controller, repository, owner, project, upload } = await setup('9762');
+		const { controller, repository, project, upload } = await setup('9762');
 		await Promise.all([
 			controller.completeTemplateUpload(upload.templateId),
 			controller.completeTemplateUpload(upload.templateId)
@@ -80,14 +87,16 @@ describe('durable template upload lifecycle', () => {
 		}).toEqual({ ids: [upload.templateId], pending: undefined });
 	});
 	it('refuses completion by another account', async () => {
-		const { controller, upload } = await setup('9763');
-		await expect(controller.completeTemplateUpload(upload.templateId)).rejects.toMatchObject({
+		const { controllerFor, upload } = await setup('9763');
+		await expect(
+			controllerFor(actor('9764')).completeTemplateUpload(upload.templateId)
+		).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});
 	it('refuses a reservation in another account’s project', async () => {
-		const { controller, input } = await setup('9765');
-		await expect(controller.initiateTemplateUpload(input)).rejects.toMatchObject({
+		const { controllerFor, input } = await setup('9765');
+		await expect(controllerFor(actor('9766')).initiateTemplateUpload(input)).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});

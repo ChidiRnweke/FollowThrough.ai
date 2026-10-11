@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 
@@ -143,14 +142,15 @@ describe('Postgres conversation repository invariants', () => {
 			updatedAt: now
 		};
 		await repository.insert(conversation);
-		expect(await repository.findById(conversation.id)).toBeUndefined();
+		expect(
+			await new ConversationRecords(actor('9'), context.db).findById(conversation.id)
+		).toBeUndefined();
 	});
 	it('lists only sessions owned by the actor', async () => {
 		const owner = actor('14');
 		const other = actor('15');
-		const users = new UserRecords(owner, context.db);
-		await users.ensureLocal();
-		await users.ensureLocal();
+		await new UserRecords(owner, context.db).ensureLocal();
+		await new UserRecords(other, context.db).ensureLocal();
 		const repository = new ConversationRecords(owner, context.db);
 		await repository.insert({
 			id: '20000000-0000-4000-8000-000000000014' as ConversationId,
@@ -160,7 +160,7 @@ describe('Postgres conversation repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		await repository.insert({
+		await new ConversationRecords(other, context.db).insert({
 			id: '20000000-0000-4000-8000-000000000015' as ConversationId,
 			userId: other.userId,
 			kind: 'chat',
@@ -269,7 +269,7 @@ describe('Postgres agent settings repository invariants', () => {
 			updatedAt: now
 		};
 		await repository.insert(run);
-		expect(await repository.findById(run.id)).toBeUndefined();
+		expect(await new AgentRunRecords(actor('74'), context.db).findById(run.id)).toBeUndefined();
 	});
 	it('round-trips serialized paused-run decisions', async () => {
 		const owner = actor('75');
@@ -381,9 +381,9 @@ describe('Postgres durable agent run repository invariants', () => {
 	it('reconstructs one attempt without merging across an unreadable stored event', async () => {
 		const run = await seedQueuedRun('17901');
 		const other = await seedQueuedRun('17902');
-		const runs = new AgentRunRecords(testActor(), context.db);
+		const runs = new AgentRunRecords(actor('17901'), context.db);
 		await new RunPreparation(runs).claim(run.id, now);
-		const events = new AgentRunEventRecords(testActor(), context.db);
+		const events = new AgentRunEventRecords(actor('17901'), context.db);
 		const first = await events.append(run.id, 1, { type: 'text_delta', text: 'Before.' });
 		await events.append(run.id, 2, { type: 'text_delta', text: 'Another attempt.' });
 		const unreadable = await events.append(run.id, 1, {
@@ -393,7 +393,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		await context.db.execute(
 			sql`update agent_run_events set event = '{"type":"future_output"}'::jsonb where cursor = ${unreadable.cursor}`
 		);
-		await events.append(other.id, 0, {
+		await new AgentRunEventRecords(actor('17902'), context.db).append(other.id, 0, {
 			type: 'run_queued',
 			runId: other.id,
 			attempt: 1,
@@ -416,12 +416,12 @@ describe('Postgres durable agent run repository invariants', () => {
 	it('does not expose another actor’s run through event-stream completion', async () => {
 		const run = await seedQueuedRun('17803');
 		const controller = new AgentSdkHarness(
-			testActor(),
+			actor('17804'),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentHarnessDependencies>({
 				...agentRulesFixture(),
-				runs: new AgentRunRecords(testActor(), context.db),
-				events: new AgentRunEventRecords(testActor(), context.db)
+				runs: new AgentRunRecords(actor('17804'), context.db),
+				events: new AgentRunEventRecords(actor('17804'), context.db)
 			})
 		);
 		await expect(controller.isRunStreamComplete(run.id, '0')).rejects.toThrow('not found');
@@ -466,7 +466,8 @@ describe('Postgres durable agent run repository invariants', () => {
 	});
 	it('orders replayed events by their global cursor', async () => {
 		const run = await seedQueuedRun('93');
-		const events = new AgentRunEventRecords(testActor(), context.db);
+		const owner = actor('93');
+		const events = new AgentRunEventRecords(owner, context.db);
 		await Promise.all([
 			events.append(run.id, 0, {
 				type: 'run_queued',
@@ -476,7 +477,6 @@ describe('Postgres durable agent run repository invariants', () => {
 			}),
 			events.append(run.id, 1, { type: 'text_delta', text: 'next' })
 		]);
-		const owner = actor('93');
 		const replay = await events.replay(run.id, '0');
 		expect(replay.map((event) => event.cursor)).toEqual(
 			[...replay.map((event) => event.cursor)].sort((left, right) => Number(left) - Number(right))
@@ -491,7 +491,7 @@ describe('Postgres durable agent run repository invariants', () => {
 	 */
 	it('replays a reported failure with both the message and the value it came from', async () => {
 		const run = await seedQueuedRun('95');
-		const events = new AgentRunEventRecords(testActor(), context.db);
+		const events = new AgentRunEventRecords(actor('95'), context.db);
 		await events.append(run.id, 1, {
 			type: 'tool_reported_failure',
 			callId: 'call-95',
@@ -517,7 +517,7 @@ describe('Postgres durable agent run repository invariants', () => {
 	 */
 	it('round-trips a parked tool call through the pending_decisions column', async () => {
 		const run = await seedQueuedRun('103');
-		const runs = new AgentRunRecords(testActor(), context.db);
+		const runs = new AgentRunRecords(actor('103'), context.db);
 		const parked = {
 			callId: 'call-103',
 			toolName: 'archive_note' as const,
@@ -539,13 +539,13 @@ describe('Postgres durable agent run repository invariants', () => {
 	 */
 	it('reads an unparked run back with no pending decisions', async () => {
 		const run = await seedQueuedRun('104');
-		const runs = new AgentRunRecords(testActor(), context.db);
+		const runs = new AgentRunRecords(actor('104'), context.db);
 		expect((await runs.findById(run.id))?.pendingDecisions).toEqual([]);
 	});
 
 	it('replays a success that returned nothing without inventing a result', async () => {
 		const run = await seedQueuedRun('96');
-		const events = new AgentRunEventRecords(testActor(), context.db);
+		const events = new AgentRunEventRecords(actor('96'), context.db);
 		await events.append(run.id, 1, {
 			type: 'tool_succeeded',
 			callId: 'call-96',
@@ -569,7 +569,7 @@ describe('Postgres durable agent run repository invariants', () => {
 	});
 	it('rejects overlapping active runs in one conversation', async () => {
 		const run = await seedQueuedRun('97');
-		const repository = new AgentRunRecords(testActor(), context.db);
+		const repository = new AgentRunRecords(actor('97'), context.db);
 		await expect(
 			repository.insert({
 				...run,
@@ -627,9 +627,9 @@ describe('Postgres agent session repository invariants', () => {
 		await repository.append(conversationId, [
 			resultItem('create_diagram', 'call', JSON.stringify({ diagramId: testDiagramId() }))
 		]);
-		await expect(repository.listCanvasResults(conversationId)).rejects.toThrow(
-			'Conversation was not found'
-		);
+		await expect(
+			new AgentSessionRecords(actor('87'), context.db).listCanvasResults(conversationId)
+		).rejects.toThrow('Conversation was not found');
 	});
 
 	it('fails when canvas selection reaches corrupt persisted output', async () => {
@@ -687,7 +687,7 @@ describe('Postgres trust-policy repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		expect(await repository.list()).toEqual([]);
+		expect(await new TrustPolicyRecords(actor('26'), context.db).list()).toEqual([]);
 	});
 });
 describe('Postgres tool-embedding repository invariants', () => {

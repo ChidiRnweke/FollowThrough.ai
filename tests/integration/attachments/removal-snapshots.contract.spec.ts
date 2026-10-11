@@ -18,7 +18,7 @@ it('restores the snapshotted attachment with its file bytes after path removal',
 	const records = new AttachmentRecords(owner, tx.database);
 	const notes = new NoteRecords(owner, tx.database);
 	const storage = new InMemoryStorage();
-	const library = new AttachmentLifecycleService(owner, records, notes);
+	const library = new AttachmentLifecycleService(records, notes);
 	const attachment = await tx.transactionRunner.run(async () => {
 		const upload = await records.createUpload({
 			id: crypto.randomUUID() as AttachmentUploadId,

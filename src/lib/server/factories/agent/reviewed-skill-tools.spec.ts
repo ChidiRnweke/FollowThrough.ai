@@ -14,7 +14,6 @@ const noteMarkdown = new NoteMarkdownCodec();
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {
 	noteBuilder,
-	testActor,
 	testConversationId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -33,7 +32,6 @@ const setup = (kind: 'skill' | 'note' = 'skill', operation: 'replace' | 'patch' 
 		createAgentToolSurface(
 			testTokenizer,
 			fixture.factory,
-			testActor(),
 			mode,
 			{
 				provenanceId: testProvenanceId(),

@@ -1,5 +1,4 @@
 import { agentResourcePathSchema, type AgentResourcePath } from '$lib/models/agent-files';
-import type { ActorContext } from '$lib/models/identity';
 import type { StoredAgentFile, StoreAgentFileInput } from '$lib/models/agent-files';
 
 export interface AgentFileRepository {

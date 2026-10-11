@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { SuggestionId } from '$lib/models/suggestions';
 import type { ApplicationEffect, AppliedChange } from '$lib/models/proposal-effects';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';

@@ -76,11 +76,11 @@ export function createSkillServices(
 	notes: NoteRepository,
 	provenance: ProvenanceRepository
 ): SkillServices {
-	const usage = new SkillUsageService(actor, skills, notes, provenance);
+	const usage = new SkillUsageService(skills, notes, provenance);
 	return {
 		creator: new SkillCreationService(skills, notes),
-		finder: new SkillReadingService(actor, skills),
-		editor: new SkillEditingService(actor, skills, notes),
+		finder: new SkillReadingService(skills),
+		editor: new SkillEditingService(skills, notes),
 		usageRecorder: usage,
 		usageLister: usage
 	};

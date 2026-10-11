@@ -45,7 +45,6 @@ export interface TodoContextReader {
 async function validateAnchor(
 	anchors: SourceAnchorRepository,
 	notes: NoteRepository,
-	actor: ActorContext,
 	anchorId: NonNullable<CreateTodoInput['sourceAnchorId']>,
 	projectId: CreateTodoInput['projectId']
 ): Promise<void> {
@@ -70,13 +69,7 @@ export class TodoCreationService implements TodoCreator {
 		if (!(await this.projects.findById(todo.projectId)))
 			throw new NotFoundError('Todo project was not found');
 		if (todo.sourceAnchorId)
-			await validateAnchor(
-				this.anchors,
-				this.notes,
-				this.actor,
-				todo.sourceAnchorId,
-				todo.projectId
-			);
+			await validateAnchor(this.anchors, this.notes, todo.sourceAnchorId, todo.projectId);
 		if (todo.provenanceId && !(await this.provenance.findById(todo.provenanceId)))
 			throw new NotFoundError('Todo provenance was not found');
 		return this.todos.insert(todo);
@@ -122,13 +115,7 @@ export class TodoEditingService implements TodoEditor {
 			throw new OwnershipError('Cannot edit another user’s task');
 		if (!todo.title) throw new ValidationError('Todo title is required');
 		if (todo.sourceAnchorId)
-			await validateAnchor(
-				this.anchors,
-				this.notes,
-				this.actor,
-				todo.sourceAnchorId,
-				todo.projectId
-			);
+			await validateAnchor(this.anchors, this.notes, todo.sourceAnchorId, todo.projectId);
 		if (todo.provenanceId && !(await this.provenance.findById(todo.provenanceId)))
 			throw new NotFoundError('Todo provenance was not found');
 		return this.todos.update(todo);
@@ -145,7 +132,6 @@ export class TodoEditingService implements TodoEditor {
 
 export class TodoLifecycleService implements TodoDeleter {
 	constructor(
-		private readonly actor: ActorContext,
 		private readonly todos: TodoRepository,
 		private readonly clock: () => DateTime = now
 	) {}
@@ -158,7 +144,6 @@ export class TodoLifecycleService implements TodoDeleter {
 
 export class TodoContextService implements TodoContextReader {
 	constructor(
-		private readonly actor: ActorContext,
 		private readonly anchors: SourceAnchorRepository,
 		private readonly notes: NoteRepository,
 		private readonly provenance: ProvenanceRepository

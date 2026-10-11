@@ -4,7 +4,7 @@ import {
 	promiseExtractionFixture as setup,
 	promiseSelection as selection
 } from '$lib/testing/todos/fixtures/promise-extraction';
-import { testActor, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const candidate = (
 	action: string,

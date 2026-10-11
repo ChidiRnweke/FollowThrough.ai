@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { Note, NoteId } from '$lib/models/notes';
 import type { ProvenanceId } from '$lib/models/provenance';
@@ -58,11 +57,7 @@ export interface SkillUsageRecorder {
 export interface SkillUsageLister {
 	list(skillNoteId: NoteId): Promise<readonly SkillUsageView[]>;
 }
-async function loadSkill(
-	skills: SkillRepository,
-	actor: ActorContext,
-	noteId: NoteId
-): Promise<Skill<Note>> {
+async function loadSkill(skills: SkillRepository, noteId: NoteId): Promise<Skill<Note>> {
 	const skill = await skills.findByNoteId(noteId);
 	if (!skill || skill.note.archivedAt) throw new NotFoundError('Skill was not found');
 	return skill;
@@ -101,10 +96,7 @@ export class SkillCreationService implements SkillCreator {
 	}
 }
 export class SkillReadingService implements SkillFinder {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly skills: SkillRepository
-	) {}
+	constructor(private readonly skills: SkillRepository) {}
 	listEnabled(projectId?: ProjectId): Promise<readonly SkillSummary[]> {
 		return this.skills.listEnabled(projectId);
 	}
@@ -112,12 +104,11 @@ export class SkillReadingService implements SkillFinder {
 		return this.skills.listAll(projectId);
 	}
 	load(noteId: NoteId): Promise<Skill<Note>> {
-		return loadSkill(this.skills, this.actor, noteId);
+		return loadSkill(this.skills, noteId);
 	}
 }
 export class SkillEditingService implements SkillEditor {
 	constructor(
-		private readonly actor: ActorContext,
 		private readonly skills: SkillRepository,
 		private readonly notes: NoteRepository
 	) {}
@@ -206,7 +197,6 @@ export class SkillEditingService implements SkillEditor {
 }
 export class SkillUsageService implements SkillUsageRecorder, SkillUsageLister {
 	constructor(
-		private readonly actor: ActorContext,
 		private readonly skills: SkillRepository,
 		private readonly notes: NoteRepository,
 		private readonly provenance: ProvenanceRepository
@@ -216,7 +206,7 @@ export class SkillUsageService implements SkillUsageRecorder, SkillUsageLister {
 		contextNoteId?: NoteId;
 		provenanceId: ProvenanceId;
 	}): Promise<void> {
-		await loadSkill(this.skills, this.actor, input.skillNoteId);
+		await loadSkill(this.skills, input.skillNoteId);
 		if (input.contextNoteId) {
 			const context = await this.notes.findById(input.contextNoteId);
 			if (!context) throw new NotFoundError('Skill context note was not found');
@@ -230,7 +220,7 @@ export class SkillUsageService implements SkillUsageRecorder, SkillUsageLister {
 		});
 	}
 	async list(skillNoteId: NoteId): Promise<readonly SkillUsageView[]> {
-		await loadSkill(this.skills, this.actor, skillNoteId);
+		await loadSkill(this.skills, skillNoteId);
 		const usages = await this.skills.listUsages(skillNoteId);
 		return Promise.all(
 			usages.map(async (usage: SkillUsage) => {

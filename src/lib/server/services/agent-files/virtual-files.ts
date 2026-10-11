@@ -8,7 +8,6 @@ import {
 	RE2JSGroupException,
 	RE2JSSyntaxException
 } from 're2js';
-import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentId } from '$lib/models/attachments';
 import type { Diagram } from '$lib/models/diagrams';
 import type { Note } from '$lib/models/notes';

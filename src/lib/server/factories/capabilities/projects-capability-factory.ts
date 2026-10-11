@@ -41,15 +41,15 @@ export const createProjectServices = (
 	repository: ProjectRepository,
 	tree: ProjectTreeRepository
 ): ProjectServices => {
-	const reader = new ProjectReadingService(actor, repository);
-	const entries = new ProjectTreeService(actor, repository, tree);
+	const reader = new ProjectReadingService(repository);
+	const entries = new ProjectTreeService(repository, tree);
 	return {
 		creator: new ProjectCreationService(repository),
 		reader,
 		lister: reader,
 		choice: new ProjectChoiceService(),
-		editor: new ProjectEditingService(actor, repository),
-		lifecycle: new ProjectLifecycleService(actor, repository),
+		editor: new ProjectEditingService(repository),
+		lifecycle: new ProjectLifecycleService(repository),
 		treeReader: entries,
 		treeWriter: entries,
 		details: new ProjectDetailService(),

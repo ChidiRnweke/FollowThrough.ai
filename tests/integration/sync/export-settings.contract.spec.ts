@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import {
 	Deliverables,
@@ -17,12 +16,13 @@ import { actor, context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
+	const actor = seeded.owner;
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability(testActor(), { db: database });
-	const settings = new ExportSettingsRecords(testActor(), database);
-	const artifacts = new ArtifactSettingsService(testActor(), settings);
+	const sync = createSyncCapability(actor, { db: database });
+	const settings = new ExportSettingsRecords(actor, database);
+	const artifacts = new ArtifactSettingsService(settings);
 	const controller = new Deliverables(
-		testActor(),
+		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
 			...agentToolResultsFixture(),

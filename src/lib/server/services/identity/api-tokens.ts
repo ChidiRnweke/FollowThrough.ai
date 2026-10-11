@@ -1,13 +1,6 @@
 import { NotFoundError } from '$lib/errors';
 import { createHash } from 'node:crypto';
-import type {
-	ActorContext,
-	ApiToken,
-	ApiTokenId,
-	ApiTokenScope,
-	User,
-	UserId
-} from '$lib/models/identity';
+import type { ApiToken, ApiTokenId, ApiTokenScope, User } from '$lib/models/identity';
 import type {
 	ApiTokenCredentialRepository,
 	ApiTokenRepository

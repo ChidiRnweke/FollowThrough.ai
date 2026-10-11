@@ -1,9 +1,8 @@
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { InMemoryMaintenanceProgress } from '$lib/testing/maintenance/fakes/in-memory-maintenance-progress';
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { Attachment, AttachmentId, AttachmentVersionId } from '$lib/models/attachments';
-import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
+import { KnowledgeIndexing } from '$lib/server/controllers/knowledge-indexing/controller';
 import { retrievalTransport } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { z } from 'zod';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
@@ -75,7 +74,7 @@ const setup = async (suffix: string) => {
 
 describe('attachment search tail in PostgreSQL', () => {
 	it('finds accepted tail text before embeddings are ready', async () => {
-		const { owner, project, repository } = await setup('9741');
+		const { project, repository } = await setup('9741');
 		const matches = await repository.search('amberfalcon', 10, project.id);
 		expect(
 			matches.map(({ document }) => ({
@@ -86,12 +85,11 @@ describe('attachment search tail in PostgreSQL', () => {
 	});
 
 	it('returns the tail as the nearest semantic result after backfill', async () => {
-		const { owner, project, attachment, repository, transaction } = await setup('9742');
-		await new EmbeddingMaintenance(
+		const { project, attachment, repository, transaction } = await setup('9742');
+		await new KnowledgeIndexing(
 			createContentIndex(repository, client.model, undefined, false, client),
-			transaction.transactionRunner,
-			new InMemoryMaintenanceProgress()
-		).run();
+			transaction.transactionRunner
+		).backfill({ kind: 'attachment', attachmentId: attachment.id });
 		const matches = await repository.searchByEmbedding(vector(true), 1, project.id);
 		expect(
 			matches.map(({ document }) => ({

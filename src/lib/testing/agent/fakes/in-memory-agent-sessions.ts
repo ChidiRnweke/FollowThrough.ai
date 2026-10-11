@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { readCanvasSessionResult } from '$lib/server/repositories/agent/canvas-results';
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentSessionItem,
 	AgentSessionItemId,

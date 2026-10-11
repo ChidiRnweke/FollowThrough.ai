@@ -158,7 +158,7 @@ describe('Permanent note deletion invariants', () => {
 
 	it('does not destroy another user’s trashed note', async () => {
 		const { notes, controller } = setup();
-		notes.notes = [noteBuilder({ archivedAt: testNow })];
+		notes.notes = [noteBuilder({ archivedAt: testNow, userId: testActor(2).userId })];
 		await expect(controller.deleteForever({ noteId: testNoteId() })).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});

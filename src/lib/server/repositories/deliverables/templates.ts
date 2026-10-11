@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId, ProjectTemplate, TemplateUpload } from '$lib/models/projects';
 import type { TemplateId } from '$lib/models/deliverables';
 

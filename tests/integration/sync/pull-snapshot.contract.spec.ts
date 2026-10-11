@@ -11,7 +11,7 @@ it('retains the selected body and version when a writer commits before the body 
 	const { owner, note } = await seedNote('8840');
 	const reader = connectPostgresTestDatabase(context.url);
 	const writer = connectPostgresTestDatabase(context.url);
-	const workspace = workspacePullFixture(reader.db);
+	const workspace = workspacePullFixture(owner, reader.db);
 	let pulling: Promise<SyncPage<WorkspaceRecord>> | undefined;
 	try {
 		const initial = await workspace.pullChangePage(initialSyncCursor);

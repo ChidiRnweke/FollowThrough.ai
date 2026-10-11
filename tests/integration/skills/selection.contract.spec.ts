@@ -19,7 +19,7 @@ const setup = async (suffix: string) => {
 	return {
 		...seeded,
 		note,
-		controller: skillController(tx.database, tx.transactionRunner),
+		controller: skillController(seeded.owner, tx.database, tx.transactionRunner),
 		input: {
 			name: 'Decision quality',
 			description: 'Improves architecture decisions',
@@ -77,14 +77,16 @@ it('rolls back source evidence and the candidate note after a duplicate skill na
 });
 
 it('refuses a selection from another account', async () => {
-	const { controller, input } = await setup('21003');
-	await expect(controller.createFromSelection(input)).rejects.toMatchObject({
+	const { input } = await setup('21003');
+	const tx = createTransactionContext(context.db);
+	const foreign = skillController(actor('21004'), tx.database, tx.transactionRunner);
+	await expect(foreign.createFromSelection(input)).rejects.toMatchObject({
 		code: 'NOT_FOUND'
 	});
 });
 
 it('refuses a selection whose note revision has changed', async () => {
-	const { owner, note, controller, input } = await setup('21005');
+	const { note, controller, input } = await setup('21005');
 	await replaceNoteFixture({ ...note, currentRevision: 2 });
 	await expect(controller.createFromSelection(input)).rejects.toMatchObject({
 		code: 'STALE_REVISION'

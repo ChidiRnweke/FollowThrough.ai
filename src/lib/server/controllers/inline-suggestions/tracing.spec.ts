@@ -8,11 +8,7 @@ import { operationObserver, workflowObserver } from '$lib/server/infrastructure/
 import { createInlineCompletion } from '$lib/server/factories/inline-completion';
 import { inlineCompletionProvider } from '$lib/testing/inline-suggestions/fixtures/provider';
 import { inlineSuggestionFixture } from '$lib/testing/inline-suggestions/fixtures/context';
-import {
-	noteBuilder,
-	testActor,
-	testNoteId
-} from '$lib/testing/workspace/fixtures/domain-builders';
+import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const exporter = new InMemorySpanExporter();
 const sdk = new NodeSDK({
@@ -95,7 +91,6 @@ it('records an in-flight SDK cancellation as cancelled and releases the admissio
 	const provider = await inlineCompletionProvider(deferred.promise);
 	try {
 		const fixture = fixtureFor(provider.baseURL);
-		const actor = testActor();
 		const abort = new AbortController();
 		const outcome = fixture.controller.suggest(request, abort.signal).then(
 			(result) => result.outcome,

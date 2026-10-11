@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	AttachmentId,
 	AttachmentUpload,
@@ -15,7 +14,7 @@ import type {
 } from '$lib/server/repositories/attachments/attachments';
 import { type IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
 import type { StoredObjectInfo } from '$lib/models/attachments';
-import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { RecognizedContent as OcrContentPart } from '$lib/models/attachments/ocr';
 import { z } from 'zod';
 
@@ -126,17 +125,6 @@ export class InMemoryAttachmentRepository implements AttachmentRepository {
 		this.updates.push(version);
 		if (this.found) this.found = { ...this.found, version };
 		return this.viewOf(version);
-	}
-	async listPendingVersions() {
-		const version = this.found?.version;
-		return version &&
-			(['queued', 'processing'].includes(version.processingStatus) ||
-				(version.processingStatus === 'partial' &&
-					version.processingFailure === undefined &&
-					version.extractedText !== undefined &&
-					version.parserKind !== undefined))
-			? [{ ...testActor(), versionId: version.id }]
-			: [];
 	}
 	async findVersionForUpdate() {
 		return this.found;

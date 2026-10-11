@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { ActorContext, User, UserId } from '$lib/models/identity';
 import type {
 	CreateUserData,

@@ -1,5 +1,4 @@
 import type { GenerateMermaidDiagramOutput } from '$lib/models/diagrams';
-import type { ActorContext } from '$lib/models/identity';
 import type { TextSelection } from '$lib/models/notes';
 import type { FindReferencesOutput } from '$lib/models/references';
 import type { RelateSelectionOutput } from '$lib/models/relationships';

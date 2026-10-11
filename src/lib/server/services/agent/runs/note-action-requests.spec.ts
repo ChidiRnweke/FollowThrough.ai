@@ -3,7 +3,6 @@ import {
 	promiseExtractionFixture,
 	promiseSelection
 } from '$lib/testing/todos/fixtures/promise-extraction';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const input = () => ({
 	requestId: crypto.randomUUID(),

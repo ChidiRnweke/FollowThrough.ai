@@ -4,7 +4,6 @@ import type {
 	AgentSedRange,
 	AgentSedResult
 } from '$lib/models/agent-files';
-import type { ActorContext } from '$lib/models/identity';
 
 import type { AgentFileReader } from '$lib/server/services/agent-files/virtual-files';
 

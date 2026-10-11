@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
-import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 
 it('rejects a traversal path before creating an attachment upload', async () => {
 	const { uploads, notes } = setupAttachments();

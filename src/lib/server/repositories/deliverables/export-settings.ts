@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { ExportSettings } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
 

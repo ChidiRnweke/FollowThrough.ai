@@ -1,8 +1,4 @@
-import type {
-	ActorContext,
-	UpdateUserPreferencesInput,
-	UserPreferences
-} from '$lib/models/identity';
+import type { UpdateUserPreferencesInput, UserPreferences } from '$lib/models/identity';
 
 /**
  * One row per user, created on first write. A missing row reads as every

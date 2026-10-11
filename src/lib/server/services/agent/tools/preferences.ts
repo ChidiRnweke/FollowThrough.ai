@@ -1,5 +1,4 @@
 import type { ResolvedToolCatalogEntry } from '$lib/models/agent/tool-catalog';
-import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { ToolPreference } from '$lib/models/agent';
 import { ValidationError } from '$lib/errors';

@@ -8,7 +8,7 @@ import { skillController } from './edit-harness';
 const setup = async (suffix: string) => {
 	const seed = await seedNote(suffix);
 	const tx = createTransactionContext(context.db);
-	const controller = skillController(tx.database, tx.transactionRunner);
+	const controller = skillController(seed.owner, tx.database, tx.transactionRunner);
 	const { skill } = await controller.create({
 		name: 'Reviewing changes',
 		projectId: seed.project.id
@@ -28,13 +28,15 @@ it('hides a skill catalog entry and detail after its project is archived', async
 	});
 });
 it('does not open another account’s skill detail', async () => {
-	const { skill, controller } = await setup('21202');
-	await expect(controller.get({ noteId: skill.note.id })).rejects.toMatchObject({
+	const { skill } = await setup('21202');
+	const tx = createTransactionContext(context.db);
+	const foreign = skillController(actor('21203'), tx.database, tx.transactionRunner);
+	await expect(foreign.get({ noteId: skill.note.id })).rejects.toMatchObject({
 		code: 'NOT_FOUND'
 	});
 });
 it('keeps a disabled skill readable for its owner', async () => {
-	const { owner, skill, controller } = await setup('21204');
+	const { skill, controller } = await setup('21204');
 	await controller.update({ noteId: skill.note.id, isEnabled: false });
 	expect(await controller.get({ noteId: skill.note.id })).toMatchObject({
 		skill: { isEnabled: false, note: { id: skill.note.id } }

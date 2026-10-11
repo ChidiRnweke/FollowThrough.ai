@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { NoteId } from '$lib/models/notes';
 import { workspaceMutationRequestSchema } from '$lib/models/workspace-mutations';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -38,14 +37,14 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const synchronization = createSyncCapability(testActor(), { db: database });
-	const { services: catalog } = createNotesCapability(testActor(), {
+	const synchronization = createSyncCapability(seeded.owner, { db: database });
+	const { services: catalog } = createNotesCapability(seeded.owner, {
 		db: database,
-		projects: new ProjectRecords(testActor(), database)
+		projects: new ProjectRecords(seeded.owner, database)
 	});
-	const content = new InMemoryNoteContent(testActor());
+	const content = new InMemoryNoteContent(seeded.owner);
 	const controller = new Notes(
-		testActor(),
+		seeded.owner,
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -108,7 +107,7 @@ const setup = async (suffix: string) => {
 
 describe('synchronized domain mutations on PostgreSQL', () => {
 	it('does not apply a retried rename twice', async () => {
-		const { owner, note, controller, baseEtag } = await setup('9101');
+		const { note, controller, baseEtag } = await setup('9101');
 		const request = {
 			operationId: crypto.randomUUID(),
 			baseEtag,
@@ -123,7 +122,7 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 	});
 
 	it('rejects a stale base without overwriting another client’s edit', async () => {
-		const { owner, note, controller, baseEtag } = await setup('9102');
+		const { note, controller, baseEtag } = await setup('9102');
 		await context.client`update notes set title = 'Other device' where id = ${note.id}`;
 		const outcome = await controller.synchronize({
 			operationId: crypto.randomUUID(),
@@ -140,7 +139,7 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 	});
 
 	it('creates a new note using its stable local identity with no server base', async () => {
-		const { owner, project, controller } = await setup('9103');
+		const { project, controller } = await setup('9103');
 		const id = crypto.randomUUID() as NoteId;
 		const outcome = await controller.synchronize({
 			operationId: crypto.randomUUID(),
@@ -152,7 +151,7 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 	});
 
 	it('publishes the guarded current note using the domain’s document revision check', async () => {
-		const { owner, note, controller, baseEtag } = await setup('9104');
+		const { note, controller, baseEtag } = await setup('9104');
 		await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag,
@@ -167,7 +166,7 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 
 describe('imported note metadata', () => {
 	it('preserves explicitly edited metadata across a later document-only save', async () => {
-		const { owner, note, controller, synchronization, baseEtag } = await setup('9105');
+		const { note, controller, synchronization, baseEtag } = await setup('9105');
 		const outcome = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag,
@@ -206,7 +205,7 @@ describe('imported note metadata', () => {
 
 describe('guarded note trash actions', () => {
 	it('archives a note once even after a lost acknowledgement', async () => {
-		const { owner, note, controller, baseEtag } = await setup('9107');
+		const { note, controller, baseEtag } = await setup('9107');
 		const request = {
 			operationId: crypto.randomUUID(),
 			baseEtag,
@@ -216,7 +215,7 @@ describe('guarded note trash actions', () => {
 		expect(await controller.synchronize(request)).toEqual(first);
 	});
 	it('restores the guarded note through the owning trash rules', async () => {
-		const { owner, note, controller, synchronization, catalog } = await setup('9108');
+		const { note, controller, synchronization, catalog } = await setup('9108');
 		await controller.archive({ noteId: note.id });
 		const current = await synchronization.objects.read({ type: 'notes', id: [note.id] }, null);
 		if (current.kind !== 'found') throw new Error('The archived note must exist');
@@ -264,7 +263,7 @@ it('does not disguise a non-sync database failure as a domain decision', async (
 	).rejects.toMatchObject({ cause: { code: '23502' } });
 });
 it('matches cancellation to normalized input after an applied response is lost', async () => {
-	const { owner, note, controller, workspace, baseEtag } = await setup('9183');
+	const { note, controller, workspace, baseEtag } = await setup('9183');
 	const input = workspaceMutationRequestSchema.parse({
 		operationId: crypto.randomUUID(),
 		baseEtag,
@@ -289,7 +288,7 @@ it('matches cancellation to normalized input after an applied response is lost',
 });
 
 it('recovers a completed write while another transaction locks its resource', async () => {
-	const { owner, note, controller, baseEtag, database, transactionRunner } = await setup('9111');
+	const { note, controller, baseEtag, database, transactionRunner } = await setup('9111');
 	const request = {
 		operationId: crypto.randomUUID(),
 		baseEtag,

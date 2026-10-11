@@ -103,7 +103,7 @@ export const createAttachmentsCapability = (
 		storage,
 		uploads: new AttachmentUploadService(actor, repository, input.notes),
 		reader: new AttachmentReadingService(repository),
-		lifecycle: new AttachmentLifecycleService(actor, repository, input.notes),
+		lifecycle: new AttachmentLifecycleService(repository, input.notes),
 		processing: new AttachmentProcessing({
 			modelSelection: new AgentModelSelectionService(),
 			records: new AttachmentVersionService(repository),

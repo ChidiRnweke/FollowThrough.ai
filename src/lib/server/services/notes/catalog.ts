@@ -82,27 +82,18 @@ export interface NoteDeletion {
 	): Promise<readonly Pick<Note, 'id' | 'title'>[]>;
 }
 
-async function requireNote(
-	notes: NoteRepository,
-	actor: ActorContext,
-	noteId: NoteId
-): Promise<Note> {
+async function requireNote(notes: NoteRepository, noteId: NoteId): Promise<Note> {
 	const note = await notes.findById(noteId);
 	if (!note) throw new NotFoundError('Note was not found', { noteId });
 	return note;
 }
-async function lockedNote(
-	notes: NoteRepository,
-	actor: ActorContext,
-	noteId: NoteId
-): Promise<Note> {
+async function lockedNote(notes: NoteRepository, noteId: NoteId): Promise<Note> {
 	const note = await notes.findForWrite(noteId);
 	if (!note) throw new NotFoundError('Note was not found', { noteId });
 	return note;
 }
 async function resolveProject(
 	projects: ProjectRepository,
-	actor: ActorContext,
 	projectId: Note['projectId']
 ): Promise<Project> {
 	const project = await projects.findForWrite(projectId);
@@ -112,12 +103,11 @@ async function resolveProject(
 async function lockTreeForNote(
 	notes: NoteRepository,
 	projects: ProjectRepository,
-	actor: ActorContext,
 	noteId: NoteId
 ): Promise<Note> {
-	const candidate = await requireNote(notes, actor, noteId);
-	await resolveProject(projects, actor, candidate.projectId);
-	return lockedNote(notes, actor, noteId);
+	const candidate = await requireNote(notes, noteId);
+	await resolveProject(projects, candidate.projectId);
+	return lockedNote(notes, noteId);
 }
 
 export class NoteReadingService
@@ -174,7 +164,7 @@ export class NoteEditingService implements NoteEditor, NoteSectionNumberingEdito
 	async getForEdit(candidate: Pick<Note, 'id' | 'userId'>): Promise<Note> {
 		if (candidate.userId !== this.actor.userId)
 			throw new OwnershipError('Cannot save another user’s note');
-		return lockedNote(this.notes, this.actor, candidate.id);
+		return lockedNote(this.notes, candidate.id);
 	}
 	async persistEdit(write: NoteSaveWrite): Promise<Note> {
 		const updated = await this.notes.updateIfRevision(write.note, write.expectedRevision);
@@ -182,26 +172,25 @@ export class NoteEditingService implements NoteEditor, NoteSectionNumberingEdito
 		return updated;
 	}
 	async setSectionNumbering(input: SetNoteSectionNumberingInput): Promise<Note> {
-		await requireNote(this.notes, this.actor, input.noteId);
+		await requireNote(this.notes, input.noteId);
 		return this.notes.setSectionNumbering(input.noteId, input.enabled ?? null);
 	}
 }
 
 export class NoteLifecycleService implements NoteTrashOperations, NoteDeletion {
 	constructor(
-		private readonly actor: ActorContext,
 		private readonly notes: NoteRepository,
 		private readonly projects: ProjectRepository
 	) {}
 	async archiveFacts(noteId: NoteId): Promise<{ note: Note; hasActiveChildren: boolean }> {
-		const note = await lockTreeForNote(this.notes, this.projects, this.actor, noteId);
+		const note = await lockTreeForNote(this.notes, this.projects, noteId);
 		const active = note.kind === 'folder' ? await this.notes.listActive(note.projectId) : [];
 		return { note, hasActiveChildren: active.some((entry) => entry.parentId === noteId) };
 	}
 	async restoreFacts(
 		noteId: NoteId
 	): Promise<{ note: Note; parent: Note | null; rootSiblingCount: number }> {
-		const note = await lockTreeForNote(this.notes, this.projects, this.actor, noteId);
+		const note = await lockTreeForNote(this.notes, this.projects, noteId);
 		const parent = note.parentId ? await this.notes.findForWrite(note.parentId) : undefined;
 		return {
 			note,
@@ -213,7 +202,7 @@ export class NoteLifecycleService implements NoteTrashOperations, NoteDeletion {
 		return this.notes.updateTrash(note);
 	}
 	async deletionFacts(noteId: NoteId): Promise<{ note: Note; trashed: readonly Note[] }> {
-		const note = await lockTreeForNote(this.notes, this.projects, this.actor, noteId);
+		const note = await lockTreeForNote(this.notes, this.projects, noteId);
 		return { note, trashed: await this.notes.listTrashed(note.projectId) };
 	}
 	async trashForDeletion(projectId?: Note['projectId']): Promise<readonly Note[]> {
@@ -244,17 +233,14 @@ export class NoteLifecycleService implements NoteTrashOperations, NoteDeletion {
 }
 
 export class NoteRevisionReadingService implements NoteRevisionReader {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly notes: NoteRepository
-	) {}
+	constructor(private readonly notes: NoteRepository) {}
 	async latestRevision(noteId: NoteId): Promise<NoteRevision | undefined> {
-		await requireNote(this.notes, this.actor, noteId);
+		await requireNote(this.notes, noteId);
 		const revisions = await this.notes.listRevisions(noteId);
 		return revisions.length > 0 ? revisions[revisions.length - 1] : undefined;
 	}
 	async revisions(noteId: NoteId): Promise<readonly NoteRevision[]> {
-		await requireNote(this.notes, this.actor, noteId);
+		await requireNote(this.notes, noteId);
 		// The repository orders ascending; history reads newest first.
 		return [...(await this.notes.listRevisions(noteId))].reverse();
 	}
@@ -262,19 +248,16 @@ export class NoteRevisionReadingService implements NoteRevisionReader {
 		noteId: NoteId,
 		revisionId: NoteRevisionId
 	): Promise<NoteRevision | undefined> {
-		await requireNote(this.notes, this.actor, noteId);
+		await requireNote(this.notes, noteId);
 		const revisions = await this.notes.listRevisions(noteId);
 		return revisions.find((revision) => revision.id === revisionId);
 	}
 }
 
 export class NoteRevisionWritingService implements NoteRevisionRecorder, NoteAttachmentRestorer {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly notes: NoteRepository
-	) {}
+	constructor(private readonly notes: NoteRepository) {}
 	async record(note: Note, provenance?: Provenance): Promise<void> {
-		await requireNote(this.notes, this.actor, note.id);
+		await requireNote(this.notes, note.id);
 		const revision: NoteRevision = {
 			id: crypto.randomUUID() as NoteRevisionId,
 			noteId: note.id,
@@ -289,18 +272,15 @@ export class NoteRevisionWritingService implements NoteRevisionRecorder, NoteAtt
 		await this.notes.pruneRevisions(note.id, NOTE_REVISION_HISTORY_LIMIT);
 	}
 	async restoreAttachments(noteId: NoteId, revisionId: NoteRevisionId): Promise<void> {
-		await requireNote(this.notes, this.actor, noteId);
+		await requireNote(this.notes, noteId);
 		await this.notes.restoreAttachmentSnapshot(revisionId, noteId);
 	}
 }
 
 export class NotePublicationService implements NotePublisher {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly notes: NoteRepository
-	) {}
+	constructor(private readonly notes: NoteRepository) {}
 	getForPublication(noteId: NoteId): Promise<Note> {
-		return lockedNote(this.notes, this.actor, noteId);
+		return lockedNote(this.notes, noteId);
 	}
 	async persistPublication(write: NotePublicationWrite): Promise<Note> {
 		const note = await this.notes.updatePublication(write);
@@ -311,12 +291,11 @@ export class NotePublicationService implements NotePublisher {
 
 export class NoteAnchorRepairService implements SourceAnchorRepairer {
 	constructor(
-		private readonly actor: ActorContext,
 		private readonly notes: NoteRepository,
 		private readonly anchors: SourceAnchorRepository
 	) {}
 	async repairForNote(note: Note): Promise<readonly SourceAnchor[]> {
-		await requireNote(this.notes, this.actor, note.id);
+		await requireNote(this.notes, note.id);
 		const existing = await this.anchors.listForNote(note.id);
 		const repaired: SourceAnchor[] = [];
 		for (const anchor of existing) {
@@ -344,7 +323,7 @@ export class NoteCreationService implements NoteCreator {
 	async creationFacts(
 		input: Pick<CreateNoteInput, 'projectId' | 'parentId'>
 	): Promise<NoteCreationFacts> {
-		const project = await resolveProject(this.projects, this.actor, input.projectId);
+		const project = await resolveProject(this.projects, input.projectId);
 		return {
 			project,
 			parent: input.parentId ? ((await this.notes.findById(input.parentId)) ?? null) : null,

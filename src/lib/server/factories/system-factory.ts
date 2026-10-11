@@ -9,13 +9,20 @@ import { AgentRunBacklogRecords } from '$lib/server/repositories/agent/postgres/
 import { RunBacklogService } from '$lib/server/services/agent/runs/backlog';
 import type { ApplicationConfig } from '$lib/server/application';
 import { createAttachmentMaintenance } from './capabilities/attachments-capability-factory';
-import { createEmbeddingBacklog } from './capabilities/knowledge-search-capability-factory';
+import {
+	createEmbeddingBacklog,
+	createToolDiscovery
+} from './capabilities/knowledge-search-capability-factory';
+import type { ToolDiscoveryController } from '$lib/server/controllers/tool-discovery/controller';
+import { DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 
 /** Controllers for work that acts for no user: they list work and say whose it is. */
 export interface SystemControllers {
 	runRecovery(): RunRecoveryController;
 	embeddingBacklog(): EmbeddingBacklogController;
 	attachmentBacklog(): AttachmentBacklogController;
+	/** Seeds and ranks the tool catalog's embeddings. */
+	toolDiscovery(): ToolDiscoveryController;
 }
 
 export interface SystemApplication {
@@ -39,7 +46,17 @@ export const createSystemApplication = (config: ApplicationConfig): SystemApplic
 			runRecovery: () =>
 				new RunRecovery(new RunBacklogService(new AgentRunBacklogRecords(config.db))),
 			embeddingBacklog: () => createEmbeddingBacklog(config.db),
-			attachmentBacklog: () => new AttachmentBacklogReader(attachments.backlog)
+			attachmentBacklog: () => new AttachmentBacklogReader(attachments.backlog),
+			toolDiscovery: () =>
+				createToolDiscovery({
+					db: config.db,
+					transactionRunner: config.transactionRunner,
+					tokenizer: config.tokenizer,
+					openRouterApiKey: config.openRouterApiKey,
+					openRouterBaseURL: config.openRouterBaseURL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL,
+					appURL: config.appURL ?? 'http://localhost:5173',
+					...(config.overrides?.toolSearch ? { toolSearch: config.overrides.toolSearch } : {})
+				})
 		},
 		tasks: attachments.tasks
 	};

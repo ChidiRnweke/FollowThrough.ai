@@ -45,8 +45,8 @@ export const promiseExtractionFixture = () => {
 	const extractor = new InMemoryPromiseExtractor();
 	const provenance = new InMemoryProvenanceRecorder(testActor());
 	const suggestions = new InMemorySuggestions(testActor());
-	const effects = new InMemorySuggestionEffects(testActor());
-	const trust = new InMemoryTrustPolicyEvaluator(testActor());
+	const effects = new InMemorySuggestionEffects();
+	const trust = new InMemoryTrustPolicyEvaluator();
 	const todos = new InMemoryTodos(testActor());
 	const runs = new InMemoryAgentRunPersistence(testActor());
 	const conversations = new InMemoryConversationRepository(testActor());

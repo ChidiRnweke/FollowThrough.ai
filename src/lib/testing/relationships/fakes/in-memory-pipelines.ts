@@ -147,7 +147,7 @@ export class InMemoryProvenanceRecorder implements ProvenanceRecorder, SnapshotP
 }
 
 export class InMemoryTrustPolicyEvaluator implements TrustPolicyEvaluator {
-	constructor(private readonly actor: ActorContext) {}
+	constructor() {}
 	autoAccept = false;
 
 	async shouldAutoAccept(pipeline: PipelineKind, _suggestion: Suggestion): Promise<boolean> {

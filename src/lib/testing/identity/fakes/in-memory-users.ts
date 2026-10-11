@@ -1,15 +1,20 @@
 import type { ActorContext, User, UserId } from '$lib/models/identity';
-import type { CreateUserData, UserRepository } from '$lib/server/repositories/identity';
+import type {
+	CreateUserData,
+	UserAccountRepository,
+	UserRepository
+} from '$lib/server/repositories/identity';
 import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
-export class InMemoryUserRepository implements UserRepository {
+/** The users table: the bound user's account, and the sign-in lookups across every account. */
+export class InMemoryUserRepository implements UserRepository, UserAccountRepository {
 	constructor(private readonly actor: ActorContext) {}
 	users: User[] = [];
 	createOnEnsure = true;
 	ensureFailure: Error | undefined;
 
-	async findById(id: UserId): Promise<User | undefined> {
-		return this.users.find((user) => user.id === id && user.id === this.actor.userId);
+	async findCurrent(): Promise<User | undefined> {
+		return this.users.find((user) => user.id === this.actor.userId);
 	}
 
 	async ensureLocal(): Promise<void> {

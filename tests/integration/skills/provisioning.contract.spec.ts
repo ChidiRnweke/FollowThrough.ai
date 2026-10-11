@@ -1,4 +1,4 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import { syncCursorSchema } from '$lib/models/sync';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
@@ -29,18 +29,18 @@ afterAll(async () => {
 	await Promise.all(clients.map((client) => client.end()));
 });
 
-const setup = () => {
+const setup = (actor: ActorContext) => {
 	const client = postgres(context.url, { max: 3 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const synchronization = createSyncCapability(testActor(), { db: database });
-	const projects = new ProjectRecords(testActor(), database);
-	const notes = new NoteRecords(testActor(), database);
-	const capability = createSkillsCapability(testActor(), {
+	const synchronization = createSyncCapability(actor, { db: database });
+	const projects = new ProjectRecords(actor, database);
+	const notes = new NoteRecords(actor, database);
+	const capability = createSkillsCapability(actor, {
 		db: database,
 		projects,
 		notes,
-		provenance: new ProvenanceRecords(testActor(), database)
+		provenance: new ProvenanceRecords(actor, database)
 	});
 	const dependencies = {
 		transactionRunner,
@@ -70,8 +70,8 @@ const setup = () => {
 };
 
 it('returns one complete built-in installation to simultaneous first requests', async () => {
-	const state = setup();
 	const owner = await seedUser('811');
+	const state = setup(owner);
 	const results = await Promise.all([
 		state.skills.list(),
 		state.skills.list(),
@@ -93,7 +93,7 @@ it('returns one complete built-in installation to simultaneous first requests', 
 });
 
 it('includes built-in skills and their Inbox in the first browser synchronization page', async () => {
-	const state = setup();
+	const state = setup(await seedUser('812'));
 	const page = await state.workspace.pullChangePage(syncCursorSchema.parse('0'));
 	const records = page.records.flatMap((record) =>
 		record.resource.kind === 'found' ? [record.resource.snapshot.value] : []
@@ -107,8 +107,8 @@ it('includes built-in skills and their Inbox in the first browser synchronizatio
 });
 
 it('provisions one replacement Inbox after archive without moving ordinary content', async () => {
-	const state = setup();
 	const owner = await seedUser('19801');
+	const state = setup(owner);
 	const initial = await state.skills.list();
 	const previous = (await state.projects.listActive()).find((project) => project.role === 'inbox')!;
 	const ordinary = await state.notes.insert({
@@ -156,8 +156,8 @@ it('provisions one replacement Inbox after archive without moving ordinary conte
 });
 
 it('keeps an existing project named Inbox when choosing the replacement name', async () => {
-	const state = setup();
 	const owner = await seedUser('19802');
+	const state = setup(owner);
 	await state.skills.list();
 	const previous = (await state.projects.listActive()).find((project) => project.role === 'inbox')!;
 	await state.projects.update({ projectId: previous.id, name: 'Old captures' });

@@ -4,23 +4,31 @@ import {
 	testTokenUser
 } from '$lib/testing/identity/fakes/in-memory-api-tokens';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { AccessTokens } from './api-tokens';
+import { AccessTokens, TokenVerification } from './api-tokens';
 
 const userId = testActor().userId;
 
 const service = (
 	overrides: Parameters<typeof testTokenUser>[1] = {}
-): { service: AccessTokens; repository: InMemoryApiTokenRepository } => {
+): {
+	service: AccessTokens;
+	verification: TokenVerification;
+	repository: InMemoryApiTokenRepository;
+} => {
 	const repository = new InMemoryApiTokenRepository(testActor(), [
 		testTokenUser(userId, overrides)
 	]);
-	return { service: new AccessTokens(repository), repository };
+	return {
+		service: new AccessTokens(repository),
+		verification: new TokenVerification(repository),
+		repository
+	};
 };
 
 const mint = async (scope: 'read' | 'full' = 'read') => {
-	const { service: subject, repository } = service();
-	const minted = await subject.mint(userId, { name: 'Claude Desktop', scope });
-	return { subject, repository, minted };
+	const { service: subject, verification, repository } = service();
+	const minted = await subject.mint({ name: 'Claude Desktop', scope });
+	return { subject, verification, repository, minted };
 };
 
 describe('API token minting', () => {
@@ -35,8 +43,8 @@ describe('API token minting', () => {
 	it('issues a distinct credential each time', async () => {
 		const { subject } = await mint();
 		const [first, second] = await Promise.all([
-			subject.mint(userId, { name: 'a', scope: 'read' }),
-			subject.mint(userId, { name: 'b', scope: 'read' })
+			subject.mint({ name: 'a', scope: 'read' }),
+			subject.mint({ name: 'b', scope: 'read' })
 		]);
 		expect(first.plaintext).not.toEqual(second.plaintext);
 	});
@@ -44,8 +52,8 @@ describe('API token minting', () => {
 
 describe('API token verification', () => {
 	it('accepts the minted full-scope credential as a bearer header', async () => {
-		const { subject, minted } = await mint('full');
-		const verified = await subject.verify(`Bearer ${minted.plaintext}`);
+		const { verification, minted } = await mint('full');
+		const verified = await verification.verify(`Bearer ${minted.plaintext}`);
 		expect({ userId: verified?.user.id, scope: verified?.scope }).toEqual({
 			userId,
 			scope: 'full'
@@ -53,45 +61,46 @@ describe('API token verification', () => {
 	});
 
 	it('rejects a credential that was never minted', async () => {
-		const { subject } = await mint();
-		expect(await subject.verify('Bearer ftm_deadbeef')).toBeNull();
+		const { verification } = await mint();
+		expect(await verification.verify('Bearer ftm_deadbeef')).toBeNull();
 	});
 
 	it('rejects a header without the Bearer scheme', async () => {
-		const { subject, minted } = await mint();
-		expect(await subject.verify(minted.plaintext)).toBeNull();
+		const { verification, minted } = await mint();
+		expect(await verification.verify(minted.plaintext)).toBeNull();
 	});
 
 	it('rejects a missing header', async () => {
-		const { subject } = await mint();
-		expect(await subject.verify(null)).toBeNull();
+		const { verification } = await mint();
+		expect(await verification.verify(null)).toBeNull();
 	});
 
 	it('rejects a revoked token', async () => {
-		const { subject, minted } = await mint();
+		const { subject, verification, minted } = await mint();
 		await subject.revoke(minted.token.id);
 		expect({
-			verified: await subject.verify(`Bearer ${minted.plaintext}`),
+			verified: await verification.verify(`Bearer ${minted.plaintext}`),
 			listed: await subject.list()
 		}).toEqual({ verified: null, listed: [] });
 	});
 
 	it('rejects an expired token', async () => {
-		const { subject, repository, minted } = await mint();
+		const { verification, repository, minted } = await mint();
 		repository.expire(minted.token.id, new Date(Date.now() - 1000));
-		expect(await subject.verify(`Bearer ${minted.plaintext}`)).toBeNull();
+		expect(await verification.verify(`Bearer ${minted.plaintext}`)).toBeNull();
 	});
 
 	it('rejects a token whose owner is still awaiting approval', async () => {
-		const { service: subject } = service({ role: 'WAITING' });
-		const minted = await subject.mint(userId, { name: 'early', scope: 'read' });
-		expect(await subject.verify(`Bearer ${minted.plaintext}`)).toBeNull();
+		const { service: subject, verification } = service({ role: 'WAITING' });
+		const minted = await subject.mint({ name: 'early', scope: 'read' });
+		expect(await verification.verify(`Bearer ${minted.plaintext}`)).toBeNull();
 	});
 });
 
 describe('API token listing', () => {
 	it('does not revoke a token belonging to another user', async () => {
-		const { subject, minted } = await mint();
-		await expect(subject.revoke(minted.token.id)).rejects.toThrow('Access token not found');
+		const { repository, minted } = await mint();
+		const otherUser = new AccessTokens(repository.boundTo(testActor(2)));
+		await expect(otherUser.revoke(minted.token.id)).rejects.toThrow('Access token not found');
 	});
 });

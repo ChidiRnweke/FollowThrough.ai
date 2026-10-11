@@ -22,19 +22,19 @@ const setup = async (suffix: string) => {
 	return { owner, project, records, diagram };
 };
 it('hides direct diagrams when their project is archived', async () => {
-	const { owner, records, diagram } = await setup('32711');
+	const { records, diagram } = await setup('32711');
 	expect(await records.findById(diagram.id)).toBeUndefined();
 });
 it('refuses locking reads in archived projects', async () => {
-	const { owner, records, diagram } = await setup('32712');
+	const { records, diagram } = await setup('32712');
 	expect(await records.findForWrite(diagram.id)).toBeUndefined();
 });
 it('excludes archived projects from diagram counts', async () => {
-	const { owner, project, records } = await setup('32713');
+	const { project, records } = await setup('32713');
 	expect(await records.countForProject(project.id)).toBe(0);
 });
 it('does not expose revision history from archived projects', async () => {
-	const { owner, records, diagram } = await setup('32714');
+	const { records, diagram } = await setup('32714');
 	await expect(records.listRevisions(diagram.id)).rejects.toBeInstanceOf(NotFoundError);
 });
 it('keeps diagram lifecycle unchanged by project archival', async () => {

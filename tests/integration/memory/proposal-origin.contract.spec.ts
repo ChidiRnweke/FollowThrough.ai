@@ -53,14 +53,14 @@ const setup = async (suffix: string) => {
 			presentation: new MemoryPresentationService(),
 			memoryChanges: library.changes,
 			suggestionCreator: inbox.creator,
-			trustPolicyEvaluator: new InMemoryTrustPolicyEvaluator(owner),
+			trustPolicyEvaluator: new InMemoryTrustPolicyEvaluator(),
 			transactionRunner
 		})
 	);
 	return { owner, origin, controller, suggestions, provenance };
 };
 it('keeps the owned caller source and its recorded MCP scope', async () => {
-	const { owner, origin, controller, provenance } = await setup('22801');
+	const { origin, controller, provenance } = await setup('22801');
 	const result = await controller.propose({
 		scope: 'user',
 		operation: 'add',
@@ -72,7 +72,7 @@ it('keeps the owned caller source and its recorded MCP scope', async () => {
 it.each(['foreign', 'missing'] as const)(
 	'refuses a %s source without persisting a proposal',
 	async (kind) => {
-		const { owner, controller, suggestions } = await setup(kind === 'foreign' ? '22802' : '22803');
+		const { controller, suggestions } = await setup(kind === 'foreign' ? '22802' : '22803');
 		let provenanceId: ProvenanceId;
 		if (kind === 'foreign') {
 			const foreign = await seedNote('22812');

@@ -39,7 +39,7 @@ const recover = async (status: 'running' | 'cancelling') => {
 			runSignals: new RunSignalService(runs, runs),
 			transactionRunner: new InMemoryTransactionRunner([runs])
 		})
-	).recoverInterruptedRuns();
+	).recoverInterrupted(run.id);
 	return { status: runs.runs[0].status, events: runs.events.map((record) => record.event.type) };
 };
 describe('run recovery after restart', () => {
@@ -80,7 +80,7 @@ describe('run recovery after restart', () => {
 			attempt: 1,
 			reason: 'submitted'
 		});
-		await state.controller.recoverInterruptedRuns();
+		await state.controller.resumeQueued(runId);
 		await vi.waitFor(() =>
 			expect(state.runs.runs.find((run) => run.id === runId)?.status).toBe('completed')
 		);

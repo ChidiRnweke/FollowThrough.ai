@@ -1,7 +1,10 @@
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { expect, it } from 'vitest';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
-import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import {
+	AgentRunBacklogRecords,
+	AgentRunRecords
+} from '$lib/server/repositories/agent/postgres/agent-settings';
 import { AgentRunEventRecords } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
@@ -69,7 +72,7 @@ it('selects queued chat runs without selecting running chats or queued note acti
 			})
 		);
 		expect(
-			(await runs.listQueuedAgents())
+			(await new AgentRunBacklogRecords(database).listQueuedAgents())
 				.filter((run) => run.userId === owner.userId)
 				.map((run) => run.id)
 		).toEqual([queued.id]);

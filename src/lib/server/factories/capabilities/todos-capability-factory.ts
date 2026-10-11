@@ -123,7 +123,7 @@ export const createTodoServices = (
 		lister: reading,
 		waitingOn: reading,
 		editor: new TodoEditingService(actor, todos, anchors, notes, provenance),
-		deleter: new TodoLifecycleService(actor, todos, clock),
-		context: new TodoContextService(actor, anchors, notes, provenance)
+		deleter: new TodoLifecycleService(todos, clock),
+		context: new TodoContextService(anchors, notes, provenance)
 	};
 };

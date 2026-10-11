@@ -8,7 +8,6 @@ import type { ProjectChoiceRules } from '$lib/services/projects/choice';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
-import type { ActorContext } from '$lib/models/identity';
 import type { CreateNoteInput, Note, NoteId, NoteRevision } from '$lib/models/notes';
 import type { ProjectId, WithProjectChoice } from '$lib/models/projects';
 import type {

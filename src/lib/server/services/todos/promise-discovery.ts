@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { PromiseCandidate, PromiseModelContext } from '$lib/models/todos';
 import type { TextSelection } from '$lib/models/notes';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';

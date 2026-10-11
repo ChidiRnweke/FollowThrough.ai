@@ -63,7 +63,6 @@ const setup = () => {
 	const tools = createAgentToolSurface(
 		testTokenizer,
 		capabilityDependencies<ControllerFactory>({ widgets: () => controller }),
-		testActor(),
 		'auto_accept',
 		{
 			provenanceId: testProvenanceId(),

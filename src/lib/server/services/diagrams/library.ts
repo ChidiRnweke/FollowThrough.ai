@@ -148,10 +148,7 @@ export class DiagramWritingService implements DiagramWriter {
 	}
 }
 export class DiagramLifecycleService implements DiagramLifecycle {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly diagrams: DiagramRepository
-	) {}
+	constructor(private readonly diagrams: DiagramRepository) {}
 	async getForWrite(diagramId: DiagramId): Promise<Diagram> {
 		const diagram = await this.diagrams.findForWrite(diagramId);
 		if (!diagram) throw new NotFoundError('Diagram was not found');
@@ -169,10 +166,7 @@ export class DiagramLifecycleService implements DiagramLifecycle {
 	}
 }
 export class DiagramRevisionService implements DiagramDraftWriter, DiagramRevisionReader {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly diagrams: DiagramRepository
-	) {}
+	constructor(private readonly diagrams: DiagramRepository) {}
 	async getForWrite(diagramId: DiagramId): Promise<Diagram> {
 		const diagram = await this.diagrams.findForWrite(diagramId);
 		if (!diagram) throw new NotFoundError('Diagram was not found');

@@ -117,7 +117,7 @@ describe('Empty trash invariants', () => {
 
 	it('leaves another user’s trash alone', async () => {
 		const { notes, controller } = setup();
-		notes.notes = [noteBuilder({ archivedAt: testNow })];
+		notes.notes = [noteBuilder({ archivedAt: testNow, userId: testActor(2).userId })];
 		await controller.emptyTrash({});
 		expect(notes.notes).toHaveLength(1);
 	});

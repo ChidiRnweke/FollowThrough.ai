@@ -1,6 +1,5 @@
 import { workspaceWriteRejection } from '$lib/server/repositories/workspace/write-failure';
 import { DomainError, ValidationError } from '$lib/errors';
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	WorkspaceResourceIdentity,
 	ResolvedWorkspaceResource

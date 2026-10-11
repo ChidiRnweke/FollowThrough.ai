@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentEvent,
 	AgentRun,
@@ -55,10 +54,7 @@ export interface AgentRunEvents {
 	listAttempt(runId: AgentRunId, attempt: number): Promise<readonly StoredAgentRunEventRecord[]>;
 }
 export class AgentRunEventService implements AgentRunEvents {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly repository: AgentRunEventRepository
-	) {}
+	constructor(private readonly repository: AgentRunEventRepository) {}
 	append(runId: AgentRunId, attempt: number, event: AgentEvent) {
 		return this.repository.append(runId, attempt, event);
 	}
@@ -86,10 +82,7 @@ export interface AgentRunDecisions {
 	clearPending(runId: AgentRunId): Promise<void>;
 }
 export class AgentRunDecisionService implements AgentRunDecisions {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly repository: AgentRunDecisionRepository
-	) {}
+	constructor(private readonly repository: AgentRunDecisionRepository) {}
 	record(input: Parameters<AgentRunDecisions['record']>[0]) {
 		return this.repository.record(input);
 	}
@@ -110,10 +103,7 @@ export interface AgentSessions {
 	replace(conversationId: ConversationId, items: readonly PersistedSessionItem[]): Promise<void>;
 }
 export class AgentSessionService implements AgentSessions {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly repository: AgentSessionRepository
-	) {}
+	constructor(private readonly repository: AgentSessionRepository) {}
 	list(conversationId: ConversationId, limit?: number) {
 		return this.repository.list(conversationId, limit);
 	}

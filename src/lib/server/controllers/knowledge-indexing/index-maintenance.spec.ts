@@ -1,10 +1,9 @@
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { InMemoryMaintenanceProgress } from '$lib/testing/maintenance/fakes/in-memory-maintenance-progress';
+import { inMemoryEmbeddingSweep } from '$lib/testing/knowledge-search/fixtures/embedding-sweep';
 import { describe, expect, it } from 'vitest';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 
 const immediateTransactions: TransactionRunner = { run: (work) => work() };
@@ -19,25 +18,12 @@ const deferredIndexer = (repository: InMemorySearchRepository, client: InMemoryR
 	);
 
 const backfill = (repository: InMemorySearchRepository, client: InMemoryRetrievalProvider) =>
-	new EmbeddingMaintenance(
-		createContentIndex(repository, client.model, undefined, false, client),
-		immediateTransactions,
-		new InMemoryMaintenanceProgress(),
-		{
-			logger: {
-				error: (_message, error: Error) => {
-					throw error;
-				},
-				log: () => {}
-			}
-		}
-	);
+	inMemoryEmbeddingSweep(repository, client, { transactions: immediateTransactions });
 
 describe('Deferred embedding write path', () => {
 	it('stages deferred text for lexical but not semantic search', async () => {
 		const repository = new InMemorySearchRepository(testActor());
 		const client = new InMemoryRetrievalProvider();
-		const actor = testActor();
 		const note = noteBuilder({ plainText: 'Kubernetes ingress notes' });
 		await deferredIndexer(repository, client).indexNote(note);
 

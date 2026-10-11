@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import type { AgentRunId, ConversationId, WorkflowRunContext } from '$lib/models/agent';
@@ -115,7 +114,7 @@ it('does not expose another actor’s workflow through the context lock', async 
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	await expect(
 		transactionRunner.run(() =>
-			new DiagramRunContext(new AgentRunRecords(testActor(), database)).getForWrite(run.id)
+			new DiagramRunContext(new AgentRunRecords(actor('17304'), database)).getForWrite(run.id)
 		)
 	).rejects.toThrow('not found');
 });

@@ -6,7 +6,6 @@ import type { InMemoryAttachmentStorage } from '$lib/testing/attachments/fakes/i
 import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/export-controller';
 import {
 	noteBuilder,
-	testActor,
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';

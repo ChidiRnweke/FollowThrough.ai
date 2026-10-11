@@ -1,4 +1,4 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { SkillPortabilityService } from '$lib/services/skills/manifest';
@@ -28,20 +28,24 @@ import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content'
 import { context } from '../database-harness';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 
-export const skillController = (database: Database, transactionRunner: TransactionRunner) => {
-	const projects = new ProjectRecords(testActor(), database);
-	const notes = new NoteRecords(testActor(), database);
-	const skills = new SkillRecords(testActor(), database);
-	const provenance = new ProvenanceRecords(testActor(), database);
-	const library = createSkillServices(testActor(), skills, notes, provenance);
+export const skillController = (
+	actor: ActorContext,
+	database: Database,
+	transactionRunner: TransactionRunner
+) => {
+	const projects = new ProjectRecords(actor, database);
+	const notes = new NoteRecords(actor, database);
+	const skills = new SkillRecords(actor, database);
+	const provenance = new ProvenanceRecords(actor, database);
+	const library = createSkillServices(actor, skills, notes, provenance);
 	const catalog = createNoteServices(
-		testActor(),
+		actor,
 		notes,
-		new SourceAnchorRecords(testActor(), database),
+		new SourceAnchorRecords(actor, database),
 		projects
 	);
-	const content = new InMemoryNoteContent(testActor());
-	const sync = createSyncCapability(testActor(), { db: database });
+	const content = new InMemoryNoteContent(actor);
+	const sync = createSyncCapability(actor, { db: database });
 	return new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
@@ -52,14 +56,14 @@ export const skillController = (database: Database, transactionRunner: Transacti
 			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
 			selectionOrigins: new SelectionOrigins(
-				testActor(),
+				actor,
 				notes,
-				new SourceAnchorRecords(testActor(), database),
+				new SourceAnchorRecords(actor, database),
 				provenance
 			),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
-			builtInSkills: new BuiltInSkills(testActor(), projects, notes, skills, {
+			builtInSkills: new BuiltInSkills(actor, projects, notes, skills, {
 				active: BUILT_INS,
 				retired: RETIRED_BUILT_INS
 			}),
@@ -84,6 +88,7 @@ export const skillController = (database: Database, transactionRunner: Transacti
 
 /** Commit the first controller write only after the competing write reaches a PostgreSQL lock. */
 export const competingSkillWrites = async <T>(
+	actor: ActorContext,
 	first: (controller: Skills) => Promise<void>,
 	second: (controller: Skills) => Promise<T>
 ) => {
@@ -95,7 +100,7 @@ export const competingSkillWrites = async <T>(
 	const ready = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
 	const holding = held.transactionRunner.run(async () => {
-		await first(skillController(held.database, held.transactionRunner));
+		await first(skillController(actor, held.database, held.transactionRunner));
 		ready.resolve();
 		await release.promise;
 	});
@@ -106,7 +111,7 @@ export const competingSkillWrites = async <T>(
 	try {
 		await ready.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const writing = second(skillController(write.database, write.transactionRunner)).then(
+		const writing = second(skillController(actor, write.database, write.transactionRunner)).then(
 			(value) => ({ kind: 'success' as const, value }),
 			(error: Error) => ({ kind: 'failure' as const, error })
 		);

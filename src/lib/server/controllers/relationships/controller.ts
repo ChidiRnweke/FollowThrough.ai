@@ -1,5 +1,4 @@
 import { DuplicateNoteActionRequest } from '$lib/errors';
-import type { ActorContext } from '$lib/models/identity';
 import type { Note, TextSelection } from '$lib/models/notes';
 import type {
 	LinkCandidate,

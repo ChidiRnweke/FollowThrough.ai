@@ -1,4 +1,4 @@
-import type { ActorContext, UserId } from '$lib/models/identity';
+import type { UserId } from '$lib/models/identity';
 import type {
 	Attachment,
 	AttachmentUpload,

@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { SyncCursor } from '$lib/models/sync';
 import type { WorkspaceJournalPage } from '$lib/models/workspace-sync-reads';
 import type { SyncChangesRepository } from '$lib/server/repositories/workspace/sync-changes';

@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateTodoBatchInput,
 	CreateTodoBatchOutput,

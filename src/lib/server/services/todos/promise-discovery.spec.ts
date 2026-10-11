@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { TextSelection } from '$lib/models/notes';
 import { PromiseDiscovery } from './promise-discovery';
 import { InMemoryStructuredPromiseClient } from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const selection: TextSelection = {
 	noteId: testNoteId(),

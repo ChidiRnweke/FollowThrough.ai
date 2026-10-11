@@ -7,7 +7,7 @@ import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-e
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
-import { seedUser, actor, context, now, seedProvenance } from '../database-harness';
+import { actor, seedUser, context, now, seedProvenance } from '../database-harness';
 describe('Postgres memory-entry repository invariants', () => {
 	const seedEntry = async (suffix: string) => {
 		const owner = await seedUser(suffix);
@@ -27,7 +27,7 @@ describe('Postgres memory-entry repository invariants', () => {
 		return { owner, project, repository, entry };
 	};
 	it('round-trips an inserted entry', async () => {
-		const { owner, repository, entry } = await seedEntry('60');
+		const { repository, entry } = await seedEntry('60');
 		expect(await repository.findById(entry.id)).toEqual(entry);
 	});
 	it('preserves project memory when a profile replacement names its id', async () => {
@@ -58,16 +58,16 @@ describe('Postgres memory-entry repository invariants', () => {
 	// services/memory/library.spec.ts; this file keeps the SQL facts only a real
 	// database can prove (scoping, soft-delete, constraints, cascade).
 	it('does not reveal an entry to another actor', async () => {
-		const { repository, entry } = await seedEntry('61');
-		expect(await repository.findById(entry.id)).toBeUndefined();
+		const { entry } = await seedEntry('61');
+		expect(await new MemoryRecords(actor('62'), context.db).findById(entry.id)).toBeUndefined();
 	});
 	it('excludes soft-deleted entries from the default list', async () => {
-		const { owner, project, repository, entry } = await seedEntry('63');
+		const { project, repository, entry } = await seedEntry('63');
 		await repository.update({ ...entry, deletedAt: now });
 		expect(await repository.list({ projectId: project.id })).toEqual([]);
 	});
 	it('includes soft-deleted entries when requested', async () => {
-		const { owner, project, repository, entry } = await seedEntry('64');
+		const { project, repository, entry } = await seedEntry('64');
 		await repository.update({ ...entry, deletedAt: now });
 		expect(
 			(await repository.list({ projectId: project.id, includeDeleted: true })).map(
@@ -76,7 +76,7 @@ describe('Postgres memory-entry repository invariants', () => {
 		).toEqual([entry.id]);
 	});
 	it('clears the deletion marker on restore', async () => {
-		const { owner, repository, entry } = await seedEntry('65');
+		const { repository, entry } = await seedEntry('65');
 		await repository.update({ ...entry, deletedAt: now });
 		await repository.update({ ...entry, deletedAt: undefined });
 		expect((await repository.findById(entry.id))?.deletedAt).toBeUndefined();

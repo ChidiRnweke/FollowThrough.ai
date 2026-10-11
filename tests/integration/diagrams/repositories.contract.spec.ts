@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import type {
 	Diagram,
@@ -216,7 +215,7 @@ describe('Project-owned diagram persistence invariants', () => {
 	it('rejects a diagram naming a note that belongs to another actor', async () => {
 		const { project } = await seedNote('424');
 		const { note: foreign } = await seedNote('425');
-		const repository = new DiagramRecords(testActor(), context.db);
+		const repository = new DiagramRecords(actor('424'), context.db);
 		await expect(
 			repository.insert(
 				diagram('424', {

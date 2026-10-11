@@ -81,7 +81,6 @@ const setup = (scope: 'user' | 'project') => {
 	const tools = createAgentToolSurface(
 		testTokenizer,
 		factory,
-		testActor(),
 		'auto_accept',
 		{
 			provenanceId: testProvenanceId(),

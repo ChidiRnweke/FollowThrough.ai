@@ -48,7 +48,7 @@ describe('Provenance management invariants', () => {
 	it('rejects a source anchor not owned by the actor', async () => {
 		const { service, anchors } = setup();
 		anchors.anchors = [anchorBuilder()];
-		anchors.ownerIds.set(testAnchorId(), testActor().userId);
+		anchors.ownerIds.set(testAnchorId(), testActor(2).userId);
 		await expect(
 			service.record({
 				producerKind: 'pipeline',

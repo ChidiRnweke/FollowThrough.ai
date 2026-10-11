@@ -50,7 +50,7 @@ it('uses the saved model to produce the diagram after configuration changes', as
 
 it('recovers a queued diagram with one conversation, one run and its result event', async () => {
 	const state = await prepare();
-	await new Diagrams(testActor(), state.dependencies).recoverQueuedDiagramRuns();
+	await new Diagrams(testActor(), state.dependencies).resumeQueuedDiagramRun(state.receipt.runId);
 	await vi.waitFor(() => {
 		if (state.persistence.runs[0].status !== 'completed')
 			throw new Error('Diagram has not settled');

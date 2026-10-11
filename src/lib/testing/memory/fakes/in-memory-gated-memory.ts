@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { MemoryEntryListFilter } from '$lib/server/repositories/memory';
 import { InMemoryMemoryEntryRepository } from './in-memory-memory-repository';
 

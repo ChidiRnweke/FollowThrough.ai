@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
 import { view } from '$lib/testing/attachments/fakes/processing';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { AttachmentVersionId } from '$lib/models/attachments';
 
 describe('durable attachment processing', () => {
@@ -12,13 +11,14 @@ describe('durable attachment processing', () => {
 			...queued,
 			version: { ...queued.version, processingStatus: 'processing' }
 		};
-		await worker.run();
+		await worker.process(repository.found.version.id);
 		expect(repository.found.version.processingStatus).toBe('ready');
 	});
 	it('leaves a claimed version for its current worker', async () => {
 		const { repository, worker, claims } = setupAttachments();
 		repository.found = view('application/pdf');
-		await claims.withClaim(repository.found.version.id, () => worker.run());
+		const versionId = repository.found.version.id;
+		await claims.withClaim(versionId, () => worker.process(versionId));
 		expect(repository.found.version.processingStatus).toBe('queued');
 	});
 	it('does not save extraction or search results after losing the claim', async () => {
@@ -40,13 +40,13 @@ describe('durable attachment processing', () => {
 				currentVersionId: crypto.randomUUID() as AttachmentVersionId
 			}
 		};
-		await worker.run();
+		await worker.process(repository.found.version.id);
 		expect(search.documents).toEqual([]);
 	});
 	it('stages literal search and leaves vectors in the embedding backlog', async () => {
 		const { repository, worker, search } = setupAttachments();
 		repository.found = view('application/pdf');
-		await worker.run();
+		await worker.process(repository.found.version.id);
 		expect(
 			search.documents.map((item) => ({
 				content: item.document.content,
@@ -61,7 +61,7 @@ describe('durable attachment processing', () => {
 		extraction.beforeExtract = async () => claims.lose(versionId);
 		await worker.process(versionId);
 		extraction.beforeExtract = async () => {};
-		await worker.run();
+		await worker.process(repository.found.version.id);
 		expect(repository.found.version.processingStatus).toBe('ready');
 	});
 	it('keeps extraction pending when search staging cannot commit', async () => {

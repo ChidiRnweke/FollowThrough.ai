@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
 import { callItem, resultItem } from '$lib/testing/agent/session-items';
 import { PresentedCanvasSource } from './canvas-source';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import { testDiagramId } from '$lib/testing/workspace/fixtures/domain-builders';
 
-const actor = { userId: 'user-1' as ActorContext['userId'] };
 const conversation = 'conversation-1' as ConversationId;
 
 const itemsOf = async (...rows: { item: PersistedSessionItem }[]) => {

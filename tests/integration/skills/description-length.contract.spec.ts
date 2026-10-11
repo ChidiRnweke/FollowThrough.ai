@@ -8,7 +8,7 @@ import { skillController } from './edit-harness';
 const setup = async (suffix: string) => {
 	const seed = await seedNote(suffix);
 	const tx = createTransactionContext(context.db);
-	const controller = skillController(tx.database, tx.transactionRunner);
+	const controller = skillController(seed.owner, tx.database, tx.transactionRunner);
 	const { skill } = await controller.create({
 		name: 'Review',
 		projectId: seed.project.id,

@@ -25,7 +25,7 @@ describe('Agent harness turns', () => {
 	// deserializes as gated-off and `RunState.fromString` throws `Tool <name> not found`.
 	// Every approval of a long-tail mutation failed this way.
 	it('offers the long-tail tool a parked run is about to answer for', async () => {
-		const tools = createAgentTools({} as ControllerFactory, testActor(), {
+		const tools = createAgentTools({} as ControllerFactory, {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Help' },
 			model: 'test/model'
@@ -40,7 +40,7 @@ describe('Agent harness turns', () => {
 	});
 
 	it('keeps an undiscovered long-tail tool gated', async () => {
-		const tools = createAgentTools({} as ControllerFactory, testActor(), {
+		const tools = createAgentTools({} as ControllerFactory, {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Help' },
 			model: 'test/model'

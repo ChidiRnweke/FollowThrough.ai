@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
@@ -30,7 +29,10 @@ import { InMemoryGatedMemoryEntries } from '$lib/testing/memory/fakes/in-memory-
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { actor, context, now, seedProvenance } from '../database-harness';
 
-const setup = async (suffix: string, memory = new InMemoryMemoryEntryRepository(testActor())) => {
+const setup = async (
+	suffix: string,
+	memory: InMemoryMemoryEntryRepository = new InMemoryMemoryEntryRepository(actor(suffix))
+) => {
 	const owner = actor(suffix);
 	await new UserRecords(owner, context.db).ensureLocal();
 	const { database, transactionRunner } = createTransactionContext(context.db);
@@ -116,7 +118,7 @@ it('rolls back prepared context with a rejected start event before recording fai
 });
 
 it('does not start a run cancelled by another execution while its context was loading', async () => {
-	const memory = new InMemoryGatedMemoryEntries(testActor());
+	const memory = new InMemoryGatedMemoryEntries(actor('17502'));
 	const state = await setup('17502', memory);
 	const execution = state.controller.execute(state.run.id, new AbortController().signal);
 	try {

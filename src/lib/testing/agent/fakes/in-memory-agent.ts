@@ -1,6 +1,5 @@
 import { NotFoundError } from '$lib/errors';
 import type { ToolDescriptor } from '$lib/models/agent/tool-index';
-import type { ActorContext } from '$lib/models/identity';
 import type { Note, NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { ProvenanceId } from '$lib/models/provenance';

@@ -1,4 +1,4 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
 import type { Note } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -34,43 +34,47 @@ const content = (text: string): Pick<Note, 'title' | 'plainText' | 'document'> =
 const setup = async (suffix: string) => {
 	const seed = await seedNote(suffix);
 	const tx = createTransactionContext(context.db);
-	const { services: catalog } = createNotesCapability(testActor(), {
-		db: tx.database,
-		projects: new ProjectRecords(testActor(), tx.database)
-	});
-	const effects = new InMemoryNoteContent(testActor());
-	const controller = new Notes(
-		testActor(),
-		new BacklinkPresentationService(),
-		new ReferencePresentationService(),
-		new WorkspaceCommandRulesService(),
-		new ProvenancePresentationService(),
-		capabilityDependencies<NotesDependencies>({
-			...agentToolResultsFixture(),
-			archiveImport: new NoteArchiveImportService(),
-			patchPreparation: new NotePatchPreparationService(),
-			revisionComparison: new NoteRevisionComparisonService(),
-			todoPresentation: new TodoPresentationService(),
-			textSearch: new NoteTextSearchService(),
-			noteReferences: new NoteReferenceService(),
-			sections: new NoteSectionNumberingService(),
-			noteCreationRules: new NoteLifecycleRulesService(),
-			noteTrashRules: new NoteLifecycleRulesService(),
-			notePublicationRules: new NoteLifecycleRulesService(),
-			noteEditingRules: new NoteEditingRulesService(),
-			notePresentation: new NotePresentationService(),
-			suggestionPresentation: new SuggestionPresentationService(),
-			transactionRunner: tx.transactionRunner,
-			noteReader: catalog.reader,
-			noteEditor: catalog.editor,
-			notePublisher: catalog.publisher,
-			revisionRecorder: catalog.revisionRecorder,
-			revisionReader: catalog.revisionReader,
-			anchorRepairer: catalog.anchorRepairer,
-			noteLinkReconciler: effects,
-			noteIndexer: effects
-		})
-	);
+	const controllerFor = (actor: ActorContext) => {
+		const { services: catalog } = createNotesCapability(actor, {
+			db: tx.database,
+			projects: new ProjectRecords(actor, tx.database)
+		});
+		const effects = new InMemoryNoteContent(actor);
+		const controller = new Notes(
+			actor,
+			new BacklinkPresentationService(),
+			new ReferencePresentationService(),
+			new WorkspaceCommandRulesService(),
+			new ProvenancePresentationService(),
+			capabilityDependencies<NotesDependencies>({
+				...agentToolResultsFixture(),
+				archiveImport: new NoteArchiveImportService(),
+				patchPreparation: new NotePatchPreparationService(),
+				revisionComparison: new NoteRevisionComparisonService(),
+				todoPresentation: new TodoPresentationService(),
+				textSearch: new NoteTextSearchService(),
+				noteReferences: new NoteReferenceService(),
+				sections: new NoteSectionNumberingService(),
+				noteCreationRules: new NoteLifecycleRulesService(),
+				noteTrashRules: new NoteLifecycleRulesService(),
+				notePublicationRules: new NoteLifecycleRulesService(),
+				noteEditingRules: new NoteEditingRulesService(),
+				notePresentation: new NotePresentationService(),
+				suggestionPresentation: new SuggestionPresentationService(),
+				transactionRunner: tx.transactionRunner,
+				noteReader: catalog.reader,
+				noteEditor: catalog.editor,
+				notePublisher: catalog.publisher,
+				revisionRecorder: catalog.revisionRecorder,
+				revisionReader: catalog.revisionReader,
+				anchorRepairer: catalog.anchorRepairer,
+				noteLinkReconciler: effects,
+				noteIndexer: effects
+			})
+		);
+		return controller;
+	};
+	const controller = controllerFor(seed.owner);
 	const first = await controller.save({
 		note: { ...seed.note, ...content('First publication') }
 	});
@@ -86,10 +90,10 @@ const setup = async (suffix: string) => {
 		baseEtag: noteEtag(second.note.id, second.note.currentRevision)
 	});
 	const { revisions } = await controller.listRevisions({ noteId: seed.note.id });
-	return { ...seed, note: latest.note, controller, revisions };
+	return { ...seed, note: latest.note, controller, controllerFor, revisions };
 };
 it('compares the requested snapshot against publication instead of the working draft', async () => {
-	const { controller, owner, note, revisions } = await setup('30001');
+	const { controller, note, revisions } = await setup('30001');
 	await controller.save({ note: { ...note, ...content('Unpublished draft') } });
 	expect(
 		await controller.compareRevisions({ noteId: note.id, revisionId: revisions[1]!.id })
@@ -103,7 +107,7 @@ it('compares the requested snapshot against publication instead of the working d
 	});
 });
 it('compares in the explicit baseline-to-target direction', async () => {
-	const { controller, owner, note, revisions } = await setup('30002');
+	const { controller, note, revisions } = await setup('30002');
 	expect(
 		await controller.compareRevisions({
 			noteId: note.id,
@@ -134,10 +138,10 @@ it('rejects an explicit baseline belonging to another note of the same account',
 	).rejects.toMatchObject({ code: 'NOT_FOUND' });
 });
 it('rejects comparison by another established account', async () => {
-	const { controller, note, revisions } = await setup('30005');
+	const { controllerFor, note, revisions } = await setup('30005');
 	const foreign = await seedNote('30006');
 	await expect(
-		controller.compareRevisions({
+		controllerFor(foreign.owner).compareRevisions({
 			noteId: note.id,
 			revisionId: revisions[0]!.id,
 			againstRevisionId: revisions[1]!.id

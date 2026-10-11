@@ -1,5 +1,4 @@
 import type { ConversationId } from '$lib/models/agent';
-import type { ActorContext } from '$lib/models/identity';
 import type { KnowledgeSearchSource } from '$lib/models/knowledge-search';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';

@@ -144,7 +144,7 @@ describe('Note restore invariants', () => {
 	});
 	it('does not expose another user’s trashed note', async () => {
 		const { notes, controller } = setup();
-		notes.notes = [noteBuilder({ archivedAt: testNow })];
+		notes.notes = [noteBuilder({ archivedAt: testNow, userId: testActor(2).userId })];
 		await expect(controller.restore({ noteId: testNoteId() })).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});

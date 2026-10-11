@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { LocalDate, DateTime } from '$lib/models/workspace';
 import type { PromiseCandidate, TodoResponsibility } from '$lib/models/todos';
 import type { TextSelection } from '$lib/models/notes';

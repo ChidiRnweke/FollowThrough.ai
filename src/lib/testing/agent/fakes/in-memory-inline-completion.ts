@@ -8,8 +8,11 @@ import type { InlineCompletionService } from '$lib/server/services/inline-sugges
 import type { AgentPreferencesRepository } from '$lib/server/repositories/agent';
 
 export class InMemoryAgentPreferencesRepository implements AgentPreferencesRepository {
-	constructor(private readonly actor: ActorContext) {}
-	readonly entries = new Map<string, AgentPreferences>();
+	/** Pass another repository's `entries` to see the same table as a different user. */
+	constructor(
+		private readonly actor: ActorContext,
+		readonly entries = new Map<string, AgentPreferences>()
+	) {}
 	snapshot(): () => void {
 		const entries = structuredClone(this.entries);
 		return () => {

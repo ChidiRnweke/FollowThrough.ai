@@ -1,4 +1,4 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
 import { InMemoryAttachmentStorage } from '$lib/testing/attachments/fakes/in-memory-deliverables';
 import { NotFoundError } from '$lib/errors';
 import {
@@ -26,21 +26,13 @@ import { treeControllers } from '../project-tree-harness';
 const setup = async (identity: number) => {
 	const seeded = await seedNote(String(identity));
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const records = new TodoRecords(testActor(), database);
+	const records = new TodoRecords(seeded.owner, database);
 	const todo = await records.insert(
 		todoBuilder({
 			id: testTodoId(identity),
 			userId: seeded.owner.userId,
 			projectId: seeded.project.id
 		})
-	);
-	const catalog = createTodoServices(
-		testActor(),
-		records,
-		new ProjectRecords(testActor(), database),
-		new SourceAnchorRecords(testActor(), database),
-		new NoteRecords(testActor(), database),
-		new ProvenanceRecords(testActor(), database)
 	);
 	// Attachment effects stay outside the database transaction, like object storage.
 	// Rejection must precede completion; a database rollback cannot undo this fake.
@@ -50,22 +42,42 @@ const setup = async (identity: number) => {
 		...view,
 		attachment: { ...view.attachment, projectId: seeded.project.id }
 	});
-	const controller = new Attachments(
-		capabilityDependencies<AttachmentsDependencies>({
-			...agentToolResultsFixture(),
-			uploads: attachments,
-			reader: attachments,
-			lifecycle: attachments,
-			storage: new InMemoryAttachmentStorage(),
-			todoReader: catalog.reader,
-			transactionRunner
-		})
-	);
-	return { ...seeded, todo, records, attachments, controller, database, transactionRunner };
+	const controllerFor = (actor: ActorContext) => {
+		const catalog = createTodoServices(
+			actor,
+			new TodoRecords(actor, database),
+			new ProjectRecords(actor, database),
+			new SourceAnchorRecords(actor, database),
+			new NoteRecords(actor, database),
+			new ProvenanceRecords(actor, database)
+		);
+		return new Attachments(
+			capabilityDependencies<AttachmentsDependencies>({
+				...agentToolResultsFixture(),
+				uploads: attachments,
+				reader: attachments,
+				lifecycle: attachments,
+				storage: new InMemoryAttachmentStorage(),
+				todoReader: catalog.reader,
+				transactionRunner
+			})
+		);
+	};
+	const controller = controllerFor(seeded.owner);
+	return {
+		...seeded,
+		todo,
+		records,
+		attachments,
+		controller,
+		controllerFor,
+		database,
+		transactionRunner
+	};
 };
 
 it('does not finalize a screenshot when its task was deleted before completion', async () => {
-	const { owner, todo, records, controller, attachments } = await setup(21601);
+	const { todo, records, controller, attachments } = await setup(21601);
 	await records.softDelete(todo.id, now);
 	const outcome = await controller.completeForTodo(UPLOAD_ID, todo.id).then(
 		() => 'completed',
@@ -81,7 +93,7 @@ it('does not finalize a screenshot when its task was deleted before completion',
 it('does not finalize a screenshot after its task project is archived', async () => {
 	const { owner, project, todo, controller, attachments, database, transactionRunner } =
 		await setup(21602);
-	await treeControllers(database, transactionRunner).projects.archive({
+	await treeControllers(owner, database, transactionRunner).projects.archive({
 		projectId: project.id
 	});
 	const outcome = await controller.completeForTodo(UPLOAD_ID, todo.id).then(
@@ -110,7 +122,7 @@ it('does not finalize an owned upload for another accounts task', async () => {
 });
 
 it('completes and lists a screenshot for an active owned task', async () => {
-	const { owner, todo, controller } = await setup(21605);
+	const { todo, controller } = await setup(21605);
 	await controller.completeForTodo(UPLOAD_ID, todo.id);
 	expect((await controller.listForTodo(todo.id)).map(({ attachment }) => attachment.id)).toEqual([
 		ATTACHMENT_ID
@@ -120,14 +132,16 @@ it('completes and lists a screenshot for an active owned task', async () => {
 it('rejects screenshot listing after project archival', async () => {
 	const { owner, project, todo, controller, database, transactionRunner } = await setup(21606);
 	await controller.completeForTodo(UPLOAD_ID, todo.id);
-	await treeControllers(database, transactionRunner).projects.archive({
+	await treeControllers(owner, database, transactionRunner).projects.archive({
 		projectId: project.id
 	});
 	await expect(controller.listForTodo(todo.id)).rejects.toBeInstanceOf(NotFoundError);
 });
 
 it('rejects screenshot listing for another accounts task', async () => {
-	const { owner, todo, controller } = await setup(21607);
+	const { todo, controller, controllerFor } = await setup(21607);
 	await controller.completeForTodo(UPLOAD_ID, todo.id);
-	await expect(controller.listForTodo(todo.id)).rejects.toBeInstanceOf(NotFoundError);
+	await expect(controllerFor(actor('21608')).listForTodo(todo.id)).rejects.toBeInstanceOf(
+		NotFoundError
+	);
 });

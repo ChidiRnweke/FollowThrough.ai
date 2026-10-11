@@ -78,7 +78,6 @@ const settingsTool = (controller: AgentSettings) => {
 	const tool = createAgentToolSurface(
 		testTokenizer,
 		capabilityDependencies<ControllerFactory>({ agentSettings: () => controller }),
-		testActor(),
 		'auto_accept',
 		{
 			provenanceId: testProvenanceId(),

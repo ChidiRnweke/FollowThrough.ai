@@ -1,30 +1,37 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
+import type { ToolDiscoveryController } from '$lib/server/controllers/tool-discovery/controller';
+import { createSystemApplication } from '$lib/server/factories/system-factory';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 const toolCatalogRules = new AgentToolCatalogService();
 import { InMemoryAttachmentClaims } from '$lib/testing/attachments/fakes/claims';
 import { fileURLToPath } from 'node:url';
-import { createApplication, type ProductionApplication } from '$lib/server/application';
+import {
+	createApplication,
+	type ApplicationConfig,
+	type ProductionApplication
+} from '$lib/server/application';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
 import { cachedRetrievalFetch } from './cache/cached-clients';
 import { createRetrievalProvider } from '$lib/server/factories/retrieval-providers';
-import { KnowledgeRetrieval } from '$lib/server/services/knowledge-search/retrieval';
 import { ToolSearch } from '$lib/server/services/agent/tools/tool-search';
-import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import { Cl100kTokenizer } from '$lib/server/infrastructure/tokenization/cl100k';
 import { operationObserver } from '$lib/server/infrastructure/telemetry/tracing';
 import { DEFAULT_EMBEDDING_MODEL } from '$lib/models/knowledge-search/embeddings';
-import { DEFAULT_SEARCH_QUERY_MODEL } from '$lib/models/knowledge-search/query-generation';
 import type { Database } from '$lib/server/db';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 import { createPGliteDatabase } from './pglite-database';
 
 const CACHE_PATH = fileURLToPath(new URL('../fixtures/auxiliary-cache.json', import.meta.url));
 
-export interface Lab extends ProductionApplication {
+export interface Lab {
 	readonly model: string;
+	/** One account's production graph; every case seeds its own account. */
+	forActor(actor: ActorContext): ProductionApplication;
+	/** Tool discovery spans every account, so it is reachable without one. */
+	readonly toolRetriever: ToolDiscoveryController;
 	/**
 	 * Exposed so tool-retrieval can be evaluated on its own, without paying for a
 	 * full agent turn. Whether the catalog surfaces the right tool for a goal is
@@ -95,16 +102,6 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	});
 	const tokenizer = new Cl100kTokenizer();
 	const observer = { run: operationObserver.run };
-	const knowledge = new KnowledgeRetrieval(testActor(), {
-		repository: new KnowledgeIndexRecords(testActor(), database),
-		provider: provider.client,
-		rerank: provider.rerank,
-		models: { embedding: DEFAULT_EMBEDDING_MODEL, query: DEFAULT_SEARCH_QUERY_MODEL },
-		encoding: tokenizer,
-		chunking: { targetTokens: 2400, overlapTokens: 480 },
-		defer: false,
-		observer
-	});
 	const toolSearch = new ToolSearch({
 		repository: new ToolEmbeddingRecords(database),
 		provider: provider.client,
@@ -113,7 +110,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		observer
 	});
 
-	const application = createApplication(testActor(), {
+	const config: ApplicationConfig = {
 		attachmentClaims: new InMemoryAttachmentClaims(),
 		db: database,
 		notifications,
@@ -126,21 +123,23 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		appURL,
 		defaultAgentModel: model,
 		overrides: {
-			knowledge,
+			retrievalProvider: provider,
 			toolSearch,
 			attachmentStorage: new InMemoryAttachmentStorage(),
 			modelCatalog: new StubModelCatalog()
 		}
-	});
+	};
+	const toolRetriever = createSystemApplication(config).controllers.toolDiscovery();
 
 	// Tool discovery ranks against stored vectors. An unseeded database now fails
 	// explicitly rather than making every long-tail tool appear unavailable.
 	// Deploys run this seed next to migrations; the lab has to do the same or it
 	// evaluates a configuration that never ships.
-	await application.toolRetriever.seed();
+	await toolRetriever.seed();
 
 	return {
-		...application,
+		forActor: (actor) => createApplication(actor, config),
+		toolRetriever,
 		model,
 		db: database,
 		async close() {

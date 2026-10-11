@@ -45,12 +45,13 @@ async function drawFor(lab: Lab, fixture: DiagramFixture, prompt: string) {
 		noteId,
 		selection: await selectionFromSeededNote(lab, workspace, noteId, sourceText)
 	});
-	const canvas = await lab.controllers
-		.diagramStudio()
+	const canvas = await lab
+		.forActor(workspace.actor)
+		.controllers.diagramStudio()
 		.readCanvasDiagram({ conversationId: result.conversationId });
 	const review =
 		canvas.kind === 'present' ? reviewDiagram(canvas.source, fixture.expectations) : undefined;
-	const { skills } = await lab.controllers.skills().list();
+	const { skills } = await lab.forActor(workspace.actor).controllers.skills().list();
 	const skillNoteId = skills.find((skill) => skill.name === DIAGRAMMING_SKILL_NAME)?.noteId;
 	return { result, canvas, review, sourceText, skillNoteId };
 }

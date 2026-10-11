@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -31,11 +30,11 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { services: catalog, markdown } = createNotesCapability(testActor(), {
+	const { services: catalog, markdown } = createNotesCapability(seeded.owner, {
 		db: database,
-		projects: new ProjectRecords(testActor(), database)
+		projects: new ProjectRecords(seeded.owner, database)
 	});
-	const consequences = new InMemoryNoteContent(testActor());
+	const consequences = new InMemoryNoteContent(seeded.owner);
 	const note =
 		target === 'skill'
 			? await storedNote(catalog.creator, seeded.owner, {
@@ -55,7 +54,7 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 			metadata: { owner: 'release-team' }
 		});
 	const controller = new Notes(
-		testActor(),
+		seeded.owner,
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -147,7 +146,7 @@ describe('Reviewed note writes on PostgreSQL', () => {
 		});
 	});
 	it('refuses a review after another database writer changes its base', async () => {
-		const { controller, change, owner, note } = await setup('97102');
+		const { controller, change, note } = await setup('97102');
 		await controller.save({ note: { ...note, title: 'A newer title' } });
 		expect(await controller.applyReviewedChange(change, 'authored')).toMatchObject({
 			kind: 'failure',
@@ -173,7 +172,7 @@ describe('Reviewed note writes on PostgreSQL', () => {
 		expect((await new NoteRecords(owner, context.db).findById(note.id))?.currentRevision).toBe(2);
 	});
 	it('admits only one of two competing reviewed results', async () => {
-		const { controller, change, owner, note } = await setup('97105');
+		const { controller, change, note } = await setup('97105');
 		const other = requirePreparedChange(
 			await controller.prepareChange(
 				{

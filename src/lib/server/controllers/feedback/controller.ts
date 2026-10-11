@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { FeedbackReport } from '$lib/models/feedback';
 interface FeedbackWriter {
 	create(report: FeedbackReport): Promise<void>;

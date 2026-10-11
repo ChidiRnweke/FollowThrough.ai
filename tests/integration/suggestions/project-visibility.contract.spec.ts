@@ -39,7 +39,7 @@ it('hides a note-less memory proposal when its project is archived', async () =>
 	expect(await repository.list({ status: 'proposed' })).toEqual([]);
 });
 it('keeps active project and profile proposals in the inbox', async () => {
-	const { owner, repository, proposal } = await setup('22702');
+	const { repository, proposal } = await setup('22702');
 	const profile: MemorySuggestion = {
 		...proposal,
 		id: crypto.randomUUID() as SuggestionId,
@@ -58,7 +58,7 @@ it('retains a hidden proposal for its decision history', async () => {
 	expect(await repository.findById(proposal.id)).toEqual(proposal);
 });
 it('reports an invalid stored project key without making neighboring proposals unreadable', async () => {
-	const { owner, repository, proposal } = await setup('22704');
+	const { repository, proposal } = await setup('22704');
 	const invalidId = crypto.randomUUID() as SuggestionId;
 	await repository.insert({ ...proposal, id: invalidId });
 	await context.db.execute(

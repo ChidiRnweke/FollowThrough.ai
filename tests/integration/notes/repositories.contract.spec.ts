@@ -72,7 +72,7 @@ describe('Postgres note repository invariants', () => {
 		};
 		const repository = new NoteRecords(owner, context.db);
 		await repository.insert(note);
-		expect(await repository.findById(note.id)).toBeUndefined();
+		expect(await new NoteRecords(actor('13'), context.db).findById(note.id)).toBeUndefined();
 	});
 	it('hides a note when its project is archived', async () => {
 		const { owner, project, note } = await seedNote('43');
@@ -177,7 +177,7 @@ describe('Postgres note repository invariants', () => {
 		const { owner, note } = await seedNote('191');
 		const repository = new NoteRecords(owner, context.db);
 		const trashed = await replaceNoteFixture({ ...note, archivedAt: now });
-		await repository.deleteTrashed(note.id);
+		await new NoteRecords(actor('192'), context.db).deleteTrashed(note.id);
 		expect(await repository.findById(note.id)).toEqual(trashed);
 	});
 	it('refuses storage deletion of a hidden skill in the trash', async () => {

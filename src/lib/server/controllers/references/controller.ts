@@ -6,7 +6,6 @@ import type {
 	NoteActionRequest,
 	RunSettlementOutcome
 } from '$lib/models/agent';
-import type { ActorContext } from '$lib/models/identity';
 import type { TextSelection } from '$lib/models/notes';
 import type {
 	FindReferencesInput,

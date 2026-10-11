@@ -30,7 +30,7 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 	const storage = new InMemoryStorage();
 	const uploads = new AttachmentUploadService(testActor(), repository, notes);
 	const reader = new AttachmentReadingService(repository);
-	const lifecycle = new AttachmentLifecycleService(testActor(), repository, notes);
+	const lifecycle = new AttachmentLifecycleService(repository, notes);
 	const worker = new AttachmentProcessing({
 		modelSelection: new AgentModelSelectionService(),
 		records: new AttachmentVersionService(repository),
@@ -40,8 +40,8 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 		processing: new AttachmentProcessingService(),
 		formats: new AttachmentFormatService(),
 		preferences: {
-			get: async (actor) => ({
-				userId: actor.userId,
+			get: async () => ({
+				userId: testActor().userId,
 				executionMode: 'approval_required',
 				inlineSuggestionsEnabled: true,
 				createdAt: testNow,
@@ -50,8 +50,7 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 		},
 		indexer: createContentIndex(search, new InMemoryRetrievalProvider().model, chunker),
 		transactionRunner: new InMemoryTransactionRunner([repository, search]),
-		visionModel: process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ?? 'google/gemini-2.5-flash-lite',
-		logger: { error: () => {} }
+		visionModel: process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ?? 'google/gemini-2.5-flash-lite'
 	});
 	return {
 		uploads,

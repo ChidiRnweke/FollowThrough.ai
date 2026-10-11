@@ -28,7 +28,7 @@ const retrieval = (
 		baseURL,
 		appURL: 'https://app.example.test'
 	});
-	return new KnowledgeRetrieval(testActor(), {
+	return new KnowledgeRetrieval({
 		repository,
 		provider: provider.client,
 		rerank: provider.rerank,

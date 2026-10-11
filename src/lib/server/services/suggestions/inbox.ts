@@ -153,7 +153,6 @@ export class SuggestionReadingService implements SuggestionFinder, SuggestionLis
 }
 export class SuggestionContextService implements SuggestionContextReader {
 	constructor(
-		private readonly actor: ActorContext,
 		private readonly notes: NoteRepository,
 		private readonly provenance: ProvenanceRepository,
 		private readonly anchors: SourceAnchorRepository
@@ -176,7 +175,6 @@ export class SuggestionLifecycleService
 	implements SuggestionAccepter, SuggestionRejecter, SuggestionReverter, SuggestionExpirer
 {
 	constructor(
-		private readonly actor: ActorContext,
 		private readonly suggestions: SuggestionRepository,
 		private readonly clock: Clock
 	) {}

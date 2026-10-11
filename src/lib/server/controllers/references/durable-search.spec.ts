@@ -4,7 +4,6 @@ import {
 	referenceSearchFixture,
 	referenceSelection
 } from '$lib/testing/references/fixtures/search';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const candidate = {
 	url: 'https://www.rfc-editor.org/rfc/rfc6749' as Url,
@@ -42,7 +41,7 @@ it('uses the stored model after deployment settings change', async () => {
 
 it('recovers a queued search from its saved selection', async () => {
 	const state = await prepare();
-	await state.reference.recoverQueuedReferenceRuns();
+	await state.reference.resumeQueuedReferenceRun(state.receipt.runId);
 	await vi.waitFor(() => {
 		if (state.runs.runs[0].status !== 'completed') throw new Error('Search has not settled');
 	});

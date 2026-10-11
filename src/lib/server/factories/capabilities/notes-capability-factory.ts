@@ -151,8 +151,8 @@ export const createNoteServices = (
 ): NoteServices => {
 	const reading = new NoteReadingService(notes, projects);
 	const editing = new NoteEditingService(actor, notes);
-	const lifecycle = new NoteLifecycleService(actor, notes, projects);
-	const revisionWriting = new NoteRevisionWritingService(actor, notes);
+	const lifecycle = new NoteLifecycleService(notes, projects);
+	const revisionWriting = new NoteRevisionWritingService(notes);
 	return {
 		reader: reading,
 		treeReader: reading,
@@ -163,10 +163,10 @@ export const createNoteServices = (
 		trash: lifecycle,
 		deletion: lifecycle,
 		creator: new NoteCreationService(actor, notes, projects),
-		publisher: new NotePublicationService(actor, notes),
-		revisionReader: new NoteRevisionReadingService(actor, notes),
+		publisher: new NotePublicationService(notes),
+		revisionReader: new NoteRevisionReadingService(notes),
 		revisionRecorder: revisionWriting,
 		attachmentRestorer: revisionWriting,
-		anchorRepairer: new NoteAnchorRepairService(actor, notes, anchors)
+		anchorRepairer: new NoteAnchorRepairService(notes, anchors)
 	};
 };

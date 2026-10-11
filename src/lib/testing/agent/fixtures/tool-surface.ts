@@ -9,7 +9,7 @@ import type {
 } from '$lib/models/agent-tool-protocol';
 import type { AgentPayload } from '$lib/models/agent/payload';
 import { FIRST_CLASS_TOOL_NAMES, type ToolName } from '$lib/models/agent/tool-catalog';
-import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
+import type { ApiTokenScope } from '$lib/models/identity';
 import type { TokenCounter } from '$lib/models/tokenization';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { createAgentTools, createMcpTools } from '$lib/server/factories/agent/tools/definitions';
@@ -77,7 +77,6 @@ const rank = async (
 export const createAgentToolSurface = (
 	_tokens: TokenCounter,
 	controllers: ControllerFactory,
-	actor: ActorContext,
 	mode: AgentExecutionMode,
 	context: AgentToolContext,
 	recorder: ToolCompletionRecorder,
@@ -86,7 +85,7 @@ export const createAgentToolSurface = (
 	parked: readonly PendingAgentDecision[] = [],
 	signal: AbortSignal = new AbortController().signal
 ) => {
-	const tools = createAgentTools(controllers, actor, context);
+	const tools = createAgentTools(controllers, context);
 	const discoveryCatalog = catalog
 		.discoverable()
 		.filter((entry) => catalog.isLocked(entry.name) || access.isEnabled(entry.name))
@@ -171,12 +170,11 @@ export type AgentToolSurface = ReturnType<typeof createAgentToolSurface>;
 export const createMcpToolDefinitions = (
 	_tokens: TokenCounter,
 	controllers: ControllerFactory,
-	actor: ActorContext,
 	context: McpToolContext,
 	access: ToolAccessPolicy,
 	retriever: ToolRanking
 ) => {
-	const tools = createMcpTools(controllers, actor, context);
+	const tools = createMcpTools(controllers, context);
 	const open = (scope: ApiTokenScope): McpToolSession => {
 		const permitted = permittedTools(tools, access, scope === 'read' ? ['read'] : undefined);
 		return {

@@ -45,7 +45,7 @@ export class RelationshipWritingService implements RelationshipCreator {
 		if (input.provenanceId && !(await this.provenance.findById(input.provenanceId)))
 			throw new NotFoundError('Relationship provenance was not found');
 		const timestamp = now();
-		return writeRelationship(this.relationships, this.actor, {
+		return writeRelationship(this.relationships, {
 			id: crypto.randomUUID() as RelationshipId,
 			userId: this.actor.userId,
 			...input,
@@ -78,7 +78,7 @@ export class NoteLinkReconciliationService implements NoteLinkReconciler {
 			const targetNote = await this.notes.findById(target);
 			if (!targetNote || targetNote.projectId !== note.projectId) continue;
 			const timestamp = now();
-			await writeRelationship(this.relationships, this.actor, {
+			await writeRelationship(this.relationships, {
 				id: crypto.randomUUID() as RelationshipId,
 				userId: this.actor.userId,
 				sourceNoteId: note.id,
@@ -122,7 +122,6 @@ export class RelationshipReadingService implements RelationshipFinder, BacklinkC
 }
 async function writeRelationship(
 	relationships: NoteRelationshipRepository,
-	actor: ActorContext,
 	incoming: NoteRelationship
 ): Promise<AppliedChange<NoteRelationship>> {
 	const current = await relationships.findForWrite(incoming);

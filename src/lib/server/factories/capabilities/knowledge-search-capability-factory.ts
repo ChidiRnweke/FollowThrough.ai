@@ -2,7 +2,6 @@ import type { ActorContext } from '$lib/models/identity';
 import type { OperationObserver, WorkflowObserver } from '$lib/models/telemetry';
 import type { InlineCompletionService } from '$lib/server/services/inline-suggestions/completion';
 import { normalizeLanguageModelId } from '$lib/models/agent';
-import type { ScheduledTask } from '$lib/models/maintenance';
 import type { TokenCodec } from '$lib/models/tokenization';
 import {
 	EmbeddingBacklog,
@@ -15,7 +14,10 @@ import {
 	type ToolDiscoveryController
 } from '$lib/server/controllers/tool-discovery/controller';
 import type { Database } from '$lib/server/db';
-import { createRetrievalProvider } from '$lib/server/factories/retrieval-providers';
+import {
+	createRetrievalProvider,
+	type RetrievalProvider
+} from '$lib/server/factories/retrieval-providers';
 import {
 	KnowledgeRetrieval,
 	type KnowledgeRetrievalCapabilities
@@ -40,7 +42,6 @@ import { IndexBacklogService } from '$lib/server/services/knowledge-search/backl
 import { MaintenanceCursorRecords } from '$lib/server/repositories/maintenance/postgres/cursors';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 
-import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
 import {
 	InlineAdmissionService,
 	type InlineAdmission
@@ -59,7 +60,8 @@ export interface KnowledgeSearchCapabilityInput {
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
-	readonly knowledge?: KnowledgeRetrievalCapabilities;
+	/** Replaces the provider client, e.g. with one that replays recorded responses. */
+	readonly retrievalProvider?: RetrievalProvider;
 	readonly toolSearch?: ToolSeeding & ToolRanking;
 	readonly deferEmbedding: boolean;
 }
@@ -69,7 +71,6 @@ export interface KnowledgeSearchCapability {
 	/** Indexing, backfill and search over knowledge: one capability behind its interfaces. */
 	readonly knowledge: KnowledgeRetrievalCapabilities;
 	readonly indexing: KnowledgeIndexingController;
-	readonly toolRetriever: ToolDiscoveryController;
 	readonly toolDiscovery: ToolRanking;
 	readonly finalize: (input: KnowledgeSearchFinalizeInput) => KnowledgeSearchFinalized;
 }
@@ -93,26 +94,26 @@ export const createKnowledgeSearchCapability = (
 	input: KnowledgeSearchCapabilityInput
 ): KnowledgeSearchCapability => {
 	const { tokenizer } = input;
-	const provider = createRetrievalProvider({
-		apiKey: input.openRouterApiKey,
-		baseURL: input.openRouterBaseURL,
-		appURL: input.appURL
-	});
-	const knowledge =
-		input.knowledge ??
-		new KnowledgeRetrieval(actor, {
-			repository: new KnowledgeIndexRecords(actor, input.db),
-			provider: provider.client,
-			rerank: provider.rerank,
-			models: { embedding: DEFAULT_EMBEDDING_MODEL, query: DEFAULT_SEARCH_QUERY_MODEL },
-			encoding: tokenizer,
-			chunking: {
-				targetTokens: Number(process.env.RETRIEVAL_CHUNK_TOKENS ?? 2400),
-				overlapTokens: Number(process.env.RETRIEVAL_CHUNK_OVERLAP_TOKENS ?? 480)
-			},
-			defer: input.deferEmbedding,
-			observer: operationObserver
+	const provider =
+		input.retrievalProvider ??
+		createRetrievalProvider({
+			apiKey: input.openRouterApiKey,
+			baseURL: input.openRouterBaseURL,
+			appURL: input.appURL
 		});
+	const knowledge = new KnowledgeRetrieval({
+		repository: new KnowledgeIndexRecords(actor, input.db),
+		provider: provider.client,
+		rerank: provider.rerank,
+		models: { embedding: DEFAULT_EMBEDDING_MODEL, query: DEFAULT_SEARCH_QUERY_MODEL },
+		encoding: tokenizer,
+		chunking: {
+			targetTokens: Number(process.env.RETRIEVAL_CHUNK_TOKENS ?? 2400),
+			overlapTokens: Number(process.env.RETRIEVAL_CHUNK_OVERLAP_TOKENS ?? 480)
+		},
+		defer: input.deferEmbedding,
+		observer: operationObserver
+	});
 	const toolSearch =
 		input.toolSearch ??
 		new ToolSearch({
@@ -126,11 +127,6 @@ export const createKnowledgeSearchCapability = (
 	return {
 		tokenizer,
 		knowledge,
-		toolRetriever: new ToolDiscovery(
-			toolSearch,
-			input.transactionRunner,
-			new AgentToolCatalogService()
-		),
 		toolDiscovery: toolSearch,
 		finalize: ({ preferences }) => ({
 			inlineContext: new InlineContextService(tokenizer),
@@ -161,4 +157,31 @@ export const createEmbeddingBacklog = (db: Database): EmbeddingBacklogController
 	new EmbeddingBacklog(
 		new IndexBacklogService(new KnowledgeBacklogRecords(db)),
 		new MaintenanceProgressService(new MaintenanceCursorRecords(db))
+	);
+
+/** Tool discovery over the catalog's stored embeddings, which belong to no user. */
+export const createToolDiscovery = (input: {
+	readonly db: Database;
+	readonly transactionRunner: TransactionRunner;
+	readonly tokenizer: TokenCodec;
+	readonly openRouterApiKey: string;
+	readonly openRouterBaseURL: string;
+	readonly appURL: string;
+	readonly toolSearch?: ToolSeeding & ToolRanking;
+}): ToolDiscoveryController =>
+	new ToolDiscovery(
+		input.toolSearch ??
+			new ToolSearch({
+				repository: new ToolEmbeddingRecords(input.db),
+				provider: createRetrievalProvider({
+					apiKey: input.openRouterApiKey,
+					baseURL: input.openRouterBaseURL,
+					appURL: input.appURL
+				}).client,
+				model: DEFAULT_EMBEDDING_MODEL,
+				tokens: input.tokenizer,
+				observer: operationObserver
+			}),
+		input.transactionRunner,
+		new AgentToolCatalogService()
 	);

@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { IndexChunking } from '$lib/models/knowledge-search';
 import type { OperationObserver } from '$lib/models/telemetry';
 import { DEFAULT_SEARCH_QUERY_MODEL } from '$lib/models/knowledge-search/query-generation';
@@ -19,7 +18,7 @@ export const createTestContentIndex = (
 	provider: RetrievalProviderDouble = new InMemoryRetrievalProvider(),
 	observer: OperationObserver = { run: (_name, _context, body) => body() }
 ): KnowledgeRetrieval =>
-	new KnowledgeRetrieval(testActor(), {
+	new KnowledgeRetrieval({
 		repository,
 		provider: provider.client,
 		rerank: provider.rerank,

@@ -2,7 +2,7 @@ import { syncEtag } from '$lib/models/sync';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { WorkspaceJournalReader } from '$lib/server/services/workspace/journal';
 import type { WorkspaceResourceVersionReader } from '$lib/server/services/workspace/resource-versions';
-import type { ActorContext, User } from '$lib/models/identity';
+import type { User } from '$lib/models/identity';
 import type { NoteSummary } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
 import type { SkillSummary } from '$lib/models/skills';

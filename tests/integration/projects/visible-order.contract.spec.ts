@@ -53,7 +53,7 @@ const setup = async (suffix: string) => {
 	return { owner, projectId, skill, projects, creation, records };
 };
 it('persists the visible reorder in an Inbox containing built-in skills', async () => {
-	const { owner, projectId, projects, creation } = await setup('31001');
+	const { projectId, projects, creation } = await setup('31001');
 	const { note: first } = await creation.notes.create({ projectId, title: 'First' });
 	const { note: second } = await creation.notes.create({ projectId, title: 'Second' });
 	await projects.move({ projectId, entryId: first.id, position: 1 });
@@ -63,7 +63,7 @@ it('persists the visible reorder in an Inbox containing built-in skills', async 
 	]);
 });
 it('appends a moved child after the visible root siblings instead of between hidden skills', async () => {
-	const { owner, projectId, projects, creation } = await setup('31002');
+	const { projectId, projects, creation } = await setup('31002');
 	const { folder } = await creation.projects.createFolder({ projectId, name: 'Folder' });
 	const { note: first } = await creation.notes.create({
 		projectId,
@@ -79,7 +79,7 @@ it('appends a moved child after the visible root siblings instead of between hid
 	]);
 });
 it('uses visible sibling positions inside folders while retaining skill identities', async () => {
-	const { owner, projectId, skill, projects, creation, records } = await setup('31003');
+	const { projectId, skill, projects, creation, records } = await setup('31003');
 	const { folder } = await creation.projects.createFolder({ projectId, name: 'Folder' });
 	await projects.move({ projectId, entryId: skill.id, parentId: folder.id, position: 0 });
 	const { note: first } = await creation.notes.create({

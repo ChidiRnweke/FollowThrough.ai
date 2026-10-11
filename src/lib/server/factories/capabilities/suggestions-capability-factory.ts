@@ -63,12 +63,12 @@ export const createSuggestionServices = (
 	clock: Clock = { now: () => new Date().toISOString() as DateTime }
 ): SuggestionServices => {
 	const reading = new SuggestionReadingService(records);
-	const lifecycle = new SuggestionLifecycleService(actor, records, clock);
+	const lifecycle = new SuggestionLifecycleService(records, clock);
 	return {
 		creator: new SuggestionCreationService(actor, records, notes, provenance, anchors, clock),
 		finder: reading,
 		lister: reading,
-		context: new SuggestionContextService(actor, notes, provenance, anchors),
+		context: new SuggestionContextService(notes, provenance, anchors),
 		accepter: lifecycle,
 		rejecter: lifecycle,
 		reverter: lifecycle,

@@ -53,7 +53,6 @@ const setup = () => {
 		createAgentToolSurface(
 			testTokenizer,
 			fixture.factory,
-			testActor(),
 			mode,
 			{
 				provenanceId: testProvenanceId(),
@@ -271,7 +270,6 @@ describe('A note change that fails while it is being prepared', () => {
 		const tools = createAgentToolSurface(
 			testTokenizer,
 			capabilityDependencies<ControllerFactory>({ notes: () => controller }),
-			testActor(),
 			'approval_required',
 			{
 				provenanceId: testProvenanceId(),

@@ -1,4 +1,4 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -58,29 +58,29 @@ const seed = async (suffix: string) => {
 	return { owner, run };
 };
 
-const cancellationController = (db: typeof context.db) => {
+const cancellationController = (actor: ActorContext, db: typeof context.db) => {
 	const { database, transactionRunner } = createTransactionContext(db);
-	const runs = new AgentRunRecords(testActor(), database);
-	const events = new AgentRunEventRecords(testActor(), database);
+	const runs = new AgentRunRecords(actor, database);
+	const events = new AgentRunEventRecords(actor, database);
 	return new AgentSdkHarness(
-		testActor(),
+		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			conversationMessages: new ConversationArchive(
-				testActor(),
-				new ConversationRecords(testActor(), database)
+				actor,
+				new ConversationRecords(actor, database)
 			),
 			conversationSessions: new ConversationArchive(
-				testActor(),
-				new ConversationRecords(testActor(), database)
+				actor,
+				new ConversationRecords(actor, database)
 			),
 			events,
 			transactionRunner,
 			cancellations: new RunCancellation(runs),
 			settlements: new RunSettlements(runs, events),
-			decisions: new AgentRunDecisionRecords(testActor(), database),
+			decisions: new AgentRunDecisionRecords(actor, database),
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
@@ -96,7 +96,7 @@ it('aborts a running execution in another process after it wins the row lock', a
 	const stopWatching = await watching.abortOnCancel(run.id, execution);
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
-	const controller = cancellationController(writer.db);
+	const controller = cancellationController(owner, writer.db);
 	const locked = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
 	const starting = blocker.begin(async (transaction) => {
@@ -138,8 +138,8 @@ it('stores one terminal event when two connections cancel the same queued run', 
 	const writer = connectPostgresTestDatabase(context.url);
 	try {
 		await Promise.all([
-			cancellationController(context.db).cancel(run.id),
-			cancellationController(writer.db).cancel(run.id)
+			cancellationController(owner, context.db).cancel(run.id),
+			cancellationController(owner, writer.db).cancel(run.id)
 		]);
 		const events = await new AgentRunEventRecords(owner, context.db).replay(run.id, '0');
 		expect(
@@ -186,7 +186,7 @@ it.each(['awaiting_approval', 'queued'] as const)(
 			if (!change) throw new Error('Expected approval to queue the checkpoint');
 			await approvals.persist(run.id, change);
 		}
-		const snapshot = await cancellationController(context.db).cancel(run.id);
+		const snapshot = await cancellationController(owner, context.db).cancel(run.id);
 		const stored = await records.findById(run.id);
 		expect({
 			status: snapshot.run.status,
@@ -199,5 +199,7 @@ it.each(['awaiting_approval', 'queued'] as const)(
 
 it('does not expose another actor’s run through the locking read', async () => {
 	const { run } = await seed('17103');
-	await expect(cancellationController(context.db).cancel(run.id)).rejects.toThrow('not found');
+	await expect(cancellationController(actor('17104'), context.db).cancel(run.id)).rejects.toThrow(
+		'not found'
+	);
 });

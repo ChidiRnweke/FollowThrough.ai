@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { User } from '$lib/models/identity';
-import { AccessTokens } from '$lib/server/services/identity/api-tokens';
+import { AccessTokens, TokenVerification } from '$lib/server/services/identity/api-tokens';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import { NoteProvenance } from '$lib/server/services/notes/provenance';
 import { InMemoryApiTokenRepository } from '$lib/testing/identity/fakes/in-memory-api-tokens';
@@ -10,6 +10,7 @@ import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-m
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Access, type AccessDependencies } from './access';
+import { Authentication, type AuthenticationDependencies } from './authentication';
 
 const reader: User = {
 	id: testActor().userId,
@@ -24,7 +25,13 @@ const setup = () => {
 	const users = new InMemoryUserRepository(testActor());
 	const directory = new UserDirectory(users);
 	const provenance = new InMemoryProvenanceRepository(testActor());
-	const tokens = new AccessTokens(new InMemoryApiTokenRepository(testActor(), [reader]));
+	const credentials = new InMemoryApiTokenRepository(testActor(), [reader]);
+	const tokens = new AccessTokens(credentials);
+	const authentication = new Authentication(
+		capabilityDependencies<AuthenticationDependencies>({
+			tokens: new TokenVerification(credentials)
+		})
+	);
 	const access = new Access(
 		testActor(),
 		capabilityDependencies<AccessDependencies>({
@@ -38,14 +45,16 @@ const setup = () => {
 			)
 		})
 	);
-	return { access, tokens, users, provenance };
+	return { access, authentication, tokens, users, provenance };
 };
 
 describe('MCP access', () => {
 	it('attributes a verified bearer request to the token owner with the token scope', async () => {
-		const { access, tokens, provenance } = setup();
-		const minted = await tokens.mint(reader.id, { name: 'Editor', scope: 'read' });
-		const result = await access.authenticateMcp(`Bearer ${minted.plaintext}`);
+		const { access, authentication, tokens, provenance } = setup();
+		const minted = await tokens.mint({ name: 'Editor', scope: 'read' });
+		const verified = await authentication.verifyBearer(`Bearer ${minted.plaintext}`);
+		if (!verified) throw new Error('The minted credential did not verify');
+		const result = await access.attributeMcp(verified.scope);
 		expect({ result, recorded: provenance.provenance }).toMatchObject({
 			result: { actor: { userId: reader.id }, scope: 'read' },
 			recorded: [
@@ -60,8 +69,8 @@ describe('MCP access', () => {
 	});
 
 	it('rejects an unusable credential without recording provenance', async () => {
-		const { access, provenance } = setup();
-		const result = await access.authenticateMcp('Bearer ftm_unknown');
+		const { authentication, provenance } = setup();
+		const result = await authentication.verifyBearer('Bearer ftm_unknown');
 		expect({ result, recorded: provenance.provenance }).toEqual({ result: null, recorded: [] });
 	});
 

@@ -76,7 +76,7 @@ describe('Reviewed note changes', () => {
 		).toMatchObject({ kind: 'failure' });
 	});
 	it('does not prepare another account’s note', async () => {
-		const { controller } = reviewedNoteFixture(baseNote());
+		const { controller } = reviewedNoteFixture({ ...baseNote(), userId: testActor(2).userId });
 		await expect(
 			controller.prepareChange(
 				{
@@ -89,7 +89,9 @@ describe('Reviewed note changes', () => {
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 	it('does not apply another account’s review', async () => {
-		const { controller, change } = await setup();
+		const { controller, content, note, change } = await setup();
+		// The reviewed note, as another account owns it.
+		content.notes = [{ ...note, userId: testActor(2).userId }];
 		await expect(controller.applyReviewedChange(change, 'authored')).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});

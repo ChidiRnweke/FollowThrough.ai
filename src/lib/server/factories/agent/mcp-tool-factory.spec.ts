@@ -12,11 +12,7 @@ import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-facto
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { createMcpToolDefinitions } from '$lib/testing/agent/fixtures/tool-surface';
-import {
-	noteBuilder,
-	testActor,
-	testProvenanceId
-} from '$lib/testing/workspace/fixtures/domain-builders';
+import { noteBuilder, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
@@ -32,7 +28,6 @@ const connect = async (
 	const session = createMcpToolDefinitions(
 		testTokenizer,
 		options.factory ?? ({} as ControllerFactory),
-		testActor(),
 		{ provenanceId: testProvenanceId() },
 		{ isEnabled: (name) => !(options.disabled ?? []).includes(name) },
 		options.retriever ?? new InMemoryToolRetriever()

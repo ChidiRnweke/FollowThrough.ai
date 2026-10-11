@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, expect, it } from 'vitest';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
@@ -7,9 +6,10 @@ import { createNotesCapability } from '$lib/server/factories/capabilities/notes-
 import { context, seedNote } from '../database-harness';
 const seedSkillNote = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
-	const { services: catalog } = createNotesCapability(testActor(), {
+	const actor = seeded.owner;
+	const { services: catalog } = createNotesCapability(actor, {
 		db: context.db,
-		projects: new ProjectRecords(testActor(), context.db)
+		projects: new ProjectRecords(actor, context.db)
 	});
 	const note = await storedNote(catalog.creator, seeded.owner, {
 		kind: 'skill',

@@ -111,7 +111,7 @@ const setup = async (suffix: string) => {
 
 describe('atomic execution settlement', () => {
 	it('does not complete a queued run before execution claims it', async () => {
-		const { owner, runs, events, run } = await setup('17802');
+		const { runs, events, run } = await setup('17802');
 		const claim = await new RunSettlements(runs, events).claim(run.id, {
 			kind: 'completed',
 			conversationId: run.conversationId,
@@ -124,8 +124,7 @@ describe('atomic execution settlement', () => {
 	});
 
 	it('clears the provider checkpoint after an approved run resumes and completes', async () => {
-		const { owner, runs, run, runner, controller, transactionRunner, decisions } =
-			await setup('17801');
+		const { runs, run, runner, controller, transactionRunner, decisions } = await setup('17801');
 		runner.events = [];
 		runner.outcome = {
 			type: 'approval_checkpoint',
@@ -169,7 +168,7 @@ describe('atomic execution settlement', () => {
 	});
 
 	it('does not publish a checkpoint after another execution cancels the run', async () => {
-		const { owner, runs, events, sessions, run, runner, controller } = await setup('17701');
+		const { runs, events, sessions, run, runner, controller } = await setup('17701');
 		runner.events = [];
 		runner.outcome = {
 			type: 'approval_checkpoint',
@@ -210,7 +209,7 @@ describe('atomic execution settlement', () => {
 	});
 
 	it('rolls back the checkpoint and session when approval publication fails', async () => {
-		const { owner, runs, events, sessions, run, runner, controller } = await setup('17702');
+		const { runs, events, sessions, run, runner, controller } = await setup('17702');
 		runner.events = [];
 		runner.outcome = {
 			type: 'approval_checkpoint',
@@ -265,7 +264,7 @@ describe('atomic execution settlement', () => {
 	});
 
 	it('records one completion when competing workers execute the same run', async () => {
-		const { owner, runs, events, run, controller, conversations } = await setup('9611');
+		const { runs, events, run, controller, conversations } = await setup('9611');
 		await Promise.all([
 			controller.execute(run.id, new AbortController().signal),
 			controller.execute(run.id, new AbortController().signal)
@@ -283,7 +282,7 @@ describe('atomic execution settlement', () => {
 		});
 	});
 	it('publishes only cancellation after cancellation wins against execution', async () => {
-		const { owner, runs, events, run, runner, controller, transactionRunner } = await setup('9612');
+		const { runs, events, run, runner, controller, transactionRunner } = await setup('9612');
 		runner.events = [];
 		const completion = Promise.withResolvers<void>();
 		runner.completion = completion.promise;
@@ -306,7 +305,7 @@ describe('atomic execution settlement', () => {
 		}).toEqual({ status: 'cancelled', events: ['run_started', 'cancelled'] });
 	});
 	it('rolls back completion, session replacement and saved messages when the terminal event fails', async () => {
-		const { owner, runs, events, sessions, run, controller, conversations } = await setup('9613');
+		const { runs, events, sessions, run, controller, conversations } = await setup('9613');
 		const original: PersistedSessionItem = {
 			type: 'user_message',
 			content: 'Original request'

@@ -4,7 +4,7 @@ import * as schema from '$lib/server/db/schema';
 import { ArtifactRecords } from '$lib/server/repositories/deliverables/postgres/artifacts';
 import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { seedUser, actor, context, seedArtifact, seedNote } from '../database-harness';
+import { actor, seedUser, context, seedArtifact, seedNote } from '../database-harness';
 describe('Postgres artifact repository listing invariants', () => {
 	it('matches artifact titles with a case-insensitive substring', async () => {
 		const owner = await seedUser('301');
@@ -161,7 +161,9 @@ describe('Postgres export-settings repository invariants', () => {
 			lineHeight: 1.5,
 			margin: 60
 		});
-		await expect(repository.find(project.id)).rejects.toMatchObject({
+		await expect(
+			new ExportSettingsRecords(actor('84'), context.db).find(project.id)
+		).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});

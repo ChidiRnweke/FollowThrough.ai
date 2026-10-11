@@ -1,4 +1,4 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
 import type { NoteId, NoteRevisionId } from '$lib/models/notes';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import type { Database } from '$lib/server/db';
@@ -26,19 +26,15 @@ import { context, now, replaceNoteFixture, seedUser } from '../database-harness'
 
 const currentDefinitions = { active: BUILT_INS, retired: RETIRED_BUILT_INS };
 const controller = (
+	actor: ActorContext,
 	database: Database,
 	transactionRunner: TransactionRunner,
 	definitions: ConstructorParameters<typeof BuiltInSkills>[4]
 ) => {
-	const projects = new ProjectRecords(testActor(), database);
-	const notes = new NoteRecords(testActor(), database);
-	const skills = new SkillRecords(testActor(), database);
-	const library = createSkillServices(
-		testActor(),
-		skills,
-		notes,
-		new ProvenanceRecords(testActor(), database)
-	);
+	const projects = new ProjectRecords(actor, database);
+	const notes = new NoteRecords(actor, database);
+	const skills = new SkillRecords(actor, database);
+	const library = createSkillServices(actor, skills, notes, new ProvenanceRecords(actor, database));
 	return new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
@@ -49,7 +45,7 @@ const controller = (
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
-			builtInSkills: new BuiltInSkills(testActor(), projects, notes, skills, definitions),
+			builtInSkills: new BuiltInSkills(actor, projects, notes, skills, definitions),
 			skillFinder: library.finder,
 			skillEditor: library.editor,
 			skillUsageLister: library.usageLister
@@ -61,8 +57,8 @@ it('upgrades an untouched stored guide and records the new revision', async () =
 	const owner = await seedUser('19503');
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const retired = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough')!;
-	await controller(database, transactionRunner, { active: [retired], retired: [] }).list();
-	await controller(database, transactionRunner, currentDefinitions).list();
+	await controller(owner, database, transactionRunner, { active: [retired], retired: [] }).list();
+	await controller(owner, database, transactionRunner, currentDefinitions).list();
 	const records = new NoteRecords(owner, context.db);
 	const note = (await records.findByBuiltInKey('followthrough'))!;
 	expect({
@@ -79,7 +75,7 @@ it('upgrades an untouched stored guide and records the new revision', async () =
 it('repairs legacy built-ins from an archived project while preserving authored content and identity', async () => {
 	const owner = await seedUser('19501');
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const skills = controller(database, transactionRunner, currentDefinitions);
+	const skills = controller(owner, database, transactionRunner, currentDefinitions);
 	const initial = await skills.list();
 	const notes = new NoteRecords(owner, context.db);
 	const projects = new ProjectRecords(owner, context.db);
@@ -147,7 +143,7 @@ it.each([
 	const owner = await seedUser(suffix);
 	const seed = createTransactionContext(context.db);
 	const retired = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough')!;
-	await controller(seed.database, seed.transactionRunner, {
+	await controller(owner, seed.database, seed.transactionRunner, {
 		active: [retired],
 		retired: []
 	}).list();
@@ -174,7 +170,7 @@ it.each([
 	try {
 		await locked.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const provisioning = controller(database, transactionRunner, currentDefinitions).list();
+		const provisioning = controller(owner, database, transactionRunner, currentDefinitions).list();
 		await vi.waitFor(async () => {
 			const waiting = await blocker<
 				{ pid: number }[]
@@ -220,10 +216,13 @@ it.each(['description', 'hints'] as const)(
 		const { database, transactionRunner } = createTransactionContext(context.db);
 		const released = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough');
 		if (!released) throw new Error('The released guide fixture is required');
-		await controller(database, transactionRunner, { active: [released], retired: [] }).list();
+		await controller(owner, database, transactionRunner, {
+			active: [released],
+			retired: []
+		}).list();
 		const note = await new NoteRecords(owner, context.db).findByBuiltInKey(released.key);
 		if (!note) throw new Error('The installed guide is required');
-		const current = controller(database, transactionRunner, currentDefinitions);
+		const current = controller(owner, database, transactionRunner, currentDefinitions);
 		const edited = await current.update({
 			noteId: note.id,
 			...(field === 'description'

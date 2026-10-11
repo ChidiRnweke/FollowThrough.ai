@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
@@ -15,7 +14,7 @@ import { skillController } from './edit-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const note = await replaceNoteFixture({ ...seeded.note, kind: 'skill' });
-	const records = new SkillRecords(testActor(), context.db);
+	const records = new SkillRecords(seeded.owner, context.db);
 	await records.insert({
 		note,
 		slug: `skill-${suffix}`,
@@ -32,7 +31,7 @@ const setup = async (suffix: string) => {
 		note,
 		records,
 		provenance,
-		controller: skillController(tx.database, tx.transactionRunner)
+		controller: skillController(seeded.owner, tx.database, tx.transactionRunner)
 	};
 };
 
@@ -61,7 +60,7 @@ it('records an agent load with context in another owned project and leaves read-
 });
 
 it('records a context-free agent load with its provenance', async () => {
-	const { owner, note, provenance, controller } = await setup('20303');
+	const { note, provenance, controller } = await setup('20303');
 	const result = await controller.use({
 		noteId: note.id,
 		provenanceId: provenance.id
@@ -81,7 +80,7 @@ it.each([
 ])(
 	'rejects another actor’s $resource without recording usage',
 	async ({ resource, suffix, foreign }) => {
-		const { owner, note, provenance, controller, records } = await setup(suffix);
+		const { note, provenance, controller, records } = await setup(suffix);
 		const other = await seedNote(foreign, actor(foreign));
 		const foreignProvenance = await seedProvenance(other.owner, foreign);
 		const result = await controller
@@ -102,7 +101,7 @@ it.each([
 );
 
 it('hides an archived skill from discovery and refuses to count it as loaded', async () => {
-	const { owner, note, provenance, controller, records } = await setup('20308');
+	const { note, provenance, controller, records } = await setup('20308');
 	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await controller.use({ noteId: note.id, provenanceId: provenance.id }).then(
 		() => ({ kind: 'success' as const }),

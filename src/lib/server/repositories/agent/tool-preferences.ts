@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 
 /** One stored departure from the default. Absent rows mean "enabled". */

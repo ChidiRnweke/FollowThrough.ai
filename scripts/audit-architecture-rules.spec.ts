@@ -706,30 +706,34 @@ export class Notes implements NotesController { async save(): Promise<void> {} a
 			})
 		).toEqual([]);
 	});
-	it.each(['src/hooks.server.ts', 'src/worker.ts', 'src/routes/api/+server.ts'])(
-		'rejects %s calling a service',
-		(entry) => {
-			expect(
-				rules({
-					[servicePath]: service,
-					[entry]:
-						"import type { Titles } from '$lib/services/notes/titles'; export function handle(titles: Titles): string { return titles.title('note'); }"
-				})
-			).toEqual(['indirect-dependency']);
-		}
-	);
-	it.each(['src/hooks.server.ts', 'src/worker.ts', 'src/routes/api/+server.ts'])(
-		'allows %s to sequence controller operations as the outermost caller',
-		(entry) => {
-			expect(
-				inspect({
-					[notesPath]: notes,
-					[entry]:
-						"import type { NotesController } from '$lib/server/controllers/notes/controller'; export async function handle(notes: NotesController): Promise<void> { await notes.save(); await notes.index(); }"
-				})
-			).toEqual([]);
-		}
-	);
+	it.each([
+		'src/hooks.server.ts',
+		'src/worker.ts',
+		'src/worker-tasks.ts',
+		'src/routes/api/+server.ts'
+	])('rejects %s calling a service', (entry) => {
+		expect(
+			rules({
+				[servicePath]: service,
+				[entry]:
+					"import type { Titles } from '$lib/services/notes/titles'; export function handle(titles: Titles): string { return titles.title('note'); }"
+			})
+		).toEqual(['indirect-dependency']);
+	});
+	it.each([
+		'src/hooks.server.ts',
+		'src/worker.ts',
+		'src/worker-tasks.ts',
+		'src/routes/api/+server.ts'
+	])('allows %s to sequence controller operations as the outermost caller', (entry) => {
+		expect(
+			inspect({
+				[notesPath]: notes,
+				[entry]:
+					"import type { NotesController } from '$lib/server/controllers/notes/controller'; export async function handle(notes: NotesController): Promise<void> { await notes.save(); await notes.index(); }"
+			})
+		).toEqual([]);
+	});
 	it('rejects a remote function reading a store', () => {
 		expect(
 			rules({

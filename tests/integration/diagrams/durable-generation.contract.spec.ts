@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { type AgentRunId, type DiagramActionInput } from '$lib/models/agent';
@@ -49,11 +48,11 @@ const setup = async (suffix: string) => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const notes = createNotesCapability(testActor(), {
+	const notes = createNotesCapability(seeded.owner, {
 		db: database,
-		projects: new ProjectRecords(testActor(), database)
+		projects: new ProjectRecords(seeded.owner, database)
 	});
-	const suggestions = createSuggestionsCapability(testActor(), {
+	const suggestions = createSuggestionsCapability(seeded.owner, {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
@@ -73,10 +72,10 @@ const setup = async (suffix: string) => {
 		text
 	};
 	const fixture = diagramGenerationFixture();
-	const runs = new AgentRunRecords(testActor(), database);
-	const events = new AgentRunEventRecords(testActor(), database);
-	const conversations = new ConversationRecords(testActor(), database);
-	const requests = new NoteActionRequests(testActor(), runs, events, conversations);
+	const runs = new AgentRunRecords(seeded.owner, database);
+	const events = new AgentRunEventRecords(seeded.owner, database);
+	const conversations = new ConversationRecords(seeded.owner, database);
+	const requests = new NoteActionRequests(seeded.owner, runs, events, conversations);
 	const settlements = new RunSettlements(runs, events);
 	const dependencies = capabilityDependencies<DiagramsDependencies>({
 		...agentToolResultsFixture(),
@@ -85,9 +84,9 @@ const setup = async (suffix: string) => {
 		generation: {
 			...fixture.generation,
 			contextNotes: notes.services.reader,
-			conversations: new ConversationArchive(testActor(), conversations),
-			conversationMessages: new ConversationArchive(testActor(), conversations),
-			runs: new AgentRunLedger(testActor(), runs),
+			conversations: new ConversationArchive(seeded.owner, conversations),
+			conversationMessages: new ConversationArchive(seeded.owner, conversations),
+			runs: new AgentRunLedger(seeded.owner, runs),
 			runContext: new DiagramRunContext(runs),
 			provenance: notes.provenance
 		},
@@ -100,14 +99,14 @@ const setup = async (suffix: string) => {
 		runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 	});
 	const agent = new AgentSdkHarness(
-		testActor(),
+		seeded.owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
-			decisions: new AgentRunDecisionRecords(testActor(), database),
+			decisions: new AgentRunDecisionRecords(seeded.owner, database),
 			settlements,
 			transactionRunner,
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
@@ -138,7 +137,7 @@ const setup = async (suffix: string) => {
 		finished,
 		provider: fixture.provider,
 		models: fixture.models,
-		controller: new Diagrams(testActor(), dependencies)
+		controller: new Diagrams(seeded.owner, dependencies)
 	};
 };
 
@@ -210,7 +209,7 @@ it('resumes a queued draw.io conversion from its persisted source after reconstr
 		noteId: state.note.id,
 		source: 'flowchart LR\nA --> B'
 	});
-	await new Diagrams(testActor(), state.dependencies).recoverQueuedDiagramRuns();
+	await new Diagrams(state.owner, state.dependencies).resumeQueuedDiagramRun(receipt.runId);
 	await state.finished(receipt.runId);
 	const rows =
 		await context.client`select payload->>'kind' as kind from suggestions where user_id = ${state.owner.userId}`;

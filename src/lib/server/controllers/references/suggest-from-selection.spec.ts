@@ -4,7 +4,6 @@ import {
 	referenceSearchFixture as setup,
 	referenceSelection as selection
 } from '$lib/testing/references/fixtures/search';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const reference = (
 	title: string,

@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { Todo, TodoId, TodoListFilter } from '$lib/models/todos';
 

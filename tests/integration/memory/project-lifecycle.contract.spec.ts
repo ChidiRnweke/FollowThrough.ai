@@ -32,14 +32,14 @@ const setup = async (suffix: string) => {
 
 describe('archived project memory boundaries', () => {
 	it('hides a retained project entry from the application reader', async () => {
-		const { owner, library, entry } = await setup('22101');
+		const { library, entry } = await setup('22101');
 		await expect(library.reader.get(entry.id)).rejects.toThrow('Memory project was not found');
 	});
 
 	it.each(['update', 'remove'] as const)(
 		'refuses a pending %s without changing the retained entry',
 		async (operation) => {
-			const { owner, project, provenance, entries, library, entry } = await setup(
+			const { project, provenance, entries, library, entry } = await setup(
 				operation === 'update' ? '22102' : '22103'
 			);
 			const payload: MemoryChangePayload =
@@ -69,7 +69,7 @@ describe('archived project memory boundaries', () => {
 	);
 
 	it('rejects direct deletion while preserving the stored entry', async () => {
-		const { owner, entries, library, entry } = await setup('22104');
+		const { entries, library, entry } = await setup('22104');
 		const outcome = await library.deleter.remove(entry.id).then(
 			() => 'unexpected success',
 			(error: Error) => error.message

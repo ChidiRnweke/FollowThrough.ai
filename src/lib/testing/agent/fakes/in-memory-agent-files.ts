@@ -7,9 +7,16 @@ import type { AgentFileRepository } from '$lib/server/repositories/agent-files/a
 const encoding = getEncoding('cl100k_base');
 
 export class InMemoryAgentFiles implements AgentFileRepository {
-	constructor(private readonly actor: ActorContext) {}
-	files: StoredAgentFile[] = [];
-	private readonly owners = new Map<AgentFileId, ActorContext['userId']>();
+	/** Pass another instance as `table` to see its files as a different user. */
+	constructor(
+		private readonly actor: ActorContext,
+		table?: InMemoryAgentFiles
+	) {
+		this.files = table?.files ?? [];
+		this.owners = table?.owners ?? new Map();
+	}
+	files: StoredAgentFile[];
+	private readonly owners: Map<AgentFileId, ActorContext['userId']>;
 
 	async list(): Promise<readonly StoredAgentFile[]> {
 		return this.files.filter((file) => this.owners.get(file.metadata.id) === this.actor.userId);

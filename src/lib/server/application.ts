@@ -1,6 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { TokenCodec } from '$lib/models/tokenization';
-import type { KnowledgeRetrievalCapabilities } from './services/knowledge-search/retrieval';
+import type { RetrievalProvider } from './factories/retrieval-providers';
 import type { ToolRanking, ToolSeeding } from './services/agent/tools/tool-search';
 import type { WebReferenceClient } from '$lib/server/services/references/web-research';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
@@ -14,7 +14,6 @@ import {
 	DEFAULT_LANGUAGE_MODEL_BASE_URL,
 	optionalProperty
 } from './config';
-import type { ToolDiscoveryController } from './controllers/tool-discovery/controller';
 import type { Database } from './db';
 import type { McpSurfaceFactory } from './factories/agent/mcp-tool-factory';
 import { createAgentCapability } from './factories/capabilities/agent-capability-factory';
@@ -51,7 +50,7 @@ import type { NotificationChannel } from './db';
  * production so that an isolated run exercises the real code paths.
  */
 export interface ApplicationOverrides {
-	readonly knowledge?: KnowledgeRetrievalCapabilities;
+	readonly retrievalProvider?: RetrievalProvider;
 	readonly toolSearch?: ToolSeeding & ToolRanking;
 	readonly attachmentStorage?: IAttachmentStorage;
 	readonly referenceClient?: WebReferenceClient;
@@ -95,8 +94,6 @@ export interface ProductionApplication {
 	 * mint a provenance row per session so tool writes are attributable.
 	 */
 	readonly provenance: ProvenanceRecorder;
-	/** Tool discovery, which seeding and the eval lab drive directly. */
-	readonly toolRetriever: ToolDiscoveryController;
 }
 
 /**
@@ -184,7 +181,7 @@ export function createApplication(
 		openRouterApiKey,
 		openRouterBaseURL,
 		appURL,
-		...optionalProperty('knowledge', overrides.knowledge),
+		...optionalProperty('retrievalProvider', overrides.retrievalProvider),
 		...optionalProperty('toolSearch', overrides.toolSearch),
 		deferEmbedding
 	});
@@ -192,7 +189,6 @@ export function createApplication(
 	const noteIndexer = knowledge;
 	const diagramIndexer = knowledge;
 	const memoryIndexer = knowledge;
-	const toolRetriever = knowledgeSearch.toolRetriever;
 	const agentFilesCapability = createAgentFilesCapability(actor, {
 		tokens: knowledgeSearch.tokenizer,
 		db,
@@ -737,7 +733,6 @@ export function createApplication(
 	return {
 		controllers: controllerFactory,
 		mcpSurface: agentCapability.mcpSurface,
-		provenance,
-		toolRetriever
+		provenance
 	};
 }

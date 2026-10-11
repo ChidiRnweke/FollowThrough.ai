@@ -115,10 +115,7 @@ export class TemplateWritingService implements TemplateWriter {
 }
 
 export class TemplateLifecycleService implements TemplateLifecycle {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly repository: TemplateRepository
-	) {}
+	constructor(private readonly repository: TemplateRepository) {}
 	async delete(id: TemplateId): Promise<void> {
 		if (!(await this.repository.findById(id))) throw new NotFoundError('Template not found');
 		await this.repository.delete(id);

@@ -1,13 +1,14 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { ActorContext } from '$lib/models/identity';
 import { describe, expect, it } from 'vitest';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SearchDocument, SearchDocumentId } from '$lib/models/knowledge-search';
 import * as schema from '$lib/server/db/schema';
-import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
+import {
+	KnowledgeBacklogRecords,
+	KnowledgeIndexRecords
+} from '$lib/server/repositories/knowledge-search/postgres/search';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { seedUser, actor, context, seedNote } from '../database-harness';
+import { actor, seedUser, context, seedNote } from '../database-harness';
 describe('Postgres search repository invariants', () => {
 	it('limits vector search to the requested project', async () => {
 		const owner = await seedUser('10');
@@ -58,7 +59,13 @@ describe('Postgres search repository invariants', () => {
 				embeddingModel: 'contract-model'
 			}
 		]);
-		expect(await repository.searchByEmbedding(vector, 10, project.id)).toEqual([]);
+		expect(
+			await new KnowledgeIndexRecords(actor('48'), context.db).searchByEmbedding(
+				vector,
+				10,
+				project.id
+			)
+		).toEqual([]);
 	});
 });
 describe('Postgres deferred embedding invariants', () => {
@@ -86,7 +93,7 @@ describe('Postgres deferred embedding invariants', () => {
 	it('continues a bounded scan after the cursor source has been removed', async () => {
 		const first = await seedNote('9831');
 		const second = await seedNote('9832', first.owner);
-		const repository = new KnowledgeIndexRecords(testActor(), context.db);
+		const repository = new KnowledgeIndexRecords(first.owner, context.db);
 		for (const [index, entry] of [first, second].entries())
 			await repository.stage({ kind: 'note', noteId: entry.note.id }, [
 				chunk(
@@ -97,13 +104,13 @@ describe('Postgres deferred embedding invariants', () => {
 					false
 				)
 			]);
-		const initial = await repository.listPendingSources(500);
+		const initial = await new KnowledgeBacklogRecords(context.db).listPendingSources(500);
 		const cursor = initial.find(
 			(entry) => entry.source.kind === 'note' && entry.source.noteId === first.note.id
 		)?.cursor;
 		if (!cursor) throw new Error('The seeded first source must have a cursor');
 		await repository.deleteForNote(first.note.id);
-		const page = await repository.listPendingSources(1, cursor);
+		const page = await new KnowledgeBacklogRecords(context.db).listPendingSources(1, cursor);
 		expect(page.map((entry) => ({ userId: entry.userId, source: entry.source }))).toEqual([
 			{ userId: second.owner.userId, source: { kind: 'note', noteId: second.note.id } }
 		]);
@@ -114,7 +121,7 @@ describe('Postgres deferred embedding invariants', () => {
 		await repository.stage({ kind: 'note', noteId: note.id }, [
 			chunk('917', project.id, note.id, 'pending text', false)
 		]);
-		const pending = await repository.listPendingSources(500);
+		const pending = await new KnowledgeBacklogRecords(context.db).listPendingSources(500);
 		expect(
 			pending.find((entry) => entry.source.kind === 'note' && entry.source.noteId === note.id)
 				?.userId
@@ -125,6 +132,8 @@ describe('Postgres deferred embedding invariants', () => {
 		const repository = new KnowledgeIndexRecords(owner, context.db);
 		const source = { kind: 'note', noteId: note.id } as const;
 		await repository.stage(source, [chunk('918', project.id, note.id, 'pending text', false)]);
-		expect(await repository.listPending(source)).toEqual([]);
+		expect(await new KnowledgeIndexRecords(actor('919'), context.db).listPending(source)).toEqual(
+			[]
+		);
 	});
 });

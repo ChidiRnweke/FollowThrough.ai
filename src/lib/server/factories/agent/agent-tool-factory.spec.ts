@@ -13,7 +13,7 @@ import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widge
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
-import { AccessTokens } from '$lib/server/services/identity/api-tokens';
+import { AccessTokens, TokenVerification } from '$lib/server/services/identity/api-tokens';
 import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
@@ -88,23 +88,13 @@ const allTools: ToolAccessPolicy = { isEnabled: () => true };
 
 const createAgentTools = (
 	controllers: Parameters<typeof createAgentToolSurface>[1],
-	actor: Parameters<typeof createAgentToolSurface>[2],
-	mode: Parameters<typeof createAgentToolSurface>[3],
-	context: Parameters<typeof createAgentToolSurface>[4],
+	mode: Parameters<typeof createAgentToolSurface>[2],
+	context: Parameters<typeof createAgentToolSurface>[3],
 	executor: ToolCompletionRecorder = executeDirectly,
 	retriever: InMemoryToolRetriever = new InMemoryToolRetriever(),
 	access: ToolAccessPolicy = allTools
 ): AgentToolSurface =>
-	createAgentToolSurface(
-		testTokenizer,
-		controllers,
-		actor,
-		mode,
-		context,
-		executor,
-		retriever,
-		access
-	);
+	createAgentToolSurface(testTokenizer, controllers, mode, context, executor, retriever, access);
 
 let freshKeyCounter = 0;
 const freshKey = (): string => `fresh:${freshKeyCounter++}`;
@@ -139,7 +129,6 @@ const registry = memoizeAgentTools(
 		createAgentToolSurface(
 			testTokenizer,
 			options.factory ?? ({} as ControllerFactory),
-			testActor(),
 			mode,
 			{
 				provenanceId: testProvenanceId(),
@@ -199,7 +188,6 @@ const agentToolsRegistry = memoizeAgentTools(
 		createAgentToolSurface(
 			testTokenizer,
 			options.factory ?? ({} as ControllerFactory),
-			testActor(),
 			mode,
 			{
 				provenanceId: testProvenanceId(),
@@ -309,16 +297,11 @@ describe('Agent tool coverage invariants', () => {
 	];
 
 	it('withholds exactly the selection-bound tools when a turn has no selection', () => {
-		const withoutSelection = createAgentTools(
-			{} as ControllerFactory,
-			testActor(),
-			'approval_required',
-			{
-				provenanceId: testProvenanceId(),
-				input: { conversationId: testConversationId(), prompt: 'Help' },
-				model: 'openai/gpt-5.6'
-			}
-		);
+		const withoutSelection = createAgentTools({} as ControllerFactory, 'approval_required', {
+			provenanceId: testProvenanceId(),
+			input: { conversationId: testConversationId(), prompt: 'Help' },
+			model: 'openai/gpt-5.6'
+		});
 		expect(
 			withoutSelection
 				.tools()
@@ -341,7 +324,6 @@ describe('Agent tool coverage invariants', () => {
 		const mcp = createMcpToolDefinitions(
 			testTokenizer,
 			{} as ControllerFactory,
-			testActor(),
 			{ provenanceId: testProvenanceId() },
 			allTools,
 			new InMemoryToolRetriever()
@@ -393,7 +375,7 @@ describe('Agent tool coverage invariants', () => {
 	// surface hid it from the very screen the studio runs on, and a capability the
 	// model cannot reach is one nobody discovers.
 	it('offers create_diagram in an ordinary chat', () => {
-		const chat = createAgentTools({} as ControllerFactory, testActor(), 'auto_accept', {
+		const chat = createAgentTools({} as ControllerFactory, 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: {
 				conversationId: testConversationId(),
@@ -414,7 +396,6 @@ describe('Agent tool coverage invariants', () => {
 		retriever.names = ['create_note'];
 		const selected = createAgentTools(
 			{} as ControllerFactory,
-			testActor(),
 			'auto_accept',
 			{
 				provenanceId: testProvenanceId(),
@@ -503,7 +484,7 @@ describe('Agent tool coverage invariants', () => {
 			})
 		);
 		const factory = capabilityDependencies<ControllerFactory>({ diagramStudio: () => controller });
-		const tool = createAgentTools(factory, testActor(), 'auto_accept', {
+		const tool = createAgentTools(factory, 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId, prompt: 'Read the canvas' },
 			model: 'openai/gpt-5.6'
@@ -546,7 +527,6 @@ describe('Agent tool coverage invariants', () => {
 		retriever.names = ['create_note'];
 		const available = createAgentTools(
 			{} as ControllerFactory,
-			testActor(),
 			'auto_accept',
 			{
 				provenanceId: testProvenanceId(),
@@ -645,7 +625,7 @@ describe('Agent tool coverage invariants', () => {
 	const skillFixture = (body = 'Number every finding.') => {
 		const { note, controller } = loadedSkillFixture(body);
 		const factory = capabilityDependencies<ControllerFactory>({ skills: () => controller });
-		const definitions = createAgentTools(factory, testActor(), 'auto_accept', {
+		const definitions = createAgentTools(factory, 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Use a skill' },
 			model: 'openai/gpt-5.6'
@@ -698,7 +678,6 @@ describe('Agent tool coverage invariants', () => {
 		const registry = createAgentToolSurface(
 			testTokenizer,
 			factory,
-			testActor(),
 			'auto_accept',
 			{
 				provenanceId: run.provenanceId,
@@ -828,7 +807,6 @@ describe('Agent tool coverage invariants', () => {
 		const mcp = createMcpToolDefinitions(
 			testTokenizer,
 			factory,
-			testActor(),
 			{ provenanceId: testProvenanceId() },
 			allTools,
 			new InMemoryToolRetriever()
@@ -1150,7 +1128,7 @@ describe('Agent tool coverage invariants', () => {
 	it('uses the effective conversation model for reference search', async () => {
 		const { reference, references } = referenceSearchFixture();
 		const factory = capabilityDependencies<ControllerFactory>({ references: () => reference });
-		const selected = createAgentTools(factory, testActor(), 'auto_accept', {
+		const selected = createAgentTools(factory, 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: {
 				conversationId: testConversationId(),
@@ -1259,7 +1237,6 @@ describe('The provider call id', () => {
 		const { factory } = agentProjectsFixture();
 		const selected = createAgentTools(
 			factory,
-			testActor(),
 			'auto_accept',
 			{
 				provenanceId: testProvenanceId(),
@@ -1302,20 +1279,21 @@ describe('Explicit mutation receipts', () => {
 	});
 
 	it('reports the revoked token id', async () => {
-		const tokens = new AccessTokens(
-			new InMemoryApiTokenRepository(testActor(), [testTokenUser(testActor().userId)])
-		);
-		const minted = await tokens.mint(testActor().userId, {
-			name: 'Local integration',
-			scope: 'read'
-		});
+		const credentials = new InMemoryApiTokenRepository(testActor(), [
+			testTokenUser(testActor().userId)
+		]);
+		const tokens = new AccessTokens(credentials);
+		const minted = await tokens.mint({ name: 'Local integration', scope: 'read' });
 		const apiTokens = new ApiTokens({ ...agentToolResultsFixture(), tokens });
 		const factory = capabilityDependencies<ControllerFactory>({ apiTokens: () => apiTokens });
 		const tool = registry('auto_accept', { factory })
 			.definitions()
 			.find((tool) => tool.name === 'revoke_api_token');
 		const receipt = await directTool(tool).prepare({ tokenId: minted.token.id }).execute();
-		expect({ receipt, verified: await tokens.verify(`Bearer ${minted.plaintext}`) }).toEqual({
+		expect({
+			receipt,
+			verified: await new TokenVerification(credentials).verify(`Bearer ${minted.plaintext}`)
+		}).toEqual({
 			receipt: { tokenId: minted.token.id, name: 'Local integration', revoked: true },
 			verified: null
 		});
@@ -1426,7 +1404,6 @@ describe('Deselected tools', () => {
 			return createAgentToolSurface(
 				testTokenizer,
 				{} as ControllerFactory,
-				testActor(),
 				'auto_accept',
 				{
 					provenanceId: testProvenanceId(),
@@ -1504,7 +1481,6 @@ it('keeps promotions inside the SDK tool set that discovered them', async () => 
 	retriever.names = ['create_note'];
 	const available = createAgentTools(
 		capabilityDependencies<ControllerFactory>({}),
-		testActor(),
 		'auto_accept',
 		{
 			provenanceId: testProvenanceId(),

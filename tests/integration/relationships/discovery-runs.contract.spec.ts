@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
@@ -55,9 +54,9 @@ const setup = async (suffix: string) => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const projects = new ProjectRecords(testActor(), database);
-	const notes = createNotesCapability(testActor(), { db: database, projects });
-	const suggestions = createSuggestionsCapability(testActor(), {
+	const projects = new ProjectRecords(seeded.owner, database);
+	const notes = createNotesCapability(seeded.owner, { db: database, projects });
+	const suggestions = createSuggestionsCapability(seeded.owner, {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
@@ -76,13 +75,13 @@ const setup = async (suffix: string) => {
 		to: text.length,
 		text
 	};
-	const runs = new AgentRunRecords(testActor(), database);
-	const events = new AgentRunEventRecords(testActor(), database);
+	const runs = new AgentRunRecords(seeded.owner, database);
+	const events = new AgentRunEventRecords(seeded.owner, database);
 	const requests = new NoteActionRequests(
-		testActor(),
+		seeded.owner,
 		runs,
 		events,
-		new ConversationRecords(testActor(), database)
+		new ConversationRecords(seeded.owner, database)
 	);
 	const settlements = new RunSettlements(runs, events);
 	const classifier = new InMemoryStructuredRelationshipClient();
@@ -106,7 +105,7 @@ const setup = async (suffix: string) => {
 		}
 	});
 	const vector = Array.from({ length: 3072 }, (_, index) => (index === 0 ? 1 : 0));
-	const index = new KnowledgeIndexRecords(testActor(), database);
+	const index = new KnowledgeIndexRecords(seeded.owner, database);
 	await index.replaceForNote(target.id, [
 		searchDocumentBuilder({
 			noteId: target.id,
@@ -134,14 +133,14 @@ const setup = async (suffix: string) => {
 		suggestionCreator: suggestions.creator
 	};
 	const agent = new AgentSdkHarness(
-		testActor(),
+		seeded.owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
-			decisions: new AgentRunDecisionRecords(testActor(), database),
+			decisions: new AgentRunDecisionRecords(seeded.owner, database),
 			settlements,
 			transactionRunner,
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
@@ -248,7 +247,7 @@ it('reconstructs a queued related-note search after its submitting controller ha
 	await new Relationships(
 		new RelationshipCandidatesService(),
 		state.dependencies
-	).recoverQueuedRelatedNoteRuns();
+	).resumeQueuedRelatedNoteRun(receipt.runId);
 	await state.finished(receipt.runId);
 	expect(
 		(await state.events.replay(receipt.runId, '0')).flatMap((record) =>

@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
 import { ToolPreferences } from '$lib/server/controllers/agent/tool-preferences/controller';
 import { TrustPolicies } from '$lib/server/controllers/agent/trust-policies/controller';
@@ -16,10 +15,11 @@ import { actor, context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
+	const actor = seeded.owner;
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability(testActor(), { db: database });
-	const preferences = new ToolPreferenceRecords(testActor(), database);
-	const tools = new ToolPreferences(testActor(), new WorkspaceCommandRulesService(), {
+	const sync = createSyncCapability(actor, { db: database });
+	const preferences = new ToolPreferenceRecords(actor, database);
+	const tools = new ToolPreferences(actor, new WorkspaceCommandRulesService(), {
 		...agentToolResultsFixture(),
 		syncMutations: sync.mutations,
 		syncRetry: sync.mutationRetry,
@@ -27,12 +27,12 @@ const setup = async (suffix: string) => {
 		preferences: new ToolAccess(preferences),
 		catalog: new AgentToolCatalogService()
 	});
-	const policies = new TrustPolicies(testActor(), new WorkspaceCommandRulesService(), {
+	const policies = new TrustPolicies(actor, new WorkspaceCommandRulesService(), {
 		...agentToolResultsFixture(),
 		syncMutations: sync.mutations,
 		syncRetry: sync.mutationRetry,
 		transactionRunner,
-		trustPolicyStore: new ToolTrust(testActor(), new TrustPolicyRecords(testActor(), database))
+		trustPolicyStore: new ToolTrust(actor, new TrustPolicyRecords(actor, database))
 	});
 	return { ...seeded, sync, preferences, tools, policies };
 };

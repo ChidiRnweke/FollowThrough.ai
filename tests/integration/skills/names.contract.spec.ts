@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import type { NoteId } from '$lib/models/notes';
 import type { SkillEditInput } from '$lib/models/skills';
@@ -42,12 +41,13 @@ it('rejects a portable name committed by a competing import into another project
 	const first = await seedSkill('20201');
 	const second = await seedSkill('20202', first.owner);
 	const result = await competingSkillWrites(
+		first.owner,
 		async (skills) => {
 			await skills.update(imported(first.note.id, 'release-guide'));
 		},
 		(skills) => skills.update(imported(second.note.id, 'release-guide'))
 	);
-	const repository = new SkillRecords(testActor(), context.db);
+	const repository = new SkillRecords(first.owner, context.db);
 	expect({
 		result,
 		first: (await repository.findByNoteId(first.note.id))?.slug,
@@ -63,6 +63,7 @@ it('rejects an import name committed by a competing direct creation', async () =
 	const first = await seedNote('20203');
 	const second = await seedSkill('20204', first.owner);
 	const result = await competingSkillWrites(
+		first.owner,
 		async (skills) => {
 			await skills.create({ projectId: first.project.id, name: 'Release guide' });
 		},
@@ -81,6 +82,7 @@ it('allows a portable name released by a competing import after it commits', asy
 	const first = await seedSkill('20205');
 	const second = await seedSkill('20206', first.owner);
 	const result = await competingSkillWrites(
+		first.owner,
 		async (skills) => {
 			await skills.update(imported(first.note.id, 'renamed-guide'));
 		},
@@ -96,6 +98,7 @@ it('rejects a built-in name after provisioning and rolls back the candidate note
 	const { owner, project } = await seedNote('20207');
 	const candidateId = crypto.randomUUID() as NoteId;
 	const result = await competingSkillWrites(
+		owner,
 		async (skills) => {
 			await skills.list();
 		},
@@ -114,9 +117,13 @@ it('allows separate actors to use the same portable name', async () => {
 	const first = await seedNote('20208');
 	const second = await seedNote('20209');
 	const tx = createTransactionContext(context.db);
-	const controller = skillController(tx.database, tx.transactionRunner);
 	const results = [];
 	for (const { owner, project } of [first, second])
-		results.push(await controller.create({ projectId: project.id, name: 'Release guide' }));
+		results.push(
+			await skillController(owner, tx.database, tx.transactionRunner).create({
+				projectId: project.id,
+				name: 'Release guide'
+			})
+		);
 	expect(results.map(({ skill }) => skill.slug)).toEqual(['release-guide', 'release-guide']);
 });

@@ -1,4 +1,4 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -33,22 +33,23 @@ import { describe, expect, it } from 'vitest';
 import { context, now, seedNote, seedProvenance } from '../database-harness';
 
 const application = (
+	actor: ActorContext,
 	transaction: ReturnType<typeof createTransactionContext<typeof context.db>>
 ) => {
 	const { database, transactionRunner } = transaction;
-	const suggestions = new SuggestionRecords(testActor(), database);
-	const notes = new NoteRecords(testActor(), database);
-	const provenance = new ProvenanceRecords(testActor(), database);
-	const anchors = new SourceAnchorRecords(testActor(), database);
-	const inbox = createSuggestionServices(testActor(), suggestions, notes, provenance, anchors);
+	const suggestions = new SuggestionRecords(actor, database);
+	const notes = new NoteRecords(actor, database);
+	const provenance = new ProvenanceRecords(actor, database);
+	const anchors = new SourceAnchorRecords(actor, database);
+	const inbox = createSuggestionServices(actor, suggestions, notes, provenance, anchors);
 	const repository = new SuggestionEffectRecords(
-		testActor(),
+		actor,
 		database,
-		new WorkspaceSyncObjects(testActor(), database)
+		new WorkspaceSyncObjects(actor, database)
 	);
-	const entries = new MemoryRecords(testActor(), database);
-	const relationships = new RelationshipRecords(testActor(), database);
-	const search = new KnowledgeIndexRecords(testActor(), database);
+	const entries = new MemoryRecords(actor, database);
+	const relationships = new RelationshipRecords(actor, database);
+	const search = new KnowledgeIndexRecords(actor, database);
 	const embeddings = new InMemoryRetrievalProvider();
 	for (const content of ['Original', 'Replacement', 'Accepted']) {
 		embeddings.vectorsByContent.set(
@@ -58,7 +59,7 @@ const application = (
 	}
 	const index = createContentIndex(search, undefined, undefined, false, embeddings);
 	const controller = new Suggestions(
-		testActor(),
+		actor,
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
 			...agentToolResultsFixture(),
@@ -69,13 +70,13 @@ const application = (
 			suggestionReverter: inbox.reverter,
 			suggestionEffects: new SuggestionEffects(repository),
 			memoryChanges: createMemoryServices(
-				testActor(),
+				actor,
 				entries,
-				new ProjectRecords(testActor(), database),
+				new ProjectRecords(actor, database),
 				provenance
 			).changes,
 			relationshipCreator: createRelationshipServices(
-				testActor(),
+				actor,
 				relationships,
 				notes,
 				anchors,
@@ -102,7 +103,11 @@ const application = (
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const provenance = await seedProvenance(seeded.owner, suffix);
-	return { ...seeded, provenance, ...application(createTransactionContext(context.db)) };
+	return {
+		...seeded,
+		provenance,
+		...application(seeded.owner, createTransactionContext(context.db))
+	};
 };
 const memoryReplacement = async (suffix: string) => {
 	const state = await setup(suffix);
@@ -237,7 +242,7 @@ describe('Durable proposal application effects', () => {
 		const state = await memoryReplacement('9506');
 		const connection = connectPostgresTestDatabase(context.url);
 		try {
-			const second = application(createTransactionContext(connection.db));
+			const second = application(state.owner, createTransactionContext(connection.db));
 			const results = await Promise.allSettled([
 				state.controller.revert({ suggestionId: state.suggestion.id }),
 				second.controller.revert({ suggestionId: state.suggestion.id })
@@ -269,7 +274,7 @@ describe('Durable proposal application effects', () => {
 		});
 		const connection = connectPostgresTestDatabase(context.url);
 		try {
-			const second = application(createTransactionContext(connection.db));
+			const second = application(state.owner, createTransactionContext(connection.db));
 			const results = await Promise.allSettled([
 				state.controller.accept({ suggestionId: suggestion.id }),
 				second.controller.accept({ suggestionId: suggestion.id })
@@ -320,10 +325,12 @@ describe('Durable proposal application effects', () => {
 	it('refuses a different actor without restoring the owned replacement', async () => {
 		const state = await memoryReplacement('23102');
 		const foreign = await seedNote('23112');
-		const outcome = await state.controller.revert({ suggestionId: state.suggestion.id }).then(
-			() => 'unexpected success',
-			(error: Error) => error.message
-		);
+		const outcome = await application(foreign.owner, createTransactionContext(context.db))
+			.controller.revert({ suggestionId: state.suggestion.id })
+			.then(
+				() => 'unexpected success',
+				(error: Error) => error.message
+			);
 		expect({ outcome, active: await activeMemory(state) }).toEqual({
 			outcome: 'Suggestion was not found',
 			active: [{ id: state.replacement.id, content: 'Replacement' }]

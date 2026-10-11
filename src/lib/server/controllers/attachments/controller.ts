@@ -5,7 +5,6 @@ import type {
 	AttachmentUploadId,
 	AttachmentView
 } from '$lib/models/attachments';
-import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';

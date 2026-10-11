@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	Artifact,
 	ArtifactId,
@@ -41,10 +40,7 @@ export class ArtifactWritingService implements ArtifactWriter {
 }
 
 export class ArtifactReadingService implements ArtifactReader, ArtifactLister {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly artifactRepo: ArtifactRepository
-	) {}
+	constructor(private readonly artifactRepo: ArtifactRepository) {}
 	async get(artifactId: ArtifactId): Promise<Artifact | undefined> {
 		return this.artifactRepo.findById(artifactId);
 	}
@@ -54,10 +50,7 @@ export class ArtifactReadingService implements ArtifactReader, ArtifactLister {
 }
 
 export class ArtifactLifecycleService implements ArtifactDeleter {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly artifactRepo: ArtifactRepository
-	) {}
+	constructor(private readonly artifactRepo: ArtifactRepository) {}
 	async delete(artifactId: ArtifactId): Promise<Pick<Artifact, 'id' | 'title'>> {
 		const artifact = await this.artifactRepo.findById(artifactId);
 		if (!artifact) throw new NotFoundError('Artifact not found');
@@ -67,10 +60,7 @@ export class ArtifactLifecycleService implements ArtifactDeleter {
 }
 
 export class ArtifactSettingsService implements ExportSettingsReader, ExportSettingsWriter {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly settingsRepo: ExportSettingsRepository
-	) {}
+	constructor(private readonly settingsRepo: ExportSettingsRepository) {}
 	async getSettings(projectId: ProjectId): Promise<ExportSettings> {
 		return (await this.settingsRepo.find(projectId)) ?? defaultExportSettings;
 	}

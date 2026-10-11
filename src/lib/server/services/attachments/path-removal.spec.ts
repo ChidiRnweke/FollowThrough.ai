@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
 import { view, ATTACHMENT_ID } from '$lib/testing/attachments/fakes/processing';
-import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = (embedded = false) => {
 	const dependencies = setupAttachments();

@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import type { SearchDocumentId } from '$lib/models/knowledge-search';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
@@ -14,7 +13,7 @@ const vector = Array.from({ length: 3072 }, (_, index) => (index === 0 ? 1 : 0))
 const setup = async (suffix: string) => {
 	const archived = await seedNote(suffix);
 	const active = await seedNote(String(Number(suffix) + 100), archived.owner);
-	const repository = new KnowledgeIndexRecords(testActor(), context.db);
+	const repository = new KnowledgeIndexRecords(archived.owner, context.db);
 	const memory = await new MemoryRecords(archived.owner, context.db).insert(
 		memoryEntryBuilder({
 			id: testMemoryEntryId(Number(suffix)),
@@ -56,7 +55,7 @@ const setup = async (suffix: string) => {
 it.each(['text', 'vector'] as const)(
 	'excludes archived project chunks from unscoped %s search',
 	async (mode) => {
-		const { archived, active, repository } = await setup(mode === 'text' ? '22501' : '22502');
+		const { active, repository } = await setup(mode === 'text' ? '22501' : '22502');
 		const matches =
 			mode === 'text'
 				? await repository.search('visibility', 10)
@@ -76,7 +75,7 @@ it.each(['text', 'vector'] as const)(
 	}
 );
 it('retains archived memory chunks for storage maintenance', async () => {
-	const { archived, repository, memory } = await setup('22505');
+	const { repository, memory } = await setup('22505');
 	expect((await repository.listForMemoryEntry(memory.id)).map((chunk) => chunk.content)).toEqual([
 		memory.content
 	]);

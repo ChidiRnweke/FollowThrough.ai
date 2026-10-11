@@ -132,10 +132,10 @@ describe('Note save transaction invariants', () => {
 
 	it('does not expose another user’s note through save', async () => {
 		const { content, controller } = setup();
-		content.notes = [noteBuilder()];
-		await expect(
-			controller.save({ note: noteBuilder({ userId: testActor(2).userId }) })
-		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+		content.notes = [noteBuilder({ userId: testActor(2).userId })];
+		await expect(controller.save({ note: noteBuilder() })).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
 	});
 });
 

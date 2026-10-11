@@ -59,12 +59,12 @@ const setup = async (suffix: string) => {
 
 describe('guarded chat names', () => {
 	it('replays a rename without losing its acknowledgement', async () => {
-		const { owner, controller, input } = await setup('9421');
+		const { controller, input } = await setup('9421');
 		const first = await controller.synchronize(input);
 		expect(await controller.synchronize(input)).toEqual(first);
 	});
 	it('preserves a newer chat name when an offline rename arrives', async () => {
-		const { owner, controller, records, conversation, input } = await setup('9422');
+		const { controller, records, conversation, input } = await setup('9422');
 		await controller.renameSession(conversation.id, 'Another client');
 		const result = await controller.synchronize(input);
 		expect({

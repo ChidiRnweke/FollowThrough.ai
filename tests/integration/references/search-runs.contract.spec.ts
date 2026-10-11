@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
@@ -51,9 +50,9 @@ const setup = async (suffix: string) => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const projects = new ProjectRecords(testActor(), database);
-	const notes = createNotesCapability(testActor(), { db: database, projects });
-	const suggestions = createSuggestionsCapability(testActor(), {
+	const projects = new ProjectRecords(seeded.owner, database);
+	const notes = createNotesCapability(seeded.owner, { db: database, projects });
+	const suggestions = createSuggestionsCapability(seeded.owner, {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
@@ -72,13 +71,13 @@ const setup = async (suffix: string) => {
 		to: text.length,
 		text
 	};
-	const runs = new AgentRunRecords(testActor(), database);
-	const events = new AgentRunEventRecords(testActor(), database);
+	const runs = new AgentRunRecords(seeded.owner, database);
+	const events = new AgentRunEventRecords(seeded.owner, database);
 	const requests = new NoteActionRequests(
-		testActor(),
+		seeded.owner,
 		runs,
 		events,
-		new ConversationRecords(testActor(), database)
+		new ConversationRecords(seeded.owner, database)
 	);
 	const settlements = new RunSettlements(runs, events);
 	const finder = new InMemoryReferencePipeline();
@@ -107,14 +106,14 @@ const setup = async (suffix: string) => {
 		suggestionCreator: suggestions.creator
 	};
 	const agent = new AgentSdkHarness(
-		testActor(),
+		seeded.owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
-			decisions: new AgentRunDecisionRecords(testActor(), database),
+			decisions: new AgentRunDecisionRecords(seeded.owner, database),
 			settlements,
 			transactionRunner,
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
@@ -218,7 +217,7 @@ it('rolls back reference proposals and anchors when the result event fails', asy
 it('reconstructs a queued reference search after its submitting controller has been discarded', async () => {
 	const state = await setup('12904');
 	const receipt = await state.prepare();
-	await new References(state.dependencies).recoverQueuedReferenceRuns();
+	await new References(state.dependencies).resumeQueuedReferenceRun(receipt.runId);
 	await state.finished(receipt.runId);
 	expect(
 		(await state.events.replay(receipt.runId, '0')).flatMap((record) =>

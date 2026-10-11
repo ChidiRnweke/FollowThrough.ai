@@ -3,11 +3,7 @@ import type { OperationObserver } from '$lib/models/telemetry';
 import { describe, expect, it } from 'vitest';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { searchControllerFixture } from '$lib/testing/knowledge-search/fixtures/controller';
-import {
-	testActor,
-	testConversationId,
-	testNow
-} from '$lib/testing/workspace/fixtures/domain-builders';
+import { testConversationId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const completion = (content: string | null) => ({
 	id: 'completion-1',

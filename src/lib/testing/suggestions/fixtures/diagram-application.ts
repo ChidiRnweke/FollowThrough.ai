@@ -32,7 +32,7 @@ import {
 export const diagramSuggestionFixture = (source = VALID_DRAWIO_XML) => {
 	const diagrams = new InMemoryDiagrams(testActor());
 	const suggestions = new InMemorySuggestions(testActor());
-	const effects = new InMemorySuggestionEffects(testActor());
+	const effects = new InMemorySuggestionEffects();
 	const notes = new InMemoryNoteContent(testActor());
 	notes.notes = [noteBuilder()];
 	const suggestion: DiagramSuggestion = {

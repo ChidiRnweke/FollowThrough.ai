@@ -1,5 +1,4 @@
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
-import type { ActorContext } from '$lib/models/identity';
 import type { SkillPinChange } from '$lib/models/skills';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';

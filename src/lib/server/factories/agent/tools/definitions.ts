@@ -6,7 +6,6 @@ import { agentToolInputSchemas } from '$lib/models/agent-tool-inputs';
 import type { AgentTool } from '$lib/models/agent-tool-protocol';
 import { TOOL_DESCRIPTIONS, type ToolName } from '$lib/models/agent/tool-catalog';
 import { toolFailure } from '$lib/models/agent/tool-failure';
-import type { ActorContext } from '$lib/models/identity';
 import {
 	noteChangeRequestSchema,
 	noteChangeReviewSchema,
@@ -134,7 +133,6 @@ const noteChangeOutput = (
  */
 const defineNoteChangeTool = <Name extends ToolName, Shape extends z.ZodRawShape>(
 	controllers: ControllerFactory,
-	actor: ActorContext,
 	name: Name,
 	parameters: z.ZodObject<Shape>,
 	change: { readonly kind: 'patch' | 'replace'; readonly target: NoteChangeTarget }
@@ -187,11 +185,7 @@ const defineNoteChangeTool = <Name extends ToolName, Shape extends z.ZodRawShape
 	}
 });
 
-const sharedToolDefinitions = (
-	controllers: ControllerFactory,
-	actor: ActorContext,
-	provenanceId: ProvenanceId
-) => {
+const sharedToolDefinitions = (controllers: ControllerFactory, provenanceId: ProvenanceId) => {
 	const retrieval = () => ({
 		ls: defineTool(
 			'ls',
@@ -315,26 +309,14 @@ const sharedToolDefinitions = (
 			agentToolInputSchemas.create_note,
 			async (input) => projectNoteWrite((await controllers.notes().create(input)).note)
 		),
-		save_note: defineNoteChangeTool(
-			controllers,
-			actor,
-			'save_note',
-			agentToolInputSchemas.save_note,
-			{
-				kind: 'replace',
-				target: 'authored'
-			}
-		),
-		edit_note: defineNoteChangeTool(
-			controllers,
-			actor,
-			'edit_note',
-			agentToolInputSchemas.edit_note,
-			{
-				kind: 'patch',
-				target: 'authored'
-			}
-		),
+		save_note: defineNoteChangeTool(controllers, 'save_note', agentToolInputSchemas.save_note, {
+			kind: 'replace',
+			target: 'authored'
+		}),
+		edit_note: defineNoteChangeTool(controllers, 'edit_note', agentToolInputSchemas.edit_note, {
+			kind: 'patch',
+			target: 'authored'
+		}),
 		rename_note: defineTool(
 			'rename_note',
 			'mutation',
@@ -498,26 +480,14 @@ const sharedToolDefinitions = (
 		list_skills: defineTool('list_skills', 'read', agentToolInputSchemas.list_skills, async () =>
 			controllers.skills().list()
 		),
-		save_skill: defineNoteChangeTool(
-			controllers,
-			actor,
-			'save_skill',
-			agentToolInputSchemas.save_skill,
-			{
-				kind: 'replace',
-				target: 'skill'
-			}
-		),
-		edit_skill: defineNoteChangeTool(
-			controllers,
-			actor,
-			'edit_skill',
-			agentToolInputSchemas.edit_skill,
-			{
-				kind: 'patch',
-				target: 'skill'
-			}
-		),
+		save_skill: defineNoteChangeTool(controllers, 'save_skill', agentToolInputSchemas.save_skill, {
+			kind: 'replace',
+			target: 'skill'
+		}),
+		edit_skill: defineNoteChangeTool(controllers, 'edit_skill', agentToolInputSchemas.edit_skill, {
+			kind: 'patch',
+			target: 'skill'
+		}),
 		create_skill: defineTool(
 			'create_skill',
 			'mutation',
@@ -819,7 +789,6 @@ const sharedToolDefinitions = (
 };
 const selectionToolDefinitions = (
 	controllers: ControllerFactory,
-	actor: ActorContext,
 	selection: TextSelection,
 	model: string
 ) => ({
@@ -863,11 +832,7 @@ const selectionToolDefinitions = (
 		})
 	)
 });
-const appToolDefinitions = (
-	controllers: ControllerFactory,
-	actor: ActorContext,
-	context: AgentToolContext
-) => {
+const appToolDefinitions = (controllers: ControllerFactory, context: AgentToolContext) => {
 	return {
 		load_skill: defineTool('load_skill', 'read', agentToolInputSchemas.load_skill, async (input) =>
 			skillView(
@@ -910,11 +875,7 @@ const appToolDefinitions = (
 		)
 	};
 };
-const mcpOnlyDefinitions = (
-	controllers: ControllerFactory,
-	actor: ActorContext,
-	context: McpToolContext
-) => ({
+const mcpOnlyDefinitions = (controllers: ControllerFactory, context: McpToolContext) => ({
 	load_skill: defineTool('load_skill', 'read', agentToolInputSchemas.load_skill, async (input) =>
 		skillView(
 			await controllers
@@ -935,24 +896,20 @@ type _BuildersNameNothingElse = Total<Exclude<BuiltToolName, ToolName>>;
 /** Every tool of an in-app agent run: the selection tools exist only for a run with a selection. */
 export const createAgentTools = (
 	controllers: ControllerFactory,
-	actor: ActorContext,
 	context: AgentToolContext
 ): readonly AgentTool[] => [
-	...Object.values(sharedToolDefinitions(controllers, actor, context.provenanceId)),
-	...Object.values(appToolDefinitions(controllers, actor, context)),
+	...Object.values(sharedToolDefinitions(controllers, context.provenanceId)),
+	...Object.values(appToolDefinitions(controllers, context)),
 	...(context.input.selection
-		? Object.values(
-				selectionToolDefinitions(controllers, actor, context.input.selection, context.model)
-			)
+		? Object.values(selectionToolDefinitions(controllers, context.input.selection, context.model))
 		: [])
 ];
 
 /** Every tool an MCP client can reach. */
 export const createMcpTools = (
 	controllers: ControllerFactory,
-	actor: ActorContext,
 	context: McpToolContext
 ): readonly AgentTool[] => [
-	...Object.values(sharedToolDefinitions(controllers, actor, context.provenanceId)),
-	...Object.values(mcpOnlyDefinitions(controllers, actor, context))
+	...Object.values(sharedToolDefinitions(controllers, context.provenanceId)),
+	...Object.values(mcpOnlyDefinitions(controllers, context))
 ];

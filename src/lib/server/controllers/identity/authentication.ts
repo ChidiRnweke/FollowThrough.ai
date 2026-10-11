@@ -25,10 +25,10 @@ export interface AuthenticationDependencies {
 }
 export class Authentication implements AuthenticationController {
 	constructor(private readonly dependencies: AuthenticationDependencies) {}
-	resumeSession(sessionId: string) {
+	resumeSession(sessionId: string): Promise<{ user: User; session: Session } | null> {
 		return this.dependencies.sessions.validateSession(sessionId);
 	}
-	endSession(sessionId: string) {
+	endSession(sessionId: string): Promise<void> {
 		return this.dependencies.sessions.logout(sessionId);
 	}
 	async verifyBearer(authorizationHeader: string | null): Promise<VerifiedCredential | null> {

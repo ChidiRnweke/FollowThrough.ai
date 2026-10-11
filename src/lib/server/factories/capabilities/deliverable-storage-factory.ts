@@ -40,13 +40,13 @@ export const createArtifactServices = (
 	artifacts: ArtifactRepository,
 	settings: ExportSettingsRepository
 ): ArtifactServices => {
-	const reader = new ArtifactReadingService(actor, artifacts);
-	const preferences = new ArtifactSettingsService(actor, settings);
+	const reader = new ArtifactReadingService(artifacts);
+	const preferences = new ArtifactSettingsService(settings);
 	return {
 		artifactWriter: new ArtifactWritingService(artifacts),
 		artifactReader: reader,
 		artifactLister: reader,
-		artifactDeleter: new ArtifactLifecycleService(actor, artifacts),
+		artifactDeleter: new ArtifactLifecycleService(artifacts),
 		exportSettingsReader: preferences,
 		exportSettingsWriter: preferences
 	};
@@ -65,5 +65,5 @@ export const createTemplateServices = (
 	templateUploads: new TemplateUploadService(actor, repository, now),
 	templateReader: new TemplateReadingService(repository),
 	templateWriter: new TemplateWritingService(actor, repository, now),
-	templateLifecycle: new TemplateLifecycleService(actor, repository)
+	templateLifecycle: new TemplateLifecycleService(repository)
 });

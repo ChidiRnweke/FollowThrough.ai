@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { TodoId } from '$lib/models/todos';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -17,11 +16,12 @@ import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
+	const actor = seeded.owner;
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability(testActor(), { db: database });
-	const projects = new ProjectRecords(testActor(), database);
-	const notes = createNotesCapability(testActor(), { db: database, projects });
-	const { services: catalog } = createTodosCapability(testActor(), {
+	const sync = createSyncCapability(actor, { db: database });
+	const projects = new ProjectRecords(actor, database);
+	const notes = createNotesCapability(actor, { db: database, projects });
+	const { services: catalog } = createTodosCapability(actor, {
 		db: database,
 		projects,
 		notes: notes.repository,
@@ -29,7 +29,7 @@ const setup = async (suffix: string) => {
 		provenance: notes.provenanceRepository
 	});
 	const controller = new Todos(
-		testActor(),
+		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
 			...agentToolResultsFixture(),
@@ -52,7 +52,7 @@ const setup = async (suffix: string) => {
 
 describe('offline todo writes through the versioned boundary', () => {
 	it('persists explicit clears for nullable task fields', async () => {
-		const { owner, project, note, controller } = await setup('9256');
+		const { project, note, controller } = await setup('9256');
 		const { todo } = await controller.create({
 			projectId: project.id,
 			title: 'Original',
@@ -87,7 +87,7 @@ describe('offline todo writes through the versioned boundary', () => {
 		]).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
 	});
 	it('persists a combined task edit with its completion time and cleared counterparty', async () => {
-		const { owner, project, controller } = await setup('9253');
+		const { project, controller } = await setup('9253');
 		const { todo } = await controller.create({
 			projectId: project.id,
 			title: 'Original',
@@ -140,7 +140,7 @@ describe('offline todo writes through the versioned boundary', () => {
 		});
 	});
 	it('preserves a client-created identity and its requested board column across retries', async () => {
-		const { owner, project, controller } = await setup('9251');
+		const { project, controller } = await setup('9251');
 		const id = crypto.randomUUID() as TodoId;
 		const input = {
 			operationId: crypto.randomUUID(),
@@ -161,7 +161,7 @@ describe('offline todo writes through the versioned boundary', () => {
 		]);
 	});
 	it('preserves another client edit when an offline task update has an older base', async () => {
-		const { owner, project, controller, sync } = await setup('9252');
+		const { project, controller, sync } = await setup('9252');
 		const { todo } = await controller.create({
 			projectId: project.id,
 			title: 'Original',

@@ -27,7 +27,7 @@ import { skillController } from './edit-harness';
 it('lists persisted skill snapshots newest first while leaving the current draft out of history', async () => {
 	const { owner, project } = await seedNote('21401');
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const skills = skillController(database, transactionRunner);
+	const skills = skillController(owner, database, transactionRunner);
 	const { services: catalog } = createNotesCapability(owner, {
 		db: database,
 		projects: new ProjectRecords(owner, database)
@@ -96,9 +96,10 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 it('refuses another account’s skill history', async () => {
 	const { owner, project } = await seedNote('21402');
 	const tx = createTransactionContext(context.db);
-	const skills = skillController(tx.database, tx.transactionRunner);
+	const skills = skillController(owner, tx.database, tx.transactionRunner);
 	const { skill } = await skills.create({ projectId: project.id, name: 'Review' });
-	await expect(skills.listVersions({ noteId: skill.note.id })).rejects.toMatchObject({
+	const foreign = skillController(actor('21403'), tx.database, tx.transactionRunner);
+	await expect(foreign.listVersions({ noteId: skill.note.id })).rejects.toMatchObject({
 		code: 'NOT_FOUND'
 	});
 });

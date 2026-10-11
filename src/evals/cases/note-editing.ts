@@ -71,7 +71,7 @@ export const noteEditingCases: readonly EvalCase[] = [
 				explanation: tools.explanation
 			});
 
-			const view = await lab.controllers.notes().get({ noteId });
+			const view = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const markdown = noteMarkdown.write(view.note.document).trim();
 			const applied = markdown === 'Robin leads platform engineering at Northwind Analytics.';
 			noteEffect(view.note.plainText, 'leads platform engineering');
@@ -102,7 +102,7 @@ export const noteEditingCases: readonly EvalCase[] = [
 			const workspace = await seedWorkspace(lab, personaWorkspace);
 			const noteId = workspace.noteIds.get('Background');
 			if (!noteId) throw new Error('Background note was not seeded');
-			const before = await lab.controllers.notes().get({ noteId });
+			const before = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const expectedMarkdown = noteMarkdown
 				.write(before.note.document)
 				.replace('Kubernetes', 'K8s');
@@ -128,7 +128,7 @@ export const noteEditingCases: readonly EvalCase[] = [
 				explanation: tools.explanation
 			});
 
-			const view = await lab.controllers.notes().get({ noteId });
+			const view = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const actualMarkdown = noteMarkdown.write(view.note.document);
 			const changed = actualMarkdown.includes('K8s');
 			const preserved = actualMarkdown === expectedMarkdown;
@@ -164,7 +164,7 @@ export const noteEditingCases: readonly EvalCase[] = [
 			const workspace = await seedWorkspace(lab, personaWorkspace);
 			const noteId = workspace.noteIds.get('Background');
 			if (!noteId) throw new Error('Background note was not seeded');
-			const seeded = await lab.controllers.notes().get({ noteId });
+			const seeded = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept',
@@ -187,7 +187,7 @@ export const noteEditingCases: readonly EvalCase[] = [
 					: `no edit tool was used (${called.join(', ') || 'no tools'})`
 			});
 
-			const view = await lab.controllers.notes().get({ noteId });
+			const view = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const changed = view.note.plainText !== seeded.note.plainText;
 			const facts = [
 				'Robin Aldridge',
@@ -273,7 +273,7 @@ export const noteEditingCases: readonly EvalCase[] = [
 				explanation: tools.explanation
 			});
 
-			const view = await lab.controllers.notes().get({ noteId });
+			const view = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 			const actualBody = noteMarkdown.write(view.note.document).trim();
 			const exact = actualBody === expectedBody.trim();
 			noteEffect(view.note.plainText, 'event-driven scheduler');

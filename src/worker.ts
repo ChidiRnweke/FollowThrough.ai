@@ -12,10 +12,8 @@ import {
 	optionalProperty,
 	positiveNumberFromEnvironment
 } from '$lib/server/config';
-import type { ProductionComposition } from '$lib/server/factories/production-factory';
-import type { IndexSource } from '$lib/models/knowledge-search';
-import type { ScheduledTask } from '$lib/models/maintenance';
 import { createScheduler } from '$lib/server/factories/scheduler';
+import { attachmentProcessing, embeddingBackfill } from './worker-tasks';
 import {
 	drainBeforeTelemetryShutdown,
 	shutdownTelemetry
@@ -23,93 +21,32 @@ import {
 
 const shutdownTimeoutMs = Number(process.env.WORKER_SHUTDOWN_TIMEOUT_MS ?? 30_000);
 
-/**
- * Fills in the vectors the write path deliberately skipped. The backlog spans every user; each
- * source is embedded as its owner. Failures are per source: one poisoned document must not stall
- * every other user's index, and a failed source stays pending without monopolizing the next tick.
- */
-const embeddingBackfill = (composition: ProductionComposition): ScheduledTask => {
-	const settings = {
-		intervalMs: 10 * 60 * 1000,
-		maxSourcesPerTick: 200,
-		...optionalProperty('intervalMs', positiveNumberFromEnvironment('EMBEDDING_SWEEP_INTERVAL_MS')),
-		...optionalProperty(
-			'maxSourcesPerTick',
-			positiveNumberFromEnvironment('EMBEDDING_SWEEP_MAX_SOURCES')
-		)
-	};
-	return {
-		name: 'embedding-backfill',
-		intervalMs: settings.intervalMs,
-		async run() {
-			const backlog = composition.system().controllers.embeddingBacklog();
-			const pending = await backlog.next(settings.maxSourcesPerTick);
-			if (!pending.length) return;
-			let embedded = 0;
-			let failed = 0;
-			for (const entry of pending) {
-				try {
-					embedded += await composition
-						.forActor({ userId: entry.userId })
-						.controllers.knowledgeIndexing()
-						.backfill(entry.source);
-					// audit-allow: silent-catch — the batch counts and reports this failed source while leaving it pending for retry.
-				} catch (error) {
-					failed += 1;
-					console.error(
-						`[embedding-backfill] ${entry.source.kind} ${sourceId(entry.source)} failed:`,
-						error
-					);
-				} finally {
-					await backlog.advance(entry.cursor);
-				}
-			}
-			console.log(
-				`[embedding-backfill] embedded ${embedded} chunk(s) across ${pending.length - failed} source(s)` +
-					(failed ? `, ${failed} failed` : '')
-			);
-		}
-	};
-};
-
-/** Extracts queued and interrupted attachment versions, each as the user it belongs to. */
-const attachmentProcessing = (composition: ProductionComposition): ScheduledTask => ({
-	name: 'attachment-processing',
-	intervalMs: 1000,
-	async run() {
-		const pending = await composition.system().controllers.attachmentBacklog().pendingVersions();
-		for (const item of pending) {
-			const result = await composition
-				.forActor({ userId: item.userId })
-				.controllers.attachmentProcessing()
-				.process(item.versionId);
-			if (result.kind === 'failure') console.error('Attachment processing failed', result.message);
-		}
-	}
+const embeddingSettings = () => ({
+	intervalMs: 10 * 60 * 1000,
+	maxSourcesPerTick: 200,
+	...optionalProperty('intervalMs', positiveNumberFromEnvironment('EMBEDDING_SWEEP_INTERVAL_MS')),
+	...optionalProperty(
+		'maxSourcesPerTick',
+		positiveNumberFromEnvironment('EMBEDDING_SWEEP_MAX_SOURCES')
+	)
 });
-
-const sourceId = (source: IndexSource): string => {
-	switch (source.kind) {
-		case 'note':
-			return source.noteId;
-		case 'diagram':
-			return source.diagramId;
-		case 'widget':
-			return source.widgetId;
-		case 'memory':
-			return source.memoryEntryId;
-		case 'attachment':
-			return source.attachmentId;
-	}
-};
 
 const main = async (): Promise<void> => {
 	await hydrateEnvironment();
 	const composition = createProductionComposition();
 	const tasks = [
 		...composition.system().tasks,
-		embeddingBackfill(composition),
-		attachmentProcessing(composition)
+		embeddingBackfill(
+			{
+				backlog: () => composition.system().controllers.embeddingBacklog(),
+				indexingFor: (actor) => composition.forActor(actor).controllers.knowledgeIndexing()
+			},
+			embeddingSettings()
+		),
+		attachmentProcessing({
+			backlog: () => composition.system().controllers.attachmentBacklog(),
+			processingFor: (actor) => composition.forActor(actor).controllers.attachmentProcessing()
+		})
 	];
 
 	const scheduler = createScheduler(tasks, { runOnStart: true });

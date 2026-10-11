@@ -5,7 +5,6 @@ import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { Attachments, type AttachmentsDependencies } from './controller';
 describe('attachment search removal', () => {

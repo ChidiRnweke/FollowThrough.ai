@@ -1,6 +1,5 @@
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { AgentRun, AgentRunId, RunApprovalWrite } from '$lib/models/agent';
-import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';
 

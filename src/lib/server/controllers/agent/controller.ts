@@ -335,9 +335,9 @@ export interface AgentHarnessDependencies {
 	/** False until the deployment configures a model provider key. */
 	readonly agentAvailable: boolean;
 	/** Every tool an in-app run may call; the harness decides which it offers and how. */
-	readonly tools: (actor: ActorContext, context: AgentToolContext) => readonly AgentTool[];
+	readonly tools: (context: AgentToolContext) => readonly AgentTool[];
 	/** Every tool an MCP client may call. */
-	readonly mcpTools: (actor: ActorContext, context: McpToolContext) => readonly AgentTool[];
+	readonly mcpTools: (context: McpToolContext) => readonly AgentTool[];
 	/** Turns a run's tools and the harness's policy into the tools the SDK calls. */
 	readonly toolset: (tools: readonly AgentTool[], policy: AgentToolPolicy) => AgentToolset;
 	readonly toolPreferences: Pick<ToolPreferenceCapability, 'view'>;
@@ -900,15 +900,13 @@ export class AgentSdkHarness implements AgentHarness {
 		try {
 			const run = await this.prepare(runId);
 			if (!run) return 'cancelled';
-			const actor: ActorContext = { userId: run.userId };
 			const request = run.inputSnapshot;
 			const decisions = await this.dependencies.decisions.loadUnconsumed(run.id);
 			const completed = async (call: AgentToolCompletion, _output: AgentPayload) => {
 				if (call.classification !== 'mutation') return;
-				await this.persistEvent(run, actor, { type: 'resources_stale', resources: ['workspace'] });
+				await this.persistEvent(run, { type: 'resources_stale', resources: ['workspace'] });
 			};
 			for await (const update of this.turnUpdates({
-				actor,
 				run,
 				request,
 				imageInput: this.dependencies.imagePreparation.prepare(request),
@@ -931,7 +929,7 @@ export class AgentSdkHarness implements AgentHarness {
 					return 'cancelled';
 				}
 				if (update.type === 'event') {
-					await this.persistEvent(run, actor, update.event);
+					await this.persistEvent(run, update.event);
 					continue;
 				}
 				if (update.type === 'approval_checkpoint') {
@@ -972,7 +970,6 @@ export class AgentSdkHarness implements AgentHarness {
 				}
 				const settled = await this.complete(
 					run,
-					actor,
 					update.sessionItems,
 					decisions.map((decision) => decision.callId)
 				);
@@ -995,7 +992,7 @@ export class AgentSdkHarness implements AgentHarness {
 	}
 
 	async openMcpTools(scope: ApiTokenScope, provenanceId: ProvenanceId): Promise<McpToolSession> {
-		const tools = this.dependencies.mcpTools(this.actor, { provenanceId });
+		const tools = this.dependencies.mcpTools({ provenanceId });
 		const disabled = await this.disabledTools();
 		const permitted = this.permittedTools(tools, disabled, scope === 'read' ? ['read'] : undefined);
 		const plan = this.toolPlan(permitted, []);
@@ -1016,7 +1013,6 @@ export class AgentSdkHarness implements AgentHarness {
 
 	/** One model turn of a run: its events as they stream, then a checkpoint or completion. */
 	private async *turnUpdates(input: {
-		readonly actor: ActorContext;
 		readonly run: ResolvedAgentRun;
 		readonly request: RunAgentInput;
 		readonly imageInput: AgentRunImages;
@@ -1026,7 +1022,7 @@ export class AgentSdkHarness implements AgentHarness {
 		readonly signal: AbortSignal;
 		readonly completed: AgentToolPolicy['completed'];
 	}): AsyncIterable<AgentExecutionUpdate> {
-		const { actor, run, request, imageInput, webSearch, context, decisions = [], signal } = input;
+		const { run, request, imageInput, webSearch, context, decisions = [], signal } = input;
 		signal.throwIfAborted();
 		if (!this.dependencies.agentAvailable)
 			throw new AgentProviderFailure(
@@ -1038,7 +1034,7 @@ export class AgentSdkHarness implements AgentHarness {
 		const preparationSignal = AbortSignal.any([signal, preparation.signal]);
 		let turn: AgentProviderTurn | undefined;
 		try {
-			const tools = this.dependencies.tools(actor, {
+			const tools = this.dependencies.tools({
 				provenanceId: run.provenanceId as ProvenanceId,
 				input: request,
 				model: run.model
@@ -1180,7 +1176,7 @@ export class AgentSdkHarness implements AgentHarness {
 					input: request.prompt ?? '',
 					sessionId: run.conversationId,
 					model: run.model,
-					userId: actor.userId,
+					userId: this.actor.userId,
 					runId: run.id,
 					...(run.traceparent ? { parentTraceparent: run.traceparent } : {}),
 					onRoot: (value: string) => {
@@ -1334,7 +1330,6 @@ export class AgentSdkHarness implements AgentHarness {
 		const transitioned = await this.dependencies.preparation.claim(runId, now());
 		if (!transitioned) return undefined;
 		let run = transitioned;
-		const actor: ActorContext = { userId: run.userId };
 
 		if (!run.provenanceId) {
 			const provenance = await this.dependencies.provenance.record({
@@ -1492,7 +1487,6 @@ export class AgentSdkHarness implements AgentHarness {
 	 */
 	private async abandonPendingCalls(run: AgentRun, failure: string): Promise<void> {
 		if (run.pendingDecisions.length === 0) return;
-		const actor: ActorContext = { userId: run.userId };
 		for (const pending of run.pendingDecisions)
 			await this.dependencies.conversationMessages.recordToolActivity(
 				run.conversationId,
@@ -1508,11 +1502,7 @@ export class AgentSdkHarness implements AgentHarness {
 		await this.dependencies.decisions.clearPending(run.id);
 	}
 
-	private async persistEvent(
-		run: AgentRun,
-		actor: ActorContext,
-		event: AgentEvent
-	): Promise<AgentRunEventRecord> {
+	private async persistEvent(run: AgentRun, event: AgentEvent): Promise<AgentRunEventRecord> {
 		const record = await this.dependencies.transactionRunner.run(async () => {
 			const record = await this.dependencies.events.append(run.id, 1, event);
 			const activity = this.dependencies.toolActivity.activity(event);
@@ -1532,7 +1522,6 @@ export class AgentSdkHarness implements AgentHarness {
 
 	private async complete(
 		run: AgentRun,
-		actor: ActorContext,
 		sessionItems: readonly PersistedSessionItem[],
 		decisionCallIds: readonly string[] = []
 	): Promise<boolean> {

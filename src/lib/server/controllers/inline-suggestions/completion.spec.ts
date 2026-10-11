@@ -2,13 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { InlineSuggestionRequest } from '$lib/models/agent';
 import { inlineSuggestionFixture } from '$lib/testing/inline-suggestions/fixtures/context';
 import { InMemoryOperationObserver } from '$lib/testing/telemetry/fakes/in-memory-operation-observer';
-import {
-	noteBuilder,
-	testActor,
-	testNoteId
-} from '$lib/testing/workspace/fixtures/domain-builders';
+import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
-const actor = testActor();
 const request: InlineSuggestionRequest = {
 	requestId: '00000000-0000-4000-8000-000000000001',
 	noteId: testNoteId(),

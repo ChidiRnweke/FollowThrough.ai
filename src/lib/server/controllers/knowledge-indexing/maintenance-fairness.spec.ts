@@ -1,11 +1,8 @@
-import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
-import { InMemoryMaintenanceProgress } from '$lib/testing/maintenance/fakes/in-memory-maintenance-progress';
 import { expect, it } from 'vitest';
-import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
+import { inMemoryEmbeddingSweep } from '$lib/testing/knowledge-search/fixtures/embedding-sweep';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = async () => {
@@ -23,12 +20,10 @@ const setup = async () => {
 			})
 		]);
 	}
-	const worker = new EmbeddingMaintenance(
-		createTestContentIndex(repository, client.model, undefined, false, client),
-		new InMemoryTransactionRunner([repository]),
-		new InMemoryMaintenanceProgress(),
-		{ maxSourcesPerTick: 2, logger: { error: () => {}, log: () => {} } }
-	);
+	const worker = inMemoryEmbeddingSweep(repository, client, {
+		maxSourcesPerTick: 2,
+		logger: { error: () => {}, log: () => {} }
+	});
 	return { repository, client, worker };
 };
 

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { DeterministicPromiseExtractor } from './promise-rules';
 const rules = new DeterministicPromiseExtractor();
 const selection = (text: string): TextSelection => ({

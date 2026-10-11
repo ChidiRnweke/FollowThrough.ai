@@ -1,13 +1,11 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { retrievalTransport } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { z } from 'zod';
-import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
+import { KnowledgeIndexing } from '$lib/server/controllers/knowledge-indexing/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { InMemoryMaintenanceProgress } from '$lib/testing/maintenance/fakes/in-memory-maintenance-progress';
 import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { context, replaceNoteFixture, seedNote } from '../database-harness';
 
@@ -37,11 +35,13 @@ const embedAll: Embed = async (inputs) => ({ model, vectors: inputs.map(() => ve
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const repository = new KnowledgeIndexRecords(testActor(), database);
-	const committed = new KnowledgeIndexRecords(testActor(), context.db);
+	const repository = new KnowledgeIndexRecords(seeded.owner, database);
+	const committed = new KnowledgeIndexRecords(seeded.owner, context.db);
 	onTestFinished(() => committed.deleteForNote(seeded.note.id));
-	const index = createTestContentIndex(repository, model, undefined, true);
-	const inline = createTestContentIndex(repository, model, undefined, false, provider(embedAll));
+	const contentIndex = (defer: boolean, embed: Embed) =>
+		createTestContentIndex(repository, model, undefined, defer, provider(embed));
+	const index = contentIndex(true, embedAll);
+	const inline = contentIndex(false, embedAll);
 	const note = await replaceNoteFixture({ ...seeded.note, plainText: 'original searchable text' });
 	await transactionRunner.run(() => inline.indexNote(note));
 	const save = async (text: string, revision: number) => {
@@ -64,20 +64,14 @@ const setup = async (suffix: string) => {
 		(await committed.searchByEmbedding(vector, 10, seeded.project.id)).map(
 			(match) => match.document.content
 		);
-	const maintenance = (embed: Embed) =>
-		new EmbeddingMaintenance(
-			createTestContentIndex(repository, model, undefined, false, provider(embed)),
-			transactionRunner,
-			new InMemoryMaintenanceProgress(),
-			{
-				logger: {
-					log: () => {},
-					error: (message, error) => {
-						throw new Error(String(message), { cause: error });
-					}
-				}
-			}
-		);
+	/** The worker's backfill of this note, embedded as its owner. */
+	const maintenance = (embed: Embed) => ({
+		run: () =>
+			new KnowledgeIndexing(contentIndex(false, embed), transactionRunner).backfill({
+				kind: 'note',
+				noteId: seeded.note.id
+			})
+	});
 	return {
 		database,
 		...seeded,

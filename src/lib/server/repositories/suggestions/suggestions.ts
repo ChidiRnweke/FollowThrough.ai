@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
 import type {

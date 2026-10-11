@@ -5,7 +5,6 @@ import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/expo
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
-	testActor,
 	testConversationId,
 	testProjectId,
 	testProvenanceId
@@ -21,7 +20,6 @@ describe('agent export settings', () => {
 		const tools = createAgentToolSurface(
 			testTokenizer,
 			factory,
-			testActor(),
 			'auto_accept',
 			{
 				provenanceId: testProvenanceId(),

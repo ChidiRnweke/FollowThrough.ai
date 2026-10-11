@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
@@ -24,7 +23,7 @@ const setup = async (suffix: string) => {
 		plainText: 'Release guidance'
 	});
 	const target = await new ProjectRecords(seeded.owner, context.db).insert({ name: 'Launch' });
-	const records = new SkillRecords(testActor(), context.db);
+	const records = new SkillRecords(seeded.owner, context.db);
 	await records.insert({
 		note,
 		slug: `skill-${suffix}`,
@@ -40,7 +39,7 @@ const setup = async (suffix: string) => {
 it('keeps project skill pins separate from note pins and from other project catalogs', async () => {
 	const { owner, note, target, records } = await setup('20001');
 	const tx = createTransactionContext(context.db);
-	const controller = skillController(tx.database, tx.transactionRunner);
+	const controller = skillController(owner, tx.database, tx.transactionRunner);
 	const pin = { noteId: note.id, projectId: target.id, pinned: true };
 	await controller.setPinned(pin);
 	await controller.setPinned(pin);
@@ -84,7 +83,7 @@ it.each([
 	try {
 		await ready.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const writing = skillController(tx.database, tx.transactionRunner)
+		const writing = skillController(owner, tx.database, tx.transactionRunner)
 			.setPinned({ noteId: note.id, projectId: target.id, pinned: true })
 			.then(
 				() => ({ kind: 'success' as const }),
@@ -115,10 +114,11 @@ it.each([
 it('preserves a project pin while concurrent built-in provisioning waits', async () => {
 	const owner = await seedUser('20004');
 	const tx = createTransactionContext(context.db);
-	await skillController(tx.database, tx.transactionRunner).list();
+	await skillController(owner, tx.database, tx.transactionRunner).list();
 	const note = (await new NoteRecords(owner, context.db).findByBuiltInKey('followthrough'))!;
 	const target = await new ProjectRecords(owner, context.db).insert({ name: 'Launch' });
 	const result = await competingSkillWrites(
+		owner,
 		(skills) => skills.setPinned({ noteId: note.id, projectId: target.id, pinned: true }),
 		(skills) => skills.list()
 	);
@@ -160,7 +160,7 @@ it('allows note indexing to finish while a pin holds project locks and waits for
 	try {
 		await ready.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const writing = skillController(write.database, write.transactionRunner)
+		const writing = skillController(owner, write.database, write.transactionRunner)
 			.setPinned({ noteId: note.id, projectId: target.id, pinned: true })
 			.then(
 				() => ({ kind: 'success' as const }),

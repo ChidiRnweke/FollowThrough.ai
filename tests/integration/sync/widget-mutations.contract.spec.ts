@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { widgetTemplates, type WidgetId } from '$lib/models/widgets';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -17,21 +16,21 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability(testActor(), { db: database });
-	const widgets = createWidgetsCapability(testActor(), {
+	const sync = createSyncCapability(seeded.owner, { db: database });
+	const widgets = createWidgetsCapability(seeded.owner, {
 		db: database,
-		projects: new ProjectRecords(testActor(), database),
-		notes: new NoteRecords(testActor(), database)
+		projects: new ProjectRecords(seeded.owner, database),
+		notes: new NoteRecords(seeded.owner, database)
 	});
 	// Deferred, as production is: chunks land without vectors and the worker embeds them (ADR 0021).
 	const index = createContentIndex(
-		new KnowledgeIndexRecords(testActor(), database),
+		new KnowledgeIndexRecords(seeded.owner, database),
 		'contract',
 		undefined,
 		true
 	);
 	const controller = new Widgets(
-		testActor(),
+		seeded.owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<WidgetsDependencies>({
 			...agentToolResultsFixture(),
@@ -78,13 +77,13 @@ const tick = (index: number) => ({
 
 describe('guarded widget mutations', () => {
 	it('publish a created widget as a workspace record', async () => {
-		const { owner, sync, create } = await setup('7711');
+		const { sync, create } = await setup('7711');
 		const { id } = await create();
 		const read = await sync.objects.read({ type: 'widgets', id: [id] }, null);
 		expect(read.kind === 'found' && read.snapshot.value.type).toBe('widgets');
 	});
 	it('apply a data edit and save it with the next data revision', async () => {
-		const { owner, controller, create } = await setup('7712');
+		const { controller, create } = await setup('7712');
 		const { id, etag } = await create();
 		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
@@ -97,7 +96,7 @@ describe('guarded widget mutations', () => {
 		}).toEqual({ kind: 'applied', rows: [{ done: true, data_revision: 2 }] });
 	});
 	it('report a conflict and keep the competing edit when the base is stale', async () => {
-		const { owner, controller, create } = await setup('7713');
+		const { controller, create } = await setup('7713');
 		const { id, etag } = await create();
 		await context.client`update widgets set title = 'Other client' where id = ${id}`;
 		const result = await controller.synchronize({
@@ -111,7 +110,7 @@ describe('guarded widget mutations', () => {
 		}).toEqual({ kind: 'conflict', rows: [{ title: 'Other client', data_revision: 1 }] });
 	});
 	it('apply a change replayed onto a remote edit of another item', async () => {
-		const { owner, controller, sync, create } = await setup('7715');
+		const { controller, sync, create } = await setup('7715');
 		const { id, etag } = await create();
 		await controller.synchronize({
 			operationId: crypto.randomUUID(),
@@ -133,7 +132,7 @@ describe('guarded widget mutations', () => {
 		}).toEqual({ kind: 'applied', rows: [{ done: 'true,true,false', data_revision: 3 }] });
 	});
 	it('reject a layout the catalog does not allow, leaving the widget unchanged', async () => {
-		const { owner, controller, create } = await setup('7714');
+		const { controller, create } = await setup('7714');
 		const { id, etag } = await create();
 		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
@@ -150,7 +149,7 @@ describe('guarded widget mutations', () => {
 		expect(result.kind).toBe('rejected');
 	});
 	it('save formulas with the layout, and reject one that reads itself in a circle', async () => {
-		const { owner, controller, create } = await setup('7719');
+		const { controller, create } = await setup('7719');
 		const { id, etag } = await create();
 		const formulas = (derived: Record<string, string>) =>
 			controller.synchronize({
@@ -175,7 +174,7 @@ describe('guarded widget mutations', () => {
 		});
 	});
 	it('move a widget to the trash and delete it only from there', async () => {
-		const { owner, controller, sync, create } = await setup('7716');
+		const { controller, sync, create } = await setup('7716');
 		const { id, etag } = await create();
 		const early = await controller.synchronize({
 			operationId: crypto.randomUUID(),
@@ -201,7 +200,7 @@ describe('guarded widget mutations', () => {
 		}).toEqual({ early: 'rejected', deleted: 'applied', rows: [] });
 	});
 	it('restore a widget from the trash with its data intact', async () => {
-		const { owner, controller, create } = await setup('7717');
+		const { controller, create } = await setup('7717');
 		const { id } = await create();
 		await controller.archive({ widgetId: id });
 		await controller.restore({ widgetId: id });
@@ -210,7 +209,7 @@ describe('guarded widget mutations', () => {
 		).toEqual([{ active: true, items: 3 }]);
 	});
 	it('index the words a widget shows, and drop them when it moves to the trash', async () => {
-		const { owner, controller, create } = await setup('7718');
+		const { controller, create } = await setup('7718');
 		const { id } = await create();
 		const indexed =
 			await context.client`select source_title, content from search_chunks where widget_id = ${id}`;

@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type { CanvasSessionResult, DiagramId } from '$lib/models/diagrams';
 

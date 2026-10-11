@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -32,11 +31,11 @@ const setup = async (suffix: string) => {
 	const first = await seedNote(suffix);
 	const second = await seedNote(`${suffix}1`, first.owner);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { services: catalog, markdown } = createNotesCapability(testActor(), {
+	const { services: catalog, markdown } = createNotesCapability(first.owner, {
 		db: database,
-		projects: new ProjectRecords(testActor(), database)
+		projects: new ProjectRecords(first.owner, database)
 	});
-	const search = new KnowledgeIndexRecords(testActor(), database);
+	const search = new KnowledgeIndexRecords(first.owner, database);
 	const index = createContentIndex(
 		search,
 		new InMemoryRetrievalProvider().model,
@@ -52,10 +51,10 @@ const setup = async (suffix: string) => {
 		)
 	);
 	for (const note of original) await index.indexNote(note);
-	const effects = new InMemoryNoteContent(testActor());
+	const effects = new InMemoryNoteContent(first.owner);
 	const faults = { secondIndex: false };
 	const controller = new Notes(
-		testActor(),
+		first.owner,
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -82,7 +81,7 @@ const setup = async (suffix: string) => {
 			anchorRepairer: effects,
 			noteLinkReconciler: effects,
 			noteIndexer: {
-				indexNote: async (actor, note) => {
+				indexNote: async (note) => {
 					const result = await index.indexNote(note);
 					if (faults.secondIndex && note.id === second.note.id)
 						throw new Error('Second index write failed');
@@ -110,14 +109,14 @@ const setup = async (suffix: string) => {
 
 describe('atomic server text replacement', () => {
 	it('retains both note bodies and indexes when the second write fails', async () => {
-		const { controller, owner, faults, input, read } = await setup('9791');
+		const { controller, faults, input, read } = await setup('9791');
 		const before = await read();
 		faults.secondIndex = true;
 		await controller.replaceText(input).catch(() => undefined);
 		expect(await read()).toEqual(before);
 	});
 	it('retries a failed batch without leaving a double revision on the first note', async () => {
-		const { controller, owner, faults, input, read } = await setup('9792');
+		const { controller, faults, input, read } = await setup('9792');
 		faults.secondIndex = true;
 		await controller.replaceText(input).catch(() => undefined);
 		faults.secondIndex = false;

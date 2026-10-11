@@ -24,6 +24,7 @@ const seedSkill = async (suffix: string) => {
 it('preserves independent metadata edits after waiting for the current skill', async () => {
 	const { owner, note } = await seedSkill('19701');
 	const result = await competingSkillWrites(
+		owner,
 		async (skills) => {
 			await skills.update({ noteId: note.id, description: 'Peer description' });
 		},
@@ -44,6 +45,7 @@ it('preserves independent metadata edits after waiting for the current skill', a
 it('returns the current renamed note after a competing metadata edit waits', async () => {
 	const { owner, note } = await seedSkill('19702');
 	const result = await competingSkillWrites(
+		owner,
 		async (skills) => {
 			await skills.update({ noteId: note.id, displayName: 'Renamed skill' });
 		},
@@ -68,6 +70,7 @@ it('preserves concurrent metadata when restoring an immutable skill version', as
 		createdAt: now
 	});
 	const result = await competingSkillWrites(
+		owner,
 		async (skills) => {
 			await skills.update({ noteId: note.id, isEnabled: false });
 		},
@@ -84,6 +87,7 @@ it('preserves concurrent metadata when restoring an immutable skill version', as
 it('rejects a stale document base after a concurrent skill edit commits', async () => {
 	const { owner, note } = await seedSkill('19704');
 	const result = await competingSkillWrites(
+		owner,
 		async (skills) => {
 			await skills.update({
 				noteId: note.id,
@@ -103,9 +107,10 @@ it('preserves a disabled built-in while concurrent provisioning waits', async ()
 	const owner = await seedUser('19705');
 	// First provisioning uses the real controller transaction; subsequent calls share the same identity.
 	const initial = createTransactionContext(context.db);
-	await skillController(initial.database, initial.transactionRunner).list();
+	await skillController(owner, initial.database, initial.transactionRunner).list();
 	const note = (await new NoteRecords(owner, context.db).findByBuiltInKey('followthrough'))!;
 	const result = await competingSkillWrites(
+		owner,
 		async (skills) => {
 			await skills.update({ noteId: note.id, isEnabled: false });
 		},

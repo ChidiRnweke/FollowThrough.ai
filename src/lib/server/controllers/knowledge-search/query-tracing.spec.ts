@@ -6,7 +6,7 @@ import { operationObserver } from '$lib/server/infrastructure/telemetry/tracing'
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { searchControllerFixture } from '$lib/testing/knowledge-search/fixtures/controller';
 import { searchHistory } from '$lib/testing/knowledge-search/fixtures/query-generation';
-import { testActor, testConversationId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testConversationId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const exporter = new InMemorySpanExporter();
 const sdk = new NodeSDK({

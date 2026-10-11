@@ -1,6 +1,5 @@
 import type { WidgetId } from '$lib/models/widgets';
 import type { IndexSource, PendingIndexSource, EmbeddedChunk } from '$lib/models/knowledge-search';
-import type { ActorContext } from '$lib/models/identity';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { MemoryEntryId } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';

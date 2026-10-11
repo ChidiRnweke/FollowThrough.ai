@@ -5,7 +5,6 @@ import {
 	promiseExtractionFixture,
 	promiseSelection
 } from '$lib/testing/todos/fixtures/promise-extraction';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const prepare = async (
 	generation: SelectionGeneration = { kind: 'model', model: 'test/model' }
@@ -73,7 +72,7 @@ it('resolves tomorrow against the stored request date after queued recovery', as
 
 it('resumes a queued request without its original in-memory callback', async () => {
 	const state = await prepare();
-	await state.controller.recoverQueuedPromiseRuns();
+	await state.controller.resumeQueuedPromiseRun(state.receipt.runId);
 	await vi.waitFor(() => {
 		if (state.runs.runs[0]?.status !== 'completed') throw new Error('Run has not completed');
 	});

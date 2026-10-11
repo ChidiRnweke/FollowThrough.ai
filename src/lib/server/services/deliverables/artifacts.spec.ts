@@ -3,8 +3,7 @@ import { ArtifactSettingsService } from './artifacts';
 import { defaultExportSettings, type ExportSettings } from '$lib/models/deliverables';
 import { InMemoryExportSettingsRepository } from '$lib/testing/deliverables/fakes/in-memory-export-settings-repository';
 import { testActor, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
-const setup = () =>
-	new ArtifactSettingsService(testActor(), new InMemoryExportSettingsRepository(testActor()));
+const setup = () => new ArtifactSettingsService(new InMemoryExportSettingsRepository(testActor()));
 const settings = (overrides: Partial<ExportSettings> = {}): ExportSettings => ({
 	...defaultExportSettings,
 	...overrides

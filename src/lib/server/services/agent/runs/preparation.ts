@@ -7,7 +7,6 @@ import type {
 	PreparedAgentRun,
 	ResolvedAgentRun
 } from '$lib/models/agent';
-import type { ActorContext } from '$lib/models/identity';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';

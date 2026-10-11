@@ -7,7 +7,6 @@ import type { ProjectPlacement } from '$lib/services/projects/placement';
 import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
-import type { ActorContext } from '$lib/models/identity';
 import type { Note, NoteId } from '$lib/models/notes';
 import type {
 	ArchiveProjectInput,

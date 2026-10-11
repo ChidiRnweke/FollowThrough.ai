@@ -29,6 +29,7 @@ const toolsFor = (hasProject: boolean) => {
 	return createAgentToolSurface(
 		testTokenizer,
 		new ProductionControllerFactory(
+			testActor(),
 			capabilityDependencies<ProductionControllerDependencies>({
 				notes: capabilityDependencies<ProductionControllerDependencies['notes']>({
 					...agentToolResultsFixture(),
@@ -48,7 +49,6 @@ const toolsFor = (hasProject: boolean) => {
 				})
 			})
 		),
-		testActor(),
 		'auto_accept',
 		{
 			provenanceId: testProvenanceId(),

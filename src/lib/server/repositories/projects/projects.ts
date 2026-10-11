@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { CreateProjectInput, Project, ProjectId, ProjectRename } from '$lib/models/projects';
 import type { Note, NoteId } from '$lib/models/notes';
 

@@ -224,7 +224,6 @@ export interface AttachmentLifecycle {
 }
 export class AttachmentLifecycleService implements AttachmentLifecycle {
 	constructor(
-		private readonly actor: ActorContext,
 		private readonly attachments: AttachmentRepository,
 		private readonly notes: NoteRepository
 	) {}

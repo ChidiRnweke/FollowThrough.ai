@@ -132,7 +132,7 @@ describe('Todo edit invariants', () => {
 
 	it('does not reveal another user’s todo during update', async () => {
 		const { todos, controller } = setup();
-		todos.todos = [todoBuilder()];
+		todos.todos = [todoBuilder({ userId: testActor(2).userId })];
 		await expect(
 			controller.update({ todoId: testTodoId(), title: 'Foreign edit' })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });

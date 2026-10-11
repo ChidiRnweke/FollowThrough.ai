@@ -35,9 +35,8 @@ describe('Postgres actor-scoping matrix', () => {
 
 	it('does not reveal another actor’s user record', async () => {
 		const owner = actor('5');
-		const repository = new UserRecords(owner, context.db);
-		await repository.ensureLocal();
-		expect(await repository.findById(owner.userId)).toBeUndefined();
+		await new UserRecords(owner, context.db).ensureLocal();
+		expect(await new UserRecords(actor('6'), context.db).findCurrent()).toBeUndefined();
 	});
 
 	it('does not reveal provenance to another actor', async () => {
@@ -62,6 +61,6 @@ describe('Postgres actor-scoping matrix', () => {
 			createdAt: now
 		};
 		await repository.insert(reference);
-		expect(await repository.listForNote(note.id)).toEqual([]);
+		expect(await new ReferenceRecords(actor('31'), context.db).listForNote(note.id)).toEqual([]);
 	});
 });

@@ -1,6 +1,5 @@
 import { expect, it, vi } from 'vitest';
 import { agentSubmissionFixture } from '$lib/testing/agent/fixtures/submission';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentRunStatusService } from '$lib/services/agent/run-status';
 const runStatus = new AgentRunStatusService();
 

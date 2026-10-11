@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { type AgentRunId } from '$lib/models/agent';
@@ -51,16 +50,16 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const projects = new ProjectRecords(testActor(), database);
-	const notes = createNotesCapability(testActor(), { db: database, projects });
-	const todo = createTodosCapability(testActor(), {
+	const projects = new ProjectRecords(seeded.owner, database);
+	const notes = createNotesCapability(seeded.owner, { db: database, projects });
+	const todo = createTodosCapability(seeded.owner, {
 		db: database,
 		projects,
 		notes: notes.repository,
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
-	const suggestions = createSuggestionsCapability(testActor(), {
+	const suggestions = createSuggestionsCapability(seeded.owner, {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
@@ -78,20 +77,20 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		to: text.length,
 		text
 	};
-	const runs = new AgentRunRecords(testActor(), database);
-	const events = new AgentRunEventRecords(testActor(), database);
+	const runs = new AgentRunRecords(seeded.owner, database);
+	const events = new AgentRunEventRecords(seeded.owner, database);
 	const requests = new NoteActionRequests(
-		testActor(),
+		seeded.owner,
 		runs,
 		events,
-		new ConversationRecords(testActor(), database)
+		new ConversationRecords(seeded.owner, database)
 	);
 	const settlements = new RunSettlements(runs, events);
 	const extractor = new InMemoryPromiseExtractor();
 	extractor.candidates = [
 		{ action: 'Send it', responsibility: 'mine', strength: 'explicit', confidence: 95 }
 	];
-	const trust = new InMemoryTrustPolicyEvaluator(testActor());
+	const trust = new InMemoryTrustPolicyEvaluator();
 	trust.autoAccept = true;
 	const dependencies = capabilityDependencies<TodosDependencies>({
 		...agentToolResultsFixture(),
@@ -114,20 +113,20 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		trustPolicyEvaluator: trust
 	});
 	const agent = new AgentSdkHarness(
-		testActor(),
+		seeded.owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
-			decisions: new AgentRunDecisionRecords(testActor(), database),
+			decisions: new AgentRunDecisionRecords(seeded.owner, database),
 			settlements,
 			transactionRunner,
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
-	const controller = new Todos(testActor(), new WorkspaceCommandRulesService(), dependencies);
+	const controller = new Todos(seeded.owner, new WorkspaceCommandRulesService(), dependencies);
 	const input = { requestId: crypto.randomUUID(), selection };
 	const prepare = () =>
 		transactionRunner.run(() =>
@@ -260,10 +259,10 @@ it('reconstructs a queued extraction after the submitting controller has been di
 	const state = await setup('12504');
 	const receipt = await state.prepare();
 	await new Todos(
-		testActor(),
+		state.owner,
 		new WorkspaceCommandRulesService(),
 		state.dependencies
-	).recoverQueuedPromiseRuns();
+	).resumeQueuedPromiseRun(receipt.runId);
 	await state.finished(receipt.runId);
 	expect(
 		(await state.events.replay(receipt.runId, '0')).flatMap((record) =>

@@ -8,7 +8,7 @@ import {
 	UPLOAD_ID,
 	ATTACHMENT_ID
 } from '$lib/testing/attachments/fakes/processing';
-import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 afterEach(() => vi.unstubAllEnvs());
 describe('attachments and the note document revision', () => {
 	// `currentRevision` is the document's optimistic-concurrency token. The editor

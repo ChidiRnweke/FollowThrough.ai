@@ -19,7 +19,7 @@ describe('conditional normalized object reads', () => {
 	it('returns a normalized note and the version of that same database snapshot', async () => {
 		const { note, owner } = await seedNote('8701');
 		const identity = { type: 'notes' as const, id: [note.id] as [string] };
-		const batch = await workspacePullFixture(context.db).pullChangePage(initialSyncCursor);
+		const batch = await workspacePullFixture(owner, context.db).pullChangePage(initialSyncCursor);
 		const entry = batch.records.find((entry) => entry.key === workspaceResourceKey(identity));
 		if (entry?.resource.kind !== 'found')
 			throw new Error('Seeded note is missing from the journal');
@@ -142,7 +142,7 @@ it('normalizes PostgreSQL provenance timestamps in complete pages', async () => 
 	const runId = crypto.randomUUID();
 	await context.client`insert into provenance (id, user_id, producer_kind, producer_name, pipeline, run_id, model, created_at)
  values (${id}, ${owner.userId}, 'agent', 'FollowThrough Workbench Agent', 'agent', ${runId}, 'contract-model', '2026-09-14T10:30:45.123+02:00')`;
-	const page = await workspacePullFixture(context.db).pullChangePage(initialSyncCursor);
+	const page = await workspacePullFixture(owner, context.db).pullChangePage(initialSyncCursor);
 	expect(
 		page.records.find(
 			(entry) => entry.key === workspaceResourceKey({ type: 'provenance', id: [id] })

@@ -1,5 +1,4 @@
 import type { Note } from '$lib/models/notes';
-import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { Skill, SkillSummary, SkillUsage } from '$lib/models/skills';

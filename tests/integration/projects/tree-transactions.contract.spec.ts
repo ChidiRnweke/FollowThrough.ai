@@ -8,6 +8,7 @@ it('refuses creation into a folder after a concurrent archive commits', async ()
 	const { owner, note, project } = await seedNote('19301');
 	await replaceNoteFixture({ ...note, kind: 'folder' });
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
 			await api.notes.archive({ noteId: note.id });
 		},
@@ -20,6 +21,7 @@ it('refuses archiving a folder after concurrent child creation commits', async (
 	const { owner, note, project } = await seedNote('19302');
 	await replaceNoteFixture({ ...note, kind: 'folder' });
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
 			await api.projects.createFolder({
 				projectId: project.id,
@@ -44,6 +46,7 @@ it('refuses the second of two moves that would create a folder cycle', async () 
 		position: 1
 	});
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
 			await api.projects.move({
 				projectId: project.id,
@@ -66,6 +69,7 @@ it('refuses the second of two moves that would create a folder cycle', async () 
 it('assigns a later sibling position after concurrent creation commits', async () => {
 	const { owner, project } = await seedNote('19304');
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
 			await api.notes.create({ projectId: project.id, title: 'First new sibling' });
 		},
@@ -77,6 +81,7 @@ it('assigns a later sibling position after concurrent creation commits', async (
 it('refuses creation after a concurrent project archive commits', async () => {
 	const { owner, project } = await seedNote('19305');
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
 			await api.projects.archive({ projectId: project.id });
 		},
@@ -95,6 +100,7 @@ it('refuses moving into a folder after a concurrent archive commits', async () =
 		position: 1
 	});
 	const result = await competingTreeWrites(
+		owner,
 		async (api) => {
 			await api.notes.archive({ noteId: parent.id });
 		},

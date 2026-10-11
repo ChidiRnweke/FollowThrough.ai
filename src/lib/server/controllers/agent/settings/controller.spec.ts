@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
@@ -17,8 +18,12 @@ import { AgentSettings, type AgentSettingsDependencies } from './controller';
 const DEPLOYMENT_CHAT_MODEL = 'deepseek/deepseek-v4-flash';
 const DEPLOYMENT_VISION_MODEL = 'mistral/pixtral-large';
 const timestamp = '2026-09-23T12:00:00.000Z' as DateTime;
-const setup = () => {
-	const repository = new InMemoryAgentPreferencesRepository(testActor());
+/** Preferences stored for `testActor()`; `viewer` is the account the controller acts for. */
+const setup = (
+	viewer: ActorContext = testActor(),
+	entries?: InMemoryAgentPreferencesRepository['entries']
+) => {
+	const repository = new InMemoryAgentPreferencesRepository(viewer, entries);
 	repository.entries.set(testActor().userId, {
 		userId: testActor().userId,
 		executionMode: 'approval_required',
@@ -26,7 +31,7 @@ const setup = () => {
 		createdAt: testNow,
 		updatedAt: testNow
 	});
-	const preferences = new AgentPreferenceCatalog(testActor(), repository);
+	const preferences = new AgentPreferenceCatalog(viewer, repository);
 	const models = new InMemoryModelCatalog();
 	models.models = [
 		{
@@ -44,7 +49,7 @@ const setup = () => {
 		repository,
 		models,
 		controller: new AgentSettings(
-			testActor(),
+			viewer,
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentSettingsDependencies>({
 				...agentToolResultsFixture(),
@@ -155,9 +160,10 @@ describe('agent settings controller behavior', () => {
 		);
 	});
 	it('keeps another account’s preferences separate', async () => {
-		const { controller, preferences } = setup();
+		const { controller, preferences, repository } = setup();
+		const other = setup(testActor(2), repository.entries);
 		const original = await preferences.get();
-		await controller.updatePreferences({ inlineSuggestionsEnabled: false });
+		await other.controller.updatePreferences({ inlineSuggestionsEnabled: false });
 		expect(await controller.getPreferences()).toEqual(original);
 	});
 	it('includes the deployment chat model alongside provider models', async () => {

@@ -1,4 +1,4 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -68,37 +68,37 @@ const seed = async (suffix: string) => {
 	return { owner, run };
 };
 
-const approvalController = (db: typeof context.db) => {
+const approvalController = (actor: ActorContext, db: typeof context.db) => {
 	const { database, transactionRunner } = createTransactionContext(db);
-	const runs = new AgentRunRecords(testActor(), database);
-	const events = new AgentRunEventRecords(testActor(), database);
+	const runs = new AgentRunRecords(actor, database);
+	const events = new AgentRunEventRecords(actor, database);
 	const runner = new InMemoryAgentTurns();
 	const completion = Promise.withResolvers<void>();
 	runner.completion = completion.promise;
 	runner.abortable = true;
 	const controller = new AgentSdkHarness(
-		testActor(),
+		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			approvals: new RunApprovals(runs),
-			sessions: new AgentSessionRecords(testActor(), database),
+			sessions: new AgentSessionRecords(actor, database),
 			...harnessTurnDependencies(
 				runner,
 				new ConversationHistoryService(
-					new AgentSessionRecords(testActor(), database),
-					new InMemoryAgentFiles(testActor()),
+					new AgentSessionRecords(actor, database),
+					new InMemoryAgentFiles(actor),
 					testTokenizer
 				)
 			),
 			conversationMessages: new ConversationArchive(
-				testActor(),
-				new ConversationRecords(testActor(), database)
+				actor,
+				new ConversationRecords(actor, database)
 			),
 			conversationSessions: new ConversationArchive(
-				testActor(),
-				new ConversationRecords(testActor(), database)
+				actor,
+				new ConversationRecords(actor, database)
 			),
 			events,
 			transactionRunner,
@@ -107,7 +107,7 @@ const approvalController = (db: typeof context.db) => {
 			checkpoints: new RunCheckpoints(runs),
 			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			settlements: new RunSettlements(runs, events),
-			decisions: new AgentRunDecisionRecords(testActor(), database),
+			decisions: new AgentRunDecisionRecords(actor, database),
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
@@ -118,7 +118,7 @@ it('does not append another requeue after a concurrent approval already queued t
 	const { owner, run } = await seed('17201');
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
-	const { controller, completion } = approvalController(writer.db);
+	const { controller, completion } = approvalController(owner, writer.db);
 	const locked = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
 	const queuing = blocker.begin(async (transaction) => {
@@ -169,7 +169,7 @@ it('rejects an approval after concurrent cancellation without recording a decisi
 	const { owner, run } = await seed('17202');
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
-	const { controller, completion } = approvalController(writer.db);
+	const { controller, completion } = approvalController(owner, writer.db);
 	const locked = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
 	const cancelling = blocker.begin(async (transaction) => {

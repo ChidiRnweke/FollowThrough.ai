@@ -20,7 +20,6 @@ import type { AgentEvent, AgentExecutionMode, PendingAgentDecision } from '$lib/
 import { parseProviderStreamEvent } from '$lib/server/infrastructure/agents/provider-events';
 import {
 	noteBuilder,
-	testActor,
 	testConversationId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -40,7 +39,6 @@ const scenario = (
 		createAgentToolSurface(
 			testTokenizer,
 			fixture.factory,
-			testActor(),
 			mode,
 			{
 				provenanceId: testProvenanceId(),

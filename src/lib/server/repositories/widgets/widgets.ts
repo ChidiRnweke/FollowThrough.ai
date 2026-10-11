@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { Widget, WidgetId } from '$lib/models/widgets';
 

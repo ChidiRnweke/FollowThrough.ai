@@ -79,13 +79,13 @@ const setup = async (suffix: string) => {
 		records,
 		controller,
 		transactionRunner,
-		workspace: workspacePullFixture(database)
+		workspace: workspacePullFixture(owner, database)
 	};
 };
 
 describe('Skill display name authority', () => {
 	it('renames the note through a legacy display-name command', async () => {
-		const { owner, note, controller, records } = await setup('12201');
+		const { note, controller, records } = await setup('12201');
 		await controller.update({ noteId: note.id, displayName: 'Ship checklist' });
 		expect((await records.findByNoteId(note.id))?.note.title).toBe('Ship checklist');
 	});

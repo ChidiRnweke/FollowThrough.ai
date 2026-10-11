@@ -8,7 +8,7 @@ import { skillController } from './edit-harness';
 it('round-trips imported instructions and portable metadata through persisted skill detail', async () => {
 	const { owner, project } = await seedNote('21301');
 	const tx = createTransactionContext(context.db);
-	const controller = skillController(tx.database, tx.transactionRunner);
+	const controller = skillController(owner, tx.database, tx.transactionRunner);
 	const created = await controller.create({ name: 'Original title', projectId: project.id });
 	await controller.update({ noteId: created.skill.note.id, isEnabled: false });
 	const manifest = readSkillManifest(

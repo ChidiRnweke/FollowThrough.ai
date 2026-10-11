@@ -62,7 +62,9 @@ it.each(['cancelling', 'cancelled'] as const)(
 );
 
 it('does not expose another actor’s chat run', async () => {
-	const { run, preparation } = await setup();
+	const { run, runs, preparation } = await setup();
+	// The same run, as another account owns it.
+	runs.runs = runs.runs.map((stored) => ({ ...stored, userId: testActor(2).userId }));
 	await expect(preparation.getForWrite(run.id)).rejects.toThrow('not found');
 });
 

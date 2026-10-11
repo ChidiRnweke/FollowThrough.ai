@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
@@ -19,17 +18,17 @@ import { treeControllers } from '../project-tree-harness';
 const archivedLink = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const records = new TodoRecords(testActor(), database);
+	const records = new TodoRecords(seeded.owner, database);
 	const catalog = createTodoServices(
-		testActor(),
+		seeded.owner,
 		records,
-		new ProjectRecords(testActor(), database),
-		new SourceAnchorRecords(testActor(), database),
-		new NoteRecords(testActor(), database),
-		new ProvenanceRecords(testActor(), database)
+		new ProjectRecords(seeded.owner, database),
+		new SourceAnchorRecords(seeded.owner, database),
+		new NoteRecords(seeded.owner, database),
+		new ProvenanceRecords(seeded.owner, database)
 	);
 	const controller = new Todos(
-		testActor(),
+		seeded.owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
 			...agentToolResultsFixture(),
@@ -49,14 +48,14 @@ const archivedLink = async (suffix: string) => {
 		responsibility: 'mine'
 	});
 	await controller.update({ todoId: todo.id, linkedNoteId: seeded.note.id });
-	await treeControllers(database, transactionRunner).notes.archive({
+	await treeControllers(seeded.owner, database, transactionRunner).notes.archive({
 		noteId: seeded.note.id
 	});
 	return { ...seeded, controller, records, todo };
 };
 
 it('persists completion after the linked note is archived through its controller', async () => {
-	const { owner, note, controller, records, todo } = await archivedLink('20901');
+	const { note, controller, records, todo } = await archivedLink('20901');
 	await controller.update({
 		todoId: todo.id,
 		status: 'done',
@@ -71,7 +70,7 @@ it('persists completion after the linked note is archived through its controller
 });
 
 it('refuses an explicit archived-link assignment before saving other requested edits', async () => {
-	const { owner, note, controller, records, todo } = await archivedLink('20903');
+	const { note, controller, records, todo } = await archivedLink('20903');
 	const outcome = await controller
 		.update({ todoId: todo.id, linkedNoteId: note.id, title: 'Must not persist' })
 		.then(
@@ -87,7 +86,7 @@ it('refuses an explicit archived-link assignment before saving other requested e
 });
 
 it('allows the user to clear an archived note link', async () => {
-	const { owner, controller, records, todo } = await archivedLink('20904');
+	const { controller, records, todo } = await archivedLink('20904');
 	await controller.update({ todoId: todo.id, linkedNoteId: null });
 	expect((await records.findById(todo.id))?.linkedNoteId).toBeUndefined();
 });

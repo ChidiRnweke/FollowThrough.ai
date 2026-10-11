@@ -1,6 +1,5 @@
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 import { diagramSuggestionFixture as setup } from '$lib/testing/suggestions/fixtures/diagram-application';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 
 describe('Diagram suggestion application', () => {

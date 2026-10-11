@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { AgentRun, AgentRunId, AgentRunStatus, RunCancellationWrite } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';

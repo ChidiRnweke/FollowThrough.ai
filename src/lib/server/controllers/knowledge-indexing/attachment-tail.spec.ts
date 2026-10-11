@@ -1,14 +1,12 @@
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { InMemoryMaintenanceProgress } from '$lib/testing/maintenance/fakes/in-memory-maintenance-progress';
 import { describe, expect, it } from 'vitest';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 const tokenizer = testTokenizer;
-import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
+import { inMemoryEmbeddingSweep } from '$lib/testing/knowledge-search/fixtures/embedding-sweep';
 import { retrievalTransport } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { view } from '$lib/testing/attachments/fakes/processing';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 const text =
 	Array.from(
@@ -41,19 +39,7 @@ describe('complete attachment search', () => {
 			beyondOldLimit: document.chunkIndex >= 50,
 			path: document.attachmentPath
 		}));
-		await new EmbeddingMaintenance(
-			createContentIndex(repository, client.model, undefined, false, client),
-			new InMemoryTransactionRunner([repository]),
-			new InMemoryMaintenanceProgress(),
-			{
-				logger: {
-					log: () => {},
-					error: (message) => {
-						throw new Error(message);
-					}
-				}
-			}
-		).run();
+		await inMemoryEmbeddingSweep(repository, client).run();
 		const tail = repository.documents.find(({ document }) =>
 			document.content.includes('amberfalcon')
 		);

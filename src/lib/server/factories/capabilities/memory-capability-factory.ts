@@ -44,7 +44,7 @@ export const createMemoryServices = (
 	projects: ProjectRepository,
 	provenance: ProvenanceRepository
 ): MemoryCapability => {
-	const reading = new MemoryReadingService(actor, entries, projects);
+	const reading = new MemoryReadingService(entries, projects);
 	const writing = new MemoryWritingService(actor, entries, projects);
 	return {
 		editing: new MemoryEditingService(),
@@ -53,7 +53,7 @@ export const createMemoryServices = (
 		lister: reading,
 		creator: writing,
 		editor: writing,
-		deleter: new MemoryLifecycleService(actor, entries, projects),
+		deleter: new MemoryLifecycleService(entries, projects),
 		changes: new MemoryProposalService(actor, entries, projects, provenance)
 	};
 };

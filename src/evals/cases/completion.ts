@@ -73,7 +73,7 @@ export const completionRegressionCases: readonly EvalCase[] = [
 			for (let index = 1; index <= 6; index += 1) {
 				const noteId = workspace.noteIds.get(`Backlog ${index}`);
 				if (!noteId) continue;
-				const view = await lab.controllers.notes().get({ noteId });
+				const view = await lab.forActor(workspace.actor).controllers.notes().get({ noteId });
 				if (
 					view.note.plainText.toLowerCase().includes('outcome') &&
 					view.note.plainText.includes(
@@ -135,7 +135,7 @@ export const completionRegressionCases: readonly EvalCase[] = [
 					findCall(turn2, 'create_todo')?.arguments ?? findCall(turn2, 'create_todos')?.arguments
 			});
 
-			const after = await lab.controllers.todos().count({ projectId });
+			const after = await lab.forActor(workspace.actor).controllers.todos().count({ projectId });
 			px.logAnnotation({
 				name: ARCHETYPES.reworkAvoidance,
 				score: after === 2 ? 1 : 0,

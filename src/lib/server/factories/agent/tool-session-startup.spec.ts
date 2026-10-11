@@ -8,7 +8,6 @@ import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	noteBuilder,
-	testActor,
 	testConversationId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -24,7 +23,6 @@ const setup = () => {
 		createAgentToolSurface(
 			testTokenizer,
 			factory,
-			testActor(),
 			'approval_required',
 			{
 				provenanceId: testProvenanceId(),

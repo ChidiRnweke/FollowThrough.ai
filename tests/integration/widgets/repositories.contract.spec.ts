@@ -34,7 +34,7 @@ describe('widget records', () => {
 		const records = new WidgetRecords(owner, context.db);
 		const widget = checklist(owner, project.id);
 		await records.insert(widget);
-		expect(await records.findById(widget.id)).toBeUndefined();
+		expect(await new WidgetRecords(actor('7799'), context.db).findById(widget.id)).toBeUndefined();
 	});
 	it('refuse a write computed from an older revision', async () => {
 		const { owner, project } = await seedNote('7703');

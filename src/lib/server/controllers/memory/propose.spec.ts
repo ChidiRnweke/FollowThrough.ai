@@ -56,8 +56,8 @@ const setup = () => {
 		}
 	];
 	const suggestions = new InMemorySuggestions(testActor());
-	const effects = new InMemorySuggestionEffects(testActor());
-	const trust = new InMemoryTrustPolicyEvaluator(testActor());
+	const effects = new InMemorySuggestionEffects();
+	const trust = new InMemoryTrustPolicyEvaluator();
 	projects.projects = [projectBuilder()];
 	const search = new InMemorySearchRepository(testActor());
 	const indexEmbeddings = new InMemoryRetrievalProvider();

@@ -254,9 +254,9 @@ export const createAgentCapability = (
 		sessions,
 		harnessRecords: {
 			runs: new AgentRunService(runs),
-			events: new AgentRunEventService(actor, runEvents),
-			decisions: new AgentRunDecisionService(actor, runDecisions),
-			sessions: new AgentSessionService(actor, sessions)
+			events: new AgentRunEventService(runEvents),
+			decisions: new AgentRunDecisionService(runDecisions),
+			sessions: new AgentSessionService(sessions)
 		},
 		context,
 		turns: new AgentTurnService(

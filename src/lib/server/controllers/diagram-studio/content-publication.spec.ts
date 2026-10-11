@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { diagramEtag, type DiagramWriteOutcome } from '$lib/models/diagrams';
 import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
@@ -32,10 +33,10 @@ import { noteBuilder, testActor, testNow } from '$lib/testing/workspace/fixtures
 import { expect, it } from 'vitest';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 
-const setup = () => {
-	const notes = new InMemoryNoteContent(testActor());
+const setup = (viewer: ActorContext = testActor()) => {
+	const notes = new InMemoryNoteContent(viewer);
 	notes.notes = [noteBuilder({ title: 'Deployment decisions' })];
-	const diagrams = new InMemoryDiagramRepository(testActor());
+	const diagrams = new InMemoryDiagramRepository(viewer);
 	const original = drawioBuilder({
 		source: VALID_DRAWIO_XML.replace('API &amp; worker', 'Before'),
 		searchableText: 'Before',
@@ -43,18 +44,18 @@ const setup = () => {
 	});
 	diagrams.diagrams = [original];
 	const library = createDiagramServices(
-		testActor(),
+		viewer,
 		diagrams,
-		new InMemoryNoteRepository(testActor()),
-		new InMemoryAnchorRepository(testActor()),
-		new InMemoryProvenanceRepository(testActor()),
-		new InMemoryProjectRepository(testActor())
+		new InMemoryNoteRepository(viewer),
+		new InMemoryAnchorRepository(viewer),
+		new InMemoryProvenanceRepository(viewer),
+		new InMemoryProjectRepository(viewer)
 	);
-	const search = new InMemorySearchRepository(testActor());
+	const search = new InMemorySearchRepository(viewer);
 	const embeddings = new InMemoryRetrievalProvider();
 	const index = createContentIndex(search, undefined, undefined, false, embeddings);
 	const controller = new DiagramStudio(
-		testActor(),
+		viewer,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
 			...agentToolResultsFixture(),
@@ -170,7 +171,7 @@ it('rolls back publication when the source-note context is missing', async () =>
 });
 
 it('rejects another actor’s publication', async () => {
-	const { controller, input } = setup();
+	const { controller, input } = setup(testActor(2));
 	await expect(controller.publishProjectDiagram(input)).rejects.toMatchObject({
 		code: 'NOT_FOUND'
 	});

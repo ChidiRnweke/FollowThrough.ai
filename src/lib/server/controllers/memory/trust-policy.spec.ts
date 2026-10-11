@@ -98,9 +98,15 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 		provenance,
 		new InMemoryAnchorRepository(actor)
 	);
-	const trust = new ToolTrust(actor, new InMemoryTrustPolicyRepository(actor));
-	if (scenario.policy) await trust.upsert(scenario.policy.input);
-	const effects = new InMemorySuggestionEffects(actor);
+	const policies = new InMemoryTrustPolicyRepository(actor);
+	const trust = new ToolTrust(actor, policies);
+	if (scenario.policy) {
+		// The scenario's account writes its policy; the policy table is shared by every account.
+		const written = new InMemoryTrustPolicyRepository(scenario.policy.actor);
+		await new ToolTrust(scenario.policy.actor, written).upsert(scenario.policy.input);
+		policies.policies = written.policies;
+	}
+	const effects = new InMemorySuggestionEffects();
 	const search = new InMemorySearchRepository(actor);
 	const embeddings = new InMemoryRetrievalProvider();
 	const index = createContentIndex(search, undefined, undefined, false, embeddings);

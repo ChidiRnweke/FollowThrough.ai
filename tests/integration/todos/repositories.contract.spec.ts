@@ -19,7 +19,7 @@ describe('Postgres todo repository invariants', () => {
 			updatedAt: now
 		};
 		await repository.insert(todo);
-		expect(await repository.findById(todo.id)).toBeUndefined();
+		expect(await new TodoRecords(actor('22'), context.db).findById(todo.id)).toBeUndefined();
 	});
 	it('does not list another actor’s todos', async () => {
 		const { owner, project } = await seedNote('63');
@@ -27,7 +27,7 @@ describe('Postgres todo repository invariants', () => {
 		await repository.insert(
 			todoBuilder({ id: testTodoId(6301), userId: owner.userId, projectId: project.id })
 		);
-		expect(await repository.list({})).toEqual([]);
+		expect(await new TodoRecords(actor('64'), context.db).list({})).toEqual([]);
 	});
 	it('lists only todos in the selected project', async () => {
 		const { owner, project } = await seedNote('61');
@@ -151,7 +151,7 @@ describe('Postgres todo repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		expect(await repository.listCategories()).toEqual([]);
+		expect(await new TodoRecords(actor('58'), context.db).listCategories()).toEqual([]);
 	});
 	it('sets a category then clears it when the next update omits it', async () => {
 		const { owner, project } = await seedNote('59');

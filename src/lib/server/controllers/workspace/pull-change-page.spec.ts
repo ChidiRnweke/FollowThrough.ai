@@ -83,7 +83,7 @@ it('rejects the whole page when a selected body has a different version', async 
 });
 
 it('rejects the whole page when a selected body is unavailable', async () => {
-	const { actor, journal, workspace, since } = setup();
+	const { journal, workspace, since } = setup();
 	journal.publish({
 		kind: 'upsert',
 		identity: { type: 'notes', id: [testNoteId()] },
@@ -95,7 +95,7 @@ it('rejects the whole page when a selected body is unavailable', async () => {
 });
 
 it('returns an empty terminal page at the account head', async () => {
-	const { actor, workspace, since } = setup();
+	const { workspace, since } = setup();
 	expect(await workspace.pullChangePage(since)).toEqual({
 		cursor: since,
 		hasMore: false,
@@ -104,7 +104,7 @@ it('returns an empty terminal page at the account head', async () => {
 });
 
 it('keeps every resource across the page checkpoint and terminal head', async () => {
-	const { actor, journal, workspace, since } = setup();
+	const { journal, workspace, since } = setup();
 	for (let i = 0; i < 129; i++)
 		journal.publish({
 			kind: 'delete',

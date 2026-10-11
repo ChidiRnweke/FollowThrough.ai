@@ -31,7 +31,7 @@ const setup = async (suffix: string) => {
 };
 
 it('marks an older malformed task date unreadable without losing a valid neighboring proposal', async () => {
-	const { owner, proposal, repository } = await setup('21801');
+	const { proposal, repository } = await setup('21801');
 	const valid = await repository.insert({
 		...proposal,
 		id: crypto.randomUUID() as SuggestionId
@@ -57,7 +57,7 @@ it('marks an older malformed task date unreadable without losing a valid neighbo
 });
 
 it('refuses a malformed stored task date on the read used for acceptance', async () => {
-	const { owner, proposal, repository } = await setup('21802');
+	const { proposal, repository } = await setup('21802');
 	await context.db
 		.update(suggestions)
 		.set({
@@ -68,7 +68,7 @@ it('refuses a malformed stored task date on the read used for acceptance', async
 });
 
 it('round-trips a valid leap-day task proposal', async () => {
-	const { owner, proposal, repository } = await setup('21803');
+	const { proposal, repository } = await setup('21803');
 	expect((await repository.findById(proposal.id))?.payload).toMatchObject({
 		dueDate: '2028-02-29'
 	});

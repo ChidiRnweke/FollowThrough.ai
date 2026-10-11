@@ -108,13 +108,13 @@ flowchart TB
 
 7. **Delivery boundary: `src/lib/remote/<cap>/` or a route**
 
-   Delivery code delegates to controllers; it contains no logic of its own. The remote-function boundary validates input with zod, resolves the actor, and calls the controller: see `src/lib/remote/skills/skills.remote.ts:11`:
+   Delivery code delegates to controllers; it contains no logic of its own. The remote-function boundary validates input with zod, builds the controller factory for the request's actor, and calls the controller. No controller method takes the actor; the factory binds it into everything it constructs (ADR 0007). See `src/lib/remote/skills/skills.remote.ts`:
 
    ```ts
    export const toggleSkill = command(z.object({ noteId, enabled: z.boolean() }), async (input) => {
-   	await AppFactory.controllers()
+   	await AppFactory.forActor(requestActor())
    		.skills()
-   		.update(requestActor(), {
+   		.update({
    			noteId: input.noteId as NoteId,
    			isEnabled: input.enabled
    		});
@@ -122,7 +122,7 @@ flowchart TB
    });
    ```
 
-   Server load functions and form actions in `src/routes/` follow the same rule: resolve the actor, call the controller, render the result.
+   Server load functions and form actions in `src/routes/` follow the same rule: build the factory for the actor, call the controller, render the result.
 
 8. **Document the public surface**
 

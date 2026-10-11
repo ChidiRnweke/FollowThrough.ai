@@ -131,7 +131,7 @@ it('archives a folder whose contents are all archived', async () => {
 });
 it('does not expose another user’s note through archive', async () => {
 	const { notes, controller } = setup();
-	notes.notes = [noteBuilder()];
+	notes.notes = [noteBuilder({ userId: testActor(2).userId })];
 	await expect(controller.archive({ noteId: testNoteId() })).rejects.toMatchObject({
 		code: 'NOT_FOUND'
 	});

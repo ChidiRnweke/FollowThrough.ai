@@ -1,15 +1,5 @@
-import type { AgentRunId, AgentRunStatus, NoteActionRunContext } from '$lib/models/agent';
-import type { ActorContext } from '$lib/models/identity';
+import type { InterruptedRun, NoteActionRunContext, OwnedRun } from '$lib/models/agent';
 import type { AgentRunBacklogRepository } from '$lib/server/repositories/agent';
-
-/** A run that recovery acts on, with the user it acts for. */
-export interface OwnedRun {
-	readonly owner: ActorContext;
-	readonly runId: AgentRunId;
-}
-export interface InterruptedRun extends OwnedRun {
-	readonly status: AgentRunStatus;
-}
 
 /** The runs a restarted process must settle or resume, across every user. */
 export interface RunBacklog {

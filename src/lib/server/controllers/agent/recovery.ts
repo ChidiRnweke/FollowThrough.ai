@@ -1,5 +1,6 @@
 import type { NoteActionRunContext } from '$lib/models/agent';
-import type { InterruptedRun, OwnedRun, RunBacklog } from '$lib/server/services/agent/runs/backlog';
+import type { InterruptedRun, OwnedRun } from '$lib/models/agent';
+import type { RunBacklog } from '$lib/server/services/agent/runs/backlog';
 
 /**
  * The runs a restarted process must settle or resume. Recovery acts for each run's owner, so

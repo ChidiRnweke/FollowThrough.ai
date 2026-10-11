@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { attachmentUploads } from '$lib/server/db/schema/attachments';
@@ -8,7 +7,10 @@ import type {
 	AttachmentVersionId
 } from '$lib/models/attachments';
 import type { DateTime } from '$lib/models/workspace';
-import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
+import {
+	AttachmentBacklogRecords,
+	AttachmentRecords
+} from '$lib/server/repositories/attachments/postgres/attachments';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import {
@@ -21,7 +23,7 @@ import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string, noteOwned = true) => {
 	const seed = await seedNote(suffix);
-	const records = new AttachmentRecords(testActor(), context.db);
+	const records = new AttachmentRecords(seed.owner, context.db);
 	const createdAt = new Date().toISOString() as DateTime;
 	const uploadInput = {
 		id: crypto.randomUUID() as AttachmentUploadId,
@@ -54,21 +56,21 @@ const setup = async (suffix: string, noteOwned = true) => {
 	const archive = () => new ProjectRecords(seed.owner, context.db).archive(seed.project.id);
 	const reader = new AttachmentReadingService(records);
 	const uploads = new AttachmentUploadService(
-		testActor(),
+		seed.owner,
 		records,
-		new NoteRecords(testActor(), context.db)
+		new NoteRecords(seed.owner, context.db)
 	);
 	return { ...seed, records, reader, uploads, attachment, pendingUpload, archive };
 };
 
 it('hides note attachment lists after the owning project is archived', async () => {
-	const { owner, note, records, archive } = await setup('34001');
+	const { note, records, archive } = await setup('34001');
 	await archive();
 	expect(await records.list(note.id)).toEqual([]);
 });
 
 it('blocks attachment list, download, and path reads after project archival', async () => {
-	const { owner, project, note, records, reader, attachment, archive } = await setup('34002');
+	const { project, note, records, reader, attachment, archive } = await setup('34002');
 	await archive();
 	expect(await records.listForProject(project.id)).toEqual([]);
 	expect(await records.findByPath(note.id, 'document.txt')).toBeUndefined();
@@ -76,7 +78,7 @@ it('blocks attachment list, download, and path reads after project archival', as
 });
 
 it('rejects new upload reservations in archived projects', async () => {
-	const { owner, records, pendingUpload, archive } = await setup('34005');
+	const { records, pendingUpload, archive } = await setup('34005');
 	await archive();
 	await expect(
 		records.createUpload({ ...pendingUpload, id: crypto.randomUUID() as AttachmentUploadId })
@@ -84,7 +86,7 @@ it('rejects new upload reservations in archived projects', async () => {
 });
 
 it('refuses upload completion after its project is archived', async () => {
-	const { owner, uploads, pendingUpload, archive } = await setup('34006');
+	const { uploads, pendingUpload, archive } = await setup('34006');
 	await archive();
 	await expect(uploads.pending(pendingUpload.id)).rejects.toThrow(
 		'Attachment upload was not found'
@@ -92,21 +94,23 @@ it('refuses upload completion after its project is archived', async () => {
 });
 
 it('does not discover hidden project versions for background processing', async () => {
-	const { records, attachment, archive } = await setup('34007');
+	const { attachment, archive } = await setup('34007');
 	await archive();
 	expect(
-		(await records.listPendingVersions()).some((row) => row.versionId === attachment.version.id)
+		(await new AttachmentBacklogRecords(context.db).listPendingVersions()).some(
+			(row) => row.versionId === attachment.version.id
+		)
 	).toBe(false);
 });
 
 it('refuses to claim a hidden project version already selected for processing', async () => {
-	const { owner, records, attachment, archive } = await setup('34008');
+	const { records, attachment, archive } = await setup('34008');
 	await archive();
 	expect(await records.findVersionForUpdate(attachment.version.id)).toBeUndefined();
 });
 
 it('keeps an active owned attachment readable and downloadable', async () => {
-	const { owner, note, records, attachment, reader } = await setup('34009');
+	const { note, records, attachment, reader } = await setup('34009');
 	expect({
 		attachments: (await records.list(note.id)).map((view) => view.attachment.id),
 		object: (await reader.get(attachment.attachment.id)).version.objectKey
@@ -127,7 +131,7 @@ it('hides task attachment lists after project archival', async () => {
 });
 
 it('still discovers expired upload reservations in archived projects', async () => {
-	const { owner, records, pendingUpload, archive } = await setup('34011');
+	const { records, pendingUpload, archive } = await setup('34011');
 	await records.deleteUpload(pendingUpload.id);
 	const expired = await records.createUpload({
 		...pendingUpload,
@@ -137,9 +141,12 @@ it('still discovers expired upload reservations in archived projects', async () 
 	await archive();
 	try {
 		expect(
-			(await records.listExpiredUploads(new Date('2000-01-02'), 100)).some(
-				({ upload }) => upload.id === expired.id
-			)
+			(
+				await new AttachmentBacklogRecords(context.db).listExpiredUploads(
+					new Date('2000-01-02'),
+					100
+				)
+			).some(({ upload }) => upload.id === expired.id)
 		).toBe(true);
 	} finally {
 		// Global maintenance tests share this database; remove this scenario's expired row.
@@ -148,7 +155,7 @@ it('still discovers expired upload reservations in archived projects', async () 
 });
 
 it('still deletes reclaimed upload reservations in archived projects', async () => {
-	const { owner, records, pendingUpload, archive } = await setup('34012');
+	const { records, pendingUpload, archive } = await setup('34012');
 	await archive();
 	await records.deleteUpload(pendingUpload.id);
 	expect(

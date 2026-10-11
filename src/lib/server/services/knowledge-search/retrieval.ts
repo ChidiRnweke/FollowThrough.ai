@@ -7,7 +7,6 @@ import type {
 	IndexingResult
 } from '$lib/models/knowledge-search';
 import { InvalidGeneratedContentError } from '$lib/errors';
-import type { ActorContext } from '$lib/models/identity';
 import type { Attachment, ContentHash } from '$lib/models/attachments';
 import type { Diagram } from '$lib/models/diagrams';
 import type { Widget } from '$lib/models/widgets';
@@ -30,7 +29,6 @@ import {
 	type KnowledgeSearchSource,
 	type RerankEndpoint,
 	type RetrievalScope,
-	type PendingIndexSource,
 	type SearchMatch
 } from '$lib/models/knowledge-search';
 import type { StoredMessage } from '$lib/models/agent';
@@ -68,7 +66,6 @@ const retrievalContentHash = async (
 
 const listFor = (
 	repository: RetrievalIndexRepository,
-	actor: ActorContext,
 	source: IndexSource
 ): Promise<readonly SearchDocument[]> => {
 	switch (source.kind) {
@@ -85,11 +82,7 @@ const listFor = (
 	}
 };
 
-const deleteFor = (
-	repository: RetrievalIndexRepository,
-	actor: ActorContext,
-	source: IndexSource
-): Promise<void> => {
+const deleteFor = (repository: RetrievalIndexRepository, source: IndexSource): Promise<void> => {
 	switch (source.kind) {
 		case 'note':
 			return repository.deleteForNote(source.noteId);
@@ -118,11 +111,10 @@ const applyIndex = async (
 	repository: RetrievalIndexRepository,
 	embeddingModel: string,
 	defer: boolean,
-	actor: ActorContext,
 	plan: IndexPlan
 ): Promise<IndexingResult> => {
 	if (plan.kind === 'remove') {
-		await deleteFor(repository, actor, plan.source);
+		await deleteFor(repository, plan.source);
 		return { kind: 'stored' };
 	}
 
@@ -132,7 +124,7 @@ const applyIndex = async (
 	const hashes = await Promise.all(
 		contents.map((content) => retrievalContentHash(content, metadata))
 	);
-	const existing = await listFor(repository, actor, source);
+	const existing = await listFor(repository, source);
 	const reusable = new Map<
 		string,
 		{ ids: SearchDocumentId[]; embedding: readonly number[] | undefined }
@@ -254,10 +246,7 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 	private readonly embeddingModel: string;
 	private readonly encoding: TokenCodec;
 	private readonly defer: boolean;
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly dependencies: KnowledgeRetrievalDependencies
-	) {
+	constructor(private readonly dependencies: KnowledgeRetrievalDependencies) {
 		const { targetTokens, overlapTokens } = dependencies.chunking;
 		if (!Number.isInteger(targetTokens) || targetTokens <= 0)
 			throw new Error('Retrieval chunk target must be a positive integer');
@@ -402,7 +391,7 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 	}
 
 	private async apply(plan: IndexPlan, defer = this.defer): Promise<void> {
-		const result = await applyIndex(this.repository, this.embeddingModel, defer, this.actor, plan);
+		const result = await applyIndex(this.repository, this.embeddingModel, defer, plan);
 		if (result.kind === 'stored') return;
 		const batch = await this.embed(result.missing.map((chunk) => chunk.input));
 		if (batch.model !== result.model || batch.vectors.length !== result.missing.length)

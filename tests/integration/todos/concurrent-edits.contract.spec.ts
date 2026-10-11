@@ -1,4 +1,4 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -17,11 +17,14 @@ import postgres from 'postgres';
 import { expect, it, vi } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
-const editor = (connection: ReturnType<typeof connectPostgresTestDatabase>) => {
+const editor = (
+	actor: ActorContext,
+	connection: ReturnType<typeof connectPostgresTestDatabase>
+) => {
 	const { database, transactionRunner } = createTransactionContext(connection.db);
-	const projects = new ProjectRecords(testActor(), database);
-	const notes = createNotesCapability(testActor(), { db: database, projects });
-	const { services: catalog } = createTodosCapability(testActor(), {
+	const projects = new ProjectRecords(actor, database);
+	const notes = createNotesCapability(actor, { db: database, projects });
+	const { services: catalog } = createTodosCapability(actor, {
 		db: database,
 		projects,
 		notes: notes.repository,
@@ -29,7 +32,7 @@ const editor = (connection: ReturnType<typeof connectPostgresTestDatabase>) => {
 		provenance: notes.provenanceRepository
 	});
 	return new Todos(
-		testActor(),
+		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
 			...agentToolResultsFixture(),
@@ -71,8 +74,8 @@ it('preserves both independent edits when two task updates wait for the same row
 		const [firstBackend] = await first.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
 		const [secondBackend] = await second.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
 		const writes = Promise.all([
-			editor(first).update({ todoId: task.id, title: 'New title' }),
-			editor(second).update({ todoId: task.id, description: 'New description' })
+			editor(owner, first).update({ todoId: task.id, title: 'New title' }),
+			editor(owner, second).update({ todoId: task.id, description: 'New description' })
 		]);
 		await vi.waitFor(async () => {
 			const waiting = await blocker<

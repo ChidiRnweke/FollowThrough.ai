@@ -1,7 +1,7 @@
 import type { HandleServerError, ServerInit } from '@sveltejs/kit';
 import { building } from '$app/env';
 import { AppFactory } from '$lib/server/factories/app-factory';
-import type { OwnedRun } from '$lib/server/services/agent/runs/backlog';
+import type { OwnedRun } from '$lib/models/agent';
 import {
 	getSessionCookie,
 	setSessionCookie,

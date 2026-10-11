@@ -1,5 +1,4 @@
 import type { WorkspaceWriteCancellation } from '$lib/models/workspace-mutations';
-import type { ActorContext } from '$lib/models/identity';
 import type { WorkspaceWriteRecovery } from '$lib/models/workspace-mutations';
 
 export interface SyncWriteRecovery {

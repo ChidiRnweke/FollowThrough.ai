@@ -21,10 +21,12 @@ const setup = (phase: Parameters<typeof agentSubmissionFixture>[0] = 'queued') =
 };
 afterEach(async () => {
 	for (const fixture of activeFixtures.splice(0)) {
-		for (const run of fixture.runs.runs) await fixture.controller.cancel(run.id);
+		// Only the fixture's own runs: a run another account owns is not this controller's to settle.
+		const owned = () => fixture.runs.runs.filter((run) => run.userId === testActor().userId);
+		for (const run of owned()) await fixture.controller.cancel(run.id);
 		fixture.release();
 		await vi.waitFor(() => {
-			if (fixture.runs.runs.some((run) => !runStatus.isTerminal(run.status)))
+			if (owned().some((run) => !runStatus.isTerminal(run.status)))
 				throw new Error('Run did not settle after fixture cleanup');
 		});
 	}
@@ -297,11 +299,15 @@ describe('resubmitting an edited question', () => {
 
 describe('durable agent lifecycle commands', () => {
 	it('does not let another actor cancel a queued run', async () => {
-		const { controller } = setup();
+		const { controller, runs } = setup();
 		const receipt = await controller.submit({
 			requestId: crypto.randomUUID(),
 			input: 'Private request'
 		});
+		// The same queued run, as another account submitted it.
+		runs.runs = runs.runs.map((run) =>
+			run.id === receipt.runId ? { ...run, userId: testActor(2).userId } : run
+		);
 		await expect(controller.cancel(receipt.runId)).rejects.toThrow('not found');
 	});
 

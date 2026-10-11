@@ -5,7 +5,10 @@ import type {
 	AttachmentVersionId
 } from '$lib/models/attachments';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
+import {
+	AttachmentBacklogRecords,
+	AttachmentRecords
+} from '$lib/server/repositories/attachments/postgres/attachments';
 import { context, now, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
@@ -48,7 +51,9 @@ it('commits every version key for cleanup when permanently removing an attachmen
 	const persisted = new AttachmentRecords(owner, context.db);
 	expect({
 		attachment: await persisted.findById(attachmentId),
-		keys: (await persisted.listPendingObjectRemovals()).filter((key) => keys.includes(key)).sort()
+		keys: (await new AttachmentBacklogRecords(context.db).listPendingObjectRemovals())
+			.filter((key) => keys.includes(key))
+			.sort()
 	}).toEqual({ attachment: undefined, keys });
 });
 
@@ -67,6 +72,8 @@ it('rolls back cleanup work with the attachment when downstream indexing fails',
 	expect({
 		result,
 		objectKey: (await persisted.findById(attachmentId))?.version.objectKey,
-		keys: (await persisted.listPendingObjectRemovals()).filter((key) => keys.includes(key))
+		keys: (await new AttachmentBacklogRecords(context.db).listPendingObjectRemovals()).filter(
+			(key) => keys.includes(key)
+		)
 	}).toEqual({ result: 'Index failed', objectKey: keys[1], keys: [] });
 });

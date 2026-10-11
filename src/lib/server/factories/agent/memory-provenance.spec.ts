@@ -64,11 +64,11 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 		provenance
 	);
 	const suggestions = new InMemorySuggestions(actor);
-	const effects = new InMemorySuggestionEffects(actor);
+	const effects = new InMemorySuggestionEffects();
 	const search = new InMemorySearchRepository(actor);
 	const embeddings = new InMemoryRetrievalProvider();
 	const index = createContentIndex(search, undefined, undefined, false, embeddings);
-	const trust = new InMemoryTrustPolicyEvaluator(actor);
+	const trust = new InMemoryTrustPolicyEvaluator();
 	trust.autoAccept = trusted;
 	const controller = new Memory(
 		actor,
@@ -92,7 +92,6 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 			? createAgentToolSurface(
 					testTokenizer,
 					factory,
-					actor,
 					'auto_accept',
 					{
 						provenanceId: origin.id,
@@ -106,7 +105,6 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 			: createMcpToolDefinitions(
 					testTokenizer,
 					factory,
-					actor,
 					{ provenanceId: origin.id },
 					{ isEnabled: () => true },
 					new InMemoryToolRetriever()

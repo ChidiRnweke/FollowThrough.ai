@@ -4,7 +4,6 @@ import { defaultExportSettings } from '$lib/models/deliverables';
 import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/export-controller';
 import {
 	noteBuilder,
-	testActor,
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';

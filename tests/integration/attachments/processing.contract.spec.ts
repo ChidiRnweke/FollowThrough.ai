@@ -14,7 +14,10 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { PostgresAttachmentClaims } from '$lib/server/repositories/attachments/postgres/claims';
-import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
+import {
+	AttachmentBacklogRecords,
+	AttachmentRecords
+} from '$lib/server/repositories/attachments/postgres/attachments';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
@@ -98,14 +101,13 @@ const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapToke
 		},
 		indexer: createContentIndex(search, new InMemoryRetrievalProvider().model, chunker),
 		transactionRunner: transaction.transactionRunner,
-		visionModel: 'test/model',
-		logger: { error: () => {} }
+		visionModel: 'test/model'
 	});
 	return { owner, records, search, view, extraction, worker, finalize, transaction };
 };
 describe('attachment processing persistence', () => {
 	it('recovers an old truncated index from saved extraction without parsing again', async () => {
-		const { owner, records, search, view, extraction, worker } = await setup('9751', {
+		const { records, search, view, extraction, worker } = await setup('9751', {
 			targetTokens: 30,
 			overlapTokens: 5
 		});
@@ -123,7 +125,7 @@ describe('attachment processing persistence', () => {
 		extraction.beforeExtract = async () => {
 			throw new Error('Parsing is unavailable');
 		};
-		await worker.run();
+		await worker.process(view.version.id);
 		const saved = await records.findById(view.attachment.id);
 		const matches = await search.search('amberfalcon', 10, view.attachment.projectId);
 		expect({
@@ -133,7 +135,7 @@ describe('attachment processing persistence', () => {
 	});
 
 	it('rescans interrupted versions and saves searchable text', async () => {
-		const { owner, records, search, view, worker, transaction } = await setup('9711');
+		const { records, search, view, worker, transaction } = await setup('9711');
 		await transaction.transactionRunner.run(() =>
 			records.updateVersion({ ...view.version, processingStatus: 'processing' })
 		);
@@ -144,7 +146,7 @@ describe('attachment processing persistence', () => {
 		}).toEqual({ status: 'ready', text: ['Extracted document'] });
 	});
 	it('does not publish older text when another upload becomes current during extraction', async () => {
-		const { owner, records, search, view, extraction, worker, finalize } = await setup('9712');
+		const { records, search, view, extraction, worker, finalize } = await setup('9712');
 		extraction.beforeExtract = async () => {
 			await finalize();
 		};
@@ -161,14 +163,14 @@ describe('attachment processing persistence', () => {
 		);
 		const latest = await finalize();
 		expect(
-			(await records.listPendingVersions())
+			(await new AttachmentBacklogRecords(context.db).listPendingVersions())
 				.filter((item) => item.userId === owner.userId)
 				.map((item) => item.versionId)
 				.sort()
 		).toEqual([view.version.id, latest.version.id].sort());
 	});
 	it('clears a previous failure when retry queues a version', async () => {
-		const { owner, records, view, transaction } = await setup('9714');
+		const { records, view, transaction } = await setup('9714');
 		await transaction.transactionRunner.run(() =>
 			records.updateVersion({
 				...view.version,
@@ -208,6 +210,6 @@ it('preserves successful empty extraction when the version is read back', async 
 });
 
 it('does not invent extracted text for a queued attachment', async () => {
-	const { owner, records, view } = await setup('21703');
+	const { records, view } = await setup('21703');
 	expect((await records.findById(view.attachment.id))?.version.extractedText).toBeUndefined();
 });

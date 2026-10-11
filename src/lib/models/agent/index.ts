@@ -230,6 +230,15 @@ export type AgentExecutionMode = 'approval_required' | 'auto_accept';
 export type AgentRunStatus =
 	'queued' | 'running' | 'awaiting_approval' | 'cancelling' | 'completed' | 'failed' | 'cancelled';
 
+/** A run that startup recovery acts on, with the account it acts for. */
+export interface OwnedRun {
+	readonly owner: { readonly userId: UserId };
+	readonly runId: AgentRunId;
+}
+export interface InterruptedRun extends OwnedRun {
+	readonly status: AgentRunStatus;
+}
+
 /**
  * Which provider fulfils the agent's web searches. Declared here rather than in
  * the server's web-research module because the settings picker renders the list

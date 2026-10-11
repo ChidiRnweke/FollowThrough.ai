@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { MemoryEntry, MemoryEntryId } from '$lib/models/memory';
 import type { ProjectId } from '$lib/models/projects';
 

@@ -7,7 +7,7 @@ import { skillController } from './edit-harness';
 it('keeps disabled skills out of automatic discovery while allowing an explicit owned load', async () => {
 	const { owner, project } = await seedNote('21901');
 	const tx = createTransactionContext(context.db);
-	const controller = skillController(tx.database, tx.transactionRunner);
+	const controller = skillController(owner, tx.database, tx.transactionRunner);
 	const { skill } = await controller.create({
 		name: 'Review',
 		projectId: project.id,

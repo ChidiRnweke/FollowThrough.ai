@@ -19,7 +19,8 @@ parts connect. ADR 0007 records the decision; the tool failure contract is in
 | Provider factory | `server/factories/agent/agent-providers.ts`      | Builds the OpenRouter model and image providers that the turn service owns.                              |
 
 The capability factory connects these parts. The harness receives the tool constructors, not the
-tools, because each run builds its tools for its own actor, provenance and request.
+tools, because each run builds its tools for its own provenance and request. The constructors take
+no actor: they wrap the controller factory of the actor the harness was built for.
 
 ## A tool is an entry point
 
@@ -91,8 +92,9 @@ retry. A failure that is not a tool failure fails the run.
 
 ## MCP
 
-An MCP request uses the same tool definitions. The route calls `openMcpTools` with the token's
-actor, scope and provenance. The harness applies the same tool preferences and limits a read-only
+An MCP request uses the same tool definitions. The route verifies the bearer token through the
+authentication controller, builds the token user's controller factory, and calls `openMcpTools`
+with the token's scope and provenance. The harness applies the same tool preferences and limits a read-only
 token to `read` tools. The MCP server factory turns the resulting `McpToolSession` into a server
 for that request. MCP has no approval park: the MCP host makes its own approval decisions, so a
 call runs as soon as the token authorizes it.

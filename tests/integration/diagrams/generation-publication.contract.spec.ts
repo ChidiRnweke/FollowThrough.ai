@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { DomainError } from '$lib/errors';
@@ -48,30 +47,31 @@ import { context, seedNote, notifications } from '../database-harness';
 
 const setup = async (suffix: string, connection: PostgresDatabaseContext = context) => {
 	const seeded = await seedNote(suffix);
+	const actor = seeded.owner;
 	const { database, transactionRunner } = createTransactionContext(connection.db);
-	const notes = createNotesCapability(testActor(), {
+	const notes = createNotesCapability(actor, {
 		db: database,
-		projects: new ProjectRecords(testActor(), database)
+		projects: new ProjectRecords(actor, database)
 	});
-	const suggestions = createSuggestionsCapability(testActor(), {
+	const suggestions = createSuggestionsCapability(actor, {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
 	const fixture = diagramGenerationFixture();
-	const records = new DiagramRecords(testActor(), database);
+	const records = new DiagramRecords(actor, database);
 	const library = createDiagramServices(
-		testActor(),
+		actor,
 		records,
 		notes.repository,
 		notes.anchors,
 		notes.provenanceRepository,
-		new ProjectRecords(testActor(), database)
+		new ProjectRecords(actor, database)
 	);
-	const diagrams = new InMemoryDiagrams(testActor());
+	const diagrams = new InMemoryDiagrams(actor);
 	const controller = new Diagrams(
-		testActor(),
+		actor,
 		capabilityDependencies<DiagramsDependencies>({
 			...agentToolResultsFixture(),
 			generationRules: new DiagramGenerationRuleService(),
@@ -85,16 +85,13 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 			generation: {
 				...fixture.generation,
 				contextNotes: notes.services.reader,
-				conversations: new ConversationArchive(
-					testActor(),
-					new ConversationRecords(testActor(), database)
-				),
+				conversations: new ConversationArchive(actor, new ConversationRecords(actor, database)),
 				conversationMessages: new ConversationArchive(
-					testActor(),
-					new ConversationRecords(testActor(), database)
+					actor,
+					new ConversationRecords(actor, database)
 				),
-				runs: new AgentRunLedger(testActor(), new AgentRunRecords(testActor(), database)),
-				runContext: new DiagramRunContext(new AgentRunRecords(testActor(), database)),
+				runs: new AgentRunLedger(actor, new AgentRunRecords(actor, database)),
+				runContext: new DiagramRunContext(new AgentRunRecords(actor, database)),
 				provenance: notes.provenance
 			},
 			transactionRunner,
@@ -102,11 +99,11 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 			suggestionCreator: suggestions.creator,
 			runSignals: new RunSignalService(
 				new AgentRunNotificationRecords(notifications),
-				new AgentRunRecords(testActor(), database)
+				new AgentRunRecords(actor, database)
 			),
 			runSettlements: new RunSettlements(
-				new AgentRunRecords(testActor(), database),
-				new AgentRunEventRecords(testActor(), database)
+				new AgentRunRecords(actor, database),
+				new AgentRunEventRecords(actor, database)
 			)
 		})
 	);
@@ -262,10 +259,10 @@ it('does not publish a direct result after cancellation settles its run', async 
 		>`select id from agent_runs where user_id = ${state.owner.userId}`;
 		if (!run) throw new Error('Direct diagram run was not created');
 		const { database, transactionRunner } = createTransactionContext(context.db);
-		const runs = new AgentRunRecords(testActor(), database);
-		const events = new AgentRunEventRecords(testActor(), database);
+		const runs = new AgentRunRecords(state.owner, database);
+		const events = new AgentRunEventRecords(state.owner, database);
 		const agent = new AgentSdkHarness(
-			testActor(),
+			state.owner,
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentHarnessDependencies>({
 				...agentRulesFixture(),
@@ -274,7 +271,7 @@ it('does not publish a direct result after cancellation settles its run', async 
 				transactionRunner,
 				cancellations: new RunCancellation(runs),
 				settlements: new RunSettlements(runs, events),
-				decisions: new AgentRunDecisionRecords(testActor(), database),
+				decisions: new AgentRunDecisionRecords(state.owner, database),
 				runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 			})
 		);

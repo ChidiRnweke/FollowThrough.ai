@@ -19,7 +19,6 @@ const setup = () => {
 
 it('replaces an archived Inbox while preserving built-in identities', async () => {
 	const { projects, notes, provisioner } = setup();
-	const owner = testActor();
 	await provisioner.ensure();
 	const previous = (await projects.listActive()).find((project) => project.role === 'inbox')!;
 	const ids = notes.notes.map((note) => note.id).sort();
@@ -38,7 +37,6 @@ it('replaces an archived Inbox while preserving built-in identities', async () =
 
 it('uses an available Inbox name without claiming another project', async () => {
 	const { projects, provisioner } = setup();
-	const owner = testActor();
 	await projects.insert({ name: 'inbox', role: 'workspace' });
 	await projects.insert({ name: 'Inbox (2)', role: 'workspace' });
 	await provisioner.ensure();

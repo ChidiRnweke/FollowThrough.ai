@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { InlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
@@ -19,19 +20,22 @@ import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content'
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
-export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDependencies> = {}) => {
-	const notes = new InMemoryNoteContent(testActor());
-	const memory = new InMemoryMemoryEntryRepository(testActor());
-	const search = new InMemorySearchRepository(testActor());
+export const inlineSuggestionFixture = (
+	overrides: Partial<InlineSuggestionsDependencies> = {},
+	viewer: ActorContext = testActor()
+) => {
+	const notes = new InMemoryNoteContent(viewer);
+	const memory = new InMemoryMemoryEntryRepository(viewer);
+	const search = new InMemorySearchRepository(viewer);
 	const provider = new InMemoryRetrievalProvider();
 	const generator = new InMemoryInlineCompletion();
 	const preferences = new AgentPreferenceCatalog(
-		testActor(),
-		new InMemoryAgentPreferencesRepository(testActor())
+		viewer,
+		new InMemoryAgentPreferencesRepository(viewer)
 	);
 	const attempts = new InMemoryInlineAttempts();
 	const controller = new InlineSuggestions(
-		testActor(),
+		viewer,
 		capabilityDependencies<InlineSuggestionsDependencies>({
 			context: new InlineContextService(testTokenizer),
 			noteReader: notes,

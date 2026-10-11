@@ -163,13 +163,13 @@ const setup = <T extends InMemoryAgentTurns | AgentTurnService>(
 			toolActivity: new ToolActivityProjection(),
 			traceContext: { activeTraceparent: () => undefined },
 			conversationMessages: capabilityDependencies<ConversationMessages>({
-				recordToolActivity: async (_actor, _conversationId, activity) => {
+				recordToolActivity: async (_conversationId, activity) => {
 					toolRows.push(activity);
 				},
-				recordAssistantText: async (_actor, _conversationId, text, _model, provenance) => {
+				recordAssistantText: async (_conversationId, text, _model, provenance) => {
 					journalled.push({ kind: 'text', text, cursor: provenance?.eventCursor });
 				},
-				recordAssistantReasoning: async (_actor, _conversationId, text, _model, provenance) => {
+				recordAssistantReasoning: async (_conversationId, text, _model, provenance) => {
 					journalled.push({ kind: 'reasoning', text, cursor: provenance?.eventCursor });
 				}
 			}),
@@ -645,7 +645,7 @@ it('journals a failed tool call and its correction through the production runner
 		models: () => new InMemoryModelProvider(model),
 		images: capabilityDependencies<Pick<OpenAI, 'chat'>>({})
 	});
-	const tools = createAgentTools(notes.factory, testActor(), {
+	const tools = createAgentTools(notes.factory, {
 		provenanceId: testProvenanceId(),
 		input: { conversationId: testConversationId, prompt: 'Do the thing' },
 		model: 'openai/test-model'

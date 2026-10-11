@@ -3,7 +3,6 @@ import type { ConversationImageInput } from '$lib/models/agent';
 import { AgentRunStatusService } from '$lib/services/agent/run-status';
 const runStatus = new AgentRunStatusService();
 import { agentSubmissionFixture } from '$lib/testing/agent/fixtures/submission';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const image: ConversationImageInput = {
 	id: '40000000-0000-4000-8000-000000018001',

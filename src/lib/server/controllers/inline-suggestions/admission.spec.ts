@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { describe, expect, it } from 'vitest';
 import type { InlineSuggestionRequest } from '$lib/models/agent';
 import { InlineAdmissionService } from '$lib/server/services/inline-suggestions/inline-admission';
@@ -24,14 +25,17 @@ const request: InlineSuggestionRequest = {
 const signal = () => new AbortController().signal;
 
 /** One completion per minute, on a clock the test moves. */
-const setup = () => {
+/** One account's inline suggestions; accounts that share `admission` share one attempt store. */
+const setup = (
+	viewer: ActorContext = testActor(),
+	admission = new InlineAdmissionService(new InMemoryInlineAttempts(), 1)
+) => {
 	const clock = { now: Date.parse('2026-07-12T08:00:00.000Z') };
-	const fixture = inlineSuggestionFixture({
-		admission: new InlineAdmissionService(new InMemoryInlineAttempts(), 1),
-		now: () => clock.now
-	});
-	fixture.notes.notes = [noteBuilder({ title: 'Migration', plainText: 'Saved note text' })];
-	return { ...fixture, clock };
+	const fixture = inlineSuggestionFixture({ admission, now: () => clock.now }, viewer);
+	fixture.notes.notes = [
+		noteBuilder({ title: 'Migration', plainText: 'Saved note text', userId: viewer.userId })
+	];
+	return { ...fixture, admission, clock };
 };
 
 describe('inline suggestion admission', () => {
@@ -54,9 +58,7 @@ describe('inline suggestion admission', () => {
 	it('keeps each user on their own budget', async () => {
 		const fixture = setup();
 		await fixture.controller.suggest(request, signal());
-		fixture.notes.notes = [
-			noteBuilder({ title: 'Migration', plainText: 'Saved note text', userId: testActor(2).userId })
-		];
-		expect((await fixture.controller.suggest(request, signal())).outcome).toBe('suggested');
+		const other = setup(testActor(2), fixture.admission);
+		expect((await other.controller.suggest(request, signal())).outcome).toBe('suggested');
 	});
 });

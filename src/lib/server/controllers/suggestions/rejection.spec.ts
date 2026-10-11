@@ -69,7 +69,7 @@ it.each(['accepted', 'rejected', 'reverted', 'expired'] as const)(
 );
 it('refuses another actor without changing the proposal', async () => {
 	const { records, controller } = setup();
-	const proposal = suggestionBuilder();
+	const proposal = suggestionBuilder({ userId: testActor(2).userId });
 	records.suggestions = [proposal];
 	const outcome = await controller.reject({ suggestionId: proposal.id }).then(
 		() => 'unexpected success',

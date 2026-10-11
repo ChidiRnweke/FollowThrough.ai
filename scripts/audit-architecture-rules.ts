@@ -42,7 +42,7 @@ const layer = (file: string): Layer => {
 	// A tool is an entry point: its factory turns controller operations into tools (ADR 0007).
 	if (/^src\/lib\/server\/factories\/agent\/tools\//.test(file)) return 'tool-factory';
 	if (
-		/^src\/(?:hooks\.server|worker)\.ts$/.test(file) ||
+		/^src\/(?:hooks\.server|worker|worker-tasks)\.ts$/.test(file) ||
 		/^src\/routes\/.*(?:\+server|\.server)\.ts$/.test(file)
 	)
 		return 'entry';

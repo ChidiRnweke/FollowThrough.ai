@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { Suggestion, SuggestionId } from '$lib/models/suggestions';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type {

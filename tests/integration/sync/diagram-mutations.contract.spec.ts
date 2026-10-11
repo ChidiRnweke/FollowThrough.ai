@@ -1,4 +1,3 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { DiagramId } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/models/diagrams';
@@ -34,12 +33,15 @@ const source =
 const setup = async (suffix: string, title: string | null = 'Architecture') => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability(testActor(), { db: database });
-	const projects = createProjectsCapability(testActor(), { db: database });
-	const notes = createNotesCapability(testActor(), { db: database, projects: projects.repository });
-	const records = new DiagramRecords(testActor(), database);
+	const sync = createSyncCapability(seeded.owner, { db: database });
+	const projects = createProjectsCapability(seeded.owner, { db: database });
+	const notes = createNotesCapability(seeded.owner, {
+		db: database,
+		projects: projects.repository
+	});
+	const records = new DiagramRecords(seeded.owner, database);
 	const library = createDiagramServices(
-		testActor(),
+		seeded.owner,
 		records,
 		notes.repository,
 		notes.anchors,
@@ -54,7 +56,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 		sourceNoteId: seeded.note.id
 	});
 	await records.insert(diagram);
-	const search = new KnowledgeIndexRecords(testActor(), database);
+	const search = new KnowledgeIndexRecords(seeded.owner, database);
 	const index = createContentIndex(
 		search,
 		new InMemoryRetrievalProvider().model,
@@ -64,7 +66,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 	await index.indexDiagram(diagram, { kind: 'note', title: seeded.note.title });
 	const faults = { afterIndex: false };
 	const controller = new DiagramStudio(
-		testActor(),
+		seeded.owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
 			...agentToolResultsFixture(),
@@ -81,7 +83,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 			now: () => new Date().toISOString() as typeof diagram.updatedAt,
 			diagramIndexer: {
 				diagramContextRequirement: (diagram) => index.diagramContextRequirement(diagram),
-				indexDiagram: async (actor, value, sourceContext) => {
+				indexDiagram: async (value, sourceContext) => {
 					const result = await index.indexDiagram(value, sourceContext);
 					if (faults.afterIndex) throw new Error('Index transaction failed');
 					return result;
@@ -100,7 +102,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 
 describe('diagram edits through the shared mutation boundary', () => {
 	it('clears the saved title when restoring an untitled publication', async () => {
-		const { owner, controller, diagram } = await setup('18401', null);
+		const { controller, diagram } = await setup('18401', null);
 		const published = await controller.publishProjectDiagram({
 			diagramId: diagram.id,
 			source,
@@ -131,7 +133,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 	});
 
 	it('rolls back a rename and its search rows when indexing fails', async () => {
-		const { owner, controller, diagram, search, faults } = await setup('18402');
+		const { controller, diagram, search, faults } = await setup('18402');
 		const before = await search.listForDiagram(diagram.id);
 		faults.afterIndex = true;
 		await controller
@@ -147,7 +149,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 		}).toEqual({ diagram, search: before });
 	});
 	it('rolls back both the draft and its staged search rows after an indexing failure', async () => {
-		const { owner, controller, diagram, search, faults } = await setup('9781');
+		const { controller, diagram, search, faults } = await setup('9781');
 		const before = await search.listForDiagram(diagram.id);
 		faults.afterIndex = true;
 		await controller
@@ -163,7 +165,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 		}).toEqual({ diagram, search: before });
 	});
 	it('rolls back a trash move and the removed search rows after an indexing failure', async () => {
-		const { owner, controller, diagram, search, faults } = await setup('9782');
+		const { controller, diagram, search, faults } = await setup('9782');
 		const before = await search.listForDiagram(diagram.id);
 		faults.afterIndex = true;
 		await controller.archiveProjectDiagram({ diagramId: diagram.id }).catch(() => undefined);
@@ -173,7 +175,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 		}).toEqual({ diagram, search: before });
 	});
 	it('retains a trashed diagram and its absent search rows when restoration fails', async () => {
-		const { owner, controller, diagram, search, faults } = await setup('9783');
+		const { controller, diagram, search, faults } = await setup('9783');
 		const archived = await controller.archiveProjectDiagram({ diagramId: diagram.id });
 		faults.afterIndex = true;
 		await controller.restoreProjectDiagram({ diagramId: diagram.id }).catch(() => undefined);
@@ -183,7 +185,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 		}).toEqual({ diagram: archived, search: [] });
 	});
 	it('acknowledges the normalized draft and does not apply a replay twice', async () => {
-		const { owner, controller, diagram, baseEtag } = await setup('9361');
+		const { controller, diagram, baseEtag } = await setup('9361');
 		const input = {
 			operationId: crypto.randomUUID(),
 			baseEtag,
@@ -199,7 +201,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 		}).toEqual({ sameReceipt: true, revision: 2, labels: 'Offline edit' });
 	});
 	it('retains another client edit when the device submits an older diagram version', async () => {
-		const { owner, controller, diagram, baseEtag } = await setup('9362');
+		const { controller, diagram, baseEtag } = await setup('9362');
 		await context.client`update diagrams set title = 'Other client' where id = ${diagram.id}`;
 		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
@@ -212,7 +214,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 		}).toEqual({ kind: 'conflict', title: 'Other client' });
 	});
 	it('records publication once when the response is lost', async () => {
-		const { owner, controller, diagram, baseEtag } = await setup('9363');
+		const { controller, diagram, baseEtag } = await setup('9363');
 		const input = {
 			operationId: crypto.randomUUID(),
 			baseEtag,
@@ -230,7 +232,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 		).toEqual([{ revision: 2 }]);
 	});
 	it('returns an authoritative tombstone after a guarded permanent deletion', async () => {
-		const { owner, controller, diagram, sync } = await setup('9364');
+		const { controller, diagram, sync } = await setup('9364');
 		await controller.archiveProjectDiagram({ diagramId: diagram.id });
 		const base = await sync.objects.read({ type: 'diagrams', id: [diagram.id] }, null);
 		if (base.kind !== 'found') throw new Error('Expected the trashed diagram');

@@ -9,7 +9,6 @@ import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/expo
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import {
 	noteBuilder,
-	testActor,
 	testNoteId,
 	testNow,
 	testProjectId,

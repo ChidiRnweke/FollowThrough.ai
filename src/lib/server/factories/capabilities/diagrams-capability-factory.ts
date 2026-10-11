@@ -203,7 +203,7 @@ export function createDiagramServices(
 	projects: ProjectRepository
 ): DiagramServices {
 	const reader = new DiagramReadingService(diagrams, notes);
-	const revisions = new DiagramRevisionService(actor, diagrams);
+	const revisions = new DiagramRevisionService(diagrams);
 	return {
 		finder: reader,
 		lister: reader,
@@ -212,6 +212,6 @@ export function createDiagramServices(
 		writer: new DiagramWritingService(actor, diagrams, notes, anchors, provenance, projects),
 		draftWriter: revisions,
 		revisionReader: revisions,
-		lifecycle: new DiagramLifecycleService(actor, diagrams)
+		lifecycle: new DiagramLifecycleService(diagrams)
 	};
 }

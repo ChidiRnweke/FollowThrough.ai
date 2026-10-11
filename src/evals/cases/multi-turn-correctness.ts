@@ -48,7 +48,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			const workspace = await seedWorkspace(lab, disambiguationWorkspace);
 			const projectId = workspace.projectIds.get('Backend')!;
 			const expectedNoteId = workspace.noteIds.get('API documentation|Backend')!;
-			const before = await lab.controllers.notes().get({
+			const before = await lab.forActor(workspace.actor).controllers.notes().get({
 				noteId: expectedNoteId
 			});
 
@@ -73,7 +73,7 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			const call = findCall(turn2, 'edit_note') ?? findCall(turn2, 'save_note');
 			const targetedId = targetedNoteId(call);
 			const gotCorrect = targetedId === expectedNoteId;
-			const after = await lab.controllers.notes().get({
+			const after = await lab.forActor(workspace.actor).controllers.notes().get({
 				noteId: expectedNoteId
 			});
 			const persisted =
@@ -131,10 +131,10 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			const mobileProjectId = workspace.projectIds.get('Mobile')!;
 			const backendNoteId = workspace.noteIds.get('API documentation|Backend')!;
 			const mobileNoteId = workspace.noteIds.get('API documentation|Mobile')!;
-			const backendBefore = await lab.controllers.notes().get({
+			const backendBefore = await lab.forActor(workspace.actor).controllers.notes().get({
 				noteId: backendNoteId
 			});
-			const mobileBefore = await lab.controllers.notes().get({
+			const mobileBefore = await lab.forActor(workspace.actor).controllers.notes().get({
 				noteId: mobileNoteId
 			});
 
@@ -170,10 +170,10 @@ export const multiTurnCorrectnessCases: readonly EvalCase[] = [
 			const targetedId = targetedNoteId(call);
 			const gotCorrect = targetedId === backendNoteId;
 			const gotWrong = targetedId === mobileNoteId;
-			const backendAfter = await lab.controllers.notes().get({
+			const backendAfter = await lab.forActor(workspace.actor).controllers.notes().get({
 				noteId: backendNoteId
 			});
-			const mobileAfter = await lab.controllers.notes().get({
+			const mobileAfter = await lab.forActor(workspace.actor).controllers.notes().get({
 				noteId: mobileNoteId
 			});
 			const intendedPersisted =

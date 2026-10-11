@@ -1,4 +1,4 @@
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext } from '$lib/models/identity';
 import { describe, expect, it } from 'vitest';
 import type { NoteId } from '$lib/models/notes';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -9,18 +9,21 @@ import { RelationshipRecords } from '$lib/server/repositories/relationships/post
 import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
 import { context, seedNote } from '../database-harness';
 
-const graphFor = (connection: ReturnType<typeof connectPostgresTestDatabase>) => {
+const graphFor = (
+	actor: ActorContext,
+	connection: ReturnType<typeof connectPostgresTestDatabase>
+) => {
 	const { database, transactionRunner } = createTransactionContext(connection.db);
-	const records = new RelationshipRecords(testActor(), database);
+	const records = new RelationshipRecords(actor, database);
 	return {
 		transactionRunner,
 		records,
 		graph: createRelationshipServices(
-			testActor(),
+			actor,
 			records,
-			new NoteRecords(testActor(), database),
-			new SourceAnchorRecords(testActor(), database),
-			new ProvenanceRecords(testActor(), database)
+			new NoteRecords(actor, database),
+			new SourceAnchorRecords(actor, database),
+			new ProvenanceRecords(actor, database)
 		)
 	};
 };
@@ -44,8 +47,8 @@ describe('Stored relationship decisions', () => {
 		const first = connectPostgresTestDatabase(context.url);
 		const second = connectPostgresTestDatabase(context.url);
 		try {
-			const left = graphFor(first);
-			const right = graphFor(second);
+			const left = graphFor(owner, first);
+			const right = graphFor(owner, second);
 			const changes = await Promise.all([
 				left.transactionRunner.run(() => left.graph.creator.createWithChange(input)),
 				right.transactionRunner.run(() => right.graph.creator.createWithChange(input))
@@ -63,7 +66,7 @@ describe('Stored relationship decisions', () => {
 	});
 	it('clears an explanation without replacing the original relationship identity', async () => {
 		const { owner, input } = await setup('16002');
-		const { graph, transactionRunner, records } = graphFor(context);
+		const { graph, transactionRunner, records } = graphFor(owner, context);
 		const original = await transactionRunner.run(() =>
 			graph.creator
 				.createWithChange({ ...input, justification: 'Original' })

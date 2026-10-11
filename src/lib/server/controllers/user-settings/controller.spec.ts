@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { describe, expect, it } from 'vitest';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -5,10 +6,13 @@ import { UserSettings, type UserSettingsDependencies } from './controller';
 import { InMemoryUserPreferencesRepository } from '$lib/testing/identity/fakes/in-memory-user-preferences';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
-const setup = () => {
-	const preferences = new InMemoryUserPreferencesRepository(testActor());
+const setup = (
+	viewer: ActorContext = testActor(),
+	table?: InMemoryUserPreferencesRepository['byUser']
+) => {
+	const preferences = new InMemoryUserPreferencesRepository(viewer, table);
 	const controller = new UserSettings(
-		testActor(),
+		viewer,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<UserSettingsDependencies>({ preferences })
 	);
@@ -31,9 +35,10 @@ describe('User document preferences', () => {
 	});
 
 	it('keeps users’ preferences apart', async () => {
-		const { controller } = setup();
-		await controller.updatePreferences({ sectionNumberingDefault: true });
-		const preferences = await controller.getPreferences();
-		expect(preferences.sectionNumberingDefault).toBeUndefined();
+		const { controller, preferences } = setup();
+		await setup(testActor(2), preferences.byUser).controller.updatePreferences({
+			sectionNumberingDefault: true
+		});
+		expect((await controller.getPreferences()).sectionNumberingDefault).toBeUndefined();
 	});
 });

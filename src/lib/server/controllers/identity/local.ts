@@ -1,4 +1,4 @@
-import type { ActorContext, User } from '$lib/models/identity';
+import type { User } from '$lib/models/identity';
 import type { LocalUserProvisioner, UserReader } from '$lib/server/services/identity/users';
 
 export interface LocalIdentityController {
