@@ -121,7 +121,7 @@ the same header to exercise persisted UI preferences (`sidebar_state`,
 | `services/<domain>/`            | Business rules shared by browser and server. No I/O (ADR 0041).         |
 | `controllers/<area>/`           | Browser-side coordination over shared services, such as offline edits.  |
 | `server/services/<domain>/`     | Server-only logic against repositories.                                 |
-| `server/repositories/<domain>/` | External I/O (database, providers, files); domain types in and out.     |
+| `server/repositories/<domain>/` | Database persistence only; domain types in and out.                     |
 | `server/controllers/<domain>/`  | Orchestration across services; the only cross-service seam.             |
 | `remote/<domain>/`              | Zod-validated `query`/`command` — the sole UI→server entry point.       |
 | `stores/<area>/`                | Client `$state` singletons (`workbench`, `rightPanel`, `palette`, …).   |
@@ -255,9 +255,10 @@ are in ADR 0037.
 
 - Parsing happens only in the parse zones: the caller of a controller (remote functions, API
   routes, form actions, hooks, the worker), agent tools for model-sent arguments, repositories for
-  the rows and provider data they read, and the client event/storage readers. Schemas live in `models/`
-  next to the type they produce. Services and controllers never parse — they receive narrow
-  values from both directions.
+  the rows they read, the service that owns a provider for that provider's responses, and the
+  client event/storage readers. Schemas live in `models/`
+  next to the type they produce. Apart from a service parsing its own provider's
+  responses, services and controllers never parse — they receive narrow values from both directions.
 - `unknown` type positions, `Record<string, unknown>`, `isRecord`-style guards, cast-probes
   (`x as { a?: unknown }`), `JSON.parse` casts, and `z.unknown()` schemas are banned in the
   strict layers (`models/`, `services/`, `controllers/`) and on their way to zero everywhere

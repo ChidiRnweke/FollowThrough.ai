@@ -7,8 +7,8 @@ state ownership and controller boundary. ADRs 0037 and 0041 define parsing and s
 | --- | --- | --- |
 | `models/<domain>/` | Data types, schemas, values and value constructors | Business rules or mutable runtime state |
 | `services/<domain>/` | Shared pure rules in stateless classes with explicit interfaces | I/O, other services, workflows or retained mutable state |
-| `server/services/<domain>/` | Server domain rules against narrow repository contracts | Other services, application orchestration or retained mutable state |
-| `server/repositories/<domain>/` | External I/O (database, providers, files, processes); domain types in and out, parsing what they read | Business rules or orchestration |
+| `server/services/<domain>/` | Server domain capabilities against narrow repository contracts, including the external providers they own | Other services, application orchestration or retained mutable state |
+| `server/repositories/<domain>/` | Database persistence; domain types in and out, parsing the rows they read | Business rules, provider calls or orchestration |
 | `controllers/<domain>/` | Complete browser operations and coordination | Parsing external data or exposing mutable collaborators |
 | `server/controllers/<domain>/` | Complete server operations, transactions and sequencing over services | Parsing external data, repository access or leaking services through the public API |
 | `stores/<domain>/` (browser only) | Reactive state with an explicit lifetime and controlled updates | Transport, retries, business decisions or workflows |
@@ -45,9 +45,9 @@ facts, calls shared decisions and coordinates consequences. Factories expose col
 needed by composition; they do not hand components raw resources, queues or transports.
 
 Parse external values at a named boundary: the caller of a controller (remote function, API
-route, form action, hook, worker), an agent tool for model-sent arguments, a repository for what
-it reads, or browser event/storage readers. Schemas live in models. Services and controllers
-receive narrow values and do not invoke Zod.
+route, form action, hook, worker), an agent tool for model-sent arguments, a repository for the rows it
+reads, the service that owns a provider for that provider's responses, or browser event/storage readers. Schemas live in models. Services and controllers
+receive narrow values and do not invoke Zod, except a service parsing its own provider's responses.
 
 For IndexedDB operations, preserve transaction-local read → controller decision → write. Moving the
 decision outside the transaction loses cross-tab ordering. Keep record/outbox/receipt settlement

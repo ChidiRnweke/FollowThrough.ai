@@ -30,15 +30,15 @@ Svelte files, component-adjacent TypeScript files and indirect imports through r
 list is closed: code belongs to one of these layers or to an entry point, and no other layer may
 be introduced.
 
-| Layer        | Responsibility and boundary                                                                                                            |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Models       | Describe data with types, values and schemas. They contain no business rules.                                                          |
-| Services     | Implement a cohesive domain capability as a stateless class with a narrow public interface. They do not call or import other services. |
-| Repositories | Perform external I/O: the database, providers, the file system and processes. They take domain types in and return domain types.       |
-| Controllers  | Expose complete application operations. They own sequencing, coordination and transaction boundaries over services.                    |
-| Factories    | Assemble concrete implementations and expose their narrow interfaces. They contain no business rules.                                  |
-| Stores       | Browser only. Own reactive application state and controlled state updates, with no business rules, transport calls or orchestration.   |
-| Components   | Browser only. Render and handle UI interaction. They call controllers and observe readonly application state.                          |
+| Layer        | Responsibility and boundary                                                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Models       | Describe data with types, values and schemas. They contain no business rules.                                                                                                   |
+| Services     | Implement a cohesive domain capability as a stateless class with a narrow public interface, including any external provider it uses. They do not call or import other services. |
+| Repositories | Persist and read domain records in the database. They take domain types in and return domain types.                                                                             |
+| Controllers  | Expose complete application operations. They own sequencing, coordination and transaction boundaries over services.                                                             |
+| Factories    | Assemble concrete implementations and expose their narrow interfaces. They contain no business rules.                                                                           |
+| Stores       | Browser only. Own reactive application state and controlled state updates, with no business rules, transport calls or orchestration.                                            |
+| Components   | Browser only. Render and handle UI interaction. They call controllers and observe readonly application state.                                                                   |
 
 Entry points call controllers: remote functions, API routes, form actions, server hooks and the
 worker. The entry point parses incoming data into a model before it calls a controller, and a
@@ -47,7 +47,10 @@ may call several controller operations in an order the request genuinely needs. 
 services, repositories or stores directly.
 
 Controllers depend on services, never on repositories. A write always has business rules around
-it, so the service that owns those rules owns the repository call. If a service needs another
+it, so the service that owns those rules owns the repository call. An external provider, such as an
+embedding or language model, is not a repository: the service that owns the capability uses the
+provider client the factory injects. Two bounded contexts keep separate services and repositories
+even when their mechanism is the same, such as vector search over knowledge and over tools. If a service needs another
 service, the capability boundary is wrong; the correction is a different cut, not an extra layer.
 
 The server is stateless. A value that one service produces and another consumes stays local to
