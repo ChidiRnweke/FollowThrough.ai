@@ -258,8 +258,10 @@ including the ones the shadcn-svelte CLI writes into a newly added primitive —
 - **Pointing replays the motion, outside the rail.** Hovering or keyboard-focusing a link, button,
   menu item, tab or option replays the trace and the landing with the dot still ink. Rail icons
   move only when they become live.
-- **Theme draws the mode in force.** A sun in light, a moon in dark; switching draws the new one
-  in. The glyph switches on `.dark` in CSS, so it is right before hydration.
+- **Theme draws the mode in force.** A sun in light, a moon in dark. A switch morphs one into the
+  other: the outgoing body pulls in and turns away, the incoming one turns up into place, and its
+  dot lands last. Loading a page does not morph. Which glyph shows is decided by `.dark` in CSS,
+  so it is right before hydration; under reduced motion the swap is instant.
 - **Preferences is a switch, Settings is a gear.** The switch's knob is its dot and slides across
   when on. A skill is a repeatable workflow, so Skill takes the workflow mark and Diagram has its
   own two-box mark.
