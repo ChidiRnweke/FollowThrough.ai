@@ -5,9 +5,13 @@
 
 export { default as Artifact } from './artifact.svelte';
 export { default as Attachment } from './attachment.svelte';
+export { default as Backlog } from './backlog.svelte';
 export { default as Diagram } from './diagram.svelte';
+export { default as Finished } from './finished.svelte';
+export { default as InFlight } from './in-flight.svelte';
 export { default as Key } from './key.svelte';
 export { default as Memory } from './memory.svelte';
+export { default as Open } from './open.svelte';
 export { default as Project } from './project.svelte';
 export { default as Saved } from './saved.svelte';
 export { default as Search } from './search.svelte';

@@ -82,13 +82,14 @@
 	data-slot="todo-row"
 	data-lifted={lifted || undefined}
 	class={[
-		'relative flex items-start gap-item px-2 py-4 transition-[background-color,opacity,scale] duration-200',
+		'relative flex items-start gap-item px-2 py-2.5 transition-[background-color,opacity,scale] duration-200',
 		completing && 'scale-95 opacity-50'
 	]}
 	onclick={openBody}
 >
+	<!-- Round, unlike the square form checkbox: a todo is a commitment to tick off. -->
 	<Checkbox
-		class="mt-0.5"
+		class="mt-0.5 rounded-full"
 		checked={done}
 		aria-label={done ? 'Reopen todo' : 'Complete todo'}
 		onCheckedChange={(checked) => complete(checked === true)}

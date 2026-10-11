@@ -9,6 +9,7 @@
 	} from 'svelte-dnd-action';
 	import { Button } from '$lib/components/ui/button';
 	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from './todo-updates';
 	import TodoRow from './todo-row.svelte';
@@ -17,6 +18,15 @@
 	import { page } from '$app/state';
 	import { Input } from '$lib/components/ui/input';
 	import { SvelteSet } from 'svelte/reactivity';
+
+	/** Each empty column draws its own scene above its voice line ("Empty states"). */
+	const emptyScene: Record<TodoStatus, typeof Scene.Open> = {
+		backlog: Scene.Backlog,
+		open: Scene.Open,
+		in_progress: Scene.InFlight,
+		done: Scene.Finished,
+		cancelled: Scene.Trash
+	};
 
 	interface BoardItem {
 		id: TodoId;
@@ -170,8 +180,11 @@
 <!-- Columns are zones separated by hairlines, not filled trays: structure appears
      during a drag (the lifted row, the drop line, the zone outline), not at rest.
      Columns share the width equally and scroll sideways only once they would drop
-     below 16rem, so a laptop-width board shows all four instead of clipping Done. -->
-<div class="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto pb-3">
+     below 16rem, so a laptop-width board shows all four instead of clipping Done.
+     One hairline frame holds the board; every column keeps the same inset inside it. -->
+<div
+	class="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto rounded-xl p-item ring-1 ring-foreground/10 ring-inset"
+>
 	{#each columns as status (status)}
 		{@const items = board[status]}
 		{@const isExpanded = expanded.has(status)}
@@ -183,8 +196,8 @@
 			     not labels, so the titles read as one row heading every column. -->
 			<!-- The heading mirrors the body's structure — the column inset outside, the
 			     row's own px-2 inside — so the status dot lines up over the checkboxes. -->
-			<div class="px-row group-first/col:pl-0 group-last/col:pr-0">
-				<h3 class="eyebrow flex items-center gap-1.5 px-2 pt-1">
+			<div class="px-row">
+				<h3 class="eyebrow flex items-center gap-1.5 px-2 pt-1 text-foreground/70">
 					{#if status === 'done'}
 						<Icon.Check class="size-3 text-success" />
 					{:else}
@@ -201,15 +214,21 @@
 				</h3>
 			</div>
 			<div
-				class="flex min-h-0 flex-1 flex-col border-l border-border px-row group-first/col:border-l-0 group-first/col:pl-0 group-last/col:pr-0"
+				class="flex min-h-0 flex-1 flex-col border-l border-border px-row group-first/col:border-l-0"
 			>
 				<div class="relative flex min-h-0 flex-1 flex-col">
 					{#if items.length === 0 && addingTo !== status}
-						<p
-							class="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-muted-foreground/70"
+						{@const EmptyScene = emptyScene[status]}
+						<div
+							class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-row px-4 text-center"
 						>
-							{todoStatusEmptyCopy[status]}
-						</p>
+							<!-- Muted strokes; the scene's dot keeps the brand teal (layout.css .ft-scene). -->
+							<EmptyScene class="size-16 text-muted-foreground/60" />
+							<!-- Two text-xs lines (2rem) reserved, so a wrapped caption does not lift its scene out of line. -->
+							<p class="min-h-8 max-w-56 text-xs text-muted-foreground/70">
+								{todoStatusEmptyCopy[status]}
+							</p>
+						</div>
 					{/if}
 					{#if addingTo === status}
 						<Input
@@ -230,10 +249,11 @@
 				     outline is drawn inset, inside this p-0.5: an outward outline is
 				     clipped by the column's overflow wherever the zone meets the board
 				     edge, which erased the outer sides of the first and last columns.
-				     Rows touch; the hairlines between them separate. -->
+				     Rows touch; each row carries its own underline, so a lone row still
+				     sits on a line instead of floating. -->
 					<div
 						data-todo-status={status}
-						class="flex min-h-20 flex-1 flex-col divide-y divide-border overflow-y-auto rounded-md p-0.5"
+						class="flex min-h-20 flex-1 flex-col overflow-y-auto rounded-md p-0.5"
 						use:dragHandleZone={{
 							items: visible,
 							flipDurationMs: 150,
@@ -261,7 +281,7 @@
 							<!-- The pointer-drag placeholder is where the row will land: a
 						     brand line, not a second copy of the row. Wrapped so the
 						     zone always sees one element per item. -->
-							<div>
+							<div class={isShadowItem(item) ? undefined : 'border-b border-border'}>
 								{#if isShadowItem(item)}
 									<!-- The library hides its placeholder; the line opts back in. -->
 									<div class="visible py-1" aria-hidden="true">
@@ -311,6 +331,10 @@
 						<Icon.Plus class="size-3.5" />
 						Add
 					</Button>
+				{:else}
+					<!-- Done has no add row; the spacer keeps its body the same height, so its
+					     empty scene centres on the same line as the other columns'. -->
+					<div class="h-8 shrink-0" aria-hidden="true"></div>
 				{/if}
 			</div>
 		</section>

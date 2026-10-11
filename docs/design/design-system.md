@@ -203,7 +203,7 @@
   `::before`/`::after`. Neutral quote and indent rules (`border-l-2 border-border`) are typography,
   not highlights, and stay.
 - **Hairlines are inset rings; scroll content keeps a gutter.** A structural hairline is a
-  `ring-inset ring-1` box-shadow (Card.Root, kanban columns), never an outward `ring-1` or
+  `ring-inset ring-1` box-shadow (Card.Root, the kanban board frame), never an outward `ring-1` or
   `border` unless the element deliberately reads as in-flow. Content that can touch a
   scrollport's edge keeps an inset gutter ≥ the overlay scrollbar's width (~10px), because
   bits-ui scrollbars overlay rather than reserve space; see the `pr-3` chat-thread/right-panel
@@ -305,7 +305,9 @@ product celebrates the absence of work rather than apologizing for empty screens
 
 - Canonical empty-state lines: "Nothing overdue. Well held." · "Nothing due today." ·
   "Not waiting on anyone." · "Pin a note to keep it at hand." · "Notes you touch show up here." ·
-  kanban columns use `todoStatusEmptyCopy` in `labels.ts`.
+  kanban columns use `todoStatusEmptyCopy` in `labels.ts`. Dry does not mean flat: a line may
+  lean toward what comes next — "Nothing done yet. The first one's the best one." — but it never
+  turns into an instruction the surrounding controls already give.
 - The Today page greets with the date as an eyebrow ("Tuesday · 22 July") and a time-aware
   subtitle. No user name, no weather, no emoji. Its counts are three typographic groups
   (label, `stat-value`, caption) with no container, a zero in muted ink. Composition follows
@@ -324,7 +326,8 @@ is a small 64-unit illustration in the icon stroke; it draws itself in when the 
 its dot lands last, in teal from the start, because it marks the one action the region invites.
 The props are a discriminated union: the slot takes an `icon`, the hero takes a `scene` and an
 optional accessible `label`; a region that changes size branches at the call site.
-Kanban columns keep their drop zone and center the voice line inside it. The icon stays near its
+Kanban columns keep their drop zone and center a status scene (`size-16`, muted strokes, teal
+dot) above the voice line inside it; the scene leaves as soon as the column holds a row. The icon stays near its
 drawn size at every scale — the scene is how a large empty state gets presence, never a
 scaled-up glyph. Controls that only operate on content (tabs, filters, sort, bulk toolbars) hide
 while the region is empty; the empty state and its one action are the whole surface.
@@ -346,9 +349,11 @@ while the region is empty; the empty state and its one action are the whole surf
   right panel is the complete master-detail editor. A todo is a divided row on Today and the
   board, never a card: the title leads, and one muted caption line carries whatever metadata is
   actually set (project, due date — "Overdue" in words when it is — priority, who it waits on,
-  provenance), 8px under the title, with 16px of padding to each hairline. A row is a square band
-  between hairlines: rounding a divided row bends its dividers into card edges, so only the
-  lifted row rounds. Board columns are zones separated by hairlines, not filled trays, and each
+  provenance), 8px under the title, with 10px of padding to each hairline. A row is a square band
+  above its own underline, so a lone row still sits on a line: rounding a divided row bends its
+  dividers into card edges, so only the lifted row rounds. The todo checkbox is round; form
+  checkboxes stay square. The board sits in one inset-ring frame. Board columns are zones
+  separated by hairlines, not filled trays, each with the same inset inside the frame, and each
   column's title sits above its rule — the rule separates content, not labels — and shares the
   row's inset, so the status dot stands over the checkboxes. Columns share the width equally down
   to `min-w-64`, then scroll sideways. Row controls (drag handle, move menu) form one trailing
