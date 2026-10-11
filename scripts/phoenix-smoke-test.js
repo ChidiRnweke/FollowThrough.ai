@@ -16,7 +16,7 @@ process.stdout.write(`[Phoenix smoke] Emitting ${marker} to ${projectName} throu
 
 const { shutdownTelemetry } = await import('./otel-instrumentation.js');
 const { traceOperation, traceWorkflow } =
-	await import('../src/lib/server/adapters/telemetry/tracing.ts');
+	await import('../src/lib/server/infrastructure/telemetry/tracing.ts');
 
 await traceWorkflow(
 	'diagnostic.phoenix-smoke',

@@ -1,4 +1,4 @@
-import { ControllerBoundary } from '$lib/server/adapters/telemetry/controller-boundary';
+import { ControllerBoundary } from '$lib/server/infrastructure/telemetry/controller-boundary';
 import type { ControllerSurface } from '$lib/models/controller-boundary';
 export const instrumentedController = <T extends object>(
 	domain: string,

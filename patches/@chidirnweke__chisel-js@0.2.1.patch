@@ -171,7 +171,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27
  
  // src/chisel/checker/services/architecture/layout.ts
 -var SERVER_LAYER_FOLDERS = new Set(["repositories", "db", "services", "controllers"]);
-+var SERVER_LAYER_FOLDERS = new Set(["repositories", "db", "services", "controllers", "stores", "adapters"]);
++var SERVER_LAYER_FOLDERS = new Set(["repositories", "db", "services", "controllers", "stores", "adapters", "infrastructure"]);
  var SERVER_ROOT_FILE_RE = /^src\/lib\/server\/([^/]*[Ff]actory|application|config|index)\.(ts|js)$/;
  var MISPLACED_LAYER_DIRS = [
 -  [/^src\/lib\/services\//, "src/lib/services/", "src/lib/server/services/"],

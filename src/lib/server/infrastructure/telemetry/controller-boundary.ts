@@ -1,5 +1,9 @@
 import { DomainError } from '$lib/errors';
-import { logLevelEnabled, summarize, traceOperation } from '$lib/server/adapters/telemetry/tracing';
+import {
+	logLevelEnabled,
+	summarize,
+	traceOperation
+} from '$lib/server/infrastructure/telemetry/tracing';
 import type { ControllerSurface } from '$lib/models/controller-boundary';
 type BoundaryLogger = Pick<Console, 'info' | 'debug' | 'warn' | 'error'>;
 /** Runtime boundary middleware. Construction creates a facade; calls retain original receivers. */

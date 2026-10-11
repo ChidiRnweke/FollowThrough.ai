@@ -4,7 +4,7 @@ import type {
 	SchedulerClock,
 	SchedulerOptions
 } from '$lib/models/maintenance';
-import { WorkerScheduler } from '$lib/server/adapters/maintenance/scheduler';
+import { WorkerScheduler } from '$lib/server/infrastructure/scheduler';
 import { SchedulerStore } from '$lib/server/stores/maintenance/scheduler';
 
 const clock: SchedulerClock = {

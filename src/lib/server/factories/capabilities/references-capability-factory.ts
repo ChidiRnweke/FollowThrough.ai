@@ -23,7 +23,7 @@ import type { WebReferenceClient } from '$lib/server/controllers/references/cont
 import type { ReferenceCandidatePreparation } from '$lib/server/services/references/discovery';
 import type { AgentRunSettings } from '$lib/services/agent/run-settings';
 import type { WebResearchOptions } from '$lib/models/agent';
-import { operationObserver } from '$lib/server/adapters/telemetry/tracing';
+import { operationObserver } from '$lib/server/infrastructure/telemetry/tracing';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 
 export interface ReferencesCapabilityInput {

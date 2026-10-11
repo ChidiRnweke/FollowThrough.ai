@@ -84,7 +84,7 @@ import type { DiagramRepository } from '$lib/server/repositories/diagrams/diagra
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
-import { traceWorkflow } from '$lib/server/adapters/telemetry/tracing';
+import { traceWorkflow } from '$lib/server/infrastructure/telemetry/tracing';
 import type { ProjectRepository } from '$lib/server/repositories/projects';
 
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';

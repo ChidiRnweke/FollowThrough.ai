@@ -93,7 +93,7 @@ import {
 	ToolAccess,
 	type ToolPreferenceCapability
 } from '$lib/server/services/agent/tools/preferences';
-import { traceAgentTurn, traceContextReader } from '$lib/server/adapters/telemetry/tracing';
+import { traceAgentTurn, traceContextReader } from '$lib/server/infrastructure/telemetry/tracing';
 import { AgentEventStore, type AgentEventBus } from '$lib/server/stores/agent/events';
 import { ModelCatalogStore } from '$lib/server/stores/agent/model-catalog';
 import {

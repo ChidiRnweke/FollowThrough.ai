@@ -45,7 +45,7 @@ import {
 	DeterministicPromiseExtractor,
 	type IPromiseRules
 } from '$lib/server/services/todos/promise-rules';
-import { operationObserver } from '$lib/server/adapters/telemetry/tracing';
+import { operationObserver } from '$lib/server/infrastructure/telemetry/tracing';
 
 export interface TodosCapabilityInput {
 	readonly db: Database;

@@ -68,7 +68,7 @@ import {
 	KnowledgeLookup,
 	type IKnowledgeLookup
 } from '$lib/server/services/knowledge-search/semantic';
-import { operationObserver, workflowObserver } from '$lib/server/adapters/telemetry/tracing';
+import { operationObserver, workflowObserver } from '$lib/server/infrastructure/telemetry/tracing';
 
 export interface KnowledgeSearchCapabilityInput {
 	readonly db: Database;
