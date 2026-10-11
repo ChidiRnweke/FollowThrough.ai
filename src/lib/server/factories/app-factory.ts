@@ -1,9 +1,7 @@
-import { LocalIdentity, type LocalIdentityController } from '../controllers/identity/local';
 import { instrumentedController } from './controller-instrumentation';
-import { accessSurface, authenticationSurface, localIdentitySurface } from './controller-surfaces';
+import { accessSurface, authenticationSurface } from './controller-surfaces';
 import { Access, type AccessController } from '../controllers/identity/access';
 import { createMcpToolSurface, type McpSurfaceFactory } from './agent/mcp-tool-factory';
-import { UserDirectory } from '$lib/server/services/identity/users';
 import type { ActorContext } from '$lib/models/identity';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { SystemControllers } from './system-factory';
@@ -23,9 +21,9 @@ import { OAuthAuthorization } from '$lib/server/services/identity/oauth-authoriz
 import { ProviderAccounts } from '$lib/server/services/identity/provider-accounts';
 import { AuthentikClient } from '$lib/server/repositories/identity/authentik';
 import { SessionRecords } from '../repositories/identity/postgres/sessions';
-import { UserAccountRecords, UserRecords } from '../repositories/identity/postgres/users';
+import { UserAccountRecords } from '../repositories/identity/postgres/users';
 import { db } from '../db';
-import { authenticationEnabled, authentikConfiguration, requestActor } from '../config';
+import { authentikConfiguration, requestActor } from '../config';
 
 class DeferredValue<T> {
 	private value: T | undefined;
@@ -82,23 +80,11 @@ export class AppFactory {
 		return authentication.get();
 	}
 
-	static localIdentity(actor: ActorContext): LocalIdentityController {
-		const users = new UserDirectory(new UserRecords(actor, db));
-		return instrumentedController(
-			'localIdentity',
-			new LocalIdentity({ provisioner: users, users }),
-			localIdentitySurface
-		);
-	}
-
 	static access(actor: ActorContext): AccessController {
-		const users = new UserDirectory(new UserRecords(actor, db));
 		return instrumentedController(
 			'access',
 			new Access(actor, {
 				tokens: new AccessTokens(new ApiTokenRecords(actor, db)),
-				provisioner: users,
-				users,
 				provenance: composition.get().forActor(actor).provenance
 			}),
 			accessSurface
@@ -107,9 +93,5 @@ export class AppFactory {
 
 	static signIn(): ISignIn {
 		return signIn.get();
-	}
-
-	static isAuthEnabled(): boolean {
-		return authenticationEnabled();
 	}
 }

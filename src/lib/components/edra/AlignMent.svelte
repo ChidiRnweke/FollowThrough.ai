@@ -2,8 +2,7 @@
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { cn } from '$lib/utils.js';
-	import AlignLeft from '@lucide/svelte/icons/align-left';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import * as Icon from '$lib/components/icons';
 	import Tooltip from './Tooltip.svelte';
 	import { commands, getEditor, useEditorTransaction } from './commands/index.js';
 
@@ -20,7 +19,7 @@
 	const AlignmentIcon = () => {
 		void transaction.version;
 		const h = alignments.find((h) => h.isActive?.(editor));
-		return h ? h.icon : AlignLeft;
+		return h ? h.icon : Icon.AlignLeft;
 	};
 </script>
 
@@ -33,9 +32,9 @@
 				class: cn(isActive() && 'bg-muted')
 			})}
 		>
-			{@const Icon = AlignmentIcon()}
-			<Icon />
-			<ChevronDown class="text-muted-foreground size-2!" />
+			{@const Glyph = AlignmentIcon()}
+			<Glyph />
+			<Icon.ChevronDown class="text-muted-foreground size-2!" />
 		</DropdownMenu.Trigger>
 	</Tooltip>
 	<DropdownMenu.Content
@@ -44,9 +43,9 @@
 	>
 		<DropdownMenu.Label>Alignments</DropdownMenu.Label>
 		{#each alignments as alignment (alignment)}
-			{@const Icon = alignment.icon}
+			{@const Glyph = alignment.icon}
 			<DropdownMenu.Item onclick={() => alignment.onClick?.(editor)}>
-				<Icon />
+				<Glyph />
 				{alignment.tooltip}
 				<DropdownMenu.Shortcut>
 					{alignment.shortCut}

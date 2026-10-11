@@ -10,11 +10,8 @@
 	import EmptyState from './empty-state.svelte';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import CloudOff from '@lucide/svelte/icons/cloud-off';
-	import CloudUpload from '@lucide/svelte/icons/cloud-upload';
-	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import {
 		SYNC_GAP_BOND,
 		SYNC_GAP_ITEM,
@@ -26,20 +23,6 @@
 		SYNC_ROW_TITLE,
 		SYNC_ROW_CAPTION
 	} from './sync-review';
-	import {
-		FtCheck,
-		FtChevronLeft,
-		FtChevronDown,
-		FtDocument,
-		FtDownload,
-		FtFolder,
-		FtTodos,
-		FtMemory,
-		FtSettings,
-		FtChat,
-		FtWorkflow,
-		FtSkills
-	} from '$lib/components/icons';
 	import { writeReviewOperations } from '$lib/factories/workspace/write-review';
 	const {
 		writeTitle: title,
@@ -180,7 +163,7 @@
 							reviewed = [];
 							confirmation = null;
 							failure = null;
-						}}><FtChevronLeft class="size-3.5" />All changes</Button
+						}}><Icon.ChevronLeft class="size-3.5" />All changes</Button
 					>
 				{/if}
 				<div class={cn('flex flex-col', SYNC_GAP_BOND)}>
@@ -188,11 +171,11 @@
 						>{selected ? title(selected) : 'Unsynced changes'}</Dialog.Title
 					>
 					<Dialog.Description class={cn('flex items-center', SYNC_GAP_BOND, SYNC_STATUS)}>
-						{#if selected && writeGroup(selected) === 'decision'}<TriangleAlert
+						{#if selected && writeGroup(selected) === 'decision'}<Icon.Warning
 								class="size-3.5 shrink-0"
 							/>
-						{:else if !resources.online}<CloudOff class="size-3.5 shrink-0" />
-						{:else}<CloudUpload class="size-3.5 shrink-0" />{/if}
+						{:else if !resources.online}<Icon.Sync state="offline" class="size-3.5 shrink-0" />
+						{:else}<Icon.Sync state="saving" class="size-3.5 shrink-0" />{/if}
 						<span
 							>{selected
 								? writeStatus(selected)
@@ -239,7 +222,8 @@
 											size="icon-sm"
 											aria-label="Load latest"
 											disabled={busy || !resources.online}
-											onclick={() => void refreshConflict()}><RefreshCw class="size-3.5" /></Button
+											onclick={() => void refreshConflict()}
+											><Icon.Refresh class="size-3.5" /></Button
 										>{/snippet}
 								</WorkspaceRecordPreview>
 							{/if}
@@ -248,7 +232,7 @@
 							<div class={cn('flex flex-col', SYNC_GAP_ITEM)}>
 								{#if selected.intent.base}<Collapsible.Root>
 										<Collapsible.Trigger class={cn('flex items-center', SYNC_GAP_BOND, SYNC_LABEL)}
-											><FtChevronDown class="size-3.5" />Original version</Collapsible.Trigger
+											><Icon.ChevronDown class="size-3.5" />Original version</Collapsible.Trigger
 										>
 										<Collapsible.Content class="pt-3"
 											><WorkspaceRecordPreview
@@ -260,7 +244,7 @@
 									</Collapsible.Root>{/if}
 								{#if reviewed.length > 1}<Collapsible.Root>
 										<Collapsible.Trigger class={cn('flex items-center', SYNC_GAP_BOND, SYNC_LABEL)}
-											><FtChevronDown class="size-3.5" />Also affected ({reviewed.length -
+											><Icon.ChevronDown class="size-3.5" />Also affected ({reviewed.length -
 												1})</Collapsible.Trigger
 										>
 										<Collapsible.Content class={cn('flex flex-col pt-3', SYNC_GAP_ITEM)}>
@@ -293,29 +277,29 @@
 														aria-label={`Review ${title(entry)}`}
 													>
 														{@const type = (entry.intent.local ?? entry.intent.base?.value)?.type}
-														{@const Icon =
+														{@const Glyph =
 															type === 'projects'
-																? FtFolder
+																? Icon.Folder
 																: type === 'todos'
-																	? FtTodos
+																	? Icon.Todos
 																	: type === 'memory_entries'
-																		? FtMemory
+																		? Icon.Memory
 																		: type === 'conversations'
-																			? FtChat
+																			? Icon.Chat
 																			: type === 'diagrams'
-																				? FtWorkflow
+																				? Icon.Diagram
 																				: type === 'skills'
-																					? FtSkills
+																					? Icon.Skill
 																					: type === 'notes'
-																						? FtDocument
-																						: FtSettings}
-														<Icon class="size-4 shrink-0 text-muted-foreground" />
+																						? Icon.Document
+																						: Icon.Preferences}
+														<Glyph class="size-4 shrink-0 text-muted-foreground" />
 														<span class={cn('flex min-w-0 flex-1 flex-col', SYNC_GAP_BOND)}
 															><span class={SYNC_ROW_TITLE}>{title(entry)}</span><span
 																class={SYNC_ROW_CAPTION}>{writeStatus(entry)}</span
 															></span
 														>
-														<ChevronRight class="size-3.5 text-muted-foreground" />
+														<Icon.ChevronRight class="size-3.5 text-muted-foreground" />
 													</Button>
 												{/each}
 											</div>
@@ -324,7 +308,7 @@
 							</div>
 						</div>
 						{#if !resources.pending.length}<EmptyState
-								icon={FtCheck}
+								scene={Scene.Saved}
 								title="Everything is saved"
 								hint="There are no changes waiting for your decision."
 								size="large"
@@ -354,7 +338,7 @@
 					<Button
 						variant="ghost"
 						class="justify-start px-0 text-muted-foreground"
-						onclick={download}><FtDownload />Download a copy</Button
+						onclick={download}><Icon.Download />Download a copy</Button
 					>
 					<div class="flex flex-wrap items-center justify-end gap-3">
 						<Tooltip.Root>

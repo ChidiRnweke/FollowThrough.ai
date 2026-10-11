@@ -38,18 +38,40 @@ describe('Agent tool event invariants', () => {
 	});
 
 	/**
-	 * The SDK resolves every call against the tools this run handed it and answers
-	 * an unknown name with its own `Tool not found` before any event is emitted, so
-	 * a name arriving here that the agent surface does not have means the registry
-	 * and the tools given to the SDK have diverged. That is a bug in this process,
-	 * not something the model did, and `tool_started` has no failure arm to settle
-	 * it into: the call did start, and inventing an outcome for it would be the
-	 * quiet wrong answer.
+	 * The SDK answers a name the agent does not have with its own correction, and the run goes
+	 * on. The call never ran, so it has no running row; it settles as a failed attempt under the
+	 * name the model asked for (trace 1cde38f9, 2026-10-08, ended the turn instead).
 	 */
-	it('refuses a call to a name the agent surface does not have', async () => {
-		const mapUnknownCall = async () =>
-			await eventSequence().map(toolCalled({ callId: 'call-1', name: 'save_notes' }));
-		await expect(mapUnknownCall()).rejects.toThrowError(AgentProviderFailure);
+	it('journals a call to a name the agent does not have as a failed attempt', async () => {
+		const mapper = eventSequence();
+		const started = await mapper.map(toolCalled({ callId: 'call-1', name: 'save_notes' }));
+		const settled = await mapper.map(toolOutput({ callId: 'call-1' }));
+		expect({ started, settled }).toEqual({
+			started: undefined,
+			settled: {
+				type: 'tool_failed',
+				callId: 'call-1',
+				name: 'save_notes',
+				failure: 'The agent has no tool by this name, so nothing ran.'
+			}
+		});
+	});
+
+	it('journals a call with unreadable arguments as a failed attempt', async () => {
+		const mapper = eventSequence();
+		const started = await mapper.map(
+			toolCalled({ callId: 'call-1', name: 'edit_note', arguments: '{"noteId": "x", "edits": [' })
+		);
+		const settled = await mapper.map(toolOutput({ callId: 'call-1' }));
+		expect({ started, settled }).toEqual({
+			started: undefined,
+			settled: {
+				type: 'tool_failed',
+				callId: 'call-1',
+				name: 'edit_note',
+				failure: 'The tool arguments were not valid JSON, so the tool did not run.'
+			}
+		});
 	});
 
 	it('accepts search_tools, which is built rather than defined and has no catalog entry', async () => {
@@ -99,7 +121,7 @@ describe('Agent tool event invariants', () => {
 			call: {
 				callId: 'call-9',
 				name: 'get_note',
-				arguments: {},
+				arguments: { kind: 'value', value: {} },
 				output: { kind: 'corrupt', message: 'root.when is a Date' }
 			}
 		});

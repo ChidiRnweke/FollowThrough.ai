@@ -118,7 +118,11 @@ export type ChatToolActivity =
 			readonly failure: string;
 			readonly output: AgentPayload;
 	  })
-	| (ChatToolActivityBase & { readonly status: 'failed'; readonly failure: string })
+	| (Omit<ChatToolActivityBase, 'name'> & {
+			readonly name: string;
+			readonly status: 'failed';
+			readonly failure: string;
+	  })
 	| (ChatToolActivityBase & { readonly status: 'rejected' });
 
 export type ChatPart =

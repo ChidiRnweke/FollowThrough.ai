@@ -61,8 +61,12 @@ export const readMemoryProposal = (
 	input: AgentToolInput<'propose_memory_change'>
 ): AgentMemoryProposalInput => {
 	const { confidence, ...payload } = input;
+	// Which fields each scope and operation take is the model's to get right,
+	// so a mismatch is a correction for it, not a fault of ours.
+	const change = memoryChangePayloadSchema.safeParse(payload);
+	if (!change.success) throw new ValidationError(z.prettifyError(change.error));
 	return {
-		...memoryChangePayloadSchema.parse(payload),
+		...change.data,
 		...(confidence !== undefined ? { confidence } : {})
 	};
 };

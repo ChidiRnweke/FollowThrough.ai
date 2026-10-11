@@ -3,7 +3,7 @@
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import { commands, addAIHighlight, getEditor, useEditorTransaction } from './commands/index.js';
 	import { cn } from '$lib/utils.js';
-	import { WandSparkles } from '@lucide/svelte';
+	import * as Icon from '$lib/components/icons';
 	import Colors from './Colors.svelte';
 	import Export from './Export.svelte';
 	import Tooltip from './Tooltip.svelte';
@@ -45,14 +45,14 @@
 				variant="ghost"
 				size="icon"
 			>
-				<WandSparkles />
+				<Icon.Suggestion />
 			</Button>
 		</Tooltip>
 	{/if}
 	{#each commandsKeys as key (key)}
 		{@const group = commands[key]}
 		{#each group as command, idx (idx)}
-			{@const Icon = command.icon}
+			{@const Glyph = command.icon}
 			<Tooltip tooltip={command.tooltip} shortCut={command.shortCut ?? ''}>
 				<Button
 					variant="ghost"
@@ -63,7 +63,7 @@
 						command.onClick?.(editor);
 					}}
 				>
-					<Icon />
+					<Glyph />
 				</Button>
 			</Tooltip>
 		{/each}

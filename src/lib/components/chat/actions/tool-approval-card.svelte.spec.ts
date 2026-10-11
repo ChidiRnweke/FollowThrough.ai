@@ -19,7 +19,10 @@ const shell = {
 	noteTree: [{ id: NOTE_ID, title: 'Infrastructure' } as unknown as NoteSummary]
 } as unknown as ShellContext;
 
-const pendingCall = (name: AgentToolName, args: AgentPayloadObject): ChatToolActivity => ({
+const pendingCall = (
+	name: AgentToolName,
+	args: AgentPayloadObject
+): Extract<ChatToolActivity, { status: 'approval_required' }> => ({
 	callId: '00000000-0000-4000-8000-0000000000aa',
 	name,
 	arguments: args,

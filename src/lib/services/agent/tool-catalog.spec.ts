@@ -55,6 +55,12 @@ describe('tool catalog', () => {
 		expect(agentToolNameSchema.safeParse('save_notes').data).toBeUndefined();
 	});
 
+	it('tells the agent a memory proposal is not saved until the user approves it', () => {
+		expect(toolCatalogRules.description('propose_memory_change')).toContain(
+			'Tell the user it is proposed, never that it is saved or remembered, unless appliedEntry is present.'
+		);
+	});
+
 	it('routes vague note cleanup away from whole-body replacement', () => {
 		expect(toolCatalogRules.description('save_note')).toContain(
 			'A request to tidy, refresh, polish, or improve an existing note is not a full rewrite'

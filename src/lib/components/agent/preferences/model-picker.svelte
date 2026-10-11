@@ -6,7 +6,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Command from '$lib/components/ui/command';
 	import * as Popover from '$lib/components/ui/popover';
-	import { FtCheck as Check, FtChevronsUd as ChevronsUpDown } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		models,
@@ -56,7 +56,7 @@
 		disabled={requireTools && !model.supportsTools}
 		onSelect={() => select(model.id)}
 	>
-		<Check class={value === model.id ? 'opacity-100' : 'opacity-0'} />
+		<Icon.Check class={value === model.id ? 'opacity-100' : 'opacity-0'} />
 		<div class="min-w-0 flex-1">
 			<p class="truncate">{shortModelName(model.name)}</p>
 			<p class="truncate text-xs text-muted-foreground">{modelMetaLine(model)}</p>
@@ -81,7 +81,7 @@
 							? defaultLabel
 							: 'Select model'}</span
 				>
-				<ChevronsUpDown data-icon="inline-end" />
+				<Icon.ChevronsUpDown data-icon="inline-end" />
 			</Button>
 		{/snippet}
 	</Popover.Trigger>
@@ -97,7 +97,7 @@
 				{#if allowDefault}
 					<Command.Group heading="Conversation">
 						<Command.Item value={defaultLabel} onSelect={() => select(null)}>
-							<Check class={value === null ? 'opacity-100' : 'opacity-0'} />
+							<Icon.Check class={value === null ? 'opacity-100' : 'opacity-0'} />
 							{defaultLabel}
 						</Command.Item>
 					</Command.Group>

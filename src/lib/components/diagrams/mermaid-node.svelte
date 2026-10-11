@@ -8,21 +8,8 @@
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import * as Tabs from '$lib/components/ui/tabs/index.js';
 	import { cn } from '$lib/utils.js';
-	import Workflow from '@lucide/svelte/icons/workflow';
-	import Pencil from '@lucide/svelte/icons/pencil';
-	import Copy from '@lucide/svelte/icons/copy';
-	import ImageIcon from '@lucide/svelte/icons/image';
-	import Check from '@lucide/svelte/icons/check';
-	import Eye from '@lucide/svelte/icons/eye';
-	import Code from '@lucide/svelte/icons/code';
-	import Columns2 from '@lucide/svelte/icons/columns-2';
-	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-	import Sparkles from '@lucide/svelte/icons/sparkles';
+	import * as Icon from '$lib/components/icons';
 	import ActionProgress from '$lib/components/shared/action-progress.svelte';
-	import Shapes from '@lucide/svelte/icons/shapes';
-	import X from '@lucide/svelte/icons/x';
-	import Minus from '@lucide/svelte/icons/minus';
-	import Plus from '@lucide/svelte/icons/plus';
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
 
 	import MermaidExportMenu from './mermaid-export-menu.svelte';
@@ -468,7 +455,7 @@
 			<!-- Toolbar -->
 			<div class="border-b bg-muted/30 px-3 py-1.5 flex items-center justify-between">
 				<div class="flex items-center gap-2">
-					<Workflow class="size-3.5 text-primary" />
+					<Icon.Diagram class="size-3.5 text-primary" />
 					<span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
 						>Mermaid</span
 					>
@@ -481,20 +468,20 @@
 							variant={showAiRevision ? 'secondary' : 'ghost'}
 							onclick={() => (showAiRevision = !showAiRevision)}
 						>
-							<Sparkles />
+							<Icon.Suggestion />
 							Revise with AI
 						</Button>
 					{/if}
 					<Tabs.Root bind:value={mode}>
 						<Tabs.List>
 							<Tabs.Trigger value="code" class="px-2 py-1">
-								<Code />
+								<Icon.Code />
 							</Tabs.Trigger>
 							<Tabs.Trigger value="both" class="px-2 py-1">
-								<Columns2 />
+								<Icon.SplitView />
 							</Tabs.Trigger>
 							<Tabs.Trigger value="preview" class="px-2 py-1">
-								<Eye />
+								<Icon.Eye />
 							</Tabs.Trigger>
 						</Tabs.List>
 					</Tabs.Root>
@@ -508,9 +495,9 @@
 								aria-label="Copy code"
 							>
 								{#if copied}
-									<Check class="text-brand" />
+									<Icon.Check class="text-brand" />
 								{:else}
-									<Copy />
+									<Icon.Copy />
 								{/if}
 							</Button>
 						{/snippet}
@@ -541,7 +528,7 @@
 					</div>
 					{#if isRevising}
 						<ActionProgress
-							icon={Sparkles}
+							icon={Icon.Suggestion}
 							label="Revising the diagram"
 							oncancel={options.onCancel ? () => options.onCancel?.('revise') : undefined}
 						/>
@@ -605,7 +592,7 @@
 							{#if error}
 								<div class="flex flex-col items-center gap-2 text-center max-w-xs">
 									<div class="bg-destructive/10 flex size-8 items-center justify-center rounded-lg">
-										<TriangleAlert class="text-destructive size-4" />
+										<Icon.Warning class="text-destructive size-4" />
 									</div>
 									<p class="text-destructive text-xs font-medium">Syntax Error</p>
 									<!-- audit-allow: no-raw-font-family — Parser error output is machine text. -->
@@ -647,7 +634,7 @@
 											disabled={editZoom <= EDIT_ZOOM_MIN}
 											onclick={() => stepEditZoom(-1)}
 										>
-											<Minus />
+											<Icon.Minus />
 										</Button>
 									{/snippet}
 								</Tooltip.Tip>
@@ -675,7 +662,7 @@
 											disabled={editZoom >= EDIT_ZOOM_MAX}
 											onclick={() => stepEditZoom(1)}
 										>
-											<Plus />
+											<Icon.Plus />
 										</Button>
 									{/snippet}
 								</Tooltip.Tip>
@@ -699,7 +686,7 @@
 					class="w-full justify-start border-dashed p-4 min-h-14"
 					onclick={enterEditMode}
 				>
-					<Workflow class="size-4 text-muted-foreground" />
+					<Icon.Diagram class="size-4 text-muted-foreground" />
 					<span class="text-muted-foreground text-sm" contenteditable={false}
 						>Click to add a Mermaid diagram</span
 					>
@@ -712,14 +699,14 @@
 					></div>
 					{#if error}
 						<div class="border-t bg-destructive/5 px-4 py-2 flex items-center gap-2">
-							<TriangleAlert class="text-destructive size-3.5 shrink-0" />
+							<Icon.Warning class="text-destructive size-3.5 shrink-0" />
 							<p class="text-destructive text-xs truncate">{error}</p>
 						</div>
 					{/if}
 				</div>
 				{#if pendingDrawioSuggestionId}
 					<div class="flex min-h-10 items-center gap-2 border-x border-b border-border px-3 py-2">
-						<Shapes class="size-4 text-primary" />
+						<Icon.Shapes class="size-4 text-primary" />
 						<p class="min-w-0 flex-1 text-xs text-muted-foreground">
 							draw.io conversion ready to review
 						</p>
@@ -739,7 +726,7 @@
 									aria-label="Dismiss conversion"
 									onclick={() => void rejectDrawio()}
 								>
-									<X />
+									<Icon.Close />
 								</Button>
 							{/snippet}
 						</Tooltip.Tip>
@@ -786,7 +773,7 @@
 					>
 						{#if isConverting}
 							<ActionProgress
-								icon={Shapes}
+								icon={Icon.Shapes}
 								label="Converting to draw.io"
 								class="rounded-md border border-border bg-popover"
 								oncancel={options.onCancel ? () => options.onCancel?.('convert') : undefined}
@@ -801,7 +788,7 @@
 										onclick={() => void convertToDrawio()}
 										aria-label="Convert to draw.io"
 									>
-										<Shapes class="text-muted-foreground" />
+										<Icon.Shapes class="text-muted-foreground" />
 									</Button>
 								{/snippet}
 							</Tooltip.Tip>
@@ -816,7 +803,7 @@
 										onclick={enterAiRevision}
 										aria-label="Revise with AI"
 									>
-										<Sparkles class="text-muted-foreground" />
+										<Icon.Suggestion class="text-muted-foreground" />
 									</Button>
 								{/snippet}
 							</Tooltip.Tip>
@@ -832,9 +819,9 @@
 									aria-label="Copy diagram as image"
 								>
 									{#if copiedImage}
-										<Check class=" text-brand" />
+										<Icon.Check class=" text-brand" />
 									{:else}
-										<ImageIcon class="text-muted-foreground" />
+										<Icon.Image class="text-muted-foreground" />
 									{/if}
 								</Button>
 							{/snippet}
@@ -849,9 +836,9 @@
 									aria-label="Copy code"
 								>
 									{#if copied}
-										<Check class=" text-brand" />
+										<Icon.Check class=" text-brand" />
 									{:else}
-										<Copy class="text-muted-foreground" />
+										<Icon.Copy class="text-muted-foreground" />
 									{/if}
 								</Button>
 							{/snippet}
@@ -865,7 +852,7 @@
 									onclick={enterEditMode}
 									aria-label="Edit diagram"
 								>
-									<Pencil class="text-muted-foreground" />
+									<Icon.Edit class="text-muted-foreground" />
 								</Button>
 							{/snippet}
 						</Tooltip.Tip>

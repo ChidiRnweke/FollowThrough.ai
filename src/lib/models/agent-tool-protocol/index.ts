@@ -10,10 +10,11 @@ export interface PreparedAction {
 	readonly arguments: AgentPayloadObject;
 	readonly execute: () => Promise<AgentPayload>;
 }
+/** What a call becomes before it runs. A failure is the envelope itself, so it is model feedback as is. */
 export type ToolPreparation =
 	| { readonly kind: 'ready'; readonly action: PreparedAction }
 	| { readonly kind: 'approval_required'; readonly action: PreparedAction }
-	| { readonly kind: 'failure'; readonly failure: ToolFailure };
+	| ToolFailure;
 
 /** A reviewed call's prepared change, and how to apply it once approved. */
 export type AgentToolReviewPreparation =

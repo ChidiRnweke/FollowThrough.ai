@@ -6,7 +6,7 @@
 
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
-	import { FtPin as Pin, FtDocument as FileText } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import EmptyState from '../../shared/empty-state.svelte';
 	import { openTodoSurface } from '$lib/client/shell/responsive-surfaces';
 	import { page } from '$app/state';
@@ -54,7 +54,7 @@
 		class="row-interactive flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
 	>
 		{#if pinned}
-			<Pin class="size-3.5 shrink-0 text-muted-foreground" />
+			<Icon.Pin class="size-3.5 shrink-0 text-muted-foreground" />
 		{/if}
 		<span class="min-w-0 flex-1 truncate">{note.title}</span>
 		{#if projectName(note.projectId)}
@@ -133,7 +133,7 @@
 		{#each view.pinnedNotes as note (note.id)}
 			{@render noteRow(note, true)}
 		{:else}
-			<EmptyState icon={Pin} title="Pin a note to keep it at hand." />
+			<EmptyState icon={Icon.Pin} title="Pin a note to keep it at hand." />
 		{/each}
 	</section>
 	<section class="space-y-2" aria-label="Recently edited notes">
@@ -141,7 +141,7 @@
 		{#each view.recentNotes as note (note.id)}
 			{@render noteRow(note, false)}
 		{:else}
-			<EmptyState icon={FileText} title="Notes you touch show up here." />
+			<EmptyState icon={Icon.Document} title="Notes you touch show up here." />
 		{/each}
 	</section>
 </div>

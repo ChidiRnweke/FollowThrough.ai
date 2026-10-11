@@ -6,7 +6,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { cn, mergeProps } from '$lib/utils';
-	import { FtNotifications as Bell } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		notifications,
@@ -36,7 +36,7 @@
 							? 'Memory notifications'
 							: `${total} pending memory suggestions`}
 					>
-						<Bell />
+						<Icon.Notifications />
 						{#if total > 0}
 							<Badge
 								variant="secondary"

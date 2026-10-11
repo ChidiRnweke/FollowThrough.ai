@@ -9,13 +9,8 @@
 	import { Spinner } from '$lib/components/ui/spinner';
 	import { Toggle } from '$lib/components/ui/toggle';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import {
-		FtChevronDown as ChevronDown,
-		FtChevronRight as ChevronRight,
-		FtDocument as Document,
-		FtExternal as ExternalLink,
-		FtSearch as Search
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { globalSearch as defaultSearch } from '$lib/factories/search/global-search';
@@ -198,7 +193,7 @@
 						aria-label="Open search in workbench"
 						onclick={onMoveToCanvas}
 					>
-						<ExternalLink data-icon />
+						<Icon.External data-icon />
 					</Button>
 				{/snippet}
 			</Tip>
@@ -251,7 +246,7 @@
 	<div class="mt-2 min-h-0 flex-1 overflow-y-auto">
 		{#if globalSearch.query === ''}
 			<EmptyState
-				icon={Search}
+				scene={Scene.Search}
 				title="Search every note's title and text."
 				hint="Toggle .* for regex."
 				size="large"
@@ -263,7 +258,7 @@
 			</div>
 		{:else if hits.length === 0 && !globalSearch.searchError}
 			<EmptyState
-				icon={Search}
+				scene={Scene.Search}
 				title="No results for “{globalSearch.query}”."
 				size="large"
 				label="No results"
@@ -313,9 +308,9 @@
 										onclick={() => globalSearch.toggleCollapsed(hit.noteId)}
 									>
 										{#if collapsed}
-											<ChevronRight data-icon />
+											<Icon.ChevronRight data-icon />
 										{:else}
-											<ChevronDown data-icon />
+											<Icon.ChevronDown data-icon />
 										{/if}
 									</Button>
 									<!-- The title jumps to the first match; the chevron collapses. One gesture
@@ -329,7 +324,7 @@
 											else void workbench.openTab(hit.noteId);
 										}}
 									>
-										<Document data-icon class="shrink-0 text-muted-foreground" />
+										<Icon.Document data-icon class="shrink-0 text-muted-foreground" />
 										<span class="truncate text-sm font-medium">
 											{#each titleSegments(hit.title, hit.titleMatches) as segment, index (index)}
 												{#if segment.hit}<mark class="search-hit">{segment.text}</mark

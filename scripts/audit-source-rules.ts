@@ -20,7 +20,8 @@ const RULES = [
 	'no-record-unknown',
 	'no-json-parse-cast',
 	'no-cast-probe',
-	'no-unknown-type'
+	'no-unknown-type',
+	'no-icon-library'
 ] as const;
 export type SourceRule = (typeof RULES)[number];
 export interface SourceViolation {
@@ -533,11 +534,10 @@ export const analyzeSource = (
 		if (violations.some((v) => v.rule === rule && v.line === localLine + lineOffset)) return;
 		violations.push({ rule, line: localLine + lineOffset, message });
 	};
-	// The agent tool set and the MCP server are built by the agent tool factories; diagram
-	// generation registers its own submission tool with the provider it owns.
-	const sdkAdapter = 'src/lib/server/factories/agent/tools/toolset.ts';
+	// Every Agents SDK tool is built through the one constructor that applies the feedback
+	// policy; the MCP server is built by the agent tool factory.
+	const sdkAdapter = 'src/lib/server/infrastructure/agents/sdk-tool.ts';
 	const mcpAdapter = 'src/lib/server/factories/agent/tools/mcp.ts';
-	const diagramProtocol = 'src/lib/server/services/diagrams/generation.ts';
 	const toolBoundaryImport = (node: ts.Node): boolean => {
 		if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
 			const clause = node.importClause;
@@ -557,7 +557,7 @@ export const analyzeSource = (
 				);
 			}
 			if (module !== '@openai/agents' && module !== '@openai/agents-core') return false;
-			if (fileName === sdkAdapter || fileName === diagramProtocol) return false;
+			if (fileName === sdkAdapter) return false;
 			return (
 				!!bindings &&
 				(ts.isNamespaceImport(bindings) ||
@@ -594,6 +594,16 @@ export const analyzeSource = (
 		}
 		return false;
 	};
+	/**
+	 * The icon set is ours (ADR 0044): every glyph comes from `$lib/components/icons`. The
+	 * shadcn-svelte CLI still writes Lucide imports into components it adds, so this catches the
+	 * one that survives an add.
+	 */
+	const iconLibraryImport = (node: ts.Node): boolean =>
+		(ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+		!!node.moduleSpecifier &&
+		ts.isStringLiteral(node.moduleSpecifier) &&
+		/^(@lucide\/|lucide-)/.test(node.moduleSpecifier.text);
 	const visit = (node: ts.Node): void => {
 		if (fileName.startsWith('src/lib/models/')) {
 			if (modelProcedure(node))
@@ -611,6 +621,8 @@ export const analyzeSource = (
 				node,
 				'constructs or re-exports tools outside the designated protocol adapter'
 			);
+		if (iconLibraryImport(node))
+			report('no-icon-library', node, 'imports an icon library; use $lib/components/icons');
 		if (shapeCast(node)) report('shape-cast', node, 'asserts a type onto an object literal');
 		if (responseJsonCast(node))
 			report('no-response-json-cast', node, 'casts a response JSON result without parsing it');

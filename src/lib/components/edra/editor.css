@@ -193,39 +193,55 @@
 	counter-reset: note-h1;
 }
 
-.note-section-numbering .tiptap h1 {
+/* Headings inside an embedded widget belong to the widget, not to the note's
+   outline, so they neither count nor carry a number. */
+.note-section-numbering .tiptap h1:not([data-widget-node] *) {
 	counter-increment: note-h1;
 	counter-reset: note-h2;
 }
 
-.note-section-numbering .tiptap h2 {
+.note-section-numbering .tiptap h2:not([data-widget-node] *) {
 	counter-increment: note-h2;
 	counter-reset: note-h3;
 }
 
-.note-section-numbering .tiptap h3 {
+.note-section-numbering .tiptap h3:not([data-widget-node] *) {
 	counter-increment: note-h3;
 	counter-reset: note-h4;
 }
 
-.note-section-numbering .tiptap h4 {
+.note-section-numbering .tiptap h4:not([data-widget-node] *) {
 	counter-increment: note-h4;
 }
 
-.note-section-numbering .tiptap h1::before {
+.note-section-numbering .tiptap h1:not([data-widget-node] *)::before {
 	content: counter(note-h1) '.\2002';
 }
 
-.note-section-numbering .tiptap h2::before {
+.note-section-numbering .tiptap h2:not([data-widget-node] *)::before {
 	content: counter(note-h1) '.' counter(note-h2) '\2002';
 }
 
-.note-section-numbering .tiptap h3::before {
+.note-section-numbering .tiptap h3:not([data-widget-node] *)::before {
 	content: counter(note-h1) '.' counter(note-h2) '.' counter(note-h3) '\2002';
 }
 
-.note-section-numbering .tiptap h4::before {
+.note-section-numbering .tiptap h4:not([data-widget-node] *)::before {
 	content: counter(note-h1) '.' counter(note-h2) '.' counter(note-h3) '.' counter(note-h4) '\2002';
+}
+
+/* A note with no H1 opens at H2, and its first heading is 1, not 0.1, as
+   sectionNumbersFor in src/lib/services/notes/section-numbering.ts defines. */
+.note-section-numbering .tiptap:not(:has(> h1)) h2:not([data-widget-node] *)::before {
+	content: counter(note-h2) '\2002';
+}
+
+.note-section-numbering .tiptap:not(:has(> h1)) h3:not([data-widget-node] *)::before {
+	content: counter(note-h2) '.' counter(note-h3) '\2002';
+}
+
+.note-section-numbering .tiptap:not(:has(> h1)) h4:not([data-widget-node] *)::before {
+	content: counter(note-h2) '.' counter(note-h3) '.' counter(note-h4) '\2002';
 }
 
 .tiptap strong {

@@ -124,7 +124,13 @@ export interface AttachmentUploadIntent {
 }
 export type AttachmentObjectWrite =
 	| { readonly kind: 'stored' }
-	| { readonly kind: 'failure'; readonly status: number; readonly detail?: string };
+	| { readonly kind: 'failure'; readonly reason: 'unreachable' }
+	| {
+			readonly kind: 'failure';
+			readonly reason: 'refused';
+			readonly status: number;
+			readonly detail?: string;
+	  };
 
 /** What object storage reports about a stored object. */
 export interface StoredObjectInfo {

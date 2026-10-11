@@ -4,7 +4,12 @@ import type {
 	UserContentPart,
 	UserMessageSessionItem
 } from '$lib/models/agent';
-import { sessionJsonSchema, type ReplayContent, type ReplayPreparation } from '$lib/models/agent';
+import {
+	sessionJsonSchema,
+	type ReplayContent,
+	type ReplayPreparation,
+	type SessionJson
+} from '$lib/models/agent';
 import type { TokenCounter } from '$lib/models/tokenization';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
@@ -44,6 +49,18 @@ const withoutInlineImages = (item: PersistedSessionItem): PersistedSessionItem =
 };
 
 /** Reuses the measured boundary already enforced for attached context notes. */
+/** A tool call's arguments as JSON, or a failure when the model's text is not JSON. */
+const readArguments = (
+	text: string
+): { readonly kind: 'json'; readonly value: SessionJson } | { readonly kind: 'failure' } => {
+	try {
+		const parsed = sessionJsonSchema.safeParse(JSON.parse(text));
+		return parsed.success ? { kind: 'json', value: parsed.data } : { kind: 'failure' };
+	} catch {
+		return { kind: 'failure' };
+	}
+};
+
 const REPLAY_FILE_THRESHOLD_TOKENS = 4000;
 const isDiagramWrite = (name: string): boolean =>
 	name === 'create_diagram' || name === 'edit_diagram';
@@ -100,12 +117,12 @@ export class ConversationHistoryService implements ConversationHistory {
 	): Promise<PersistedSessionItem> | PersistedSessionItem {
 		const prepared = this.prepare(item);
 		if (prepared.kind === 'unchanged') return prepared.item;
-		return this.apply(
-			conversationId,
-			prepared.kind === 'arguments'
-				? { ...prepared, value: sessionJsonSchema.parse(JSON.parse(prepared.item.arguments)) }
-				: prepared
-		);
+		if (prepared.kind !== 'arguments') return this.apply(conversationId, prepared);
+		const read = readArguments(prepared.item.arguments);
+		// Arguments the model sent as malformed JSON are kept verbatim: the SDK answered that
+		// call with a correction and nothing ran, so there is nothing to move out of the replay.
+		if (read.kind === 'failure') return prepared.item;
+		return this.apply(conversationId, { ...prepared, value: read.value });
 	}
 
 	private prepare(item: PersistedSessionItem): ReplayPreparation {

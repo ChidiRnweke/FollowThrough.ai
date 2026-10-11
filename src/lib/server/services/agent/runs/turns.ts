@@ -7,15 +7,16 @@ import {
 	type FunctionCallResultSessionItem,
 	type AgentToolOutcome,
 	type PersistedSessionItem,
-	type ProviderToolCall,
 	type ProviderToolOutput,
 	type SessionJsonObject
 } from '$lib/models/agent';
-import { readToolFailure } from '$lib/server/repositories/agent/tool-failure';
+import { readToolOutput } from '$lib/server/repositories/agent/tool-failure';
 import type { AgentToolName, ToolName } from '$lib/models/agent/tool-catalog';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import {
 	parseProviderToolCall,
-	parseProviderStreamEvent
+	parseProviderStreamEvent,
+	providerRejectionContext
 } from '$lib/server/infrastructure/agents/provider-events';
 import {
 	Agent,
@@ -75,8 +76,8 @@ export interface AgentTurns {
 	/** The tool names the model has called so far in this conversation. */
 	calledTools(history: readonly PersistedSessionItem[]): readonly string[];
 	turn(input: AgentProviderTurnInput): Promise<AgentProviderTurn>;
-	/** The agent tool a provider event names; a name this agent does not offer fails the turn. */
-	toolName(name: string): AgentToolName;
+	/** The agent tool a provider event names, or absent for a name this agent does not offer. */
+	toolName(name: string): AgentToolName | undefined;
 	/** Whether a provider-reported tool output succeeded or carries the tool's own failure. */
 	toolOutcome(output: ProviderToolOutput): AgentToolOutcome;
 	describeImages(
@@ -131,30 +132,23 @@ export class AgentTurnService implements AgentTurns {
 		);
 	}
 
-	toolName(name: string): AgentToolName {
-		const read = agentToolNameSchema.safeParse(name).data;
-		if (read === undefined)
-			throw new AgentProviderFailure(
-				`The provider called "${name}", which is not a tool this agent offers`,
-				'UNKNOWN_TOOL_CALL',
-				false
-			);
-		return read;
+	toolName(name: string): AgentToolName | undefined {
+		return agentToolNameSchema.safeParse(name).data;
 	}
 
 	toolOutcome(output: ProviderToolOutput): AgentToolOutcome {
 		if (output.kind !== 'value') return output;
-		const failure = readToolFailure(output.value);
-		return failure === undefined
-			? { kind: 'succeeded', value: output.value }
-			: { kind: 'reported_failure', value: output.value, failure };
+		const reading = readToolOutput(output.value);
+		if (reading.kind === 'success') return { kind: 'succeeded', value: output.value };
+		if (reading.kind === 'corrupt') return { kind: 'unreadable_failure', message: reading.message };
+		return { kind: 'reported_failure', value: output.value, failure: reading.failure.message };
 	}
 
 	// audit-allow: no-unknown-type — a caught provider failure is classified here, where the provider's error shapes are known.
 	failure(error: unknown): AgentProviderFailure {
 		if (error instanceof AgentProviderFailure) return error;
 		return new AgentProviderFailure(
-			error instanceof Error ? error.message : String(error),
+			`${error instanceof Error ? error.message : String(error)}${providerRejectionContext(error)}`,
 			providerErrorCode(error) ?? 'EXTERNAL_SERVICE',
 			isRetryable(error),
 			{ cause: error }
@@ -274,7 +268,11 @@ const unidentifiedCall = (name: string) =>
 	);
 const parkedCall = (
 	item: RunToolApprovalItem
-): ProviderToolCall & { readonly callId: string; readonly name: ToolName } => {
+): {
+	readonly callId: string;
+	readonly name: ToolName;
+	readonly arguments: AgentPayloadObject;
+} => {
 	const call = parseProviderToolCall(item);
 	if (!call)
 		throw new AgentProviderFailure(
@@ -291,7 +289,7 @@ const parkedCall = (
 			'UNKNOWN_PARKED_CALL',
 			false
 		);
-	return { ...call, callId, name };
+	return { callId, name, arguments: call.arguments.value };
 };
 
 const isDiagramWrite = (name: string): boolean =>
@@ -318,7 +316,7 @@ const replayView = (items: readonly PersistedSessionItem[]): readonly PersistedS
 		items.flatMap((item) => {
 			if (item.type !== 'function_call_result' || !isDiagramWrite(item.name)) return [];
 			const text = outputText(item);
-			return text !== undefined && readToolFailure(text) !== undefined ? [item.callId] : [];
+			return text !== undefined && readToolOutput(text).kind !== 'success' ? [item.callId] : [];
 		})
 	);
 	return items.map((item) => {

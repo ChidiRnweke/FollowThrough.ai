@@ -7,11 +7,7 @@
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import { Button } from '$lib/components/ui/button';
 	import * as Empty from '$lib/components/ui/empty';
-	import {
-		FtSearch as Search,
-		FtChat as MessageSquare,
-		FtPlus as Plus
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import ChatHistoryList from './chat-history-list.svelte';
 
 	let {
@@ -47,7 +43,7 @@
 				Find conversations by title and return to their project or note context.
 			</p>
 		</div>
-		<Button href="/chats/new"><Plus data-icon="inline-start" /> New chat</Button>
+		<Button href="/chats/new"><Icon.Plus data-icon="inline-start" /> New chat</Button>
 	</header>
 
 	<InputGroup.Root>
@@ -61,7 +57,9 @@
 			}}
 		/>
 		<InputGroup.Addon align="inline-end">
-			<InputGroup.Button aria-label="Search" onclick={submitSearch}><Search /></InputGroup.Button>
+			<InputGroup.Button aria-label="Search" onclick={submitSearch}
+				><Icon.Search /></InputGroup.Button
+			>
 		</InputGroup.Addon>
 	</InputGroup.Root>
 
@@ -83,7 +81,7 @@
 	{:else}
 		<Empty.Root>
 			<Empty.Header>
-				<Empty.Media variant="icon"><MessageSquare /></Empty.Media>
+				<Empty.Media variant="icon"><Icon.Chat /></Empty.Media>
 				<Empty.Title>{query ? 'No matching chats' : 'No chats yet'}</Empty.Title>
 				<Empty.Description
 					>{query

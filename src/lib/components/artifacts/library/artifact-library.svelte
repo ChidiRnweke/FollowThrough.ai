@@ -4,16 +4,8 @@
 	import type { ArtifactId, ArtifactView } from '$lib/models/deliverables';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
-	import {
-		FtDownload as Download,
-		FtExport as FileOutput,
-		FtDocument as FileText,
-		FtArtifacts as PackageOpen,
-		FtSearch as Search,
-		FtClose as X,
-		FtRetry as RefreshCw,
-		FtTrash as Trash2
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import { toast } from 'svelte-sonner';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
@@ -143,7 +135,7 @@
 	{/snippet}
 	{#if !data.selectedProjectId}
 		<EmptyState
-			icon={PackageOpen}
+			scene={Scene.Project}
 			title="Select a project to see its artifacts."
 			size="large"
 			label="Artifacts"
@@ -169,23 +161,25 @@
 					<InputGroup.Addon align="inline-end">
 						{#if data.query}
 							<InputGroup.Button aria-label="Clear search" onclick={clearSearch}
-								><X /> Clear</InputGroup.Button
+								><Icon.Close /> Clear</InputGroup.Button
 							>
 						{/if}
-						<InputGroup.Button type="submit" variant="default"><Search /> Search</InputGroup.Button>
+						<InputGroup.Button type="submit" variant="default"
+							><Icon.Search /> Search</InputGroup.Button
+						>
 					</InputGroup.Addon>
 				</InputGroup.Root>
 			</Form>
 		{/if}
 		{#if artifacts.length === 0 && data.query}
-			<EmptyState icon={Search} title="No artifacts match “{data.query}”." size="large">
+			<EmptyState scene={Scene.Search} title="No artifacts match “{data.query}”." size="large">
 				{#snippet action()}
 					<Button variant="outline" onclick={clearSearch}>Clear search</Button>
 				{/snippet}
 			</EmptyState>
 		{:else if artifacts.length === 0}
 			<EmptyState
-				icon={FileOutput}
+				scene={Scene.Artifact}
 				title="No artifacts yet."
 				hint="Exports of your notes and project documents show up here."
 				size="large"
@@ -200,9 +194,9 @@
 					<li class="row-interactive flex items-center justify-between gap-3 px-3 py-2.5">
 						<div class="flex min-w-0 items-center gap-3">
 							{#if artifact.format === 'docx'}
-								<FileText class="shrink-0" />
+								<Icon.Document class="shrink-0" />
 							{:else}
-								<FileOutput class="shrink-0" />
+								<Icon.Export class="shrink-0" />
 							{/if}
 							<div class="flex min-w-0 flex-col gap-0.5">
 								<span class="truncate text-sm font-medium">{artifact.title}</span>
@@ -240,7 +234,7 @@
 										disabled={working.has(artifact.id)}
 										onclick={() => download(artifact.id)}
 									>
-										<Download />
+										<Icon.Download />
 									</Button>
 								{/snippet}
 							</Tip>
@@ -254,7 +248,7 @@
 										disabled={working.has(artifact.id)}
 										onclick={() => regenerate(artifact.id)}
 									>
-										<RefreshCw />
+										<Icon.Retry />
 									</Button>
 								{/snippet}
 							</Tip>
@@ -273,7 +267,7 @@
 												aria-label="Delete"
 												disabled={working.has(artifact.id)}
 											>
-												<Trash2 />
+												<Icon.Trash />
 											</Button>
 										{/snippet}
 									</Tip>

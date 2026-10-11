@@ -23,7 +23,22 @@ export const variables = defineEnvVars({
 	DATABASE_URL: { description: 'The database connection string.', schema: optionalString },
 	DB_NAME: { description: 'Provisioned database name.', schema: optionalString },
 	DB_USER: { description: 'Provisioned application role.', schema: optionalString },
-	LOCAL_USER_ID: { description: 'Single-user installation actor UUID.', schema: optionalString },
+	AUTHENTIK_DOMAIN: {
+		description: 'Authentik provider URL. Required at runtime.',
+		schema: optionalString
+	},
+	AUTHENTIK_CLIENT_ID: {
+		description: 'Authentik OAuth client ID. Required at runtime.',
+		schema: optionalString
+	},
+	AUTHENTIK_CLIENT_SECRET: {
+		description: 'Authentik OAuth client secret. Required at runtime.',
+		schema: optionalString
+	},
+	AUTHENTIK_CALLBACK_URL: {
+		description: 'Authentik OAuth callback URL. Required at runtime.',
+		schema: optionalString
+	},
 	ORIGIN: { description: 'Canonical public application origin.', schema: optionalString },
 	BODY_SIZE_LIMIT: {
 		description:

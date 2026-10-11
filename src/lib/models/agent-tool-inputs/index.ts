@@ -2,6 +2,7 @@ import { PROPOSAL_AUTO_ACCEPT_PIPELINES, webSearchEngines } from '$lib/models/ag
 import type { ArtifactId } from '$lib/models/deliverables';
 import { exportSettingsSchema } from '$lib/models/deliverables';
 import type { DiagramId } from '$lib/models/diagrams';
+import type { MERMAID_PALETTE_KEYS } from '$lib/models/diagrams/mermaid-theme';
 import type { ApiTokenId } from '$lib/models/identity';
 import type { MemoryChangePayload, MemoryEntryId } from '$lib/models/memory';
 import type { NoteEtag, NoteId, NoteRevisionId } from '$lib/models/notes';
@@ -15,6 +16,27 @@ import type { DateTime, LocalDate } from '$lib/models/workspace';
 import { z } from 'zod';
 const none = z.object({});
 const dateTime = z.iso.datetime({ offset: true }).transform((value) => value as DateTime);
+/**
+ * The export diagram theme as the model can send it. The settings schema keys colours by any
+ * string, which strict function calling cannot express (`propertyNames` is not permitted, and
+ * the whole request fails). The renderer reads exactly the palette keys, so they are named.
+ */
+const paletteColor = z.string().optional();
+const exportDiagramTheme = z.object({
+	base: z.enum(['light', 'dark']),
+	colors: z
+		.object({
+			background: paletteColor,
+			foreground: paletteColor,
+			brand: paletteColor,
+			muted: paletteColor,
+			mutedForeground: paletteColor,
+			border: paletteColor,
+			surface: paletteColor
+		} satisfies Record<(typeof MERMAID_PALETTE_KEYS)[number], typeof paletteColor>)
+		.strict()
+		.optional()
+});
 const optionalModelField = <T extends z.ZodType>(schema: T) =>
 	z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
 const createdBoundsSchema = z.object({
@@ -254,13 +276,13 @@ export const agentToolInputSchemas = {
 	list_user_memory: temporal({}),
 	propose_memory_change: z.object({
 		scope: z.enum(['project', 'user']),
-		projectId: projectId
-			.optional()
-			.describe('Required for project scope; omit entirely for user scope.'),
+		projectId: optionalModelField(projectId).describe(
+			'Required for project scope; omit entirely for user scope.'
+		),
 		operation: z.enum(['add', 'update', 'remove']),
-		memoryEntryId: memoryEntryId
-			.optional()
-			.describe('Required for update or remove; omit entirely for add.'),
+		memoryEntryId: optionalModelField(memoryEntryId).describe(
+			'Required for update or remove; omit entirely for add.'
+		),
 		content: z
 			.string()
 			.optional()
@@ -308,7 +330,10 @@ export const agentToolInputSchemas = {
 	list_artifacts: temporal({ projectId: projectId }),
 	list_templates: temporal({ projectId: projectId }),
 	get_export_settings: z.object({ projectId: projectId }),
-	update_export_settings: exportSettingsSchema.extend({ projectId }),
+	update_export_settings: exportSettingsSchema.extend({
+		projectId,
+		diagramTheme: exportDiagramTheme.optional()
+	}),
 	get_artifact: z.object({ artifactId: artifactId }),
 	download_artifact: z.object({ artifactId: artifactId }),
 	delete_artifact: z.object({ artifactId: artifactId }),

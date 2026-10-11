@@ -1,0 +1,80 @@
+---
+title: Widgets
+description: Put an interactive tool inside a note, such as a checklist, a table, or a simulator that computes from its data. You or the agent can build one.
+---
+
+import Screenshot from '../../../../components/screenshot.astro';
+
+A widget is a small interactive tool that lives in a project and shows inside a note. A widget can
+be a checklist, a progress tracker, a table you edit in place, a dashboard over your todos, or a
+simulator that computes results from sliders and inputs. What you change in a widget is saved, so
+the next person who opens the note, and the agent, sees the same values.
+
+A widget is its own record in the project. A note shows it by reference, so several notes can show
+one widget, and a change in one place shows everywhere.
+
+## Add a widget
+
+- **From a note.** Type `/widget` in the note. The picker previews each template as it will be
+  saved: a checklist, a progress tracker, a decision log, a status board, a savings simulator, a
+  loan calculator, an expense tracker, a habit tracker, a decision matrix, and a project dashboard.
+  It also offers the project's existing widgets, so you can show one widget in more than one note.
+- **From the agent.** Describe the tool you want in chat, and say which note it belongs in. The
+  agent builds the widget from the context it can read, such as the stages and durations in the
+  open note.
+
+<Screenshot
+	id="walkthrough-04-widget-proposal"
+	alt="The chat shows a proposed Critical-Path Simulator widget: the development stream ends on day 16, content on day 9, and sliders hold each stage's duration."
+	caption="The agent proposes a critical-path simulator built from the stages in the open note. Approve it to add it to the note."
+/>
+
+In approval mode, a widget from the agent waits for you. The chat shows a preview with
+**Approve** and **Reject**, and the note does not change until you approve.
+
+## Use and edit a widget
+
+Use a widget where it appears: tick a checkbox, move a slider, or type in a field. The widget saves
+each change, and it works offline like the rest of the workspace.
+
+A widget also opens in its own tab. There you can edit it directly: the **Edit** mode shows the
+title, the layout, and the data as JSON, lists any problems with their location, and keeps
+**Apply** off until the widget is valid. You can also ask the agent to change a widget, for example
+to add a stage or a column.
+
+## Compute values from the data
+
+A widget can compute values from its data with formulas. A simulator uses this to show results
+that update as you move a slider, and a dashboard uses it to count and group your todos. Computed
+values are never saved. The widget calculates them each time from the saved data, so they always
+match the inputs.
+
+<Screenshot
+	id="walkthrough-05-widget-result"
+	alt="The simulator embedded in a note. Legal review is set to 12 days, the content stream ends on day 17, and the critical path reads Content stream."
+	caption="Move Legal review to 12 days, and the content stream becomes the critical path. The results update as you move the slider."
+/>
+
+A dashboard reads the project's todos and notes, read-only. A widget has no network access, so it
+cannot reach outside your workspace or into another project.
+
+## Delete and restore a widget
+
+A widget moves to the trash before it is deleted, so an unwanted widget can come back. Move a
+widget to the trash from the project's widget gallery. The gallery first tells you how many notes
+show it. A note that shows a widget in the trash says so and offers **Restore**.
+
+## Export a note with widgets
+
+When you export a note as PDF or Word, each widget prints as it last appeared: checklist items with
+ticks, fields, metrics, tables, and a chart as the table of the values it plots. An export stops
+with an error if a widget is missing or in the trash, so a printed note never silently leaves a
+widget out.
+
+## See also
+
+- [Getting started](/FollowThrough.ai/getting-started/): the walkthrough that ends with the
+  critical-path simulator.
+- [The agent](/FollowThrough.ai/using/the-agent/): approval mode and the tools the agent uses.
+- [ADR 0043](/FollowThrough.ai/decisions/0043-build-widgets-as-cataloged-json-with-one-edit-rule/):
+  how widgets are stored, edited, and validated.

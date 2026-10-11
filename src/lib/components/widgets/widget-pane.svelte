@@ -5,7 +5,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import { FtClose as X } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import WidgetView from './widget-view.svelte';
 	import type { Widget } from '$lib/models/widgets';
 	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
@@ -58,7 +58,7 @@
 								aria-label="Close split view"
 								onclick={onCloseSplit}
 							>
-								<X />
+								<Icon.Close />
 							</Button>
 						{/snippet}
 					</Tip>

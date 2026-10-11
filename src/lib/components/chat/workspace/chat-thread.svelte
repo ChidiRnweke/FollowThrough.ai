@@ -9,12 +9,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
-	import {
-		FtCopy as Copy,
-		FtEdit as Pencil,
-		FtRefresh as RotateCcw,
-		FtWarning as Warning
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import type { ChatEntry } from '$lib/stores/agent/chat.svelte';
 	import { entryText, entryTools } from '$lib/stores/agent/chat.svelte';
@@ -325,7 +320,7 @@
 													? 'text-brand-muted-foreground'
 													: 'text-muted-foreground'}"
 											>
-												<Warning class="mt-0.5 size-3.5 shrink-0" />
+												<Icon.Warning class="mt-0.5 size-3.5 shrink-0" />
 												<span>{part.reason}</span>
 											</div>
 										{/if}
@@ -346,7 +341,7 @@
 									<!-- The run itself ended badly, as opposed to one call inside it: same
 								     shape, stated for the turn. -->
 									<div class="flex items-start gap-2 text-xs" role="alert">
-										<Warning class="mt-0.5 size-3.5 shrink-0 text-destructive" />
+										<Icon.Warning class="mt-0.5 size-3.5 shrink-0 text-destructive" />
 										<span class="text-destructive"
 											>{entry.error ??
 												(entry.status === 'cancelled'
@@ -355,7 +350,7 @@
 										>
 										{#if entry.status === 'failed' && entry.retryable && entry.runId}
 											<Button variant="outline" size="xs" onclick={() => onretry(entry)}>
-												<RotateCcw data-icon="inline-start" /> Retry
+												<Icon.Refresh data-icon="inline-start" /> Retry
 											</Button>
 										{/if}
 									</div>
@@ -375,7 +370,7 @@
 												variant="ghost"
 												size="icon-xs"
 												aria-label="Copy message"
-												onclick={() => oncopy(entry)}><Copy /></Button
+												onclick={() => oncopy(entry)}><Icon.Copy /></Button
 											>
 										{/snippet}
 									</Tip>
@@ -388,7 +383,7 @@
 													size="icon-xs"
 													aria-label="Edit and resubmit question"
 													disabled={isStreaming || executionDisabled}
-													onclick={() => onstartediting(entry)}><Pencil /></Button
+													onclick={() => onstartediting(entry)}><Icon.Edit /></Button
 												>
 											{/snippet}
 										</Tip>
@@ -401,7 +396,7 @@
 													size="icon-xs"
 													aria-label="Ask again"
 													disabled={isStreaming || executionDisabled}
-													onclick={() => onaskagain(entry)}><RotateCcw /></Button
+													onclick={() => onaskagain(entry)}><Icon.Refresh /></Button
 												>
 											{/snippet}
 										</Tip>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Calendar as CalendarPrimitive } from 'bits-ui';
 	import { cn, type WithoutChildrenOrChild } from '$lib/utils.js';
-	import { FtChevronDown as ChevronDownIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		ref = $bindable(null),
@@ -40,7 +40,7 @@
 				aria-hidden="true"
 			>
 				{yearItems.find((item) => item.value === value)?.label || selectedYearItem.label}
-				<ChevronDownIcon class={cn('size-4', className)} />
+				<Icon.ChevronDown class={cn('size-4', className)} />
 			</span>
 		{/snippet}
 	</CalendarPrimitive.YearSelect>

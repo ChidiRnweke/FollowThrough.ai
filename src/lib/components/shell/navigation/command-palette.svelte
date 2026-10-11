@@ -4,7 +4,7 @@
 	import type { NoteSummary } from '$lib/models/notes';
 
 	import * as Command from '$lib/components/ui/command';
-	import { FtDocument as FileText } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { commandRegistry } from '$lib/commands/registry';
 	import { palette } from '$lib/stores/shell/palette.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -42,7 +42,7 @@
 				<!-- The id keeps the value unique: bits-ui keys its item registry by
 			     `value`, and two same-titled notes would delete each other's entry. -->
 				<Command.Item value={`${note.title} ${note.id}`} onSelect={() => openNote(note)}>
-					<FileText class="size-4" />
+					<Icon.Document class="size-4" />
 					{note.title}
 				</Command.Item>
 			{/each}

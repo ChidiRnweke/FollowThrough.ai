@@ -3,7 +3,7 @@ import type { NoteId, TrashedNote } from '$lib/models/notes';
 import type { Diagram, DiagramId } from '$lib/models/diagrams';
 import type { Widget, WidgetId } from '$lib/models/widgets';
 import type { Component } from 'svelte';
-import { FtDocument, FtFolder, FtSkills, FtWidget, FtWorkflow } from '$lib/components/icons';
+import * as Icon from '$lib/components/icons';
 
 /** The shape every `Ft*` icon has, matching `EmptyState` and `ActionProgress`. */
 type TrashEntryIcon = Component<{ class?: string }>;
@@ -43,18 +43,18 @@ export type TrashEntry =
 /**
  * The icons the rest of the app already uses for these things.
  *
- * Deliberately not a new set. A diagram is `FtWorkflow` in the gallery, the
+ * Deliberately not a new set. A diagram is `Icon.Diagram` in the gallery, the
  * project overview, the note editor and the chat's tool rows; a folder is
- * `FtFolder` and a note `FtDocument` in the project tree. The trash mixes kinds
+ * `Icon.Folder` and a note `Icon.Document` in the project tree. The trash mixes kinds
  * that are told apart nowhere else, so inventing icons here would be the one
  * screen where the vocabulary disagrees with itself.
  */
 const TRASH_ENTRY_ICONS: Readonly<Record<TrashEntry['kind'], TrashEntryIcon>> = {
-	note: FtDocument,
-	folder: FtFolder,
-	skill: FtSkills,
-	diagram: FtWorkflow,
-	widget: FtWidget
+	note: Icon.Document,
+	folder: Icon.Folder,
+	skill: Icon.Skill,
+	diagram: Icon.Diagram,
+	widget: Icon.Widget
 };
 
 export const trashEntryIcon = (entry: TrashEntry): TrashEntryIcon => TRASH_ENTRY_ICONS[entry.kind];

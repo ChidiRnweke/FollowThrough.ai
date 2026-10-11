@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { NoteLinkTarget } from './commands/NoteLinkSuggestion.js';
-	import { FtDocument as FileText } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		items,
@@ -33,7 +33,7 @@
 				data-active={index === selected}
 				onclick={() => onpick(note)}
 			>
-				<FileText class="size-3.5 shrink-0 text-muted-foreground" />
+				<Icon.Document class="size-3.5 shrink-0 text-muted-foreground" />
 				<span class="truncate">{note.title}</span>
 			</button>
 		{/each}

@@ -268,7 +268,7 @@ test('retains an offline note edit and publishes it after reconnecting', async (
 	await context.setOffline(true);
 	await body.fill('An offline edit retained through publication.');
 	await page.getByRole('button', { name: 'Publish note (Ctrl+S, S)', exact: true }).click();
-	await page.getByText('Publication saved on this device', { exact: true }).waitFor();
+	await page.getByText('Published', { exact: true }).waitFor();
 	await page.reload();
 	await body.waitFor();
 	const retained = await body.textContent();

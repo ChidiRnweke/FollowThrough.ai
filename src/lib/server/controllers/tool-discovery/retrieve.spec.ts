@@ -54,8 +54,8 @@ it('reports an incomplete seed instead of silently omitting an available tool', 
 		storedTool(catalog[1]!)
 	]);
 	await expect(controller.retrieve(catalog, 'pin a note', 1)).rejects.toMatchObject({
-		code: 'EXTERNAL_SERVICE',
-		details: { cause: 'Missing current-model vectors for: pin_note' }
+		message: 'Tool search index is incomplete. Run the tool-embedding seed (pnpm db:seed:tools).',
+		cause: 'Missing current-model vectors for: pin_note'
 	});
 });
 
@@ -64,6 +64,6 @@ it('rejects vectors from a different embedding model', async () => {
 		catalog.map((tool) => storedTool(tool, [0, 1], 'old-model'))
 	);
 	await expect(controller.retrieve(catalog, 'notes', 5)).rejects.toMatchObject({
-		code: 'EXTERNAL_SERVICE'
+		message: 'Tool search index is incomplete. Run the tool-embedding seed (pnpm db:seed:tools).'
 	});
 });

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { HeadingLinkTarget } from './commands/HeadingLinkSuggestion.js';
-	import { FtDocument as FileText } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		items,
@@ -32,7 +32,7 @@
 				data-active={index === selected}
 				onclick={() => onpick(heading)}
 			>
-				<FileText class="size-3.5 shrink-0 text-muted-foreground" />
+				<Icon.Document class="size-3.5 shrink-0 text-muted-foreground" />
 				<span class="truncate" style:padding-left="{(heading.level - 1) * 0.75}rem">
 					{heading.textContent}
 				</span>

@@ -9,13 +9,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
-	import {
-		FtChat as MessageSquare,
-		FtEllipsis as MoreHorizontal,
-		FtExternal as ExternalLink,
-		FtTrash as Trash2,
-		FtEdit as Pencil
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { NameDialog } from '$lib/components/projects';
 	import { deleteSession } from '$lib/remote/agent/chat.remote';
 	import { toast } from 'svelte-sonner';
@@ -121,7 +115,7 @@
 					size="icon-sm"
 					aria-label="Actions for {session.title ?? 'chat'}"
 				>
-					<MoreHorizontal />
+					<Icon.Ellipsis />
 				</Button>
 			{/snippet}
 		</DropdownMenu.Trigger>
@@ -130,7 +124,7 @@
 				<DropdownMenu.Item
 					onclick={() => window.open(`/chats/${session.id}`, '_blank', 'noopener,noreferrer')}
 				>
-					<ExternalLink /> Open in new tab
+					<Icon.External /> Open in new tab
 				</DropdownMenu.Item>
 				<DropdownMenu.Item
 					onclick={() => {
@@ -146,7 +140,7 @@
 						renameOpen = true;
 					}}
 				>
-					<Pencil /> Rename
+					<Icon.Edit /> Rename
 				</DropdownMenu.Item>
 				<DropdownMenu.Item
 					variant="destructive"
@@ -155,7 +149,7 @@
 						deleteOpen = true;
 					}}
 				>
-					<Trash2 /> Delete
+					<Icon.Trash /> Delete
 				</DropdownMenu.Item>
 			</DropdownMenu.Group>
 		</DropdownMenu.Content>
@@ -221,7 +215,7 @@
 						class="h-auto min-w-0 flex-1 justify-start gap-3 px-2 py-2.5"
 						onclick={() => onselect(session.id)}
 					>
-						<MessageSquare data-icon="inline-start" />
+						<Icon.Chat data-icon="inline-start" />
 						<span class="flex min-w-0 flex-col items-start gap-0.5">
 							<span class="w-full truncate text-left text-sm"
 								>{session.title ?? 'New conversation'}</span

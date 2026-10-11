@@ -16,7 +16,7 @@
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Sheet from '$lib/components/ui/sheet';
-	import { FtPlus as Plus, FtClose as X, FtExternal as ExternalLink } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab, searchTab } from '$lib/stores/workbench/tab-ref';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
@@ -102,7 +102,7 @@
 					rightPanel.close();
 				}}
 			>
-				<ExternalLink data-icon />
+				<Icon.External data-icon />
 			</Button>
 		{/snippet}
 	</Tip>
@@ -115,7 +115,7 @@
 				aria-label="New chat"
 				onclick={() => rightPanel.newChat()}
 			>
-				<Plus data-icon />
+				<Icon.Plus data-icon />
 			</Button>
 		{/snippet}
 	</Tip>
@@ -146,7 +146,7 @@
 								aria-label="Close panel"
 								onclick={() => rightPanel.close()}
 							>
-								<X data-icon />
+								<Icon.Close data-icon />
 							</Button>
 						{/snippet}
 					</Tip>
@@ -249,7 +249,7 @@
 									aria-label="Close panel"
 									onclick={() => rightPanel.close()}
 								>
-									<X data-icon />
+									<Icon.Close data-icon />
 								</Button>
 							{/snippet}
 						</Tip>

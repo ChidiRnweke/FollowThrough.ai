@@ -1,44 +1,13 @@
-import AlignCenter from '@lucide/svelte/icons/align-center';
-import AlighJustify from '@lucide/svelte/icons/align-justify';
-import AlignLeft from '@lucide/svelte/icons/align-left';
-import AlignRight from '@lucide/svelte/icons/align-right';
-import Audio from '@lucide/svelte/icons/audio-lines';
-import Bold from '@lucide/svelte/icons/bold';
-import Code from '@lucide/svelte/icons/code';
-import IFrame from '@lucide/svelte/icons/code-xml';
-import Heading1 from '@lucide/svelte/icons/heading-1';
-import Heading2 from '@lucide/svelte/icons/heading-2';
-import Heading3 from '@lucide/svelte/icons/heading-3';
-import Heading4 from '@lucide/svelte/icons/heading-4';
-import Image from '@lucide/svelte/icons/image';
-import Italic from '@lucide/svelte/icons/italic';
-import Link from '@lucide/svelte/icons/link-2';
-import List from '@lucide/svelte/icons/list';
-import Blocks from '@lucide/svelte/icons/blocks';
-import ListChecks from '@lucide/svelte/icons/list-checks';
-import ListOrdered from '@lucide/svelte/icons/list-ordered';
-import Pilcrow from '@lucide/svelte/icons/pilcrow';
-import Quote from '@lucide/svelte/icons/quote';
-import Radical from '@lucide/svelte/icons/radical';
-import Redo from '@lucide/svelte/icons/redo-2';
-import SquareRadical from '@lucide/svelte/icons/square-radical';
-import StrikeThrough from '@lucide/svelte/icons/strikethrough';
-import Subscript from '@lucide/svelte/icons/subscript';
-import Superscript from '@lucide/svelte/icons/superscript';
-import Table from '@lucide/svelte/icons/table';
-import Underline from '@lucide/svelte/icons/underline';
-import Undo from '@lucide/svelte/icons/undo-2';
-import Video from '@lucide/svelte/icons/video';
+import type { Component } from 'svelte';
+import * as Icon from '$lib/components/icons';
 import { isTextSelection, type Editor } from '@tiptap/core';
 import type { Node } from '@tiptap/pm/model';
 import { ISMAC } from './utils.js';
 import strings from './strings.js';
-import { FileCode, type Icon } from '@lucide/svelte';
-import Workflow from '@lucide/svelte/icons/workflow';
 
 export interface EdraCommand {
 	name: string;
-	icon: typeof Icon;
+	icon: Component<{ class?: string }>;
 	tooltip: string;
 	/** Extra words the slash menu matches on, for names a writer would not guess. */
 	aliases?: readonly string[];
@@ -52,7 +21,7 @@ export interface EdraCommand {
 export const commands: Record<string, EdraCommand[]> = {
 	'undo-redo': [
 		{
-			icon: Undo,
+			icon: Icon.Undo,
 			name: 'undo',
 			tooltip: strings.command.undo,
 			shortCut: `${ISMAC ? '⌘' : 'Ctrl+'}Z`,
@@ -64,7 +33,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: Redo,
+			icon: Icon.Redo,
 			name: 'redo',
 			tooltip: strings.command.redo,
 			shortCut: `${ISMAC ? '⌘' : 'Ctrl+'}Y`,
@@ -78,7 +47,7 @@ export const commands: Record<string, EdraCommand[]> = {
 	],
 	headings: [
 		{
-			icon: Heading1,
+			icon: Icon.Heading1,
 			name: 'h1',
 			tooltip: strings.command.h1,
 			shortCut: `${ISMAC ? '⌘⌥' : 'Ctrl+Alt+'}1`,
@@ -96,7 +65,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: Heading2,
+			icon: Icon.Heading2,
 			name: 'h2',
 			tooltip: strings.command.h2,
 			shortCut: `${ISMAC ? '⌘⌥' : 'Ctrl+Alt+'}2`,
@@ -114,7 +83,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: Heading3,
+			icon: Icon.Heading3,
 			name: 'h3',
 			tooltip: strings.command.h3,
 			shortCut: `${ISMAC ? '⌘⌥' : 'Ctrl+Alt+'}3`,
@@ -132,7 +101,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: Heading4,
+			icon: Icon.Heading4,
 			name: 'h4',
 			tooltip: strings.command.h4,
 			shortCut: `${ISMAC ? '⌘⌥' : 'Ctrl+Alt+'}4`,
@@ -152,7 +121,7 @@ export const commands: Record<string, EdraCommand[]> = {
 	],
 	'text-formatting': [
 		{
-			icon: Link,
+			icon: Icon.Link,
 			name: 'link',
 			tooltip: strings.command.link,
 			onClick: (editor) => {
@@ -170,7 +139,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: Pilcrow,
+			icon: Icon.Paragraph,
 			name: 'paragraph',
 			tooltip: 'Paragraph',
 			shortCut: `${ISMAC ? '⌘⇧' : 'Ctrl+Shift+'}0`,
@@ -188,7 +157,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: Bold,
+			icon: Icon.Bold,
 			name: 'bold',
 			tooltip: strings.command.bold,
 			shortCut: `${ISMAC ? '⌘' : 'Ctrl+'}B`,
@@ -206,7 +175,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: Italic,
+			icon: Icon.Italic,
 			name: 'italic',
 			tooltip: strings.command.italic,
 			shortCut: `${ISMAC ? '⌘' : 'Ctrl+'}I`,
@@ -224,7 +193,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: Underline,
+			icon: Icon.Underline,
 			name: 'underline',
 			tooltip: strings.command.underline,
 			shortCut: `${ISMAC ? '⌘' : 'Ctrl+'}U`,
@@ -242,7 +211,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: StrikeThrough,
+			icon: Icon.Strikethrough,
 			name: 'strikethrough',
 			tooltip: strings.command.strikethrough,
 			shortCut: `${ISMAC ? '⌘⇧' : 'Ctrl+Shift+'}S`,
@@ -260,7 +229,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: Quote,
+			icon: Icon.Quote,
 			name: 'blockQuote',
 			tooltip: strings.command.blockQuote,
 			shortCut: `${ISMAC ? '⌘⇧' : 'Ctrl+Shift+'}B`,
@@ -278,7 +247,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: Code,
+			icon: Icon.Code,
 			name: 'code',
 			tooltip: strings.command.code,
 			shortCut: `${ISMAC ? '⌘' : 'Ctrl+'}E`,
@@ -296,7 +265,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: FileCode,
+			icon: Icon.FileCode,
 			name: 'codeBlock',
 			tooltip: strings.command.codeBlock,
 			shortCut: `${ISMAC ? '⌘⌥' : 'Ctrl+Shift+'}C`,
@@ -314,7 +283,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: Superscript,
+			icon: Icon.Superscript,
 			name: 'superscript',
 			tooltip: strings.command.superscript,
 			shortCut: `${ISMAC ? '⌘' : 'Ctrl+'}.`,
@@ -329,7 +298,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: Subscript,
+			icon: Icon.Subscript,
 			name: 'subscript',
 			tooltip: strings.command.subscript,
 			shortCut: `${ISMAC ? '⌘' : 'Ctrl+'},`,
@@ -346,7 +315,7 @@ export const commands: Record<string, EdraCommand[]> = {
 	],
 	alignment: [
 		{
-			icon: AlignLeft,
+			icon: Icon.AlignLeft,
 			name: 'align-left',
 			tooltip: strings.command.alignLeft,
 			shortCut: `${ISMAC ? '⌘⇧' : 'Ctrl+Shift+'}L`,
@@ -362,7 +331,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			isActive: (editor) => editor.isActive({ textAlign: 'left' })
 		},
 		{
-			icon: AlignCenter,
+			icon: Icon.AlignCenter,
 			name: 'align-center',
 			tooltip: strings.command.alignCenter,
 			shortCut: `${ISMAC ? '⌘⇧' : 'Ctrl+Shift+'}E`,
@@ -378,7 +347,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			isActive: (editor) => editor.isActive({ textAlign: 'center' })
 		},
 		{
-			icon: AlignRight,
+			icon: Icon.AlignRight,
 			name: 'align-right',
 			tooltip: strings.command.alignRight,
 			shortCut: `${ISMAC ? '⌘⇧' : 'Ctrl+Shift+'}R`,
@@ -394,7 +363,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			isActive: (editor) => editor.isActive({ textAlign: 'right' })
 		},
 		{
-			icon: AlighJustify,
+			icon: Icon.AlignJustify,
 			name: 'align-justify',
 			tooltip: strings.command.alignJustify,
 			shortCut: `${ISMAC ? '⌘⇧' : 'Ctrl+Shift+'}J`,
@@ -412,7 +381,7 @@ export const commands: Record<string, EdraCommand[]> = {
 	],
 	lists: [
 		{
-			icon: List,
+			icon: Icon.ListBullet,
 			name: 'bulletList',
 			tooltip: strings.command.bulletList,
 			shortCut: `${ISMAC ? '⌘⇧' : 'Ctrl+Shift+'}8`,
@@ -425,7 +394,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			isActive: (editor) => editor.isActive('bulletList')
 		},
 		{
-			icon: ListOrdered,
+			icon: Icon.ListOrdered,
 			name: 'orderedList',
 			tooltip: strings.command.orderedList,
 			shortCut: `${ISMAC ? '⌘⇧' : 'Ctrl+Shift+'}7`,
@@ -443,7 +412,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			}
 		},
 		{
-			icon: ListChecks,
+			icon: Icon.ListChecks,
 			name: 'taskList',
 			tooltip: strings.command.taskList,
 			shortCut: `${ISMAC ? '⌘⇧' : 'Ctrl+Shift+'}9`,
@@ -463,7 +432,7 @@ export const commands: Record<string, EdraCommand[]> = {
 	],
 	media: [
 		{
-			icon: Image,
+			icon: Icon.Image,
 			name: 'image-placeholder',
 			tooltip: strings.command.imagePlaceholder,
 			onClick: (editor) => {
@@ -472,7 +441,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			isActive: (editor) => editor.isActive('mediaPlaceholder', { mediaType: 'image' })
 		},
 		{
-			icon: Video,
+			icon: Icon.Video,
 			name: 'video-placeholder',
 			tooltip: strings.command.videoPlaceholder,
 			onClick: (editor) => {
@@ -481,7 +450,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			isActive: (editor) => editor.isActive('mediaPlaceholder', { mediaType: 'video' })
 		},
 		{
-			icon: Audio,
+			icon: Icon.Audio,
 			name: 'audio-placeholder',
 			tooltip: strings.command.audioPlaceholder,
 			onClick: (editor) => {
@@ -490,7 +459,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			isActive: (editor) => editor.isActive('mediaPlaceholder', { mediaType: 'audio' })
 		},
 		{
-			icon: IFrame,
+			icon: Icon.CodeBlock,
 			name: 'iframe-placeholder',
 			tooltip: strings.command.iframePlaceholder,
 			onClick: (editor) => {
@@ -501,7 +470,7 @@ export const commands: Record<string, EdraCommand[]> = {
 	],
 	table: [
 		{
-			icon: Table,
+			icon: Icon.Table,
 			name: 'table',
 			tooltip: strings.command.table,
 			onClick: (editor) => {
@@ -520,7 +489,7 @@ export const commands: Record<string, EdraCommand[]> = {
 	],
 	math: [
 		{
-			icon: Radical,
+			icon: Icon.Math,
 			name: 'mathematics',
 			tooltip: strings.command.inlineExpression,
 			onClick: (editor) => {
@@ -536,7 +505,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			isActive: (editor) => editor.isActive('inlineMath')
 		},
 		{
-			icon: SquareRadical,
+			icon: Icon.MathBlock,
 			name: 'blockMathematics',
 			tooltip: strings.command.blockExpression,
 			onClick: (editor) => {
@@ -548,7 +517,7 @@ export const commands: Record<string, EdraCommand[]> = {
 	],
 	diagram: [
 		{
-			icon: Workflow,
+			icon: Icon.Diagram,
 			name: 'mermaid',
 			tooltip: 'Mermaid Diagram',
 			aliases: ['diagram', 'flowchart', 'chart'],
@@ -558,7 +527,7 @@ export const commands: Record<string, EdraCommand[]> = {
 			isActive: (editor) => editor.isActive('mermaid')
 		},
 		{
-			icon: Workflow,
+			icon: Icon.Diagram,
 			name: 'projectDiagram',
 			tooltip: 'Project diagram',
 			aliases: ['drawio', 'diagram', 'saved'],
@@ -572,7 +541,7 @@ export const commands: Record<string, EdraCommand[]> = {
 	],
 	widget: [
 		{
-			icon: Blocks,
+			icon: Icon.Widget,
 			name: 'widget',
 			tooltip: 'Widget',
 			aliases: ['checklist', 'tracker'],

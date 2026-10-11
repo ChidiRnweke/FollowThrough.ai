@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { DropdownMenu as DropdownMenuPrimitive } from 'bits-ui';
-	import { FtChevronRight as ChevronRightIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { cn } from '$lib/utils.js';
 
 	let {
@@ -25,5 +25,5 @@
 	{...restProps}
 >
 	{@render children?.()}
-	<ChevronRightIcon class="ml-auto" />
+	<Icon.ChevronRight class="ml-auto" />
 </DropdownMenuPrimitive.SubTrigger>

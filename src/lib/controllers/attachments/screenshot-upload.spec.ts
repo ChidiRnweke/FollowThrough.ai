@@ -21,7 +21,12 @@ it('uploads a project screenshot under its todo and returns the completed conten
 });
 it('surfaces storage rejection without completing a screenshot', async () => {
 	const { controller, remote, browser } = attachmentActionsFixture();
-	browser.writeResult = { kind: 'failure', status: 403, detail: 'Entity too large' };
+	browser.writeResult = {
+		kind: 'failure',
+		reason: 'refused',
+		status: 403,
+		detail: 'Entity too large'
+	};
 	const outcome = await controller
 		.uploadScreenshot(testTodoId(), testProjectId(), screenshot())
 		.then(
@@ -29,7 +34,7 @@ it('surfaces storage rejection without completing a screenshot', async () => {
 			(error: Error) => error.message
 		);
 	expect({ outcome, completed: remote.completed }).toEqual({
-		outcome: 'Object storage rejected the screenshot: Entity too large',
+		outcome: 'File storage rejected the screenshot: Entity too large',
 		completed: []
 	});
 });

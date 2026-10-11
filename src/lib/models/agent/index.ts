@@ -223,7 +223,11 @@ export type ToolActivity =
 			readonly failure: string;
 			readonly output: AgentPayload;
 	  })
-	| (ToolActivityBase & { readonly status: 'failed'; readonly failure: string });
+	| (Omit<ToolActivityBase, 'name'> & {
+			readonly name: string;
+			readonly status: 'failed';
+			readonly failure: string;
+	  });
 
 export type AgentExecutionMode = 'approval_required' | 'auto_accept';
 
@@ -958,7 +962,7 @@ export type AgentEvent =
 	| {
 			readonly type: 'tool_failed';
 			readonly callId?: string;
-			readonly name: AgentToolName;
+			readonly name: string;
 			readonly failure: string;
 	  }
 	| {
@@ -1076,7 +1080,12 @@ export const toolNameSchema = z.enum(TOOL_DESCRIPTIONS.map((entry) => entry.name
  * `tests/corpus/`, the only name outside the catalog is `search_tools`, which
  * `AgentTools.agentTools()` assembles rather than defines.
  */
-export const agentToolNameSchema = z.union([toolNameSchema, z.literal('search_tools')]);
+export const agentToolNameSchema = z.union([
+	toolNameSchema,
+	z.literal('search_tools'),
+	z.literal('submit_mermaid_diagram'),
+	z.literal('submit_drawio_diagram')
+]);
 
 export const pendingDecisionIdentitySchema = z.object({ callId: z.string() });
 
@@ -1119,7 +1128,7 @@ const toolOutcomeSchemas = [
 	z.object({
 		type: z.literal('tool_failed'),
 		callId: z.string().optional(),
-		name: agentToolNameSchema,
+		name: z.string(),
 		failure: z.string()
 	})
 ] as const;
@@ -1275,6 +1284,17 @@ export type ProviderToolOutput =
 	| { readonly kind: 'value'; readonly value: AgentPayload }
 	| { readonly kind: 'corrupt'; readonly message: string };
 
+/**
+ * A call's arguments: readable, or not.
+ *
+ * Unreadable is an arm rather than a throw. The Agents SDK answers malformed
+ * arguments itself — it returns a correction to the model and the run goes on —
+ * so the observer must record that call, not end the turn over it.
+ */
+export type ProviderToolArguments =
+	| { readonly kind: 'value'; readonly value: AgentPayloadObject }
+	| { readonly kind: 'corrupt'; readonly message: string };
+
 /** One tool call as the provider described it, with the three id spellings resolved. */
 export interface ProviderToolCall {
 	/**
@@ -1284,7 +1304,7 @@ export interface ProviderToolCall {
 	 */
 	readonly callId: string | undefined;
 	readonly name: string;
-	readonly arguments: AgentPayloadObject;
+	readonly arguments: ProviderToolArguments;
 	readonly output: ProviderToolOutput;
 }
 
@@ -2064,10 +2084,24 @@ export const normalizeLanguageModelId = (modelId: string): LanguageModelId => {
 export type AgentToolOutcome =
 	| Exclude<ProviderToolOutput, { readonly kind: 'value' }>
 	| { readonly kind: 'succeeded'; readonly value: AgentPayload }
-	| { readonly kind: 'reported_failure'; readonly value: AgentPayload; readonly failure: string };
+	| { readonly kind: 'reported_failure'; readonly value: AgentPayload; readonly failure: string }
+	/** A value claiming the failure kind that does not match the envelope: still a failure. */
+	| { readonly kind: 'unreadable_failure'; readonly message: string };
 
 /** Prepared autocomplete messages, with no provider protocol or executable rules. */
 export interface InlineCompletionPrompt {
 	readonly system: string;
 	readonly user: string;
 }
+
+/**
+ * What identifies a rejected provider request, read off the provider client's error: the
+ * upstream provider OpenRouter routed to, and the request id. Neither carries user content.
+ * The upstream body in `error.metadata.raw` may echo the prompt and is deliberately not read.
+ */
+export const providerRejectionSchema = z.object({
+	requestID: z.string().min(1).nullish(),
+	error: z
+		.object({ metadata: z.object({ provider_name: z.string().min(1).optional() }).nullish() })
+		.nullish()
+});

@@ -1,4 +1,3 @@
-import { ToolLifecycleError } from '$lib/errors';
 import type { PendingAgentDecision } from '$lib/models/agent';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
@@ -82,6 +81,6 @@ describe('Resuming reviewed tool calls', () => {
 					}
 				])
 				.agentTools()
-		).toThrow(ToolLifecycleError);
+		).toThrow('A saved note approval is missing its prepared review');
 	});
 });

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import { FtRetry as RefreshCw } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 </script>
 
 <svelte:head>
@@ -27,7 +27,7 @@
 			available from the cached workspace.
 		</p>
 		<Button href="/today" class="mt-8 min-h-11">
-			<RefreshCw class="size-4" />
+			<Icon.Retry class="size-4" />
 			Retry workspace
 		</Button>
 	</section>

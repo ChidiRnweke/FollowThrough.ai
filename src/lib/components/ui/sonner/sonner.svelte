@@ -1,14 +1,7 @@
 <script lang="ts">
 	import { Toaster as Sonner, type ToasterProps as SonnerProps } from 'svelte-sonner';
 	import { mode } from 'mode-watcher';
-	import {
-		FtLoader as Loader2Icon,
-		FtSuccess as CircleCheckIcon,
-		FtError as OctagonXIcon,
-		FtInfo as InfoIcon,
-		FtWarning as TriangleAlertIcon,
-		FtClose as XIcon
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	// Every toast is dismissable: several of them report the outcome of a durable action and
 	// there is no other way to clear one before its timer runs out. Sonner's own close button
@@ -33,21 +26,21 @@
 	{...restProps}
 >
 	{#snippet loadingIcon()}
-		<Loader2Icon class="size-4 animate-spin" />
+		<Icon.Loader class="size-4 animate-spin" />
 	{/snippet}
 	{#snippet successIcon()}
-		<CircleCheckIcon class="size-4" />
+		<Icon.Success class="size-4" />
 	{/snippet}
 	{#snippet errorIcon()}
-		<OctagonXIcon class="size-4" />
+		<Icon.Error class="size-4" />
 	{/snippet}
 	{#snippet infoIcon()}
-		<InfoIcon class="size-4" />
+		<Icon.Info class="size-4" />
 	{/snippet}
 	{#snippet warningIcon()}
-		<TriangleAlertIcon class="size-4" />
+		<Icon.Warning class="size-4" />
 	{/snippet}
 	{#snippet closeIcon()}
-		<XIcon class="size-3" />
+		<Icon.Close class="size-3" />
 	{/snippet}
 </Sonner>

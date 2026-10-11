@@ -71,10 +71,11 @@ export const legacyNoteReview: NoteChangeReview = {
 const journalledToolSchema = z.object({
 	review: agentReviewSchema.optional(),
 	callId: z.string().nullish(),
-	// A journalled row naming a tool the agent surface no longer has becomes an
-	// `unreadable` transcript part rather than a row nothing can label.
-	// `tests/unit/corpus.spec.ts` holds that at zero against the stored messages.
-	name: agentToolNameSchema,
+	// A failed row may name a tool the model asked for and the agent does not
+	// have. Every other row names a catalog tool, checked below; one that does
+	// not becomes an `unreadable` transcript part rather than a row nothing can
+	// label. `tests/unit/corpus.spec.ts` holds that at zero.
+	name: z.string(),
 	input: z.custom<AgentPayload>(() => true).optional(),
 	output: z.custom<AgentPayload>(() => true).optional(),
 	failure: z.string().nullish(),
@@ -88,9 +89,8 @@ export const readJournalledTool = (
 	const parsed = journalledToolSchema.safeParse(content);
 	if (!parsed.success) return { kind: 'unreadable', reason: z.prettifyError(parsed.error) };
 	const row = parsed.data;
-	const base: ChatToolActivityBase = {
+	const identity = {
 		...(row.callId ? { callId: row.callId } : {}),
-		name: row.name,
 		arguments: toolArguments(row.input ?? {}),
 		...(provenance.runId ? { runId: provenance.runId } : {})
 	};
@@ -98,6 +98,13 @@ export const readJournalledTool = (
 	// cannot carry `undefined`. Both spellings mean the field is not there.
 	const output = row.output ?? undefined;
 	const failure = row.failure ?? undefined;
+	if (row.status === 'failed')
+		return failure === undefined
+			? { kind: 'unreadable', reason: 'a failed row carries no failure' }
+			: { kind: 'readable', tool: { ...identity, name: row.name, failure, status: 'failed' } };
+	const name = agentToolNameSchema.safeParse(row.name);
+	if (!name.success) return { kind: 'unreadable', reason: z.prettifyError(name.error) };
+	const base: ChatToolActivityBase = { ...identity, name: name.data };
 	if (row.status === 'running') return { kind: 'readable', tool: { ...base, status: 'running' } };
 	if (row.status === 'approval_required')
 		return {
@@ -118,8 +125,6 @@ export const readJournalledTool = (
 	// reconstruct — the writer always supplies both.
 	if (failure === undefined)
 		return { kind: 'unreadable', reason: `a ${row.status} row carries no failure` };
-	if (row.status === 'failed')
-		return { kind: 'readable', tool: { ...base, failure, status: 'failed' } };
 	return output === undefined
 		? { kind: 'unreadable', reason: 'a reported_failure row carries no output' }
 		: { kind: 'readable', tool: { ...base, failure, output, status: 'reported_failure' } };

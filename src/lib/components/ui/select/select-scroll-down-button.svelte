@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Select as SelectPrimitive } from 'bits-ui';
 	import { cn, type WithoutChildrenOrChild } from '$lib/utils.js';
-	import { FtChevronDown as ChevronDownIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		ref = $bindable(null),
@@ -19,5 +19,5 @@
 	)}
 	{...restProps}
 >
-	<ChevronDownIcon />
+	<Icon.ChevronDown />
 </SelectPrimitive.ScrollDownButton>

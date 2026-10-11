@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { workspaceViews } from '$lib/factories/workspace/session';
+	import * as Icon from '$lib/components/icons';
 	import { workspaceSession } from '$lib/factories/workspace/session';
-	import { FtMemory, FtPlus } from '$lib/components/icons';
 	import { CHAT_ROW, CHAT_ROW_ICON } from '../chat-row';
 
 	let {
@@ -51,7 +51,7 @@
 	     underneath is the context for weighing it. -->
 	{#if content}
 		<div class="flex items-start gap-2 rounded-md bg-brand/10 px-2 py-1.5 dark:bg-brand/15">
-			<FtPlus class="{CHAT_ROW_ICON} mt-0.5 text-brand" />
+			<Icon.Plus class="{CHAT_ROW_ICON} mt-0.5 text-brand" />
 			<div class="flex min-w-0 flex-col gap-0.5">
 				<p class="provenance-caption text-brand-muted-foreground">{verb}, about {scope}</p>
 				<p class="break-words text-xs text-foreground">{content}</p>
@@ -73,7 +73,7 @@
 			<ul class="flex flex-col">
 				{#each existing as entry (entry.id)}
 					<li class="{CHAT_ROW} items-start text-muted-foreground">
-						<FtMemory class="{CHAT_ROW_ICON} mt-0.5" />
+						<Icon.Memory class="{CHAT_ROW_ICON} mt-0.5" />
 						<span class="min-w-0 break-words">{entry.content}</span>
 					</li>
 				{/each}

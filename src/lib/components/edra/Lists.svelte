@@ -2,8 +2,7 @@
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { cn } from '$lib/utils.js';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import Minus from '@lucide/svelte/icons/minus';
+	import * as Icon from '$lib/components/icons';
 	import { commands, getEditor, useEditorTransaction } from './commands/index.js';
 	import Tooltip from './Tooltip.svelte';
 
@@ -19,13 +18,13 @@
 	const ListIcon = () => {
 		void transaction.version;
 		const h = lists.find((h) => h.isActive?.(editor));
-		return h ? h.icon : Minus;
+		return h ? h.icon : Icon.Minus;
 	};
 </script>
 
 <DropdownMenu.Root>
 	<Tooltip tooltip="Lists">
-		{@const Icon = ListIcon()}
+		{@const Glyph = ListIcon()}
 		<DropdownMenu.Trigger
 			class={buttonVariants({
 				variant: 'ghost',
@@ -33,8 +32,8 @@
 				class: cn(isActive() && 'bg-muted')
 			})}
 		>
-			<Icon />
-			<ChevronDown class="text-muted-foreground size-2!" />
+			<Glyph />
+			<Icon.ChevronDown class="text-muted-foreground size-2!" />
 		</DropdownMenu.Trigger>
 	</Tooltip>
 	<DropdownMenu.Content
@@ -43,9 +42,9 @@
 	>
 		<DropdownMenu.Label>Lists</DropdownMenu.Label>
 		{#each lists as list (list)}
-			{@const Icon = list.icon}
+			{@const Glyph = list.icon}
 			<DropdownMenu.Item onclick={() => list.onClick?.(editor)}>
-				<Icon />
+				<Glyph />
 				{list.tooltip}
 				<DropdownMenu.Shortcut>{list.shortCut}</DropdownMenu.Shortcut>
 			</DropdownMenu.Item>

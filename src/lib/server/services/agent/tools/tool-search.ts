@@ -108,9 +108,12 @@ export class ToolSearch implements ToolSeeding, ToolRanking {
 		);
 		const available = new Set(ranked);
 		const missing = names.filter((name) => !available.has(name));
+		// A missing seed is a deployment fault, not an upstream outage: no retry can
+		// fill the index. It reaches the model as an internal fault ("do not retry"),
+		// and the detail reaches the operator through boundary logging (ADR 0022).
 		if (missing.length)
-			throw new ExternalServiceError(
-				'Tool search index is incomplete. Run the tool-embedding seed.',
+			throw new Error(
+				'Tool search index is incomplete. Run the tool-embedding seed (pnpm db:seed:tools).',
 				{ cause: 'Missing current-model vectors for: ' + missing.join(', ') }
 			);
 		return ranked.slice(0, limit);

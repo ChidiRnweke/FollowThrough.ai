@@ -56,7 +56,7 @@ export class Attachments implements AttachmentsController {
 		const intent = await this.store(
 			this.preparation.inline(noteId, this.details(file), this.browser.identity()),
 			file,
-			'upload',
+			'image',
 			current
 		);
 		const uploaded = await this.remote.complete(intent.upload.id);
@@ -89,7 +89,7 @@ export class Attachments implements AttachmentsController {
 	private async store(
 		input: AttachmentUploadDraft,
 		file: File,
-		label: 'upload' | 'screenshot',
+		label: 'upload' | 'image' | 'screenshot',
 		current: () => void
 	): Promise<AttachmentUploadIntent> {
 		const checksumSha256 = await this.browser.checksum(file);
@@ -97,11 +97,15 @@ export class Attachments implements AttachmentsController {
 		const intent = await this.remote.initiate({ ...input, checksumSha256 });
 		current();
 		const stored = await this.browser.put(intent, file);
+		if (stored.kind === 'failure' && stored.reason === 'unreachable')
+			throw new Error(
+				`Could not reach file storage, so the ${label} was not saved. Check your connection, or ask the operator to allow this site in the storage CORS settings.`
+			);
 		if (stored.kind === 'failure')
 			throw new Error(
 				stored.detail
-					? `Object storage rejected the ${label}: ${stored.detail}`
-					: `Object storage rejected the ${label} (${stored.status})`
+					? `File storage rejected the ${label}: ${stored.detail}`
+					: `File storage rejected the ${label} (${stored.status})`
 			);
 		current();
 		return intent;

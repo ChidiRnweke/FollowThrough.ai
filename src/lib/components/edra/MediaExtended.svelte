@@ -3,14 +3,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { cn, mergeProps } from '$lib/utils.js';
 	import { Tip } from '$lib/components/ui/tooltip/index.js';
-	import AlignCenter from '@lucide/svelte/icons/text-align-center';
-	import AlignLeft from '@lucide/svelte/icons/text-align-start';
-	import AlignRight from '@lucide/svelte/icons/text-align-end';
-	import Captions from '@lucide/svelte/icons/captions';
-	import CopyIcon from '@lucide/svelte/icons/copy';
-	import EllipsisVertical from '@lucide/svelte/icons/ellipsis-vertical';
-	import Fullscreen from '@lucide/svelte/icons/fullscreen';
-	import Trash from '@lucide/svelte/icons/trash-2';
+	import * as Icon from '$lib/components/icons';
 	import type { NodeViewProps } from '@tiptap/core';
 	import { onDestroy, onMount, type Snippet } from 'svelte';
 	import { duplicateContent } from './commands/utils.js';
@@ -213,7 +206,7 @@
 							onclick={() => updateAttributes({ align: 'left' })}
 							aria-label={strings.extension.media.alignLeft}
 						>
-							<AlignLeft />
+							<Icon.TextAlignStart />
 						</Button>
 					{/snippet}
 				</Tip>
@@ -227,7 +220,7 @@
 							onclick={() => updateAttributes({ align: 'center' })}
 							aria-label={strings.extension.media.alignCenter}
 						>
-							<AlignCenter />
+							<Icon.TextAlignCenter />
 						</Button>
 					{/snippet}
 				</Tip>
@@ -241,7 +234,7 @@
 							onclick={() => updateAttributes({ align: 'right' })}
 							aria-label={strings.extension.media.alignRight}
 						>
-							<AlignRight />
+							<Icon.TextAlignEnd />
 						</Button>
 					{/snippet}
 				</Tip>
@@ -258,7 +251,7 @@
 										class={buttonVariants({ variant: 'ghost', size: 'icon-xs' })}
 										aria-label={strings.extension.media.moreOptions}
 									>
-										<EllipsisVertical />
+										<Icon.EllipsisVertical />
 									</button>
 								{/snippet}
 							</Tip>
@@ -273,7 +266,7 @@
 									});
 							}}
 						>
-							<Captions />
+							<Icon.Captions />
 							{strings.extension.media.caption}
 						</DropdownMenu.Item>
 						<DropdownMenu.Item
@@ -281,7 +274,7 @@
 								duplicateContent(editor, node);
 							}}
 						>
-							<CopyIcon />
+							<Icon.Copy />
 							{strings.extension.media.duplicate}
 						</DropdownMenu.Item>
 						<DropdownMenu.Item
@@ -291,7 +284,7 @@
 								});
 							}}
 						>
-							<Fullscreen />
+							<Icon.Fullscreen />
 							{strings.extension.media.fullscreen}
 						</DropdownMenu.Item>
 						<DropdownMenu.Item
@@ -300,7 +293,7 @@
 							}}
 							class="text-destructive"
 						>
-							<Trash />
+							<Icon.Trash />
 							{strings.extension.media.delete}
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>

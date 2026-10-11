@@ -2,7 +2,7 @@
 	import { buttonVariants } from '$lib/components/ui/button/button.svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { getEditor } from './commands/index.js';
-	import { ChevronDown, Download, FileText, FileOutput } from '@lucide/svelte';
+	import * as Icon from '$lib/components/icons';
 
 	let { onExportDocx, onExportPdf }: { onExportDocx?: () => void; onExportPdf?: () => void } =
 		$props();
@@ -61,8 +61,8 @@
 
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger class={buttonVariants({ variant: 'ghost', size: 'icon' })}>
-		<Download />
-		<ChevronDown class="size-2! text-muted-foreground" />
+		<Icon.Download />
+		<Icon.ChevronDown class="size-2! text-muted-foreground" />
 	</DropdownMenu.Trigger>
 	<DropdownMenu.Portal>
 		<DropdownMenu.Content>
@@ -75,12 +75,12 @@
 				<DropdownMenu.Label>Generate Document</DropdownMenu.Label>
 				{#if onExportDocx}
 					<DropdownMenu.Item onclick={onExportDocx}>
-						<FileText class="mr-2 size-4" />DOCX
+						<Icon.FileText class="mr-2 size-4" />DOCX
 					</DropdownMenu.Item>
 				{/if}
 				{#if onExportPdf}
 					<DropdownMenu.Item onclick={onExportPdf}>
-						<FileOutput class="mr-2 size-4" />PDF
+						<Icon.FileOutput class="mr-2 size-4" />PDF
 					</DropdownMenu.Item>
 				{/if}
 			{/if}

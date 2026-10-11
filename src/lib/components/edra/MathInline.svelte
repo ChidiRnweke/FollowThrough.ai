@@ -3,7 +3,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import strings from './commands/strings.js';
 	import { BubbleMenu, getEditor, useEditorState } from './index.js';
-	import CornerDownLeft from '@lucide/svelte/icons/corner-down-left';
+	import * as Icon from '$lib/components/icons';
 
 	const editor = getEditor();
 	const editorState = useEditorState({
@@ -46,6 +46,6 @@
 		class="w-64"
 	/>
 	<Button variant="default" size="icon" onclick={updateLatex}>
-		<CornerDownLeft />
+		<Icon.Enter />
 	</Button>
 </BubbleMenu>

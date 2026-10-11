@@ -270,5 +270,3 @@ export class RunPreparationCancelled extends Error {
 		super('The run was cancelled during preparation');
 	}
 }
-
-export class ToolLifecycleError extends Error {}

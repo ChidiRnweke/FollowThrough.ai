@@ -794,23 +794,17 @@ export class Diagrams implements DiagramsController {
 		if (event.type === 'tool_called') {
 			const call = presentation.start(event.call);
 			activeCalls.set(call.callId, call);
-			return {
-				type: 'tool_started',
-				callId: call.callId,
-				name: generator.toolName(call.name),
-				arguments: call.arguments
-			};
+			return presentation.started(call, generator.toolName(call.name));
 		}
 		if (event.type !== 'tool_output') return undefined;
 		const { call } = event;
 		const resolved = presentation.completed(call, activeCalls);
-		const { callId } = resolved;
-		if (callId !== undefined) activeCalls.delete(callId);
-		const identity = {
-			...(callId === undefined ? {} : { callId }),
-			name: generator.toolName(resolved.name)
-		};
-		return presentation.outcome(identity, generator.toolOutcome(call.output));
+		if (resolved.callId !== undefined) activeCalls.delete(resolved.callId);
+		return presentation.settled(
+			resolved,
+			generator.toolName(resolved.name),
+			generator.toolOutcome(call.output)
+		);
 	}
 	/** Validates a submitted draft; the model may correct a rejected one. */
 	private async decideSubmission(draft: DiagramSubmission): Promise<DiagramSubmissionDecision> {

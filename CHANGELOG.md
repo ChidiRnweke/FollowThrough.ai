@@ -1,5 +1,54 @@
 # Changelog
 
+## [3.2.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.2.0...v3.2.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **sidebar:** give the live rail destination the brand wash ([#366](https://github.com/ChidiRnweke/FollowThrough.ai/issues/366)) ([a9d229a](https://github.com/ChidiRnweke/FollowThrough.ai/commit/a9d229a59b1f7d128b5d6c316f93ceed46136051))
+
+## [3.2.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.1.0...v3.2.0) (2026-10-10)
+
+
+### Features
+
+* **empty-state:** draw scenes for large empty states ([#361](https://github.com/ChidiRnweke/FollowThrough.ai/issues/361)) ([56d1943](https://github.com/ChidiRnweke/FollowThrough.ai/commit/56d194360caeea33ce2eedbe9259d81a4a57e2d5))
+* **icons:** replace lucide and ft icons with the through-line set ([#359](https://github.com/ChidiRnweke/FollowThrough.ai/issues/359)) ([fc53381](https://github.com/ChidiRnweke/FollowThrough.ai/commit/fc53381e850dc0e555a52b4671d4d20c57788d16))
+
+## [3.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.0.1...v3.1.0) (2026-10-10)
+
+
+### Features
+
+* **ui:** point empty notes, boards, and chats at the features they hide ([#343](https://github.com/ChidiRnweke/FollowThrough.ai/issues/343)) ([b04536d](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b04536dd23098b470a10c0768e030984ae5e24b3))
+
+
+### Bug Fixes
+
+* **agent:** surface upload, stale-revision, and tool-index failures honestly ([#341](https://github.com/ChidiRnweke/FollowThrough.ai/issues/341)) ([fafb553](https://github.com/ChidiRnweke/FollowThrough.ai/commit/fafb553d8f92a3fa4ebe187b9455ca0cc1e570a5))
+* **shell:** create strip notes in the open project and reveal it in the sidebar ([#342](https://github.com/ChidiRnweke/FollowThrough.ai/issues/342)) ([adf31c8](https://github.com/ChidiRnweke/FollowThrough.ai/commit/adf31c8d7e7c29c3aa69e16105b38e1abede8849))
+* **ui:** correct section numbering, keep the toolbar in the pane, and clarify sync wording ([#339](https://github.com/ChidiRnweke/FollowThrough.ai/issues/339)) ([01b4ef2](https://github.com/ChidiRnweke/FollowThrough.ai/commit/01b4ef2df924fbef151791d593fa4f4628c96596))
+
+## [3.0.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.0.0...v3.0.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **agent:** keep recovered tool calls from ending the agent turn ([#322](https://github.com/ChidiRnweke/FollowThrough.ai/issues/322)) ([fc7d4fc](https://github.com/ChidiRnweke/FollowThrough.ai/commit/fc7d4fcca09d3e5e87fec92e0172b205828e04bc))
+* **agent:** keep who rejected a provider request ([#330](https://github.com/ChidiRnweke/FollowThrough.ai/issues/330)) ([ded7b26](https://github.com/ChidiRnweke/FollowThrough.ai/commit/ded7b269f2b741e993b1c0befcaa46c18a942e36))
+* **agent:** send only tool schema keywords strict function calling accepts ([#328](https://github.com/ChidiRnweke/FollowThrough.ai/issues/328)) ([cc0f7e2](https://github.com/ChidiRnweke/FollowThrough.ai/commit/cc0f7e2e21ed96255756849f29b8802834b000a1))
+
+## [3.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.3.1...v3.0.0) (2026-10-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **auth:** All deployments require complete Authentik configuration. Anonymous single-user access and the runtime LOCAL_USER_ID setting are removed. Browser test account selection now uses E2E_USER_ID.
+
+### Bug Fixes
+
+* **auth:** remove unauthenticated single-user access ([#326](https://github.com/ChidiRnweke/FollowThrough.ai/issues/326)) ([499288e](https://github.com/ChidiRnweke/FollowThrough.ai/commit/499288e4762f7e1eb5fc2dbc6517dab56f19c946))
+
 ## [2.3.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.3.0...v2.3.1) (2026-10-10)
 
 

@@ -12,12 +12,8 @@ const unauthorized = (detail: string): Response =>
 		}
 	});
 
-/**
- * Bearer token when auth is on. With auth disabled (single-user dev) there is
- * no session token. Establish the configured local account before provenance or tool writes.
- */
+/** Every MCP request requires an API token; its account and scope define access. */
 const authenticate = async (request: Request) => {
-	if (!AppFactory.isAuthEnabled()) return AppFactory.access(AppFactory.actor()).attributeLocalMcp();
 	const verified = await AppFactory.authentication().verifyBearer(
 		request.headers.get('authorization')
 	);

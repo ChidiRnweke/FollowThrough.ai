@@ -4,7 +4,7 @@
 	import * as Field from '$lib/components/ui/field';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
-	import { FtExternal as ExternalLink } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { todoUpdates } from '../todo-updates';
 	import TodoTextField from '../fields/todo-text-field.svelte';
 	import TodoDescriptionField from '../fields/todo-description-field.svelte';
@@ -141,7 +141,7 @@
 				<dt class="sr-only">Open source</dt>
 				<dd class="col-start-2">
 					<Button href="/notes/{view.sourceNote.id}" variant="link" size="sm" class="h-auto px-0"
-						>Open selected note<ExternalLink data-icon="inline-end" /></Button
+						>Open selected note<Icon.External data-icon="inline-end" /></Button
 					>
 				</dd>
 			{/if}
@@ -162,7 +162,7 @@
 						variant="link"
 						size="sm"
 						class="self-start px-0"
-						>Open {view.originNote.title}<ExternalLink data-icon="inline-end" /></Button
+						>Open {view.originNote.title}<Icon.External data-icon="inline-end" /></Button
 					>{/if}
 			</section>
 		{/if}

@@ -10,7 +10,8 @@
 	import EmptyState from '../shared/empty-state.svelte';
 	import { attachmentStatusStyle, formatBytes } from '../shared/labels';
 	import { toast } from 'svelte-sonner';
-	import { FtAttachments as Paperclip, FtEllipsis as Ellipsis } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import { workspaceSession, workspaceViews } from '$lib/factories/workspace/session';
 	import {
 		downloadAttachment,
@@ -117,17 +118,29 @@
 		{@render uploadButton()}{:else if items.length === 0}
 		<!-- An empty region is an invitation, not dead text: the one action the
 		     space exists for sits inside the empty state. -->
-		<EmptyState
-			icon={Paperclip}
-			title="No attachments yet."
-			hint="Briefs, screenshots, and exports you add here ground the agent's answers in this project."
-			size={heroEmpty ? 'large' : 'default'}
-			label={heroEmpty ? 'Attachments' : undefined}
-		>
-			{#snippet action()}
-				{@render uploadButton()}
-			{/snippet}
-		</EmptyState>
+		{#if heroEmpty}
+			<EmptyState
+				size="large"
+				scene={Scene.Attachment}
+				title="No attachments yet."
+				hint="Briefs, screenshots, and exports you add here ground the agent's answers in this project."
+				label="Attachments"
+			>
+				{#snippet action()}
+					{@render uploadButton()}
+				{/snippet}
+			</EmptyState>
+		{:else}
+			<EmptyState
+				icon={Icon.Attachment}
+				title="No attachments yet."
+				hint="Briefs, screenshots, and exports you add here ground the agent's answers in this project."
+			>
+				{#snippet action()}
+					{@render uploadButton()}
+				{/snippet}
+			</EmptyState>
+		{/if}
 	{:else}
 		<div class="flex flex-wrap items-center gap-2">
 			{@render uploadButton()}
@@ -188,7 +201,7 @@
 							class="size-7"
 							aria-label="Actions for {item.attachment.path}"
 						>
-							<Ellipsis class="size-4" />
+							<Icon.Ellipsis class="size-4" />
 						</Button>
 					{/snippet}
 				</DropdownMenu.Trigger>

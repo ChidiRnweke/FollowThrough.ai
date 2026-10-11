@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ContextMenu as ContextMenuPrimitive } from 'bits-ui';
 	import { cn, type WithoutChild } from '$lib/utils.js';
-	import { FtCheck as CheckIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		ref = $bindable(null),
@@ -27,7 +27,7 @@
 	{#snippet children({ checked })}
 		<span class="absolute right-2 pointer-events-none">
 			{#if checked}
-				<CheckIcon />
+				<Icon.Check />
 			{/if}
 		</span>
 		{@render childrenProp?.({ checked })}

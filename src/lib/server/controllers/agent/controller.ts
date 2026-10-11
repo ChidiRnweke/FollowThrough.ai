@@ -685,6 +685,9 @@ export class AgentSdkHarness implements AgentHarness {
 		// audit-allow: silent-catch — detached execution persists a failed run; only failure of that settlement reaches the terminal reporter.
 		void this.executeCancellably(runId)
 			.catch(async (error) => {
+				// A detached run executes outside the instrumented boundary, so nothing else logs
+				// its failure; the run's own record carries it for the user.
+				console.error(`[agent-run] Run ${runId} failed:`, error);
 				// Without this the run stays `running` forever, holding the
 				// conversation's single active-run slot and its open event stream.
 				await this.failRun(runId, error instanceof Error ? error : new Error(String(error)));
@@ -1007,7 +1010,7 @@ export class AgentSdkHarness implements AgentHarness {
 					limit
 				),
 			failed: (value) =>
-				this.dependencies.turns.toolOutcome({ kind: 'value', value }).kind === 'reported_failure'
+				this.dependencies.turns.toolOutcome({ kind: 'value', value }).kind !== 'succeeded'
 		};
 	}
 
@@ -1122,26 +1125,20 @@ export class AgentSdkHarness implements AgentHarness {
 					if (event.type === 'tool_called') {
 						const call = dependencies.streamPresentation.start(event.call);
 						activeCalls.set(call.callId, call);
-						yield {
-							type: 'event',
-							event: {
-								type: 'tool_started',
-								callId: call.callId,
-								name: dependencies.turns.toolName(call.name),
-								arguments: call.arguments
-							}
-						};
+						const started = dependencies.streamPresentation.started(
+							call,
+							dependencies.turns.toolName(call.name)
+						);
+						if (started) yield { type: 'event', event: started };
 					}
 					if (event.type === 'tool_output') {
 						const resolved = dependencies.streamPresentation.completed(event.call, activeCalls);
 						if (resolved.callId !== undefined) activeCalls.delete(resolved.callId);
 						yield {
 							type: 'event',
-							event: dependencies.streamPresentation.outcome(
-								{
-									...(resolved.callId === undefined ? {} : { callId: resolved.callId }),
-									name: dependencies.turns.toolName(resolved.name)
-								},
+							event: dependencies.streamPresentation.settled(
+								resolved,
+								dependencies.turns.toolName(resolved.name),
 								dependencies.turns.toolOutcome(event.call.output)
 							)
 						};

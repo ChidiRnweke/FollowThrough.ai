@@ -20,7 +20,7 @@
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
-	import { FtWidget as WidgetIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import WidgetView from './widget-view.svelte';
 	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
@@ -103,7 +103,7 @@
 			<Tabs.Content value="existing">
 				{#if existing.length === 0}
 					<EmptyState
-						icon={WidgetIcon}
+						icon={Icon.Widget}
 						title="No widgets in this project yet."
 						hint="A widget you create from a template appears here."
 					/>

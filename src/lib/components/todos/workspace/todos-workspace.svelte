@@ -17,7 +17,7 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import { Input } from '$lib/components/ui/input';
-	import { FtPlus as Plus, FtSearch as Search, FtTodos as ListTodo } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import EmptyState from '../../shared/empty-state.svelte';
 	import AgentAction from '../../agent/agent-action.svelte';
 	import { agentActions } from '../../agent/agent-actions';
@@ -100,7 +100,7 @@
 	>
 		<div class="flex flex-wrap items-center gap-2">
 			<div class="relative">
-				<Search
+				<Icon.Search
 					class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
 				/>
 				<Input
@@ -188,7 +188,7 @@
 	{#if view === 'list'}
 		{#if todos.length === 0}
 			<EmptyState
-				icon={ListTodo}
+				icon={Icon.Todos}
 				title="No todos yet."
 				hint="Capture a promise from a note, or add one from the board."
 				class="py-16"
@@ -243,7 +243,7 @@
 							listTitle = '';
 						}}
 					>
-						<Plus class="size-3.5" />
+						<Icon.Plus class="size-3.5" />
 						Add todo
 					</Button>
 				{/if}

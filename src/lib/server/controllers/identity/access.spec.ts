@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { User } from '$lib/models/identity';
 import { AccessTokens, TokenVerification } from '$lib/server/services/identity/api-tokens';
-import { UserDirectory } from '$lib/server/services/identity/users';
 import { NoteProvenance } from '$lib/server/services/notes/provenance';
 import { InMemoryApiTokenRepository } from '$lib/testing/identity/fakes/in-memory-api-tokens';
-import { InMemoryUserRepository } from '$lib/testing/identity/fakes/in-memory-users';
 import { InMemoryAnchorRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -22,8 +20,6 @@ const reader: User = {
 };
 
 const setup = () => {
-	const users = new InMemoryUserRepository(testActor());
-	const directory = new UserDirectory(users);
 	const provenance = new InMemoryProvenanceRepository(testActor());
 	const credentials = new InMemoryApiTokenRepository(testActor(), [reader]);
 	const tokens = new AccessTokens(credentials);
@@ -36,8 +32,6 @@ const setup = () => {
 		testActor(),
 		capabilityDependencies<AccessDependencies>({
 			tokens,
-			provisioner: directory,
-			users: directory,
 			provenance: new NoteProvenance(
 				testActor(),
 				provenance,
@@ -45,7 +39,7 @@ const setup = () => {
 			)
 		})
 	);
-	return { access, authentication, tokens, users, provenance };
+	return { access, authentication, tokens, provenance };
 };
 
 describe('MCP access', () => {
@@ -72,19 +66,5 @@ describe('MCP access', () => {
 		const { authentication, provenance } = setup();
 		const result = await authentication.verifyBearer('Bearer ftm_unknown');
 		expect({ result, recorded: provenance.provenance }).toEqual({ result: null, recorded: [] });
-	});
-
-	it('establishes the local profile before attributing a single-user request', async () => {
-		const { access, users, provenance } = setup();
-		const result = await access.attributeLocalMcp();
-		expect({
-			scope: result.scope,
-			profiles: users.users.map((user) => user.id),
-			recorded: provenance.provenance.map((item) => item.userId)
-		}).toEqual({
-			scope: 'full',
-			profiles: [testActor().userId],
-			recorded: [testActor().userId]
-		});
 	});
 });

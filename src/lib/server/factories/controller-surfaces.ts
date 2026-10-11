@@ -267,6 +267,5 @@ export const authenticationSurface = {
 >;
 export const accessSurface = {
 	issueApiToken: true,
-	attributeMcp: true,
-	attributeLocalMcp: true
+	attributeMcp: true
 } satisfies ControllerSurface<import('../controllers/identity/access').AccessController>;

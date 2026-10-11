@@ -164,3 +164,6 @@ export const syncEtag = (version: bigint): SyncEtag => {
 	if (version <= 0n) throw new Error('A synchronization version must be positive');
 	return `sync-v1-${version}` as SyncEtag;
 };
+
+/** Where the user's work is, as the sync indicator shows it. */
+export type SyncIndicatorKind = 'synced' | 'saving' | 'offline' | 'downloading' | 'attention';

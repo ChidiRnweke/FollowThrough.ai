@@ -14,7 +14,7 @@ import type { TokenCounter } from '$lib/models/tokenization';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { createAgentTools, createMcpTools } from '$lib/server/factories/agent/tools/definitions';
 import { createAgentToolset } from '$lib/server/factories/agent/tools/toolset';
-import { readToolFailure } from '$lib/server/repositories/agent/tool-failure';
+import { readToolOutput } from '$lib/server/repositories/agent/tool-failure';
 import type { ToolRanking } from '$lib/server/services/agent/tools/tool-search';
 import { AgentToolApprovalRules } from '$lib/services/agent/tool-approval';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
@@ -188,7 +188,7 @@ export const createMcpToolDefinitions = (
 					query,
 					limit
 				),
-			failed: (value) => readToolFailure(value) !== undefined
+			failed: (value) => readToolOutput(value).kind !== 'success'
 		};
 	};
 	return {

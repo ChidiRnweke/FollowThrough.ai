@@ -2,7 +2,7 @@
 	import WorkspaceRecoveryDownload from '$lib/components/shared/workspace-recovery-download.svelte';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { FtRetry as Retry } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	/**
 	 * Sits inside the app shell, so the sidebar, tabs and right panel stay usable
@@ -19,7 +19,7 @@
 <PageShell title="This screen didn't load" description={error.message}>
 	<div class="flex items-center gap-2">
 		<Button onclick={() => location.reload()}>
-			<Retry data-icon="inline-start" />
+			<Icon.Retry data-icon="inline-start" />
 			Try again
 		</Button>
 		<Button href="/today" variant="ghost">Go to today</Button>

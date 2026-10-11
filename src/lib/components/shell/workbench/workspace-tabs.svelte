@@ -8,13 +8,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import {
-		FtClose as X,
-		FtPin as Pin,
-		FtChevronDown as ChevronDown,
-		FtChevronUp as ChevronUp,
-		FtPlus as Plus
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import {
 		hasInternalTabDrag,
 		readActiveTabDrag,
@@ -262,7 +256,7 @@
 						aria-expanded={false}
 						onclick={() => ontoggleHidden?.()}
 					>
-						<ChevronDown class="size-4" />
+						<Icon.ChevronDown class="size-4" />
 					</Button>
 				{/snippet}
 			</Tip>
@@ -341,9 +335,9 @@
 									>
 										<span class="truncate">{group.projectName}</span>
 										{#if folded.has(group.projectId)}
-											<ChevronDown class="size-3 shrink-0" aria-hidden="true" />
+											<Icon.ChevronDown class="size-3 shrink-0" aria-hidden="true" />
 										{:else}
-											<ChevronUp class="size-3 shrink-0" aria-hidden="true" />
+											<Icon.ChevronUp class="size-3 shrink-0" aria-hidden="true" />
 										{/if}
 									</Button>
 								{/snippet}
@@ -466,7 +460,7 @@
 												onclick={() => void workbench.focusTab(noteId)}
 											>
 												{#if workbench.isPinned(noteId)}
-													<Pin
+													<Icon.Pin
 														class="size-3 shrink-0 text-brand-muted-foreground"
 														aria-hidden="true"
 													/>
@@ -491,7 +485,7 @@
 														}
 													}}
 												>
-													<X class="size-3.5" />
+													<Icon.Close class="size-3.5" />
 												</span>
 											</Button>
 										{/snippet}
@@ -538,7 +532,7 @@
 								aria-label="New note"
 								onclick={oncreateNote}
 							>
-								<Plus class="size-4" />
+								<Icon.Plus class="size-4" />
 							</Button>
 						{/snippet}
 					</Tip>
@@ -566,7 +560,7 @@
 								aria-label={`Close all ${tabCount} tabs`}
 								onclick={() => void workbench.closeTabs(workbench.openTabs)}
 							>
-								<X class="size-3.5" />
+								<Icon.Close class="size-3.5" />
 								<span>Close all</span>
 								<span class="tabular-nums" aria-hidden="true">· {tabCount}</span>
 							</Button>
@@ -593,7 +587,7 @@
 							aria-expanded={true}
 							onclick={() => ontoggleHidden?.()}
 						>
-							<ChevronUp class="size-4" />
+							<Icon.ChevronUp class="size-4" />
 						</Button>
 					{/snippet}
 				</Tip>
