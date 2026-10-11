@@ -49,7 +49,6 @@ export interface WorkspaceStorage {
 	resetAccount(accountId: string): Promise<void>;
 	readBootstrap(accountHint: string | null): StoredBootstrap;
 	saveBootstrap(bootstrap: WorkspaceBootstrap): void;
-	clearBootstrap(): void;
 }
 
 export class WorkspaceStorageService implements WorkspaceStorage {
@@ -100,8 +99,5 @@ export class WorkspaceStorageService implements WorkspaceStorage {
 	}
 	saveBootstrap(bootstrap: WorkspaceBootstrap): void {
 		this.bootstrap.save(bootstrap);
-	}
-	clearBootstrap(): void {
-		this.bootstrap.clear();
 	}
 }

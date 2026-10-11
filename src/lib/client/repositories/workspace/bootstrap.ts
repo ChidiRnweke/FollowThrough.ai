@@ -9,7 +9,6 @@ import {
 export interface WorkspaceBootstrapRepository {
 	read(accountHint: string | null): StoredBootstrap;
 	save(bootstrap: WorkspaceBootstrap): void;
-	clear(): void;
 }
 
 export const readStoredBootstrap = (
@@ -41,8 +40,5 @@ export class LocalStorageBootstrap implements WorkspaceBootstrapRepository {
 	save(bootstrap: WorkspaceBootstrap): void {
 		this.storage().setItem(workspaceBootstrapKey, JSON.stringify(bootstrap));
 		this.storage().removeItem('followthrough-workspace-bootstrap-v1');
-	}
-	clear(): void {
-		this.storage().removeItem(workspaceBootstrapKey);
 	}
 }

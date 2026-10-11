@@ -38,12 +38,6 @@ describe('deployment settings on this device', () => {
 			kind: 'absent'
 		});
 	});
-	it('forgets the settings on sign-out', () => {
-		const { storage } = device();
-		storage.saveBootstrap(testBootstrap());
-		storage.clearBootstrap();
-		expect(storage.readBootstrap(testWorkspaceAccount)).toEqual({ kind: 'absent' });
-	});
 });
 
 it('keeps an account’s downloaded records apart from the next account after a reset', async () => {

@@ -270,7 +270,6 @@ export interface WorkspaceController {
 		identity: WorkspaceResourceIdentity & { type: K }
 	): WorkspaceDraftController<K> | null;
 	stop(): void;
-	signOut(): void;
 	downloadLocalWrites(): Promise<Blob>;
 	resetLocalWorkspace(): Promise<void>;
 }
@@ -762,10 +761,6 @@ export class Workspace implements WorkspaceController {
 		if (!accountId) throw new Error('Sign in to identify the account to reset');
 		this.stop();
 		await this.storage.resetAccount(accountId);
-	}
-	signOut(): void {
-		this.stop();
-		this.storage.clearBootstrap();
 	}
 }
 

@@ -15,7 +15,7 @@ const setup = (fresh = false) => {
 	const fixture = workspaceFixture({ accountId: projectBuilder().userId });
 	started.push(fixture.workspace);
 	fixture.transport.bootstrapped = testBootstrap(fixture.accountId);
-	if (fresh) fixture.storage.clearBootstrap();
+	if (fresh) fixture.browserStorage.removeItem(workspaceBootstrapKey);
 	return fixture;
 };
 const failure = (error: Error) => ({ kind: 'failure' as const, message: error.message });
@@ -71,26 +71,6 @@ describe('workspace account lifetime', () => {
 			active: resources.active,
 			reloads: environment.reloads
 		}).toEqual({ result: { kind: 'stopped' }, current: null, active: false, reloads: 1 });
-	});
-	it('clears startup data and detaches browser events on sign out', async () => {
-		const { workspace, environment, storage, accountId } = setup();
-		const { resources } = await workspace.start();
-		workspace.signOut();
-		environment.accountId = null;
-		for (const events of environment.events) events.refresh();
-		expect({
-			current: workspace.current,
-			active: resources.active,
-			stored: storage.readBootstrap(accountId),
-			listeners: environment.events.length,
-			reloads: environment.reloads
-		}).toEqual({
-			current: null,
-			active: false,
-			stored: { kind: 'absent' },
-			listeners: 0,
-			reloads: 0
-		});
 	});
 	it('resets only the bound account after stopping its session', async () => {
 		const { workspace, replica, accountId } = setup();
