@@ -170,16 +170,20 @@
 <!-- Columns are zones separated by hairlines, not filled trays: structure appears
      during a drag (the lifted row, the drop line, the zone outline), not at rest. -->
 <div
-	class="flex min-h-0 flex-1 snap-x snap-mandatory divide-x divide-border overflow-x-auto pb-3 2xl:grid 2xl:grid-cols-4 2xl:grid-rows-1 2xl:overflow-visible 2xl:pb-0"
+	class="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto pb-3 2xl:grid 2xl:grid-cols-4 2xl:grid-rows-1 2xl:overflow-visible 2xl:pb-0"
 >
 	{#each columns as status (status)}
 		{@const items = board[status]}
 		{@const isExpanded = expanded.has(status)}
 		{@const visible = visibleItems(items, isExpanded)}
 		<section
-			class="flex min-h-40 w-80 shrink-0 snap-start flex-col gap-bind overflow-hidden px-row first:pl-0 last:pr-0 2xl:w-auto 2xl:min-w-0"
+			class="group/col flex min-h-40 w-80 shrink-0 snap-start flex-col gap-item overflow-hidden 2xl:w-auto 2xl:min-w-0"
 		>
-			<h3 class="eyebrow flex items-center gap-1.5 px-1.5 pt-1 pb-2">
+			<!-- The title sits above its column's rule: the rule separates content,
+			     not labels, so the titles read as one row heading every column. -->
+			<h3
+				class="eyebrow flex items-center gap-1.5 px-row pt-1 group-first/col:pl-0 group-last/col:pr-0"
+			>
 				{#if status === 'done'}
 					<Icon.Check class="size-3 text-success" />
 				{:else}
@@ -193,108 +197,112 @@
 					]}>{items.length}</span
 				>
 			</h3>
-			<div class="relative flex min-h-0 flex-1 flex-col">
-				{#if items.length === 0 && addingTo !== status}
-					<p
-						class="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-muted-foreground/70"
-					>
-						{todoStatusEmptyCopy[status]}
-					</p>
-				{/if}
-				{#if addingTo === status}
-					<Input
-						id={status === 'open' ? 'quick-todo-input' : undefined}
-						autofocus
-						{@attach (node: HTMLElement) => node.focus()}
-						placeholder="Todo title…"
-						bind:value={newTitle}
-						class="mb-2"
-						onkeydown={(e) => {
-							if (e.key === 'Escape') addingTo = null;
-							if (e.key === 'Enter') void addTodo(status);
-						}}
-					/>
-				{/if}
-				<!-- A long column scrolls inside its zone; the header and the add row
+			<div
+				class="flex min-h-0 flex-1 flex-col border-l border-border px-row group-first/col:border-l-0 group-first/col:pl-0 group-last/col:pr-0"
+			>
+				<div class="relative flex min-h-0 flex-1 flex-col">
+					{#if items.length === 0 && addingTo !== status}
+						<p
+							class="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-muted-foreground/70"
+						>
+							{todoStatusEmptyCopy[status]}
+						</p>
+					{/if}
+					{#if addingTo === status}
+						<Input
+							id={status === 'open' ? 'quick-todo-input' : undefined}
+							autofocus
+							{@attach (node: HTMLElement) => node.focus()}
+							placeholder="Todo title…"
+							bind:value={newTitle}
+							class="mb-2"
+							onkeydown={(e) => {
+								if (e.key === 'Escape') addingTo = null;
+								if (e.key === 'Enter') void addTodo(status);
+							}}
+						/>
+					{/if}
+					<!-- A long column scrolls inside its zone; the header and the add row
 				     stay put, which is what lets the board fill the page height. The p-0.5
 				     keeps the dnd drop outline from being clipped by the overflow
 				     scrollport. Rows touch; the hairlines between them separate. -->
-				<div
-					data-todo-status={status}
-					class="flex min-h-20 flex-1 flex-col divide-y divide-border overflow-y-auto rounded-md p-0.5"
-					use:dragHandleZone={{
-						items: visible,
-						flipDurationMs: 150,
-						/* The placeholder is a 2px drop line, so morphing the clone to its
+					<div
+						data-todo-status={status}
+						class="flex min-h-20 flex-1 flex-col divide-y divide-border overflow-y-auto rounded-md p-0.5"
+						use:dragHandleZone={{
+							items: visible,
+							flipDurationMs: 150,
+							/* The placeholder is a 2px drop line, so morphing the clone to its
 						   size would crush the held row. The clone keeps the row's size. */
-						morphDisabled: true,
-						type: 'todo',
-						/* The default drop-target outline is library yellow. */
-						dropTargetStyle: { outline: '2px solid var(--color-brand)' },
-						/* The floating clone is a DOM copy made before Svelte re-renders,
+							morphDisabled: true,
+							type: 'todo',
+							/* The default drop-target outline is library yellow. */
+							dropTargetStyle: { outline: '2px solid var(--color-brand)' },
+							/* The floating clone is a DOM copy made before Svelte re-renders,
 						   so it is marked lifted directly; layout.css styles both. */
-						transformDraggedElement: (element) => {
-							element?.querySelector('[data-slot="todo-row"]')?.setAttribute('data-lifted', '');
-						}
-					}}
-					onconsider={(event) => handleConsider(status, event)}
-					onfinalize={(event) => handleFinalize(status, event)}
-				>
-					{#each visible as item (item.id)}
-						<!-- The pointer-drag placeholder is where the row will land: a
+							transformDraggedElement: (element) => {
+								element?.querySelector('[data-slot="todo-row"]')?.setAttribute('data-lifted', '');
+							}
+						}}
+						onconsider={(event) => handleConsider(status, event)}
+						onfinalize={(event) => handleFinalize(status, event)}
+					>
+						{#each visible as item (item.id)}
+							<!-- The pointer-drag placeholder is where the row will land: a
 						     brand line, not a second copy of the row. Wrapped so the
 						     zone always sees one element per item. -->
-						<div>
-							{#if isShadowItem(item)}
-								<!-- The library hides its placeholder; the line opts back in. -->
-								<div class="visible py-1" aria-hidden="true">
-									<div class="h-0.5 rounded-full bg-brand"></div>
-								</div>
+							<div>
+								{#if isShadowItem(item)}
+									<!-- The library hides its placeholder; the line opts back in. -->
+									<div class="visible py-1" aria-hidden="true">
+										<div class="h-0.5 rounded-full bg-brand"></div>
+									</div>
+								{:else}
+									<TodoRow
+										view={item.view}
+										draggable
+										lifted={item.id === draggingId}
+										projectName={projectNames?.get(item.view.todo.projectId)}
+										{onopen}
+										onstatus={onmove}
+									/>
+								{/if}
+							</div>
+						{/each}
+					</div>
+					{#if items.length > VISIBLE_LIMIT}
+						<Button
+							variant="ghost"
+							size="sm"
+							class="w-full justify-start text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+							onclick={() => toggleExpanded(status)}
+						>
+							{#if isExpanded}
+								Show less
 							{:else}
-								<TodoRow
-									view={item.view}
-									draggable
-									lifted={item.id === draggingId}
-									projectName={projectNames?.get(item.view.todo.projectId)}
-									{onopen}
-									onstatus={onmove}
-								/>
+								Show <span class="font-semibold text-foreground tabular-nums"
+									>{items.length - VISIBLE_LIMIT}</span
+								> more
 							{/if}
-						</div>
-					{/each}
+						</Button>
+					{/if}
 				</div>
-				{#if items.length > VISIBLE_LIMIT}
+				{#if status !== 'done'}
 					<Button
 						variant="ghost"
 						size="sm"
 						class="w-full justify-start text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-						onclick={() => toggleExpanded(status)}
+						aria-label="Add todo to {todoStatusLabels[status]}"
+						onclick={() => {
+							addingTo = status;
+							newTitle = '';
+						}}
 					>
-						{#if isExpanded}
-							Show less
-						{:else}
-							Show <span class="font-semibold text-foreground tabular-nums"
-								>{items.length - VISIBLE_LIMIT}</span
-							> more
-						{/if}
+						<Icon.Plus class="size-3.5" />
+						Add
 					</Button>
 				{/if}
 			</div>
-			{#if status !== 'done'}
-				<Button
-					variant="ghost"
-					size="sm"
-					class="w-full justify-start text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-					aria-label="Add todo to {todoStatusLabels[status]}"
-					onclick={() => {
-						addingTo = status;
-						newTitle = '';
-					}}
-				>
-					<Icon.Plus class="size-3.5" />
-					Add
-				</Button>
-			{/if}
 		</section>
 	{/each}
 </div>

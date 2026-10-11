@@ -73,7 +73,8 @@
 </script>
 
 <!-- A divided row, never a card: the list's hairlines separate rows, and the row
-     only paints while it is hovered or held. Hover and lift live in layout.css
+     only paints while it is hovered or held. It stays square: `divide-y` borders a
+     rounded row along its corners, which bends each hairline into a card edge. Hover and lift live in layout.css
      under [data-slot='todo-row'] so the drag clone, which is a DOM copy outside
      Svelte, picks up the same lifted recipe. -->
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -81,7 +82,7 @@
 	data-slot="todo-row"
 	data-lifted={lifted || undefined}
 	class={[
-		'flex items-start gap-item rounded-md px-2 py-row transition-[background-color,opacity,scale] duration-200',
+		'flex items-start gap-item px-2 py-4 transition-[background-color,opacity,scale] duration-200',
 		completing && 'scale-95 opacity-50'
 	]}
 	onclick={openBody}
@@ -111,7 +112,7 @@
 		aria-label={done ? 'Reopen todo' : 'Complete todo'}
 		onCheckedChange={(checked) => complete(checked === true)}
 	/>
-	<div class="flex min-w-0 flex-1 flex-col gap-bind">
+	<div class="flex min-w-0 flex-1 flex-col gap-item">
 		{#if onopen}
 			<!-- Full wrap, no clamp: a clipped title reads as lost text. Focus shows as
 			     an underline, not a ring: Chrome applies :focus-visible to clicked

@@ -346,7 +346,10 @@ while the region is empty; the empty state and its one action are the whole surf
   right panel is the complete master-detail editor. A todo is a divided row on Today and the
   board, never a card: the title leads, and one muted caption line carries whatever metadata is
   actually set (project, due date — "Overdue" in words when it is — priority, who it waits on,
-  provenance). Board columns are zones separated by hairlines, not filled trays. Row controls
+  provenance), 8px under the title, with 16px of padding to each hairline. A row is a square band
+  between hairlines: rounding a divided row bends its dividers into card edges, so only the
+  lifted row rounds. Board columns are zones separated by hairlines, not filled trays, and each
+  column's title sits above its rule — the rule separates content, not labels. Row controls
   (drag handle, move menu) reveal on hover or focus on pointer layouts and stay visible on touch.
   No second board-density toggle. Editable popovers never resize rows;
   provenance stays separate from the user-selected source. Controls use the flat shadcn Select,
