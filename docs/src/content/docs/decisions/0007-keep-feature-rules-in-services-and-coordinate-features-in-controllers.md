@@ -67,6 +67,8 @@ operation becomes an ordinary controller operation any entry point could call, n
 one. Controllers and services do not know that a tool calls them. The harness holds no transaction
 while a tool runs, so each tool's operation commits on its own. Factories, including tool factories,
 only construct and connect; a tool's call runs in the harness.
+`docs/architecture/agent-harness.md` describes how the harness, its services and the tool
+factories connect.
 
 A service may hold readonly references to injected collaborators and immutable configuration.
 Inputs, intermediate calculations and results remain local to each operation. Mutable state that

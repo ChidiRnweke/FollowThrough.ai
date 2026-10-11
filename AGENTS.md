@@ -202,6 +202,7 @@ dev, info in prod.
 - The agent controller is a harness over an injected tool list. A tool is an entry point: an agent
   tool factory turns one public controller operation into a tool and converts its arguments and
   result. Tools never sequence operations or call services, and controllers carry no tool vocabulary.
+  `docs/architecture/agent-harness.md` describes the harness architecture.
 - Components and adjacent TypeScript call controllers for complete application operations and
   observe readonly application state. They do not assemble service or remote calls.
 - Factories construct and connect dependencies and expose their interfaces. They do not execute
