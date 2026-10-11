@@ -11,7 +11,8 @@ Plan features so an agent can build them unsupervised.
 
 ## What this skill produces
 
-A `docs/plans/<feature>-plan.md` file. This file is the complete instruction set for an
+An `artifacts/plans/<feature>-plan.md` file, in the ignored `artifacts/` directory: plans are
+working notes and are never committed. This file is the complete instruction set for an
 executor agent. It contains everything the agent needs to understand the current state of the
 codebase, what needs to change, and how to verify each step is done correctly.
 
@@ -105,7 +106,7 @@ When the user engages with this phase:
 
 ## Phase 4: Write the Blueprint
 
-Produce a `docs/plans/<feature>-plan.md` with the following structure:
+Produce an `artifacts/plans/<feature>-plan.md` with the following structure:
 
 ```markdown
 # Blueprint: [Feature Name]
@@ -212,7 +213,7 @@ This is how you prevent the agent from inventing its own patterns. It copies wha
 
 ## Phase 5: Executor Instructions
 
-Add a section at the top of `docs/plans/<feature>-plan.md` that the executor agent reads every loop:
+Add a section at the top of `artifacts/plans/<feature>-plan.md` that the executor agent reads every loop:
 
 ```markdown
 ## Executor Instructions
@@ -286,7 +287,7 @@ produced it, not the git history, the blueprint.
 
 ## Self-Validation Loop
 
-Before showing the final `docs/plans/<feature>-plan.md` to the user, you must validate your own work:
+Before showing the final `artifacts/plans/<feature>-plan.md` to the user, you must validate your own work:
 1. **Check step granularity:** Are the steps too broad? Do they specify exact file paths, class names, and method signatures?
 2. **Check verifiability:** Does every step have a clear, objective verification command or action?
 3. **Check pattern adherence:** Do steps that create new code explicitly point to existing files as structural examples?
