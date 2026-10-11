@@ -226,9 +226,11 @@
 						/>
 					{/if}
 					<!-- A long column scrolls inside its zone; the header and the add row
-				     stay put, which is what lets the board fill the page height. The p-0.5
-				     keeps the dnd drop outline from being clipped by the overflow
-				     scrollport. Rows touch; the hairlines between them separate. -->
+				     stay put, which is what lets the board fill the page height. The drop
+				     outline is drawn inset, inside this p-0.5: an outward outline is
+				     clipped by the column's overflow wherever the zone meets the board
+				     edge, which erased the outer sides of the first and last columns.
+				     Rows touch; the hairlines between them separate. -->
 					<div
 						data-todo-status={status}
 						class="flex min-h-20 flex-1 flex-col divide-y divide-border overflow-y-auto rounded-md p-0.5"
@@ -245,7 +247,7 @@
 							centreDraggedOnCursor: true,
 							type: 'todo',
 							/* The default drop-target outline is library yellow. */
-							dropTargetStyle: { outline: '2px solid var(--color-brand)' },
+							dropTargetStyle: { outline: '2px solid var(--color-brand)', outlineOffset: '-2px' },
 							/* The floating clone is a DOM copy made before Svelte re-renders,
 						   so it is marked lifted directly; layout.css styles both. */
 							transformDraggedElement: (element) => {

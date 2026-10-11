@@ -102,7 +102,7 @@
 				type="button"
 				variant="ghost"
 				class={[
-					'tactile h-auto min-w-0 justify-start rounded-sm p-0 text-left text-sm leading-snug font-medium whitespace-normal break-words underline-offset-2 outline-none hover:bg-transparent focus-visible:underline',
+					'tactile h-auto min-w-0 justify-start rounded-sm p-0 text-left text-sm leading-snug font-medium whitespace-normal break-words underline-offset-2 outline-none hover:bg-transparent focus-visible:underline dark:hover:bg-transparent',
 					done ? 'text-muted-foreground line-through' : 'text-foreground'
 				]}
 				onclick={() => onopen(view.todo.id)}

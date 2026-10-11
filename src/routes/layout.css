@@ -1757,6 +1757,13 @@
 	[data-slot='todo-row'][data-lifted] .text-muted-foreground {
 		@apply text-brand-muted-foreground;
 	}
+	/* The checkbox's resting border is the neutral input grey, which disappears on
+	   the brand wash; on a held row it follows the wash like the rest of the ink.
+	   Important because the checkbox's own `border-input` is a utility, and the
+	   utilities layer always outranks this components-layer rule. */
+	[data-slot='todo-row'][data-lifted] [data-slot='checkbox'] {
+		@apply border-brand-muted-foreground!;
+	}
 	/* svelte-dnd-action focuses its floating pointer-drag clone, which draws the
 	   global focus outline as a square frame around the held row. The clone is a
 	   transient copy that keyboard users never reach (keyboard drags move the row
