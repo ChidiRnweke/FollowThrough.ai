@@ -1,6 +1,7 @@
 import { Extension } from '@tiptap/core';
 import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion';
 import { PluginKey } from '@tiptap/pm/state';
+import { rankLinkTargets } from './link-ranking.js';
 export interface NoteLinkTarget {
 	readonly id: string;
 	readonly title: string;
@@ -69,31 +70,16 @@ export const NoteLinkSuggestion = Extension.create<NoteLinkSuggestionOptions>({
 	}
 });
 
-/**
- * Rank note titles for a query.
- *
- * Pure, so the ordering is testable without an editor. A prefix match outranks a
- * word-start match, which outranks a match anywhere — typing "des" should offer "Design
- * review" before "Fundamentals of design".
- */
+/** Rank note titles for a query; see `rankLinkTargets`. */
 export const rankNoteLinkTargets = (
 	notes: readonly NoteLinkTarget[],
 	query: string,
 	limit = 8
-): readonly NoteLinkTarget[] => {
-	const needle = query.trim().toLowerCase();
-	if (!needle) return notes.slice(0, limit);
-
-	const scored: { note: NoteLinkTarget; score: number }[] = [];
-	for (const note of notes) {
-		const title = note.title.toLowerCase();
-		const at = title.indexOf(needle);
-		if (at === -1) continue;
-		const startsWord = at === 0 || /[\s\-_/]/.test(title[at - 1] ?? '');
-		scored.push({ note, score: at === 0 ? 0 : startsWord ? 1 : 2 });
-	}
-	return scored
-		.sort((a, b) => a.score - b.score || a.note.title.localeCompare(b.note.title))
-		.slice(0, limit)
-		.map((entry) => entry.note);
-};
+): readonly NoteLinkTarget[] =>
+	rankLinkTargets(
+		notes,
+		query,
+		(note) => note.title,
+		() => 0,
+		limit
+	);

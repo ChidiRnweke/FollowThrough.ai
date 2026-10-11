@@ -1,6 +1,5 @@
 import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import { ValidationError } from '$lib/errors';
-import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { IMemoryEditingService } from '$lib/services/memory/edits';
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
@@ -188,7 +187,7 @@ export class Memory implements MemoryController {
 				await this.dependencies.suggestionEffects.record(
 					suggestion.id,
 					applied.changes.map((change) =>
-						mapAppliedChange(change, (value) => ({ type: 'memory_entries' as const, value }))
+						this.dependencies.suggestionEffects.tag(change, 'memory_entries')
 					)
 				);
 				const accepted = await this.dependencies.suggestionAccepter.accept(
@@ -200,19 +199,5 @@ export class Memory implements MemoryController {
 			}
 			return { suggestion };
 		});
-	}
-}
-
-function mapAppliedChange<Input, Output>(
-	change: AppliedChange<Input>,
-	map: (record: Input) => Output
-): AppliedChange<Output> {
-	switch (change.kind) {
-		case 'created':
-			return { kind: 'created', after: map(change.after) };
-		case 'modified':
-			return { kind: 'modified', before: map(change.before), after: map(change.after) };
-		case 'unchanged':
-			return { kind: 'unchanged', after: map(change.after) };
 	}
 }

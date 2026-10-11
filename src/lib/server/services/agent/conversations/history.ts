@@ -10,6 +10,7 @@ import {
 	type ReplayPreparation,
 	type SessionJson
 } from '$lib/models/agent';
+import { DIAGRAM_WRITE_TOOLS } from '$lib/models/agent/tool-catalog';
 import type { TokenCounter } from '$lib/models/tokenization';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
@@ -62,8 +63,6 @@ const readArguments = (
 };
 
 const REPLAY_FILE_THRESHOLD_TOKENS = 4000;
-const isDiagramWrite = (name: string): boolean =>
-	name === 'create_diagram' || name === 'edit_diagram';
 
 const safeSegment = (value: string): string => {
 	const safe = value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
@@ -128,11 +127,13 @@ export class ConversationHistoryService implements ConversationHistory {
 	private prepare(item: PersistedSessionItem): ReplayPreparation {
 		switch (item.type) {
 			case 'function_call':
-				return isDiagramWrite(item.name)
+				return DIAGRAM_WRITE_TOOLS.has(item.name)
 					? { kind: 'unchanged', item }
 					: { kind: 'arguments', item };
 			case 'function_call_result':
-				return isDiagramWrite(item.name) ? { kind: 'unchanged', item } : { kind: 'record', item };
+				return DIAGRAM_WRITE_TOOLS.has(item.name)
+					? { kind: 'unchanged', item }
+					: { kind: 'record', item };
 			case 'user_message':
 			case 'assistant_message':
 				return { kind: 'record', item };

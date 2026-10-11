@@ -16,9 +16,8 @@ import {
 	type BuiltInSkillSelection
 } from '$lib/server/services/skills/built-ins';
 import {
-	SkillCreationService,
+	SkillAuthoringService,
 	SkillReadingService,
-	SkillEditingService,
 	SkillUsageService,
 	type SkillCreator,
 	type SkillFinder,
@@ -77,10 +76,11 @@ export function createSkillServices(
 	provenance: ProvenanceRepository
 ): SkillServices {
 	const usage = new SkillUsageService(skills, notes, provenance);
+	const authoring = new SkillAuthoringService(skills, notes);
 	return {
-		creator: new SkillCreationService(skills, notes),
+		creator: authoring,
 		finder: new SkillReadingService(skills),
-		editor: new SkillEditingService(skills, notes),
+		editor: authoring,
 		usageRecorder: usage,
 		usageLister: usage
 	};

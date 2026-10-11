@@ -62,7 +62,19 @@ async function loadSkill(skills: SkillRepository, noteId: NoteId): Promise<Skill
 	if (!skill || skill.note.archivedAt) throw new NotFoundError('Skill was not found');
 	return skill;
 }
-export class SkillCreationService implements SkillCreator {
+export class SkillReadingService implements SkillFinder {
+	constructor(private readonly skills: SkillRepository) {}
+	listEnabled(projectId?: ProjectId): Promise<readonly SkillSummary[]> {
+		return this.skills.listEnabled(projectId);
+	}
+	listAll(projectId?: ProjectId): Promise<readonly SkillSummary[]> {
+		return this.skills.listAll(projectId);
+	}
+	load(noteId: NoteId): Promise<Skill<Note>> {
+		return loadSkill(this.skills, noteId);
+	}
+}
+export class SkillAuthoringService implements SkillCreator, SkillEditor {
 	constructor(
 		private readonly skills: SkillRepository,
 		private readonly notes: NoteRepository
@@ -93,27 +105,6 @@ export class SkillCreationService implements SkillCreator {
 			allowImplicitInvocation: true,
 			isEnabled: true
 		});
-	}
-}
-export class SkillReadingService implements SkillFinder {
-	constructor(private readonly skills: SkillRepository) {}
-	listEnabled(projectId?: ProjectId): Promise<readonly SkillSummary[]> {
-		return this.skills.listEnabled(projectId);
-	}
-	listAll(projectId?: ProjectId): Promise<readonly SkillSummary[]> {
-		return this.skills.listAll(projectId);
-	}
-	load(noteId: NoteId): Promise<Skill<Note>> {
-		return loadSkill(this.skills, noteId);
-	}
-}
-export class SkillEditingService implements SkillEditor {
-	constructor(
-		private readonly skills: SkillRepository,
-		private readonly notes: NoteRepository
-	) {}
-	lockCatalog(): Promise<void> {
-		return this.skills.lockCatalog();
 	}
 	async getForEdit(noteId: NoteId): Promise<Skill<Note>> {
 		const note = await this.notes.findForWrite(noteId);

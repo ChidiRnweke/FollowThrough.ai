@@ -266,9 +266,7 @@ export class Suggestions implements SuggestionsController {
 				);
 				return {
 					artifact: change.after,
-					changes: [
-						mapAppliedChange(change, (value) => ({ type: 'note_relationships' as const, value }))
-					]
+					changes: [this.dependencies.suggestionEffects.tag(change, 'note_relationships')]
 				};
 			}
 			case 'reference': {
@@ -288,7 +286,7 @@ export class Suggestions implements SuggestionsController {
 				return {
 					artifact: result.entry,
 					changes: result.changes.map((change) =>
-						mapAppliedChange(change, (value) => ({ type: 'memory_entries' as const, value }))
+						this.dependencies.suggestionEffects.tag(change, 'memory_entries')
 					)
 				};
 			}
@@ -348,19 +346,5 @@ export class Suggestions implements SuggestionsController {
 						title: (await this.dependencies.sourceNotes.get(requirement.noteId)).title
 					};
 		await this.dependencies.diagramIndexer.indexDiagram(diagram, context);
-	}
-}
-
-function mapAppliedChange<Input, Output>(
-	change: AppliedChange<Input>,
-	map: (record: Input) => Output
-): AppliedChange<Output> {
-	switch (change.kind) {
-		case 'created':
-			return { kind: 'created', after: map(change.after) };
-		case 'modified':
-			return { kind: 'modified', before: map(change.before), after: map(change.after) };
-		case 'unchanged':
-			return { kind: 'unchanged', after: map(change.after) };
 	}
 }
