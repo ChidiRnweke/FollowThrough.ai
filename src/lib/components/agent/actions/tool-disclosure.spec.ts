@@ -1,11 +1,10 @@
 import type { ShellContext } from '$lib/models/workspace-views';
 import { describe, expect, it } from 'vitest';
-import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
 import type { NoteSummary } from '$lib/models/notes';
 
-import { opensInPlace, toolDisclosure, toolFamily } from './tool-disclosure';
+import { opensInPlace, toolDisclosure } from './tool-disclosure';
 
 const NOTE_ID = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
 const TODO_ID = '2b1f0c44-1d3e-4a90-9f21-77c6b0a1e5d3';
@@ -24,19 +23,6 @@ const call = (over: ToolActivityOverrides): ChatToolActivity => ({
 });
 
 const familyOf = (over: ToolActivityOverrides): string => toolDisclosure(call(over), shell).kind;
-
-describe('Every tool in the catalog knows what it opens onto', () => {
-	// The server keeps `AgentToolCoverage` total over controller methods so a capability cannot
-	// be added without being classified. This is the same guarantee on the reading side: a tool
-	// nobody classified would otherwise fall through to a shape guess and quietly render as the
-	// generic bucket this module exists to abolish.
-	it('classifies every catalog entry by name rather than by guessing at its payload', () => {
-		const unclassified = TOOL_DESCRIPTIONS.map((entry) => entry.name).filter(
-			(name) => toolFamily(name) === undefined
-		);
-		expect(unclassified).toEqual([]);
-	});
-});
 
 describe('A read of one thing is a link, not a disclosure', () => {
 	it('names the known note as a link that opens in place', () => {

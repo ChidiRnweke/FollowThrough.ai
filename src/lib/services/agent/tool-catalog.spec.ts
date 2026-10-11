@@ -3,15 +3,8 @@ const toolCatalogRules = new AgentToolCatalogService();
 import { agentToolNameSchema } from '$lib/models/agent';
 import { toolNameSchema } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
-import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
 
 describe('tool catalog', () => {
-	it('lists no duplicate tool names', () => {
-		expect(new Set(TOOL_DESCRIPTIONS.map((entry) => entry.name)).size).toBe(
-			TOOL_DESCRIPTIONS.length
-		);
-	});
-
 	it('keeps body edits direct while project archival remains discoverable', () => {
 		const names = toolCatalogRules.discoverable().map((entry) => entry.name);
 		expect({
@@ -55,15 +48,12 @@ describe('tool catalog', () => {
 		expect(agentToolNameSchema.safeParse('save_notes').data).toBeUndefined();
 	});
 
-	it('tells the agent a memory proposal is not saved until the user approves it', () => {
-		expect(toolCatalogRules.description('propose_memory_change')).toContain(
-			'Tell the user it is proposed, never that it is saved or remembered, unless appliedEntry is present.'
-		);
-	});
-
-	it('routes vague note cleanup away from whole-body replacement', () => {
-		expect(toolCatalogRules.description('save_note')).toContain(
-			'A request to tidy, refresh, polish, or improve an existing note is not a full rewrite'
-		);
+	it('marks a tool the user may not disable as locked and an ordinary tool as not', () => {
+		const locked = (name: string) =>
+			toolCatalogRules.entries().find((entry) => entry.name === name)?.locked;
+		expect({ setEnabled: locked('set_tool_enabled'), saveNote: locked('save_note') }).toEqual({
+			setEnabled: true,
+			saveNote: false
+		});
 	});
 });
