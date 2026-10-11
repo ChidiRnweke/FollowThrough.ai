@@ -87,6 +87,5 @@ Add a rejecting fixture and a nearby valid fixture when extending a rule. Test r
 indirection, source locations, provenance and CLI status. Keep expected results independent of the
 analyzer. Never fix a checker failure by moving a workflow into a wrapper or adding an allowance.
 
-Existing application findings are recorded with the ADR 0007 refactor plan. That inventory is
-evidence for migration, not input to the checker. Run all remaining architecture stages separately
-when the chained command stops at a failure.
+The application has no recorded findings: every rule passes at zero. Run all remaining architecture
+stages separately when the chained command stops at a failure.

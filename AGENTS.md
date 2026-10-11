@@ -87,10 +87,14 @@ current behavior.
 ## Documentation placement
 
 Keep root documents for project entry points and contribution instructions. Put architecture
-references in `docs/architecture/`, design guidance in `docs/design/`, and plans in
-`docs/plans/`. The design digest is derived; `docs/design/design-system.md` is authoritative.
-Published site content stays under `docs/src/content/docs/`. Update links and audit paths when
-moving maintained documents. Delete obsolete handoffs after their work lands.
+references in `docs/architecture/` and design guidance in `docs/design/`. The design digest is
+derived; `docs/design/design-system.md` is authoritative. Published site content stays under
+`docs/src/content/docs/`. Update links and audit paths when moving maintained documents.
+
+Do not commit plans, handoffs, migration inventories or audit reports. They describe work in
+flight, go stale as soon as it lands, and mislead the next agent. Keep working notes in the ignored
+`artifacts/` directory; record a lasting decision as an ADR and lasting behavior in
+`docs/architecture/`.
 
 ## Seeing the running app
 
@@ -227,8 +231,8 @@ and workflows in stores/factories. See `docs/architecture/semantic-enforcement.m
 valid patterns and analysis limits. A type-only import or `Pick<ConcreteClass, ...>` does not hide
 a concrete dependency. A callback does not move workflow ownership out of its factory or store.
 
-Keep analyzer fixtures for both the prohibited pattern and its valid neighbor. Record existing
-application findings in the refactor plan without baselines or suppressions. When the chained
+Keep analyzer fixtures for both the prohibited pattern and its valid neighbor. Fix findings; there
+are no baselines or suppressions. When the chained
 architecture command stops, run the remaining stages individually and report each result.
 
 ## Layering rules the audits enforce
