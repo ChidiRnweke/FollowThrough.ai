@@ -27,9 +27,8 @@ it('returns the same memory review view from server and downloaded records', asy
 			...agentToolResultsFixture(),
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			suggestionLister: reader,
-			suggestionExpirer: reader,
-			suggestionContextReader: reader
+			suggestionReader: reader,
+			suggestionExpirer: reader
 		})
 	);
 	const records = [

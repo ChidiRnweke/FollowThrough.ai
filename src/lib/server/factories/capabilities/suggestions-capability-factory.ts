@@ -20,14 +20,12 @@ import type { SuggestionRepository } from '$lib/server/repositories/suggestions/
 import { SuggestionRecords } from '$lib/server/repositories/suggestions/postgres/suggestions';
 import {
 	SuggestionCreationService,
-	SuggestionReadingService,
-	SuggestionContextService,
+	SuggestionInbox,
 	SuggestionLifecycleService,
 	type Clock,
 	type SuggestionCreator,
 	type SuggestionFinder,
-	type SuggestionLister,
-	type SuggestionContextReader,
+	type SuggestionReader,
 	type SuggestionAccepter,
 	type SuggestionRejecter,
 	type SuggestionReverter,
@@ -43,8 +41,7 @@ export interface SuggestionsCapabilityInput {
 export interface SuggestionServices {
 	readonly creator: SuggestionCreator;
 	readonly finder: SuggestionFinder;
-	readonly lister: SuggestionLister;
-	readonly context: SuggestionContextReader;
+	readonly reader: SuggestionReader;
 	readonly accepter: SuggestionAccepter;
 	readonly rejecter: SuggestionRejecter;
 	readonly reverter: SuggestionReverter;
@@ -62,13 +59,12 @@ export const createSuggestionServices = (
 	anchors: SourceAnchorRepository,
 	clock: Clock = { now: () => new Date().toISOString() as DateTime }
 ): SuggestionServices => {
-	const reading = new SuggestionReadingService(records);
+	const inbox = new SuggestionInbox(records, notes, provenance, anchors);
 	const lifecycle = new SuggestionLifecycleService(records, clock);
 	return {
 		creator: new SuggestionCreationService(actor, records, notes, provenance, anchors, clock),
-		finder: reading,
-		lister: reading,
-		context: new SuggestionContextService(notes, provenance, anchors),
+		finder: inbox,
+		reader: inbox,
 		accepter: lifecycle,
 		rejecter: lifecycle,
 		reverter: lifecycle,

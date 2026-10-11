@@ -19,7 +19,21 @@ const now = (): DateTime => new Date().toISOString() as DateTime;
 export interface RelationshipCreator {
 	createWithChange(input: CreateRelationshipInput): Promise<AppliedChange<NoteRelationship>>;
 }
-export class RelationshipWritingService implements RelationshipCreator {
+export interface NoteLinkReconciler {
+	reconcile(note: Note, targets: readonly NoteId[]): Promise<void>;
+}
+export interface RelationshipFinder {
+	findForNote(noteId: NoteId): Promise<readonly NoteRelationship[]>;
+}
+export interface BacklinkContextReader {
+	readContexts(relationships: readonly NoteRelationship[]): Promise<readonly BacklinkContext[]>;
+}
+/** What a consumer needs to show a note's relationships with the notes on both ends. */
+export interface RelationshipReader extends RelationshipFinder, BacklinkContextReader {}
+
+export class RelationshipGraph
+	implements RelationshipCreator, NoteLinkReconciler, RelationshipReader
+{
 	constructor(
 		private readonly actor: ActorContext,
 		private readonly relationships: NoteRelationshipRepository,
@@ -45,7 +59,7 @@ export class RelationshipWritingService implements RelationshipCreator {
 		if (input.provenanceId && !(await this.provenance.findById(input.provenanceId)))
 			throw new NotFoundError('Relationship provenance was not found');
 		const timestamp = now();
-		return writeRelationship(this.relationships, {
+		return this.write({
 			id: crypto.randomUUID() as RelationshipId,
 			userId: this.actor.userId,
 			...input,
@@ -53,16 +67,6 @@ export class RelationshipWritingService implements RelationshipCreator {
 			updatedAt: timestamp
 		});
 	}
-}
-export interface NoteLinkReconciler {
-	reconcile(note: Note, targets: readonly NoteId[]): Promise<void>;
-}
-export class NoteLinkReconciliationService implements NoteLinkReconciler {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly relationships: NoteRelationshipRepository,
-		private readonly notes: NoteRepository
-	) {}
 	async reconcile(note: Note, targets: readonly NoteId[]): Promise<void> {
 		const existing = (await this.relationships.listForNote(note.id)).filter(
 			(relationship) => relationship.kind === 'mentions' && relationship.sourceNoteId === note.id
@@ -78,7 +82,7 @@ export class NoteLinkReconciliationService implements NoteLinkReconciler {
 			const targetNote = await this.notes.findById(target);
 			if (!targetNote || targetNote.projectId !== note.projectId) continue;
 			const timestamp = now();
-			await writeRelationship(this.relationships, {
+			await this.write({
 				id: crypto.randomUUID() as RelationshipId,
 				userId: this.actor.userId,
 				sourceNoteId: note.id,
@@ -89,18 +93,6 @@ export class NoteLinkReconciliationService implements NoteLinkReconciler {
 			});
 		}
 	}
-}
-export interface RelationshipFinder {
-	findForNote(noteId: NoteId): Promise<readonly NoteRelationship[]>;
-}
-export interface BacklinkContextReader {
-	readContexts(relationships: readonly NoteRelationship[]): Promise<readonly BacklinkContext[]>;
-}
-export class RelationshipReadingService implements RelationshipFinder, BacklinkContextReader {
-	constructor(
-		private readonly relationships: NoteRelationshipRepository,
-		private readonly notes: NoteRepository
-	) {}
 	async findForNote(noteId: NoteId): Promise<readonly NoteRelationship[]> {
 		if (!(await this.notes.findById(noteId))) throw new NotFoundError('Note was not found');
 		return this.relationships.listForNote(noteId);
@@ -119,19 +111,16 @@ export class RelationshipReadingService implements RelationshipFinder, BacklinkC
 		);
 		return contexts.flat();
 	}
-}
-async function writeRelationship(
-	relationships: NoteRelationshipRepository,
-	incoming: NoteRelationship
-): Promise<AppliedChange<NoteRelationship>> {
-	const current = await relationships.findForWrite(incoming);
-	if (!current) return { kind: 'created', after: await relationships.insert(incoming) };
-	if (current.justification === incoming.justification)
-		return { kind: 'unchanged', after: current };
-	const after = await relationships.update({
-		...current,
-		justification: incoming.justification,
-		updatedAt: incoming.updatedAt
-	});
-	return { kind: 'modified', before: current, after };
+	private async write(incoming: NoteRelationship): Promise<AppliedChange<NoteRelationship>> {
+		const current = await this.relationships.findForWrite(incoming);
+		if (!current) return { kind: 'created', after: await this.relationships.insert(incoming) };
+		if (current.justification === incoming.justification)
+			return { kind: 'unchanged', after: current };
+		const after = await this.relationships.update({
+			...current,
+			justification: incoming.justification,
+			updatedAt: incoming.updatedAt
+		});
+		return { kind: 'modified', before: current, after };
+	}
 }

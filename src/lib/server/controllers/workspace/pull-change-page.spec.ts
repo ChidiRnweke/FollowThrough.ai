@@ -1,8 +1,7 @@
 import { expect, it } from 'vitest';
 import { syncCursorSchema } from '$lib/models/sync';
 import { Workspace, type WorkspaceDependencies } from './controller';
-import { WorkspaceJournal } from '$lib/server/services/workspace/journal';
-import { WorkspaceResourceVersions } from '$lib/server/services/workspace/resource-versions';
+import { WorkspaceSyncReads } from '$lib/server/services/workspace/sync-reads';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { TodayPresentationService } from '$lib/services/workspace/today';
 import { InMemoryWorkspaceJournal } from '$lib/testing/sync/fakes/in-memory-workspace-journal';
@@ -25,10 +24,7 @@ const setup = () => {
 		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
 			transactionRunner: new InMemoryTransactionRunner([content]),
-			syncChanges: new WorkspaceJournal(journal),
-			resourceVersions: new WorkspaceResourceVersions(
-				new InMemoryWorkspaceNoteReads(actor, content)
-			),
+			syncReads: new WorkspaceSyncReads(journal, new InMemoryWorkspaceNoteReads(actor, content)),
 			resourceKeys: new WorkspaceCommandRulesService()
 		})
 	);

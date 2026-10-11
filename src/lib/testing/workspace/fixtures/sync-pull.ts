@@ -29,8 +29,7 @@ export function workspacePullFixture(actor: ActorContext, db: Database): Workspa
 		capabilityDependencies<WorkspaceDependencies>({
 			transactionRunner,
 			builtInSkills: skills.builtIns,
-			syncChanges: synchronization.changes,
-			resourceVersions: synchronization.resourceVersions,
+			syncReads: synchronization.reads,
 			resourceKeys: synchronization.resourceKeys
 		})
 	);

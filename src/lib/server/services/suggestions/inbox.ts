@@ -123,8 +123,15 @@ export class SuggestionCreationService implements SuggestionCreator {
 		}
 	}
 }
-export class SuggestionReadingService implements SuggestionFinder, SuggestionLister {
-	constructor(private readonly suggestions: SuggestionRepository) {}
+/** What a consumer needs to list suggestions and show them with their note, anchor and provenance. */
+export interface SuggestionReader extends SuggestionLister, SuggestionContextReader {}
+export class SuggestionInbox implements SuggestionFinder, SuggestionReader {
+	constructor(
+		private readonly suggestions: SuggestionRepository,
+		private readonly notes: NoteRepository,
+		private readonly provenance: ProvenanceRepository,
+		private readonly anchors: SourceAnchorRepository
+	) {}
 	async get(id: SuggestionId): Promise<Suggestion> {
 		const suggestion = await this.suggestions.findById(id);
 		if (!suggestion) throw new NotFoundError('Suggestion was not found', { suggestionId: id });
@@ -150,13 +157,6 @@ export class SuggestionReadingService implements SuggestionFinder, SuggestionLis
 	async countByStatus(status: SuggestionStatus): Promise<number> {
 		return (await this.listByStatus(status)).length;
 	}
-}
-export class SuggestionContextService implements SuggestionContextReader {
-	constructor(
-		private readonly notes: NoteRepository,
-		private readonly provenance: ProvenanceRepository,
-		private readonly anchors: SourceAnchorRepository
-	) {}
 	async readContexts(suggestions: readonly Suggestion[]): Promise<readonly SuggestionContext[]> {
 		return Promise.all(
 			suggestions.map(async (suggestion) => {

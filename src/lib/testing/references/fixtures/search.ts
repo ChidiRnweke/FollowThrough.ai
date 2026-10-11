@@ -13,7 +13,6 @@ import {
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { ReferenceRanking } from '$lib/server/services/references/ranking';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
@@ -62,7 +61,6 @@ export const referenceSearchFixture = () => {
 		referenceCandidates: new ReferenceDiscovery(),
 		researchSettings: new AgentRunSettingsService(),
 		researchOverrides: {},
-		referenceRanker: new ReferenceRanking(),
 		referenceModel: 'test/model',
 		noteActionRequests: requests,
 		runSettlements: settlements,

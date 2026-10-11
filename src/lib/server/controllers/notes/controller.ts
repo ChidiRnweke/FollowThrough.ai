@@ -106,9 +106,8 @@ import type { NotePatchPreparation } from '$lib/server/services/notes/patches';
 import type { NoteRevisionComparison } from '$lib/server/services/notes/revision-diff';
 import type { ProjectReader } from '$lib/server/services/projects/catalog';
 import type {
-	BacklinkContextReader,
 	NoteLinkReconciler,
-	RelationshipFinder
+	RelationshipReader
 } from '$lib/server/services/relationships/graph';
 import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { NoteReferences } from '$lib/services/notes/references';
@@ -132,15 +131,8 @@ import type {
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/catalog';
 import type { NoteIndexing as NoteIndexer } from '$lib/server/services/knowledge-search/retrieval';
-import type {
-	ReferenceContextReader,
-	ReferenceLister
-} from '$lib/server/services/references/library';
-import type {
-	SuggestionContextReader,
-	SuggestionExpirer,
-	SuggestionLister
-} from '$lib/server/services/suggestions/inbox';
+import type { ReferenceReader } from '$lib/server/services/references/library';
+import type { SuggestionExpirer, SuggestionReader } from '$lib/server/services/suggestions/inbox';
 import type { TodoContextReader, TodoLister } from '$lib/server/services/todos/catalog';
 
 /**
@@ -335,16 +327,13 @@ export interface NotesDependencies {
 	noteSectionNumbering: NoteSectionNumberingEditor;
 	projectReader: ProjectReader;
 	userPreferences: UserPreferencesReader;
-	relationshipFinder: RelationshipFinder;
-	backlinkContextReader: BacklinkContextReader;
-	referenceLister: ReferenceLister;
-	referenceContextReader: ReferenceContextReader;
+	relationshipReader: RelationshipReader;
+	referenceReader: ReferenceReader;
 	diagramLister: DiagramLister;
 	todoLister: TodoLister;
 	todoContextReader: TodoContextReader;
-	suggestionLister: SuggestionLister;
+	suggestionReader: SuggestionReader;
 	suggestionExpirer: SuggestionExpirer;
-	suggestionContextReader: SuggestionContextReader;
 	noteEditor: NoteEditor;
 	noteLinkReconciler: NoteLinkReconciler;
 	noteTrash: NoteTrashOperations;
@@ -571,18 +560,18 @@ export class Notes implements NotesController {
 		await this.dependencies.suggestionExpirer.expire();
 		const [note, relationships, references, diagrams, todos, pending] = await Promise.all([
 			this.dependencies.noteReader.get(input.noteId),
-			this.dependencies.relationshipFinder.findForNote(input.noteId),
-			this.dependencies.referenceLister.listForNote(input.noteId),
+			this.dependencies.relationshipReader.findForNote(input.noteId),
+			this.dependencies.referenceReader.listForNote(input.noteId),
 			this.dependencies.diagramLister.listForNote(input.noteId),
 			this.dependencies.todoLister.list({ noteId: input.noteId }),
-			this.dependencies.suggestionLister.listByStatus('proposed', input.noteId)
+			this.dependencies.suggestionReader.listByStatus('proposed', input.noteId)
 		]);
 		const [backlinkContexts, referenceContexts, todoContexts, pendingContexts, sectionNumbering] =
 			await Promise.all([
-				this.dependencies.backlinkContextReader.readContexts(relationships),
-				this.dependencies.referenceContextReader.readContexts(references),
+				this.dependencies.relationshipReader.readContexts(relationships),
+				this.dependencies.referenceReader.readContexts(references),
 				this.dependencies.todoContextReader.readContexts(todos),
-				this.dependencies.suggestionContextReader.readContexts(pending),
+				this.dependencies.suggestionReader.readContexts(pending),
 				this.resolveSectionNumbering(note)
 			]);
 		return this.dependencies.notePresentation.assemble({

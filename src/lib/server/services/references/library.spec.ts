@@ -48,7 +48,7 @@ describe('Reference management invariants', () => {
 			createdAt: testNow
 		};
 		references.references = [reference];
-		const views = await service.contexts.readContexts(references.references);
+		const views = await service.reader.readContexts(references.references);
 		expect(views[0]?.anchor?.id).toBe(testAnchorId());
 	});
 
@@ -65,7 +65,7 @@ describe('Reference management invariants', () => {
 			sourceAnchorId: testAnchorId(2),
 			createdAt: testNow
 		};
-		const views = await service.contexts.readContexts([reference]);
+		const views = await service.reader.readContexts([reference]);
 		expect(views[0]?.anchor).toBeUndefined();
 	});
 

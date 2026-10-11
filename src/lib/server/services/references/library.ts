@@ -19,7 +19,16 @@ const now = (): DateTime => new Date().toISOString() as DateTime;
 export interface ReferenceCreator {
 	create(input: CreateReferenceInput): Promise<ExternalReference>;
 }
-export class ReferenceWritingService implements ReferenceCreator {
+export interface ReferenceLister {
+	listForNote(noteId: NoteId): Promise<readonly ExternalReference[]>;
+}
+export interface ReferenceContextReader {
+	readContexts(references: readonly ExternalReference[]): Promise<readonly ReferenceView[]>;
+}
+/** What a consumer needs to show a note's references with their source anchors. */
+export interface ReferenceReader extends ReferenceLister, ReferenceContextReader {}
+
+export class ReferenceLibrary implements ReferenceCreator, ReferenceReader {
 	constructor(
 		private readonly actor: ActorContext,
 		private readonly references: ReferenceRepository,
@@ -44,19 +53,6 @@ export class ReferenceWritingService implements ReferenceCreator {
 			createdAt: now()
 		});
 	}
-}
-export interface ReferenceLister {
-	listForNote(noteId: NoteId): Promise<readonly ExternalReference[]>;
-}
-export interface ReferenceContextReader {
-	readContexts(references: readonly ExternalReference[]): Promise<readonly ReferenceView[]>;
-}
-export class ReferenceReadingService implements ReferenceLister, ReferenceContextReader {
-	constructor(
-		private readonly references: ReferenceRepository,
-		private readonly notes: NoteRepository,
-		private readonly anchors: SourceAnchorRepository
-	) {}
 	async listForNote(noteId: NoteId): Promise<readonly ExternalReference[]> {
 		if (!(await this.notes.findById(noteId))) throw new NotFoundError('Note was not found');
 		return this.references.listForNote(noteId);

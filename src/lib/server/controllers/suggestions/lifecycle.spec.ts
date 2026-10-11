@@ -51,9 +51,8 @@ describe('Pending memory review invariants', () => {
 				...agentToolResultsFixture(),
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
-				suggestionLister: reader,
-				suggestionExpirer: reader,
-				suggestionContextReader: reader
+				suggestionReader: reader,
+				suggestionExpirer: reader
 			})
 		);
 		const result = await controller.listPendingMemory({});
@@ -93,9 +92,8 @@ describe('Pending memory review invariants', () => {
 				...agentToolResultsFixture(),
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
-				suggestionLister: reader,
-				suggestionExpirer: reader,
-				suggestionContextReader: reader
+				suggestionReader: reader,
+				suggestionExpirer: reader
 			})
 		);
 		const result = await controller.listPendingMemory({ projectId: testProjectId() });

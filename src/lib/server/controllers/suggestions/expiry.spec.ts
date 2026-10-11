@@ -36,8 +36,7 @@ const setup = () => {
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionExpirer: proposals,
-			suggestionLister: proposals,
-			suggestionContextReader: proposals
+			suggestionReader: proposals
 		})
 	);
 	return { controller, proposals };
