@@ -267,7 +267,7 @@ export function createApplication(
 	const diagramCapability = createDiagramsCapability(actor, {
 		contextNotes: notes.reader,
 		contextSkills: skills.finder,
-		contextMemory: memory.lister,
+		contextMemory: memory.library,
 		apiKey: openRouterApiKey,
 		baseURL: openRouterBaseURL,
 		appURL,
@@ -454,7 +454,7 @@ export function createApplication(
 			contextAttachments: attachmentCapability.reader,
 			contextFiles: agentFilesCapability.references,
 			builtInSkills: skillCapability.builtIns,
-			contextMemory: memory.lister,
+			contextMemory: memory.library,
 			contextProjects: projects.catalog,
 			provenance
 		},
@@ -645,10 +645,7 @@ export function createApplication(
 			memoryIndexer,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			memoryLister: memory.lister,
-			memoryCreator: memory.creator,
-			memoryEditor: memory.editor,
-			memoryDeleter: memory.deleter,
+			memoryLibrary: memory.library,
 			memoryChanges: memory.changes,
 			suggestionCreator: suggestions.creator,
 			suggestionAccepter: suggestions.accepter,
@@ -696,7 +693,7 @@ export function createApplication(
 			completion: finalizedKnowledgeSearch.completion,
 			defaultCompletionModel: finalizedKnowledgeSearch.defaultCompletionModel,
 			knowledge,
-			memory: memory.lister,
+			memory: memory.library,
 			observer: finalizedKnowledgeSearch.observer,
 			workflow: finalizedKnowledgeSearch.workflow,
 			// Controllers are constructed per request, so the process-wide spend

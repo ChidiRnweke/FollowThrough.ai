@@ -139,7 +139,7 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 		status: stored?.status,
 		autoAccepted: stored?.isAutoAccepted,
 		applied: result.appliedEntry,
-		entries: await library.lister.list({}),
+		entries: await library.library.list({}),
 		effectCount: effects.repository.effects.size
 	}).toEqual({
 		returned: stored,

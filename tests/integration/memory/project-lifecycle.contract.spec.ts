@@ -17,7 +17,7 @@ const setup = async (suffix: string) => {
 		projects,
 		new ProvenanceRecords(owner, context.db)
 	);
-	const entry = await library.creator.create({
+	const entry = await library.library.create({
 		id: crypto.randomUUID() as MemoryEntryId,
 		userId: owner.userId,
 		projectId: project.id,
@@ -33,7 +33,7 @@ const setup = async (suffix: string) => {
 describe('archived project memory boundaries', () => {
 	it('hides a retained project entry from the application reader', async () => {
 		const { library, entry } = await setup('22101');
-		await expect(library.reader.get(entry.id)).rejects.toThrow('Memory project was not found');
+		await expect(library.library.get(entry.id)).rejects.toThrow('Memory project was not found');
 	});
 
 	it.each(['update', 'remove'] as const)(
@@ -70,7 +70,7 @@ describe('archived project memory boundaries', () => {
 
 	it('rejects direct deletion while preserving the stored entry', async () => {
 		const { entries, library, entry } = await setup('22104');
-		const outcome = await library.deleter.remove(entry.id).then(
+		const outcome = await library.library.remove(entry.id).then(
 			() => 'unexpected success',
 			(error: Error) => error.message
 		);
