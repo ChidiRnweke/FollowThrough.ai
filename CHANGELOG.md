@@ -1,5 +1,16 @@
 # Changelog
 
+## [5.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v4.1.1...v5.0.0) (2026-10-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* **architecture:** pnpm test:source, test:quality, test:ui and test:architecture:semantic are removed; pnpm test:chisel runs those rules.
+
+### Build System
+
+* **architecture:** enforce the architecture with chisel-js 0.4.0 ([#423](https://github.com/ChidiRnweke/FollowThrough.ai/issues/423)) ([3065e34](https://github.com/ChidiRnweke/FollowThrough.ai/commit/3065e3400d21d7204674626f60d67821f7b41166))
+
 ## [4.1.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v4.1.0...v4.1.1) (2026-10-11)
 
 
