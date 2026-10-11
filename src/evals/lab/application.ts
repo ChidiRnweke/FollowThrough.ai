@@ -7,6 +7,15 @@ import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
 import { cachedRetrievalFetch } from './cache/cached-clients';
+import { createRetrievalProvider } from '$lib/server/factories/retrieval-providers';
+import { KnowledgeRetrieval } from '$lib/server/services/knowledge-search/retrieval';
+import { ToolSearch } from '$lib/server/services/agent/tools/tool-search';
+import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
+import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
+import { Cl100kTokenizer } from '$lib/server/infrastructure/tokenization/cl100k';
+import { operationObserver } from '$lib/server/infrastructure/telemetry/tracing';
+import { DEFAULT_EMBEDDING_MODEL } from '$lib/models/knowledge-search/embeddings';
+import { DEFAULT_SEARCH_QUERY_MODEL } from '$lib/models/knowledge-search/query-generation';
 import type { Database } from '$lib/server/db';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 import { createPGliteDatabase } from './pglite-database';
@@ -69,9 +78,34 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 			.discoverable()
 			.map((entry) => `${entry.name}: ${entry.retrievalText ?? entry.description}`)
 	);
-	const retrievalFetch = cachedRetrievalFetch(cache, globalThis.fetch, (content) =>
-		deterministicToolTexts.has(content)
-	);
+	// The lab replaces both retrieval services with ones whose providers replay from the cache.
+	const provider = createRetrievalProvider({
+		apiKey: openRouterApiKey,
+		baseURL,
+		appURL,
+		fetch: cachedRetrievalFetch(cache, globalThis.fetch, (content) =>
+			deterministicToolTexts.has(content)
+		)
+	});
+	const tokenizer = new Cl100kTokenizer();
+	const observer = { run: operationObserver.run };
+	const knowledge = new KnowledgeRetrieval({
+		repository: new KnowledgeIndexRecords(database),
+		provider: provider.client,
+		rerank: provider.rerank,
+		models: { embedding: DEFAULT_EMBEDDING_MODEL, query: DEFAULT_SEARCH_QUERY_MODEL },
+		encoding: tokenizer,
+		chunking: { targetTokens: 2400, overlapTokens: 480 },
+		defer: false,
+		observer
+	});
+	const toolSearch = new ToolSearch({
+		repository: new ToolEmbeddingRecords(database),
+		provider: provider.client,
+		model: DEFAULT_EMBEDDING_MODEL,
+		tokens: tokenizer,
+		observer
+	});
 
 	const application = createApplication({
 		attachmentClaims: new InMemoryAttachmentClaims(),
@@ -84,7 +118,8 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		appURL,
 		defaultAgentModel: model,
 		overrides: {
-			retrievalFetch,
+			knowledge,
+			toolSearch,
 			attachmentStorage: new InMemoryAttachmentStorage(),
 			modelCatalog: new StubModelCatalog()
 		}

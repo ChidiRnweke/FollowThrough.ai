@@ -1,3 +1,5 @@
+import type { KnowledgeRetrievalCapabilities } from './services/knowledge-search/retrieval';
+import type { ToolRanking, ToolSeeding } from './services/agent/tools/tool-search';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
 import { createAgentToolResults } from '$lib/server/factories/agent/tool-result-factory';
@@ -53,8 +55,8 @@ import type { AgentEventBus } from './stores/agent/events';
  * production so that an isolated run exercises the real code paths.
  */
 export interface ApplicationOverrides {
-	/** Transport for the embedding, rerank and search-query providers. */
-	readonly retrievalFetch?: typeof globalThis.fetch;
+	readonly knowledge?: KnowledgeRetrievalCapabilities;
+	readonly toolSearch?: ToolSeeding & ToolRanking;
 	readonly attachmentStorage?: IAttachmentStorage;
 	readonly referenceClient?: WebReferenceClient;
 	readonly modelCatalog?: AgentModelCatalog;
@@ -183,7 +185,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		openRouterApiKey,
 		openRouterBaseURL,
 		appURL,
-		...optionalProperty('providerFetch', overrides.retrievalFetch),
+		...optionalProperty('knowledge', overrides.knowledge),
+		...optionalProperty('toolSearch', overrides.toolSearch),
 		deferEmbedding
 	});
 	const knowledge = knowledgeSearch.knowledge;

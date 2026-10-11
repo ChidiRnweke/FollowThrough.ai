@@ -19,7 +19,11 @@ import {
 	KnowledgeRetrieval,
 	type KnowledgeRetrievalCapabilities
 } from '$lib/server/services/knowledge-search/retrieval';
-import { ToolSearch, type ToolRanking } from '$lib/server/services/agent/tools/tool-search';
+import {
+	ToolSearch,
+	type ToolRanking,
+	type ToolSeeding
+} from '$lib/server/services/agent/tools/tool-search';
 import { DEFAULT_EMBEDDING_MODEL } from '$lib/models/knowledge-search/embeddings';
 import { DEFAULT_SEARCH_QUERY_MODEL } from '$lib/models/knowledge-search/query-generation';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
@@ -51,8 +55,10 @@ export interface KnowledgeSearchCapabilityInput {
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
-	/** Replaces the provider transport, e.g. with a recording cache in evaluations. */
-	readonly providerFetch?: typeof globalThis.fetch;
+	/** Replaces knowledge retrieval as a whole, e.g. with a recording one in evaluations. */
+	readonly knowledge?: KnowledgeRetrievalCapabilities;
+	/** Replaces tool search as a whole. */
+	readonly toolSearch?: ToolSeeding & ToolRanking;
 	readonly deferEmbedding: boolean;
 }
 
@@ -89,29 +95,32 @@ export const createKnowledgeSearchCapability = (
 	const provider = createRetrievalProvider({
 		apiKey: input.openRouterApiKey,
 		baseURL: input.openRouterBaseURL,
-		appURL: input.appURL,
-		...optionalProperty('fetch', input.providerFetch)
+		appURL: input.appURL
 	});
-	const knowledge = new KnowledgeRetrieval({
-		repository: new KnowledgeIndexRecords(input.db),
-		provider: provider.client,
-		rerank: provider.rerank,
-		models: { embedding: DEFAULT_EMBEDDING_MODEL, query: DEFAULT_SEARCH_QUERY_MODEL },
-		encoding: tokenizer,
-		chunking: {
-			targetTokens: Number(process.env.RETRIEVAL_CHUNK_TOKENS ?? 2400),
-			overlapTokens: Number(process.env.RETRIEVAL_CHUNK_OVERLAP_TOKENS ?? 480)
-		},
-		defer: input.deferEmbedding,
-		observer: operationObserver
-	});
-	const toolSearch = new ToolSearch({
-		repository: new ToolEmbeddingRecords(input.db),
-		provider: provider.client,
-		model: DEFAULT_EMBEDDING_MODEL,
-		tokens: tokenizer,
-		observer: operationObserver
-	});
+	const knowledge =
+		input.knowledge ??
+		new KnowledgeRetrieval({
+			repository: new KnowledgeIndexRecords(input.db),
+			provider: provider.client,
+			rerank: provider.rerank,
+			models: { embedding: DEFAULT_EMBEDDING_MODEL, query: DEFAULT_SEARCH_QUERY_MODEL },
+			encoding: tokenizer,
+			chunking: {
+				targetTokens: Number(process.env.RETRIEVAL_CHUNK_TOKENS ?? 2400),
+				overlapTokens: Number(process.env.RETRIEVAL_CHUNK_OVERLAP_TOKENS ?? 480)
+			},
+			defer: input.deferEmbedding,
+			observer: operationObserver
+		});
+	const toolSearch =
+		input.toolSearch ??
+		new ToolSearch({
+			repository: new ToolEmbeddingRecords(input.db),
+			provider: provider.client,
+			model: DEFAULT_EMBEDDING_MODEL,
+			tokens: tokenizer,
+			observer: operationObserver
+		});
 
 	return {
 		tokenizer,
