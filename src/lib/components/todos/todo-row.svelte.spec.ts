@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import '../../../routes/layout.css';
-import TodoCard from './todo-card.svelte';
+import TodoRow from './todo-row.svelte';
 import type { Todo, TodoView } from '$lib/models/todos';
+import type { LocalDate } from '$lib/models/workspace';
 import { todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const id = '00000000-0000-4000-8000-000000000001' as Todo['id'];
@@ -24,24 +25,38 @@ const view = (overrides: Partial<TodoView> = {}): TodoView => ({
 	...overrides
 });
 
-describe('TodoCard metadata badges', () => {
-	it('omits badges when no metadata is set', async () => {
-		const screen = await render(TodoCard, { view: view() });
-		expect(screen.container.querySelectorAll('[data-slot="badge"]')).toHaveLength(0);
+describe('TodoRow metadata line', () => {
+	it('shows only the title when no metadata is set', async () => {
+		const screen = await render(TodoRow, { view: view() });
+		expect(screen.container.textContent?.trim()).toBe('Ship the manifest');
 	});
 
-	it('renders a due-date badge when the todo carries one', async () => {
-		const screen = await render(TodoCard, {
-			view: view({ todo: todo({ dueDate: '2026-08-15' as Todo['dueDate'] }) })
+	it('states the due date when the todo carries one', async () => {
+		const screen = await render(TodoRow, {
+			view: view({ todo: todo({ dueDate: '2026-08-15' as Todo['dueDate'] }) }),
+			today: '2026-08-01' as LocalDate
 		});
-		expect(await screen.getByText('15 Aug').all()).not.toHaveLength(0);
+		expect(await screen.getByText('Due 15 Aug').all()).toHaveLength(1);
+	});
+
+	it('names an overdue date in words, not only in colour', async () => {
+		const screen = await render(TodoRow, {
+			view: view({ todo: todo({ dueDate: '2026-08-15' as Todo['dueDate'] }) }),
+			today: '2026-08-20' as LocalDate
+		});
+		expect(await screen.getByText('Overdue 15 Aug').all()).toHaveLength(1);
+	});
+
+	it('names the project the todo belongs to', async () => {
+		const screen = await render(TodoRow, { view: view(), projectName: 'Docs site relaunch' });
+		expect(await screen.getByText('Docs site relaunch').all()).toHaveLength(1);
 	});
 });
 
-describe('TodoCard status intent', () => {
+describe('TodoRow status intent', () => {
 	it('completes the todo through onstatus', async () => {
 		const statuses: string[] = [];
-		const screen = await render(TodoCard, {
+		const screen = await render(TodoRow, {
 			view: view(),
 			onstatus: (todoId, status) => statuses.push(`${todoId}:${status}`)
 		});
@@ -50,7 +65,7 @@ describe('TodoCard status intent', () => {
 	});
 
 	it('sweeps a line through the title while the completion settles', async () => {
-		const screen = await render(TodoCard, {
+		const screen = await render(TodoRow, {
 			view: view(),
 			onstatus: () => undefined,
 			onopen: () => undefined
