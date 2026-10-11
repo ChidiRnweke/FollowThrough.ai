@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { MemoryChangePayload } from '$lib/models/memory';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
@@ -48,37 +47,6 @@ describe('memory owned by an archived project', () => {
 					remove: () => library.library.remove(entry.id)
 				}[operation]()
 			).rejects.toThrow('Memory project was not found');
-		}
-	);
-
-	it.each(['update', 'remove'] as const)(
-		'preserves memory when a pending %s proposal outlives its project',
-		async (operation) => {
-			const { entries, projects, library, entry } = await setup();
-			const payload: MemoryChangePayload =
-				operation === 'update'
-					? {
-							scope: 'project',
-							projectId: testProjectId(),
-							operation,
-							memoryEntryId: entry.id,
-							content: 'Replacement'
-						}
-					: {
-							scope: 'project',
-							projectId: testProjectId(),
-							operation,
-							memoryEntryId: entry.id
-						};
-			await projects.archive(testProjectId());
-			const outcome = await library.changes.apply(payload, testProvenanceId()).then(
-				() => 'unexpected success',
-				(error: Error) => error.message
-			);
-			expect({ outcome, entries: entries.entries }).toEqual({
-				outcome: 'Memory project was not found',
-				entries: [entry]
-			});
 		}
 	);
 

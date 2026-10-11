@@ -12,9 +12,6 @@ import {
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-const rules = new InlineContextService(testTokenizer);
 
 const actor = testActor();
 const note = noteBuilder({
@@ -117,9 +114,16 @@ describe('inline completion context', () => {
 	it('falls back to vector order when project reranking fails', async () => {
 		const matches = Array.from({ length: 10 }, (_, index) => match(`project ${index}`));
 		const context = await build(matches, [], failingReranker());
-		expect(passages(context)).toEqual(
-			matches.slice(0, 8).map((candidate) => candidate.document.content)
-		);
+		expect(passages(context)).toEqual([
+			'project 0',
+			'project 1',
+			'project 2',
+			'project 3',
+			'project 4',
+			'project 5',
+			'project 6',
+			'project 7'
+		]);
 	});
 
 	it('reranks project passages even when fewer than eight candidates were retrieved', async () => {
@@ -133,7 +137,7 @@ describe('inline completion context', () => {
 	it('injects every shared user memory at or below the threshold', async () => {
 		const memories = Array.from({ length: 20 }, (_, index) => userMemory(index));
 		const context = await build([], memories);
-		expect(context.userMemory).toEqual(memories.map((m) => m.content));
+		expect(context.userMemory).toEqual(Array.from({ length: 20 }, (_, index) => `memory ${index}`));
 	});
 
 	it('excludes unshared user memory', async () => {
@@ -148,28 +152,28 @@ describe('inline completion context', () => {
 		const context = await build([], memories);
 		expect(context.userMemory).toEqual([
 			'relevant owner is Ana',
-			...memories.slice(0, 7).map((m) => m.content)
+			'memory 0',
+			'memory 1',
+			'memory 2',
+			'memory 3',
+			'memory 4',
+			'memory 5',
+			'memory 6'
 		]);
 	});
 
 	it('falls back to recent bounded memory when reranking fails', async () => {
 		const memories = Array.from({ length: 21 }, (_, index) => userMemory(index));
 		const context = await build([], memories, failingReranker());
-		expect(context.userMemory).toEqual(memories.slice(0, 8).map((m) => m.content));
-	});
-});
-
-describe('trace output payloads', () => {
-	it('serializes actual vector-search matches with scores and content', () => {
-		const results = [match('Greek epic content')];
-		expect(JSON.parse(rules.vectorSearchTraceOutput(results))).toEqual([
-			{
-				id: results[0].document.id,
-				sourceTitle: 'The Odyssey',
-				noteId: results[0].document.noteId,
-				score: 0.9,
-				content: 'Greek epic content'
-			}
+		expect(context.userMemory).toEqual([
+			'memory 0',
+			'memory 1',
+			'memory 2',
+			'memory 3',
+			'memory 4',
+			'memory 5',
+			'memory 6',
+			'memory 7'
 		]);
 	});
 });

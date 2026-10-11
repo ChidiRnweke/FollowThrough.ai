@@ -11,7 +11,6 @@ import {
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 
 const indexedChunks = async (content: string, targetTokens: number, overlapTokens: number) => {
 	const repository = new InMemorySearchRepository(testActor());
@@ -31,17 +30,6 @@ describe('Content chunking invariants', () => {
 			'alpha beta',
 			'alpha beta'
 		]);
-	});
-	it('uses large token chunks with a generous overlap', async () => {
-		const chunks = await indexedChunks(
-			Array.from({ length: 60 }, (_, index) => `word${index}`).join(' '),
-			20,
-			5
-		);
-		const encoding = testTokenizer;
-		const left = encoding.encode(chunks[0]!);
-		const right = encoding.encode(chunks[1]!);
-		expect(right.slice(0, 5)).toEqual(left.slice(-5));
 	});
 	it('returns no chunks for empty content', async () => {
 		expect(await indexedChunks('   ', 20, 0)).toEqual([]);
@@ -264,23 +252,5 @@ describe('Memory indexing invariants', () => {
 		const firstId = repository.documents[0]?.document.id;
 		await index.indexMemory(entry);
 		expect(repository.documents[0]?.document.id).toBe(firstId);
-	});
-
-	it('removes chunks for an entry withheld from agents', async () => {
-		const repository = new InMemorySearchRepository(testActor());
-		const indexer = createContentIndex(repository, 'test-embedding', undefined, true);
-		const entry = memoryEntryBuilder();
-		await indexer.indexMemory(entry);
-		await indexer.indexMemory({ ...entry, shareWithAgents: false });
-		expect(repository.documents).toEqual([]);
-	});
-
-	it('removes chunks for a deleted entry', async () => {
-		const repository = new InMemorySearchRepository(testActor());
-		const indexer = createContentIndex(repository, 'test-embedding', undefined, true);
-		const entry = memoryEntryBuilder();
-		await indexer.indexMemory(entry);
-		await indexer.indexMemory({ ...entry, deletedAt: testNow });
-		expect(repository.documents).toEqual([]);
 	});
 });

@@ -57,4 +57,4 @@ export class KnowledgeIndexing implements KnowledgeIndexingController {
 }
 
 /** The maintenance traversal the embedding backlog resumes from. */
-export const EMBEDDING_BACKFILL = 'embedding-backfill';
+const EMBEDDING_BACKFILL = 'embedding-backfill';

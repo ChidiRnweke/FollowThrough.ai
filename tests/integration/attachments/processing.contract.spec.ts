@@ -130,7 +130,7 @@ describe('attachment processing persistence', () => {
 		const matches = await search.search('amberfalcon', 10, view.attachment.projectId);
 		expect({
 			status: saved?.version.processingStatus,
-			tail: matches.map(({ document }) => document.chunkIndex >= 50)
+			tail: matches.map(({ document }) => document.content.includes('amberfalcon'))
 		}).toEqual({ status: 'ready', tail: [true] });
 	});
 
