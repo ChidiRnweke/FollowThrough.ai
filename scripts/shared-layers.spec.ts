@@ -290,3 +290,35 @@ it('accepts the same code in a server service', () => {
 		})
 	).not.toContain('structure:unknown-server-folder');
 });
+
+describe('browser layers mirror the server (ADR 0041)', () => {
+	const repository =
+		'export interface Drafts { read(): string } export class DraftRows implements Drafts { read() { return "draft"; } }';
+	it('rejects a browser controller importing a browser repository', () => {
+		expect(
+			inspect({
+				'src/lib/client/repositories/notes/drafts.ts': repository,
+				'src/lib/controllers/notes/drafts.ts':
+					"import { DraftRows } from '$lib/client/repositories/notes/drafts'; export const read = () => new DraftRows().read();"
+			})
+		).toContain('import-boundary:banned-layer-import');
+	});
+	it('lets a browser service call the remote function it owns', () => {
+		expect(
+			inspect({
+				'src/lib/remote/notes/notes.remote.ts': 'export const readNote = async () => "note";',
+				'src/lib/client/services/notes/reading.ts':
+					"import { readNote } from '$lib/remote/notes/notes.remote'; export interface NoteReading { read(): Promise<string> } export class NoteReader implements NoteReading { read() { return readNote(); } }"
+			})
+		).not.toContain('import-boundary:banned-layer-import');
+	});
+	it('keeps shared services from calling remote functions', () => {
+		expect(
+			inspect({
+				'src/lib/remote/notes/notes.remote.ts': 'export const readNote = async () => "note";',
+				'src/lib/services/notes/reading.ts':
+					"import { readNote } from '$lib/remote/notes/notes.remote'; export interface NoteReading { read(): Promise<string> } export class NoteReader implements NoteReading { read() { return readNote(); } }"
+			})
+		).toContain('import-boundary:banned-layer-import');
+	});
+});

@@ -47,7 +47,7 @@ const layer = (file: string): Layer => {
 	)
 		return 'entry';
 	const match =
-		/^src\/lib\/(?:server\/)?(services|controllers|stores|factories|repositories|remote|components|models)\//.exec(
+		/^src\/lib\/(?:server\/|client\/)?(services|controllers|stores|factories|repositories|remote|components|models)\//.exec(
 			file
 		);
 	if (match) return match[1] as Layer;
@@ -426,8 +426,14 @@ export function analyzeArchitecture(
 				(ancestorClass(target) && exportedClasses.has(ancestorClass(target)!)) ||
 				serviceContracts.has(target.parent);
 			const trace = [...trail, ...origin.trail];
+			// A browser service owns its server interactions and calls the remote function (ADR 0041).
+			const browserServiceCall =
+				owner === 'services' &&
+				targetLayer === 'remote' &&
+				pathOf(site).startsWith('src/lib/client/services/');
 			if (
 				forbidden(owner, targetLayer) &&
+				!browserServiceCall &&
 				!(owner === 'services' && targetLayer === 'factories' && origin.injected) &&
 				!sameClass &&
 				(!sameFile || anotherCapability)

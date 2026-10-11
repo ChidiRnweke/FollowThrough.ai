@@ -617,6 +617,36 @@ describe('controller operation ownership', () => {
 	});
 });
 
+describe('browser layers mirror the server', () => {
+	const repository =
+		'export interface Drafts { read(): string } export class DraftRows implements Drafts { read() { return "draft"; } }';
+	it('rejects a browser controller that calls a browser repository', () => {
+		expect(
+			rules({
+				'src/lib/client/repositories/notes/drafts.ts': repository,
+				'src/lib/controllers/notes/drafts.ts': `import type { Drafts } from '$lib/client/repositories/notes/drafts'; export class NoteDrafts { constructor(private drafts: Drafts) {} read() { return this.drafts.read(); } }`,
+				'src/lib/factories/notes/drafts.ts': `import { DraftRows } from '$lib/client/repositories/notes/drafts'; import { NoteDrafts } from '$lib/controllers/notes/drafts'; export const create = () => new NoteDrafts(new DraftRows());`
+			})
+		).toContain('controller-repository');
+	});
+	it('lets a browser service call the remote function it owns', () => {
+		expect(
+			rules({
+				'src/lib/remote/notes/notes.remote.ts': 'export const readNote = async () => "note";',
+				'src/lib/client/services/notes/reading.ts': `import { readNote } from '$lib/remote/notes/notes.remote'; export interface NoteReading { read(): Promise<string> } export class NoteReader implements NoteReading { read() { return readNote(); } }`
+			})
+		).not.toContain('indirect-dependency');
+	});
+	it('rejects a shared service that calls a remote function', () => {
+		expect(
+			rules({
+				'src/lib/remote/notes/notes.remote.ts': 'export const readNote = async () => "note";',
+				'src/lib/services/notes/reading.ts': `import { readNote } from '$lib/remote/notes/notes.remote'; export interface NoteReading { read(): Promise<string> } export class NoteReader implements NoteReading { read() { return readNote(); } }`
+			})
+		).toContain('indirect-dependency');
+	});
+});
+
 describe('controllers reach persistence through services', () => {
 	const repository =
 		'export interface NoteRecords { find(): string } export class NoteRows implements NoteRecords { find() { return "row"; } }';
