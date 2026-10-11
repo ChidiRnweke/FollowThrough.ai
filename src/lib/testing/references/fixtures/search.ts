@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
 import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
@@ -38,13 +39,13 @@ export const referenceSelection = {
 };
 
 export const referenceSearchFixture = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	content.notes = [noteBuilder({ plainText: referenceSelection.text })];
 	const references = new InMemoryReferencePipeline();
-	const provenance = new InMemoryProvenanceRecorder();
-	const suggestions = new InMemorySuggestions();
-	const runs = new InMemoryAgentRunPersistence();
-	const conversations = new InMemoryConversationRepository();
+	const provenance = new InMemoryProvenanceRecorder(testActor());
+	const suggestions = new InMemorySuggestions(testActor());
+	const runs = new InMemoryAgentRunPersistence(testActor());
+	const conversations = new InMemoryConversationRepository(testActor());
 	const transactions = new InMemoryTransactionRunner([
 		content,
 		provenance,
@@ -53,7 +54,7 @@ export const referenceSearchFixture = () => {
 		conversations
 	]);
 	const settlements = new RunSettlements(runs, runs);
-	const requests = new NoteActionRequests(runs, runs, conversations);
+	const requests = new NoteActionRequests(testActor(), runs, runs, conversations);
 	const dependencies: ReferencesDependencies = {
 		...agentToolResultsFixture(),
 		selectionOrigins: new InMemorySelectionOrigins(content, provenance),
@@ -70,6 +71,7 @@ export const referenceSearchFixture = () => {
 		transactionRunner: transactions
 	};
 	const agent = new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),

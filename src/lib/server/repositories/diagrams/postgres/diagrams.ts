@@ -33,14 +33,17 @@ import * as schema from '$lib/server/db/schema/diagrams';
 import { toDiagram, toDiagramRevision } from '$lib/server/db/mappers';
 
 export class DiagramRecords implements DiagramRepository {
-	constructor(private readonly database: Database) {}
-	private activeProjectIds(actor: ActorContext) {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
+	private activeProjectIds() {
 		return this.database
 			.select({ id: projects.id })
 			.from(projects)
-			.where(and(eq(projects.userId, actor.userId), projectIsNull(projects.archivedAt)));
+			.where(and(eq(projects.userId, this.actor.userId), projectIsNull(projects.archivedAt)));
 	}
-	async findForWrite(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined> {
+	async findForWrite(id: DiagramId): Promise<Diagram | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.diagrams)
@@ -48,15 +51,15 @@ export class DiagramRecords implements DiagramRepository {
 				and(
 					eq(schema.diagrams.id, id),
 					and(
-						eq(schema.diagrams.userId, actor.userId),
-						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+						eq(schema.diagrams.userId, this.actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds())
 					)
 				)
 			)
 			.for('update');
 		return row ? toDiagram(row) : undefined;
 	}
-	async findById(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined> {
+	async findById(id: DiagramId): Promise<Diagram | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.diagrams)
@@ -64,17 +67,14 @@ export class DiagramRecords implements DiagramRepository {
 				and(
 					eq(schema.diagrams.id, id),
 					and(
-						eq(schema.diagrams.userId, actor.userId),
-						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+						eq(schema.diagrams.userId, this.actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds())
 					)
 				)
 			);
 		return row ? toDiagram(row) : undefined;
 	}
-	async findByConversation(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<Diagram | undefined> {
+	async findByConversation(conversationId: ConversationId): Promise<Diagram | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.diagrams)
@@ -82,8 +82,8 @@ export class DiagramRecords implements DiagramRepository {
 				and(
 					eq(schema.diagrams.conversationId, conversationId),
 					and(
-						eq(schema.diagrams.userId, actor.userId),
-						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+						eq(schema.diagrams.userId, this.actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds())
 					),
 					// A conversation whose diagram is in the trash has none as far as the
 					// studio is concerned: refusing a new one by naming a diagram the user
@@ -93,7 +93,7 @@ export class DiagramRecords implements DiagramRepository {
 			);
 		return row ? toDiagram(row) : undefined;
 	}
-	async countReferencingNotes(actor: ActorContext, id: DiagramId): Promise<number> {
+	async countReferencingNotes(id: DiagramId): Promise<number> {
 		// A draw.io reference is a `drawio` node inside the note's ProseMirror
 		// document, so the documents are the only place this can be counted. The
 		// scan is bounded to the actor's notes and only runs behind a delete
@@ -103,13 +103,13 @@ export class DiagramRecords implements DiagramRepository {
 			.from(schema.notes)
 			.where(
 				and(
-					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.userId, this.actor.userId),
 					sql`jsonb_path_exists(${schema.notes.document}, '$.** ? (@.type == "drawio" && @.attrs.diagramId == $id)', jsonb_build_object('id', ${id}::text))`
 				)
 			);
 		return row?.total ?? 0;
 	}
-	async listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly Diagram[]> {
+	async listForNote(noteId: NoteId): Promise<readonly Diagram[]> {
 		return (
 			await this.database
 				.select()
@@ -117,8 +117,8 @@ export class DiagramRecords implements DiagramRepository {
 				.where(
 					and(
 						and(
-							eq(schema.diagrams.userId, actor.userId),
-							inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+							eq(schema.diagrams.userId, this.actor.userId),
+							inArray(schema.diagrams.projectId, this.activeProjectIds())
 						),
 						eq(schema.diagrams.sourceNoteId, noteId),
 						// A note renders a trashed diagram as unavailable, which is what the
@@ -129,11 +129,7 @@ export class DiagramRecords implements DiagramRepository {
 				.orderBy(asc(schema.diagrams.createdAt))
 		).map(toDiagram);
 	}
-	private projectFilters(
-		actor: ActorContext,
-		projectId: ProjectId,
-		params: ListProjectDiagramsParams
-	) {
+	private projectFilters(projectId: ProjectId, params: ListProjectDiagramsParams) {
 		const term = params.query?.trim();
 		// Titles and the searchable text, so a query finds a diagram by what it is
 		// called or by a label inside it — the two things a reader remembers.
@@ -146,8 +142,8 @@ export class DiagramRecords implements DiagramRepository {
 		return and(
 			eq(schema.diagrams.projectId, projectId),
 			and(
-				eq(schema.diagrams.userId, actor.userId),
-				inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+				eq(schema.diagrams.userId, this.actor.userId),
+				inArray(schema.diagrams.projectId, this.activeProjectIds())
 			),
 			// The gallery and its count both build from here, so one filter keeps the
 			// number and the grid telling the same story about what is in the project.
@@ -158,23 +154,21 @@ export class DiagramRecords implements DiagramRepository {
 	}
 
 	async countForProject(
-		actor: ActorContext,
 		projectId: ProjectId,
 		params: ListProjectDiagramsParams = {}
 	): Promise<number> {
 		const [totals] = await this.database
 			.select({ total: count() })
 			.from(schema.diagrams)
-			.where(this.projectFilters(actor, projectId, params));
+			.where(this.projectFilters(projectId, params));
 		return totals?.total ?? 0;
 	}
 
 	async listForProject(
-		actor: ActorContext,
 		projectId: ProjectId,
 		params: ListProjectDiagramsParams = {}
 	): Promise<ListProjectDiagramsOutput> {
-		const filters = this.projectFilters(actor, projectId, params);
+		const filters = this.projectFilters(projectId, params);
 		let rows = this.database
 			.select()
 			.from(schema.diagrams)
@@ -191,7 +185,7 @@ export class DiagramRecords implements DiagramRepository {
 		]);
 		return { diagrams: page.map(toDiagram), total: totals[0]?.total ?? 0 };
 	}
-	async insert(actor: ActorContext, diagram: Diagram): Promise<Diagram> {
+	async insert(diagram: Diagram): Promise<Diagram> {
 		// A diagram carries its own project. When it also names a source note, that
 		// note must exist and belong to the actor — a studio diagram has no note and
 		// skips the lookup entirely.
@@ -200,7 +194,7 @@ export class DiagramRecords implements DiagramRepository {
 				.select({ id: schema.notes.id })
 				.from(schema.notes)
 				.where(
-					and(eq(schema.notes.id, diagram.sourceNoteId), eq(schema.notes.userId, actor.userId))
+					and(eq(schema.notes.id, diagram.sourceNoteId), eq(schema.notes.userId, this.actor.userId))
 				);
 			if (!note) throw new NotFoundError('Diagram note was not found');
 		}
@@ -208,7 +202,7 @@ export class DiagramRecords implements DiagramRepository {
 			.insert(schema.diagrams)
 			.values({
 				id: diagram.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				projectId: diagram.projectId,
 				sourceNoteId: diagram.sourceNoteId,
 				conversationId: diagram.conversationId,
@@ -232,10 +226,7 @@ export class DiagramRecords implements DiagramRepository {
 			.returning();
 		return toDiagram(row!);
 	}
-	async updateContent(
-		actor: ActorContext,
-		write: DiagramContentWrite
-	): Promise<Diagram | undefined> {
+	async updateContent(write: DiagramContentWrite): Promise<Diagram | undefined> {
 		const [row] = await this.database
 			.update(schema.diagrams)
 			.set({
@@ -251,8 +242,8 @@ export class DiagramRecords implements DiagramRepository {
 				and(
 					eq(schema.diagrams.id, write.diagramId),
 					and(
-						eq(schema.diagrams.userId, actor.userId),
-						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+						eq(schema.diagrams.userId, this.actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds())
 					),
 					eq(schema.diagrams.kind, write.kind),
 					isNull(schema.diagrams.archivedAt),
@@ -269,7 +260,6 @@ export class DiagramRecords implements DiagramRepository {
 		return row ? toDiagram(row) : undefined;
 	}
 	async updateIfRevision(
-		actor: ActorContext,
 		diagram: DrawioDiagram,
 		expected: number,
 		expectedPublishedRevision: number
@@ -290,8 +280,8 @@ export class DiagramRecords implements DiagramRepository {
 				and(
 					eq(schema.diagrams.id, diagram.id),
 					and(
-						eq(schema.diagrams.userId, actor.userId),
-						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+						eq(schema.diagrams.userId, this.actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds())
 					),
 					eq(schema.diagrams.currentRevision, expected),
 					eq(schema.diagrams.publishedRevision, expectedPublishedRevision),
@@ -303,8 +293,8 @@ export class DiagramRecords implements DiagramRepository {
 		const updated = toDiagram(row);
 		return updated.kind === 'drawio' ? updated : undefined;
 	}
-	async insertRevision(actor: ActorContext, revision: DiagramRevision) {
-		const owned = await this.findById(actor, revision.diagramId);
+	async insertRevision(revision: DiagramRevision) {
+		const owned = await this.findById(revision.diagramId);
 		if (!owned) throw new NotFoundError('Diagram was not found');
 		const [row] = await this.database
 			.insert(schema.diagramRevisions)
@@ -335,8 +325,8 @@ export class DiagramRecords implements DiagramRepository {
 		if (!existing) throw new NotFoundError('The published diagram snapshot was not found');
 		return toDiagramRevision(existing);
 	}
-	async listRevisions(actor: ActorContext, id: DiagramId) {
-		if (!(await this.findById(actor, id))) throw new NotFoundError('Diagram was not found');
+	async listRevisions(id: DiagramId) {
+		if (!(await this.findById(id))) throw new NotFoundError('Diagram was not found');
 		return (
 			await this.database
 				.select()
@@ -345,8 +335,8 @@ export class DiagramRecords implements DiagramRepository {
 				.orderBy(desc(schema.diagramRevisions.createdAt))
 		).map(toDiagramRevision);
 	}
-	async findRevision(actor: ActorContext, id: DiagramId, revisionId: DiagramRevisionId) {
-		if (!(await this.findById(actor, id))) throw new NotFoundError('Diagram was not found');
+	async findRevision(id: DiagramId, revisionId: DiagramRevisionId) {
+		if (!(await this.findById(id))) throw new NotFoundError('Diagram was not found');
 		const [row] = await this.database
 			.select()
 			.from(schema.diagramRevisions)
@@ -355,7 +345,7 @@ export class DiagramRecords implements DiagramRepository {
 			);
 		return row ? toDiagramRevision(row) : undefined;
 	}
-	async updateTrash(actor: ActorContext, diagram: Diagram): Promise<Diagram> {
+	async updateTrash(diagram: Diagram): Promise<Diagram> {
 		const [row] = await this.database
 			.update(schema.diagrams)
 			.set({
@@ -366,8 +356,8 @@ export class DiagramRecords implements DiagramRepository {
 				and(
 					eq(schema.diagrams.id, diagram.id),
 					and(
-						eq(schema.diagrams.userId, actor.userId),
-						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+						eq(schema.diagrams.userId, this.actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds())
 					)
 				)
 			)
@@ -376,18 +366,18 @@ export class DiagramRecords implements DiagramRepository {
 		return toDiagram(row);
 	}
 
-	async listArchived(actor: ActorContext, projectId?: ProjectId): Promise<readonly Diagram[]> {
+	async listArchived(projectId?: ProjectId): Promise<readonly Diagram[]> {
 		const scope = projectId
 			? and(
 					and(
-						eq(schema.diagrams.userId, actor.userId),
-						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+						eq(schema.diagrams.userId, this.actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds())
 					),
 					eq(schema.diagrams.projectId, projectId)
 				)
 			: and(
-					eq(schema.diagrams.userId, actor.userId),
-					inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+					eq(schema.diagrams.userId, this.actor.userId),
+					inArray(schema.diagrams.projectId, this.activeProjectIds())
 				);
 		return (
 			await this.database
@@ -398,15 +388,15 @@ export class DiagramRecords implements DiagramRepository {
 		).map(toDiagram);
 	}
 
-	async deleteArchived(actor: ActorContext, id: DiagramId): Promise<boolean> {
+	async deleteArchived(id: DiagramId): Promise<boolean> {
 		const [row] = await this.database
 			.delete(schema.diagrams)
 			.where(
 				and(
 					eq(schema.diagrams.id, id),
 					and(
-						eq(schema.diagrams.userId, actor.userId),
-						inArray(schema.diagrams.projectId, this.activeProjectIds(actor))
+						eq(schema.diagrams.userId, this.actor.userId),
+						inArray(schema.diagrams.projectId, this.activeProjectIds())
 					),
 					isNotNull(schema.diagrams.archivedAt)
 				)

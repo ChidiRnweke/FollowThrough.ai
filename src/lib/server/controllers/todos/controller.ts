@@ -70,30 +70,30 @@ import type { ExportPreparation } from '$lib/services/deliverables/export-prepar
  * pipeline that turns commitments in text into reviewable todo suggestions.
  */
 export interface TodosController {
-	synchronize(actor: ActorContext, input: TodoMutationRequest): Promise<WorkspaceMutationResult>;
+	synchronize(input: TodoMutationRequest): Promise<WorkspaceMutationResult>;
 	/** Load a single todo as a view with its resolved display fields. */
-	get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView>;
+	get(input: GetTodoViewInput): Promise<TodoView>;
 	/** List todos by filter, each assembled into a view. */
-	list(actor: ActorContext, filter: TodoListFilter): Promise<ListTodosOutput>;
+	list(filter: TodoListFilter): Promise<ListTodosOutput>;
 	/** Count todos matching a filter without loading them, for badges and pagination. */
-	count(actor: ActorContext, filter: TodoListFilter): Promise<number>;
+	count(filter: TodoListFilter): Promise<number>;
 	/** List the distinct category names in use, for filter dropdowns. */
-	listCategories(actor: ActorContext): Promise<readonly string[]>;
+	listCategories(): Promise<readonly string[]>;
 	/** Render the board matching a filter as an ephemeral PDF download. */
-	exportBoardPdf(actor: ActorContext, filter: TodoListFilter): Promise<BoardPdfExportResult>;
+	exportBoardPdf(filter: TodoListFilter): Promise<BoardPdfExportResult>;
 	/** Create a todo. */
-	create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }>;
+	create(input: CreateTodoInput): Promise<{ todo: Todo }>;
 	/** Commit all tasks in input order; repeated requests return the saved outcome. */
-	createBatch(actor: ActorContext, input: CreateTodoBatchInput): Promise<CreateTodoBatchOutput>;
+	createBatch(input: CreateTodoBatchInput): Promise<CreateTodoBatchOutput>;
 	/**
 	 * Validate and persist the supplied fields and status as one complete edit.
 	 *
 	 * @throws InvalidGeneratedContentError if no edit is supplied at all — an update
 	 * that changes nothing is a caller bug, not a no-op.
 	 */
-	update(actor: ActorContext, input: UpdateTodoInput): Promise<UpdateTodoOutput>;
+	update(input: UpdateTodoInput): Promise<UpdateTodoOutput>;
 	/** Soft-delete a todo so it disappears from lists while its history survives. */
-	remove(actor: ActorContext, todoId: TodoId): Promise<void>;
+	remove(todoId: TodoId): Promise<void>;
 	/**
 	 * Extract commitments from a text selection and create one reviewable todo
 	 * suggestion per candidate, in one transaction.
@@ -103,7 +103,6 @@ export interface TodosController {
 	 * auto-created from them.
 	 */
 	extractPromises(
-		actor: ActorContext,
 		input: ExtractPromisesInput,
 		signal?: AbortSignal
 	): Promise<ExtractPromisesOutput<TodoSuggestion>>;
@@ -112,12 +111,10 @@ export interface TodosController {
 	 * durable rather than once the extraction is done. Its result arrives as a
 	 * `workflow_result` event, so a client that refreshes mid-run can still collect it.
 	 */
-	startExtractPromises(
-		actor: ActorContext,
-		input: StartExtractPromisesInput
-	): Promise<AgentRunReceipt>;
-	executePromiseRun(actor: ActorContext, runId: AgentRunId): Promise<void>;
-	recoverQueuedPromiseRuns(): Promise<number>;
+	startExtractPromises(input: StartExtractPromisesInput): Promise<AgentRunReceipt>;
+	executePromiseRun(runId: AgentRunId): Promise<void>;
+	/** Start a queued run the previous process never started. */
+	resumeQueuedPromiseRun(runId: AgentRunId): Promise<void>;
 }
 export interface TodosDependencies {
 	readonly boardExport: TodoBoardExport;
@@ -140,7 +137,7 @@ export interface TodosDependencies {
 	suggestionAccepter: SuggestionAccepter;
 	suggestionEffects: SuggestionEffectService;
 	transactionRunner: TransactionRunner;
-	projectLister: { list(actor: ActorContext): Promise<readonly Project[]> };
+	projectLister: { list(): Promise<readonly Project[]> };
 	markdownToContent: NoteMarkdownReader;
 	exportPreparer: ExportPreparation;
 	pdfGenerator: PdfRendering;
@@ -151,21 +148,18 @@ export interface TodosDependencies {
 	promiseRules: IPromiseRules;
 }
 export class Todos implements TodosController {
-	async synchronize(
-		actor: ActorContext,
-		input: TodoMutationRequest
-	): Promise<WorkspaceMutationResult> {
+	async synchronize(input: TodoMutationRequest): Promise<WorkspaceMutationResult> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
 					const target = this.workspaceCommandRules.mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, {
+					const prepared = await this.dependencies.syncMutations.prepare(input, {
 						identity: target,
 						key: this.workspaceCommandRules.workspaceResourceKey(target)
 					});
 					if (prepared.kind === 'finished') return prepared.result;
-					await this.applySynchronizedCommand(actor, input);
-					return this.dependencies.syncMutations.complete(actor, input, target);
+					await this.applySynchronizedCommand(input);
+					return this.dependencies.syncMutations.complete(input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);
@@ -175,64 +169,62 @@ export class Todos implements TodosController {
 		}
 	}
 
-	private async applySynchronizedCommand(
-		actor: ActorContext,
-		input: TodoMutationRequest
-	): Promise<void> {
+	private async applySynchronizedCommand(input: TodoMutationRequest): Promise<void> {
 		const command = input.command;
 
 		switch (command.kind) {
 			case 'createTodo':
-				await this.create(actor, command);
+				await this.create(command);
 				break;
 			case 'updateTodo': {
 				const { kind, ...edits } = command;
 				void kind;
-				await this.update(actor, edits);
+				await this.update(edits);
 				break;
 			}
 			case 'deleteTodo':
-				await this.remove(actor, command.todoId);
+				await this.remove(command.todoId);
 				break;
 		}
 	}
 
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly workspaceCommandRules: WorkspaceCommandRules,
 		private readonly dependencies: TodosDependencies,
 		private readonly clock: () => DateTime = () => new Date().toISOString() as DateTime
 	) {}
-	async get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView> {
-		const todo = await this.dependencies.todoReader.get(actor, input.todoId);
-		const context = await this.dependencies.todoContextReader.readContext(actor, todo);
+	async get(input: GetTodoViewInput): Promise<TodoView> {
+		const todo = await this.dependencies.todoReader.get(input.todoId);
+		const context = await this.dependencies.todoContextReader.readContext(todo);
 		const view = this.dependencies.todoPresentation.view(todo, context);
 		return view;
 	}
-	async list(actor: ActorContext, filter: TodoListFilter): Promise<ListTodosOutput> {
-		const todos = await this.dependencies.todoLister.list(actor, filter);
-		const contexts = await this.dependencies.todoContextReader.readContexts(actor, todos);
+	async list(filter: TodoListFilter): Promise<ListTodosOutput> {
+		const todos = await this.dependencies.todoLister.list(filter);
+		const contexts = await this.dependencies.todoContextReader.readContexts(todos);
 		return {
 			todos: contexts.map((context) =>
 				this.dependencies.todoPresentation.view(context.todo, context)
 			)
 		};
 	}
-	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
-		return this.dependencies.todoLister.count(actor, filter);
+	async count(filter: TodoListFilter): Promise<number> {
+		return this.dependencies.todoLister.count(filter);
 	}
-	async listCategories(actor: ActorContext): Promise<readonly string[]> {
-		return this.dependencies.todoLister.listCategories(actor);
+	async listCategories(): Promise<readonly string[]> {
+		return this.dependencies.todoLister.listCategories();
 	}
-	async exportBoardPdf(actor: ActorContext, filter: TodoListFilter): Promise<BoardPdfExportResult> {
+	async exportBoardPdf(filter: TodoListFilter): Promise<BoardPdfExportResult> {
 		const [todos, projects] = await Promise.all([
-			this.dependencies.todoLister.list(actor, filter),
-			this.dependencies.projectLister.list(actor)
+			this.dependencies.todoLister.list(filter),
+			this.dependencies.projectLister.list()
 		]);
 		const projectNames = new Map(projects.map((project) => [project.id, project.name]));
 		const projectName = filter.projectId ? projectNames.get(filter.projectId) : undefined;
 		if (filter.projectId && projectName === undefined)
 			throw new NotFoundError('Todo project was not found');
-		const contexts = await this.dependencies.todoContextReader.readContexts(actor, todos);
+		const contexts = await this.dependencies.todoContextReader.readContexts(todos);
 		const views = contexts.map((context) =>
 			this.dependencies.todoPresentation.view(context.todo, context)
 		);
@@ -256,44 +248,43 @@ export class Todos implements TodosController {
 			filename: board.filename
 		};
 	}
-	async create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }> {
+	async create(input: CreateTodoInput): Promise<{ todo: Todo }> {
 		const decision = this.dependencies.todoCreationRules.create(input, {
 			id: input.id ?? (crypto.randomUUID() as TodoId),
-			userId: actor.userId,
+			userId: this.actor.userId,
 			timestamp: this.clock()
 		});
 		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		return { todo: await this.dependencies.todoCreator.create(actor, decision.todo) };
+		return { todo: await this.dependencies.todoCreator.create(decision.todo) };
 	}
-	async update(actor: ActorContext, input: UpdateTodoInput): Promise<UpdateTodoOutput> {
+	async update(input: UpdateTodoInput): Promise<UpdateTodoOutput> {
 		if (!this.dependencies.todoEditingRules.hasEdits(input)) {
 			throw new InvalidGeneratedContentError('A todo update requires at least one edit');
 		}
 		return this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.todoEditor.getForEdit(actor, input.todoId);
+			const current = await this.dependencies.todoEditor.getForEdit(input.todoId);
 			if (input.linkedNoteId) {
 				await this.dependencies.todoEditor.validateLinkedNote(
-					actor,
 					input.linkedNoteId,
 					current.projectId
 				);
 			}
 			const edited = this.dependencies.todoEditingRules.edit(current, input, this.clock());
-			const todo = await this.dependencies.todoEditor.update(actor, edited);
-			const context = await this.dependencies.todoContextReader.readContext(actor, todo);
+			const todo = await this.dependencies.todoEditor.update(edited);
+			const context = await this.dependencies.todoContextReader.readContext(todo);
 			return { todo, view: this.dependencies.todoPresentation.view(todo, context) };
 		});
 	}
-	createBatch(actor: ActorContext, input: CreateTodoBatchInput): Promise<CreateTodoBatchOutput> {
+	createBatch(input: CreateTodoBatchInput): Promise<CreateTodoBatchOutput> {
 		return this.dependencies.transactionRunner.run(
 			async () => {
-				const previous = await this.dependencies.todoBatchReceipts.findForUpdate(actor, input);
+				const previous = await this.dependencies.todoBatchReceipts.findForUpdate(input);
 				if (previous.kind === 'saved') return previous.result;
 				const todos: Todo[] = [];
 				for (const item of input.todos) {
 					todos.push(
 						(
-							await this.create(actor, {
+							await this.create({
 								...item,
 								projectId: input.projectId
 							})
@@ -301,20 +292,17 @@ export class Todos implements TodosController {
 					);
 				}
 				const result = { todos };
-				await this.dependencies.todoBatchReceipts.save(actor, input, result);
+				await this.dependencies.todoBatchReceipts.save(input, result);
 				return result;
 			},
 			{ retry: 'database-only' }
 		);
 	}
-	async remove(actor: ActorContext, todoId: TodoId): Promise<void> {
-		await this.dependencies.todoReader.get(actor, todoId);
-		await this.dependencies.todoDeleter.softDelete(actor, todoId);
+	async remove(todoId: TodoId): Promise<void> {
+		await this.dependencies.todoReader.get(todoId);
+		await this.dependencies.todoDeleter.softDelete(todoId);
 	}
-	async startExtractPromises(
-		actor: ActorContext,
-		input: StartExtractPromisesInput
-	): Promise<AgentRunReceipt> {
+	async startExtractPromises(input: StartExtractPromisesInput): Promise<AgentRunReceipt> {
 		const request = {
 			requestId: input.requestId,
 			context: {
@@ -327,32 +315,30 @@ export class Todos implements TodosController {
 		let receipt: AgentRunReceipt;
 		try {
 			receipt = await this.dependencies.transactionRunner.run(() =>
-				this.dependencies.noteActionRequests.prepare(actor, request)
+				this.dependencies.noteActionRequests.prepare(request)
 			);
 		} catch (error) {
 			if (!(error instanceof DuplicateNoteActionRequest)) throw error;
-			receipt = await this.dependencies.noteActionRequests.existing(actor, request);
+			receipt = await this.dependencies.noteActionRequests.existing(request);
 		}
-		if (receipt.status === 'queued') this.launchPromiseRun(actor, receipt.runId);
+		if (receipt.status === 'queued') this.launchPromiseRun(receipt.runId);
 		return receipt;
 	}
 
-	private launchPromiseRun(actor: ActorContext, runId: AgentRunId): void {
+	private launchPromiseRun(runId: AgentRunId): void {
 		// audit-allow: silent-catch — detached execution persists its terminal state; settlement failures are emitted for operational repair.
-		void this.executePromiseRun(actor, runId).catch((error) =>
+		void this.executePromiseRun(runId).catch((error) =>
 			console.error(`[promise-run] Could not settle ${runId}:`, error)
 		);
 	}
 
-	async recoverQueuedPromiseRuns(): Promise<number> {
-		const queued = await this.dependencies.noteActionRequests.queued('promise_extraction');
-		for (const run of queued) this.launchPromiseRun(run.actor, run.runId);
-		return queued.length;
+	async resumeQueuedPromiseRun(runId: AgentRunId): Promise<void> {
+		this.launchPromiseRun(runId);
 	}
 
-	async executePromiseRun(actor: ActorContext, runId: AgentRunId): Promise<void> {
+	async executePromiseRun(runId: AgentRunId): Promise<void> {
 		const run = await this.dependencies.transactionRunner.run(() =>
-			this.dependencies.noteActionRequests.claim(actor, runId, 'promise_extraction')
+			this.dependencies.noteActionRequests.claim(runId, 'promise_extraction')
 		);
 		if (!run) return;
 		const active = new AbortController();
@@ -360,9 +346,8 @@ export class Todos implements TodosController {
 		try {
 			stopWatching = await this.dependencies.runSignals.abortOnCancel(runId, active);
 			const input = run.contextSnapshot;
-			await this.dependencies.selectionOrigins.validate(actor, input.selection);
+			await this.dependencies.selectionOrigins.validate(input.selection);
 			const candidates = await this.extractCandidates(
-				actor,
 				input,
 				input.generation,
 				run.createdAt,
@@ -376,7 +361,7 @@ export class Todos implements TodosController {
 					model: run.model
 				});
 				if (claim.kind === 'lost') return false;
-				const result = await this.saveExtractedPromises(actor, input, candidates);
+				const result = await this.saveExtractedPromises(input, candidates);
 				await this.dependencies.noteActionRequests.recordResult(runId, {
 					action: 'promises',
 					result
@@ -428,14 +413,12 @@ export class Todos implements TodosController {
 		return settled;
 	}
 	async extractPromises(
-		actor: ActorContext,
 		input: ExtractPromisesInput,
 		signal?: AbortSignal
 	): Promise<ExtractPromisesOutput<TodoSuggestion>> {
 		const requestedAt = new Date().toISOString() as DateTime;
-		await this.dependencies.selectionOrigins.validate(actor, input.selection);
+		await this.dependencies.selectionOrigins.validate(input.selection);
 		const extracted = await this.extractCandidates(
-			actor,
 			input,
 			this.dependencies.promiseGeneration,
 			requestedAt,
@@ -443,21 +426,19 @@ export class Todos implements TodosController {
 		);
 		signal?.throwIfAborted();
 		return this.dependencies.transactionRunner.run(() =>
-			this.saveExtractedPromises(actor, input, extracted)
+			this.saveExtractedPromises(input, extracted)
 		);
 	}
 
 	private extractCandidates(
-		actor: ActorContext,
 		input: ExtractPromisesInput,
 		generation: SelectionGeneration,
 		requestedAt: DateTime,
 		signal?: AbortSignal
 	): Promise<readonly PromiseCandidate[]> {
 		return generation.kind === 'rules'
-			? this.dependencies.promiseRules.extract(actor, input.selection, requestedAt)
+			? this.dependencies.promiseRules.extract(input.selection, requestedAt)
 			: this.dependencies.promiseExtractor.extract(
-					actor,
 					input.selection,
 					{ model: generation.model, requestedAt },
 					signal
@@ -465,16 +446,15 @@ export class Todos implements TodosController {
 	}
 
 	private async saveExtractedPromises(
-		actor: ActorContext,
 		input: ExtractPromisesInput,
 		extracted: readonly PromiseCandidate[]
 	): Promise<ExtractPromisesOutput<TodoSuggestion>> {
-		const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
+		const source = await this.dependencies.selectionOrigins.resolve(input.selection);
 		const { anchor } = source;
 		const candidates = input.responsibility
 			? this.dependencies.promiseRules.select(extracted, input.responsibility)
 			: extracted;
-		const origin = await this.dependencies.selectionOrigins.record(actor, source, {
+		const origin = await this.dependencies.selectionOrigins.record(source, {
 			producerKind: 'pipeline',
 			producerName: 'Extract Promises',
 			pipeline: 'extract_promises',
@@ -483,37 +463,31 @@ export class Todos implements TodosController {
 		const suggestions = [];
 		const createdTodos: Todo[] = [];
 		for (const candidate of candidates) {
-			let suggestion = await this.dependencies.suggestionCreator.createFromSelection(
-				actor,
-				origin,
-				{
-					kind: 'todo',
-					confidence: candidate.confidence,
-					payload: {
-						title: candidate.action,
-						responsibility: candidate.responsibility,
-						waitingOn: candidate.responsibility === 'waiting_on' ? candidate.ownerName : undefined,
-						dueDateVerbatim: candidate.dueDateVerbatim,
-						dueDate: candidate.resolvedDueDate,
-						promiseStrength: candidate.strength
-					}
+			let suggestion = await this.dependencies.suggestionCreator.createFromSelection(origin, {
+				kind: 'todo',
+				confidence: candidate.confidence,
+				payload: {
+					title: candidate.action,
+					responsibility: candidate.responsibility,
+					waitingOn: candidate.responsibility === 'waiting_on' ? candidate.ownerName : undefined,
+					dueDateVerbatim: candidate.dueDateVerbatim,
+					dueDate: candidate.resolvedDueDate,
+					promiseStrength: candidate.strength
 				}
-			);
+			});
 
 			if (
 				await this.dependencies.trustPolicyEvaluator.shouldAutoAccept(
-					actor,
 					'extract_promises',
 					suggestion
 				)
 			) {
-				const { todo } = await this.create(actor, suggestion.payload);
-				await this.dependencies.suggestionEffects.record(actor, suggestion.id, [
+				const { todo } = await this.create(suggestion.payload);
+				await this.dependencies.suggestionEffects.record(suggestion.id, [
 					{ kind: 'created', after: { type: 'todos', value: todo } }
 				]);
 				createdTodos.push(todo);
 				const accepted = await this.dependencies.suggestionAccepter.accept(
-					actor,
 					suggestion,
 					todo.id,
 					true

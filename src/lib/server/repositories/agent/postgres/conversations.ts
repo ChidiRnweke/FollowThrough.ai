@@ -73,13 +73,13 @@ const toMessage = (row: typeof schema.messages.$inferSelect): Message => {
 };
 
 export class ConversationRecords implements ConversationRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async list(
-		actor: ActorContext,
-		options: ConversationListOptions = {}
-	): Promise<readonly Conversation[]> {
-		const conditions = [eq(schema.conversations.userId, actor.userId)];
+	async list(options: ConversationListOptions = {}): Promise<readonly Conversation[]> {
+		const conditions = [eq(schema.conversations.userId, this.actor.userId)];
 		if (options.kind) conditions.push(eq(schema.conversations.kind, options.kind));
 		if (options.query?.trim())
 			conditions.push(ilike(schema.conversations.title, `%${options.query.trim()}%`));
@@ -94,32 +94,33 @@ export class ConversationRecords implements ConversationRepository {
 		return (await query).map(toConversation);
 	}
 
-	async findById(actor: ActorContext, id: Conversation['id']): Promise<Conversation | undefined> {
+	async findById(id: Conversation['id']): Promise<Conversation | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.conversations)
-			.where(and(eq(schema.conversations.id, id), eq(schema.conversations.userId, actor.userId)));
+			.where(
+				and(eq(schema.conversations.id, id), eq(schema.conversations.userId, this.actor.userId))
+			);
 		return row ? toConversation(row) : undefined;
 	}
 
-	async findForWrite(
-		actor: ActorContext,
-		id: Conversation['id']
-	): Promise<Conversation | undefined> {
+	async findForWrite(id: Conversation['id']): Promise<Conversation | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.conversations)
-			.where(and(eq(schema.conversations.id, id), eq(schema.conversations.userId, actor.userId)))
+			.where(
+				and(eq(schema.conversations.id, id), eq(schema.conversations.userId, this.actor.userId))
+			)
 			.for('update');
 		return row ? toConversation(row) : undefined;
 	}
 
-	async insert(actor: ActorContext, conversation: Conversation): Promise<Conversation> {
+	async insert(conversation: Conversation): Promise<Conversation> {
 		const [row] = await this.database
 			.insert(schema.conversations)
 			.values({
 				id: conversation.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				kind: conversation.kind,
 				contextNoteId: conversation.contextNoteId ?? null,
 				contextProjectId: conversation.contextProjectId ?? null,
@@ -134,7 +135,7 @@ export class ConversationRecords implements ConversationRepository {
 		return toConversation(row!);
 	}
 
-	async update(actor: ActorContext, conversation: Conversation): Promise<Conversation> {
+	async update(conversation: Conversation): Promise<Conversation> {
 		const [row] = await this.database
 			.update(schema.conversations)
 			.set({
@@ -149,7 +150,7 @@ export class ConversationRecords implements ConversationRepository {
 			.where(
 				and(
 					eq(schema.conversations.id, conversation.id),
-					eq(schema.conversations.userId, actor.userId)
+					eq(schema.conversations.userId, this.actor.userId)
 				)
 			)
 			.returning();
@@ -157,16 +158,18 @@ export class ConversationRecords implements ConversationRepository {
 		return toConversation(row);
 	}
 
-	async delete(actor: ActorContext, id: Conversation['id']): Promise<void> {
+	async delete(id: Conversation['id']): Promise<void> {
 		const [row] = await this.database
 			.delete(schema.conversations)
-			.where(and(eq(schema.conversations.id, id), eq(schema.conversations.userId, actor.userId)))
+			.where(
+				and(eq(schema.conversations.id, id), eq(schema.conversations.userId, this.actor.userId))
+			)
 			.returning({ id: schema.conversations.id });
 		if (!row) throw new NotFoundError('Conversation was not found');
 	}
 
-	async appendMessage(actor: ActorContext, message: Message): Promise<Message> {
-		if (!(await this.findById(actor, message.conversationId)))
+	async appendMessage(message: Message): Promise<Message> {
+		if (!(await this.findById(message.conversationId)))
 			throw new NotFoundError('Conversation was not found');
 		const [row] = await this.database
 			.insert(schema.messages)
@@ -187,17 +190,14 @@ export class ConversationRecords implements ConversationRepository {
 			.where(
 				and(
 					eq(schema.conversations.id, message.conversationId),
-					eq(schema.conversations.userId, actor.userId)
+					eq(schema.conversations.userId, this.actor.userId)
 				)
 			);
 		return toMessage(row!);
 	}
 
-	async listMessages(
-		actor: ActorContext,
-		id: Conversation['id']
-	): Promise<readonly StoredMessage[]> {
-		if (!(await this.findById(actor, id))) throw new NotFoundError('Conversation was not found');
+	async listMessages(id: Conversation['id']): Promise<readonly StoredMessage[]> {
+		if (!(await this.findById(id))) throw new NotFoundError('Conversation was not found');
 		return (
 			await this.database
 				.select()
@@ -208,11 +208,10 @@ export class ConversationRecords implements ConversationRepository {
 	}
 
 	async deleteMessages(
-		actor: ActorContext,
 		id: Conversation['id'],
 		messageIds: readonly Message['id'][]
 	): Promise<void> {
-		if (!(await this.findById(actor, id))) throw new NotFoundError('Conversation was not found');
+		if (!(await this.findById(id))) throw new NotFoundError('Conversation was not found');
 		if (messageIds.length === 0) return;
 		await this.database
 			.delete(schema.messages)

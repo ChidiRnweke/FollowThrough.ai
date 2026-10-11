@@ -18,56 +18,38 @@ import type { CreatedRange, SearchFilter } from '$lib/models/knowledge-search';
 export type { CreatedRange, SearchFilter } from '$lib/models/knowledge-search';
 
 export interface RetrievalIndexRepository {
-	listForAttachment(
-		actor: ActorContext,
-		attachmentId: AttachmentId
-	): Promise<readonly SearchDocument[]>;
+	listForAttachment(attachmentId: AttachmentId): Promise<readonly SearchDocument[]>;
 	replaceForAttachment(
-		actor: ActorContext,
 		attachmentId: AttachmentId,
 		documents: readonly SearchDocument[]
 	): Promise<void>;
-	deleteForAttachment(actor: ActorContext, attachmentId: AttachmentId): Promise<void>;
-	listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly SearchDocument[]>;
-	listForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<readonly SearchDocument[]>;
-	listForWidget(actor: ActorContext, widgetId: WidgetId): Promise<readonly SearchDocument[]>;
-	listForMemoryEntry(
-		actor: ActorContext,
-		memoryEntryId: MemoryEntryId
-	): Promise<readonly SearchDocument[]>;
-	replaceForNote(
-		actor: ActorContext,
-		noteId: NoteId,
-		documents: readonly SearchDocument[]
-	): Promise<void>;
-	replaceForDiagram(
-		actor: ActorContext,
-		diagramId: DiagramId,
-		documents: readonly SearchDocument[]
-	): Promise<void>;
+	deleteForAttachment(attachmentId: AttachmentId): Promise<void>;
+	listForNote(noteId: NoteId): Promise<readonly SearchDocument[]>;
+	listForDiagram(diagramId: DiagramId): Promise<readonly SearchDocument[]>;
+	listForWidget(widgetId: WidgetId): Promise<readonly SearchDocument[]>;
+	listForMemoryEntry(memoryEntryId: MemoryEntryId): Promise<readonly SearchDocument[]>;
+	replaceForNote(noteId: NoteId, documents: readonly SearchDocument[]): Promise<void>;
+	replaceForDiagram(diagramId: DiagramId, documents: readonly SearchDocument[]): Promise<void>;
 	replaceForMemoryEntry(
-		actor: ActorContext,
 		memoryEntryId: MemoryEntryId,
 		documents: readonly SearchDocument[]
 	): Promise<void>;
 	search(
-		actor: ActorContext,
 		query: string,
 		limit: number,
 		projectId?: ProjectId,
 		created?: CreatedRange
 	): Promise<readonly SearchMatch[]>;
 	searchByEmbedding(
-		actor: ActorContext,
 		embedding: readonly number[],
 		limit: number,
 		projectId?: ProjectId,
 		filter?: SearchFilter
 	): Promise<readonly SearchMatch[]>;
-	deleteForNote(actor: ActorContext, noteId: NoteId): Promise<void>;
-	deleteForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<void>;
-	deleteForWidget(actor: ActorContext, widgetId: WidgetId): Promise<void>;
-	deleteForMemoryEntry(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<void>;
+	deleteForNote(noteId: NoteId): Promise<void>;
+	deleteForDiagram(diagramId: DiagramId): Promise<void>;
+	deleteForWidget(widgetId: WidgetId): Promise<void>;
+	deleteForMemoryEntry(memoryEntryId: MemoryEntryId): Promise<void>;
 
 	/**
 	 * Writes the desired chunk set for a source without requiring embeddings.
@@ -77,26 +59,24 @@ export interface RetrievalIndexRepository {
 	 * up. Prior rows that were themselves still pending are dropped outright —
 	 * nothing depends on them.
 	 */
-	stage(
-		actor: ActorContext,
-		source: IndexSource,
-		documents: readonly SearchDocument[]
-	): Promise<void>;
-
-	/** Pending sources in stable account/source order, strictly after the supplied cursor. */
-	listPendingSources(limit: number, after?: string): Promise<readonly PendingIndexSource[]>;
+	stage(source: IndexSource, documents: readonly SearchDocument[]): Promise<void>;
 
 	/** The chunks of one source that still need vectors. */
-	listPending(actor: ActorContext, source: IndexSource): Promise<readonly SearchDocument[]>;
+	listPending(source: IndexSource): Promise<readonly SearchDocument[]>;
 
 	/**
 	 * Attaches vectors to pending chunks and, once the source has no pending
 	 * chunks left, retires the superseded rows it was holding for continuity.
 	 */
 	completePending(
-		actor: ActorContext,
 		source: IndexSource,
 		embedded: readonly EmbeddedChunk[],
 		embeddingModel: string
 	): Promise<void>;
+}
+
+/** Index sources waiting for vectors across every user, for the worker. */
+export interface RetrievalBacklogRepository {
+	/** Pending sources in stable account/source order, strictly after the supplied cursor. */
+	listPendingSources(limit: number, after?: string): Promise<readonly PendingIndexSource[]>;
 }

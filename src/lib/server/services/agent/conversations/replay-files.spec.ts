@@ -15,13 +15,13 @@ import { testActor, testConversationId } from '$lib/testing/workspace/fixtures/d
 
 describe('Storing a turn for replay', () => {
 	it('sinks a large tool result and leaves a readable pointer', async () => {
-		const files = new InMemoryAgentFiles();
+		const files = new InMemoryAgentFiles(testActor());
 		const content = 'large result '.repeat(5000);
 		const result = await snapshotItem(files, stringResultItem('search', 'call-1', content));
 
 		expect({
 			pointer: result.type === 'function_call_result' && result.output,
-			stored: (await files.list(testActor()))[0]?.content
+			stored: (await files.list())[0]?.content
 		}).toEqual({
 			pointer: expect.stringMatching(
 				/^\[content stored at \/conversations\/.*\/tool-results\/call-1\/item.output-/
@@ -32,7 +32,7 @@ describe('Storing a turn for replay', () => {
 
 	it('keeps virtualized function arguments valid JSON', async () => {
 		const result = await snapshotItem(
-			new InMemoryAgentFiles(),
+			new InMemoryAgentFiles(testActor()),
 			callItem('save_note', 'call-2', JSON.stringify({ markdown: 'long note '.repeat(5000) }))
 		);
 
@@ -41,14 +41,14 @@ describe('Storing a turn for replay', () => {
 
 	it('preserves diagram rows for the canvas recovery reader', async () => {
 		const item = stringResultItem('create_diagram', 'call-4', 'diagram source '.repeat(5000));
-		const result = await snapshotItem(new InMemoryAgentFiles(), item);
+		const result = await snapshotItem(new InMemoryAgentFiles(testActor()), item);
 
 		expect(result).toEqual(item);
 	});
 
 	it('sinks long conversation messages into the history tree', async () => {
 		const result = await snapshotItem(
-			new InMemoryAgentFiles(),
+			new InMemoryAgentFiles(testActor()),
 			userItemWithImage('long message '.repeat(5000), 'https://example.test/a.png')
 		);
 
@@ -57,14 +57,14 @@ describe('Storing a turn for replay', () => {
 
 	it('leaves the model reasoning alone', async () => {
 		const item = reasoningItem('thinking '.repeat(5000));
-		const result = await snapshotItem(new InMemoryAgentFiles(), item);
+		const result = await snapshotItem(new InMemoryAgentFiles(testActor()), item);
 
 		expect(result).toEqual(item);
 	});
 
 	it('leaves an item it does not recognise exactly as stored', async () => {
 		const item = unrecognisedItem('compaction');
-		const result = await snapshotItem(new InMemoryAgentFiles(), item);
+		const result = await snapshotItem(new InMemoryAgentFiles(testActor()), item);
 
 		expect(result).toEqual(item);
 	});
@@ -79,7 +79,7 @@ async function snapshotItem(
 		files,
 		testTokenizer
 	);
-	const result = (await history.snapshot(testActor(), testConversationId(), [item]))[0];
+	const result = (await history.snapshot(testConversationId(), [item]))[0];
 	if (!result) throw new Error('Snapshot item missing');
 	return result;
 }

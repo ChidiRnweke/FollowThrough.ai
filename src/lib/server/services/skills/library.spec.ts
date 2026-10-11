@@ -13,9 +13,9 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
+	const notes = new InMemoryNoteRepository(testActor());
 	const skills = new InMemorySkillRepository(notes);
-	const provenance = new InMemoryProvenanceRepository();
+	const provenance = new InMemoryProvenanceRepository(testActor());
 	notes.notes = [
 		noteBuilder({
 			kind: 'skill',
@@ -38,7 +38,7 @@ const setup = () => {
 	return {
 		skills,
 		notes,
-		service: createSkillServices(skills, notes, provenance)
+		service: createSkillServices(testActor(), skills, notes, provenance)
 	};
 };
 
@@ -47,12 +47,12 @@ describe('Skill management invariants', () => {
 		const { service, notes } = setup();
 		const name = `${'a'.repeat(63)} next word`;
 		notes.notes[0] = { ...notes.notes[0], title: name };
-		await service.creator.create(testActor(), notes.notes[0], {
+		await service.creator.create(notes.notes[0], {
 			name,
 			description: 'Description',
 			triggerHints: []
 		});
-		const skill = await service.finder.load(testActor(), notes.notes[0].id);
+		const skill = await service.finder.load(notes.notes[0].id);
 		expect(
 			new SkillPortabilityService().export({ ...skill, instructions: skill.note.plainText }).content
 		).toContain(`name: ${'a'.repeat(63)}\n`);
@@ -61,7 +61,7 @@ describe('Skill management invariants', () => {
 	it('rejects an empty skill name', async () => {
 		const { service } = setup();
 		await expect(
-			service.creator.create(testActor(), noteBuilder(), {
+			service.creator.create(noteBuilder(), {
 				name: '  ',
 				description: 'Description',
 				triggerHints: []
@@ -83,7 +83,7 @@ describe('Skill management invariants', () => {
 				isEnabled: true
 			}
 		];
-		await service.usageRecorder.record(testActor(), {
+		await service.usageRecorder.record({
 			skillNoteId: testNoteId(),
 			contextNoteId: testNoteId(2),
 			provenanceId: testProvenanceId()
@@ -109,7 +109,7 @@ describe('Skill management invariants', () => {
 			id: testNoteId(2),
 			projectId: '00000000-0000-4000-0002-000000000002' as never
 		});
-		await service.usageRecorder.record(testActor(), {
+		await service.usageRecorder.record({
 			skillNoteId: testNoteId(),
 			contextNoteId: testNoteId(2),
 			provenanceId: testProvenanceId()

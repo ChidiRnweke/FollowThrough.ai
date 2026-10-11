@@ -19,14 +19,20 @@ import {
 import { describe, expect, it } from 'vitest';
 import { Memory, type MemoryDependencies } from './controller';
 const setup = () => {
-	const entries = new InMemoryMemoryEntryRepository();
-	const projects = new InMemoryProjectRepository();
+	const entries = new InMemoryMemoryEntryRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const search = new InMemorySearchRepository();
+	const search = new InMemorySearchRepository(testActor());
 	const indexEmbeddings = new InMemoryRetrievalProvider();
 	const indexWriter = createContentIndex(search, undefined, undefined, false, indexEmbeddings);
-	const memory = createMemoryServices(entries, projects, new InMemoryProvenanceRepository());
+	const memory = createMemoryServices(
+		testActor(),
+		entries,
+		projects,
+		new InMemoryProvenanceRepository(testActor())
+	);
 	const controller = new Memory(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
 			...agentToolResultsFixture(),
@@ -46,22 +52,22 @@ describe('Memory edit preparation', () => {
 	it('rejects an empty memory entry before persistence', async () => {
 		const { controller } = setup();
 		await expect(
-			controller.create(testActor(), { projectId: testProjectId(), content: '   ' })
+			controller.create({ projectId: testProjectId(), content: '   ' })
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 	it('rejects an edit that empties memory content', async () => {
 		const { controller } = setup();
-		const { entry } = await controller.create(testActor(), { content: 'Retain this fact' });
+		const { entry } = await controller.create({ content: 'Retain this fact' });
 		await expect(
-			controller.update(testActor(), { memoryEntryId: entry.id, content: '  ' })
+			controller.update({ memoryEntryId: entry.id, content: '  ' })
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 	it('does not edit a removed memory entry', async () => {
 		const { controller } = setup();
-		const { entry } = await controller.create(testActor(), { content: 'Retain this fact' });
-		await controller.remove(testActor(), { memoryEntryId: entry.id });
+		const { entry } = await controller.create({ content: 'Retain this fact' });
+		await controller.remove({ memoryEntryId: entry.id });
 		await expect(
-			controller.update(testActor(), { memoryEntryId: entry.id, content: 'Changed fact' })
+			controller.update({ memoryEntryId: entry.id, content: 'Changed fact' })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 });

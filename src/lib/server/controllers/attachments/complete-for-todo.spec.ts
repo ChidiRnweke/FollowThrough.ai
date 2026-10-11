@@ -22,7 +22,7 @@ const ATTACHMENT_ID = '00000000-0000-4000-8000-0000000000a1' as AttachmentId;
 
 const setup = () => {
 	const attachments = new InMemoryAttachments();
-	const todos = new InMemoryTodos();
+	const todos = new InMemoryTodos(testActor());
 	todos.todos = [todoBuilder(), todoBuilder({ id: testTodoId(2) })];
 	return {
 		attachments,
@@ -45,8 +45,8 @@ describe('Completing a todo screenshot', () => {
 	it('links the finalized attachment to the todo', async () => {
 		const { attachments, controller } = setup();
 		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
-		const view = await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId());
-		const otherTodo = await controller.listForTodo(testActor(), testTodoId(2));
+		const view = await controller.completeForTodo(UPLOAD_ID, testTodoId());
+		const otherTodo = await controller.listForTodo(testTodoId(2));
 		expect(attachments.todoLinks).toEqual([{ attachmentId: ATTACHMENT_ID, todoId: testTodoId() }]);
 		expect(view.attachment.id).toBe(ATTACHMENT_ID);
 		expect(otherTodo).toEqual([]);
@@ -58,15 +58,15 @@ describe('Completing a todo screenshot', () => {
 		const { attachments, controller } = setup();
 		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
 		attachments.linkFails = true;
-		await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId()).catch(() => undefined);
+		await controller.completeForTodo(UPLOAD_ID, testTodoId()).catch(() => undefined);
 		expect(attachments.finalized).toEqual([]);
 	});
 
 	it('lists the screenshots a todo references', async () => {
 		const { attachments, controller } = setup();
 		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
-		await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId());
-		const listed = await controller.listForTodo(testActor(), testTodoId());
+		await controller.completeForTodo(UPLOAD_ID, testTodoId());
+		const listed = await controller.listForTodo(testTodoId());
 		expect(listed.map((view) => view.attachment.id)).toEqual([ATTACHMENT_ID]);
 	});
 });
@@ -75,27 +75,25 @@ describe('Unavailable screenshot targets', () => {
 	it('rejects completion when the task was deleted after upload reservation', async () => {
 		const { attachments, todos, controller } = setup();
 		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
-		await todos.softDelete(testActor(), testTodoId());
-		await expect(
-			controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId())
-		).rejects.toBeInstanceOf(NotFoundError);
+		await todos.softDelete(testTodoId());
+		await expect(controller.completeForTodo(UPLOAD_ID, testTodoId())).rejects.toBeInstanceOf(
+			NotFoundError
+		);
 	});
 
 	it('rejects completion for a missing task', async () => {
 		const { attachments, controller } = setup();
 		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
-		await expect(
-			controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId(3))
-		).rejects.toBeInstanceOf(NotFoundError);
+		await expect(controller.completeForTodo(UPLOAD_ID, testTodoId(3))).rejects.toBeInstanceOf(
+			NotFoundError
+		);
 	});
 
 	it('does not list screenshots after task deletion', async () => {
 		const { attachments, todos, controller } = setup();
 		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
-		await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId());
-		await todos.softDelete(testActor(), testTodoId());
-		await expect(controller.listForTodo(testActor(), testTodoId())).rejects.toBeInstanceOf(
-			NotFoundError
-		);
+		await controller.completeForTodo(UPLOAD_ID, testTodoId());
+		await todos.softDelete(testTodoId());
+		await expect(controller.listForTodo(testTodoId())).rejects.toBeInstanceOf(NotFoundError);
 	});
 });

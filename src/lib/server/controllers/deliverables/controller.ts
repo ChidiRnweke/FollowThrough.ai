@@ -94,85 +94,65 @@ export interface ExportObjectStorage {
  * leaves a partial template behind. Generated artifact metadata and provenance commit together.
  */
 export interface DeliverablesController {
-	synchronize(
-		actor: ActorContext,
-		input: DeliverableMutationRequest
-	): Promise<WorkspaceMutationResult>;
+	synchronize(input: DeliverableMutationRequest): Promise<WorkspaceMutationResult>;
 	/**
 	 * Begin a template upload: reserve a template record and return a presigned URL the
 	 * client writes the file to. The template becomes visible only after
 	 * {@link completeTemplateUpload}.
 	 */
-	initiateTemplateUpload(
-		actor: ActorContext,
-		input: {
-			projectId: ProjectId;
-			name: string;
-			mediaType: string;
-			byteSize: number;
-			checksumSha256: string;
-		}
-	): Promise<{
+	initiateTemplateUpload(input: {
+		projectId: ProjectId;
+		name: string;
+		mediaType: string;
+		byteSize: number;
+		checksumSha256: string;
+	}): Promise<{
 		templateId: TemplateId;
 		uploadUrl: string;
 		requiredHeaders: Record<string, string>;
 	}>;
 	/** Finalize a completed template upload and make the template usable for generation. */
-	completeTemplateUpload(actor: ActorContext, templateId: TemplateId): Promise<void>;
+	completeTemplateUpload(templateId: TemplateId): Promise<void>;
 	/** List the templates available to a project, in display order. */
-	listTemplates(actor: ActorContext, projectId: ProjectId): Promise<readonly ProjectTemplate[]>;
+	listTemplates(projectId: ProjectId): Promise<readonly ProjectTemplate[]>;
 	/** Permanently remove a template. */
-	deleteTemplate(actor: ActorContext, templateId: TemplateId): Promise<void>;
+	deleteTemplate(templateId: TemplateId): Promise<void>;
 	/**
 	 * Generate a finished document artifact from a template and note content.
 	 *
 	 * Render and upload before committing artifact metadata and provenance together.
 	 * Remove the new upload if signing or persistence fails.
 	 */
-	generateDocument(
-		actor: ActorContext,
-		input: GenerateDocumentInput
-	): Promise<GenerateDocumentOutput>;
+	generateDocument(input: GenerateDocumentInput): Promise<GenerateDocumentOutput>;
 	/**
 	 * Generate one document per note and return them zipped.
 	 *
 	 * Store an ephemeral zip without artifact metadata or provenance. The zip does not
 	 * appear in the artifact library.
 	 */
-	generateBundle(actor: ActorContext, input: GenerateBundleInput): Promise<GenerateBundleOutput>;
+	generateBundle(input: GenerateBundleInput): Promise<GenerateBundleOutput>;
 	/**
 	 * Render a document for preview without persisting it, returning the rendered bytes
 	 * as base64 so the client can show them immediately. Intentionally side-effect free.
 	 */
-	previewDocument(actor: ActorContext, input: PreviewDocumentInput): Promise<PreviewDocumentOutput>;
+	previewDocument(input: PreviewDocumentInput): Promise<PreviewDocumentOutput>;
 	/** Read the export settings saved for a project. */
-	getExportSettings(actor: ActorContext, projectId: ProjectId): Promise<ExportSettings>;
+	getExportSettings(projectId: ProjectId): Promise<ExportSettings>;
 	/** Persist the export settings for a project and return them as stored. */
-	updateExportSettings(
-		actor: ActorContext,
-		projectId: ProjectId,
-		settings: ExportSettings
-	): Promise<ExportSettings>;
+	updateExportSettings(projectId: ProjectId, settings: ExportSettings): Promise<ExportSettings>;
 	/** List the generated artifacts in a project, with paging/filtering params. */
-	listArtifacts(
-		actor: ActorContext,
-		projectId: ProjectId,
-		params?: ListArtifactsParams
-	): Promise<ListArtifactsOutput>;
+	listArtifacts(projectId: ProjectId, params?: ListArtifactsParams): Promise<ListArtifactsOutput>;
 	/** Fetch an artifact's metadata, or `undefined` when it does not exist. */
-	getArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<Artifact | undefined>;
+	getArtifact(artifactId: ArtifactId): Promise<Artifact | undefined>;
 	/** Return a presigned URL that streams an artifact's file bytes. */
-	downloadArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GetArtifactDownloadOutput>;
+	downloadArtifact(artifactId: ArtifactId): Promise<GetArtifactDownloadOutput>;
 	/** Permanently delete an artifact. */
-	deleteArtifact(
-		actor: ActorContext,
-		artifactId: ArtifactId
-	): Promise<Pick<Artifact, 'id' | 'title'>>;
+	deleteArtifact(artifactId: ArtifactId): Promise<Pick<Artifact, 'id' | 'title'>>;
 	/**
 	 * Create a new artifact from the existing source identities and current note/settings
 	 * state. Preserve the original artifact and its stored content.
 	 */
-	regenerateArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GenerateDocumentOutput>;
+	regenerateArtifact(artifactId: ArtifactId): Promise<GenerateDocumentOutput>;
 }
 
 /** Everything the {@link DeliverablesController} needs, injected so it can be built and tested without real stores. */
@@ -187,23 +167,23 @@ export interface DeliverablesDependencies {
 	templateLifecycle: TemplateLifecycle;
 	templateStorage: ExportObjectStorage;
 	templateStyles: TemplateStyleReader;
-	noteReader: { get(actor: ActorContext, id: NoteId): Promise<Note> };
+	noteReader: { get(id: NoteId): Promise<Note> };
 	provenanceRecorder: {
-		record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
+		record(input: ProvenanceRequest): Promise<Provenance>;
 	};
-	artifactWriter: { store(actor: ActorContext, artifact: Artifact): Promise<Artifact> };
+	artifactWriter: { store(artifact: Artifact): Promise<Artifact> };
 	artifactStorage: ExportObjectStorage;
 	attachmentReader: Pick<AttachmentReader, 'get'>;
 	attachmentStorage: Pick<IAttachmentStorage, 'createDownloadUrl'>;
 	fetchImage: (url: string) => Promise<string | undefined>;
 	prepareExport: ExportPreparation;
-	widgetReader: { get(actor: ActorContext, id: WidgetId): Promise<Widget> };
+	widgetReader: { get(id: WidgetId): Promise<Widget> };
 	/** The project's todos and notes, read only for a widget that shows them. */
-	todoLister: { list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> };
+	todoLister: { list(filter: TodoListFilter): Promise<readonly Todo[]> };
 	noteLister: {
-		list(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSummary[]>;
+		list(projectId?: ProjectId): Promise<readonly NoteSummary[]>;
 	};
-	diagramReader: { get(actor: ActorContext, id: DiagramId): Promise<Diagram> };
+	diagramReader: { get(id: DiagramId): Promise<Diagram> };
 	diagramRenderer: DiagramRasterization;
 	readonly mermaidThemes: MermaidThemeRules;
 	readonly widgetExports: IWidgetExportService;
@@ -221,21 +201,18 @@ export interface DeliverablesDependencies {
 }
 
 export class Deliverables implements DeliverablesController {
-	async synchronize(
-		actor: ActorContext,
-		input: DeliverableMutationRequest
-	): Promise<WorkspaceMutationResult> {
+	async synchronize(input: DeliverableMutationRequest): Promise<WorkspaceMutationResult> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
 					const target = this.workspaceCommandRules.mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, {
+					const prepared = await this.dependencies.syncMutations.prepare(input, {
 						identity: target,
 						key: this.workspaceCommandRules.workspaceResourceKey(target)
 					});
 					if (prepared.kind === 'finished') return prepared.result;
-					await this.applySynchronizedCommand(actor, input);
-					return this.dependencies.syncMutations.complete(actor, input, target);
+					await this.applySynchronizedCommand(input);
+					return this.dependencies.syncMutations.complete(input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);
@@ -245,31 +222,26 @@ export class Deliverables implements DeliverablesController {
 		}
 	}
 
-	private async applySynchronizedCommand(
-		actor: ActorContext,
-		input: DeliverableMutationRequest
-	): Promise<void> {
+	private async applySynchronizedCommand(input: DeliverableMutationRequest): Promise<void> {
 		const command = input.command;
-		if (command.userId !== actor.userId)
+		if (command.userId !== this.actor.userId)
 			throw new ValidationError('The export settings belong to another account');
-		await this.updateExportSettings(actor, command.projectId, command.settings);
+		await this.updateExportSettings(command.projectId, command.settings);
 	}
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly workspaceCommandRules: WorkspaceCommandRules,
 		private readonly dependencies: DeliverablesDependencies
 	) {}
 
-	async initiateTemplateUpload(
-		actor: ActorContext,
-		input: {
-			projectId: ProjectId;
-			name: string;
-			mediaType: string;
-			byteSize: number;
-			checksumSha256: string;
-		}
-	) {
-		const upload = await this.dependencies.templateUploads.reserveUpload(actor, input);
+	async initiateTemplateUpload(input: {
+		projectId: ProjectId;
+		name: string;
+		mediaType: string;
+		byteSize: number;
+		checksumSha256: string;
+	}) {
+		const upload = await this.dependencies.templateUploads.reserveUpload(input);
 		const uploadUrl = await this.dependencies.templateStorage.createUploadUrl({
 			objectKey: upload.objectKey,
 			mediaType: upload.mediaType,
@@ -287,7 +259,7 @@ export class Deliverables implements DeliverablesController {
 		};
 	}
 
-	async completeTemplateUpload(actor: ActorContext, templateId: TemplateId): Promise<void> {
+	async completeTemplateUpload(templateId: TemplateId): Promise<void> {
 		const {
 			templateUploads,
 			templateReader,
@@ -296,19 +268,19 @@ export class Deliverables implements DeliverablesController {
 			templateStyles,
 			transactionRunner
 		} = this.dependencies;
-		const stagingKey = `staging/${actor.userId}/templates/${templateId}`;
-		if (await templateReader.find(actor, templateId)) {
+		const stagingKey = `staging/${this.actor.userId}/templates/${templateId}`;
+		if (await templateReader.find(templateId)) {
 			await storage.remove(stagingKey);
 			return;
 		}
 		let upload: TemplateUpload;
 		let bytes: Uint8Array;
 		try {
-			upload = await templateUploads.upload(actor, templateId);
+			upload = await templateUploads.upload(templateId);
 			bytes = await storage.read(upload.objectKey, upload.byteSize);
 		} catch (error) {
 			// Another completion may remove the reservation or staging after our initial read.
-			if (await templateReader.find(actor, templateId)) {
+			if (await templateReader.find(templateId)) {
 				await storage.remove(stagingKey);
 				return;
 			}
@@ -319,31 +291,28 @@ export class Deliverables implements DeliverablesController {
 		// Write the exact bytes verified above. A signed staging URL may still accept writes.
 		await storage.put(destination, bytes, upload.mediaType);
 		await transactionRunner.run(async () => {
-			const locked = await templateUploads.lockUpload(actor, templateId);
-			if (await templateReader.find(actor, templateId)) return;
+			const locked = await templateUploads.lockUpload(templateId);
+			if (await templateReader.find(templateId)) return;
 			if (!locked) throw new NotFoundError('Template upload no longer exists');
-			await templateWriter.store(actor, locked, destination, styles);
-			await templateUploads.finishUpload(actor, templateId);
+			await templateWriter.store(locked, destination, styles);
+			await templateUploads.finishUpload(templateId);
 		});
 		await storage.remove(stagingKey);
 	}
 
-	async listTemplates(actor: ActorContext, projectId: ProjectId) {
-		return this.dependencies.templateReader.list(actor, projectId);
+	async listTemplates(projectId: ProjectId) {
+		return this.dependencies.templateReader.list(projectId);
 	}
 
-	async deleteTemplate(actor: ActorContext, templateId: TemplateId): Promise<void> {
-		await this.dependencies.templateLifecycle.delete(actor, templateId);
+	async deleteTemplate(templateId: TemplateId): Promise<void> {
+		await this.dependencies.templateLifecycle.delete(templateId);
 	}
 
-	async generateDocument(
-		actor: ActorContext,
-		input: GenerateDocumentInput
-	): Promise<GenerateDocumentOutput> {
-		const prepared = await this.prepareDocument(actor, input);
+	async generateDocument(input: GenerateDocumentInput): Promise<GenerateDocumentOutput> {
+		const prepared = await this.prepareDocument(input);
 		const buffer = await this.renderDocument(input.format, prepared);
 		const id = randomUUID() as ArtifactId;
-		const objectKey = `artifacts/${actor.userId}/${id}.${input.format}`;
+		const objectKey = `artifacts/${this.actor.userId}/${id}.${input.format}`;
 		const storage = this.dependencies.artifactStorage;
 		await storage.put(
 			objectKey,
@@ -357,14 +326,14 @@ export class Deliverables implements DeliverablesController {
 				this.dependencies.artifactFiles.describe(input.title, input.format).name
 			);
 			const artifact = await this.dependencies.transactionRunner.run(async () => {
-				const provenance = await this.dependencies.provenanceRecorder.record(actor, {
+				const provenance = await this.dependencies.provenanceRecorder.record({
 					producerKind: 'user',
 					producerName: 'document-export',
 					metadata: {}
 				});
-				return this.dependencies.artifactWriter.store(actor, {
+				return this.dependencies.artifactWriter.store({
 					id,
-					userId: actor.userId,
+					userId: this.actor.userId,
 					projectId: input.projectId,
 					title: input.title,
 					format: input.format,
@@ -393,12 +362,11 @@ export class Deliverables implements DeliverablesController {
 	}
 
 	private async prepareDocument(
-		actor: ActorContext,
 		input: PreviewDocumentInput & { templateId?: TemplateId }
 	): Promise<PreparedExport> {
 		const sourceNotes = await Promise.all(
 			input.noteIds.map(async (id) => {
-				const note = await this.dependencies.noteReader.get(actor, id);
+				const note = await this.dependencies.noteReader.get(id);
 				return note;
 			})
 		);
@@ -408,9 +376,9 @@ export class Deliverables implements DeliverablesController {
 		);
 		const settings = input.settings
 			? this.dependencies.exportSettingsRules.validate(input.settings)
-			: await this.getExportSettings(actor, input.projectId);
+			: await this.getExportSettings(input.projectId);
 		const styles = input.templateId
-			? await this.dependencies.templateReader.styles(actor, input.templateId, input.projectId)
+			? await this.dependencies.templateReader.styles(input.templateId, input.projectId)
 			: undefined;
 		const images = new Map<string, string>();
 		const pendingDiagrams = new Map<string, ExportDiagramSource>();
@@ -421,7 +389,6 @@ export class Deliverables implements DeliverablesController {
 					if (!input.diagramPngs?.[key]) pendingDiagrams.set(key, { ...reference, key });
 				} else {
 					const diagram = await this.dependencies.diagramReader.get(
-						actor,
 						reference.diagramId as DiagramId
 					);
 					if (
@@ -473,7 +440,6 @@ export class Deliverables implements DeliverablesController {
 		for (const imageReference of imageReferences.values()) {
 			if (imageReference.kind !== 'attachment') continue;
 			const attachment = await this.dependencies.attachmentReader.get(
-				actor,
 				imageReference.id as AttachmentId
 			);
 			const url = await this.dependencies.attachmentStorage.createDownloadUrl(
@@ -490,12 +456,12 @@ export class Deliverables implements DeliverablesController {
 		for (const note of sourceNotes)
 			for (const widgetId of assets.get(note)!.widgets) {
 				if (widgets.has(widgetId)) continue;
-				const widget = await this.dependencies.widgetReader.get(actor, widgetId as WidgetId);
+				const widget = await this.dependencies.widgetReader.get(widgetId as WidgetId);
 				if (widget.projectId !== note.projectId || widget.archivedAt)
 					throw new ValidationError(
 						'An exported widget is unavailable in the source note’s project. Restore it or remove it from the note.'
 					);
-				const sources = await this.widgetSources(actor, widget);
+				const sources = await this.widgetSources(widget);
 				widgets.set(
 					widgetId,
 					this.dependencies.widgetExports.prepare(
@@ -523,21 +489,18 @@ export class Deliverables implements DeliverablesController {
 			: this.dependencies.docxGenerator.render(input);
 	}
 
-	async generateBundle(
-		actor: ActorContext,
-		input: GenerateBundleInput
-	): Promise<GenerateBundleOutput> {
+	async generateBundle(input: GenerateBundleInput): Promise<GenerateBundleOutput> {
 		if (!input.entries.length) throw new ValidationError('Select at least one document.');
 		const files: { path: string; bytes: Uint8Array }[] = [];
 		for (const entry of input.entries) {
-			const prepared = await this.prepareDocument(actor, { ...input, noteIds: [entry.noteId] });
+			const prepared = await this.prepareDocument({ ...input, noteIds: [entry.noteId] });
 			const note = prepared.notes[0];
 			if (!note) throw new NotFoundError(`Note ${entry.noteId} not found`);
 			const bytes = await this.renderDocument(input.format, { ...prepared, title: note.title });
 			files.push({ path: `${entry.path}.${input.format}`, bytes });
 		}
 		const buffer = this.dependencies.zipPacker.pack(files);
-		const objectKey = `bundles/${actor.userId}/${randomUUID()}.zip`;
+		const objectKey = `bundles/${this.actor.userId}/${randomUUID()}.zip`;
 		await this.dependencies.artifactStorage.put(objectKey, buffer, 'application/zip');
 		try {
 			const downloadUrl = await this.dependencies.artifactStorage.createDownloadUrl(
@@ -560,49 +523,38 @@ export class Deliverables implements DeliverablesController {
 		}
 	}
 
-	async previewDocument(
-		actor: ActorContext,
-		input: PreviewDocumentInput
-	): Promise<PreviewDocumentOutput> {
-		const buffer = await this.dependencies.pdfGenerator.render(
-			await this.prepareDocument(actor, input)
-		);
+	async previewDocument(input: PreviewDocumentInput): Promise<PreviewDocumentOutput> {
+		const buffer = await this.dependencies.pdfGenerator.render(await this.prepareDocument(input));
 		return { data: buffer.toString('base64') };
 	}
 
-	async getExportSettings(actor: ActorContext, projectId: ProjectId): Promise<ExportSettings> {
-		return this.dependencies.exportSettingsReader.getSettings(actor, projectId);
+	async getExportSettings(projectId: ProjectId): Promise<ExportSettings> {
+		return this.dependencies.exportSettingsReader.getSettings(projectId);
 	}
 
 	async updateExportSettings(
-		actor: ActorContext,
 		projectId: ProjectId,
 		settings: ExportSettings
 	): Promise<ExportSettings> {
 		return this.dependencies.exportSettingsWriter.updateSettings(
-			actor,
 			projectId,
 			this.dependencies.exportSettingsRules.validate(settings)
 		);
 	}
 
 	async listArtifacts(
-		actor: ActorContext,
 		projectId: ProjectId,
 		params?: ListArtifactsParams
 	): Promise<ListArtifactsOutput> {
-		return this.dependencies.artifactLister.list(actor, projectId, params);
+		return this.dependencies.artifactLister.list(projectId, params);
 	}
 
-	async getArtifact(actor: ActorContext, artifactId: ArtifactId) {
-		return this.dependencies.artifactReader.get(actor, artifactId);
+	async getArtifact(artifactId: ArtifactId) {
+		return this.dependencies.artifactReader.get(artifactId);
 	}
 
-	async downloadArtifact(
-		actor: ActorContext,
-		artifactId: ArtifactId
-	): Promise<GetArtifactDownloadOutput> {
-		const artifact = await this.getArtifact(actor, artifactId);
+	async downloadArtifact(artifactId: ArtifactId): Promise<GetArtifactDownloadOutput> {
+		const artifact = await this.getArtifact(artifactId);
 		if (!artifact) throw new NotFoundError('Artifact not found');
 		return {
 			url: await this.dependencies.artifactStorage.createDownloadUrl(
@@ -613,20 +565,14 @@ export class Deliverables implements DeliverablesController {
 		};
 	}
 
-	async deleteArtifact(
-		actor: ActorContext,
-		artifactId: ArtifactId
-	): Promise<Pick<Artifact, 'id' | 'title'>> {
-		return this.dependencies.artifactDeleter.delete(actor, artifactId);
+	async deleteArtifact(artifactId: ArtifactId): Promise<Pick<Artifact, 'id' | 'title'>> {
+		return this.dependencies.artifactDeleter.delete(artifactId);
 	}
 
-	async regenerateArtifact(
-		actor: ActorContext,
-		artifactId: ArtifactId
-	): Promise<GenerateDocumentOutput> {
-		const existing = await this.getArtifact(actor, artifactId);
+	async regenerateArtifact(artifactId: ArtifactId): Promise<GenerateDocumentOutput> {
+		const existing = await this.getArtifact(artifactId);
 		if (!existing) throw new NotFoundError('Artifact not found');
-		return this.generateDocument(actor, {
+		return this.generateDocument({
 			projectId: existing.projectId,
 			noteIds: existing.sourceNoteIds,
 			title: existing.title,
@@ -639,11 +585,11 @@ export class Deliverables implements DeliverablesController {
 	 * The rows a widget's sources show, as of the export. Today is the server's UTC date, so a
 	 * todo due today reads as overdue only once that day has passed everywhere.
 	 */
-	private async widgetSources(actor: ActorContext, widget: Widget): Promise<WidgetSourceRows> {
+	private async widgetSources(widget: Widget): Promise<WidgetSourceRows> {
 		if (!widget.layout.sources) return {};
 		const [todos, notes] = await Promise.all([
-			this.dependencies.todoLister.list(actor, { projectId: widget.projectId }),
-			this.dependencies.noteLister.list(actor, widget.projectId)
+			this.dependencies.todoLister.list({ projectId: widget.projectId }),
+			this.dependencies.noteLister.list(widget.projectId)
 		]);
 		return this.dependencies.widgetSources.rows(widget.layout.sources, {
 			projectId: widget.projectId,

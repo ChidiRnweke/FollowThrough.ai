@@ -12,7 +12,7 @@ import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/
 import { AgentSdkHarness, type AgentHarnessDependencies } from './controller';
 
 const recover = async (status: 'running' | 'cancelling') => {
-	const runs = new InMemoryAgentRunPersistence();
+	const runs = new InMemoryAgentRunPersistence(testActor());
 	const run: WorkflowAgentRun = {
 		kind: 'workflow',
 		id: '30000000-0000-4000-8000-000000000001' as AgentRunId,
@@ -30,6 +30,7 @@ const recover = async (status: 'running' | 'cancelling') => {
 	runs.runs.push(run);
 	const settlements = new RunSettlements(runs, runs);
 	await new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
@@ -47,14 +48,14 @@ describe('run recovery after restart', () => {
 		const actor = testActor();
 		const conversationId = crypto.randomUUID() as ConversationId;
 		const runId = crypto.randomUUID() as AgentRunId;
-		await state.conversations.insert(actor, {
+		await state.conversations.insert({
 			id: conversationId,
 			userId: actor.userId,
 			kind: 'chat',
 			createdAt: testNow,
 			updatedAt: testNow
 		});
-		await state.runs.insert(actor, {
+		await state.runs.insert({
 			kind: 'agent',
 			id: runId,
 			userId: actor.userId,
@@ -69,7 +70,6 @@ describe('run recovery after restart', () => {
 			updatedAt: testNow
 		});
 		await state.dependencies.conversationMessages.recordUserPrompt(
-			actor,
 			conversationId,
 			'Resume this request',
 			runId

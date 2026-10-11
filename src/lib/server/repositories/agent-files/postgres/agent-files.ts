@@ -24,30 +24,33 @@ const toStoredFile = (row: typeof schema.agentFiles.$inferSelect): StoredAgentFi
 
 export class AgentFileRecords implements AgentFileRepository {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly database: Database,
 		private readonly tokens: TokenCounter
 	) {}
 
-	async list(actor: ActorContext): Promise<readonly StoredAgentFile[]> {
+	async list(): Promise<readonly StoredAgentFile[]> {
 		return (
 			await this.database
 				.select()
 				.from(schema.agentFiles)
-				.where(eq(schema.agentFiles.userId, actor.userId))
+				.where(eq(schema.agentFiles.userId, this.actor.userId))
 		).map(toStoredFile);
 	}
 
-	async findByPath(actor: ActorContext, path: string): Promise<StoredAgentFile | undefined> {
+	async findByPath(path: string): Promise<StoredAgentFile | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.agentFiles)
-			.where(and(eq(schema.agentFiles.userId, actor.userId), eq(schema.agentFiles.path, path)));
+			.where(
+				and(eq(schema.agentFiles.userId, this.actor.userId), eq(schema.agentFiles.path, path))
+			);
 		return row ? toStoredFile(row) : undefined;
 	}
 
-	async store(actor: ActorContext, input: StoreAgentFileInput): Promise<StoredAgentFile> {
+	async store(input: StoreAgentFileInput): Promise<StoredAgentFile> {
 		const values = {
-			userId: actor.userId,
+			userId: this.actor.userId,
 			conversationId: input.conversationId,
 			path: input.path,
 			mediaType: input.mediaType,

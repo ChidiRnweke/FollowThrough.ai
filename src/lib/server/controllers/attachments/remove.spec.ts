@@ -24,7 +24,7 @@ describe('attachment search removal', () => {
 				transactionRunner: new InMemoryTransactionRunner([repository, search])
 			})
 		);
-		await controller.removeById(testActor(), attachment.attachment.id);
+		await controller.removeById(attachment.attachment.id);
 		expect({ attachment: repository.found, chunks: search.documents }).toEqual({
 			attachment: undefined,
 			chunks: []
@@ -50,12 +50,10 @@ it('keeps attachment bytes when index removal rolls back', async () => {
 			transactionRunner: new InMemoryTransactionRunner([repository, search])
 		})
 	);
-	const result = await controller
-		.removeById(testActor(), view('application/pdf').attachment.id)
-		.then(
-			() => 'removed',
-			() => 'failed'
-		);
+	const result = await controller.removeById(view('application/pdf').attachment.id).then(
+		() => 'removed',
+		() => 'failed'
+	);
 	expect({
 		result,
 		attachment: repository.found?.attachment.id,
@@ -83,7 +81,7 @@ it('commits physical cleanup intent without deleting bytes inside the transactio
 			transactionRunner: new InMemoryTransactionRunner([repository, search])
 		})
 	);
-	await controller.removeById(testActor(), view('application/pdf').attachment.id);
+	await controller.removeById(view('application/pdf').attachment.id);
 	expect({
 		attachment: repository.found,
 		bytes: storage.objects.has('objects/doc'),

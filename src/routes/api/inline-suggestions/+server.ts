@@ -43,7 +43,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		...(input.heading ? { heading: input.heading } : {})
 	};
 	try {
-		const suggestion = await controller.suggest(actor, inlineRequest, request.signal);
+		const suggestion = await controller.suggest(inlineRequest, request.signal);
 		if (suggestion.outcome === 'rate_limited') {
 			const retryAfterSeconds = Math.max(1, Math.ceil(suggestion.retryAfterMs / 1_000));
 			return json(suggestion, {

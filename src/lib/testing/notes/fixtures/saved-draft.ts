@@ -30,8 +30,9 @@ export async function saveNoteDraft(
 	actor: ActorContext,
 	note: Note
 ): Promise<Note> {
-	const effects = new InMemoryNoteContent();
+	const effects = new InMemoryNoteContent(actor);
 	const controller = new Notes(
+		actor,
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -58,5 +59,5 @@ export async function saveNoteDraft(
 			noteIndexer: effects
 		})
 	);
-	return (await controller.save(actor, { note })).note;
+	return (await controller.save({ note })).note;
 }

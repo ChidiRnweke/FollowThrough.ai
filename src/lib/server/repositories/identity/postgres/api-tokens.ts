@@ -1,18 +1,25 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { ActorContext, ApiToken, ApiTokenId, User } from '$lib/models/identity';
-import type { ApiTokenRepository, CreateApiTokenData } from '$lib/server/repositories/identity';
+import type {
+	ApiTokenCredentialRepository,
+	ApiTokenRepository,
+	CreateApiTokenData
+} from '$lib/server/repositories/identity';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/identity';
 import { toApiToken, toUser } from '$lib/server/db/mappers';
 
 export class ApiTokenRecords implements ApiTokenRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
 	async create(data: CreateApiTokenData): Promise<ApiToken> {
 		const [row] = await this.database
 			.insert(schema.apiTokens)
 			.values({
-				userId: data.userId,
+				userId: this.actor.userId,
 				name: data.name,
 				tokenHash: data.tokenHash,
 				scope: data.scope,
@@ -21,6 +28,31 @@ export class ApiTokenRecords implements ApiTokenRepository {
 			.returning();
 		return toApiToken(row);
 	}
+
+	async listForUser(): Promise<readonly ApiToken[]> {
+		const rows = await this.database
+			.select()
+			.from(schema.apiTokens)
+			.where(
+				and(eq(schema.apiTokens.userId, this.actor.userId), isNull(schema.apiTokens.revokedAt))
+			)
+			.orderBy(desc(schema.apiTokens.createdAt));
+		return rows.map(toApiToken);
+	}
+
+	async revoke(id: ApiTokenId): Promise<ApiToken | undefined> {
+		const [row] = await this.database
+			.update(schema.apiTokens)
+			.set({ revokedAt: new Date() })
+			.where(and(eq(schema.apiTokens.id, id), eq(schema.apiTokens.userId, this.actor.userId)))
+			.returning();
+		return row ? toApiToken(row) : undefined;
+	}
+}
+
+/** Bearer credential lookups, before any user is known. */
+export class ApiTokenCredentialRecords implements ApiTokenCredentialRepository {
+	constructor(private readonly database: Database) {}
 
 	async findByHashWithUser(tokenHash: string): Promise<{ user: User; token: ApiToken } | null> {
 		const rows = await this.database
@@ -31,24 +63,6 @@ export class ApiTokenRecords implements ApiTokenRepository {
 
 		if (rows.length === 0) return null;
 		return { user: toUser(rows[0].users), token: toApiToken(rows[0].api_tokens) };
-	}
-
-	async listForUser(actor: ActorContext): Promise<readonly ApiToken[]> {
-		const rows = await this.database
-			.select()
-			.from(schema.apiTokens)
-			.where(and(eq(schema.apiTokens.userId, actor.userId), isNull(schema.apiTokens.revokedAt)))
-			.orderBy(desc(schema.apiTokens.createdAt));
-		return rows.map(toApiToken);
-	}
-
-	async revoke(actor: ActorContext, id: ApiTokenId): Promise<ApiToken | undefined> {
-		const [row] = await this.database
-			.update(schema.apiTokens)
-			.set({ revokedAt: new Date() })
-			.where(and(eq(schema.apiTokens.id, id), eq(schema.apiTokens.userId, actor.userId)))
-			.returning();
-		return row ? toApiToken(row) : undefined;
 	}
 
 	async touchLastUsed(id: ApiTokenId, at: Date): Promise<void> {

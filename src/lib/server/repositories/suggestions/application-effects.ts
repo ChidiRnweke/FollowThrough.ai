@@ -10,16 +10,12 @@ export type AppliedRecord =
 	  >
 	| { readonly type: 'references'; readonly value: ExternalReference };
 export interface ApplicationEffectRepository {
-	lock(actor: ActorContext, suggestionId: SuggestionId): Promise<void>;
-	find(
-		actor: ActorContext,
-		suggestionId: SuggestionId
-	): Promise<ApplicationEffect<AppliedRecord> | null>;
+	lock(suggestionId: SuggestionId): Promise<void>;
+	find(suggestionId: SuggestionId): Promise<ApplicationEffect<AppliedRecord> | null>;
 	record(
-		actor: ActorContext,
 		suggestionId: SuggestionId,
 		changes: readonly AppliedChange<AppliedRecord>[]
 	): Promise<void>;
-	lockVersion(actor: ActorContext, record: AppliedRecord): Promise<string | null>;
-	restore(actor: ActorContext, change: AppliedChange<AppliedRecord>): Promise<AppliedRecord>;
+	lockVersion(record: AppliedRecord): Promise<string | null>;
+	restore(change: AppliedChange<AppliedRecord>): Promise<AppliedRecord>;
 }

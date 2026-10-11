@@ -31,9 +31,8 @@ it.each([
 	'refuses $operation after a concurrent archive commits',
 	async ({ operation, suffix, message }) => {
 		const { owner, project } = await seedNote(suffix);
-		const records = new DiagramRecords(context.db);
+		const records = new DiagramRecords(owner, context.db);
 		const diagram = await records.insert(
-			owner,
 			drawioBuilder({
 				id: crypto.randomUUID() as DiagramId,
 				userId: owner.userId,
@@ -45,16 +44,18 @@ it.each([
 		if (diagram.kind !== 'drawio') throw new Error('Expected a draw.io diagram');
 		const blocker = postgres(context.url, { max: 2 });
 		const { database, transactionRunner } = createTransactionContext(writer.db);
-		const projects = new ProjectRecords(database);
-		const notes = createNotesCapability({ db: database, projects });
+		const projects = new ProjectRecords(owner, database);
+		const notes = createNotesCapability(owner, { db: database, projects });
 		const library = createDiagramServices(
-			new DiagramRecords(database),
+			owner,
+			new DiagramRecords(owner, database),
 			notes.repository,
 			notes.anchors,
 			notes.provenanceRepository,
 			projects
 		);
 		const controller = new DiagramStudio(
+			owner,
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
 				...agentToolResultsFixture(),
@@ -65,7 +66,7 @@ it.each([
 				drawioXmlValidator: { validate: (source) => source },
 				diagramLabelPresentation: new DiagramLabelPresentationService(),
 				drawioLabels: { read: () => [diagram.searchableText] },
-				diagramIndexer: new InMemoryDiagrams(),
+				diagramIndexer: new InMemoryDiagrams(owner),
 				transactionRunner,
 				now: () => now
 			})
@@ -82,8 +83,8 @@ it.each([
 			const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
 			const action =
 				operation === 'archive'
-					? controller.archiveProjectDiagram(owner, { diagramId: diagram.id })
-					: controller.saveProjectDiagramDraft(owner, {
+					? controller.archiveProjectDiagram({ diagramId: diagram.id })
+					: controller.saveProjectDiagramDraft({
 							diagramId: diagram.id,
 							source: diagram.source,
 							baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
@@ -108,8 +109,7 @@ it.each([
 
 it('does not expose another actor’s diagram through a locking read', async () => {
 	const { owner, project } = await seedNote('16802');
-	const diagram = await new DiagramRecords(context.db).insert(
-		owner,
+	const diagram = await new DiagramRecords(owner, context.db).insert(
 		drawioBuilder({
 			id: crypto.randomUUID() as DiagramId,
 			userId: owner.userId,
@@ -120,7 +120,7 @@ it('does not expose another actor’s diagram through a locking read', async () 
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	expect(
 		await transactionRunner.run(() =>
-			new DiagramRecords(database).findForWrite(actor('16803'), diagram.id)
+			new DiagramRecords(actor('16803'), database).findForWrite(diagram.id)
 		)
 	).toBeUndefined();
 });

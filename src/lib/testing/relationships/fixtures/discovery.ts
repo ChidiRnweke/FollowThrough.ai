@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import {
 	AgentSdkHarness,
@@ -41,19 +42,19 @@ export const relatedSelection = {
 };
 
 export const relatedNoteFixture = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	content.notes = [
 		noteBuilder({ plainText: relatedSelection.text }),
 		noteBuilder({ id: testNoteId(2), plainText: 'The team chose OAuth.' })
 	];
-	const suggestions = new InMemorySuggestions();
-	const provenance = new InMemoryProvenanceRecorder();
-	const repository = new InMemorySearchRepository();
+	const suggestions = new InMemorySuggestions(testActor());
+	const provenance = new InMemoryProvenanceRecorder(testActor());
+	const repository = new InMemorySearchRepository(testActor());
 	const client = new InMemoryStructuredRelationshipClient();
 	client.result = { kind: 'prior_decision', justification: 'Earlier decision', confidence: 88 };
 	const provider = new InMemoryRetrievalProvider();
-	const runs = new InMemoryAgentRunPersistence();
-	const conversations = new InMemoryConversationRepository();
+	const runs = new InMemoryAgentRunPersistence(testActor());
+	const conversations = new InMemoryConversationRepository(testActor());
 	const transactions = new InMemoryTransactionRunner([
 		content,
 		provenance,
@@ -62,7 +63,7 @@ export const relatedNoteFixture = () => {
 		conversations
 	]);
 	const settlements = new RunSettlements(runs, runs);
-	const requests = new NoteActionRequests(runs, runs, conversations);
+	const requests = new NoteActionRequests(testActor(), runs, runs, conversations);
 	const dependencies: RelationshipsDependencies = {
 		...agentToolResultsFixture(),
 		selectionOrigins: new InMemorySelectionOrigins(content, provenance),
@@ -77,6 +78,7 @@ export const relatedNoteFixture = () => {
 		runSignals: new RunSignalService(runs, runs)
 	};
 	const agent = new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),

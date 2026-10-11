@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -30,11 +31,11 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { services: catalog, markdown } = createNotesCapability({
+	const { services: catalog, markdown } = createNotesCapability(testActor(), {
 		db: database,
-		projects: new ProjectRecords(database)
+		projects: new ProjectRecords(testActor(), database)
 	});
-	const consequences = new InMemoryNoteContent();
+	const consequences = new InMemoryNoteContent(testActor());
 	const note =
 		target === 'skill'
 			? await storedNote(catalog.creator, seeded.owner, {
@@ -44,7 +45,7 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 				})
 			: seeded.note;
 	if (target === 'skill')
-		await new SkillRecords(database).insert(seeded.owner, {
+		await new SkillRecords(seeded.owner, database).insert({
 			note,
 			slug: 'release-checklist',
 			description: 'Release instructions',
@@ -54,6 +55,7 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 			metadata: { owner: 'release-team' }
 		});
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -84,7 +86,6 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 	);
 	const change = requirePreparedChange(
 		await controller.prepareChange(
-			seeded.owner,
 			{
 				kind: 'replace',
 				noteId: note.id,
@@ -99,16 +100,16 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 describe('Reviewed note writes on PostgreSQL', () => {
 	it('saves a reviewed skill body as a draft without changing metadata or publishing history', async () => {
 		const { controller, change, owner, note } = await setup('97106', 'skill');
-		const skills = new SkillRecords(context.db);
-		const before = await skills.findByNoteId(owner, note.id);
+		const skills = new SkillRecords(owner, context.db);
+		const before = await skills.findByNoteId(note.id);
 		if (!before) throw new Error('Expected the created skill metadata');
-		const records = new NoteRecords(context.db);
-		const history = await records.listRevisions(owner, note.id);
-		await controller.applyReviewedChange(owner, change, 'skill');
-		await controller.applyReviewedChange(owner, change, 'skill');
+		const records = new NoteRecords(owner, context.db);
+		const history = await records.listRevisions(note.id);
+		await controller.applyReviewedChange(change, 'skill');
+		await controller.applyReviewedChange(change, 'skill');
 		expect({
-			skill: await skills.findByNoteId(owner, note.id),
-			history: await records.listRevisions(owner, note.id)
+			skill: await skills.findByNoteId(note.id),
+			history: await records.listRevisions(note.id)
 		}).toMatchObject({
 			skill: {
 				...before,
@@ -125,13 +126,13 @@ describe('Reviewed note writes on PostgreSQL', () => {
 	});
 	it('preserves a newer skill body when an older review is approved', async () => {
 		const { controller, change, owner, note } = await setup('97107', 'skill');
-		const newer = await controller.save(owner, {
+		const newer = await controller.save({
 			note: { ...note, title: 'Newer release instructions' }
 		});
-		const result = await controller.applyReviewedChange(owner, change, 'skill');
+		const result = await controller.applyReviewedChange(change, 'skill');
 		expect({
 			result,
-			note: await new NoteRecords(context.db).findById(owner, note.id)
+			note: await new NoteRecords(owner, context.db).findById(note.id)
 		}).toMatchObject({
 			result: { kind: 'failure', code: 'STALE_REVIEW' },
 			note: newer.note
@@ -139,16 +140,16 @@ describe('Reviewed note writes on PostgreSQL', () => {
 	});
 	it('persists the prepared content with one revision increment', async () => {
 		const { controller, change, owner, note } = await setup('97101');
-		await controller.applyReviewedChange(owner, change, 'authored');
-		expect(await new NoteRecords(context.db).findById(owner, note.id)).toMatchObject({
+		await controller.applyReviewedChange(change, 'authored');
+		expect(await new NoteRecords(owner, context.db).findById(note.id)).toMatchObject({
 			...change.result,
 			currentRevision: 2
 		});
 	});
 	it('refuses a review after another database writer changes its base', async () => {
 		const { controller, change, owner, note } = await setup('97102');
-		await controller.save(owner, { note: { ...note, title: 'A newer title' } });
-		expect(await controller.applyReviewedChange(owner, change, 'authored')).toMatchObject({
+		await controller.save({ note: { ...note, title: 'A newer title' } });
+		expect(await controller.applyReviewedChange(change, 'authored')).toMatchObject({
 			kind: 'failure',
 			code: 'STALE_REVIEW'
 		});
@@ -156,26 +157,25 @@ describe('Reviewed note writes on PostgreSQL', () => {
 	it('rolls back a committed candidate when indexing fails', async () => {
 		const { controller, change, owner, note, consequences } = await setup('97103');
 		consequences.failIndex = true;
-		const outcome = await controller.applyReviewedChange(owner, change, 'authored').then(
+		const outcome = await controller.applyReviewedChange(change, 'authored').then(
 			() => 'saved',
 			() => 'failed'
 		);
-		expect({ outcome, saved: await new NoteRecords(context.db).findById(owner, note.id) }).toEqual({
+		expect({ outcome, saved: await new NoteRecords(owner, context.db).findById(note.id) }).toEqual({
 			outcome: 'failed',
 			saved: note
 		});
 	});
 	it('does not write another revision when the same review is retried', async () => {
 		const { controller, change, owner, note } = await setup('97104');
-		await controller.applyReviewedChange(owner, change, 'authored');
-		await controller.applyReviewedChange(owner, change, 'authored');
-		expect((await new NoteRecords(context.db).findById(owner, note.id))?.currentRevision).toBe(2);
+		await controller.applyReviewedChange(change, 'authored');
+		await controller.applyReviewedChange(change, 'authored');
+		expect((await new NoteRecords(owner, context.db).findById(note.id))?.currentRevision).toBe(2);
 	});
 	it('admits only one of two competing reviewed results', async () => {
 		const { controller, change, owner, note } = await setup('97105');
 		const other = requirePreparedChange(
 			await controller.prepareChange(
-				owner,
 				{
 					kind: 'replace',
 					noteId: note.id,
@@ -185,8 +185,8 @@ describe('Reviewed note writes on PostgreSQL', () => {
 			)
 		);
 		const outcomes = await Promise.all([
-			controller.applyReviewedChange(owner, change, 'authored'),
-			controller.applyReviewedChange(owner, other, 'authored')
+			controller.applyReviewedChange(change, 'authored'),
+			controller.applyReviewedChange(other, 'authored')
 		]);
 		expect(outcomes.map((outcome) => outcome.kind).sort()).toEqual(['failure', 'saved']);
 	});
@@ -194,24 +194,23 @@ describe('Reviewed note writes on PostgreSQL', () => {
 
 it('applies a reviewed skill patch once while preserving metadata and published history', async () => {
 	const { controller, change, owner, note } = await setup('97108', 'skill');
-	await controller.applyReviewedChange(owner, change, 'skill');
-	const skills = new SkillRecords(context.db);
-	const before = await skills.findByNoteId(owner, note.id);
+	await controller.applyReviewedChange(change, 'skill');
+	const skills = new SkillRecords(owner, context.db);
+	const before = await skills.findByNoteId(note.id);
 	if (!before) throw new Error('Expected the skill metadata');
-	const records = new NoteRecords(context.db);
-	const history = await records.listRevisions(owner, note.id);
+	const records = new NoteRecords(owner, context.db);
+	const history = await records.listRevisions(note.id);
 	const patch = requirePreparedChange(
 		await controller.prepareChange(
-			owner,
 			{ kind: 'patch', noteId: note.id, edits: [{ oldText: 'Tuesday', newText: 'Friday' }] },
 			'skill'
 		)
 	);
-	await controller.applyReviewedChange(owner, patch, 'skill');
-	await controller.applyReviewedChange(owner, patch, 'skill');
+	await controller.applyReviewedChange(patch, 'skill');
+	await controller.applyReviewedChange(patch, 'skill');
 	expect({
-		skill: await skills.findByNoteId(owner, note.id),
-		history: await records.listRevisions(owner, note.id)
+		skill: await skills.findByNoteId(note.id),
+		history: await records.listRevisions(note.id)
 	}).toMatchObject({
 		skill: {
 			...before,

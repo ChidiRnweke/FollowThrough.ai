@@ -9,9 +9,8 @@ import {
 import { AgentRunLedger } from './ledger';
 
 it('starts a direct workflow with its actor and one creation timestamp', () => {
-	const ledger = new AgentRunLedger(new InMemoryAgentRunPersistence());
+	const ledger = new AgentRunLedger(testActor(), new InMemoryAgentRunPersistence(testActor()));
 	const run = ledger.prepareCreation(
-		testActor(),
 		{
 			conversationId: testConversationId(),
 			model: 'test/model',
@@ -36,7 +35,7 @@ it('starts a direct workflow with its actor and one creation timestamp', () => {
 });
 
 it('resolves completion with a finish time and cleared approval state', () => {
-	const ledger = new AgentRunLedger(new InMemoryAgentRunPersistence());
+	const ledger = new AgentRunLedger(testActor(), new InMemoryAgentRunPersistence(testActor()));
 	expect(ledger.prepareCompletion('running', testNow)).toEqual({
 		status: 'completed',
 		finishedAt: testNow,
@@ -47,7 +46,7 @@ it('resolves completion with a finish time and cleared approval state', () => {
 });
 
 it('resolves failure with the original message and finish time', () => {
-	const ledger = new AgentRunLedger(new InMemoryAgentRunPersistence());
+	const ledger = new AgentRunLedger(testActor(), new InMemoryAgentRunPersistence(testActor()));
 	expect(ledger.prepareFailure('running', 'Provider disconnected', testNow)).toEqual({
 		status: 'failed',
 		failure: 'Provider disconnected',
@@ -65,7 +64,7 @@ it.each<AgentRunStatus>([
 	'failed',
 	'cancelled'
 ])('refuses publication after the run becomes %s', (status) => {
-	const ledger = new AgentRunLedger(new InMemoryAgentRunPersistence());
+	const ledger = new AgentRunLedger(testActor(), new InMemoryAgentRunPersistence(testActor()));
 	expect(() => ledger.prepareCompletion(status, testNow)).toThrow('no longer running');
 });
 
@@ -77,6 +76,6 @@ it.each<AgentRunStatus>([
 	'failed',
 	'cancelled'
 ])('does not replace %s with a late provider failure', (status) => {
-	const ledger = new AgentRunLedger(new InMemoryAgentRunPersistence());
+	const ledger = new AgentRunLedger(testActor(), new InMemoryAgentRunPersistence(testActor()));
 	expect(ledger.prepareFailure(status, 'Late provider failure', testNow)).toBeNull();
 });

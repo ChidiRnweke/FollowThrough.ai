@@ -12,7 +12,7 @@ const selection = (text: string): TextSelection => ({
 	text
 });
 const requestedAt = '2026-07-11T09:00:00.000Z' as DateTime;
-const extract = (text: string) => rules.extract(testActor(), selection(text), requestedAt);
+const extract = (text: string) => rules.extract(selection(text), requestedAt);
 
 describe('deterministic commitment extraction', () => {
 	it('separates the action and owner of a direct commitment', async () => {

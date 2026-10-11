@@ -8,6 +8,7 @@ import type { InlineCompletionService } from '$lib/server/services/inline-sugges
 import type { AgentPreferencesRepository } from '$lib/server/repositories/agent';
 
 export class InMemoryAgentPreferencesRepository implements AgentPreferencesRepository {
+	constructor(private readonly actor: ActorContext) {}
 	readonly entries = new Map<string, AgentPreferences>();
 	snapshot(): () => void {
 		const entries = structuredClone(this.entries);
@@ -16,17 +17,14 @@ export class InMemoryAgentPreferencesRepository implements AgentPreferencesRepos
 			for (const [key, value] of entries) this.entries.set(key, value);
 		};
 	}
-	async getForWrite(
-		actor: ActorContext,
-		_resourceKey: string
-	): Promise<AgentPreferences | undefined> {
-		return this.get(actor);
+	async getForWrite(_resourceKey: string): Promise<AgentPreferences | undefined> {
+		return this.get();
 	}
-	async get(actor: ActorContext): Promise<AgentPreferences | undefined> {
-		return this.entries.get(actor.userId);
+	async get(): Promise<AgentPreferences | undefined> {
+		return this.entries.get(this.actor.userId);
 	}
-	async upsert(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences> {
-		this.entries.set(actor.userId, preferences);
+	async upsert(preferences: AgentPreferences): Promise<AgentPreferences> {
+		this.entries.set(this.actor.userId, preferences);
 		return preferences;
 	}
 }

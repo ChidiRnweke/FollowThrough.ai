@@ -11,41 +11,39 @@ const controller = (repository: InMemoryUserRepository) => {
 
 describe('User boundary invariants', () => {
 	it('creates the local actor record when it is absent', async () => {
-		const repository = new InMemoryUserRepository();
-		const user = await controller(repository).initializeLocal(testActor());
+		const repository = new InMemoryUserRepository(testActor());
+		const user = await controller(repository).initializeLocal();
 		expect(user).toMatchObject({ id: testActor().userId, role: 'ADMIN' });
 	});
 
 	it('does not create a second record for an existing actor', async () => {
-		const repository = new InMemoryUserRepository();
+		const repository = new InMemoryUserRepository(testActor());
 		const service = controller(repository);
-		await service.initializeLocal(testActor());
-		await service.initializeLocal(testActor());
+		await service.initializeLocal();
+		await service.initializeLocal();
 		expect(repository.users).toHaveLength(1);
 	});
 
 	it('returns not-found when persistence cannot establish the actor', async () => {
-		const repository = new InMemoryUserRepository();
+		const repository = new InMemoryUserRepository(testActor());
 		repository.createOnEnsure = false;
-		await expect(controller(repository).initializeLocal(testActor())).rejects.toMatchObject({
+		await expect(controller(repository).initializeLocal()).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});
 });
 
 it('keeps an existing admitted account unchanged during local initialization', async () => {
-	const repository = new InMemoryUserRepository();
+	const repository = new InMemoryUserRepository(testActor());
 	const service = controller(repository);
-	const original = await service.initializeLocal(testActor());
+	const original = await service.initializeLocal();
 	const existing = { ...original, role: 'USER' as const, displayName: 'Existing reader' };
 	repository.users = [existing];
-	expect(await service.initializeLocal(testActor())).toEqual(existing);
+	expect(await service.initializeLocal()).toEqual(existing);
 });
 
 it('propagates profile persistence failures', async () => {
-	const repository = new InMemoryUserRepository();
+	const repository = new InMemoryUserRepository(testActor());
 	repository.ensureFailure = new Error('Profile storage unavailable');
-	await expect(controller(repository).initializeLocal(testActor())).rejects.toBe(
-		repository.ensureFailure
-	);
+	await expect(controller(repository).initializeLocal()).rejects.toBe(repository.ensureFailure);
 });

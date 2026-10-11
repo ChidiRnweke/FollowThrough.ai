@@ -17,9 +17,9 @@ const input = () => ({
 it('stores one conversation and run for repeated delivery of the same request', async () => {
 	const state = promiseExtractionFixture();
 	const request = input();
-	const first = await state.transactions.run(() => state.requests.prepare(testActor(), request));
+	const first = await state.transactions.run(() => state.requests.prepare(request));
 	const second = await state.transactions.run(() =>
-		state.requests.prepare(testActor(), {
+		state.requests.prepare({
 			...request,
 			context: { ...request.context, generation: { kind: 'model', model: 'new/model' } }
 		})
@@ -34,10 +34,10 @@ it('stores one conversation and run for repeated delivery of the same request', 
 it('rejects reuse of a request ID for a different selection', async () => {
 	const state = promiseExtractionFixture();
 	const request = input();
-	await state.transactions.run(() => state.requests.prepare(testActor(), request));
+	await state.transactions.run(() => state.requests.prepare(request));
 	await expect(
 		state.transactions.run(() =>
-			state.requests.prepare(testActor(), {
+			state.requests.prepare({
 				...request,
 				context: { ...request.context, selection: { ...promiseSelection, revision: 2 } }
 			})
@@ -48,10 +48,10 @@ it('rejects reuse of a request ID for a different selection', async () => {
 it('rejects reuse of a promise request ID for reference search on the same selection', async () => {
 	const state = promiseExtractionFixture();
 	const request = input();
-	await state.transactions.run(() => state.requests.prepare(testActor(), request));
+	await state.transactions.run(() => state.requests.prepare(request));
 	await expect(
 		state.transactions.run(() =>
-			state.requests.prepare(testActor(), {
+			state.requests.prepare({
 				requestId: request.requestId,
 				context: {
 					kind: 'reference_search',
@@ -67,7 +67,7 @@ it('rolls back the initial conversation and run when its queued event cannot be 
 	const state = promiseExtractionFixture();
 	state.runs.failedEvent = 'run_queued';
 	await state.transactions
-		.run(() => state.requests.prepare(testActor(), input()))
+		.run(() => state.requests.prepare(input()))
 		.catch((error) => ({ kind: 'failure', error }));
 	expect({
 		runs: state.runs.runs,

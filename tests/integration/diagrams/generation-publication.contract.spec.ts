@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { DomainError } from '$lib/errors';
@@ -48,24 +49,29 @@ import { context, seedNote, notifications } from '../database-harness';
 const setup = async (suffix: string, connection: PostgresDatabaseContext = context) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(connection.db);
-	const notes = createNotesCapability({ db: database, projects: new ProjectRecords(database) });
-	const suggestions = createSuggestionsCapability({
+	const notes = createNotesCapability(testActor(), {
+		db: database,
+		projects: new ProjectRecords(testActor(), database)
+	});
+	const suggestions = createSuggestionsCapability(testActor(), {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
 	const fixture = diagramGenerationFixture();
-	const records = new DiagramRecords(database);
+	const records = new DiagramRecords(testActor(), database);
 	const library = createDiagramServices(
+		testActor(),
 		records,
 		notes.repository,
 		notes.anchors,
 		notes.provenanceRepository,
-		new ProjectRecords(database)
+		new ProjectRecords(testActor(), database)
 	);
-	const diagrams = new InMemoryDiagrams();
+	const diagrams = new InMemoryDiagrams(testActor());
 	const controller = new Diagrams(
+		testActor(),
 		capabilityDependencies<DiagramsDependencies>({
 			...agentToolResultsFixture(),
 			generationRules: new DiagramGenerationRuleService(),
@@ -79,10 +85,16 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 			generation: {
 				...fixture.generation,
 				contextNotes: notes.services.reader,
-				conversations: new ConversationArchive(new ConversationRecords(database)),
-				conversationMessages: new ConversationArchive(new ConversationRecords(database)),
-				runs: new AgentRunLedger(new AgentRunRecords(database)),
-				runContext: new DiagramRunContext(new AgentRunRecords(database)),
+				conversations: new ConversationArchive(
+					testActor(),
+					new ConversationRecords(testActor(), database)
+				),
+				conversationMessages: new ConversationArchive(
+					testActor(),
+					new ConversationRecords(testActor(), database)
+				),
+				runs: new AgentRunLedger(testActor(), new AgentRunRecords(testActor(), database)),
+				runContext: new DiagramRunContext(new AgentRunRecords(testActor(), database)),
 				provenance: notes.provenance
 			},
 			transactionRunner,
@@ -90,11 +102,11 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 			suggestionCreator: suggestions.creator,
 			runSignals: new RunSignalService(
 				new AgentRunNotificationRecords(notifications),
-				new AgentRunRecords(database)
+				new AgentRunRecords(testActor(), database)
 			),
 			runSettlements: new RunSettlements(
-				new AgentRunRecords(database),
-				new AgentRunEventRecords(database)
+				new AgentRunRecords(testActor(), database),
+				new AgentRunEventRecords(testActor(), database)
 			)
 		})
 	);
@@ -114,7 +126,6 @@ it.each([
 		try {
 			const state = await setup(suffix, writer);
 			const diagram = await state.records.insert(
-				state.owner,
 				mermaidBuilder({
 					id: crypto.randomUUID() as DiagramId,
 					userId: state.owner.userId,
@@ -125,7 +136,7 @@ it.each([
 			);
 			state.provider.completion = generated.promise;
 			const execution = state.controller
-				.reviseMermaid(state.owner, { diagramId: diagram.id, instruction: 'add queue' })
+				.reviseMermaid({ diagramId: diagram.id, instruction: 'add queue' })
 				.then(
 					() => 'saved',
 					(error) => {
@@ -155,7 +166,7 @@ it.each([
 				release.resolve();
 				await peer;
 				const outcome = await execution;
-				const current = await state.records.findById(state.owner, diagram.id);
+				const current = await state.records.findById(diagram.id);
 				const [run] =
 					await writer.client`select status from agent_runs where user_id = ${state.owner.userId}`;
 				expect({
@@ -185,7 +196,6 @@ it.each([
 it('persists the provenance of a generated Mermaid revision', async () => {
 	const state = await setup('18801');
 	const diagram = await state.records.insert(
-		state.owner,
 		mermaidBuilder({
 			id: crypto.randomUUID() as DiagramId,
 			userId: state.owner.userId,
@@ -194,7 +204,7 @@ it('persists the provenance of a generated Mermaid revision', async () => {
 			provenanceId: undefined
 		})
 	);
-	const result = await state.controller.reviseMermaid(state.owner, {
+	const result = await state.controller.reviseMermaid({
 		diagramId: diagram.id,
 		instruction: 'add queue'
 	});
@@ -202,7 +212,7 @@ it('persists the provenance of a generated Mermaid revision', async () => {
 		{ id: string }[]
 	>`select id from provenance where user_id = ${state.owner.userId}`;
 	if (!provenance) throw new Error('Generation provenance was not recorded');
-	const saved = await state.records.findById(state.owner, diagram.id);
+	const saved = await state.records.findById(diagram.id);
 	expect({ returned: result.diagram.provenanceId, stored: saved?.provenanceId }).toEqual({
 		returned: provenance.id,
 		stored: provenance.id
@@ -214,7 +224,7 @@ it('rolls back conversation creation when the direct run cannot be inserted', as
 	await context.client`alter table agent_runs add constraint reject_direct_run_test check (user_id <> '10000000-0000-4000-8000-000000017401') not valid`;
 	try {
 		const result = await state.controller
-			.convertInlineMermaid(state.owner, { noteId: state.note.id, source: 'flowchart LR\nA --> B' })
+			.convertInlineMermaid({ noteId: state.note.id, source: 'flowchart LR\nA --> B' })
 			.catch((error) => {
 				if (!isPermanentWriteConstraint(error)) throw error;
 				return { kind: 'failure' as const };
@@ -235,7 +245,7 @@ it('does not publish a direct result after cancellation settles its run', async 
 	const gate = Promise.withResolvers<void>();
 	state.provider.completion = gate.promise;
 	const execution = state.controller
-		.convertInlineMermaid(state.owner, { noteId: state.note.id, source: 'flowchart LR\nA --> B' })
+		.convertInlineMermaid({ noteId: state.note.id, source: 'flowchart LR\nA --> B' })
 		.catch((error) => {
 			// The cancel either aborts the generation or, if the provider finished first, refuses
 			// to complete a run that is no longer running. Neither publishes a diagram.
@@ -252,9 +262,10 @@ it('does not publish a direct result after cancellation settles its run', async 
 		>`select id from agent_runs where user_id = ${state.owner.userId}`;
 		if (!run) throw new Error('Direct diagram run was not created');
 		const { database, transactionRunner } = createTransactionContext(context.db);
-		const runs = new AgentRunRecords(database);
-		const events = new AgentRunEventRecords(database);
+		const runs = new AgentRunRecords(testActor(), database);
+		const events = new AgentRunEventRecords(testActor(), database);
 		const agent = new AgentSdkHarness(
+			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentHarnessDependencies>({
 				...agentRulesFixture(),
@@ -263,11 +274,11 @@ it('does not publish a direct result after cancellation settles its run', async 
 				transactionRunner,
 				cancellations: new RunCancellation(runs),
 				settlements: new RunSettlements(runs, events),
-				decisions: new AgentRunDecisionRecords(database),
+				decisions: new AgentRunDecisionRecords(testActor(), database),
 				runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 			})
 		);
-		await agent.cancel(state.owner, run.id);
+		await agent.cancel(run.id);
 	} finally {
 		gate.resolve();
 	}
@@ -282,7 +293,7 @@ it('records failed generation when proposal storage rejects the generated diagra
 	await context.client`alter table suggestions add constraint reject_diagram_proposal_test check (user_id <> '10000000-0000-4000-8000-000000013101') not valid`;
 	try {
 		await state.controller
-			.convertInlineMermaid(state.owner, {
+			.convertInlineMermaid({
 				noteId: state.note.id,
 				source: 'flowchart LR\nA --> B'
 			})
@@ -300,7 +311,7 @@ it('rolls back the diagram proposal when completion cannot be saved', async () =
 	await context.client`alter table agent_runs add constraint reject_diagram_completion_test check (user_id <> '10000000-0000-4000-8000-000000013102' or status <> 'completed') not valid`;
 	try {
 		await state.controller
-			.convertInlineMermaid(state.owner, {
+			.convertInlineMermaid({
 				noteId: state.note.id,
 				source: 'flowchart LR\nA --> B'
 			})

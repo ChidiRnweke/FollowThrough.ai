@@ -19,7 +19,7 @@ const diagramSource = JSON.stringify({ kind: 'drawio', source: '<mxfile>huge</mx
 
 const historyOver = (
 	stored: readonly PersistedSessionItem[] = [],
-	files = new InMemoryAgentFiles()
+	files = new InMemoryAgentFiles(testActor())
 ) => {
 	const repository = new InMemoryAgentSessionRepository();
 	repository.items = stored.map((item, position) => ({
@@ -29,10 +29,13 @@ const historyOver = (
 		item,
 		createdAt: new Date().toISOString() as (typeof repository.items)[number]['createdAt']
 	}));
-	return { history: new ConversationHistoryService(repository, files, testTokenizer), files };
+	return {
+		history: new ConversationHistoryService(repository, files, testTokenizer),
+		files
+	};
 };
 const snapshot = (items: readonly PersistedSessionItem[]) =>
-	historyOver().history.snapshot(testActor(), testConversationId(), items);
+	historyOver().history.snapshot(testConversationId(), items);
 
 describe('Stored conversation history', () => {
 	it('stores the prompt of an inline image but not the image', async () => {
@@ -49,9 +52,7 @@ describe('Stored conversation history', () => {
 	// history the model can never be shown again cannot be continued.
 	it('repairs a stored conversation already holding a broken image part', async () => {
 		const { history } = historyOver([imageItem('<image omitted from history>')]);
-		expect(JSON.stringify(await history.load(testActor(), testConversationId()))).not.toContain(
-			'input_image'
-		);
+		expect(JSON.stringify(await history.load(testConversationId()))).not.toContain('input_image');
 	});
 
 	it('keeps a remote image the provider can still fetch', async () => {
@@ -90,14 +91,14 @@ describe('Stored conversation history', () => {
 	it('reuses the content-addressed file for repeated replay of the same output', async () => {
 		const { history, files } = historyOver();
 		const item = stringResultItem('search', 'search-1', 'result '.repeat(5000));
-		const [first] = await history.snapshot(testActor(), testConversationId(), [item]);
-		const [second] = await history.snapshot(testActor(), testConversationId(), [item]);
+		const [first] = await history.snapshot(testConversationId(), [item]);
+		const [second] = await history.snapshot(testConversationId(), [item]);
 		expect({
 			same:
 				first?.type === 'function_call_result' &&
 				second?.type === 'function_call_result' &&
 				first.output === second.output,
-			files: (await files.list(testActor())).length
+			files: (await files.list()).length
 		}).toEqual({ same: true, files: 1 });
 	});
 });

@@ -151,18 +151,14 @@ export interface AgentHarness {
 	 * The tools an MCP request may call: the user's tool selection applies, and a read-scoped
 	 * token reaches only read tools.
 	 */
-	openMcpTools(
-		actor: ActorContext,
-		scope: ApiTokenScope,
-		provenanceId: ProvenanceId
-	): Promise<McpToolSession>;
+	openMcpTools(scope: ApiTokenScope, provenanceId: ProvenanceId): Promise<McpToolSession>;
 	finishCancellation(runId: AgentRunId): Promise<AgentRun | undefined>;
 	failRun(runId: AgentRunId, error: Error): Promise<void>;
-	recoverInterruptedRuns(): Promise<number>;
-	synchronize(
-		actor: ActorContext,
-		input: ConversationMutationRequest
-	): Promise<WorkspaceMutationResult>;
+	/** Settle a run the previous process left running or cancelling. */
+	recoverInterrupted(runId: AgentRunId): Promise<void>;
+	/** Start a run the previous process queued but never started. */
+	resumeQueued(runId: AgentRunId): Promise<void>;
+	synchronize(input: ConversationMutationRequest): Promise<WorkspaceMutationResult>;
 	/**
 	 * Queue an agent run for the given prompt and return a receipt for the queued run.
 	 *
@@ -180,46 +176,34 @@ export interface AgentHarness {
 	 * @throws ValidationError if an explicit model is not selectable, more than four
 	 * images are attached, or an image is not a supported type within the size limit.
 	 */
-	submit(actor: ActorContext, input: SubmitAgentRunInput): Promise<AgentRunReceipt>;
+	submit(input: SubmitAgentRunInput): Promise<AgentRunReceipt>;
 	/**
 	 * Fetch a single run as a snapshot (the run plus its latest event cursor and pending
 	 * decisions) so a client can resume the event stream and render approval cards.
 	 *
 	 * @throws NotFoundError if no run exists for `runId`.
 	 */
-	getRun(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot>;
+	getRun(runId: AgentRunId): Promise<AgentRunSnapshot>;
 	/**
 	 * Signal `listener` whenever the actor's run records a new event. The signal carries no
 	 * data: read the events with {@link listRunEvents}. Returns the unsubscribe function.
 	 *
 	 * @throws NotFoundError if no run exists for `runId`.
 	 */
-	observeRun(
-		actor: ActorContext,
-		runId: AgentRunId,
-		listener: () => void
-	): Promise<() => Promise<void>>;
+	observeRun(runId: AgentRunId, listener: () => void): Promise<() => Promise<void>>;
 	/** Close event delivery only after a terminal run's durable tail has been delivered. */
-	isRunStreamComplete(
-		actor: ActorContext,
-		runId: AgentRunId,
-		deliveredCursor: string
-	): Promise<boolean>;
+	isRunStreamComplete(runId: AgentRunId, deliveredCursor: string): Promise<boolean>;
 	/**
 	 * Replay events for a run after the given cursor, for a client that polls the event
 	 * stream while a run executes. The cursor is the opaque continuation returned by the
 	 * previous append, so a client never re-reads events it already saw.
 	 */
-	listRunEvents(
-		actor: ActorContext,
-		runId: AgentRunId,
-		after: string
-	): Promise<readonly StoredAgentRunEventRecord[]>;
+	listRunEvents(runId: AgentRunId, after: string): Promise<readonly StoredAgentRunEventRecord[]>;
 	/**
 	 * Approve or reject a single pending tool call. Delegates to {@link decideMany};
 	 * kept as a convenience so callers need not wrap one call id in a batch.
 	 */
-	decide(actor: ActorContext, input: DecideAgentRunInput): Promise<AgentRunSnapshot>;
+	decide(input: DecideAgentRunInput): Promise<AgentRunSnapshot>;
 	/**
 	 * Record approvals or rejections for several pending tool calls and requeue the run
 	 * for continued execution.
@@ -231,14 +215,14 @@ export interface AgentHarness {
 	 * @throws ValidationError if the run is not awaiting approval or any call id is not
 	 * pending.
 	 */
-	decideMany(actor: ActorContext, input: DecideAgentRunBatchInput): Promise<AgentRunSnapshot>;
+	decideMany(input: DecideAgentRunBatchInput): Promise<AgentRunSnapshot>;
 	/**
 	 * Request cancellation of a run, aborting any in-process execution immediately.
 	 *
 	 * When the run was still queued the cancellation is also recorded as an event so the
 	 * client's event stream explains why the run never produced output.
 	 */
-	cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot>;
+	cancel(runId: AgentRunId): Promise<AgentRunSnapshot>;
 	/**
 	 * Requeue a failed or cancelled run under the input snapshot it was originally frozen
 	 * with, returning a receipt for the new run.
@@ -250,23 +234,20 @@ export interface AgentHarness {
 	 *
 	 * @throws ValidationError if the original run is neither failed nor cancelled.
 	 */
-	retry(actor: ActorContext, runId: AgentRunId, requestId: string): Promise<AgentRunReceipt>;
+	retry(runId: AgentRunId, requestId: string): Promise<AgentRunReceipt>;
 	/**
 	 * List the user's conversations, newest first, optionally filtered by free-text
 	 * `query` and paginated by `limit`/`offset`.
 	 */
-	listSessions(
-		actor: ActorContext,
-		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }
-	): Promise<readonly Conversation[]>;
+	listSessions(options?: {
+		readonly limit?: number;
+		readonly offset?: number;
+		readonly query?: string;
+	}): Promise<readonly Conversation[]>;
 	/**
 	 * Change a conversation's title as it appears in the conversation list.
 	 */
-	renameSession(
-		actor: ActorContext,
-		conversationId: ConversationId,
-		title: string
-	): Promise<Conversation>;
+	renameSession(conversationId: ConversationId, title: string): Promise<Conversation>;
 	/**
 	 * Delete a conversation and its message history.
 	 *
@@ -276,7 +257,7 @@ export interface AgentHarness {
 	 *
 	 * @throws ValidationError if the conversation has an active run.
 	 */
-	deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void>;
+	deleteSession(conversationId: ConversationId): Promise<void>;
 }
 
 /**
@@ -375,21 +356,18 @@ export interface AgentHarnessDependencies {
  * applying discovery, approval, review and tool preferences, and owns the run lifecycle.
  */
 export class AgentSdkHarness implements AgentHarness {
-	async synchronize(
-		actor: ActorContext,
-		input: ConversationMutationRequest
-	): Promise<WorkspaceMutationResult> {
+	async synchronize(input: ConversationMutationRequest): Promise<WorkspaceMutationResult> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
 					const target = this.workspaceCommandRules.mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, {
+					const prepared = await this.dependencies.syncMutations.prepare(input, {
 						identity: target,
 						key: this.workspaceCommandRules.workspaceResourceKey(target)
 					});
 					if (prepared.kind === 'finished') return prepared.result;
-					await this.applySynchronizedCommand(actor, input);
-					return this.dependencies.syncMutations.complete(actor, input, target);
+					await this.applySynchronizedCommand(input);
+					return this.dependencies.syncMutations.complete(input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);
@@ -399,45 +377,40 @@ export class AgentSdkHarness implements AgentHarness {
 		}
 	}
 
-	private async applySynchronizedCommand(
-		actor: ActorContext,
-		input: ConversationMutationRequest
-	): Promise<void> {
-		await this.renameSession(actor, input.command.conversationId, input.command.title);
+	private async applySynchronizedCommand(input: ConversationMutationRequest): Promise<void> {
+		await this.renameSession(input.command.conversationId, input.command.title);
 	}
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly workspaceCommandRules: WorkspaceCommandRules,
 		private readonly dependencies: AgentHarnessDependencies
 	) {}
 
-	listSessions(
-		actor: ActorContext,
-		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }
-	): Promise<readonly Conversation[]> {
-		return this.dependencies.conversationSessions.listConversations(actor, options);
+	listSessions(options?: {
+		readonly limit?: number;
+		readonly offset?: number;
+		readonly query?: string;
+	}): Promise<readonly Conversation[]> {
+		return this.dependencies.conversationSessions.listConversations(options);
 	}
 
-	renameSession(
-		actor: ActorContext,
-		conversationId: ConversationId,
-		title: string
-	): Promise<Conversation> {
-		return this.dependencies.conversationSessions.rename(actor, conversationId, title);
+	renameSession(conversationId: ConversationId, title: string): Promise<Conversation> {
+		return this.dependencies.conversationSessions.rename(conversationId, title);
 	}
 
-	async deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void> {
+	async deleteSession(conversationId: ConversationId): Promise<void> {
 		await this.dependencies.transactionRunner.run(async () => {
-			await this.dependencies.conversationSessions.getForWrite(actor, conversationId);
-			const active = await this.dependencies.runs.findActiveByConversation(actor, conversationId);
+			await this.dependencies.conversationSessions.getForWrite(conversationId);
+			const active = await this.dependencies.runs.findActiveByConversation(conversationId);
 			if (active)
 				throw new ValidationError('Stop or resolve the active agent run before deleting this chat');
-			await this.dependencies.conversationSessions.remove(actor, conversationId);
+			await this.dependencies.conversationSessions.remove(conversationId);
 		});
 	}
 
-	async submit(actor: ActorContext, input: SubmitAgentRunInput): Promise<AgentRunReceipt> {
-		const existing = await this.dependencies.runs.findByRequestId(actor, input.requestId);
-		if (existing) return this.receipt(actor, existing);
+	async submit(input: SubmitAgentRunInput): Promise<AgentRunReceipt> {
+		const existing = await this.dependencies.runs.findByRequestId(input.requestId);
+		if (existing) return this.receipt(existing);
 		if (input.model) {
 			const models = this.dependencies.modelChoices.configuredAgentModels(
 				await this.dependencies.models.list(),
@@ -461,14 +434,11 @@ export class AgentSdkHarness implements AgentHarness {
 				// Limits are frozen onto the input alongside the prompt: a run replayed
 				// later should run under the settings it was submitted with, not
 				// whatever they have since become.
-				const preferences = await this.dependencies.preferences.get(actor);
+				const preferences = await this.dependencies.preferences.get();
 				const runInput = this.freezeInput(input, preferences);
-				const conversation = await this.dependencies.conversationSessions.getOrCreate(
-					actor,
-					runInput
-				);
+				const conversation = await this.dependencies.conversationSessions.getOrCreate(runInput);
 				if (input.retryUserOrdinal !== undefined)
-					await this.rewind(actor, conversation.id, input.retryUserOrdinal);
+					await this.rewind(conversation.id, input.retryUserOrdinal);
 				const model = this.dependencies.modelSelection.resolveAgentModel(
 					conversation,
 					preferences,
@@ -492,7 +462,7 @@ export class AgentSdkHarness implements AgentHarness {
 				const run: AgentRun = {
 					kind: 'agent',
 					id: crypto.randomUUID() as AgentRunId,
-					userId: actor.userId,
+					userId: this.actor.userId,
 					conversationId: conversation.id,
 					model,
 					executionMode: this.dependencies.runSettings.executionMode(conversation, preferences),
@@ -505,10 +475,9 @@ export class AgentSdkHarness implements AgentHarness {
 					createdAt: submittedAt,
 					updatedAt: submittedAt
 				};
-				const inserted = await this.dependencies.runs.insertIdempotent(actor, run);
+				const inserted = await this.dependencies.runs.insertIdempotent(run);
 				if (!inserted) throw new DuplicateSubmission();
 				await this.dependencies.conversationMessages.recordUserPrompt(
-					actor,
 					conversation.id,
 					runInput.prompt,
 					run.id,
@@ -531,34 +500,26 @@ export class AgentSdkHarness implements AgentHarness {
 			return receipt;
 		} catch (error) {
 			if (!(error instanceof DuplicateSubmission)) this.raiseActiveRunConflict(error);
-			const duplicate = await this.dependencies.runs.findByRequestId(actor, input.requestId);
+			const duplicate = await this.dependencies.runs.findByRequestId(input.requestId);
 			if (!duplicate) throw error;
-			return this.receipt(actor, duplicate);
+			return this.receipt(duplicate);
 		}
 	}
 
-	async getRun(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot> {
-		const run = await this.dependencies.runs.findById(actor, runId);
+	async getRun(runId: AgentRunId): Promise<AgentRunSnapshot> {
+		const run = await this.dependencies.runs.findById(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
-		return this.snapshot(actor, run);
+		return this.snapshot(run);
 	}
 
-	async observeRun(
-		actor: ActorContext,
-		runId: AgentRunId,
-		listener: () => void
-	): Promise<() => Promise<void>> {
-		await this.requireRun(actor, runId);
+	async observeRun(runId: AgentRunId, listener: () => void): Promise<() => Promise<void>> {
+		await this.requireRun(runId);
 		return this.dependencies.runSignals.observe(runId, listener);
 	}
 
-	async isRunStreamComplete(
-		actor: ActorContext,
-		runId: AgentRunId,
-		deliveredCursor: string
-	): Promise<boolean> {
-		const run = await this.requireRun(actor, runId);
-		const latestCursor = await this.dependencies.events.latestCursor(actor, runId);
+	async isRunStreamComplete(runId: AgentRunId, deliveredCursor: string): Promise<boolean> {
+		const run = await this.requireRun(runId);
+		const latestCursor = await this.dependencies.events.latestCursor(runId);
 		return this.dependencies.runStatus.eventStreamComplete(
 			run.status,
 			deliveredCursor,
@@ -571,11 +532,10 @@ export class AgentSdkHarness implements AgentHarness {
 	 * their cursors, including when the final saved event is unreadable.
 	 */
 	async listRunEvents(
-		actor: ActorContext,
 		runId: AgentRunId,
 		after: string
 	): Promise<readonly StoredAgentRunEventRecord[]> {
-		const stored = await this.dependencies.events.replay(actor, runId, after);
+		const stored = await this.dependencies.events.replay(runId, after);
 		const unreadable = stored.filter((record) => record.kind === 'unreadable');
 		if (unreadable.length > 0)
 			console.warn(
@@ -586,28 +546,23 @@ export class AgentSdkHarness implements AgentHarness {
 		return stored;
 	}
 
-	decide(actor: ActorContext, input: DecideAgentRunInput): Promise<AgentRunSnapshot> {
+	decide(input: DecideAgentRunInput): Promise<AgentRunSnapshot> {
 		const { callId, ...rest } = input;
-		return this.decideMany(actor, { ...rest, callIds: [callId] });
+		return this.decideMany({ ...rest, callIds: [callId] });
 	}
 
-	async decideMany(
-		actor: ActorContext,
-		input: DecideAgentRunBatchInput
-	): Promise<AgentRunSnapshot> {
+	async decideMany(input: DecideAgentRunBatchInput): Promise<AgentRunSnapshot> {
 		const result = await this.dependencies.transactionRunner.run(async () => {
-			const run = await this.dependencies.approvals.getForWrite(actor, input.runId);
+			const run = await this.dependencies.approvals.getForWrite(input.runId);
 			const change = this.dependencies.approvals.plan(run, input.callIds, now());
 			for (const callId of input.callIds)
-				await this.dependencies.decisions.record(actor, {
+				await this.dependencies.decisions.record({
 					runId: input.runId,
 					callId,
 					decision: input.decision,
 					...(input.message === undefined ? {} : { message: input.message })
 				});
-			const queued = change
-				? await this.dependencies.approvals.persist(actor, run.id, change)
-				: run;
+			const queued = change ? await this.dependencies.approvals.persist(run.id, change) : run;
 			if (change)
 				await this.dependencies.events.append(run.id, 0, {
 					type: 'run_queued',
@@ -615,18 +570,18 @@ export class AgentSdkHarness implements AgentHarness {
 					attempt: 1,
 					reason: 'resumed'
 				});
-			return { snapshot: await this.snapshot(actor, queued), requeued: change !== null };
+			return { snapshot: await this.snapshot(queued), requeued: change !== null };
 		});
 		if (result.requeued) this.executeInBackground(input.runId);
 		return result.snapshot;
 	}
 
-	async cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot> {
+	async cancel(runId: AgentRunId): Promise<AgentRunSnapshot> {
 		const { run, executing } = await this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.cancellations.getForWrite(actor, runId);
+			const current = await this.dependencies.cancellations.getForWrite(runId);
 			const change = this.dependencies.cancellations.plan(current.status, now());
 			if (!change) return { run: current, executing: false };
-			const requested = await this.dependencies.cancellations.persist(actor, runId, change);
+			const requested = await this.dependencies.cancellations.persist(runId, change);
 			if (requested.status === 'cancelled') {
 				await this.abandonPendingCalls(
 					requested,
@@ -637,7 +592,7 @@ export class AgentSdkHarness implements AgentHarness {
 					runId: requested.id,
 					message: 'The request was cancelled before it started'
 				});
-				return { run: await this.requireRun(actor, runId), executing: false };
+				return { run: await this.requireRun(runId), executing: false };
 			}
 			return { run: requested, executing: current.status === 'running' };
 		});
@@ -645,13 +600,13 @@ export class AgentSdkHarness implements AgentHarness {
 		// status commits; it aborts and settles the run itself.
 		if (executing) {
 			this.settleCancellationAfterGrace(runId);
-			return this.snapshot(actor, run);
+			return this.snapshot(run);
 		}
 		// No execution to abort. A run parked on an approval would otherwise sit in
 		// `cancelling` forever.
-		if (run.status !== 'cancelling') return this.snapshot(actor, run);
+		if (run.status !== 'cancelling') return this.snapshot(run);
 		const cancelled = await this.finishCancellation(runId);
-		return this.snapshot(actor, cancelled ?? run);
+		return this.snapshot(cancelled ?? run);
 	}
 
 	/**
@@ -670,12 +625,12 @@ export class AgentSdkHarness implements AgentHarness {
 		timer.unref();
 	}
 
-	async retry(actor: ActorContext, runId: AgentRunId, requestId: string): Promise<AgentRunReceipt> {
-		const duplicate = await this.dependencies.runs.findByRequestId(actor, requestId);
-		if (duplicate) return this.receipt(actor, duplicate);
+	async retry(runId: AgentRunId, requestId: string): Promise<AgentRunReceipt> {
+		const duplicate = await this.dependencies.runs.findByRequestId(requestId);
+		if (duplicate) return this.receipt(duplicate);
 		try {
 			const receipt = await this.dependencies.transactionRunner.run(async () => {
-				const original = await this.requireAgentRun(actor, runId);
+				const original = await this.requireAgentRun(runId);
 				if (
 					!this.dependencies.runStatus.isTerminal(original.status) ||
 					original.status === 'completed'
@@ -701,7 +656,7 @@ export class AgentSdkHarness implements AgentHarness {
 					createdAt: submittedAt,
 					updatedAt: submittedAt
 				};
-				const inserted = await this.dependencies.runs.insertIdempotent(actor, retry);
+				const inserted = await this.dependencies.runs.insertIdempotent(retry);
 				if (!inserted) throw new DuplicateSubmission();
 				const event = await this.dependencies.events.append(retry.id, 0, {
 					type: 'run_queued',
@@ -720,9 +675,9 @@ export class AgentSdkHarness implements AgentHarness {
 			return receipt;
 		} catch (error) {
 			if (!(error instanceof DuplicateSubmission)) this.raiseActiveRunConflict(error);
-			const existing = await this.dependencies.runs.findByRequestId(actor, requestId);
+			const existing = await this.dependencies.runs.findByRequestId(requestId);
 			if (!existing) throw error;
-			return this.receipt(actor, existing);
+			return this.receipt(existing);
 		}
 	}
 
@@ -755,19 +710,11 @@ export class AgentSdkHarness implements AgentHarness {
 	 * have to go: the transcript the client hydrates from, and the provider
 	 * session the run replays.
 	 */
-	private async rewind(
-		actor: ActorContext,
-		conversationId: ConversationId,
-		ordinal: number
-	): Promise<void> {
-		const active = await this.dependencies.runs.findActiveByConversation(actor, conversationId);
+	private async rewind(conversationId: ConversationId, ordinal: number): Promise<void> {
+		const active = await this.dependencies.runs.findActiveByConversation(conversationId);
 		if (active) throw new ValidationError('Wait for the current agent run to finish first');
-		await this.dependencies.conversationMessages.truncateFromUserMessage(
-			actor,
-			conversationId,
-			ordinal
-		);
-		const items = await this.dependencies.sessions.list(actor, conversationId);
+		await this.dependencies.conversationMessages.truncateFromUserMessage(conversationId, ordinal);
+		const items = await this.dependencies.sessions.list(conversationId);
 		const rewound = this.dependencies.conversationHistory.rewind(
 			items.map((item) => item.item),
 			ordinal
@@ -903,31 +850,31 @@ export class AgentSdkHarness implements AgentHarness {
 		);
 	}
 
-	private async requireRun(actor: ActorContext, runId: AgentRunId): Promise<AgentRun> {
-		const run = await this.dependencies.runs.findById(actor, runId);
+	private async requireRun(runId: AgentRunId): Promise<AgentRun> {
+		const run = await this.dependencies.runs.findById(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return run;
 	}
 
-	private async requireAgentRun(actor: ActorContext, runId: AgentRunId): Promise<ResolvedAgentRun> {
-		const run = await this.dependencies.runs.findAgentById(actor, runId);
+	private async requireAgentRun(runId: AgentRunId): Promise<ResolvedAgentRun> {
+		const run = await this.dependencies.runs.findAgentById(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return run;
 	}
 
-	private async receipt(actor: ActorContext, run: AgentRun): Promise<AgentRunReceipt> {
+	private async receipt(run: AgentRun): Promise<AgentRunReceipt> {
 		return {
 			runId: run.id,
 			conversationId: run.conversationId,
 			status: run.status,
-			latestCursor: await this.dependencies.events.latestCursor(actor, run.id)
+			latestCursor: await this.dependencies.events.latestCursor(run.id)
 		};
 	}
 
-	private async snapshot(actor: ActorContext, run: AgentRun): Promise<AgentRunSnapshot> {
+	private async snapshot(run: AgentRun): Promise<AgentRunSnapshot> {
 		return {
 			run,
-			latestCursor: await this.dependencies.events.latestCursor(actor, run.id),
+			latestCursor: await this.dependencies.events.latestCursor(run.id),
 			pendingDecisions: run.pendingDecisions
 		};
 	}
@@ -1009,7 +956,6 @@ export class AgentSdkHarness implements AgentHarness {
 							const activity = this.dependencies.toolActivity.activity(event);
 							if (activity)
 								await this.dependencies.conversationMessages.recordToolActivity(
-									actor,
 									run.conversationId,
 									activity,
 									{ runId: run.id, eventCursor: record.cursor }
@@ -1048,13 +994,9 @@ export class AgentSdkHarness implements AgentHarness {
 		}
 	}
 
-	async openMcpTools(
-		actor: ActorContext,
-		scope: ApiTokenScope,
-		provenanceId: ProvenanceId
-	): Promise<McpToolSession> {
-		const tools = this.dependencies.mcpTools(actor, { provenanceId });
-		const disabled = await this.disabledTools(actor);
+	async openMcpTools(scope: ApiTokenScope, provenanceId: ProvenanceId): Promise<McpToolSession> {
+		const tools = this.dependencies.mcpTools(this.actor, { provenanceId });
+		const disabled = await this.disabledTools();
 		const permitted = this.permittedTools(tools, disabled, scope === 'read' ? ['read'] : undefined);
 		const plan = this.toolPlan(permitted, []);
 		return {
@@ -1101,9 +1043,9 @@ export class AgentSdkHarness implements AgentHarness {
 				input: request,
 				model: run.model
 			});
-			const disabled = await this.disabledTools(actor, request.projectId);
+			const disabled = await this.disabledTools(request.projectId);
 			signal.throwIfAborted();
-			const history = await this.dependencies.conversationHistory.load(actor, run.conversationId);
+			const history = await this.dependencies.conversationHistory.load(run.conversationId);
 			// The app's own images are described too when the chat model cannot see: a
 			// render left out here would simply vanish on a text-only model.
 			const visionDescriptions =
@@ -1218,7 +1160,6 @@ export class AgentSdkHarness implements AgentHarness {
 				}
 				const outcome = await started.outcome();
 				const sessionItems = await dependencies.conversationHistory.snapshot(
-					actor,
 					run.conversationId,
 					outcome.sessionItems
 				);
@@ -1259,12 +1200,8 @@ export class AgentSdkHarness implements AgentHarness {
 	}
 
 	/** The tools a user has switched off, for the whole workspace or for one project. */
-	private async disabledTools(
-		actor: ActorContext,
-		projectId?: ProjectId
-	): Promise<ReadonlySet<string>> {
+	private async disabledTools(projectId?: ProjectId): Promise<ReadonlySet<string>> {
 		const preferences = await this.dependencies.toolPreferences.view(
-			actor,
 			this.dependencies.toolCatalog.entries(),
 			projectId
 		);
@@ -1400,7 +1337,7 @@ export class AgentSdkHarness implements AgentHarness {
 		const actor: ActorContext = { userId: run.userId };
 
 		if (!run.provenanceId) {
-			const provenance = await this.dependencies.provenance.record(actor, {
+			const provenance = await this.dependencies.provenance.record({
 				producerKind: 'agent',
 				producerName: 'FollowThrough Workbench Agent',
 				pipeline: 'agent',
@@ -1409,43 +1346,37 @@ export class AgentSdkHarness implements AgentHarness {
 				metadata: {}
 			});
 			run = await this.dependencies.transactionRunner.run(async () => {
-				const current = await this.dependencies.preparation.getForWrite(actor, runId);
+				const current = await this.dependencies.preparation.getForWrite(runId);
 				const change = this.dependencies.preparation.provenance(current, provenance.id, now());
-				return this.dependencies.preparation.persistProvenance(actor, runId, change);
+				return this.dependencies.preparation.persistProvenance(runId, change);
 			});
 		}
 
-		const context = run.contextSnapshot ?? (await this.buildContext(actor, run.inputSnapshot));
+		const context = run.contextSnapshot ?? (await this.buildContext(run.inputSnapshot));
 		const prepared = await this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.preparation.getForWrite(actor, runId);
+			const current = await this.dependencies.preparation.getForWrite(runId);
 			const change = this.dependencies.preparation.context(current, context, now());
-			const saved = await this.dependencies.preparation.persistContext(actor, runId, change);
+			const saved = await this.dependencies.preparation.persistContext(runId, change);
 			await this.dependencies.events.append(runId, 1, { type: 'run_started', runId, attempt: 1 });
 			return saved;
 		});
 		return prepared;
 	}
 
-	private async buildContext(actor: ActorContext, input: RunAgentInput): Promise<AgentRunContext> {
-		await this.dependencies.transactionRunner.run(() =>
-			this.dependencies.builtInSkills.ensure(actor)
-		);
+	private async buildContext(input: RunAgentInput): Promise<AgentRunContext> {
+		await this.dependencies.transactionRunner.run(() => this.dependencies.builtInSkills.ensure());
 		const current = input.noteId
 			? {
 					kind: 'note' as const,
-					note: await this.dependencies.contextNotes.get(actor, input.noteId)
+					note: await this.dependencies.contextNotes.get(input.noteId)
 				}
 			: { kind: 'no_current_note' as const };
 		const base = this.dependencies.contextFormatter.base(input, current);
 		const [skills, contextNotes, contextResources, profileMemory] = await Promise.all([
-			this.dependencies.contextSkills.listEnabled(actor, base.projectId),
-			Promise.all(
-				(input.contextNoteIds ?? []).map((noteId) => this.loadAttachedNote(actor, noteId))
-			),
-			Promise.all(
-				(input.contextResources ?? []).map((ref) => this.loadAttachedResource(actor, ref))
-			),
-			this.dependencies.contextMemory.list(actor, {})
+			this.dependencies.contextSkills.listEnabled(base.projectId),
+			Promise.all((input.contextNoteIds ?? []).map((noteId) => this.loadAttachedNote(noteId))),
+			Promise.all((input.contextResources ?? []).map((ref) => this.loadAttachedResource(ref))),
+			this.dependencies.contextMemory.list({})
 		]);
 		if (!input.appContext)
 			return this.dependencies.contextFormatter.build(input, {
@@ -1455,14 +1386,11 @@ export class AgentSdkHarness implements AgentHarness {
 				contextResources,
 				profileMemory
 			});
-		const conversation = await this.dependencies.conversationSessions.get(
-			actor,
-			input.conversationId
-		);
+		const conversation = await this.dependencies.conversationSessions.get(input.conversationId);
 		const origin = conversation.contextProjectId
 			? {
 					kind: 'project' as const,
-					project: await this.dependencies.contextProjects.get(actor, conversation.contextProjectId)
+					project: await this.dependencies.contextProjects.get(conversation.contextProjectId)
 				}
 			: { kind: 'no_origin_project' as const };
 		const appContext = this.dependencies.contextFormatter.appContext(
@@ -1481,10 +1409,8 @@ export class AgentSdkHarness implements AgentHarness {
 			});
 		const requested = input.requestedScope;
 		const [project, note] = await Promise.all([
-			requested.projectId
-				? this.dependencies.contextProjects.get(actor, requested.projectId)
-				: undefined,
-			requested.noteId ? this.dependencies.contextNotes.get(actor, requested.noteId) : undefined
+			requested.projectId ? this.dependencies.contextProjects.get(requested.projectId) : undefined,
+			requested.noteId ? this.dependencies.contextNotes.get(requested.noteId) : undefined
 		]);
 		const requestedScope = this.dependencies.contextFormatter.requestedScope(input.appContext, {
 			project,
@@ -1500,9 +1426,9 @@ export class AgentSdkHarness implements AgentHarness {
 		});
 	}
 
-	private async loadAttachedNote(actor: ActorContext, noteId: NoteId) {
+	private async loadAttachedNote(noteId: NoteId) {
 		try {
-			return await this.dependencies.contextNotes.get(actor, noteId);
+			return await this.dependencies.contextNotes.get(noteId);
 		} catch (error) {
 			if (!(error instanceof NotFoundError)) throw error;
 			throw new NotFoundError(
@@ -1512,19 +1438,16 @@ export class AgentSdkHarness implements AgentHarness {
 		}
 	}
 
-	private async loadAttachedResource(
-		actor: ActorContext,
-		ref: ContextResourceRef
-	): Promise<AttachedResource> {
+	private async loadAttachedResource(ref: ContextResourceRef): Promise<AttachedResource> {
 		try {
 			switch (ref.kind) {
 				case 'widget':
 					return {
 						kind: 'widget',
-						widget: await this.dependencies.contextWidgets.get(actor, ref.id)
+						widget: await this.dependencies.contextWidgets.get(ref.id)
 					};
 				case 'diagram': {
-					const diagram = await this.dependencies.contextDiagrams.get(actor, ref.id);
+					const diagram = await this.dependencies.contextDiagrams.get(ref.id);
 					return {
 						kind: 'diagram',
 						diagram,
@@ -1532,7 +1455,7 @@ export class AgentSdkHarness implements AgentHarness {
 					};
 				}
 				case 'attachment': {
-					const view = await this.dependencies.contextAttachments.get(actor, ref.id);
+					const view = await this.dependencies.contextAttachments.get(ref.id);
 					return {
 						kind: 'attachment',
 						view,
@@ -1572,7 +1495,6 @@ export class AgentSdkHarness implements AgentHarness {
 		const actor: ActorContext = { userId: run.userId };
 		for (const pending of run.pendingDecisions)
 			await this.dependencies.conversationMessages.recordToolActivity(
-				actor,
 				run.conversationId,
 				{
 					callId: pending.callId,
@@ -1596,7 +1518,6 @@ export class AgentSdkHarness implements AgentHarness {
 			const activity = this.dependencies.toolActivity.activity(event);
 			if (activity)
 				await this.dependencies.conversationMessages.recordToolActivity(
-					actor,
 					run.conversationId,
 					activity,
 					{
@@ -1635,7 +1556,6 @@ export class AgentSdkHarness implements AgentHarness {
 				const provenance = { runId: run.id, eventCursor: segment.cursor };
 				if (segment.kind === 'reasoning')
 					await this.dependencies.conversationMessages.recordAssistantReasoning(
-						actor,
 						run.conversationId,
 						segment.text,
 						run.model,
@@ -1643,7 +1563,6 @@ export class AgentSdkHarness implements AgentHarness {
 					);
 				else
 					await this.dependencies.conversationMessages.recordAssistantText(
-						actor,
 						run.conversationId,
 						segment.text,
 						run.model,
@@ -1656,33 +1575,33 @@ export class AgentSdkHarness implements AgentHarness {
 		return settled.kind === 'settled';
 	}
 
-	async recoverInterruptedRuns(): Promise<number> {
-		const interrupted = await this.dependencies.runs.listInterrupted();
-		for (const run of interrupted) {
-			if (run.kind === 'agent') {
-				if (run.status === 'cancelling') await this.finishCancellation(run.id);
-				else await this.failRun(run.id, new Error('Process restarted'));
-			} else {
-				await this.dependencies.transactionRunner.run(async () => {
-					const settlement = await this.dependencies.settlements.claim(
-						run.id,
-						run.status === 'cancelling'
-							? { kind: 'cancelled', message: 'Generation stopped' }
-							: {
-									kind: 'failed',
-									code: 'PROCESS_RESTARTED',
-									message: 'Process restarted',
-									retryable: true
-								}
-					);
-					if (settlement.kind === 'lost') return settlement;
-
-					return this.dependencies.settlements.complete(settlement);
-				});
-			}
+	async recoverInterrupted(runId: AgentRunId): Promise<void> {
+		const run = await this.dependencies.runs.findById(runId);
+		if (!run || (run.status !== 'running' && run.status !== 'cancelling')) return;
+		if (run.kind === 'agent') {
+			if (run.status === 'cancelling') await this.finishCancellation(run.id);
+			else await this.failRun(run.id, new Error('Process restarted'));
+			return;
 		}
-		const queued = await this.dependencies.runs.listQueuedAgents();
-		for (const run of queued) this.executeInBackground(run.id);
-		return interrupted.length + queued.length;
+		await this.dependencies.transactionRunner.run(async () => {
+			const settlement = await this.dependencies.settlements.claim(
+				run.id,
+				run.status === 'cancelling'
+					? { kind: 'cancelled', message: 'Generation stopped' }
+					: {
+							kind: 'failed',
+							code: 'PROCESS_RESTARTED',
+							message: 'Process restarted',
+							retryable: true
+						}
+			);
+			if (settlement.kind === 'lost') return settlement;
+
+			return this.dependencies.settlements.complete(settlement);
+		});
+	}
+
+	async resumeQueued(runId: AgentRunId): Promise<void> {
+		this.executeInBackground(runId);
 	}
 }

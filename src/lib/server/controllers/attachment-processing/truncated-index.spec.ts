@@ -21,7 +21,7 @@ describe('repairing historical truncated attachment indexes', () => {
 			}
 		};
 		search.stageFailure = new Error('Index unavailable');
-		await worker.process(testActor(), original.version.id);
+		await worker.process(original.version.id);
 		expect({
 			version: repository.found.version,
 			pending: await repository.listPendingVersions()

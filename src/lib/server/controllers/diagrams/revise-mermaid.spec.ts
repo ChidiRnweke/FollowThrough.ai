@@ -15,15 +15,16 @@ import { Diagrams, type DiagramsDependencies } from './controller';
 
 const setup = (drawio = false) => {
 	const generation = diagramGenerationFixture();
-	const sourceNotes = new InMemoryNoteContent();
+	const sourceNotes = new InMemoryNoteContent(testActor());
 	sourceNotes.notes = [noteBuilder()];
-	const diagrams = new InMemoryDiagrams();
+	const diagrams = new InMemoryDiagrams(testActor());
 	diagrams.diagrams = [drawio ? drawioBuilder() : mermaidBuilder()];
 	return {
 		diagrams,
 		persistence: generation.persistence,
 		provider: generation.provider,
 		controller: new Diagrams(
+			testActor(),
 			capabilityDependencies<DiagramsDependencies>({
 				...agentToolResultsFixture(),
 				generationRules: new DiagramGenerationRuleService(),
@@ -52,7 +53,7 @@ describe('Revise Mermaid workflow invariants', () => {
 			const completion = Promise.withResolvers<void>();
 			provider.completion = completion.promise;
 			const pending = controller
-				.reviseMermaid(testActor(), {
+				.reviseMermaid({
 					diagramId: mermaidBuilder().id,
 					instruction: 'add queue'
 				})
@@ -87,7 +88,7 @@ describe('Revise Mermaid workflow invariants', () => {
 		const original = structuredClone(diagrams.diagrams);
 		diagrams.failIndex = true;
 		await controller
-			.reviseMermaid(testActor(), {
+			.reviseMermaid({
 				diagramId: mermaidBuilder().id,
 				instruction: 'add queue'
 			})
@@ -104,7 +105,7 @@ describe('Revise Mermaid workflow invariants', () => {
 	it('rejects revision of a promoted draw.io diagram', async () => {
 		const { controller } = setup(true);
 		await expect(
-			controller.reviseMermaid(testActor(), {
+			controller.reviseMermaid({
 				diagramId: drawioBuilder().id,
 				instruction: 'change'
 			})
@@ -113,7 +114,7 @@ describe('Revise Mermaid workflow invariants', () => {
 
 	it('persists rendered output for a Mermaid revision', async () => {
 		const { controller, diagrams } = setup();
-		const result = await controller.reviseMermaid(testActor(), {
+		const result = await controller.reviseMermaid({
 			diagramId: mermaidBuilder().id,
 			instruction: 'add queue'
 		});

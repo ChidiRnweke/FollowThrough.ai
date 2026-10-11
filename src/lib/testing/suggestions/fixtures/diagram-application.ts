@@ -30,10 +30,10 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 export const diagramSuggestionFixture = (source = VALID_DRAWIO_XML) => {
-	const diagrams = new InMemoryDiagrams();
-	const suggestions = new InMemorySuggestions();
-	const effects = new InMemorySuggestionEffects();
-	const notes = new InMemoryNoteContent();
+	const diagrams = new InMemoryDiagrams(testActor());
+	const suggestions = new InMemorySuggestions(testActor());
+	const effects = new InMemorySuggestionEffects(testActor());
+	const notes = new InMemoryNoteContent(testActor());
 	notes.notes = [noteBuilder()];
 	const suggestion: DiagramSuggestion = {
 		id: testSuggestionId(),
@@ -49,6 +49,7 @@ export const diagramSuggestionFixture = (source = VALID_DRAWIO_XML) => {
 	};
 	suggestions.suggestions = [suggestion];
 	const controller = new Suggestions(
+		testActor(),
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
 			...agentToolResultsFixture(),

@@ -70,7 +70,7 @@ const build = async (
 		userId: actor.userId,
 		document: { ...match.document, embedding: [1, 0, 0], embeddingModel: 'fake' }
 	}));
-	await fixture.controller.suggest(actor, request, new AbortController().signal);
+	await fixture.controller.suggest(request, new AbortController().signal);
 	const context = fixture.generator.requests[0]?.context;
 	if (!context) throw new Error('Completion received no context');
 	return context;

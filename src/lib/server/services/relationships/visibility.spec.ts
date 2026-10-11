@@ -24,14 +24,15 @@ const relation: NoteRelationship = {
 	updatedAt: testNow
 };
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
+	const notes = new InMemoryNoteRepository(testActor());
 	const source = noteBuilder();
 	const target = noteBuilder({ id: testNoteId(2) });
 	const graph = createRelationshipServices(
-		new InMemoryRelationshipRepository(),
+		testActor(),
+		new InMemoryRelationshipRepository(testActor()),
 		notes,
-		new InMemoryAnchorRepository(),
-		new InMemoryProvenanceRepository()
+		new InMemoryAnchorRepository(testActor()),
+		new InMemoryProvenanceRepository(testActor())
 	);
 	return { notes, source, target, graph };
 };
@@ -50,7 +51,7 @@ it('returns only relationships whose source and target are readable', async () =
 		sourceNoteId: '00000000-0000-4000-8000-000000000003' as NoteRelationship['sourceNoteId'],
 		targetNoteId: target.id
 	};
-	expect(
-		await graph.contexts.readContexts(testActor(), [missingTarget, missingSource, readable])
-	).toEqual([{ relationship: readable, source, target }]);
+	expect(await graph.contexts.readContexts([missingTarget, missingSource, readable])).toEqual([
+		{ relationship: readable, source, target }
+	]);
 });

@@ -358,7 +358,7 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				atLeastOneOf: [['edit_note', 'save_note']],
 				maxCalls: 10
 			});
-			const { note } = await lab.controllers.notes().get(workspace.actor, { noteId: targetId });
+			const { note } = await lab.controllers.notes().get({ noteId: targetId });
 			const findingPersisted = note.plainText
 				.toLowerCase()
 				.includes('latency spike was caused by connection pool exhaustion');

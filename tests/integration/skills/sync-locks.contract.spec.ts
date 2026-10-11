@@ -11,7 +11,7 @@ it('checks a skill sync base after a competing note rename without reversing the
 	const seeded = await seedNote('20210');
 	const { owner } = seeded;
 	const note = await replaceNoteFixture({ ...seeded.note, kind: 'skill' });
-	await new SkillRecords(context.db).insert(owner, {
+	await new SkillRecords(owner, context.db).insert({
 		note,
 		slug: 'release-guide',
 		description: 'Initial description',
@@ -20,8 +20,7 @@ it('checks a skill sync base after a competing note rename without reversing the
 		allowImplicitInvocation: true,
 		isEnabled: true
 	});
-	const before = await createSyncCapability({ db: context.db }).objects.read(
-		owner,
+	const before = await createSyncCapability(owner, { db: context.db }).objects.read(
 		{ type: 'skills', id: [note.id] },
 		null
 	);
@@ -49,7 +48,7 @@ it('checks a skill sync base after a competing note rename without reversing the
 	try {
 		await ready.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const writing = skillController(tx.database, tx.transactionRunner).synchronize(owner, {
+		const writing = skillController(tx.database, tx.transactionRunner).synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: before.snapshot.etag,
 			command: { kind: 'updateSkill', noteId: note.id, description: 'Offline description' }
@@ -65,7 +64,7 @@ it('checks a skill sync base after a competing note rename without reversing the
 		expect({
 			rename: await editing,
 			result: result.kind,
-			skill: await new SkillRecords(context.db).findByNoteId(owner, note.id)
+			skill: await new SkillRecords(owner, context.db).findByNoteId(note.id)
 		}).toMatchObject({
 			rename: { kind: 'success' },
 			result: 'conflict',

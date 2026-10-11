@@ -15,10 +15,11 @@ import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
 
 const setup = () => {
-	const todos = new InMemoryTodos();
+	const todos = new InMemoryTodos(testActor());
 	return {
 		todos,
 		controller: new Todos(
+			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<TodosDependencies>({
 				...agentToolResultsFixture(),
@@ -41,7 +42,7 @@ describe('Todo edit invariants', () => {
 	it('rejects an update without an edit', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder()];
-		await expect(controller.update(testActor(), { todoId: testTodoId() })).rejects.toMatchObject({
+		await expect(controller.update({ todoId: testTodoId() })).rejects.toMatchObject({
 			code: 'INVALID_GENERATED_CONTENT'
 		});
 	});
@@ -49,14 +50,14 @@ describe('Todo edit invariants', () => {
 	it('clears a due date when explicitly set to null', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder({ dueDate: '2026-07-20' as never })];
-		const result = await controller.update(testActor(), { todoId: testTodoId(), dueDate: null });
+		const result = await controller.update({ todoId: testTodoId(), dueDate: null });
 		expect(result.todo.dueDate).toBeUndefined();
 	});
 
 	it('clears a description when explicitly set to null', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder({ description: 'Context' })];
-		const result = await controller.update(testActor(), {
+		const result = await controller.update({
 			todoId: testTodoId(),
 			description: null
 		});
@@ -66,7 +67,7 @@ describe('Todo edit invariants', () => {
 	it('trims and stores a category', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder()];
-		const result = await controller.update(testActor(), {
+		const result = await controller.update({
 			todoId: testTodoId(),
 			category: '  Client work  '
 		});
@@ -76,12 +77,12 @@ describe('Todo edit invariants', () => {
 	it('clears a category when explicitly set to null or blank (1/2)', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder({ category: 'Client work' }), todoBuilder({ id: testTodoId(2) })];
-		const cleared = await controller.update(testActor(), {
+		const cleared = await controller.update({
 			todoId: testTodoId(),
 			category: null
 		});
 		expect(cleared.todo.category).toBeUndefined();
-		const _blanked = await controller.update(testActor(), {
+		const _blanked = await controller.update({
 			todoId: testTodoId(2),
 			category: '   '
 		});
@@ -90,11 +91,11 @@ describe('Todo edit invariants', () => {
 	it('clears a category when explicitly set to null or blank (2/2)', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder({ category: 'Client work' }), todoBuilder({ id: testTodoId(2) })];
-		const _cleared = await controller.update(testActor(), {
+		const _cleared = await controller.update({
 			todoId: testTodoId(),
 			category: null
 		});
-		const blanked = await controller.update(testActor(), {
+		const blanked = await controller.update({
 			todoId: testTodoId(2),
 			category: '   '
 		});
@@ -104,7 +105,7 @@ describe('Todo edit invariants', () => {
 	it('a partial title edit preserves the description', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder({ description: 'Keep this context' })];
-		const result = await controller.update(testActor(), {
+		const result = await controller.update({
 			todoId: testTodoId(),
 			title: 'Updated title'
 		});
@@ -114,7 +115,7 @@ describe('Todo edit invariants', () => {
 	it('trims an edited title', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder()];
-		const result = await controller.update(testActor(), {
+		const result = await controller.update({
 			todoId: testTodoId(),
 			title: '  Updated title  '
 		});
@@ -124,16 +125,16 @@ describe('Todo edit invariants', () => {
 	it('rejects a whitespace-only title', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder()];
-		await expect(
-			controller.update(testActor(), { todoId: testTodoId(), title: '   ' })
-		).rejects.toMatchObject({ code: 'VALIDATION' });
+		await expect(controller.update({ todoId: testTodoId(), title: '   ' })).rejects.toMatchObject({
+			code: 'VALIDATION'
+		});
 	});
 
 	it('does not reveal another user’s todo during update', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder()];
 		await expect(
-			controller.update(testActor(2), { todoId: testTodoId(), title: 'Foreign edit' })
+			controller.update({ todoId: testTodoId(), title: 'Foreign edit' })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 });
@@ -142,14 +143,14 @@ describe('Todo removal invariants', () => {
 	it('a removed todo no longer appears in the active list', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder(), todoBuilder({ id: testTodoId(2) })];
-		await controller.remove(testActor(), testTodoId());
-		const result = await controller.list(testActor(), {});
+		await controller.remove(testTodoId());
+		const result = await controller.list({});
 		expect(result.todos.map((view) => view.todo.id)).toEqual([testTodoId(2)]);
 	});
 
 	it('removing an unknown todo reports not found', async () => {
 		const { controller } = setup();
-		await expect(controller.remove(testActor(), testTodoId())).rejects.toMatchObject({
+		await expect(controller.remove(testTodoId())).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});
@@ -157,7 +158,7 @@ describe('Todo removal invariants', () => {
 	it('cannot remove another user’s todo', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder({ userId: testActor(2).userId })];
-		await expect(controller.remove(testActor(), testTodoId())).rejects.toMatchObject({
+		await expect(controller.remove(testTodoId())).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});

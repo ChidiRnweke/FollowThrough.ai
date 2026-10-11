@@ -32,10 +32,7 @@ export interface KnowledgeSearchResult {
  * optionally scoped to a project and a time window.
  */
 export interface RetrievalController {
-	search(
-		actor: ActorContext,
-		input: SearchKnowledgeInput
-	): Promise<readonly KnowledgeSearchResult[]>;
+	search(input: SearchKnowledgeInput): Promise<readonly KnowledgeSearchResult[]>;
 }
 
 export interface RetrievalDependencies {
@@ -48,18 +45,15 @@ const DEFAULT_SEARCH_LIMIT = 8;
 export class Retrieval implements RetrievalController {
 	constructor(private readonly dependencies: RetrievalDependencies) {}
 
-	async search(
-		actor: ActorContext,
-		input: SearchKnowledgeInput
-	): Promise<readonly KnowledgeSearchResult[]> {
+	async search(input: SearchKnowledgeInput): Promise<readonly KnowledgeSearchResult[]> {
 		const query = input.conversationId
 			? await this.dependencies.knowledge.searchQuery(
 					input.query,
-					await this.dependencies.conversations.listMessages(actor, input.conversationId)
+					await this.dependencies.conversations.listMessages(input.conversationId)
 				)
 			: input.query;
 		if (!query.trim()) return [];
-		const matches = await this.dependencies.knowledge.retrieve(actor, query, {
+		const matches = await this.dependencies.knowledge.retrieve(query, {
 			limit: input.limit ?? DEFAULT_SEARCH_LIMIT,
 			projectId: input.projectId,
 			filter: {

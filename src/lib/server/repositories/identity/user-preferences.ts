@@ -9,6 +9,6 @@ import type {
  * setting unset, so the default surface needs no rows at all.
  */
 export interface UserPreferencesRepository {
-	get(actor: ActorContext): Promise<UserPreferences>;
-	update(actor: ActorContext, input: UpdateUserPreferencesInput): Promise<UserPreferences>;
+	get(): Promise<UserPreferences>;
+	update(input: UpdateUserPreferencesInput): Promise<UserPreferences>;
 }

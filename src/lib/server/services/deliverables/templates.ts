@@ -7,118 +7,100 @@ import { NotFoundError, ValidationError } from '$lib/errors';
 import type { TemplateRepository } from '$lib/server/repositories/deliverables';
 
 export interface TemplateUploadLifecycle {
-	reserveUpload(
-		actor: ActorContext,
-		input: {
-			projectId: ProjectId;
-			name: string;
-			mediaType: string;
-			byteSize: number;
-			checksumSha256: string;
-		}
-	): Promise<TemplateUpload>;
-	upload(actor: ActorContext, id: TemplateId): Promise<TemplateUpload>;
-	lockUpload(actor: ActorContext, id: TemplateId): Promise<TemplateUpload | undefined>;
-	finishUpload(actor: ActorContext, id: TemplateId): Promise<void>;
+	reserveUpload(input: {
+		projectId: ProjectId;
+		name: string;
+		mediaType: string;
+		byteSize: number;
+		checksumSha256: string;
+	}): Promise<TemplateUpload>;
+	upload(id: TemplateId): Promise<TemplateUpload>;
+	lockUpload(id: TemplateId): Promise<TemplateUpload | undefined>;
+	finishUpload(id: TemplateId): Promise<void>;
 }
 export interface TemplateReader {
-	find(actor: ActorContext, id: TemplateId): Promise<ProjectTemplate | undefined>;
-	styles(
-		actor: ActorContext,
-		id: TemplateId,
-		projectId: ProjectId
-	): Promise<ExtractedTemplateStyles>;
-	list(actor: ActorContext, projectId: ProjectId): Promise<readonly ProjectTemplate[]>;
+	find(id: TemplateId): Promise<ProjectTemplate | undefined>;
+	styles(id: TemplateId, projectId: ProjectId): Promise<ExtractedTemplateStyles>;
+	list(projectId: ProjectId): Promise<readonly ProjectTemplate[]>;
 }
 export interface TemplateWriter {
 	store(
-		actor: ActorContext,
 		upload: TemplateUpload,
 		objectKey: string,
 		extractedStyles: ExtractedTemplateStyles
 	): Promise<ProjectTemplate>;
 }
 export interface TemplateLifecycle {
-	delete(actor: ActorContext, id: TemplateId): Promise<void>;
+	delete(id: TemplateId): Promise<void>;
 }
 
 export class TemplateUploadService implements TemplateUploadLifecycle {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly repository: TemplateRepository,
 		private readonly now: () => DateTime = () => new Date().toISOString() as DateTime
 	) {}
-	async reserveUpload(
-		actor: ActorContext,
-		input: {
-			projectId: ProjectId;
-			name: string;
-			mediaType: string;
-			byteSize: number;
-			checksumSha256: string;
-		}
-	): Promise<TemplateUpload> {
+	async reserveUpload(input: {
+		projectId: ProjectId;
+		name: string;
+		mediaType: string;
+		byteSize: number;
+		checksumSha256: string;
+	}): Promise<TemplateUpload> {
 		if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 1)
 			throw new ValidationError('Template must be at least 1 byte');
 		if (!/^[a-f0-9]{64}$/i.test(input.checksumSha256))
 			throw new ValidationError('Template checksum must be a SHA-256 hex digest');
 		const id = randomUUID() as TemplateId;
-		return this.repository.insertUpload(actor, {
+		return this.repository.insertUpload({
 			...input,
 			id,
-			userId: actor.userId,
-			objectKey: `staging/${actor.userId}/templates/${id}`,
+			userId: this.actor.userId,
+			objectKey: `staging/${this.actor.userId}/templates/${id}`,
 			checksumSha256: input.checksumSha256.toLowerCase(),
 			createdAt: this.now()
 		});
 	}
-	async upload(actor: ActorContext, id: TemplateId): Promise<TemplateUpload> {
-		const upload = await this.repository.findUpload(actor, id);
+	async upload(id: TemplateId): Promise<TemplateUpload> {
+		const upload = await this.repository.findUpload(id);
 		if (!upload) throw new NotFoundError('Template upload not found. Upload the file again.');
 		return upload;
 	}
-	lockUpload(actor: ActorContext, id: TemplateId) {
-		return this.repository.findUploadForUpdate(actor, id);
+	lockUpload(id: TemplateId) {
+		return this.repository.findUploadForUpdate(id);
 	}
-	finishUpload(actor: ActorContext, id: TemplateId) {
-		return this.repository.deleteUpload(actor, id);
+	finishUpload(id: TemplateId) {
+		return this.repository.deleteUpload(id);
 	}
 }
 
 export class TemplateReadingService implements TemplateReader {
 	constructor(private readonly repository: TemplateRepository) {}
-	find(actor: ActorContext, id: TemplateId) {
-		return this.repository.findById(actor, id);
+	find(id: TemplateId) {
+		return this.repository.findById(id);
 	}
-	async styles(
-		actor: ActorContext,
-		id: TemplateId,
-		projectId: ProjectId
-	): Promise<ExtractedTemplateStyles> {
-		const template = await this.repository.findById(actor, id);
+	async styles(id: TemplateId, projectId: ProjectId): Promise<ExtractedTemplateStyles> {
+		const template = await this.repository.findById(id);
 		if (!template) throw new NotFoundError('The selected template is unavailable or not ready');
 		if (template.projectId !== projectId)
 			throw new ValidationError('The selected template belongs to another project');
 		return template.extractedStyles;
 	}
-	list(actor: ActorContext, projectId: ProjectId) {
-		return this.repository.listByProject(actor, projectId);
+	list(projectId: ProjectId) {
+		return this.repository.listByProject(projectId);
 	}
 }
 
 export class TemplateWritingService implements TemplateWriter {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly repository: TemplateRepository,
 		private readonly now: () => DateTime = () => new Date().toISOString() as DateTime
 	) {}
-	store(
-		actor: ActorContext,
-		upload: TemplateUpload,
-		objectKey: string,
-		extractedStyles: ExtractedTemplateStyles
-	) {
-		return this.repository.insert(actor, {
+	store(upload: TemplateUpload, objectKey: string, extractedStyles: ExtractedTemplateStyles) {
+		return this.repository.insert({
 			id: upload.id,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			projectId: upload.projectId,
 			name: upload.name,
 			mediaType: upload.mediaType,
@@ -133,9 +115,12 @@ export class TemplateWritingService implements TemplateWriter {
 }
 
 export class TemplateLifecycleService implements TemplateLifecycle {
-	constructor(private readonly repository: TemplateRepository) {}
-	async delete(actor: ActorContext, id: TemplateId): Promise<void> {
-		if (!(await this.repository.findById(actor, id))) throw new NotFoundError('Template not found');
-		await this.repository.delete(actor, id);
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly repository: TemplateRepository
+	) {}
+	async delete(id: TemplateId): Promise<void> {
+		if (!(await this.repository.findById(id))) throw new NotFoundError('Template not found');
+		await this.repository.delete(id);
 	}
 }

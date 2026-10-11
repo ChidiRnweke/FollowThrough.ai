@@ -9,16 +9,16 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const provenance = new InMemoryProvenanceRepository();
-	const anchors = new InMemoryAnchorRepository();
-	return { provenance, anchors, service: new NoteProvenance(provenance, anchors) };
+	const provenance = new InMemoryProvenanceRepository(testActor());
+	const anchors = new InMemoryAnchorRepository(testActor());
+	return { provenance, anchors, service: new NoteProvenance(testActor(), provenance, anchors) };
 };
 
 describe('Provenance management invariants', () => {
 	it('preserves the relationship producer and its owned source anchor', async () => {
 		const { service, anchors } = setup();
 		anchors.anchors = [anchorBuilder()];
-		const recorded = await service.record(testActor(), {
+		const recorded = await service.record({
 			producerKind: 'pipeline',
 			producerName: 'Relate',
 			pipeline: 'relate',
@@ -36,7 +36,7 @@ describe('Provenance management invariants', () => {
 
 	it('records provenance under the acting user', async () => {
 		const { service } = setup();
-		const recorded = await service.record(testActor(), {
+		const recorded = await service.record({
 			producerKind: 'agent',
 			producerName: 'Agent memory',
 			pipeline: 'memory',
@@ -50,7 +50,7 @@ describe('Provenance management invariants', () => {
 		anchors.anchors = [anchorBuilder()];
 		anchors.ownerIds.set(testAnchorId(), testActor().userId);
 		await expect(
-			service.record(testActor(2), {
+			service.record({
 				producerKind: 'pipeline',
 				producerName: 'Relate',
 				pipeline: 'relate',

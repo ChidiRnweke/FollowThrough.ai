@@ -35,8 +35,8 @@ import { Suggestions, type SuggestionsDependencies } from './controller';
 
 describe('Proposal effect coordination', () => {
 	it('records the final reviewed diagram instead of the generated preview', async () => {
-		const suggestions = new InMemorySuggestions();
-		const effects = new InMemorySuggestionEffects();
+		const suggestions = new InMemorySuggestions(testActor());
+		const effects = new InMemorySuggestionEffects(testActor());
 		const proposal: DiagramSuggestion = {
 			id: testSuggestionId(),
 			userId: testActor().userId,
@@ -55,10 +55,11 @@ describe('Proposal effect coordination', () => {
 			renderedSvg: '<svg xmlns="http://www.w3.org/2000/svg"><text>Reviewed</text></svg>',
 			searchableText: 'Reviewed'
 		};
-		const diagrams = new InMemoryDiagrams();
-		const notes = new InMemoryNoteContent();
+		const diagrams = new InMemoryDiagrams(testActor());
+		const notes = new InMemoryNoteContent(testActor());
 		notes.notes = [noteBuilder()];
 		const controller = new Suggestions(
+			testActor(),
 			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
 				...agentToolResultsFixture(),
@@ -78,7 +79,7 @@ describe('Proposal effect coordination', () => {
 				transactionRunner: new InMemoryTransactionRunner([suggestions, effects, diagrams])
 			})
 		);
-		await controller.acceptReviewed(testActor(), {
+		await controller.acceptReviewed({
 			suggestionId: proposal.id,
 			drawioReview: {
 				noteId: testNoteId(),
@@ -92,9 +93,9 @@ describe('Proposal effect coordination', () => {
 		});
 	});
 	it('reindexes the restored memory and removes the replacement from search', async () => {
-		const suggestions = new InMemorySuggestions();
-		const effects = new InMemorySuggestionEffects();
-		const search = new InMemorySearchRepository();
+		const suggestions = new InMemorySuggestions(testActor());
+		const effects = new InMemorySuggestionEffects(testActor());
+		const search = new InMemorySearchRepository(testActor());
 		const indexWriter = createContentIndex(
 			search,
 			new InMemoryRetrievalProvider().model,
@@ -115,7 +116,7 @@ describe('Proposal effect coordination', () => {
 			decidedAt: testNow
 		});
 		suggestions.suggestions = [proposal];
-		await effects.record(testActor(), proposal.id, [
+		await effects.record(proposal.id, [
 			{
 				kind: 'modified',
 				before: { type: 'memory_entries', value: before },
@@ -123,8 +124,9 @@ describe('Proposal effect coordination', () => {
 			},
 			{ kind: 'created', after: { type: 'memory_entries', value: replacement } }
 		]);
-		await indexer.indexMemory(testActor(), replacement);
+		await indexer.indexMemory(replacement);
 		const controller = new Suggestions(
+			testActor(),
 			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
 				...agentToolResultsFixture(),
@@ -137,7 +139,7 @@ describe('Proposal effect coordination', () => {
 				transactionRunner: new InMemoryTransactionRunner([suggestions, effects])
 			})
 		);
-		await controller.revert(testActor(), { suggestionId: proposal.id });
+		await controller.revert({ suggestionId: proposal.id });
 		expect(search.documents.map((item) => item.document.memoryEntryId)).toEqual([before.id]);
 	});
 });

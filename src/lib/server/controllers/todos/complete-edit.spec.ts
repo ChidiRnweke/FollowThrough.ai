@@ -25,7 +25,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
 const setup = () => {
-	const records = new InMemoryTodoRepository();
+	const records = new InMemoryTodoRepository(testActor());
 	const original = todoBuilder({
 		title: 'Original',
 		description: 'Keep context',
@@ -34,14 +34,16 @@ const setup = () => {
 	});
 	records.todos = [original];
 	const catalog = createTodoServices(
+		testActor(),
 		records,
-		new InMemoryProjectRepository(),
-		new InMemoryAnchorRepository(),
-		new InMemoryNoteRepository(),
-		new InMemoryProvenanceRepository(),
+		new InMemoryProjectRepository(testActor()),
+		new InMemoryAnchorRepository(testActor()),
+		new InMemoryNoteRepository(testActor()),
+		new InMemoryProvenanceRepository(testActor()),
 		() => testNow
 	);
 	const controller = new Todos(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
 			...agentToolResultsFixture(),
@@ -72,14 +74,14 @@ describe('complete task edits', () => {
 	];
 	it.each(edits)('matches the offline task preview for %j', async (edit) => {
 		const { controller, original } = setup();
-		const { todo } = await controller.update(testActor(), { todoId: original.id, ...edit });
+		const { todo } = await controller.update({ todoId: original.id, ...edit });
 		expect(todo).toEqual((await todoWrite(original, edit, testNow)).local?.value);
 	});
 	it('leaves all fields unchanged when saving the completed task fails', async () => {
 		const { controller, records, original } = setup();
 		records.updateFailures.set('done', new Error('Completion write failed'));
 		const result = await controller
-			.update(testActor(), { todoId: testTodoId(), title: 'Changed', status: 'done' })
+			.update({ todoId: testTodoId(), title: 'Changed', status: 'done' })
 			.then(
 				() => 'saved',
 				(error: Error) => error.message
@@ -91,7 +93,7 @@ describe('complete task edits', () => {
 	});
 	it('stores fields and completion together with one resolved timestamp', async () => {
 		const { controller, records } = setup();
-		const result = await controller.update(testActor(), {
+		const result = await controller.update({
 			todoId: testTodoId(),
 			title: '  Finished  ',
 			status: 'done',
@@ -113,7 +115,7 @@ describe('complete task edits', () => {
 	it('rejects an unavailable linked note before saving any other edit', async () => {
 		const { controller, records, original } = setup();
 		const result = await controller
-			.update(testActor(), {
+			.update({
 				todoId: testTodoId(),
 				title: 'Changed',
 				status: 'done',
@@ -132,7 +134,7 @@ describe('complete task edits', () => {
 		const { controller, records, original } = setup();
 		const completedAt = '2026-01-01T00:00:00.000Z' as typeof testNow;
 		records.todos = [{ ...original, status: 'done', completedAt }];
-		const result = await controller.update(testActor(), {
+		const result = await controller.update({
 			todoId: testTodoId(),
 			title: 'Retitled',
 			status: 'done'

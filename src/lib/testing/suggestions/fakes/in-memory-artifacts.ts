@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryApplicationEffects } from './in-memory-application-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type { Todo } from '$lib/models/todos';
@@ -9,7 +10,10 @@ import type {
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export class InMemorySuggestionArtifacts implements TodoCreator, SnapshotParticipant {
-	constructor(readonly effects = new InMemoryApplicationEffects()) {}
+	constructor(
+		private readonly actor: ActorContext,
+		readonly effects = new InMemoryApplicationEffects(testActor())
+	) {}
 	get artifacts(): Todo[] {
 		return [...this.effects.records.values()].flatMap((record) =>
 			record.type === 'todos' && !record.value.deletedAt ? [record.value] : []
@@ -23,9 +27,9 @@ export class InMemorySuggestionArtifacts implements TodoCreator, SnapshotPartici
 		this.effects.failRestore = value;
 	}
 
-	async create(actor: ActorContext, artifact: Todo): Promise<Todo> {
+	async create(artifact: Todo): Promise<Todo> {
 		if (this.failApply) throw new ExternalServiceError('Artifact application failed');
-		if (artifact.userId !== actor.userId)
+		if (artifact.userId !== this.actor.userId)
 			throw new OwnershipError('Cannot create another user’s task');
 		this.effects.put({ type: 'todos', value: artifact });
 		return artifact;

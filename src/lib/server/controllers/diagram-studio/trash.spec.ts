@@ -31,19 +31,21 @@ import { describe, expect, it } from 'vitest';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 const timestamp = '2026-09-23T12:00:00.000Z' as DateTime;
 const setup = () => {
-	const sourceNotes = new InMemoryNoteContent();
+	const sourceNotes = new InMemoryNoteContent(testActor());
 	sourceNotes.notes = [noteBuilder()];
-	const diagrams = new InMemoryDiagramRepository();
-	const index = new InMemoryDiagrams();
-	const notes = new InMemoryNoteRepository();
+	const diagrams = new InMemoryDiagramRepository(testActor());
+	const index = new InMemoryDiagrams(testActor());
+	const notes = new InMemoryNoteRepository(testActor());
 	const library = createDiagramServices(
+		testActor(),
 		diagrams,
 		notes,
-		new InMemoryAnchorRepository(),
-		new InMemoryProvenanceRepository(),
-		new InMemoryProjectRepository()
+		new InMemoryAnchorRepository(testActor()),
+		new InMemoryProvenanceRepository(testActor()),
+		new InMemoryProjectRepository(testActor())
 	);
 	const controller = new DiagramStudio(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
 			...agentToolResultsFixture(),
@@ -69,46 +71,46 @@ describe('diagram trash transitions', () => {
 		const { controller, diagrams } = setup();
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
-		await expect(
-			controller.deleteProjectDiagram(testActor(), { diagramId: diagram.id })
-		).rejects.toThrow('not in the trash');
+		await expect(controller.deleteProjectDiagram({ diagramId: diagram.id })).rejects.toThrow(
+			'not in the trash'
+		);
 	});
 	it('deletes an owned diagram after it is trashed', async () => {
 		const { controller, diagrams } = setup();
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
-		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
-		await controller.deleteProjectDiagram(testActor(), { diagramId: diagram.id });
+		await controller.archiveProjectDiagram({ diagramId: diagram.id });
+		await controller.deleteProjectDiagram({ diagramId: diagram.id });
 		expect(diagrams.diagrams).toEqual([]);
 	});
 	it('refuses a second archive', async () => {
 		const { controller, diagrams } = setup();
 		const diagram = drawioBuilder({ archivedAt: testNow });
 		diagrams.diagrams = [diagram];
-		await expect(
-			controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id })
-		).rejects.toThrow('already in the trash');
+		await expect(controller.archiveProjectDiagram({ diagramId: diagram.id })).rejects.toThrow(
+			'already in the trash'
+		);
 	});
 	it('refuses restoring an active diagram', async () => {
 		const { controller, diagrams } = setup();
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
-		await expect(
-			controller.restoreProjectDiagram(testActor(), { diagramId: diagram.id })
-		).rejects.toThrow('not in the trash');
+		await expect(controller.restoreProjectDiagram({ diagramId: diagram.id })).rejects.toThrow(
+			'not in the trash'
+		);
 	});
 	it('does not expose another actor’s diagram', async () => {
 		const { controller, diagrams } = setup();
 		const diagram = drawioBuilder({ userId: testActor(2).userId });
 		diagrams.diagrams = [diagram];
-		await expect(
-			controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id })
-		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+		await expect(controller.archiveProjectDiagram({ diagramId: diagram.id })).rejects.toMatchObject(
+			{ code: 'NOT_FOUND' }
+		);
 	});
 	it('does not restore a deleted diagram', async () => {
 		const { controller } = setup();
 		await expect(
-			controller.restoreProjectDiagram(testActor(), { diagramId: drawioBuilder().id })
+			controller.restoreProjectDiagram({ diagramId: drawioBuilder().id })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 	it.each(['archive', 'restore'] as const)(
@@ -135,8 +137,8 @@ describe('diagram trash transitions', () => {
 			).local;
 			const stored =
 				action === 'archive'
-					? await controller.archiveProjectDiagram(testActor(), command)
-					: await controller.restoreProjectDiagram(testActor(), command);
+					? await controller.archiveProjectDiagram(command)
+					: await controller.restoreProjectDiagram(command);
 			expect({ type: 'diagrams', value: stored }).toEqual(local);
 		}
 	);
@@ -146,10 +148,10 @@ describe('Diagram soft delete', () => {
 		const { controller, library, diagrams } = setup();
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
-		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
-		await controller.restoreProjectDiagram(testActor(), { diagramId: diagram.id });
-		expect(await library.lifecycle.listArchived(testActor())).toHaveLength(0);
-		const listed = await library.lister.listForProject(testActor(), diagram.projectId);
+		await controller.archiveProjectDiagram({ diagramId: diagram.id });
+		await controller.restoreProjectDiagram({ diagramId: diagram.id });
+		expect(await library.lifecycle.listArchived()).toHaveLength(0);
+		const listed = await library.lister.listForProject(diagram.projectId);
 		expect(listed.diagrams).toHaveLength(1);
 	});
 	// The defect this whole block exists for: archiving marked the row and hid it
@@ -159,13 +161,13 @@ describe('Diagram soft delete', () => {
 		const { controller, library, diagrams } = setup();
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
-		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
-		const listed = await library.lister.listForProject(testActor(), diagram.projectId);
+		await controller.archiveProjectDiagram({ diagramId: diagram.id });
+		const listed = await library.lister.listForProject(diagram.projectId);
 		expect(listed.diagrams).toHaveLength(0);
-		expect(await library.lifecycle.listArchived(testActor())).toMatchObject([
+		expect(await library.lifecycle.listArchived()).toMatchObject([
 			{ id: diagram.id, archivedAt: timestamp, updatedAt: timestamp }
 		]);
-		expect(await library.lister.countForProject(testActor(), diagram.projectId)).toBe(0);
+		expect(await library.lister.countForProject(diagram.projectId)).toBe(0);
 	});
 	// The gallery's confirmation promises a note shows the diagram as unavailable
 	// until it is restored, so the note's own listing has to agree.
@@ -175,8 +177,8 @@ describe('Diagram soft delete', () => {
 		notes.notes = [noteBuilder({ id: testNoteId() })];
 		const diagram = drawioBuilder({ sourceNoteId: testNoteId() });
 		diagrams.diagrams = [diagram];
-		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
-		expect(await library.lister.listForNote(testActor(), testNoteId())).toHaveLength(0);
+		await controller.archiveProjectDiagram({ diagramId: diagram.id });
+		expect(await library.lister.listForNote(testNoteId())).toHaveLength(0);
 	});
 	// Otherwise `create_diagram` refuses a new diagram by naming one the user threw
 	// away, which is worse than the guess that refusal replaced.
@@ -184,9 +186,7 @@ describe('Diagram soft delete', () => {
 		const { controller, library, diagrams } = setup();
 		const diagram = drawioBuilder({ conversationId: testConversationId() });
 		diagrams.diagrams = [diagram];
-		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
-		expect(
-			await library.conversations.findByConversation(testActor(), testConversationId())
-		).toBeUndefined();
+		await controller.archiveProjectDiagram({ diagramId: diagram.id });
+		expect(await library.conversations.findByConversation(testConversationId())).toBeUndefined();
 	});
 });

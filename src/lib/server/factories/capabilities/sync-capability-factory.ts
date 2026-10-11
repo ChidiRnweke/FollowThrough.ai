@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import {
 	SyncObjectService,
 	type SyncObjectReader
@@ -36,16 +37,19 @@ export interface SyncCapability {
 	readonly mutationRetry: 'database-only' | 'never';
 	readonly mutations: WorkspaceMutationGuard & WorkspaceWriteRecoveryService;
 }
-export const createSyncCapability = ({
-	db,
-	deferEmbedding = false
-}: {
-	readonly db: Database;
-	readonly deferEmbedding?: boolean;
-}): SyncCapability => {
-	const objects = new WorkspaceSyncObjects(db);
+export const createSyncCapability = (
+	actor: ActorContext,
+	{
+		db,
+		deferEmbedding = false
+	}: {
+		readonly db: Database;
+		readonly deferEmbedding?: boolean;
+	}
+): SyncCapability => {
+	const objects = new WorkspaceSyncObjects(actor, db);
 	return {
-		changes: new WorkspaceJournal(new WorkspaceSyncChanges(db)),
+		changes: new WorkspaceJournal(new WorkspaceSyncChanges(actor, db)),
 		resourceVersions: new WorkspaceResourceVersions(objects),
 		resourceKeys: new WorkspaceCommandRulesService(),
 		objects,
@@ -53,7 +57,7 @@ export const createSyncCapability = ({
 		mutationRetry: deferEmbedding ? ('database-only' as const) : ('never' as const),
 		mutations: new WorkspaceMutationReceipts({
 			syncObjects: objects,
-			mutationReceipts: new WorkspaceSyncReceipts(db)
+			mutationReceipts: new WorkspaceSyncReceipts(actor, db)
 		})
 	};
 };

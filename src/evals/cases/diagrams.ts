@@ -47,10 +47,10 @@ async function drawFor(lab: Lab, fixture: DiagramFixture, prompt: string) {
 	});
 	const canvas = await lab.controllers
 		.diagramStudio()
-		.readCanvasDiagram(workspace.actor, { conversationId: result.conversationId });
+		.readCanvasDiagram({ conversationId: result.conversationId });
 	const review =
 		canvas.kind === 'present' ? reviewDiagram(canvas.source, fixture.expectations) : undefined;
-	const { skills } = await lab.controllers.skills().list(workspace.actor);
+	const { skills } = await lab.controllers.skills().list();
 	const skillNoteId = skills.find((skill) => skill.name === DIAGRAMMING_SKILL_NAME)?.noteId;
 	return { result, canvas, review, sourceText, skillNoteId };
 }

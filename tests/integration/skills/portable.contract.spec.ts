@@ -9,16 +9,16 @@ it('round-trips imported instructions and portable metadata through persisted sk
 	const { owner, project } = await seedNote('21301');
 	const tx = createTransactionContext(context.db);
 	const controller = skillController(tx.database, tx.transactionRunner);
-	const created = await controller.create(owner, { name: 'Original title', projectId: project.id });
-	await controller.update(owner, { noteId: created.skill.note.id, isEnabled: false });
+	const created = await controller.create({ name: 'Original title', projectId: project.id });
+	await controller.update({ noteId: created.skill.note.id, isEnabled: false });
 	const manifest = readSkillManifest(
 		'---\nname: portable-review\ndescription: Review changes\nlicense: MIT\ncompatibility: Requires repository access\nmetadata:\n  owner: team\n  followthrough.allow-implicit-invocation: "false"\n---\n\n# Review\n\n- Read the diff.\n- Explain the result.\n'
 	);
-	await controller.update(owner, {
+	await controller.update({
 		noteId: created.skill.note.id,
 		content: { kind: 'manifest', baseRevision: created.skill.note.currentRevision, manifest }
 	});
-	const { skill } = await controller.get(owner, { noteId: created.skill.note.id });
+	const { skill } = await controller.get({ noteId: created.skill.note.id });
 	const exported = new SkillPortabilityService().export({
 		...skill,
 		instructions: skill.note.plainText

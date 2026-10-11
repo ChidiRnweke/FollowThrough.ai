@@ -17,7 +17,7 @@ it('answers the repository read for the acting user, resource and ETag', async (
 		}
 	});
 	const identity: WorkspaceResourceIdentity = { type: 'notes', id: [testNoteId()] };
-	const result = await service.read(testActor(), identity, etag);
+	const result = await service.read(identity, etag);
 	expect({ result, reads }).toEqual({
 		result: unchanged,
 		reads: [[testActor(), identity, etag]]

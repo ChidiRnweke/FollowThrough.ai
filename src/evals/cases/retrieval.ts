@@ -71,9 +71,7 @@ const directRetrievalCases: readonly EvalCase[] = directQueries.map((entry) => (
 	expected: { phrase: entry.phrase },
 	async run(lab) {
 		const workspace = await seedWorkspace(lab, retrievalCorpusWorkspace);
-		const matches = await lab.controllers
-			.retrieval()
-			.search(workspace.actor, { query: entry.query, limit: 1 });
+		const matches = await lab.controllers.retrieval().search({ query: entry.query, limit: 1 });
 
 		const top = matches[0]?.content ?? '';
 		px.logOutput({

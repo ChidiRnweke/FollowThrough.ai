@@ -25,51 +25,42 @@ export interface Clock {
 }
 export interface SuggestionCreator {
 	create<P extends SuggestionProposal>(
-		actor: ActorContext,
 		proposal: P
 	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
 	createFromSelection<P extends SelectionProposal>(
-		actor: ActorContext,
 		origin: ProposalSelectionOrigin,
 		proposal: P
 	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
 }
 export interface SuggestionFinder {
-	get(actor: ActorContext, id: SuggestionId): Promise<Suggestion>;
+	get(id: SuggestionId): Promise<Suggestion>;
 }
 export interface SuggestionLister {
-	listByStatus(
-		actor: ActorContext,
-		status: SuggestionStatus,
-		noteId?: NoteId
-	): Promise<readonly Suggestion[]>;
-	countByStatus(actor: ActorContext, status: SuggestionStatus): Promise<number>;
+	listByStatus(status: SuggestionStatus, noteId?: NoteId): Promise<readonly Suggestion[]>;
+	countByStatus(status: SuggestionStatus): Promise<number>;
 }
 export interface SuggestionContextReader {
-	readContexts(
-		actor: ActorContext,
-		suggestions: readonly Suggestion[]
-	): Promise<readonly SuggestionContext[]>;
+	readContexts(suggestions: readonly Suggestion[]): Promise<readonly SuggestionContext[]>;
 }
 export interface SuggestionAccepter {
 	accept(
-		actor: ActorContext,
 		suggestion: Suggestion,
 		appliedArtifactId: string,
 		autoAccepted: boolean
 	): Promise<Suggestion>;
 }
 export interface SuggestionRejecter {
-	reject(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion>;
+	reject(suggestion: Suggestion): Promise<Suggestion>;
 }
 export interface SuggestionReverter {
-	revert(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion>;
+	revert(suggestion: Suggestion): Promise<Suggestion>;
 }
 export interface SuggestionExpirer {
-	expire(actor: ActorContext): Promise<number>;
+	expire(): Promise<number>;
 }
 export class SuggestionCreationService implements SuggestionCreator {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly suggestions: SuggestionRepository,
 		private readonly notes: NoteRepository,
 		private readonly provenance: ProvenanceRepository,
@@ -77,14 +68,13 @@ export class SuggestionCreationService implements SuggestionCreator {
 		private readonly clock: Clock
 	) {}
 	async create<P extends SuggestionProposal>(
-		actor: ActorContext,
 		proposal: P
 	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
-	async create(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion> {
+	async create(proposal: SuggestionProposal): Promise<Suggestion> {
 		const [note, provenance, anchor] = await Promise.all([
-			proposal.noteId ? this.notes.findById(actor, proposal.noteId) : undefined,
-			this.provenance.findById(actor, proposal.provenanceId),
-			proposal.sourceAnchorId ? this.anchors.findById(actor, proposal.sourceAnchorId) : undefined
+			proposal.noteId ? this.notes.findById(proposal.noteId) : undefined,
+			this.provenance.findById(proposal.provenanceId),
+			proposal.sourceAnchorId ? this.anchors.findById(proposal.sourceAnchorId) : undefined
 		]);
 		if (proposal.noteId && !note) throw new NotFoundError('Suggestion note was not found');
 		if (!provenance) throw new NotFoundError('Suggestion provenance was not found');
@@ -94,27 +84,25 @@ export class SuggestionCreationService implements SuggestionCreator {
 			throw new InvalidTransitionError('Suggestion anchor must belong to its note');
 		if (note && !this.payloadBelongsToNote(proposal, note.id, note.projectId))
 			throw new InvalidTransitionError('Suggestion payload must belong to its source note');
-		return this.persist(actor, proposal);
+		return this.persist(proposal);
 	}
 	async createFromSelection<P extends SelectionProposal>(
-		actor: ActorContext,
 		origin: ProposalSelectionOrigin,
 		proposal: P
 	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
 	async createFromSelection(
-		actor: ActorContext,
 		origin: ProposalSelectionOrigin,
 		proposal: SelectionProposal
 	): Promise<Suggestion> {
-		return this.persist(actor, selectionProposal(origin, proposal));
+		return this.persist(selectionProposal(origin, proposal));
 	}
-	private async persist(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion> {
+	private async persist(proposal: SuggestionProposal): Promise<Suggestion> {
 		const suggestion = createProposalRecord(proposal, {
 			id: crypto.randomUUID() as SuggestionId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			now: this.clock.now()
 		});
-		await this.suggestions.insert(actor, suggestion);
+		await this.suggestions.insert(suggestion);
 		return suggestion;
 	}
 	private payloadBelongsToNote(
@@ -137,17 +125,16 @@ export class SuggestionCreationService implements SuggestionCreator {
 }
 export class SuggestionReadingService implements SuggestionFinder, SuggestionLister {
 	constructor(private readonly suggestions: SuggestionRepository) {}
-	async get(actor: ActorContext, id: SuggestionId): Promise<Suggestion> {
-		const suggestion = await this.suggestions.findById(actor, id);
+	async get(id: SuggestionId): Promise<Suggestion> {
+		const suggestion = await this.suggestions.findById(id);
 		if (!suggestion) throw new NotFoundError('Suggestion was not found', { suggestionId: id });
 		return suggestion;
 	}
 	async listByStatus(
-		actor: ActorContext,
 		status: SuggestionStatus,
 		noteId?: Suggestion['noteId']
 	): Promise<readonly Suggestion[]> {
-		const stored = await this.suggestions.list(actor, {
+		const stored = await this.suggestions.list({
 			status,
 			...(noteId ? { noteId } : {})
 		});
@@ -160,28 +147,24 @@ export class SuggestionReadingService implements SuggestionFinder, SuggestionLis
 			);
 		return stored.flatMap((row) => (row.status === 'readable' ? [row.suggestion] : []));
 	}
-	async countByStatus(actor: ActorContext, status: SuggestionStatus): Promise<number> {
-		return (await this.listByStatus(actor, status)).length;
+	async countByStatus(status: SuggestionStatus): Promise<number> {
+		return (await this.listByStatus(status)).length;
 	}
 }
 export class SuggestionContextService implements SuggestionContextReader {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly notes: NoteRepository,
 		private readonly provenance: ProvenanceRepository,
 		private readonly anchors: SourceAnchorRepository
 	) {}
-	async readContexts(
-		actor: ActorContext,
-		suggestions: readonly Suggestion[]
-	): Promise<readonly SuggestionContext[]> {
+	async readContexts(suggestions: readonly Suggestion[]): Promise<readonly SuggestionContext[]> {
 		return Promise.all(
 			suggestions.map(async (suggestion) => {
 				const [provenance, note, anchor] = await Promise.all([
-					this.provenance.findById(actor, suggestion.provenanceId),
-					suggestion.noteId ? this.notes.findById(actor, suggestion.noteId) : undefined,
-					suggestion.sourceAnchorId
-						? this.anchors.findById(actor, suggestion.sourceAnchorId)
-						: undefined
+					this.provenance.findById(suggestion.provenanceId),
+					suggestion.noteId ? this.notes.findById(suggestion.noteId) : undefined,
+					suggestion.sourceAnchorId ? this.anchors.findById(suggestion.sourceAnchorId) : undefined
 				]);
 				if (!provenance) throw new NotFoundError('Suggestion provenance was not found');
 				return { suggestion, note, anchor, provenance };
@@ -193,17 +176,17 @@ export class SuggestionLifecycleService
 	implements SuggestionAccepter, SuggestionRejecter, SuggestionReverter, SuggestionExpirer
 {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly suggestions: SuggestionRepository,
 		private readonly clock: Clock
 	) {}
 	async accept(
-		actor: ActorContext,
 		suggestion: Suggestion,
 		artifactId: string,
 		autoAccepted: boolean
 	): Promise<Suggestion> {
 		this.assertPending(suggestion);
-		return this.transition(actor, suggestion, 'proposed', {
+		return this.transition(suggestion, 'proposed', {
 			status: 'accepted',
 			decidedAt: this.clock.now(),
 			appliedArtifactType: suggestion.kind,
@@ -212,33 +195,32 @@ export class SuggestionLifecycleService
 			updatedAt: this.clock.now()
 		});
 	}
-	async reject(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion> {
+	async reject(suggestion: Suggestion): Promise<Suggestion> {
 		this.assertPending(suggestion);
-		return this.transition(actor, suggestion, 'proposed', {
+		return this.transition(suggestion, 'proposed', {
 			status: 'rejected',
 			decidedAt: this.clock.now(),
 			updatedAt: this.clock.now()
 		});
 	}
-	async revert(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion> {
+	async revert(suggestion: Suggestion): Promise<Suggestion> {
 		if (suggestion.status !== 'accepted')
 			throw new InvalidTransitionError('Only an applied suggestion can be reverted');
-		return this.transition(actor, suggestion, 'accepted', {
+		return this.transition(suggestion, 'accepted', {
 			status: 'reverted',
 			decidedAt: this.clock.now(),
 			updatedAt: this.clock.now()
 		});
 	}
-	async expire(actor: ActorContext): Promise<number> {
-		return this.suggestions.expireProposedThrough(actor, this.clock.now());
+	async expire(): Promise<number> {
+		return this.suggestions.expireProposedThrough(this.clock.now());
 	}
 	private async transition(
-		actor: ActorContext,
 		suggestion: Suggestion,
 		expected: SuggestionStatus,
-		patch: Parameters<SuggestionRepository['transition']>[3]
+		patch: Parameters<SuggestionRepository['transition']>[2]
 	): Promise<Suggestion> {
-		const updated = await this.suggestions.transition(actor, suggestion.id, expected, patch);
+		const updated = await this.suggestions.transition(suggestion.id, expected, patch);
 		if (!updated)
 			throw new InvalidTransitionError(
 				expected === 'proposed'

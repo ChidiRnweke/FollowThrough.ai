@@ -9,14 +9,14 @@ import { context, seedNote } from '../database-harness';
 
 it('advances past a failed reservation when equal expiry times span PostgreSQL pages', async () => {
 	const { owner, project } = await seedNote('33001');
-	const records = new AttachmentRecords(context.db);
+	const records = new AttachmentRecords(owner, context.db);
 	// This global worker's cutoff predates the other contract fixtures.
 	const expiresAt = '2000-01-01T09:00:00.000Z' as DateTime;
 	const uploads = [];
 	for (const suffix of ['a', 'b']) {
 		const id = crypto.randomUUID() as AttachmentUploadId;
 		uploads.push(
-			await records.createUpload(owner, {
+			await records.createUpload({
 				id,
 				projectId: project.id,
 				path: `expired-${suffix}.txt`,
@@ -40,8 +40,6 @@ it('advances past a failed reservation when equal expiry times span PostgreSQL p
 	await worker.run();
 	await worker.run();
 	expect(
-		await Promise.all(
-			uploads.map(async (upload) => Boolean(await records.findUpload(owner, upload.id)))
-		)
+		await Promise.all(uploads.map(async (upload) => Boolean(await records.findUpload(upload.id))))
 	).toEqual([true, false]);
 });

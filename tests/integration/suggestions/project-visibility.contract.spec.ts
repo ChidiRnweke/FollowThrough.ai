@@ -8,12 +8,12 @@ import { seedUser, context, now, seedProvenance } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const owner = await seedUser(suffix);
-	const project = await new ProjectRecords(context.db).insert(owner, {
+	const project = await new ProjectRecords(owner, context.db).insert({
 		id: `abcdef00-0000-4000-8000-${suffix.padStart(12, '0')}` as ProjectId,
 		name: `Memory proposals ${suffix}`
 	});
 	const provenance = await seedProvenance(owner, suffix);
-	const repository = new SuggestionRecords(context.db);
+	const repository = new SuggestionRecords(owner, context.db);
 	const proposal: MemorySuggestion = {
 		id: crypto.randomUUID() as SuggestionId,
 		userId: owner.userId,
@@ -30,13 +30,13 @@ const setup = async (suffix: string) => {
 		createdAt: now,
 		updatedAt: now
 	};
-	await repository.insert(owner, proposal);
+	await repository.insert(proposal);
 	return { owner, project, repository, proposal };
 };
 it('hides a note-less memory proposal when its project is archived', async () => {
 	const { owner, project, repository } = await setup('22701');
-	await new ProjectRecords(context.db).archive(owner, project.id);
-	expect(await repository.list(owner, { status: 'proposed' })).toEqual([]);
+	await new ProjectRecords(owner, context.db).archive(project.id);
+	expect(await repository.list({ status: 'proposed' })).toEqual([]);
 });
 it('keeps active project and profile proposals in the inbox', async () => {
 	const { owner, repository, proposal } = await setup('22702');
@@ -45,26 +45,26 @@ it('keeps active project and profile proposals in the inbox', async () => {
 		id: crypto.randomUUID() as SuggestionId,
 		payload: { scope: 'user', operation: 'add', content: 'Profile preference' }
 	};
-	await repository.insert(owner, profile);
+	await repository.insert(profile);
 	expect(
-		(await repository.list(owner, { status: 'proposed' }))
+		(await repository.list({ status: 'proposed' }))
 			.map((row) => (row.status === 'readable' ? row.suggestion.id : 'unreadable'))
 			.sort()
 	).toEqual([proposal.id, profile.id].sort());
 });
 it('retains a hidden proposal for its decision history', async () => {
 	const { owner, project, repository, proposal } = await setup('22703');
-	await new ProjectRecords(context.db).archive(owner, project.id);
-	expect(await repository.findById(owner, proposal.id)).toEqual(proposal);
+	await new ProjectRecords(owner, context.db).archive(project.id);
+	expect(await repository.findById(proposal.id)).toEqual(proposal);
 });
 it('reports an invalid stored project key without making neighboring proposals unreadable', async () => {
 	const { owner, repository, proposal } = await setup('22704');
 	const invalidId = crypto.randomUUID() as SuggestionId;
-	await repository.insert(owner, { ...proposal, id: invalidId });
+	await repository.insert({ ...proposal, id: invalidId });
 	await context.db.execute(
 		sql`update suggestions set payload = jsonb_set(payload,'{projectId}','"not-a-uuid"') where id = ${invalidId}`
 	);
-	const stored = await repository.list(owner, { status: 'proposed' });
+	const stored = await repository.list({ status: 'proposed' });
 	expect(
 		stored
 			.map((row) =>
@@ -86,6 +86,6 @@ it('matches a valid uppercase project key to its archived project', async () => 
 	await context.db.execute(
 		sql`update suggestions set payload = jsonb_set(payload,'{projectId}',to_jsonb(upper(payload->>'projectId'))) where id = ${proposal.id}`
 	);
-	await new ProjectRecords(context.db).archive(owner, project.id);
-	expect(await repository.list(owner, { status: 'proposed' })).toEqual([]);
+	await new ProjectRecords(owner, context.db).archive(project.id);
+	expect(await repository.list({ status: 'proposed' })).toEqual([]);
 });

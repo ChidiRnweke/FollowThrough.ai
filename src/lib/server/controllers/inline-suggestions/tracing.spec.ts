@@ -59,11 +59,7 @@ it('parents one generation span under the suggestion and preserves raw and rende
 		})
 	);
 	try {
-		await fixtureFor(provider.baseURL).controller.suggest(
-			testActor(),
-			request,
-			new AbortController().signal
-		);
+		await fixtureFor(provider.baseURL).controller.suggest(request, new AbortController().signal);
 		const spans = exporter.getFinishedSpans();
 		const root = spans.find((span) => span.name === 'inline.suggestion');
 		if (!root) throw new Error('Missing suggestion span');
@@ -101,7 +97,7 @@ it('records an in-flight SDK cancellation as cancelled and releases the admissio
 		const fixture = fixtureFor(provider.baseURL);
 		const actor = testActor();
 		const abort = new AbortController();
-		const outcome = fixture.controller.suggest(actor, request, abort.signal).then(
+		const outcome = fixture.controller.suggest(request, abort.signal).then(
 			(result) => result.outcome,
 			(error) => error.message
 		);

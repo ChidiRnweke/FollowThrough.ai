@@ -100,23 +100,15 @@ export class InMemoryAttachmentRepository implements AttachmentRepository {
 	async findById(): Promise<AttachmentView | undefined> {
 		return this.found;
 	}
-	async findByPath(
-		_actor: ActorContext,
-		noteId: NoteId,
-		path: string
-	): Promise<AttachmentView | undefined> {
+	async findByPath(noteId: NoteId, path: string): Promise<AttachmentView | undefined> {
 		return this.found?.attachment.noteId === noteId && this.found.attachment.path === path
 			? this.found
 			: undefined;
 	}
-	async finalize(
-		_actor: ActorContext,
-		_upload: AttachmentUpload,
-		version: AttachmentVersion
-	): Promise<AttachmentView> {
+	async finalize(_upload: AttachmentUpload, version: AttachmentVersion): Promise<AttachmentView> {
 		return this.viewOf(version);
 	}
-	async remove(_actor: ActorContext, _noteId: NoteId, path: string): Promise<void> {
+	async remove(_noteId: NoteId, path: string): Promise<void> {
 		this.removed.push(path);
 		this.found = undefined;
 	}
@@ -130,7 +122,7 @@ export class InMemoryAttachmentRepository implements AttachmentRepository {
 		if (this.found) this.pendingObjectRemovals.add(this.found.version.objectKey);
 		this.found = undefined;
 	}
-	async updateVersion(_actor: ActorContext, version: AttachmentVersion): Promise<AttachmentView> {
+	async updateVersion(version: AttachmentVersion): Promise<AttachmentView> {
 		this.updates.push(version);
 		if (this.found) this.found = { ...this.found, version };
 		return this.viewOf(version);

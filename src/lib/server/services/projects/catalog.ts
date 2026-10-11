@@ -18,104 +18,106 @@ const requireProject = async (
 	actor: ActorContext,
 	projectId: ProjectId
 ): Promise<Project> => {
-	const project = await projects.findById(actor, projectId);
+	const project = await projects.findById(projectId);
 	if (!project) throw new NotFoundError('Project was not found');
 	return project;
 };
 export interface ProjectCreator {
-	create(actor: ActorContext, input: CreateProjectInput & ProjectDetails): Promise<Project>;
+	create(input: CreateProjectInput & ProjectDetails): Promise<Project>;
 }
 export class ProjectCreationService implements ProjectCreator {
 	constructor(private readonly projects: ProjectRepository) {}
 
-	async create(actor: ActorContext, input: CreateProjectInput & ProjectDetails): Promise<Project> {
-		return this.projects.insert(actor, input);
+	async create(input: CreateProjectInput & ProjectDetails): Promise<Project> {
+		return this.projects.insert(input);
 	}
 }
 export interface ProjectReader {
-	get(actor: ActorContext, projectId: ProjectId): Promise<Project>;
+	get(projectId: ProjectId): Promise<Project>;
 }
 export interface ProjectLister {
-	list(actor: ActorContext): Promise<readonly Project[]>;
+	list(): Promise<readonly Project[]>;
 }
 export class ProjectReadingService implements ProjectReader, ProjectLister {
-	constructor(private readonly projects: ProjectRepository) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly projects: ProjectRepository
+	) {}
 
-	async get(actor: ActorContext, projectId: ProjectId): Promise<Project> {
-		const project = await this.projects.findById(actor, projectId);
+	async get(projectId: ProjectId): Promise<Project> {
+		const project = await this.projects.findById(projectId);
 		if (!project) throw new NotFoundError('Project was not found');
 		return project;
 	}
 
-	list(actor: ActorContext): Promise<readonly Project[]> {
-		return this.projects.listActive(actor);
+	list(): Promise<readonly Project[]> {
+		return this.projects.listActive();
 	}
 }
 export interface ProjectEditor {
-	rename(actor: ActorContext, input: ProjectRename): Promise<Project>;
-	setSectionNumberingDefault(
-		actor: ActorContext,
-		input: SetProjectSectionNumberingInput
-	): Promise<Project>;
+	rename(input: ProjectRename): Promise<Project>;
+	setSectionNumberingDefault(input: SetProjectSectionNumberingInput): Promise<Project>;
 }
 export class ProjectEditingService implements ProjectEditor {
-	constructor(private readonly projects: ProjectRepository) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly projects: ProjectRepository
+	) {}
 
-	async rename(actor: ActorContext, input: ProjectRename): Promise<Project> {
-		await requireProject(this.projects, actor, input.projectId);
-		return this.projects.update(actor, input);
+	async rename(input: ProjectRename): Promise<Project> {
+		await requireProject(this.projects, this.actor, input.projectId);
+		return this.projects.update(input);
 	}
 
-	async setSectionNumberingDefault(
-		actor: ActorContext,
-		input: SetProjectSectionNumberingInput
-	): Promise<Project> {
-		await requireProject(this.projects, actor, input.projectId);
-		return this.projects.setSectionNumberingDefault(actor, input.projectId, input.enabled ?? null);
+	async setSectionNumberingDefault(input: SetProjectSectionNumberingInput): Promise<Project> {
+		await requireProject(this.projects, this.actor, input.projectId);
+		return this.projects.setSectionNumberingDefault(input.projectId, input.enabled ?? null);
 	}
 }
 export interface ProjectLifecycle {
-	archive(actor: ActorContext, projectId: ProjectId): Promise<Project>;
+	archive(projectId: ProjectId): Promise<Project>;
 }
 export class ProjectLifecycleService implements ProjectLifecycle {
-	constructor(private readonly projects: ProjectRepository) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly projects: ProjectRepository
+	) {}
 
-	async archive(actor: ActorContext, projectId: ProjectId): Promise<Project> {
-		await requireProject(this.projects, actor, projectId);
-		return this.projects.archive(actor, projectId);
+	async archive(projectId: ProjectId): Promise<Project> {
+		await requireProject(this.projects, this.actor, projectId);
+		return this.projects.archive(projectId);
 	}
 }
 export interface ProjectTreeReader {
-	readEntries(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]>;
+	readEntries(projectId: ProjectId): Promise<readonly Note[]>;
 }
 export interface ProjectTreeWriter {
-	readForMove(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]>;
+	readForMove(projectId: ProjectId): Promise<readonly Note[]>;
 	persistOrder(
-		actor: ActorContext,
 		entries: readonly { id: NoteId; parentId: NoteId | undefined; position: number }[]
 	): Promise<void>;
 }
 export class ProjectTreeService implements ProjectTreeReader, ProjectTreeWriter {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly projects: ProjectRepository,
 		private readonly tree: ProjectTreeRepository
 	) {}
 
-	async readEntries(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]> {
-		await requireProject(this.projects, actor, projectId);
-		return this.tree.list(actor, projectId);
+	async readEntries(projectId: ProjectId): Promise<readonly Note[]> {
+		await requireProject(this.projects, this.actor, projectId);
+		return this.tree.list(projectId);
 	}
 
-	async readForMove(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]> {
-		const project = await this.projects.findForWrite(actor, projectId);
+	async readForMove(projectId: ProjectId): Promise<readonly Note[]> {
+		const project = await this.projects.findForWrite(projectId);
 		if (!project) throw new NotFoundError('Project was not found');
-		return this.tree.list(actor, projectId);
+		return this.tree.list(projectId);
 	}
 
 	persistOrder(
-		actor: ActorContext,
 		entries: readonly { id: NoteId; parentId: NoteId | undefined; position: number }[]
 	): Promise<void> {
-		return this.tree.persistOrder(actor, entries);
+		return this.tree.persistOrder(entries);
 	}
 }

@@ -6,29 +6,31 @@ import type {
 	OwnedAttachmentUpload,
 	UploadRetentionCursor
 } from '$lib/models/attachments';
-import type { ActorContext, UserId } from '$lib/models/identity';
-import type { AttachmentRepository } from '$lib/server/repositories/attachments';
+import type { UserId } from '$lib/models/identity';
+import type {
+	AttachmentBacklogRepository,
+	AttachmentRepository
+} from '$lib/server/repositories/attachments';
 import type { AttachmentClaims } from '$lib/server/repositories/attachments/claims';
 
-/** The processing backlog: versions waiting for extraction, and their recorded results. */
+/** A version waiting for extraction, with the user it belongs to. */
+export interface PendingAttachmentVersion {
+	readonly userId: UserId;
+	readonly versionId: AttachmentVersionId;
+}
+
+/** The user's attachment versions while they are processed. */
 export interface AttachmentVersions {
-	listPendingVersions(): Promise<readonly { userId: UserId; versionId: AttachmentVersionId }[]>;
-	findVersionForUpdate(
-		actor: ActorContext,
-		versionId: AttachmentVersionId
-	): Promise<AttachmentView | undefined>;
-	updateVersion(actor: ActorContext, version: AttachmentVersion): Promise<AttachmentView>;
+	findVersionForUpdate(versionId: AttachmentVersionId): Promise<AttachmentView | undefined>;
+	updateVersion(version: AttachmentVersion): Promise<AttachmentView>;
 }
 export class AttachmentVersionService implements AttachmentVersions {
 	constructor(private readonly repository: AttachmentRepository) {}
-	listPendingVersions() {
-		return this.repository.listPendingVersions();
+	findVersionForUpdate(versionId: AttachmentVersionId) {
+		return this.repository.findVersionForUpdate(versionId);
 	}
-	findVersionForUpdate(actor: ActorContext, versionId: AttachmentVersionId) {
-		return this.repository.findVersionForUpdate(actor, versionId);
-	}
-	updateVersion(actor: ActorContext, version: AttachmentVersion) {
-		return this.repository.updateVersion(actor, version);
+	updateVersion(version: AttachmentVersion) {
+		return this.repository.updateVersion(version);
 	}
 }
 
@@ -53,8 +55,9 @@ export class AttachmentClaimService implements AttachmentProcessingClaims {
 	}
 }
 
-/** Records of stored objects that no attachment uses any more. */
-export interface AttachmentCleanup {
+/** Attachment work across every user, which the worker runs. */
+export interface AttachmentBacklog {
+	listPendingVersions(): Promise<readonly PendingAttachmentVersion[]>;
 	listPendingObjectRemovals(): Promise<readonly string[]>;
 	completeObjectRemoval(objectKey: string): Promise<void>;
 	listExpiredUploads(
@@ -62,10 +65,13 @@ export interface AttachmentCleanup {
 		limit: number,
 		after?: UploadRetentionCursor
 	): Promise<readonly OwnedAttachmentUpload[]>;
-	deleteUpload(actor: ActorContext, id: AttachmentUpload['id']): Promise<void>;
+	deleteExpiredUpload(id: AttachmentUpload['id']): Promise<void>;
 }
-export class AttachmentCleanupService implements AttachmentCleanup {
-	constructor(private readonly repository: AttachmentRepository) {}
+export class AttachmentBacklogService implements AttachmentBacklog {
+	constructor(private readonly repository: AttachmentBacklogRepository) {}
+	listPendingVersions() {
+		return this.repository.listPendingVersions();
+	}
 	listPendingObjectRemovals() {
 		return this.repository.listPendingObjectRemovals();
 	}
@@ -75,7 +81,7 @@ export class AttachmentCleanupService implements AttachmentCleanup {
 	listExpiredUploads(cutoff: Date, limit: number, after?: UploadRetentionCursor) {
 		return this.repository.listExpiredUploads(cutoff, limit, after);
 	}
-	deleteUpload(actor: ActorContext, id: AttachmentUpload['id']) {
-		return this.repository.deleteUpload(actor, id);
+	deleteExpiredUpload(id: AttachmentUpload['id']) {
+		return this.repository.deleteExpiredUpload(id);
 	}
 }

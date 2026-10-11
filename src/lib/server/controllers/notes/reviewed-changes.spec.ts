@@ -18,7 +18,6 @@ const setup = async () => {
 	const fixture = reviewedNoteFixture(note);
 	const change = requirePreparedChange(
 		await fixture.controller.prepareChange(
-			testActor(),
 			{
 				kind: 'patch',
 				noteId: note.id,
@@ -42,13 +41,13 @@ describe('Reviewed note changes', () => {
 	});
 	it('saves the prepared document', async () => {
 		const { controller, change, content } = await setup();
-		await controller.applyReviewedChange(testActor(), change, 'authored');
+		await controller.applyReviewedChange(change, 'authored');
 		expect(content.notes[0].document).toEqual(change.result.document);
 	});
 	it('refuses to apply after a different edit', async () => {
 		const { controller, change, content, note } = await setup();
 		content.notes = [{ ...note, ...noteMarkdown.read('Launch Friday.'), currentRevision: 2 }];
-		const outcome = await controller.applyReviewedChange(testActor(), change, 'authored');
+		const outcome = await controller.applyReviewedChange(change, 'authored');
 		expect(outcome).toMatchObject({
 			kind: 'failure',
 			code: 'STALE_REVIEW'
@@ -57,9 +56,9 @@ describe('Reviewed note changes', () => {
 	});
 	it('does not repeat indexing when the result is already present', async () => {
 		const { controller, change, content } = await setup();
-		await controller.applyReviewedChange(testActor(), change, 'authored');
+		await controller.applyReviewedChange(change, 'authored');
 		content.failIndex = true;
-		expect(await controller.applyReviewedChange(testActor(), change, 'authored')).toMatchObject({
+		expect(await controller.applyReviewedChange(change, 'authored')).toMatchObject({
 			kind: 'unchanged'
 		});
 	});
@@ -67,7 +66,6 @@ describe('Reviewed note changes', () => {
 		const { controller } = reviewedNoteFixture(baseNote());
 		expect(
 			await controller.prepareChange(
-				testActor(),
 				{
 					kind: 'patch',
 					noteId: testNoteId(),
@@ -81,7 +79,6 @@ describe('Reviewed note changes', () => {
 		const { controller } = reviewedNoteFixture(baseNote());
 		await expect(
 			controller.prepareChange(
-				testActor(2),
 				{
 					kind: 'replace',
 					noteId: testNoteId(),
@@ -93,34 +90,28 @@ describe('Reviewed note changes', () => {
 	});
 	it('does not apply another account’s review', async () => {
 		const { controller, change } = await setup();
-		await expect(
-			controller.applyReviewedChange(testActor(2), change, 'authored')
-		).rejects.toMatchObject({
+		await expect(controller.applyReviewedChange(change, 'authored')).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});
 	it('refuses an archived note even if the result matches', async () => {
 		const { controller, content, note, change } = await setup();
 		content.notes = [{ ...note, ...change.result, archivedAt: testNow }];
-		await expect(
-			controller.applyReviewedChange(testActor(), change, 'authored')
-		).rejects.toMatchObject({
+		await expect(controller.applyReviewedChange(change, 'authored')).rejects.toMatchObject({
 			code: 'VALIDATION'
 		});
 	});
 	it('reports a target deleted after review', async () => {
 		const { controller, content, change } = await setup();
 		content.notes = [];
-		await expect(
-			controller.applyReviewedChange(testActor(), change, 'authored')
-		).rejects.toMatchObject({
+		await expect(controller.applyReviewedChange(change, 'authored')).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});
 	it('rolls back note, links and indexing when a consequence fails', async () => {
 		const { controller, content, note, change } = await setup();
 		content.failIndex = true;
-		const outcome = await controller.applyReviewedChange(testActor(), change, 'authored').then(
+		const outcome = await controller.applyReviewedChange(change, 'authored').then(
 			() => 'saved',
 			() => 'failed'
 		);
@@ -135,7 +126,6 @@ describe('Reviewed note changes', () => {
 		const { controller, content, note } = await setup();
 		const change = requirePreparedChange(
 			await controller.prepareChange(
-				testActor(),
 				{
 					kind: 'replace',
 					noteId: note.id,
@@ -144,7 +134,7 @@ describe('Reviewed note changes', () => {
 				'authored'
 			)
 		);
-		await controller.applyReviewedChange(testActor(), change, 'authored');
+		await controller.applyReviewedChange(change, 'authored');
 		expect(content.notes[0].publishedRevision).toBe(note.publishedRevision);
 	});
 });

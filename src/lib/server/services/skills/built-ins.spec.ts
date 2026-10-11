@@ -17,14 +17,14 @@ const legacyInstructions = `Use FollowThrough as an action-oriented workbench.
 Discover the available action tools before answering. Prefer read tools to inspect current state, proposal tools for AI-generated suggestions, and mutation tools only when the requested execution mode permits them. Load other skills lazily when their summaries or trigger hints match the request. Keep AI-generated proposals reviewable and preserve provenance.`;
 
 const setup = () => {
-	const projects = new InMemoryProjectRepository();
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder({ name: INBOX_PROJECT_NAME, role: 'inbox' })];
-	const notes = new InMemoryNoteRepository();
+	const notes = new InMemoryNoteRepository(testActor());
 	const skills = new InMemorySkillRepository(notes);
 	return {
 		notes,
 		skills,
-		provisioner: new BuiltInSkills(projects, notes, skills, {
+		provisioner: new BuiltInSkills(testActor(), projects, notes, skills, {
 			active: BUILT_INS,
 			retired: RETIRED_BUILT_INS
 		})
@@ -33,7 +33,7 @@ const setup = () => {
 
 const setupLegacyFollowThrough = async () => {
 	const state = setup();
-	await state.provisioner.ensure(testActor());
+	await state.provisioner.ensure();
 	const current = state.skills.skills.find((skill) => skill.note.builtInKey === 'followthrough')!;
 	const note: typeof current.note = {
 		...current.note,
@@ -78,8 +78,8 @@ const setupLegacyFollowThrough = async () => {
 describe('Built-in skill provisioning invariants', () => {
 	it('creates each visible built-in skill exactly once per user', async () => {
 		const { provisioner, skills } = setup();
-		await provisioner.ensure(testActor());
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
+		await provisioner.ensure();
 		expect(skills.skills.map((skill) => skill.note.title)).toEqual([
 			'FollowThrough',
 			'Settings',
@@ -89,7 +89,7 @@ describe('Built-in skill provisioning invariants', () => {
 
 	it('provisions the current guide, its product instructions, and initial revisions for a new user', async () => {
 		const { provisioner, skills } = setup();
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
 		expect({
 			version: followThrough?.metadata?.['followthrough.built-in-version'],
@@ -100,7 +100,7 @@ describe('Built-in skill provisioning invariants', () => {
 
 	it('upgrades an untouched stock FollowThrough skill in place', async () => {
 		const { provisioner, skills, notes } = await setupLegacyFollowThrough();
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
 		expect({
 			version: followThrough?.metadata?.['followthrough.built-in-version'],
@@ -120,8 +120,8 @@ describe('Built-in skill provisioning invariants', () => {
 
 	it('does not repeat an already-applied stock guide upgrade', async () => {
 		const { provisioner, notes } = await setupLegacyFollowThrough();
-		await provisioner.ensure(testActor());
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
+		await provisioner.ensure();
 		const followThrough = notes.notes.find((note) => note.builtInKey === 'followthrough')!;
 		expect(notes.revisions.filter((revision) => revision.noteId === followThrough.id)).toHaveLength(
 			2
@@ -130,14 +130,14 @@ describe('Built-in skill provisioning invariants', () => {
 
 	it('does not recreate a user-renamed FollowThrough skill', async () => {
 		const { provisioner, notes } = setup();
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		const existing = notes.notes[0]!;
 		notes.notes[0] = {
 			...existing,
 			title: 'My workbench instructions',
 			plainText: 'My customized instructions'
 		};
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		expect(notes.notes.map((note) => note.title)).toEqual([
 			'My workbench instructions',
 			'Settings',
@@ -156,7 +156,7 @@ describe('Built-in skill provisioning invariants', () => {
 		skills.skills = skills.skills.map((skill) =>
 			skill.note.id === published.id ? { ...skill, note: published } : skill
 		);
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		expect(
 			skills.skills.find((skill) => skill.note.builtInKey === 'followthrough')?.metadata?.[
 				'followthrough.built-in-version'
@@ -182,7 +182,7 @@ describe('Built-in skill provisioning invariants', () => {
 		skills.skills = skills.skills.map((skill) =>
 			skill.note.id === edited.id ? { ...skill, note: edited } : skill
 		);
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		expect(notes.notes.find((note) => note.id === edited.id)?.plainText).toBe(
 			'My preferred workflow'
 		);
@@ -204,7 +204,7 @@ describe('Built-in skill provisioning invariants', () => {
 		skills.skills = skills.skills.map((skill) =>
 			skill.note.id === edited.id ? { ...skill, note: edited } : skill
 		);
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		expect(notes.notes.find((note) => note.id === edited.id)?.plainText).toBe(
 			'My preferred workflow'
 		);
@@ -225,10 +225,8 @@ describe('Built-in skill provisioning invariants', () => {
 		notes.notes = notes.notes.map((note) =>
 			note.id === current.id ? { ...note, document, currentRevision: 2 } : note
 		);
-		await provisioner.ensure(testActor());
-		expect((await notes.findByBuiltInKey(testActor(), 'followthrough'))?.document).toEqual(
-			document
-		);
+		await provisioner.ensure();
+		expect((await notes.findByBuiltInKey('followthrough'))?.document).toEqual(document);
 	});
 
 	it('does not claim a same-named custom note as a built-in skill', async () => {
@@ -240,7 +238,7 @@ describe('Built-in skill provisioning invariants', () => {
 				plainText: 'My custom app instructions'
 			})
 		];
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		expect(
 			notes.notes
 				.filter((note) => note.title === 'FollowThrough')
@@ -258,14 +256,14 @@ describe('Built-in skill provisioning invariants', () => {
 		skills.skills = skills.skills.map((skill) =>
 			skill.note.builtInKey === 'followthrough' ? { ...skill, isEnabled: false } : skill
 		);
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
 		expect(followThrough?.isEnabled).toBe(false);
 	});
 
 	it('upgrades an untouched previous-version guide to the current one', async () => {
 		const { provisioner, notes, skills } = setup();
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		const stale = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough')!;
 		const staleNote = {
 			...stale.note,
@@ -301,25 +299,25 @@ describe('Built-in skill provisioning invariants', () => {
 					}
 				: skill
 		);
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
 		expect(followThrough?.metadata?.['followthrough.built-in-version']).toBe('3');
 	});
 
 	it('provisions a settings guide that names the settings tools', async () => {
 		const { provisioner, skills } = setup();
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		const settings = skills.skills.find((skill) => skill.note.builtInKey === 'settings');
 		expect(settings?.note.plainText).toContain('update_agent_preferences');
 	});
 
 	it('fails with guidance when the Diagramming skill is disabled', async () => {
 		const { provisioner, skills } = setup();
-		await provisioner.ensure(testActor());
+		await provisioner.ensure();
 		const diagramming = skills.skills.find((skill) => skill.note.builtInKey === 'diagramming')!;
 		skills.skills = skills.skills.map((skill) =>
 			skill.note.id === diagramming.note.id ? { ...skill, isEnabled: false } : skill
 		);
-		await expect(provisioner.load(testActor(), 'diagramming')).rejects.toThrow('Re-enable it');
+		await expect(provisioner.load('diagramming')).rejects.toThrow('Re-enable it');
 	});
 });

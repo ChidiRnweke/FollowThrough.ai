@@ -487,13 +487,14 @@ describe('Agent tool coverage invariants', () => {
 	it('read_canvas_diagram uses the resolved run conversation', async () => {
 		const conversationId = testConversationId(7);
 		const sessions = new InMemoryAgentSessionRepository();
-		const diagrams = new InMemoryDiagrams();
+		const diagrams = new InMemoryDiagrams(testActor());
 		const diagram = drawioBuilder({ id: testDiagramId(), title: 'Current' });
 		diagrams.diagrams = [diagram];
-		await sessions.append(testActor(), conversationId, [
+		await sessions.append(conversationId, [
 			resultItem('create_diagram', 'call-1', JSON.stringify({ diagramId: diagram.id }))
 		]);
 		const controller = new DiagramStudio(
+			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
 				...agentToolResultsFixture(),
@@ -795,9 +796,10 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('shares the saved task batch across agent and MCP retries', async () => {
-		const todos = new InMemoryTodos();
-		const receipts = new InMemoryTodoBatchReceipts();
+		const todos = new InMemoryTodos(testActor());
+		const receipts = new InMemoryTodoBatchReceipts(testActor());
 		const controller = new Todos(
+			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<TodosDependencies>({
 				...agentToolResultsFixture(),
@@ -936,6 +938,7 @@ describe('Agent tool coverage invariants', () => {
 
 	it('treats a blank call to an argument-free tool as an empty object', async () => {
 		const controller = new Widgets(
+			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<WidgetsDependencies>({
 				...agentToolResultsFixture(),
@@ -1110,11 +1113,12 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('executes agent actions through the actor-scoped controller factory', async () => {
-		const records = new InMemoryNoteRepository();
-		const projects = new InMemoryProjectRepository(records);
+		const records = new InMemoryNoteRepository(testActor());
+		const projects = new InMemoryProjectRepository(testActor(), records);
 		projects.projects = [projectBuilder()];
 		const { notes } = noteCreationControllers(
-			createNoteServices(records, new InMemoryAnchorRepository(), projects).creator,
+			createNoteServices(testActor(), records, new InMemoryAnchorRepository(testActor()), projects)
+				.creator,
 			new InMemoryTransactionRunner([records, projects])
 		);
 		const factory = capabilityDependencies<ControllerFactory>({ notes: () => notes });
@@ -1299,7 +1303,7 @@ describe('Explicit mutation receipts', () => {
 
 	it('reports the revoked token id', async () => {
 		const tokens = new AccessTokens(
-			new InMemoryApiTokenRepository([testTokenUser(testActor().userId)])
+			new InMemoryApiTokenRepository(testActor(), [testTokenUser(testActor().userId)])
 		);
 		const minted = await tokens.mint(testActor().userId, {
 			name: 'Local integration',
@@ -1320,7 +1324,7 @@ describe('Explicit mutation receipts', () => {
 	it('reports the deleted artifact id', async () => {
 		const { service, notes, artifacts } = exportControllerFixture();
 		notes.notes = [noteBuilder()];
-		const { artifact } = await service.generateDocument(testActor(), {
+		const { artifact } = await service.generateDocument({
 			projectId: testProjectId(),
 			noteIds: [testNoteId()],
 			title: 'Report',

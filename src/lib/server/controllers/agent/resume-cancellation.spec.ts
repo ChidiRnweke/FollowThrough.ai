@@ -15,7 +15,7 @@ it('still aborts the resumed provider after separate decisions reach the queued 
 			{ callId: 'call-b', toolName: 'archive_note', arguments: {} }
 		]
 	};
-	const receipt = await fixture.controller.submit(testActor(), {
+	const receipt = await fixture.controller.submit({
 		requestId: crypto.randomUUID(),
 		input: 'Review these changes'
 	});
@@ -29,12 +29,12 @@ it('still aborts the resumed provider after separate decisions reach the queued 
 		fixture.turns.completion = completion.promise;
 		fixture.turns.abortable = true;
 		fixture.turns.outcome = { type: 'completed', sessionItems: [] };
-		await fixture.controller.decide(testActor(), {
+		await fixture.controller.decide({
 			runId: receipt.runId,
 			callId: 'call-a',
 			decision: 'approve'
 		});
-		await fixture.controller.decide(testActor(), {
+		await fixture.controller.decide({
 			runId: receipt.runId,
 			callId: 'call-b',
 			decision: 'reject'
@@ -43,12 +43,12 @@ it('still aborts the resumed provider after separate decisions reach the queued 
 		await vi.waitFor(() => {
 			if (fixture.turns.signals.length !== 2) throw new Error('Provider has not resumed');
 		});
-		await fixture.controller.cancel(testActor(), receipt.runId);
+		await fixture.controller.cancel(receipt.runId);
 		expect(fixture.turns.signals.at(-1)?.aborted).toBe(true);
 	} finally {
 		completion.resolve();
 		fixture.release();
-		await fixture.controller.cancel(testActor(), receipt.runId);
+		await fixture.controller.cancel(receipt.runId);
 		await vi.waitFor(() => {
 			if (fixture.runs.runs.some((run) => !runStatus.isTerminal(run.status)))
 				throw new Error('Run has not settled');

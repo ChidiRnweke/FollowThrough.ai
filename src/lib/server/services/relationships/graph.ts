@@ -17,42 +17,37 @@ import type {
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export interface RelationshipCreator {
-	createWithChange(
-		actor: ActorContext,
-		input: CreateRelationshipInput
-	): Promise<AppliedChange<NoteRelationship>>;
+	createWithChange(input: CreateRelationshipInput): Promise<AppliedChange<NoteRelationship>>;
 }
 export class RelationshipWritingService implements RelationshipCreator {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly relationships: NoteRelationshipRepository,
 		private readonly notes: NoteRepository,
 		private readonly anchors: SourceAnchorRepository,
 		private readonly provenance: ProvenanceRepository
 	) {}
-	async createWithChange(
-		actor: ActorContext,
-		input: CreateRelationshipInput
-	): Promise<AppliedChange<NoteRelationship>> {
+	async createWithChange(input: CreateRelationshipInput): Promise<AppliedChange<NoteRelationship>> {
 		if (input.sourceNoteId === input.targetNoteId)
 			throw new ValidationError('A note cannot relate to itself');
 		const [source, target] = await Promise.all([
-			this.notes.findById(actor, input.sourceNoteId),
-			this.notes.findById(actor, input.targetNoteId)
+			this.notes.findById(input.sourceNoteId),
+			this.notes.findById(input.targetNoteId)
 		]);
 		if (!source || !target) throw new NotFoundError('Related note was not found');
 		if (source.projectId !== target.projectId)
 			throw new ValidationError('Related notes must belong to the same project');
 		if (input.sourceAnchorId) {
-			const anchor = await this.anchors.findById(actor, input.sourceAnchorId);
+			const anchor = await this.anchors.findById(input.sourceAnchorId);
 			if (!anchor || anchor.noteId !== source.id)
 				throw new ValidationError('Relationship anchor must belong to its source note');
 		}
-		if (input.provenanceId && !(await this.provenance.findById(actor, input.provenanceId)))
+		if (input.provenanceId && !(await this.provenance.findById(input.provenanceId)))
 			throw new NotFoundError('Relationship provenance was not found');
 		const timestamp = now();
-		return writeRelationship(this.relationships, actor, {
+		return writeRelationship(this.relationships, this.actor, {
 			id: crypto.randomUUID() as RelationshipId,
-			userId: actor.userId,
+			userId: this.actor.userId,
 			...input,
 			createdAt: timestamp,
 			updatedAt: timestamp
@@ -60,32 +55,32 @@ export class RelationshipWritingService implements RelationshipCreator {
 	}
 }
 export interface NoteLinkReconciler {
-	reconcile(actor: ActorContext, note: Note, targets: readonly NoteId[]): Promise<void>;
+	reconcile(note: Note, targets: readonly NoteId[]): Promise<void>;
 }
 export class NoteLinkReconciliationService implements NoteLinkReconciler {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly relationships: NoteRelationshipRepository,
 		private readonly notes: NoteRepository
 	) {}
-	async reconcile(actor: ActorContext, note: Note, targets: readonly NoteId[]): Promise<void> {
-		const existing = (await this.relationships.listForNote(actor, note.id)).filter(
+	async reconcile(note: Note, targets: readonly NoteId[]): Promise<void> {
+		const existing = (await this.relationships.listForNote(note.id)).filter(
 			(relationship) => relationship.kind === 'mentions' && relationship.sourceNoteId === note.id
 		);
 		const wanted = new Set(targets.filter((target) => target !== note.id));
 		const current = new Set(existing.map((relationship) => relationship.targetNoteId));
 
 		for (const relationship of existing)
-			if (!wanted.has(relationship.targetNoteId))
-				await this.relationships.delete(actor, relationship.id);
+			if (!wanted.has(relationship.targetNoteId)) await this.relationships.delete(relationship.id);
 
 		for (const target of wanted) {
 			if (current.has(target)) continue;
-			const targetNote = await this.notes.findById(actor, target);
+			const targetNote = await this.notes.findById(target);
 			if (!targetNote || targetNote.projectId !== note.projectId) continue;
 			const timestamp = now();
-			await writeRelationship(this.relationships, actor, {
+			await writeRelationship(this.relationships, this.actor, {
 				id: crypto.randomUUID() as RelationshipId,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				sourceNoteId: note.id,
 				targetNoteId: target,
 				kind: 'mentions',
@@ -96,32 +91,28 @@ export class NoteLinkReconciliationService implements NoteLinkReconciler {
 	}
 }
 export interface RelationshipFinder {
-	findForNote(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRelationship[]>;
+	findForNote(noteId: NoteId): Promise<readonly NoteRelationship[]>;
 }
 export interface BacklinkContextReader {
-	readContexts(
-		actor: ActorContext,
-		relationships: readonly NoteRelationship[]
-	): Promise<readonly BacklinkContext[]>;
+	readContexts(relationships: readonly NoteRelationship[]): Promise<readonly BacklinkContext[]>;
 }
 export class RelationshipReadingService implements RelationshipFinder, BacklinkContextReader {
 	constructor(
 		private readonly relationships: NoteRelationshipRepository,
 		private readonly notes: NoteRepository
 	) {}
-	async findForNote(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRelationship[]> {
-		if (!(await this.notes.findById(actor, noteId))) throw new NotFoundError('Note was not found');
-		return this.relationships.listForNote(actor, noteId);
+	async findForNote(noteId: NoteId): Promise<readonly NoteRelationship[]> {
+		if (!(await this.notes.findById(noteId))) throw new NotFoundError('Note was not found');
+		return this.relationships.listForNote(noteId);
 	}
 	async readContexts(
-		actor: ActorContext,
 		relationships: readonly NoteRelationship[]
 	): Promise<readonly BacklinkContext[]> {
 		const contexts = await Promise.all(
 			relationships.map(async (relationship) => {
 				const [source, target] = await Promise.all([
-					this.notes.findById(actor, relationship.sourceNoteId),
-					this.notes.findById(actor, relationship.targetNoteId)
+					this.notes.findById(relationship.sourceNoteId),
+					this.notes.findById(relationship.targetNoteId)
 				]);
 				return source && target ? [{ relationship, source, target }] : [];
 			})
@@ -134,11 +125,11 @@ async function writeRelationship(
 	actor: ActorContext,
 	incoming: NoteRelationship
 ): Promise<AppliedChange<NoteRelationship>> {
-	const current = await relationships.findForWrite(actor, incoming);
-	if (!current) return { kind: 'created', after: await relationships.insert(actor, incoming) };
+	const current = await relationships.findForWrite(incoming);
+	if (!current) return { kind: 'created', after: await relationships.insert(incoming) };
 	if (current.justification === incoming.justification)
 		return { kind: 'unchanged', after: current };
-	const after = await relationships.update(actor, {
+	const after = await relationships.update({
 		...current,
 		justification: incoming.justification,
 		updatedAt: incoming.updatedAt

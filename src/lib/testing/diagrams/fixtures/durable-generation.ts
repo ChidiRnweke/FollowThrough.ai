@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import {
 	AgentSdkHarness,
@@ -30,7 +31,7 @@ export const diagramSelection = {
 export const durableDiagramFixture = () => {
 	const state = diagramGenerationFixture();
 	state.notes.notes = [noteBuilder({ plainText: diagramSelection.text })];
-	const suggestions = new InMemorySuggestions();
+	const suggestions = new InMemorySuggestions(testActor());
 	const transactions = new InMemoryTransactionRunner([
 		state.persistence,
 		state.conversations,
@@ -39,6 +40,7 @@ export const durableDiagramFixture = () => {
 		suggestions
 	]);
 	const requests = new NoteActionRequests(
+		testActor(),
 		state.persistence,
 		state.persistence,
 		state.conversations
@@ -57,6 +59,7 @@ export const durableDiagramFixture = () => {
 		runSignals: new RunSignalService(state.persistence, state.persistence)
 	});
 	const agent = new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
@@ -76,6 +79,6 @@ export const durableDiagramFixture = () => {
 		requests,
 		dependencies,
 		agent,
-		controller: new Diagrams(dependencies)
+		controller: new Diagrams(testActor(), dependencies)
 	};
 };

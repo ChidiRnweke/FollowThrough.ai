@@ -15,11 +15,11 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const todos = new InMemoryTodoRepository();
-	const projects = new InMemoryProjectRepository();
-	const anchors = new InMemoryAnchorRepository();
-	const notes = new InMemoryNoteRepository();
-	const provenance = new InMemoryProvenanceRepository();
+	const todos = new InMemoryTodoRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
+	const anchors = new InMemoryAnchorRepository(testActor());
+	const notes = new InMemoryNoteRepository(testActor());
+	const provenance = new InMemoryProvenanceRepository(testActor());
 	projects.projects = [projectBuilder()];
 	return {
 		todos,
@@ -27,7 +27,7 @@ const setup = () => {
 		anchors,
 		notes,
 		provenance,
-		service: createTodoServices(todos, projects, anchors, notes, provenance)
+		service: createTodoServices(testActor(), todos, projects, anchors, notes, provenance)
 	};
 };
 
@@ -35,14 +35,14 @@ describe('Todo management invariants', () => {
 	it('rejects a resolved task belonging to another actor', async () => {
 		const { service } = setup();
 		await expect(
-			service.creator.create(testActor(), todoBuilder({ userId: testActor(2).userId }))
+			service.creator.create(todoBuilder({ userId: testActor(2).userId }))
 		).rejects.toMatchObject({ code: 'OWNERSHIP' });
 	});
 
 	it('deleted todos disappear from active lists', async () => {
 		const { service, todos } = setup();
 		todos.todos = [todoBuilder()];
-		await service.deleter.softDelete(testActor(), testTodoId());
-		expect(await service.lister.list(testActor(), {})).toEqual([]);
+		await service.deleter.softDelete(testTodoId());
+		expect(await service.lister.list({})).toEqual([]);
 	});
 });

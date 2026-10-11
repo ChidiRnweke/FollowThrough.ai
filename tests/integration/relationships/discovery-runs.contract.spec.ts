@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
@@ -54,9 +55,9 @@ const setup = async (suffix: string) => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const projects = new ProjectRecords(database);
-	const notes = createNotesCapability({ db: database, projects });
-	const suggestions = createSuggestionsCapability({
+	const projects = new ProjectRecords(testActor(), database);
+	const notes = createNotesCapability(testActor(), { db: database, projects });
+	const suggestions = createSuggestionsCapability(testActor(), {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
@@ -75,9 +76,14 @@ const setup = async (suffix: string) => {
 		to: text.length,
 		text
 	};
-	const runs = new AgentRunRecords(database);
-	const events = new AgentRunEventRecords(database);
-	const requests = new NoteActionRequests(runs, events, new ConversationRecords(database));
+	const runs = new AgentRunRecords(testActor(), database);
+	const events = new AgentRunEventRecords(testActor(), database);
+	const requests = new NoteActionRequests(
+		testActor(),
+		runs,
+		events,
+		new ConversationRecords(testActor(), database)
+	);
 	const settlements = new RunSettlements(runs, events);
 	const classifier = new InMemoryStructuredRelationshipClient();
 	classifier.result = {
@@ -100,8 +106,8 @@ const setup = async (suffix: string) => {
 		}
 	});
 	const vector = Array.from({ length: 3072 }, (_, index) => (index === 0 ? 1 : 0));
-	const index = new KnowledgeIndexRecords(database);
-	await index.replaceForNote(seeded.owner, target.id, [
+	const index = new KnowledgeIndexRecords(testActor(), database);
+	await index.replaceForNote(target.id, [
 		searchDocumentBuilder({
 			noteId: target.id,
 			projectId: seeded.project.id,
@@ -128,13 +134,14 @@ const setup = async (suffix: string) => {
 		suggestionCreator: suggestions.creator
 	};
 	const agent = new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
-			decisions: new AgentRunDecisionRecords(database),
+			decisions: new AgentRunDecisionRecords(testActor(), database),
 			settlements,
 			transactionRunner,
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
@@ -144,7 +151,7 @@ const setup = async (suffix: string) => {
 	const input = { requestId: crypto.randomUUID(), selection };
 	const prepare = () =>
 		transactionRunner.run(() =>
-			requests.prepare(seeded.owner, {
+			requests.prepare({
 				requestId: input.requestId,
 				context: {
 					kind: 'related_notes',
@@ -155,7 +162,7 @@ const setup = async (suffix: string) => {
 		);
 	const finished = async (runId: AgentRunId) => {
 		await vi.waitFor(async () => {
-			const run = await runs.findById(seeded.owner, runId);
+			const run = await runs.findById(runId);
 			if (!run || !runStatus.isTerminal(run.status)) throw new Error('Run has not settled');
 		});
 	};
@@ -178,8 +185,8 @@ const setup = async (suffix: string) => {
 it('commits one related-note search for simultaneous duplicate submissions on separate connections', async () => {
 	const state = await setup('13001');
 	const [first, second] = await Promise.all([
-		state.controller.startSuggestFromSelection(state.owner, state.input),
-		state.controller.startSuggestFromSelection(state.owner, state.input)
+		state.controller.startSuggestFromSelection(state.input),
+		state.controller.startSuggestFromSelection(state.input)
 	]);
 	await state.finished(first.runId);
 	const [counts] =
@@ -195,10 +202,10 @@ it('keeps the database free of proposals when cancellation beats the classifier 
 	const receipt = await state.prepare();
 	const gate = Promise.withResolvers<void>();
 	state.classifier.completion = gate.promise;
-	const execution = state.controller.executeRelatedNoteRun(state.owner, receipt.runId);
+	const execution = state.controller.executeRelatedNoteRun(receipt.runId);
 	try {
 		await state.classifier.started.promise;
-		await state.agent.cancel(state.owner, receipt.runId);
+		await state.agent.cancel(receipt.runId);
 	} finally {
 		gate.resolve();
 	}
@@ -206,7 +213,7 @@ it('keeps the database free of proposals when cancellation beats the classifier 
 	const [counts] =
 		await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 	expect({
-		status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+		status: (await state.runs.findById(receipt.runId))?.status,
 		counts
 	}).toEqual({ status: 'cancelled', counts: { suggestions: 0, anchors: 0 } });
 });
@@ -216,13 +223,13 @@ it('rolls back backlink proposals and anchors when the result event fails', asyn
 	const receipt = await state.prepare();
 	await context.client`alter table agent_run_events add constraint related_result_failure check (not (event->>'type' = 'workflow_result' and event->>'action' = 'relate')) not valid`;
 	try {
-		await state.controller.executeRelatedNoteRun(state.owner, receipt.runId);
+		await state.controller.executeRelatedNoteRun(receipt.runId);
 		const [counts] =
 			await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 		expect({
-			status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+			status: (await state.runs.findById(receipt.runId))?.status,
 			counts,
-			events: (await state.events.replay(state.owner, receipt.runId, '0')).map((record) =>
+			events: (await state.events.replay(receipt.runId, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			)
 		}).toEqual({
@@ -244,7 +251,7 @@ it('reconstructs a queued related-note search after its submitting controller ha
 	).recoverQueuedRelatedNoteRuns();
 	await state.finished(receipt.runId);
 	expect(
-		(await state.events.replay(state.owner, receipt.runId, '0')).flatMap((record) =>
+		(await state.events.replay(receipt.runId, '0')).flatMap((record) =>
 			record.kind === 'readable' && record.event.type === 'workflow_result'
 				? [record.event.action]
 				: []

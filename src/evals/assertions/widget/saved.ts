@@ -19,9 +19,9 @@ export interface WidgetVerdict {
 
 /** Every widget the actor has, in every project. */
 export async function savedWidgets(lab: Lab, actor: ActorContext): Promise<readonly Widget[]> {
-	const { projects } = await lab.controllers.projects().list(actor);
+	const { projects } = await lab.controllers.projects().list();
 	const lists = await Promise.all(
-		projects.map((project) => lab.controllers.widgets().list(actor, { projectId: project.id }))
+		projects.map((project) => lab.controllers.widgets().list({ projectId: project.id }))
 	);
 	return lists.flatMap((result) => result.widgets);
 }
@@ -52,7 +52,7 @@ export async function embedVerdict(
 	noteId: NoteId,
 	widget: Widget
 ): Promise<WidgetVerdict> {
-	const { note } = await lab.controllers.notes().get(actor, { noteId });
+	const { note } = await lab.controllers.notes().get({ noteId });
 	const embedded = noteReferences.widgets([note]).includes(widget.id);
 	return {
 		passed: embedded,
@@ -76,8 +76,8 @@ export async function sourceRecordsFor(
 	widget: Widget
 ): Promise<WidgetSourceRecords> {
 	const [{ todos }, shell] = await Promise.all([
-		lab.controllers.todos().list(actor, { projectId: widget.projectId }),
-		lab.controllers.workspace().getShellContext(actor)
+		lab.controllers.todos().list({ projectId: widget.projectId }),
+		lab.controllers.workspace().getShellContext()
 	]);
 	return {
 		projectId: widget.projectId,

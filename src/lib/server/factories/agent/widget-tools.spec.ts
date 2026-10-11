@@ -35,14 +35,20 @@ import { NoteReferenceService } from '$lib/services/notes/references';
 const noteReferences = new NoteReferenceService();
 
 const setup = () => {
-	const repository = new InMemoryWidgetRepository();
+	const repository = new InMemoryWidgetRepository(testActor());
 	repository.widgets = [widgetBuilder()];
-	const projects = new InMemoryProjectRepository();
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const library = new WidgetLibrary(repository, projects, new InMemoryNoteRepository());
+	const library = new WidgetLibrary(
+		testActor(),
+		repository,
+		projects,
+		new InMemoryNoteRepository(testActor())
+	);
 	const embeddings = new InMemoryRetrievalProvider();
-	const index = createContentIndex(new InMemorySearchRepository(), embeddings.model);
+	const index = createContentIndex(new InMemorySearchRepository(testActor()), embeddings.model);
 	const controller = new Widgets(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<WidgetsDependencies>({
 			...agentToolResultsFixture(),

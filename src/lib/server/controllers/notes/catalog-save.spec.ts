@@ -14,11 +14,11 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
-	const anchors = new InMemoryAnchorRepository();
-	const projects = new InMemoryProjectRepository();
+	const notes = new InMemoryNoteRepository(testActor());
+	const anchors = new InMemoryAnchorRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const service = createNoteServices(notes, anchors, projects);
+	const service = createNoteServices(testActor(), notes, anchors, projects);
 	return { service, notes, transactionRunner: new InMemoryTransactionRunner([notes]) };
 };
 

@@ -6,11 +6,7 @@ import type {
 } from '$lib/models/todos';
 
 export interface TodoBatchReceiptRepository {
-	lock(actor: ActorContext, requestId: string): Promise<void>;
-	find(actor: ActorContext, input: CreateTodoBatchInput): Promise<TodoBatchLookup>;
-	save(
-		actor: ActorContext,
-		input: CreateTodoBatchInput,
-		result: CreateTodoBatchOutput
-	): Promise<void>;
+	lock(requestId: string): Promise<void>;
+	find(input: CreateTodoBatchInput): Promise<TodoBatchLookup>;
+	save(input: CreateTodoBatchInput, result: CreateTodoBatchOutput): Promise<void>;
 }

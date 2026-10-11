@@ -170,7 +170,7 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 				explanation: tools.explanation
 			});
 
-			const view = await lab.controllers.notes().get(actor, { noteId: skillNoteId });
+			const view = await lab.controllers.notes().get({ noteId: skillNoteId });
 			const applied = view.note.plainText.includes('EDIT-OK');
 			px.logAnnotation({
 				name: ARCHETYPES.effect,
@@ -229,7 +229,7 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 				explanation: tools.explanation
 			});
 
-			const view = await lab.controllers.notes().get(actor, { noteId: skillNoteId });
+			const view = await lab.controllers.notes().get({ noteId: skillNoteId });
 			const applied = view.note.plainText.includes('SAVE-OK');
 			px.logAnnotation({
 				name: ARCHETYPES.effect,
@@ -273,7 +273,7 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 			const { actor, skillIds } = await seedWorkspace(lab, skillsWorkspace);
 			const skillNoteId = skillIds.get('Compliance format');
 			if (!skillNoteId) throw new Error('Compliance format skill was not seeded');
-			const seeded = await lab.controllers.notes().get(actor, { noteId: skillNoteId });
+			const seeded = await lab.controllers.notes().get({ noteId: skillNoteId });
 			const result = await runCase(lab, actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept'
@@ -297,7 +297,7 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 					: `no edit tool was used (${called.join(', ') || 'no tools'})`
 			});
 
-			const view = await lab.controllers.notes().get(actor, { noteId: skillNoteId });
+			const view = await lab.controllers.notes().get({ noteId: skillNoteId });
 			const changed = view.note.plainText !== seeded.note.plainText;
 			const body = view.note.plainText.toLowerCase();
 			const numberedFromOne =
@@ -460,13 +460,12 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 			});
 			const projectId = workspace.projectIds.get('Launch');
 			if (!projectId) throw new Error('Launch project was not seeded');
-			const shell = await lab.controllers.workspace().getShellContext(workspace.actor);
+			const shell = await lab.controllers.workspace().getShellContext();
 			const createdNote = shell.noteTree.find(
 				(note) => note.projectId === projectId && note.kind === 'note'
 			);
 			const savedBody = createdNote
-				? (await lab.controllers.notes().get(workspace.actor, { noteId: createdNote.id })).note
-						.plainText
+				? (await lab.controllers.notes().get({ noteId: createdNote.id })).note.plainText
 				: '';
 			px.logOutput({
 				model: result.model,

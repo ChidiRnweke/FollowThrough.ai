@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import { seedActor } from './workspace';
 import { createApplication } from '$lib/server/application';
@@ -9,7 +10,7 @@ import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 it('initializes a fresh evaluation account before opening its provisioned shell', async () => {
 	const db = await createPGliteDatabase();
 	try {
-		const application = createApplication({
+		const application = createApplication(testActor(), {
 			db: db.database,
 			notifications: db.notifications,
 			transactionRunner: db.transactionRunner,
@@ -23,7 +24,7 @@ it('initializes a fresh evaluation account before opening its provisioned shell'
 			}
 		});
 		const actor = await seedActor({ db: db.database, controllers: application.controllers });
-		const shell = await application.controllers.workspace().getShellContext(actor);
+		const shell = await application.controllers.workspace().getShellContext();
 		expect({
 			role: shell.user.role,
 			projects: shell.projects.map((project) => project.role)

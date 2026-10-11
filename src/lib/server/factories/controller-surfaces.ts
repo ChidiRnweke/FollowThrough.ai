@@ -67,19 +67,19 @@ export const controllerSurfaces = {
 		extractPromises: true,
 		startExtractPromises: true,
 		executePromiseRun: true,
-		recoverQueuedPromiseRuns: true
+		resumeQueuedPromiseRun: true
 	},
 	relationships: {
 		suggestFromSelection: true,
 		startSuggestFromSelection: true,
 		executeRelatedNoteRun: true,
-		recoverQueuedRelatedNoteRuns: true
+		resumeQueuedRelatedNoteRun: true
 	},
 	references: {
 		suggestFromSelection: true,
 		startSuggestFromSelection: true,
 		executeReferenceRun: true,
-		recoverQueuedReferenceRuns: true
+		resumeQueuedReferenceRun: true
 	},
 	diagrams: {
 		generateMermaid: true,
@@ -91,7 +91,7 @@ export const controllerSurfaces = {
 		startReviseInlineMermaid: true,
 		startConvertInlineMermaid: true,
 		executeDiagramRun: true,
-		recoverQueuedDiagramRuns: true
+		resumeQueuedDiagramRun: true
 	},
 	diagramStudio: {
 		synchronize: true,
@@ -141,7 +141,8 @@ export const controllerSurfaces = {
 		openMcpTools: true,
 		finishCancellation: true,
 		failRun: true,
-		recoverInterruptedRuns: true,
+		recoverInterrupted: true,
+		resumeQueued: true,
 		synchronize: true,
 		submit: true,
 		getRun: true,
@@ -243,6 +244,12 @@ export const controllerSurfaces = {
 	},
 	feedback: {
 		submit: true
+	},
+	attachmentProcessing: {
+		process: true
+	},
+	knowledgeIndexing: {
+		backfill: true
 	}
 } satisfies {
 	[K in keyof ControllerFactory]: ControllerSurface<ReturnType<ControllerFactory[K]>>;
@@ -251,10 +258,15 @@ export const controllerSurfaces = {
 export const localIdentitySurface = { initializeLocal: true } satisfies ControllerSurface<
 	import('../controllers/identity/local').LocalIdentityController
 >;
-export const accessSurface = {
+export const authenticationSurface = {
 	resumeSession: true,
 	endSession: true,
+	verifyBearer: true
+} satisfies ControllerSurface<
+	import('../controllers/identity/authentication').AuthenticationController
+>;
+export const accessSurface = {
 	issueApiToken: true,
-	authenticateMcp: true,
+	attributeMcp: true,
 	attributeLocalMcp: true
 } satisfies ControllerSurface<import('../controllers/identity/access').AccessController>;

@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { Note } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
 import type { AtomicOperation } from '$lib/models/workspace';
@@ -30,9 +31,13 @@ import { expect, it, vi } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const controllerFor = (db: Database, transactionRunner: AtomicOperation) => {
-	const { services: catalog } = createNotesCapability({ db, projects: new ProjectRecords(db) });
-	const effects = new InMemoryNoteContent();
+	const { services: catalog } = createNotesCapability(testActor(), {
+		db,
+		projects: new ProjectRecords(testActor(), db)
+	});
+	const effects = new InMemoryNoteContent(testActor());
 	return new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -73,12 +78,12 @@ it('discards to the publication committed while it waits for the note lock', asy
 	const { owner, note } = await seedNote('26001');
 	const seedTx = createTransactionContext(context.db);
 	const seed = controllerFor(seedTx.database, seedTx.transactionRunner);
-	const first = await seed.save(owner, { note: { ...note, ...content('First publication') } });
-	const published = await seed.publish(owner, {
+	const first = await seed.save({ note: { ...note, ...content('First publication') } });
+	const published = await seed.publish({
 		noteId: note.id,
 		baseEtag: noteEtag(first.note.id, first.note.currentRevision)
 	});
-	const draft = await seed.save(owner, {
+	const draft = await seed.save({
 		note: { ...published.note, ...content('New publication') }
 	});
 	const peer = connectPostgresTestDatabase(context.url);
@@ -88,7 +93,7 @@ it('discards to the publication committed while it waits for the note lock', asy
 	const ready = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
 	const publishing = peerTx.transactionRunner.run(async () => {
-		const result = await controllerFor(peerTx.database, peerTx.transactionRunner).publish(owner, {
+		const result = await controllerFor(peerTx.database, peerTx.transactionRunner).publish({
 			noteId: note.id,
 			baseEtag: noteEtag(draft.note.id, draft.note.currentRevision)
 		});
@@ -103,10 +108,9 @@ it('discards to the publication committed while it waits for the note lock', asy
 	try {
 		await ready.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const discarding = controllerFor(writeTx.database, writeTx.transactionRunner).discardDraft(
-			owner,
-			{ noteId: note.id }
-		);
+		const discarding = controllerFor(writeTx.database, writeTx.transactionRunner).discardDraft({
+			noteId: note.id
+		});
 		await vi.waitFor(async () => {
 			const waiting = await context.client<
 				{ pid: number }[]
@@ -118,7 +122,7 @@ it('discards to the publication committed while it waits for the note lock', asy
 		const discarded = await discarding;
 		expect({
 			result: discarded.note,
-			stored: await new NoteRecords(context.db).findById(owner, note.id)
+			stored: await new NoteRecords(owner, context.db).findById(note.id)
 		}).toEqual({ result: latest.note, stored: latest.note });
 	} finally {
 		release.resolve();

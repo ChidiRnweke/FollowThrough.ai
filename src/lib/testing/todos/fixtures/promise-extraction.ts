@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import {
 	AgentSdkHarness,
@@ -39,16 +40,16 @@ export const promiseSelection = {
 };
 
 export const promiseExtractionFixture = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	content.notes = [noteBuilder({ plainText: promiseSelection.text })];
 	const extractor = new InMemoryPromiseExtractor();
-	const provenance = new InMemoryProvenanceRecorder();
-	const suggestions = new InMemorySuggestions();
-	const effects = new InMemorySuggestionEffects();
-	const trust = new InMemoryTrustPolicyEvaluator();
-	const todos = new InMemoryTodos();
-	const runs = new InMemoryAgentRunPersistence();
-	const conversations = new InMemoryConversationRepository();
+	const provenance = new InMemoryProvenanceRecorder(testActor());
+	const suggestions = new InMemorySuggestions(testActor());
+	const effects = new InMemorySuggestionEffects(testActor());
+	const trust = new InMemoryTrustPolicyEvaluator(testActor());
+	const todos = new InMemoryTodos(testActor());
+	const runs = new InMemoryAgentRunPersistence(testActor());
+	const conversations = new InMemoryConversationRepository(testActor());
 	const transactions = new InMemoryTransactionRunner([
 		content,
 		provenance,
@@ -59,7 +60,7 @@ export const promiseExtractionFixture = () => {
 		conversations
 	]);
 	const settlements = new RunSettlements(runs, runs);
-	const requests = new NoteActionRequests(runs, runs, conversations);
+	const requests = new NoteActionRequests(testActor(), runs, runs, conversations);
 	const dependencies = capabilityDependencies<TodosDependencies>({
 		...agentToolResultsFixture(),
 		boardExport: new TodoBoardExportService(),
@@ -81,6 +82,7 @@ export const promiseExtractionFixture = () => {
 		transactionRunner: transactions
 	});
 	const agent = new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
@@ -107,6 +109,6 @@ export const promiseExtractionFixture = () => {
 		transactions,
 		dependencies,
 		agent,
-		controller: new Todos(new WorkspaceCommandRulesService(), dependencies)
+		controller: new Todos(testActor(), new WorkspaceCommandRulesService(), dependencies)
 	};
 };

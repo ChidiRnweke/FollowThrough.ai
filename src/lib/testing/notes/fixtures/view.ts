@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createReferenceServices } from '$lib/server/factories/capabilities/references-capability-factory';
 import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
@@ -37,34 +38,38 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 import { noteBuilder, projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 
 export const noteViewFixture = (note = noteBuilder()) => {
-	const notes = new InMemoryNoteRepository();
+	const notes = new InMemoryNoteRepository(testActor());
 	notes.notes = [note];
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	content.notes = notes.notes;
-	const projects = new InMemoryProjects();
+	const projects = new InMemoryProjects(testActor());
 	projects.projects = [projectBuilder()];
-	const anchors = new InMemoryAnchorRepository();
-	const provenance = new InMemoryProvenanceRepository();
+	const anchors = new InMemoryAnchorRepository(testActor());
+	const provenance = new InMemoryProvenanceRepository(testActor());
 	const graph = createRelationshipServices(
-		new InMemoryRelationshipRepository(),
+		testActor(),
+		new InMemoryRelationshipRepository(testActor()),
 		notes,
 		anchors,
 		provenance
 	);
 	const library = createReferenceServices(
-		new InMemoryReferenceRepository(),
+		testActor(),
+		new InMemoryReferenceRepository(testActor()),
 		notes,
 		anchors,
 		provenance
 	);
-	const todos = new InMemoryTodos();
+	const todos = new InMemoryTodos(testActor());
 	const suggestions = createSuggestionServices(
-		new InMemorySuggestionRepository(),
+		testActor(),
+		new InMemorySuggestionRepository(testActor()),
 		notes,
 		provenance,
 		anchors
 	);
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -86,12 +91,12 @@ export const noteViewFixture = (note = noteBuilder()) => {
 			suggestionPresentation: new SuggestionPresentationService(),
 			noteReader: content,
 			projectReader: projects,
-			userPreferences: new InMemoryUserPreferencesRepository(),
+			userPreferences: new InMemoryUserPreferencesRepository(testActor()),
 			relationshipFinder: graph.finder,
 			backlinkContextReader: graph.contexts,
 			referenceLister: library.lister,
 			referenceContextReader: library.contexts,
-			diagramLister: new InMemoryDiagramRepository(),
+			diagramLister: new InMemoryDiagramRepository(testActor()),
 			todoLister: todos,
 			todoContextReader: todos,
 			suggestionLister: suggestions.lister,

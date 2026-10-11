@@ -38,12 +38,18 @@ const content = (text: string): Pick<Note, 'plainText' | 'document'> => ({
 });
 
 it('discards against the publication that committed before it acquired the note', async () => {
-	const records = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository(records);
+	const records = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor(), records);
 	projects.projects = [projectBuilder()];
-	const catalog = createNoteServices(records, new InMemoryAnchorRepository(), projects);
-	const effects = new InMemoryNoteContent();
+	const catalog = createNoteServices(
+		testActor(),
+		records,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
+	const effects = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -77,18 +83,18 @@ it('discards against the publication that committed before it acquired the note'
 	);
 	const original = noteBuilder(content('First publication'));
 	records.notes = [original];
-	const first = await controller.publish(testActor(), {
+	const first = await controller.publish({
 		noteId: original.id,
 		baseEtag: noteEtag(original.id, original.currentRevision)
 	});
-	const { note: draft } = await controller.save(testActor(), {
+	const { note: draft } = await controller.save({
 		note: { ...first.note, ...content('New publication') }
 	});
 	const paused = records.pauseNextWriteRead();
-	const discarding = controller.discardDraft(testActor(), { noteId: original.id });
+	const discarding = controller.discardDraft({ noteId: original.id });
 	await paused.started;
 	try {
-		const latest = await controller.publish(testActor(), {
+		const latest = await controller.publish({
 			noteId: draft.id,
 			baseEtag: noteEtag(draft.id, draft.currentRevision)
 		});

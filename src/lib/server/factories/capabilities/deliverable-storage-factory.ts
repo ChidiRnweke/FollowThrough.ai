@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import type {
 	ArtifactRepository,
 	ExportSettingsRepository,
@@ -35,16 +36,17 @@ export interface ArtifactServices {
 	readonly exportSettingsWriter: ExportSettingsWriter;
 }
 export const createArtifactServices = (
+	actor: ActorContext,
 	artifacts: ArtifactRepository,
 	settings: ExportSettingsRepository
 ): ArtifactServices => {
-	const reader = new ArtifactReadingService(artifacts);
-	const preferences = new ArtifactSettingsService(settings);
+	const reader = new ArtifactReadingService(actor, artifacts);
+	const preferences = new ArtifactSettingsService(actor, settings);
 	return {
 		artifactWriter: new ArtifactWritingService(artifacts),
 		artifactReader: reader,
 		artifactLister: reader,
-		artifactDeleter: new ArtifactLifecycleService(artifacts),
+		artifactDeleter: new ArtifactLifecycleService(actor, artifacts),
 		exportSettingsReader: preferences,
 		exportSettingsWriter: preferences
 	};
@@ -56,11 +58,12 @@ export interface TemplateServices {
 	readonly templateLifecycle: TemplateLifecycle;
 }
 export const createTemplateServices = (
+	actor: ActorContext,
 	repository: TemplateRepository,
 	now: () => DateTime = () => new Date().toISOString() as DateTime
 ): TemplateServices => ({
-	templateUploads: new TemplateUploadService(repository, now),
+	templateUploads: new TemplateUploadService(actor, repository, now),
 	templateReader: new TemplateReadingService(repository),
-	templateWriter: new TemplateWritingService(repository, now),
-	templateLifecycle: new TemplateLifecycleService(repository)
+	templateWriter: new TemplateWritingService(actor, repository, now),
+	templateLifecycle: new TemplateLifecycleService(actor, repository)
 });

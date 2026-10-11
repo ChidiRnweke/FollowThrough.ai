@@ -14,9 +14,8 @@ import { context, seedNote } from '../database-harness';
 
 it('deletes the latest memory version after a concurrent edit commits', async () => {
 	const { owner, project } = await seedNote('22401');
-	const records = new MemoryRecords(context.db);
+	const records = new MemoryRecords(owner, context.db);
 	const entry = await records.insert(
-		owner,
 		memoryEntryBuilder({
 			id: testMemoryEntryId(22401),
 			userId: owner.userId,
@@ -28,9 +27,10 @@ it('deletes the latest memory version after a concurrent edit commits', async ()
 	const connection = connectPostgresTestDatabase(context.url);
 	const { database, transactionRunner } = createTransactionContext(connection.db);
 	const memory = createMemoryServices(
-		new MemoryRecords(database),
-		new ProjectRecords(database),
-		new ProvenanceRecords(database)
+		owner,
+		new MemoryRecords(owner, database),
+		new ProjectRecords(owner, database),
+		new ProvenanceRecords(owner, database)
 	);
 	const blocker = postgres(context.url, { max: 2 });
 	const locked = Promise.withResolvers<void>();
@@ -44,7 +44,7 @@ it('deletes the latest memory version after a concurrent edit commits', async ()
 	try {
 		await locked.promise;
 		const [backend] = await connection.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const removing = transactionRunner.run(() => memory.deleter.remove(owner, entry.id));
+		const removing = transactionRunner.run(() => memory.deleter.remove(entry.id));
 		await vi.waitFor(async () => {
 			const waiting = await blocker<
 				{ pid: number }[]
@@ -54,7 +54,7 @@ it('deletes the latest memory version after a concurrent edit commits', async ()
 		release.resolve();
 		await editing;
 		await removing;
-		const stored = await records.findById(owner, entry.id);
+		const stored = await records.findById(entry.id);
 		expect({
 			content: stored?.content,
 			shared: stored?.shareWithAgents,

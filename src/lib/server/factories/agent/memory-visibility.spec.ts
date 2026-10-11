@@ -27,7 +27,7 @@ import { createAgentToolSurface } from '$lib/testing/agent/fixtures/tool-surface
 
 const setup = (scope: 'user' | 'project') => {
 	const projectId = scope === 'project' ? testProjectId() : undefined;
-	const entries = new InMemoryMemoryEntryRepository();
+	const entries = new InMemoryMemoryEntryRepository(testActor());
 	const shared = memoryEntryBuilder({
 		id: testMemoryEntryId(1),
 		projectId,
@@ -59,10 +59,16 @@ const setup = (scope: 'user' | 'project') => {
 			content: 'Another actor'
 		})
 	];
-	const projects = new InMemoryProjectRepository();
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const library = createMemoryServices(entries, projects, new InMemoryProvenanceRepository());
+	const library = createMemoryServices(
+		testActor(),
+		entries,
+		projects,
+		new InMemoryProvenanceRepository(testActor())
+	);
 	const controller = new Memory(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
 			...agentToolResultsFixture(),
@@ -116,7 +122,7 @@ it.each(['user', 'project'] as const)(
 );
 it('refuses an archived project through the agent memory tool', async () => {
 	const { tool, projects } = setup('project');
-	await projects.archive(testActor(), testProjectId());
+	await projects.archive(testProjectId());
 	await expect(directTool(tool).prepare({ projectId: testProjectId() }).execute()).rejects.toThrow(
 		'Memory project was not found'
 	);

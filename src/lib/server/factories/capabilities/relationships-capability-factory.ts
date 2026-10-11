@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import type {
@@ -45,6 +46,7 @@ export interface RelationshipsCapability extends RelationshipServices {
 }
 
 export const createRelationshipsCapability = (
+	actor: ActorContext,
 	input: RelationshipsCapabilityInput
 ): RelationshipsCapability => ({
 	classifier: new RelationshipDiscovery(
@@ -59,7 +61,8 @@ export const createRelationshipsCapability = (
 		? { kind: 'model', model: input.defaultModel }
 		: { kind: 'rules' },
 	...createRelationshipServices(
-		new RelationshipRecords(input.db),
+		actor,
+		new RelationshipRecords(actor, input.db),
 		input.notes,
 		input.anchors,
 		input.provenance
@@ -73,6 +76,7 @@ export interface RelationshipServices {
 	readonly reconciler: NoteLinkReconciler;
 }
 export const createRelationshipServices = (
+	actor: ActorContext,
 	relationships: NoteRelationshipRepository,
 	notes: NoteRepository,
 	anchors: SourceAnchorRepository,
@@ -80,9 +84,9 @@ export const createRelationshipServices = (
 ): RelationshipServices => {
 	const reading = new RelationshipReadingService(relationships, notes);
 	return {
-		creator: new RelationshipWritingService(relationships, notes, anchors, provenance),
+		creator: new RelationshipWritingService(actor, relationships, notes, anchors, provenance),
 		finder: reading,
 		contexts: reading,
-		reconciler: new NoteLinkReconciliationService(relationships, notes)
+		reconciler: new NoteLinkReconciliationService(actor, relationships, notes)
 	};
 };

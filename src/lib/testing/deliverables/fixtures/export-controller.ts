@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { WidgetExportService } from '$lib/services/widgets/export-blocks';
 import { WidgetSourceService } from '$lib/services/widgets/sources';
 import { WidgetEvaluationService } from '$lib/services/widgets/edits';
@@ -47,22 +48,23 @@ export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 		pdfRendering,
 		...dependencies
 	} = overrides;
-	const artifacts = new InMemoryArtifactRepository();
+	const artifacts = new InMemoryArtifactRepository(testActor());
 	const storage = new InMemoryAttachmentStorage();
-	const notes = new InMemoryNoteContent();
-	const templates = new InMemoryTemplateRepository();
-	const exportSettings = new InMemoryExportSettingsRepository();
-	const provenance = new InMemoryProvenanceRecorder();
-	const library = createArtifactServices(artifacts, exportSettings);
-	const widgets = new InMemoryWidgetRepository();
-	const todos = new InMemoryTodoRepository();
+	const notes = new InMemoryNoteContent(testActor());
+	const templates = new InMemoryTemplateRepository(testActor());
+	const exportSettings = new InMemoryExportSettingsRepository(testActor());
+	const provenance = new InMemoryProvenanceRecorder(testActor());
+	const library = createArtifactServices(testActor(), artifacts, exportSettings);
+	const widgets = new InMemoryWidgetRepository(testActor());
+	const todos = new InMemoryTodoRepository(testActor());
 	const service = new Deliverables(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
 			...agentToolResultsFixture(),
 			exportSettingsRules: new ExportSettingsRuleService(),
 			artifactFiles: new ArtifactFileService(),
-			...createTemplateServices(templates),
+			...createTemplateServices(testActor(), templates),
 			artifactStorage: storage,
 			artifactWriter: library.artifactWriter,
 			artifactReader: library.artifactReader,
@@ -77,9 +79,10 @@ export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 			widgetSources: new WidgetSourceService(),
 			widgetEvaluation: new WidgetEvaluationService(),
 			widgetReader: new WidgetLibrary(
+				testActor(),
 				widgets,
-				new InMemoryProjectRepository(),
-				new InMemoryNoteRepository()
+				new InMemoryProjectRepository(testActor()),
+				new InMemoryNoteRepository(testActor())
 			),
 			todoLister: todos,
 			noteLister: notes,

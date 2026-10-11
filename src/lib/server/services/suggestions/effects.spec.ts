@@ -71,7 +71,7 @@ const acceptedMemory = (operation: 'update' | 'remove') =>
 		appliedArtifactId: operation === 'update' ? testMemoryEntryId(2) : testMemoryEntryId()
 	});
 const setup = () => {
-	const repository = new InMemoryApplicationEffects();
+	const repository = new InMemoryApplicationEffects(testActor());
 	return { repository, service: new SuggestionEffects(repository) };
 };
 const replacement = async () => {
@@ -92,7 +92,7 @@ const replacement = async () => {
 	};
 	context.repository.put(deleted);
 	context.repository.put(created);
-	await context.service.record(testActor(), testSuggestionId(), [
+	await context.service.record(testSuggestionId(), [
 		{ kind: 'modified', before, after: deleted },
 		{ kind: 'created', after: created }
 	]);
@@ -101,16 +101,14 @@ const replacement = async () => {
 describe('Recorded proposal undo', () => {
 	it('refuses automatic undo for an accepted proposal without a recorded effect', async () => {
 		const { service } = setup();
-		await expect(service.restore(testActor(), accepted())).rejects.toThrow(
-			'its changes were not recorded'
-		);
+		await expect(service.restore(accepted())).rejects.toThrow('its changes were not recorded');
 	});
 	it('withdraws a newly created record', async () => {
 		const { service, repository } = setup();
 		const after: AppliedRecord = { type: 'todos', value: todoBuilder() };
 		repository.put(after);
-		await service.record(testActor(), testSuggestionId(), [{ kind: 'created', after }]);
-		const result = await service.restore(testActor(), accepted());
+		await service.record(testSuggestionId(), [{ kind: 'created', after }]);
+		const result = await service.restore(accepted());
 		expect(result).toEqual([
 			{ type: 'todos', value: expect.objectContaining({ deletedAt: expect.any(String) }) }
 		]);
@@ -123,26 +121,26 @@ describe('Recorded proposal undo', () => {
 			value: { ...before.value, justification: 'Suggested' }
 		};
 		repository.put(after);
-		await service.record(testActor(), testSuggestionId(), [{ kind: 'modified', before, after }]);
-		expect(await service.restore(testActor(), acceptedBacklink())).toEqual([before]);
+		await service.record(testSuggestionId(), [{ kind: 'modified', before, after }]);
+		expect(await service.restore(acceptedBacklink())).toEqual([before]);
 	});
 	it('leaves an unchanged participant alone after later edits', async () => {
 		const { service, repository } = setup();
 		const after = relationship();
 		repository.put(after);
-		await service.record(testActor(), testSuggestionId(), [{ kind: 'unchanged', after }]);
+		await service.record(testSuggestionId(), [{ kind: 'unchanged', after }]);
 		repository.put({
 			type: 'note_relationships',
 			value: { ...after.value, justification: 'Later edit' }
 		});
-		await service.restore(testActor(), acceptedBacklink('Original'));
+		await service.restore(acceptedBacklink('Original'));
 		expect(repository.records.get(`note_relationships:${after.value.id}`)?.value).toMatchObject({
 			justification: 'Later edit'
 		});
 	});
 	it('restores the superseded memory and withdraws its replacement together', async () => {
 		const { service, before, created } = await replacement();
-		expect(await service.restore(testActor(), acceptedMemory('update'))).toEqual([
+		expect(await service.restore(acceptedMemory('update'))).toEqual([
 			{
 				type: 'memory_entries',
 				value: expect.objectContaining({ id: created.value.id, deletedAt: expect.any(String) })
@@ -153,7 +151,7 @@ describe('Recorded proposal undo', () => {
 	it('does not partially reverse a replacement when either record changed', async () => {
 		const { service, repository, created, deleted } = await replacement();
 		repository.put(created);
-		const failure = await service.restore(testActor(), acceptedMemory('update')).then(
+		const failure = await service.restore(acceptedMemory('update')).then(
 			() => null,
 			(error) => error
 		);
@@ -173,7 +171,7 @@ describe('Recorded proposal undo', () => {
 			value: { ...before.value, deletedAt: testNow }
 		};
 		repository.put(after);
-		await service.record(testActor(), testSuggestionId(), [{ kind: 'modified', before, after }]);
-		expect(await service.restore(testActor(), acceptedMemory('remove'))).toEqual([before]);
+		await service.record(testSuggestionId(), [{ kind: 'modified', before, after }]);
+		expect(await service.restore(acceptedMemory('remove'))).toEqual([before]);
 	});
 });

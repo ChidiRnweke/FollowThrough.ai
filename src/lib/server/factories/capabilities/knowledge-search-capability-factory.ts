@@ -1,9 +1,15 @@
+import type { ActorContext } from '$lib/models/identity';
 import type { OperationObserver, WorkflowObserver } from '$lib/models/telemetry';
 import type { InlineCompletionService } from '$lib/server/services/inline-suggestions/completion';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { TokenCodec } from '$lib/models/tokenization';
-import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
+import {
+	EmbeddingBacklog,
+	KnowledgeIndexing,
+	type EmbeddingBacklogController,
+	type KnowledgeIndexingController
+} from '$lib/server/controllers/knowledge-indexing/controller';
 import {
 	ToolDiscovery,
 	type ToolDiscoveryController
@@ -21,12 +27,16 @@ import {
 } from '$lib/server/services/agent/tools/tool-search';
 import { DEFAULT_EMBEDDING_MODEL } from '$lib/models/knowledge-search/embeddings';
 import { DEFAULT_SEARCH_QUERY_MODEL } from '$lib/models/knowledge-search/query-generation';
-import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
+import {
+	KnowledgeBacklogRecords,
+	KnowledgeIndexRecords
+} from '$lib/server/repositories/knowledge-search/postgres/search';
 import {
 	InlineContextService,
 	type IInlineContextService
 } from '$lib/server/services/inline-suggestions/inline-context';
 import { MaintenanceProgressService } from '$lib/server/services/maintenance/progress';
+import { IndexBacklogService } from '$lib/server/services/knowledge-search/backlog';
 import { MaintenanceCursorRecords } from '$lib/server/repositories/maintenance/postgres/cursors';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 
@@ -58,7 +68,7 @@ export interface KnowledgeSearchCapability {
 	readonly tokenizer: TokenCodec;
 	/** Indexing, backfill and search over knowledge: one capability behind its interfaces. */
 	readonly knowledge: KnowledgeRetrievalCapabilities;
-	readonly maintenance: ScheduledTask;
+	readonly indexing: KnowledgeIndexingController;
 	readonly toolRetriever: ToolDiscoveryController;
 	readonly toolDiscovery: ToolRanking;
 	readonly finalize: (input: KnowledgeSearchFinalizeInput) => KnowledgeSearchFinalized;
@@ -79,6 +89,7 @@ export interface KnowledgeSearchFinalized {
 }
 
 export const createKnowledgeSearchCapability = (
+	actor: ActorContext,
 	input: KnowledgeSearchCapabilityInput
 ): KnowledgeSearchCapability => {
 	const { tokenizer } = input;
@@ -89,8 +100,8 @@ export const createKnowledgeSearchCapability = (
 	});
 	const knowledge =
 		input.knowledge ??
-		new KnowledgeRetrieval({
-			repository: new KnowledgeIndexRecords(input.db),
+		new KnowledgeRetrieval(actor, {
+			repository: new KnowledgeIndexRecords(actor, input.db),
 			provider: provider.client,
 			rerank: provider.rerank,
 			models: { embedding: DEFAULT_EMBEDDING_MODEL, query: DEFAULT_SEARCH_QUERY_MODEL },
@@ -141,20 +152,13 @@ export const createKnowledgeSearchCapability = (
 			workflow: workflowObserver,
 			admission: new InlineAdmissionService(new InlineAttemptRecords(input.db))
 		}),
-		maintenance: new EmbeddingMaintenance(
-			knowledge,
-			input.transactionRunner,
-			new MaintenanceProgressService(new MaintenanceCursorRecords(input.db)),
-			{
-				...optionalProperty(
-					'intervalMs',
-					positiveNumberFromEnvironment('EMBEDDING_SWEEP_INTERVAL_MS')
-				),
-				...optionalProperty(
-					'maxSourcesPerTick',
-					positiveNumberFromEnvironment('EMBEDDING_SWEEP_MAX_SOURCES')
-				)
-			}
-		)
+		indexing: new KnowledgeIndexing(knowledge, input.transactionRunner)
 	};
 };
+
+/** The embedding backlog across every user, which the worker drains as each source's owner. */
+export const createEmbeddingBacklog = (db: Database): EmbeddingBacklogController =>
+	new EmbeddingBacklog(
+		new IndexBacklogService(new KnowledgeBacklogRecords(db)),
+		new MaintenanceProgressService(new MaintenanceCursorRecords(db))
+	);

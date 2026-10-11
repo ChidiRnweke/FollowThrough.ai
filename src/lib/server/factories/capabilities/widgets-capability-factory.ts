@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { createWidgetRules, type WidgetRules } from '$lib/factories/widgets/rules';
 import type {
 	WidgetReader,
@@ -22,7 +23,15 @@ export interface WidgetsCapability extends WidgetRules {
 	readonly writer: WidgetWriter;
 }
 
-export const createWidgetsCapability = (input: WidgetsCapabilityInput): WidgetsCapability => {
-	const library = new WidgetLibrary(new WidgetRecords(input.db), input.projects, input.notes);
+export const createWidgetsCapability = (
+	actor: ActorContext,
+	input: WidgetsCapabilityInput
+): WidgetsCapability => {
+	const library = new WidgetLibrary(
+		actor,
+		new WidgetRecords(actor, input.db),
+		input.projects,
+		input.notes
+	);
 	return { reader: library, lister: library, writer: library, ...createWidgetRules() };
 };

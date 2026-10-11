@@ -12,6 +12,7 @@ import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 import { NotFoundError } from '$lib/errors';
 import type {
+	AttachmentBacklogRepository,
 	AttachmentRepository,
 	UploadRetentionCursor,
 	OwnedAttachmentUpload
@@ -63,24 +64,27 @@ const toView = (
 	}
 });
 
+/** Projects that are not archived; attachments in archived projects are hidden everywhere. */
+const activeProjectIds = (database: Database) =>
+	database
+		.select({ id: schema.projects.id })
+		.from(schema.projects)
+		.where(isNull(schema.projects.archivedAt));
+
 export class AttachmentRecords implements AttachmentRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	private activeProjectIds() {
-		return this.database
-			.select({ id: schema.projects.id })
-			.from(schema.projects)
-			.where(isNull(schema.projects.archivedAt));
-	}
-
-	async createUpload(actor: ActorContext, upload: AttachmentUpload): Promise<AttachmentUpload> {
+	async createUpload(upload: AttachmentUpload): Promise<AttachmentUpload> {
 		const [project] = await this.database
 			.select({ id: schema.projects.id })
 			.from(schema.projects)
 			.where(
 				and(
 					eq(schema.projects.id, upload.projectId),
-					eq(schema.projects.userId, actor.userId),
+					eq(schema.projects.userId, this.actor.userId),
 					isNull(schema.projects.archivedAt)
 				)
 			);
@@ -89,7 +93,7 @@ export class AttachmentRecords implements AttachmentRepository {
 			.insert(schema.attachmentUploads)
 			.values({
 				id: upload.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				projectId: upload.projectId,
 				noteId: upload.noteId,
 				path: upload.path,
@@ -104,26 +108,267 @@ export class AttachmentRecords implements AttachmentRepository {
 		return toUpload(row!);
 	}
 
-	async findUpload(actor: ActorContext, id: AttachmentUpload['id']) {
+	async findUpload(id: AttachmentUpload['id']) {
 		const [row] = await this.database
 			.select()
 			.from(schema.attachmentUploads)
 			.where(
 				and(
 					eq(schema.attachmentUploads.id, id),
-					eq(schema.attachmentUploads.userId, actor.userId),
-					inArray(schema.attachmentUploads.projectId, this.activeProjectIds())
+					eq(schema.attachmentUploads.userId, this.actor.userId),
+					inArray(schema.attachmentUploads.projectId, activeProjectIds(this.database))
 				)
 			);
 		return row ? toUpload(row) : undefined;
 	}
 
-	async deleteUpload(actor: ActorContext, id: AttachmentUpload['id']): Promise<void> {
+	async deleteUpload(id: AttachmentUpload['id']): Promise<void> {
 		await this.database
 			.delete(schema.attachmentUploads)
 			.where(
-				and(eq(schema.attachmentUploads.id, id), eq(schema.attachmentUploads.userId, actor.userId))
+				and(
+					eq(schema.attachmentUploads.id, id),
+					eq(schema.attachmentUploads.userId, this.actor.userId)
+				)
 			);
+	}
+
+	async list(noteId: NoteId): Promise<readonly AttachmentView[]> {
+		return (
+			await this.database
+				.select({ attachment: schema.attachments, version: schema.attachmentVersions })
+				.from(schema.attachments)
+				.innerJoin(
+					schema.attachmentVersions,
+					eq(schema.attachmentVersions.id, schema.attachments.currentVersionId)
+				)
+				.where(
+					and(
+						eq(schema.attachments.noteId, noteId),
+						eq(schema.attachments.userId, this.actor.userId),
+						inArray(schema.attachments.projectId, activeProjectIds(this.database))
+					)
+				)
+				.orderBy(asc(schema.attachments.path))
+		).map(({ attachment, version }) => toView(attachment, version));
+	}
+
+	async listForProject(projectId: ProjectId): Promise<readonly AttachmentView[]> {
+		return (
+			await this.database
+				.select({ attachment: schema.attachments, version: schema.attachmentVersions })
+				.from(schema.attachments)
+				.innerJoin(
+					schema.attachmentVersions,
+					eq(schema.attachmentVersions.id, schema.attachments.currentVersionId)
+				)
+				.where(
+					and(
+						eq(schema.attachments.projectId, projectId),
+						eq(schema.attachments.userId, this.actor.userId),
+						inArray(schema.attachments.projectId, activeProjectIds(this.database)),
+						sql`${schema.attachments.noteId} is null`
+					)
+				)
+				.orderBy(asc(schema.attachments.path))
+		).map(({ attachment, version }) => toView(attachment, version));
+	}
+
+	async linkToTodo(id: Attachment['id'], todoId: TodoId): Promise<void> {
+		// Guarded by the actor's ownership of the attachment; the todo itself is
+		// reached through the same user's project, and the foreign key rejects a
+		// todo that does not exist.
+		const owned = await this.findById(id);
+		if (!owned) throw new NotFoundError('Attachment was not found');
+		await this.database
+			.insert(schema.todoAttachments)
+			.values({ todoId, attachmentId: id })
+			.onConflictDoNothing();
+	}
+
+	async listForTodo(todoId: TodoId): Promise<readonly AttachmentView[]> {
+		return (
+			await this.database
+				.select({ attachment: schema.attachments, version: schema.attachmentVersions })
+				.from(schema.todoAttachments)
+				.innerJoin(
+					schema.attachments,
+					eq(schema.attachments.id, schema.todoAttachments.attachmentId)
+				)
+				.innerJoin(
+					schema.attachmentVersions,
+					eq(schema.attachmentVersions.id, schema.attachments.currentVersionId)
+				)
+				.where(
+					and(
+						eq(schema.todoAttachments.todoId, todoId),
+						eq(schema.attachments.userId, this.actor.userId),
+						inArray(schema.attachments.projectId, activeProjectIds(this.database))
+					)
+				)
+				.orderBy(asc(schema.attachments.path))
+		).map(({ attachment, version }) => toView(attachment, version));
+	}
+
+	async findById(id: Attachment['id']): Promise<AttachmentView | undefined> {
+		const [row] = await this.database
+			.select({ attachment: schema.attachments, version: schema.attachmentVersions })
+			.from(schema.attachments)
+			.innerJoin(
+				schema.attachmentVersions,
+				eq(schema.attachmentVersions.id, schema.attachments.currentVersionId)
+			)
+			.where(
+				and(
+					eq(schema.attachments.id, id),
+					eq(schema.attachments.userId, this.actor.userId),
+					inArray(schema.attachments.projectId, activeProjectIds(this.database))
+				)
+			);
+		return row ? toView(row.attachment, row.version) : undefined;
+	}
+
+	async findByPath(noteId: NoteId, path: string) {
+		return (await this.list(noteId)).find((item) => item.attachment.path === path);
+	}
+
+	async finalize(upload: AttachmentUpload, version: AttachmentVersion): Promise<AttachmentView> {
+		const [existing] = await this.database
+			.select({ id: schema.attachments.id })
+			.from(schema.attachments)
+			.where(
+				and(
+					eq(schema.attachments.userId, this.actor.userId),
+					eq(schema.attachments.projectId, upload.projectId),
+					upload.noteId
+						? eq(schema.attachments.noteId, upload.noteId)
+						: sql`${schema.attachments.noteId} is null`,
+					eq(schema.attachments.path, upload.path)
+				)
+			);
+		let attachmentId = existing?.id as Attachment['id'] | undefined;
+		if (!attachmentId) {
+			const [attachment] = await this.database
+				.insert(schema.attachments)
+				.values({
+					id: version.attachmentId,
+					userId: this.actor.userId,
+					projectId: upload.projectId,
+					noteId: upload.noteId,
+					path: upload.path
+				})
+				.returning();
+			attachmentId = attachment!.id as Attachment['id'];
+		}
+		const [storedVersion] = await this.database
+			.insert(schema.attachmentVersions)
+			.values({
+				id: version.id,
+				attachmentId,
+				objectKey: version.objectKey,
+				mediaType: version.mediaType,
+				byteSize: version.byteSize,
+				checksumSha256: version.checksumSha256,
+				parserKind: version.parserKind,
+				extractedText: version.extractedText,
+				processingStatus: version.processingStatus,
+				processingFailure: version.processingFailure,
+				processedAt: version.processedAt ? new Date(version.processedAt) : undefined,
+				createdAt: new Date(version.createdAt)
+			})
+			.returning();
+		const [storedAttachment] = await this.database
+			.update(schema.attachments)
+			.set({ currentVersionId: storedVersion!.id, updatedAt: new Date() })
+			.where(
+				and(
+					eq(schema.attachments.id, attachmentId),
+					eq(schema.attachments.userId, this.actor.userId)
+				)
+			)
+			.returning();
+		await this.deleteUpload(upload.id);
+		return toView(storedAttachment!, storedVersion!);
+	}
+
+	async remove(noteId: NoteId, path: string): Promise<void> {
+		await this.database
+			.update(schema.attachments)
+			.set({ currentVersionId: null, updatedAt: new Date() })
+			.where(
+				and(
+					eq(schema.attachments.userId, this.actor.userId),
+					eq(schema.attachments.noteId, noteId),
+					eq(schema.attachments.path, path)
+				)
+			);
+	}
+
+	async removeById(id: Attachment['id']): Promise<void> {
+		await this.database.transaction(async (transaction) => {
+			const [attachment] = await transaction
+				.select({ id: schema.attachments.id })
+				.from(schema.attachments)
+				.where(and(eq(schema.attachments.id, id), eq(schema.attachments.userId, this.actor.userId)))
+				.for('update');
+			if (!attachment) throw new NotFoundError('Attachment was not found');
+			const versions = await transaction
+				.select({ objectKey: schema.attachmentVersions.objectKey })
+				.from(schema.attachmentVersions)
+				.where(eq(schema.attachmentVersions.attachmentId, id));
+			if (versions.length)
+				await transaction
+					.insert(schema.attachmentObjectRemovals)
+					.values(versions)
+					.onConflictDoNothing();
+			await transaction.delete(schema.attachments).where(eq(schema.attachments.id, id));
+		});
+	}
+
+	async updateVersion(version: AttachmentVersion): Promise<AttachmentView> {
+		const [row] = await this.database
+			.update(schema.attachmentVersions)
+			.set({
+				parserKind: version.parserKind ?? null,
+				extractedText: version.extractedText ?? null,
+				processingStatus: version.processingStatus,
+				processingFailure: version.processingFailure ?? null,
+				processedAt: version.processedAt ? new Date(version.processedAt) : null
+			})
+			.where(eq(schema.attachmentVersions.id, version.id))
+			.returning();
+		const view = await this.findById(version.attachmentId);
+		if (!row || !view) throw new NotFoundError('Attachment was not found');
+		return view;
+	}
+
+	async findVersionForUpdate(versionId: AttachmentVersion['id']) {
+		const [row] = await this.database
+			.select({ attachment: schema.attachments, version: schema.attachmentVersions })
+			.from(schema.attachments)
+			.innerJoin(
+				schema.attachmentVersions,
+				eq(schema.attachmentVersions.attachmentId, schema.attachments.id)
+			)
+			.where(
+				and(
+					eq(schema.attachments.userId, this.actor.userId),
+					eq(schema.attachmentVersions.id, versionId),
+					isNotNull(schema.attachments.currentVersionId),
+					inArray(schema.attachments.projectId, activeProjectIds(this.database))
+				)
+			)
+			.for('update');
+		return row ? toView(row.attachment, row.version) : undefined;
+	}
+}
+
+/** Attachment work across every user, for the worker. Rows carry their owner. */
+export class AttachmentBacklogRecords implements AttachmentBacklogRepository {
+	constructor(private readonly database: Database) {}
+
+	async deleteExpiredUpload(id: AttachmentUpload['id']): Promise<void> {
+		await this.database.delete(schema.attachmentUploads).where(eq(schema.attachmentUploads.id, id));
 	}
 
 	async listExpiredUploads(
@@ -153,182 +398,6 @@ export class AttachmentRecords implements AttachmentRepository {
 				.limit(limit)
 		).map((row) => ({ userId: row.userId as UserId, upload: toUpload(row) }));
 	}
-
-	async list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]> {
-		return (
-			await this.database
-				.select({ attachment: schema.attachments, version: schema.attachmentVersions })
-				.from(schema.attachments)
-				.innerJoin(
-					schema.attachmentVersions,
-					eq(schema.attachmentVersions.id, schema.attachments.currentVersionId)
-				)
-				.where(
-					and(
-						eq(schema.attachments.noteId, noteId),
-						eq(schema.attachments.userId, actor.userId),
-						inArray(schema.attachments.projectId, this.activeProjectIds())
-					)
-				)
-				.orderBy(asc(schema.attachments.path))
-		).map(({ attachment, version }) => toView(attachment, version));
-	}
-
-	async listForProject(
-		actor: ActorContext,
-		projectId: ProjectId
-	): Promise<readonly AttachmentView[]> {
-		return (
-			await this.database
-				.select({ attachment: schema.attachments, version: schema.attachmentVersions })
-				.from(schema.attachments)
-				.innerJoin(
-					schema.attachmentVersions,
-					eq(schema.attachmentVersions.id, schema.attachments.currentVersionId)
-				)
-				.where(
-					and(
-						eq(schema.attachments.projectId, projectId),
-						eq(schema.attachments.userId, actor.userId),
-						inArray(schema.attachments.projectId, this.activeProjectIds()),
-						sql`${schema.attachments.noteId} is null`
-					)
-				)
-				.orderBy(asc(schema.attachments.path))
-		).map(({ attachment, version }) => toView(attachment, version));
-	}
-
-	async linkToTodo(actor: ActorContext, id: Attachment['id'], todoId: TodoId): Promise<void> {
-		// Guarded by the actor's ownership of the attachment; the todo itself is
-		// reached through the same user's project, and the foreign key rejects a
-		// todo that does not exist.
-		const owned = await this.findById(actor, id);
-		if (!owned) throw new NotFoundError('Attachment was not found');
-		await this.database
-			.insert(schema.todoAttachments)
-			.values({ todoId, attachmentId: id })
-			.onConflictDoNothing();
-	}
-
-	async listForTodo(actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]> {
-		return (
-			await this.database
-				.select({ attachment: schema.attachments, version: schema.attachmentVersions })
-				.from(schema.todoAttachments)
-				.innerJoin(
-					schema.attachments,
-					eq(schema.attachments.id, schema.todoAttachments.attachmentId)
-				)
-				.innerJoin(
-					schema.attachmentVersions,
-					eq(schema.attachmentVersions.id, schema.attachments.currentVersionId)
-				)
-				.where(
-					and(
-						eq(schema.todoAttachments.todoId, todoId),
-						eq(schema.attachments.userId, actor.userId),
-						inArray(schema.attachments.projectId, this.activeProjectIds())
-					)
-				)
-				.orderBy(asc(schema.attachments.path))
-		).map(({ attachment, version }) => toView(attachment, version));
-	}
-
-	async findById(actor: ActorContext, id: Attachment['id']): Promise<AttachmentView | undefined> {
-		const [row] = await this.database
-			.select({ attachment: schema.attachments, version: schema.attachmentVersions })
-			.from(schema.attachments)
-			.innerJoin(
-				schema.attachmentVersions,
-				eq(schema.attachmentVersions.id, schema.attachments.currentVersionId)
-			)
-			.where(
-				and(
-					eq(schema.attachments.id, id),
-					eq(schema.attachments.userId, actor.userId),
-					inArray(schema.attachments.projectId, this.activeProjectIds())
-				)
-			);
-		return row ? toView(row.attachment, row.version) : undefined;
-	}
-
-	async findByPath(actor: ActorContext, noteId: NoteId, path: string) {
-		return (await this.list(actor, noteId)).find((item) => item.attachment.path === path);
-	}
-
-	async finalize(
-		actor: ActorContext,
-		upload: AttachmentUpload,
-		version: AttachmentVersion
-	): Promise<AttachmentView> {
-		const [existing] = await this.database
-			.select({ id: schema.attachments.id })
-			.from(schema.attachments)
-			.where(
-				and(
-					eq(schema.attachments.userId, actor.userId),
-					eq(schema.attachments.projectId, upload.projectId),
-					upload.noteId
-						? eq(schema.attachments.noteId, upload.noteId)
-						: sql`${schema.attachments.noteId} is null`,
-					eq(schema.attachments.path, upload.path)
-				)
-			);
-		let attachmentId = existing?.id as Attachment['id'] | undefined;
-		if (!attachmentId) {
-			const [attachment] = await this.database
-				.insert(schema.attachments)
-				.values({
-					id: version.attachmentId,
-					userId: actor.userId,
-					projectId: upload.projectId,
-					noteId: upload.noteId,
-					path: upload.path
-				})
-				.returning();
-			attachmentId = attachment!.id as Attachment['id'];
-		}
-		const [storedVersion] = await this.database
-			.insert(schema.attachmentVersions)
-			.values({
-				id: version.id,
-				attachmentId,
-				objectKey: version.objectKey,
-				mediaType: version.mediaType,
-				byteSize: version.byteSize,
-				checksumSha256: version.checksumSha256,
-				parserKind: version.parserKind,
-				extractedText: version.extractedText,
-				processingStatus: version.processingStatus,
-				processingFailure: version.processingFailure,
-				processedAt: version.processedAt ? new Date(version.processedAt) : undefined,
-				createdAt: new Date(version.createdAt)
-			})
-			.returning();
-		const [storedAttachment] = await this.database
-			.update(schema.attachments)
-			.set({ currentVersionId: storedVersion!.id, updatedAt: new Date() })
-			.where(
-				and(eq(schema.attachments.id, attachmentId), eq(schema.attachments.userId, actor.userId))
-			)
-			.returning();
-		await this.deleteUpload(actor, upload.id);
-		return toView(storedAttachment!, storedVersion!);
-	}
-
-	async remove(actor: ActorContext, noteId: NoteId, path: string): Promise<void> {
-		await this.database
-			.update(schema.attachments)
-			.set({ currentVersionId: null, updatedAt: new Date() })
-			.where(
-				and(
-					eq(schema.attachments.userId, actor.userId),
-					eq(schema.attachments.noteId, noteId),
-					eq(schema.attachments.path, path)
-				)
-			);
-	}
-
 	async listPendingObjectRemovals(): Promise<readonly string[]> {
 		return (
 			await this.database
@@ -345,44 +414,6 @@ export class AttachmentRecords implements AttachmentRepository {
 			.delete(schema.attachmentObjectRemovals)
 			.where(eq(schema.attachmentObjectRemovals.objectKey, objectKey));
 	}
-	async removeById(actor: ActorContext, id: Attachment['id']): Promise<void> {
-		await this.database.transaction(async (transaction) => {
-			const [attachment] = await transaction
-				.select({ id: schema.attachments.id })
-				.from(schema.attachments)
-				.where(and(eq(schema.attachments.id, id), eq(schema.attachments.userId, actor.userId)))
-				.for('update');
-			if (!attachment) throw new NotFoundError('Attachment was not found');
-			const versions = await transaction
-				.select({ objectKey: schema.attachmentVersions.objectKey })
-				.from(schema.attachmentVersions)
-				.where(eq(schema.attachmentVersions.attachmentId, id));
-			if (versions.length)
-				await transaction
-					.insert(schema.attachmentObjectRemovals)
-					.values(versions)
-					.onConflictDoNothing();
-			await transaction.delete(schema.attachments).where(eq(schema.attachments.id, id));
-		});
-	}
-
-	async updateVersion(actor: ActorContext, version: AttachmentVersion): Promise<AttachmentView> {
-		const [row] = await this.database
-			.update(schema.attachmentVersions)
-			.set({
-				parserKind: version.parserKind ?? null,
-				extractedText: version.extractedText ?? null,
-				processingStatus: version.processingStatus,
-				processingFailure: version.processingFailure ?? null,
-				processedAt: version.processedAt ? new Date(version.processedAt) : null
-			})
-			.where(eq(schema.attachmentVersions.id, version.id))
-			.returning();
-		const view = await this.findById(actor, version.attachmentId);
-		if (!row || !view) throw new NotFoundError('Attachment was not found');
-		return view;
-	}
-
 	async listPendingVersions() {
 		return (
 			await this.database
@@ -404,31 +435,12 @@ export class AttachmentRecords implements AttachmentRepository {
 							)
 						),
 						isNotNull(schema.attachments.currentVersionId),
-						inArray(schema.attachments.projectId, this.activeProjectIds())
+						inArray(schema.attachments.projectId, activeProjectIds(this.database))
 					)
 				)
 		).map((row) => ({
 			userId: row.userId as UserId,
 			versionId: row.versionId as AttachmentVersion['id']
 		}));
-	}
-	async findVersionForUpdate(actor: ActorContext, versionId: AttachmentVersion['id']) {
-		const [row] = await this.database
-			.select({ attachment: schema.attachments, version: schema.attachmentVersions })
-			.from(schema.attachments)
-			.innerJoin(
-				schema.attachmentVersions,
-				eq(schema.attachmentVersions.attachmentId, schema.attachments.id)
-			)
-			.where(
-				and(
-					eq(schema.attachments.userId, actor.userId),
-					eq(schema.attachmentVersions.id, versionId),
-					isNotNull(schema.attachments.currentVersionId),
-					inArray(schema.attachments.projectId, this.activeProjectIds())
-				)
-			)
-			.for('update');
-		return row ? toView(row.attachment, row.version) : undefined;
 	}
 }

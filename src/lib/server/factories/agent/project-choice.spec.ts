@@ -22,9 +22,9 @@ import { expect, it } from 'vitest';
 import { createAgentToolSurface } from '$lib/testing/agent/fixtures/tool-surface';
 
 const toolsFor = (hasProject: boolean) => {
-	const projects = new InMemoryProjectRepository();
+	const projects = new InMemoryProjectRepository(testActor());
 	if (hasProject) projects.projects = [projectBuilder({ role: 'inbox', name: 'Renamed inbox' })];
-	const catalog = createProjectServices(projects, projects);
+	const catalog = createProjectServices(testActor(), projects, projects);
 
 	return createAgentToolSurface(
 		testTokenizer,

@@ -7,7 +7,7 @@ import { RunSignalService } from './signals';
 const runId = '32000000-0000-4000-8000-000000000001' as AgentRunId;
 
 const setup = (status: AgentRun['status']) => {
-	const runs = new InMemoryAgentRunPersistence();
+	const runs = new InMemoryAgentRunPersistence(testActor());
 	runs.runs.push({
 		kind: 'workflow',
 		id: runId,
@@ -26,7 +26,7 @@ const setup = (status: AgentRun['status']) => {
 };
 
 const cancel = (runs: InMemoryAgentRunPersistence) =>
-	runs.updateCancellation(testActor(), runId, {
+	runs.updateCancellation(runId, {
 		status: 'cancelling',
 		cancelRequestedAt: testNow,
 		updatedAt: testNow

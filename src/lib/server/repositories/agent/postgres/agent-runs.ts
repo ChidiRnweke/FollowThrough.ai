@@ -69,7 +69,10 @@ export class AgentRunEventRecords implements AgentRunEventRepository {
 	): Promise<AgentRunEventRecord> {
 		return this.append(runId, 1, noteActionEvent(result));
 	}
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
 	async append(
 		runId: AgentRunId,
@@ -83,11 +86,7 @@ export class AgentRunEventRecords implements AgentRunEventRepository {
 		return toEvent(row!);
 	}
 
-	async replay(
-		actor: ActorContext,
-		runId: AgentRunId,
-		after: string
-	): Promise<readonly StoredAgentRunEventRecord[]> {
+	async replay(runId: AgentRunId, after: string): Promise<readonly StoredAgentRunEventRecord[]> {
 		const rows = await this.database
 			.select({ event: schema.agentRunEvents })
 			.from(schema.agentRunEvents)
@@ -95,7 +94,7 @@ export class AgentRunEventRecords implements AgentRunEventRepository {
 			.where(
 				and(
 					eq(schema.agentRunEvents.runId, runId),
-					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.userId, this.actor.userId),
 					gt(schema.agentRunEvents.cursor, BigInt(after))
 				)
 			)
@@ -103,12 +102,12 @@ export class AgentRunEventRecords implements AgentRunEventRepository {
 		return rows.map(({ event }) => toStoredEvent(event));
 	}
 
-	async latestCursor(actor: ActorContext, runId: AgentRunId): Promise<string> {
+	async latestCursor(runId: AgentRunId): Promise<string> {
 		const [row] = await this.database
 			.select({ cursor: sql<bigint>`coalesce(max(${schema.agentRunEvents.cursor}), 0)` })
 			.from(schema.agentRunEvents)
 			.innerJoin(schema.agentRuns, eq(schema.agentRuns.id, schema.agentRunEvents.runId))
-			.where(and(eq(schema.agentRuns.id, runId), eq(schema.agentRuns.userId, actor.userId)));
+			.where(and(eq(schema.agentRuns.id, runId), eq(schema.agentRuns.userId, this.actor.userId)));
 		return BigInt(row?.cursor ?? 0).toString();
 	}
 
@@ -128,21 +127,23 @@ export class AgentRunEventRecords implements AgentRunEventRepository {
 }
 
 export class AgentRunDecisionRecords implements AgentRunDecisionRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async record(
-		actor: ActorContext,
-		input: {
-			readonly runId: AgentRunId;
-			readonly callId: string;
-			readonly decision: 'approve' | 'reject';
-			readonly message?: string;
-		}
-	): Promise<AgentRunDecisionRecord> {
+	async record(input: {
+		readonly runId: AgentRunId;
+		readonly callId: string;
+		readonly decision: 'approve' | 'reject';
+		readonly message?: string;
+	}): Promise<AgentRunDecisionRecord> {
 		const [run] = await this.database
 			.select({ id: schema.agentRuns.id })
 			.from(schema.agentRuns)
-			.where(and(eq(schema.agentRuns.id, input.runId), eq(schema.agentRuns.userId, actor.userId)));
+			.where(
+				and(eq(schema.agentRuns.id, input.runId), eq(schema.agentRuns.userId, this.actor.userId))
+			);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		await this.database
 			.insert(schema.agentRunDecisions)

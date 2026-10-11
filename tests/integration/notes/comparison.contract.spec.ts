@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { Note } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -33,12 +34,13 @@ const content = (text: string): Pick<Note, 'title' | 'plainText' | 'document'> =
 const setup = async (suffix: string) => {
 	const seed = await seedNote(suffix);
 	const tx = createTransactionContext(context.db);
-	const { services: catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability(testActor(), {
 		db: tx.database,
-		projects: new ProjectRecords(tx.database)
+		projects: new ProjectRecords(testActor(), tx.database)
 	});
-	const effects = new InMemoryNoteContent();
+	const effects = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -69,28 +71,28 @@ const setup = async (suffix: string) => {
 			noteIndexer: effects
 		})
 	);
-	const first = await controller.save(seed.owner, {
+	const first = await controller.save({
 		note: { ...seed.note, ...content('First publication') }
 	});
-	const published = await controller.publish(seed.owner, {
+	const published = await controller.publish({
 		noteId: seed.note.id,
 		baseEtag: noteEtag(first.note.id, first.note.currentRevision)
 	});
-	const second = await controller.save(seed.owner, {
+	const second = await controller.save({
 		note: { ...published.note, ...content('Second publication') }
 	});
-	const latest = await controller.publish(seed.owner, {
+	const latest = await controller.publish({
 		noteId: seed.note.id,
 		baseEtag: noteEtag(second.note.id, second.note.currentRevision)
 	});
-	const { revisions } = await controller.listRevisions(seed.owner, { noteId: seed.note.id });
+	const { revisions } = await controller.listRevisions({ noteId: seed.note.id });
 	return { ...seed, note: latest.note, controller, revisions };
 };
 it('compares the requested snapshot against publication instead of the working draft', async () => {
 	const { controller, owner, note, revisions } = await setup('30001');
-	await controller.save(owner, { note: { ...note, ...content('Unpublished draft') } });
+	await controller.save({ note: { ...note, ...content('Unpublished draft') } });
 	expect(
-		await controller.compareRevisions(owner, { noteId: note.id, revisionId: revisions[1]!.id })
+		await controller.compareRevisions({ noteId: note.id, revisionId: revisions[1]!.id })
 	).toMatchObject({
 		againstRevision: revisions[0]!.revision,
 		diff: {
@@ -103,7 +105,7 @@ it('compares the requested snapshot against publication instead of the working d
 it('compares in the explicit baseline-to-target direction', async () => {
 	const { controller, owner, note, revisions } = await setup('30002');
 	expect(
-		await controller.compareRevisions(owner, {
+		await controller.compareRevisions({
 			noteId: note.id,
 			revisionId: revisions[0]!.id,
 			againstRevisionId: revisions[1]!.id
@@ -116,15 +118,15 @@ it('compares in the explicit baseline-to-target direction', async () => {
 it('rejects an explicit baseline belonging to another note of the same account', async () => {
 	const { controller, owner, note, revisions } = await setup('30003');
 	const other = await seedNote('30004', owner);
-	const published = await controller.publish(owner, {
+	const published = await controller.publish({
 		noteId: other.note.id,
 		baseEtag: noteEtag(other.note.id, other.note.currentRevision)
 	});
-	const { revisions: foreign } = await controller.listRevisions(owner, {
+	const { revisions: foreign } = await controller.listRevisions({
 		noteId: published.note.id
 	});
 	await expect(
-		controller.compareRevisions(owner, {
+		controller.compareRevisions({
 			noteId: note.id,
 			revisionId: revisions[0]!.id,
 			againstRevisionId: foreign[0]!.id
@@ -135,7 +137,7 @@ it('rejects comparison by another established account', async () => {
 	const { controller, note, revisions } = await setup('30005');
 	const foreign = await seedNote('30006');
 	await expect(
-		controller.compareRevisions(foreign.owner, {
+		controller.compareRevisions({
 			noteId: note.id,
 			revisionId: revisions[0]!.id,
 			againstRevisionId: revisions[1]!.id

@@ -14,14 +14,20 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const records = new InMemoryRelationshipRepository();
-	const notes = new InMemoryNoteRepository();
-	const anchors = new InMemoryAnchorRepository();
+	const records = new InMemoryRelationshipRepository(testActor());
+	const notes = new InMemoryNoteRepository(testActor());
+	const anchors = new InMemoryAnchorRepository(testActor());
 	notes.notes = [noteBuilder(), noteBuilder({ id: testNoteId(2) })];
 	anchors.anchors = [anchorBuilder()];
 	return {
 		records,
-		graph: createRelationshipServices(records, notes, anchors, new InMemoryProvenanceRepository()),
+		graph: createRelationshipServices(
+			testActor(),
+			records,
+			notes,
+			anchors,
+			new InMemoryProvenanceRepository(testActor())
+		),
 		input: {
 			sourceNoteId: testNoteId(),
 			targetNoteId: testNoteId(2),
@@ -34,13 +40,13 @@ describe('Relationship write decisions', () => {
 	it('returns an unchanged edge with its original identity, origin and timestamps', async () => {
 		const { graph, records, input } = setup();
 		const original = await graph.creator
-			.createWithChange(testActor(), {
+			.createWithChange({
 				...input,
 				sourceAnchorId: anchorBuilder().id,
 				justification: 'Original'
 			})
 			.then((change) => change.after);
-		const change = await graph.creator.createWithChange(testActor(), {
+		const change = await graph.creator.createWithChange({
 			...input,
 			justification: 'Original'
 		});
@@ -52,13 +58,13 @@ describe('Relationship write decisions', () => {
 	it('records both snapshots when an explanation changes without replacing its origin', async () => {
 		const { graph, records, input } = setup();
 		const original = await graph.creator
-			.createWithChange(testActor(), {
+			.createWithChange({
 				...input,
 				sourceAnchorId: anchorBuilder().id,
 				justification: 'Original'
 			})
 			.then((change) => change.after);
-		const change = await graph.creator.createWithChange(testActor(), {
+		const change = await graph.creator.createWithChange({
 			...input,
 			justification: 'Revised'
 		});
@@ -71,9 +77,9 @@ describe('Relationship write decisions', () => {
 	it('clears an existing explanation when the proposed explanation is absent', async () => {
 		const { graph, input } = setup();
 		await graph.creator
-			.createWithChange(testActor(), { ...input, justification: 'Original' })
+			.createWithChange({ ...input, justification: 'Original' })
 			.then((change) => change.after);
-		const change = await graph.creator.createWithChange(testActor(), input);
+		const change = await graph.creator.createWithChange(input);
 		expect(change.after.justification).toBeUndefined();
 	});
 });

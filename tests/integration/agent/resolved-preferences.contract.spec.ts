@@ -6,7 +6,7 @@ import { context, now, seedNote } from '../database-harness';
 
 it('clears resolved conversation overrides instead of retaining their stored values', async () => {
 	const { owner } = await seedNote('32701');
-	const records = new ConversationRecords(context.db);
+	const records = new ConversationRecords(owner, context.db);
 	const conversation: Conversation = {
 		id: crypto.randomUUID() as ConversationId,
 		userId: owner.userId,
@@ -17,14 +17,14 @@ it('clears resolved conversation overrides instead of retaining their stored val
 		createdAt: now,
 		updatedAt: now
 	};
-	await records.insert(owner, conversation);
-	await records.update(owner, {
+	await records.insert(conversation);
+	await records.update({
 		...conversation,
 		modelOverride: undefined,
 		visionModelOverride: undefined,
 		executionModeOverride: undefined
 	});
-	const saved = await records.findById(owner, conversation.id);
+	const saved = await records.findById(conversation.id);
 	expect({
 		exists: saved !== undefined,
 		model: saved?.modelOverride,
@@ -35,7 +35,7 @@ it('clears resolved conversation overrides instead of retaining their stored val
 
 it('clears the confidence threshold when replacing a trust policy without one', async () => {
 	const { owner } = await seedNote('32702');
-	const records = new TrustPolicyRecords(context.db);
+	const records = new TrustPolicyRecords(owner, context.db);
 	const policy: TrustPolicy = {
 		userId: owner.userId,
 		pipeline: 'extract_promises',
@@ -44,7 +44,7 @@ it('clears the confidence threshold when replacing a trust policy without one', 
 		createdAt: now,
 		updatedAt: now
 	};
-	await records.upsert(owner, policy);
-	await records.upsert(owner, { ...policy, minimumConfidence: undefined });
-	expect((await records.find(owner, policy.pipeline))?.minimumConfidence).toBeUndefined();
+	await records.upsert(policy);
+	await records.upsert({ ...policy, minimumConfidence: undefined });
+	expect((await records.find(policy.pipeline))?.minimumConfidence).toBeUndefined();
 });

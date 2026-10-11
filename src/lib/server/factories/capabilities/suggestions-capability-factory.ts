@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import {
 	SuggestionPresentationService,
@@ -54,6 +55,7 @@ export interface SuggestionsCapability extends SuggestionServices {
 	readonly effects: SuggestionEffectService;
 }
 export const createSuggestionServices = (
+	actor: ActorContext,
 	records: SuggestionRepository,
 	notes: NoteRepository,
 	provenance: ProvenanceRepository,
@@ -61,12 +63,12 @@ export const createSuggestionServices = (
 	clock: Clock = { now: () => new Date().toISOString() as DateTime }
 ): SuggestionServices => {
 	const reading = new SuggestionReadingService(records);
-	const lifecycle = new SuggestionLifecycleService(records, clock);
+	const lifecycle = new SuggestionLifecycleService(actor, records, clock);
 	return {
-		creator: new SuggestionCreationService(records, notes, provenance, anchors, clock),
+		creator: new SuggestionCreationService(actor, records, notes, provenance, anchors, clock),
 		finder: reading,
 		lister: reading,
-		context: new SuggestionContextService(notes, provenance, anchors),
+		context: new SuggestionContextService(actor, notes, provenance, anchors),
 		accepter: lifecycle,
 		rejecter: lifecycle,
 		reverter: lifecycle,
@@ -74,16 +76,18 @@ export const createSuggestionServices = (
 	};
 };
 export const createSuggestionsCapability = (
+	actor: ActorContext,
 	input: SuggestionsCapabilityInput
 ): SuggestionsCapability => ({
 	...createSuggestionServices(
-		new SuggestionRecords(input.db),
+		actor,
+		new SuggestionRecords(actor, input.db),
 		input.notes,
 		input.provenance,
 		input.anchors
 	),
 	presentation: new SuggestionPresentationService(),
 	effects: new SuggestionEffects(
-		new SuggestionEffectRecords(input.db, new WorkspaceSyncObjects(input.db))
+		new SuggestionEffectRecords(actor, input.db, new WorkspaceSyncObjects(actor, input.db))
 	)
 });

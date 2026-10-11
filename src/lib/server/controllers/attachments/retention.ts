@@ -2,7 +2,7 @@ import type { ScheduledTask } from '$lib/models/maintenance';
 import type { DateTime } from '$lib/models/workspace';
 import type { MaintenanceProgress } from '$lib/server/services/maintenance/progress';
 import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
-import type { AttachmentCleanup } from '$lib/server/services/attachments/records';
+import type { AttachmentBacklog } from '$lib/server/services/attachments/records';
 import type { ActorContext } from '$lib/models/identity';
 import type { OwnedAttachmentUpload } from '$lib/models/attachments';
 
@@ -39,7 +39,10 @@ export class UploadRetention implements ScheduledTask {
 	private readonly logger: Pick<Console, 'error' | 'log'>;
 
 	constructor(
-		private readonly repository: Pick<AttachmentCleanup, 'listExpiredUploads' | 'deleteUpload'>,
+		private readonly repository: Pick<
+			AttachmentBacklog,
+			'listExpiredUploads' | 'deleteExpiredUpload'
+		>,
 		private readonly storage: Pick<IAttachmentStorage, 'remove'>,
 		private readonly progress: MaintenanceProgress,
 		options: UploadRetentionOptions = {}
@@ -91,12 +94,11 @@ export class UploadRetention implements ScheduledTask {
 	}
 
 	private async reclaim(entry: OwnedAttachmentUpload): Promise<void> {
-		const actor: ActorContext = { userId: entry.userId };
 		// The object goes first: a failed delete leaves the row for the next tick to
 		// retry, whereas dropping the row first would lose the only pointer to it.
 		// The storage adapter treats an already-absent object as success. Any other
 		// removal failure must retain the row so a later sweep can retry it.
 		await this.storage.remove(entry.upload.objectKey);
-		await this.repository.deleteUpload(actor, entry.upload.id);
+		await this.repository.deleteExpiredUpload(entry.upload.id);
 	}
 }

@@ -30,17 +30,18 @@ import { context, replaceNoteFixture, seedNote } from '../database-harness';
 it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 	const seeded = await seedNote('18503');
 	const { owner } = seeded;
-	const records = new NoteRecords(context.db);
+	const records = new NoteRecords(owner, context.db);
 	const note = await replaceNoteFixture({
 		...seeded.note,
 		title: 'Publication rollback contract'
 	});
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { services: catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability(owner, {
 		db: database,
-		projects: new ProjectRecords(database)
+		projects: new ProjectRecords(owner, database)
 	});
 	const controller = new Notes(
+		owner,
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -75,11 +76,11 @@ it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 	await context.client`create trigger reject_contract_note_publication before update on notes for each row execute function reject_contract_note_publication()`;
 	try {
 		await controller
-			.publish(owner, { noteId: note.id, baseEtag: noteEtag(note.id, note.currentRevision) })
+			.publish({ noteId: note.id, baseEtag: noteEtag(note.id, note.currentRevision) })
 			.catch(() => ({ kind: 'failure' }));
 		expect({
-			note: await records.findById(owner, note.id),
-			snapshots: await records.listRevisions(owner, note.id)
+			note: await records.findById(note.id),
+			snapshots: await records.listRevisions(note.id)
 		}).toEqual({ note, snapshots: [] });
 	} finally {
 		await context.client`drop trigger reject_contract_note_publication on notes`;
@@ -97,11 +98,12 @@ it.each([
 		const writer = connectPostgresTestDatabase(context.url);
 		const blocker = postgres(context.url, { max: 2 });
 		const { database, transactionRunner } = createTransactionContext(writer.db);
-		const { services: catalog } = createNotesCapability({
+		const { services: catalog } = createNotesCapability(owner, {
 			db: database,
-			projects: new ProjectRecords(database)
+			projects: new ProjectRecords(owner, database)
 		});
 		const controller = new Notes(
+			owner,
 			new BacklinkPresentationService(),
 			new ReferencePresentationService(),
 			new WorkspaceCommandRulesService(),
@@ -140,7 +142,7 @@ it.each([
 			await locked.promise;
 			const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
 			const publishing = controller
-				.publish(owner, { noteId: note.id, baseEtag: noteEtag(note.id, note.currentRevision) })
+				.publish({ noteId: note.id, baseEtag: noteEtag(note.id, note.currentRevision) })
 				.then(
 					() => ({ kind: 'published' }),
 					(error) => {
@@ -157,15 +159,15 @@ it.each([
 			release.resolve();
 			await peer;
 			const result = await publishing;
-			const records = new NoteRecords(context.db);
-			const saved = await records.findById(owner, note.id);
+			const records = new NoteRecords(owner, context.db);
+			const saved = await records.findById(note.id);
 			expect({
 				result,
 				title: saved?.title,
 				revision: saved?.currentRevision,
 				published: saved?.publishedRevision,
 				archived: Boolean(saved?.archivedAt),
-				snapshots: await records.listRevisions(owner, note.id)
+				snapshots: await records.listRevisions(note.id)
 			}).toEqual({
 				result: { kind: 'failure', code },
 				title: change === 'edit' ? 'Peer title' : note.title,

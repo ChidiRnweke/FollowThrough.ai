@@ -3,20 +3,21 @@ import type { CreateUserData, UserRepository } from '$lib/server/repositories/id
 import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
 export class InMemoryUserRepository implements UserRepository {
+	constructor(private readonly actor: ActorContext) {}
 	users: User[] = [];
 	createOnEnsure = true;
 	ensureFailure: Error | undefined;
 
-	async findById(actor: ActorContext, id: UserId): Promise<User | undefined> {
-		return this.users.find((user) => user.id === id && user.id === actor.userId);
+	async findById(id: UserId): Promise<User | undefined> {
+		return this.users.find((user) => user.id === id && user.id === this.actor.userId);
 	}
 
-	async ensureLocal(actor: ActorContext): Promise<void> {
+	async ensureLocal(): Promise<void> {
 		if (this.ensureFailure) throw this.ensureFailure;
-		if (!this.createOnEnsure || this.users.some((user) => user.id === actor.userId)) return;
+		if (!this.createOnEnsure || this.users.some((user) => user.id === this.actor.userId)) return;
 		this.users.push({
-			id: actor.userId,
-			email: `${actor.userId}@local.invalid`,
+			id: this.actor.userId,
+			email: `${this.actor.userId}@local.invalid`,
 			displayName: 'Architect',
 			role: 'ADMIN',
 			createdAt: testNow,

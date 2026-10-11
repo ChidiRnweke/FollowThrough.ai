@@ -48,7 +48,7 @@ describe('export image authorization', () => {
 					document: { type: 'doc', content: [{ type: 'image', attrs: { src: source } }] }
 				})
 			];
-			await service.previewDocument(testActor(), input);
+			await service.previewDocument(input);
 			expect(rendered[0]?.images.get(source)).toBe(
 				`data:image/png;base64,${bytes.toString('base64')}`
 			);
@@ -67,7 +67,7 @@ describe('export image authorization', () => {
 				document: { type: 'doc', content: [{ type: 'image', attrs: { src: source } }] }
 			})
 		];
-		await expect(service.previewDocument(testActor(), input)).rejects.toMatchObject({
+		await expect(service.previewDocument(input)).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});
@@ -86,7 +86,7 @@ describe('export image authorization', () => {
 				}
 			})
 		];
-		await service.previewDocument(testActor(), input);
+		await service.previewDocument(input);
 		expect(fetched).toEqual([]);
 	});
 });

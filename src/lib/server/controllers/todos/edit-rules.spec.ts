@@ -26,14 +26,15 @@ import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
 
 const setup = () => {
-	const todos = new InMemoryTodoRepository();
-	const projects = new InMemoryProjectRepository();
-	const anchors = new InMemoryAnchorRepository();
-	const notes = new InMemoryNoteRepository();
-	const provenance = new InMemoryProvenanceRepository();
+	const todos = new InMemoryTodoRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
+	const anchors = new InMemoryAnchorRepository(testActor());
+	const notes = new InMemoryNoteRepository(testActor());
+	const provenance = new InMemoryProvenanceRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const service = createTodoServices(todos, projects, anchors, notes, provenance);
+	const service = createTodoServices(testActor(), todos, projects, anchors, notes, provenance);
 	const controller = new Todos(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
 			...agentToolResultsFixture(),
@@ -61,7 +62,7 @@ describe('Task edit rules', () => {
 	it('switching responsibility to mine clears the counterparty', async () => {
 		const { controller, todos } = setup();
 		todos.todos = [todoBuilder({ responsibility: 'waiting_on', waitingOn: 'Sam' })];
-		const { todo: updated } = await controller.update(testActor(), {
+		const { todo: updated } = await controller.update({
 			todoId: testTodoId(),
 			responsibility: 'mine',
 			waitingOn: 'Sam'
@@ -72,7 +73,7 @@ describe('Task edit rules', () => {
 		const { controller, todos, notes } = setup();
 		todos.todos = [todoBuilder()];
 		notes.notes = [noteBuilder()];
-		const { todo: updated } = await controller.update(testActor(), {
+		const { todo: updated } = await controller.update({
 			todoId: testTodoId(),
 			linkedNoteId: testNoteId()
 		});
@@ -83,9 +84,9 @@ describe('Task edit rules', () => {
 		todos.todos = [todoBuilder()];
 		const note = noteBuilder();
 		notes.notes = [note];
-		await controller.update(testActor(), { todoId: testTodoId(), linkedNoteId: note.id });
+		await controller.update({ todoId: testTodoId(), linkedNoteId: note.id });
 		notes.notes = [{ ...note, archivedAt: '2026-09-23T10:00:00.000Z' as never }];
-		const { todo } = await controller.update(testActor(), { todoId: testTodoId(), status: 'done' });
+		const { todo } = await controller.update({ todoId: testTodoId(), status: 'done' });
 		expect({ status: todo.status, linkedNoteId: todo.linkedNoteId }).toEqual({
 			status: 'done',
 			linkedNoteId: note.id
@@ -96,10 +97,10 @@ describe('Task edit rules', () => {
 		todos.todos = [todoBuilder()];
 		const note = noteBuilder();
 		notes.notes = [note];
-		await controller.update(testActor(), { todoId: testTodoId(), linkedNoteId: note.id });
+		await controller.update({ todoId: testTodoId(), linkedNoteId: note.id });
 		notes.notes = [{ ...note, archivedAt: '2026-09-23T10:00:00.000Z' as never }];
 		await expect(
-			controller.update(testActor(), { todoId: testTodoId(), linkedNoteId: note.id })
+			controller.update({ todoId: testTodoId(), linkedNoteId: note.id })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 	it.each([
@@ -112,13 +113,13 @@ describe('Task edit rules', () => {
 		todos.todos = [todoBuilder()];
 		notes.notes = [note];
 		await expect(
-			controller.update(testActor(), { todoId: testTodoId(), linkedNoteId: note.id })
+			controller.update({ todoId: testTodoId(), linkedNoteId: note.id })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 	it('completing a todo records completion time', async () => {
 		const { controller, todos } = setup();
 		todos.todos = [todoBuilder()];
-		const { todo: completed } = await controller.update(testActor(), {
+		const { todo: completed } = await controller.update({
 			todoId: testTodoId(),
 			status: 'done'
 		});
@@ -129,7 +130,7 @@ describe('Task edit rules', () => {
 		todos.todos = [
 			todoBuilder({ status: 'done', completedAt: '2026-07-11T09:00:00.000Z' as never })
 		];
-		const { todo: reopened } = await controller.update(testActor(), {
+		const { todo: reopened } = await controller.update({
 			todoId: testTodoId(),
 			status: 'open'
 		});

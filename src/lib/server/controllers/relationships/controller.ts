@@ -34,7 +34,6 @@ import type { RunSignals } from '$lib/server/services/agent/runs/signals';
  */
 export interface RelationshipsController {
 	suggestFromSelection(
-		actor: ActorContext,
 		input: RelateSelectionInput,
 		signal?: AbortSignal
 	): Promise<RelateSelectionOutput<BacklinkSuggestion>>;
@@ -43,12 +42,10 @@ export interface RelationshipsController {
 	 * is durable. Its result arrives as a `workflow_result` event, so a refresh mid-run
 	 * still collects the suggestions.
 	 */
-	startSuggestFromSelection(
-		actor: ActorContext,
-		input: StartRelateSelectionInput
-	): Promise<AgentRunReceipt>;
-	executeRelatedNoteRun(actor: ActorContext, runId: AgentRunId): Promise<void>;
-	recoverQueuedRelatedNoteRuns(): Promise<number>;
+	startSuggestFromSelection(input: StartRelateSelectionInput): Promise<AgentRunReceipt>;
+	executeRelatedNoteRun(runId: AgentRunId): Promise<void>;
+	/** Start a queued run the previous process never started. */
+	resumeQueuedRelatedNoteRun(runId: AgentRunId): Promise<void>;
 }
 
 export interface RelationshipsDependencies {
@@ -70,10 +67,7 @@ export class Relationships implements RelationshipsController {
 		private readonly dependencies: RelationshipsDependencies
 	) {}
 
-	async startSuggestFromSelection(
-		actor: ActorContext,
-		input: StartRelateSelectionInput
-	): Promise<AgentRunReceipt> {
+	async startSuggestFromSelection(input: StartRelateSelectionInput): Promise<AgentRunReceipt> {
 		const request: NoteActionRequest = {
 			requestId: input.requestId,
 			context: {
@@ -85,32 +79,30 @@ export class Relationships implements RelationshipsController {
 		let receipt: AgentRunReceipt;
 		try {
 			receipt = await this.dependencies.transactionRunner.run(() =>
-				this.dependencies.noteActionRequests.prepare(actor, request)
+				this.dependencies.noteActionRequests.prepare(request)
 			);
 		} catch (error) {
 			if (!(error instanceof DuplicateNoteActionRequest)) throw error;
-			receipt = await this.dependencies.noteActionRequests.existing(actor, request);
+			receipt = await this.dependencies.noteActionRequests.existing(request);
 		}
-		if (receipt.status === 'queued') this.launchRelatedNoteRun(actor, receipt.runId);
+		if (receipt.status === 'queued') this.launchRelatedNoteRun(receipt.runId);
 		return receipt;
 	}
 
-	private launchRelatedNoteRun(actor: ActorContext, runId: AgentRunId): void {
+	private launchRelatedNoteRun(runId: AgentRunId): void {
 		// audit-allow: silent-catch — detached execution persists its terminal state; settlement failures are emitted for operational repair.
-		void this.executeRelatedNoteRun(actor, runId).catch((error) =>
+		void this.executeRelatedNoteRun(runId).catch((error) =>
 			console.error(`[related-note-run] Could not settle ${runId}:`, error)
 		);
 	}
 
-	async recoverQueuedRelatedNoteRuns(): Promise<number> {
-		const queued = await this.dependencies.noteActionRequests.queued('related_notes');
-		for (const run of queued) this.launchRelatedNoteRun(run.actor, run.runId);
-		return queued.length;
+	async resumeQueuedRelatedNoteRun(runId: AgentRunId): Promise<void> {
+		this.launchRelatedNoteRun(runId);
 	}
 
-	async executeRelatedNoteRun(actor: ActorContext, runId: AgentRunId): Promise<void> {
+	async executeRelatedNoteRun(runId: AgentRunId): Promise<void> {
 		const run = await this.dependencies.transactionRunner.run(() =>
-			this.dependencies.noteActionRequests.claim(actor, runId, 'related_notes')
+			this.dependencies.noteActionRequests.claim(runId, 'related_notes')
 		);
 		if (!run) return;
 		const active = new AbortController();
@@ -118,9 +110,8 @@ export class Relationships implements RelationshipsController {
 		try {
 			stopWatching = await this.dependencies.runSignals.abortOnCancel(runId, active);
 			const input = run.contextSnapshot;
-			const note = await this.dependencies.selectionOrigins.validate(actor, input.selection);
+			const note = await this.dependencies.selectionOrigins.validate(input.selection);
 			const candidates = await this.findCandidates(
-				actor,
 				note,
 				input.selection,
 				input.generation,
@@ -134,7 +125,7 @@ export class Relationships implements RelationshipsController {
 					model: run.model
 				});
 				if (claim.kind === 'lost') return false;
-				const result = await this.saveRelationships(actor, input, candidates);
+				const result = await this.saveRelationships(input, candidates);
 				await this.dependencies.noteActionRequests.recordResult(runId, {
 					action: 'relate',
 					result
@@ -181,31 +172,26 @@ export class Relationships implements RelationshipsController {
 	}
 
 	async suggestFromSelection(
-		actor: ActorContext,
 		input: RelateSelectionInput,
 		signal?: AbortSignal
 	): Promise<RelateSelectionOutput<BacklinkSuggestion>> {
-		const note = await this.dependencies.selectionOrigins.validate(actor, input.selection);
+		const note = await this.dependencies.selectionOrigins.validate(input.selection);
 		const candidates = await this.findCandidates(
-			actor,
 			note,
 			input.selection,
 			this.dependencies.relationshipGeneration,
 			signal
 		);
 		signal?.throwIfAborted();
-		return this.dependencies.transactionRunner.run(() =>
-			this.saveRelationships(actor, input, candidates)
-		);
+		return this.dependencies.transactionRunner.run(() => this.saveRelationships(input, candidates));
 	}
 	private async saveRelationships(
-		actor: ActorContext,
 		input: RelateSelectionInput,
 		candidates: readonly LinkCandidate[]
 	): Promise<RelateSelectionOutput<BacklinkSuggestion>> {
-		const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
+		const source = await this.dependencies.selectionOrigins.resolve(input.selection);
 		const { anchor } = source;
-		const origin = await this.dependencies.selectionOrigins.record(actor, source, {
+		const origin = await this.dependencies.selectionOrigins.record(source, {
 			producerKind: 'pipeline',
 			producerName: 'Relate',
 			pipeline: 'relate',
@@ -213,7 +199,7 @@ export class Relationships implements RelationshipsController {
 		});
 		const suggestions = await Promise.all(
 			candidates.map((candidate) =>
-				this.dependencies.suggestionCreator.createFromSelection(actor, origin, {
+				this.dependencies.suggestionCreator.createFromSelection(origin, {
 					kind: 'backlink',
 					confidence: candidate.confidence,
 					payload: {
@@ -228,7 +214,6 @@ export class Relationships implements RelationshipsController {
 	}
 
 	private async findCandidates(
-		actor: ActorContext,
 		note: Note,
 		selection: TextSelection,
 		generation: SelectionGeneration,
@@ -236,7 +221,7 @@ export class Relationships implements RelationshipsController {
 	): Promise<readonly LinkCandidate[]> {
 		signal?.throwIfAborted();
 		if (!selection.text.trim()) return [];
-		const matches = await this.dependencies.knowledge.retrieve(actor, selection.text, {
+		const matches = await this.dependencies.knowledge.retrieve(selection.text, {
 			limit: 12,
 			projectId: note.projectId,
 			signal

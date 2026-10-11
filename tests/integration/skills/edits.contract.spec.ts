@@ -9,7 +9,7 @@ import { competingSkillWrites, skillController } from './edit-harness';
 const seedSkill = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const note = await replaceNoteFixture({ ...seeded.note, kind: 'skill' });
-	await new SkillRecords(context.db).insert(seeded.owner, {
+	await new SkillRecords(seeded.owner, context.db).insert({
 		note,
 		slug: `skill-${suffix}`,
 		description: 'Initial description',
@@ -25,11 +25,11 @@ it('preserves independent metadata edits after waiting for the current skill', a
 	const { owner, note } = await seedSkill('19701');
 	const result = await competingSkillWrites(
 		async (skills) => {
-			await skills.update(owner, { noteId: note.id, description: 'Peer description' });
+			await skills.update({ noteId: note.id, description: 'Peer description' });
 		},
-		(skills) => skills.update(owner, { noteId: note.id, isEnabled: false })
+		(skills) => skills.update({ noteId: note.id, isEnabled: false })
 	);
-	const stored = await new SkillRecords(context.db).findByNoteId(owner, note.id);
+	const stored = await new SkillRecords(owner, context.db).findByNoteId(note.id);
 	expect({
 		result: result.kind,
 		description: stored?.description,
@@ -45,9 +45,9 @@ it('returns the current renamed note after a competing metadata edit waits', asy
 	const { owner, note } = await seedSkill('19702');
 	const result = await competingSkillWrites(
 		async (skills) => {
-			await skills.update(owner, { noteId: note.id, displayName: 'Renamed skill' });
+			await skills.update({ noteId: note.id, displayName: 'Renamed skill' });
 		},
-		(skills) => skills.update(owner, { noteId: note.id, isEnabled: false })
+		(skills) => skills.update({ noteId: note.id, isEnabled: false })
 	);
 	expect(result).toMatchObject({
 		kind: 'success',
@@ -58,7 +58,7 @@ it('returns the current renamed note after a competing metadata edit waits', asy
 it('preserves concurrent metadata when restoring an immutable skill version', async () => {
 	const { owner, note } = await seedSkill('19703');
 	await replaceNoteFixture({ ...note, currentRevision: 2 });
-	await new NoteRecords(context.db).insertRevision(owner, {
+	await new NoteRecords(owner, context.db).insertRevision({
 		id: crypto.randomUUID() as NoteRevisionId,
 		noteId: note.id,
 		revision: 1,
@@ -69,11 +69,11 @@ it('preserves concurrent metadata when restoring an immutable skill version', as
 	});
 	const result = await competingSkillWrites(
 		async (skills) => {
-			await skills.update(owner, { noteId: note.id, isEnabled: false });
+			await skills.update({ noteId: note.id, isEnabled: false });
 		},
-		(skills) => skills.restoreVersion(owner, { noteId: note.id, revision: 1 })
+		(skills) => skills.restoreVersion({ noteId: note.id, revision: 1 })
 	);
-	const stored = await new SkillRecords(context.db).findByNoteId(owner, note.id);
+	const stored = await new SkillRecords(owner, context.db).findByNoteId(note.id);
 	expect({ result: result.kind, enabled: stored?.isEnabled, title: stored?.note.title }).toEqual({
 		result: 'success',
 		enabled: false,
@@ -85,13 +85,13 @@ it('rejects a stale document base after a concurrent skill edit commits', async 
 	const { owner, note } = await seedSkill('19704');
 	const result = await competingSkillWrites(
 		async (skills) => {
-			await skills.update(owner, {
+			await skills.update({
 				noteId: note.id,
 				content: { kind: 'instructions', text: 'Peer instructions', baseRevision: 1 }
 			});
 		},
 		(skills) =>
-			skills.update(owner, {
+			skills.update({
 				noteId: note.id,
 				content: { kind: 'instructions', text: 'Stale instructions', baseRevision: 1 }
 			})
@@ -103,16 +103,16 @@ it('preserves a disabled built-in while concurrent provisioning waits', async ()
 	const owner = await seedUser('19705');
 	// First provisioning uses the real controller transaction; subsequent calls share the same identity.
 	const initial = createTransactionContext(context.db);
-	await skillController(initial.database, initial.transactionRunner).list(owner);
-	const note = (await new NoteRecords(context.db).findByBuiltInKey(owner, 'followthrough'))!;
+	await skillController(initial.database, initial.transactionRunner).list();
+	const note = (await new NoteRecords(owner, context.db).findByBuiltInKey('followthrough'))!;
 	const result = await competingSkillWrites(
 		async (skills) => {
-			await skills.update(owner, { noteId: note.id, isEnabled: false });
+			await skills.update({ noteId: note.id, isEnabled: false });
 		},
-		(skills) => skills.list(owner)
+		(skills) => skills.list()
 	);
 	expect({
 		result: result.kind,
-		enabled: (await new SkillRecords(context.db).findByNoteId(owner, note.id))?.isEnabled
+		enabled: (await new SkillRecords(owner, context.db).findByNoteId(note.id))?.isEnabled
 	}).toEqual({ result: 'success', enabled: false });
 });

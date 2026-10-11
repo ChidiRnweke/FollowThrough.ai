@@ -20,10 +20,10 @@ import { context, seedNote, now } from '../database-harness';
 const setup = async (suffix: string) => {
 	const { owner } = await seedNote(suffix);
 	const tx = createTransactionContext(context.db);
-	const conversations = new ConversationRecords(tx.database);
-	const journal = new ConversationArchive(conversations);
-	const runs = new AgentRunRecords(tx.database);
-	const conversation = await conversations.insert(owner, {
+	const conversations = new ConversationRecords(owner, tx.database);
+	const journal = new ConversationArchive(owner, conversations);
+	const runs = new AgentRunRecords(owner, tx.database);
+	const conversation = await conversations.insert({
 		id: crypto.randomUUID() as ConversationId,
 		userId: owner.userId,
 		kind: 'chat',
@@ -31,6 +31,7 @@ const setup = async (suffix: string) => {
 		updatedAt: now
 	});
 	const controller = new AgentSdkHarness(
+		owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
@@ -60,12 +61,15 @@ it('preserves a newly submitted run when deletion waits for submission to commit
 	const locked = Promise.withResolvers<AgentRunId>();
 	const release = Promise.withResolvers<void>();
 	const submitted = submission.transactionRunner.run(async () => {
-		const journal = new ConversationArchive(new ConversationRecords(submission.database));
-		await journal.getOrCreate(owner, {
+		const journal = new ConversationArchive(
+			owner,
+			new ConversationRecords(owner, submission.database)
+		);
+		await journal.getOrCreate({
 			conversationId: conversation.id,
 			prompt: 'Keep this request'
 		});
-		const run = await new AgentRunRecords(submission.database).insert(owner, {
+		const run = await new AgentRunRecords(owner, submission.database).insert({
 			kind: 'agent',
 			id: crypto.randomUUID() as AgentRunId,
 			userId: owner.userId,
@@ -79,8 +83,8 @@ it('preserves a newly submitted run when deletion waits for submission to commit
 			createdAt: now,
 			updatedAt: now
 		});
-		await journal.recordUserPrompt(owner, conversation.id, 'Keep this request', run.id);
-		await new AgentRunEventRecords(submission.database).append(run.id, 1, {
+		await journal.recordUserPrompt(conversation.id, 'Keep this request', run.id);
+		await new AgentRunEventRecords(owner, submission.database).append(run.id, 1, {
 			type: 'run_queued',
 			runId: run.id,
 			attempt: 1,
@@ -91,7 +95,7 @@ it('preserves a newly submitted run when deletion waits for submission to commit
 	});
 	try {
 		const id = await locked.promise;
-		const deletion = controller.deleteSession(owner, conversation.id).then(
+		const deletion = controller.deleteSession(conversation.id).then(
 			() => 'deleted',
 			(error: Error) => error.message
 		);
@@ -100,8 +104,8 @@ it('preserves a newly submitted run when deletion waits for submission to commit
 		await submitted;
 		expect({
 			deletion: await deletion,
-			conversation: (await conversations.findById(owner, conversation.id))?.id,
-			run: (await runs.findById(owner, id))?.status
+			conversation: (await conversations.findById(conversation.id))?.id,
+			run: (await runs.findById(id))?.status
 		}).toEqual({
 			deletion: 'Stop or resolve the active agent run before deleting this chat',
 			conversation: conversation.id,
@@ -121,18 +125,16 @@ it('rejects submission to a conversation whose deletion commits first', async ()
 	const locked = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
 	const deleted = deletionTx.transactionRunner.run(async () => {
-		const records = new ConversationRecords(deletionTx.database);
-		await records.findForWrite(owner, conversation.id);
-		await records.delete(owner, conversation.id);
+		const records = new ConversationRecords(owner, deletionTx.database);
+		await records.findForWrite(conversation.id);
+		await records.delete(conversation.id);
 		locked.resolve();
 		await release.promise;
 	});
 	try {
 		await locked.promise;
 		const submission = tx.transactionRunner
-			.run(() =>
-				journal.getOrCreate(owner, { conversationId: conversation.id, prompt: 'Too late' })
-			)
+			.run(() => journal.getOrCreate({ conversationId: conversation.id, prompt: 'Too late' }))
 			.then(
 				() => 'submitted',
 				(error: Error) => error.message
@@ -142,7 +144,7 @@ it('rejects submission to a conversation whose deletion commits first', async ()
 		await deleted;
 		expect({
 			submission: await submission,
-			conversation: await conversations.findById(owner, conversation.id)
+			conversation: await conversations.findById(conversation.id)
 		}).toEqual({ submission: 'Conversation was not found', conversation: undefined });
 	} finally {
 		release.resolve();

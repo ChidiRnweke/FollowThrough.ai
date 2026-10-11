@@ -5,7 +5,7 @@ import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { ApiTokenId } from '$lib/models/identity';
 
 export const listApiTokens = query(async () =>
-	AppFactory.forActor(requestActor()).apiTokens().list(requestActor())
+	AppFactory.forActor(requestActor()).apiTokens().list()
 );
 
 /**
@@ -15,7 +15,7 @@ export const listApiTokens = query(async () =>
 export const createApiToken = command(
 	z.object({ name: z.string().min(1), scope: z.enum(['read', 'full']) }),
 	async (input) => {
-		const minted = await AppFactory.access().issueApiToken(requestActor(), input);
+		const minted = await AppFactory.access(requestActor()).issueApiToken(input);
 		await listApiTokens().refresh();
 		return { token: minted.token, plaintext: minted.plaintext };
 	}
@@ -24,6 +24,6 @@ export const createApiToken = command(
 export const revokeApiToken = command(z.string().uuid(), async (id) => {
 	await AppFactory.forActor(requestActor())
 		.apiTokens()
-		.revoke(requestActor(), id as ApiTokenId);
+		.revoke(id as ApiTokenId);
 	await listApiTokens().refresh();
 });

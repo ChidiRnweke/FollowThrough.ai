@@ -28,7 +28,7 @@ import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 
 const setup = () => {
-	const notes = new InMemoryNoteContent();
+	const notes = new InMemoryNoteContent(testActor());
 	notes.notes = [
 		noteBuilder({
 			plainText: 'Always capture consequences.',
@@ -40,15 +40,15 @@ const setup = () => {
 			}
 		})
 	];
-	const repository = new InMemoryNoteRepository();
+	const repository = new InMemoryNoteRepository(testActor());
 	repository.notes = [...notes.notes];
-	const projects = new InMemoryProjectRepository();
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const anchors = new InMemoryAnchorRepository();
-	const catalog = createNoteServices(repository, anchors, projects);
+	const anchors = new InMemoryAnchorRepository(testActor());
+	const catalog = createNoteServices(testActor(), repository, anchors, projects);
 	const skills = new InMemorySkillRepository(repository);
-	const provenance = new InMemoryProvenanceRepository();
-	const library = createSkillServices(skills, repository, provenance);
+	const provenance = new InMemoryProvenanceRepository(testActor());
+	const library = createSkillServices(testActor(), skills, repository, provenance);
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
@@ -58,7 +58,7 @@ const setup = () => {
 			noteReferences: new NoteReferenceService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
-			selectionOrigins: new SelectionOrigins(repository, anchors, provenance),
+			selectionOrigins: new SelectionOrigins(testActor(), repository, anchors, provenance),
 			noteCreation: catalog.creator,
 			noteEditor: catalog.editor,
 			anchorRepairer: catalog.anchorRepairer,
@@ -93,7 +93,7 @@ const input = {
 describe('Create skill workflow invariants', () => {
 	it('creates a skill document from the selected text', async () => {
 		const { controller, skills, anchors, provenance } = setup();
-		const { skillNoteId } = await controller.createFromSelection(testActor(), input);
+		const { skillNoteId } = await controller.createFromSelection(input);
 		expect({
 			id: skills.skills[0]?.note.id,
 			text: skills.skills[0]?.note.plainText,
@@ -114,7 +114,7 @@ describe('Create skill workflow invariants', () => {
 	it('rolls back the source records and candidate skill when metadata validation fails', async () => {
 		const { controller, anchors, provenance, repository, skills } = setup();
 		const result = await controller
-			.createFromSelection(testActor(), { ...input, description: 'x'.repeat(1025) })
+			.createFromSelection({ ...input, description: 'x'.repeat(1025) })
 			.then(
 				() => 'created',
 				() => 'failed'
@@ -135,9 +135,9 @@ describe('Create skill workflow invariants', () => {
 	});
 	it('rejects an empty name before inserting the skill document', async () => {
 		const { controller } = setup();
-		await expect(
-			controller.createFromSelection(testActor(), { ...input, name: ' ' })
-		).rejects.toMatchObject({ code: 'VALIDATION' });
+		await expect(controller.createFromSelection({ ...input, name: ' ' })).rejects.toMatchObject({
+			code: 'VALIDATION'
+		});
 	});
 	it.each([
 		{
@@ -153,7 +153,7 @@ describe('Create skill workflow invariants', () => {
 		{ label: 'outside range', selection: { ...input.selection, to: 99 }, code: 'VALIDATION' }
 	])('rejects $label without creating a skill', async ({ selection, code }) => {
 		const { controller, repository, anchors, provenance, skills } = setup();
-		const result = await controller.createFromSelection(testActor(), { ...input, selection }).then(
+		const result = await controller.createFromSelection({ ...input, selection }).then(
 			() => ({ kind: 'success' }),
 			(error: Error & { code: string }) => ({ kind: 'failure', code: error.code })
 		);

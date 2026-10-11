@@ -18,9 +18,9 @@ it.each([
 		const writer = connectPostgresTestDatabase(context.url);
 		const blocker = postgres(context.url, { max: 2 });
 		const { database, transactionRunner } = createTransactionContext(writer.db);
-		const { services: catalog } = createNotesCapability({
+		const { services: catalog } = createNotesCapability(owner, {
 			db: database,
-			projects: new ProjectRecords(database)
+			projects: new ProjectRecords(owner, database)
 		});
 		const locked = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();

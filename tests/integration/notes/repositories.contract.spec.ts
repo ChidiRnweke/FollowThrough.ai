@@ -27,7 +27,7 @@ const richDocument = proseMirrorDocumentSchema.parse(
 describe('Postgres note repository invariants', () => {
 	it('maps an inserted note back to the domain model', async () => {
 		const owner = await seedUser('11');
-		const project = await new ProjectRecords(context.db).insert(owner, {
+		const project = await new ProjectRecords(owner, context.db).insert({
 			name: 'Note repository'
 		});
 		const timestamp = now;
@@ -46,13 +46,13 @@ describe('Postgres note repository invariants', () => {
 			createdAt: timestamp,
 			updatedAt: timestamp
 		};
-		const repository = new NoteRecords(context.db);
-		await repository.insert(owner, note);
-		expect(await repository.findById(owner, note.id)).toEqual(note);
+		const repository = new NoteRecords(owner, context.db);
+		await repository.insert(note);
+		expect(await repository.findById(note.id)).toEqual(note);
 	});
 	it('does not reveal a note to another actor', async () => {
 		const owner = await seedUser('12');
-		const project = await new ProjectRecords(context.db).insert(owner, {
+		const project = await new ProjectRecords(owner, context.db).insert({
 			name: 'Private note repository'
 		});
 		const note: Note = {
@@ -70,21 +70,21 @@ describe('Postgres note repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		};
-		const repository = new NoteRecords(context.db);
-		await repository.insert(owner, note);
-		expect(await repository.findById(actor('13'), note.id)).toBeUndefined();
+		const repository = new NoteRecords(owner, context.db);
+		await repository.insert(note);
+		expect(await repository.findById(note.id)).toBeUndefined();
 	});
 	it('hides a note when its project is archived', async () => {
 		const { owner, project, note } = await seedNote('43');
-		await new ProjectRecords(context.db).archive(owner, project.id);
-		expect(await new NoteRecords(context.db).findById(owner, note.id)).toBeUndefined();
+		await new ProjectRecords(owner, context.db).archive(project.id);
+		expect(await new NoteRecords(owner, context.db).findById(note.id)).toBeUndefined();
 	});
 	it('prevents duplicate built-in skill keys for one actor', async () => {
 		const owner = await seedUser('76');
-		const project = await new ProjectRecords(context.db).insert(owner, {
+		const project = await new ProjectRecords(owner, context.db).insert({
 			name: 'General'
 		});
-		const repository = new NoteRecords(context.db);
+		const repository = new NoteRecords(owner, context.db);
 		const builtIn = (suffix: string): Note => ({
 			id: `40000000-0000-4000-8000-${suffix.padStart(12, '0')}` as NoteId,
 			userId: owner.userId,
@@ -101,14 +101,13 @@ describe('Postgres note repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		await repository.insert(owner, builtIn('76'));
-		await expect(repository.insert(owner, builtIn('77'))).rejects.toBeDefined();
+		await repository.insert(builtIn('76'));
+		await expect(repository.insert(builtIn('77'))).rejects.toBeDefined();
 	});
 	it('applies a note update when the expected revision is current', async () => {
 		const { owner, note } = await seedNote('181');
-		const repository = new NoteRecords(context.db);
+		const repository = new NoteRecords(owner, context.db);
 		const updated = await repository.updateIfRevision(
-			owner,
 			{ ...note, title: 'Accepted', currentRevision: 2 },
 			1
 		);
@@ -116,9 +115,8 @@ describe('Postgres note repository invariants', () => {
 	});
 	it('rejects a note update when the expected revision is stale', async () => {
 		const { owner, note } = await seedNote('182');
-		const repository = new NoteRecords(context.db);
+		const repository = new NoteRecords(owner, context.db);
 		const updated = await repository.updateIfRevision(
-			owner,
 			{ ...note, title: 'Stale', currentRevision: 2 },
 			2
 		);
@@ -126,35 +124,35 @@ describe('Postgres note repository invariants', () => {
 	});
 	it('lists a trashed note in the trash', async () => {
 		const { owner, note } = await seedNote('184');
-		const repository = new NoteRecords(context.db);
+		const repository = new NoteRecords(owner, context.db);
 		await replaceNoteFixture({ ...note, archivedAt: now });
-		expect((await repository.listTrashed(owner)).map((entry) => entry.id)).toContain(note.id);
+		expect((await repository.listTrashed()).map((entry) => entry.id)).toContain(note.id);
 	});
 	it('keeps active notes out of the trash', async () => {
 		const { owner, note } = await seedNote('185');
 		expect(
-			(await new NoteRecords(context.db).listTrashed(owner)).map((entry) => entry.id)
+			(await new NoteRecords(owner, context.db).listTrashed()).map((entry) => entry.id)
 		).not.toContain(note.id);
 	});
 	// The project itself is what was discarded; restoring one note into it would
 	// strand the note somewhere the reader cannot navigate to.
 	it('hides a trashed note whose project was archived', async () => {
 		const { owner, project, note } = await seedNote('186');
-		const repository = new NoteRecords(context.db);
+		const repository = new NoteRecords(owner, context.db);
 		await replaceNoteFixture({ ...note, archivedAt: now });
-		await new ProjectRecords(context.db).archive(owner, project.id);
-		expect(await repository.listTrashed(owner)).toEqual([]);
+		await new ProjectRecords(owner, context.db).archive(project.id);
+		expect(await repository.listTrashed()).toEqual([]);
 	});
 	it('does not reveal another actor’s trash', async () => {
 		const { note } = await seedNote('187');
 		await replaceNoteFixture({ ...note, archivedAt: now });
-		expect(await new NoteRecords(context.db).listTrashed(actor('188'))).toEqual([]);
+		expect(await new NoteRecords(actor('188'), context.db).listTrashed()).toEqual([]);
 	});
 	it('prunes a note’s history down to the newest snapshots', async () => {
 		const { owner, note } = await seedNote('189');
-		const repository = new NoteRecords(context.db);
+		const repository = new NoteRecords(owner, context.db);
 		for (let revision = 1; revision <= 5; revision += 1)
-			await repository.insertRevision(owner, {
+			await repository.insertRevision({
 				id: `50000000-0000-4000-8000-${String(revision).padStart(12, '0')}` as NoteRevisionId,
 				noteId: note.id,
 				revision,
@@ -163,36 +161,36 @@ describe('Postgres note repository invariants', () => {
 				plainText: '',
 				createdAt: now
 			});
-		await repository.pruneRevisions(owner, note.id, 2);
-		expect((await repository.listRevisions(owner, note.id)).map((entry) => entry.revision)).toEqual(
-			[4, 5]
-		);
+		await repository.pruneRevisions(note.id, 2);
+		expect((await repository.listRevisions(note.id)).map((entry) => entry.revision)).toEqual([
+			4, 5
+		]);
 	});
 	it('removes a hard-deleted note from the trash', async () => {
 		const { owner, note } = await seedNote('190');
-		const repository = new NoteRecords(context.db);
+		const repository = new NoteRecords(owner, context.db);
 		await replaceNoteFixture({ ...note, archivedAt: now });
-		await repository.deleteTrashed(owner, note.id);
-		expect(await repository.findById(owner, note.id)).toBeUndefined();
+		await repository.deleteTrashed(note.id);
+		expect(await repository.findById(note.id)).toBeUndefined();
 	});
 	it('does not let one actor hard-delete another actor’s note', async () => {
 		const { owner, note } = await seedNote('191');
-		const repository = new NoteRecords(context.db);
+		const repository = new NoteRecords(owner, context.db);
 		const trashed = await replaceNoteFixture({ ...note, archivedAt: now });
-		await repository.deleteTrashed(actor('192'), note.id);
-		expect(await repository.findById(owner, note.id)).toEqual(trashed);
+		await repository.deleteTrashed(note.id);
+		expect(await repository.findById(note.id)).toEqual(trashed);
 	});
 	it('refuses storage deletion of a hidden skill in the trash', async () => {
 		const { owner, note } = await seedNote('19407');
-		const repository = new NoteRecords(context.db);
+		const repository = new NoteRecords(owner, context.db);
 		const skill = await replaceNoteFixture({ ...note, kind: 'skill', archivedAt: now });
-		await repository.deleteTrashed(owner, note.id);
-		expect(await repository.findById(owner, note.id)).toEqual(skill);
+		await repository.deleteTrashed(note.id);
+		expect(await repository.findById(note.id)).toEqual(skill);
 	});
 	it('takes the note’s revisions with it', async () => {
 		const { owner, note } = await seedNote('193');
-		const repository = new NoteRecords(context.db);
-		await repository.insertRevision(owner, {
+		const repository = new NoteRecords(owner, context.db);
+		await repository.insertRevision({
 			id: '50000000-0000-4000-8000-000000000193' as NoteRevisionId,
 			noteId: note.id,
 			revision: 1,
@@ -202,8 +200,8 @@ describe('Postgres note repository invariants', () => {
 			createdAt: now
 		});
 		await replaceNoteFixture({ ...note, archivedAt: now });
-		await repository.deleteTrashed(owner, note.id);
-		expect(await repository.listRevisions(owner, note.id)).toEqual([]);
+		await repository.deleteTrashed(note.id);
+		expect(await repository.listRevisions(note.id)).toEqual([]);
 	});
 	// `note_revision_attachments.attachment_version_id` is `restrict`, so a note whose
 	// history snapshots an attachment is the case where a naive cascade would fail.
@@ -227,8 +225,8 @@ describe('Postgres note repository invariants', () => {
 			.update(schema.attachments)
 			.set({ currentVersionId: version!.id })
 			.where(eq(schema.attachments.id, attachment!.id));
-		const repository = new NoteRecords(context.db);
-		await repository.insertRevision(owner, {
+		const repository = new NoteRecords(owner, context.db);
+		await repository.insertRevision({
 			id: '50000000-0000-4000-8000-000000000194' as NoteRevisionId,
 			noteId: note.id,
 			revision: 1,
@@ -238,21 +236,21 @@ describe('Postgres note repository invariants', () => {
 			createdAt: now
 		});
 		await replaceNoteFixture({ ...note, archivedAt: now });
-		await repository.deleteTrashed(owner, note.id);
-		expect(await repository.findById(owner, note.id)).toBeUndefined();
+		await repository.deleteTrashed(note.id);
+		expect(await repository.findById(note.id)).toBeUndefined();
 	});
 	it('allows exactly one concurrent note update from the same revision', async () => {
 		const { owner, note } = await seedNote('183');
-		const repository = new NoteRecords(context.db);
+		const repository = new NoteRecords(owner, context.db);
 		const results = await Promise.all([
-			repository.updateIfRevision(owner, { ...note, title: 'Browser A', currentRevision: 2 }, 1),
-			repository.updateIfRevision(owner, { ...note, title: 'Browser B', currentRevision: 2 }, 1)
+			repository.updateIfRevision({ ...note, title: 'Browser A', currentRevision: 2 }, 1),
+			repository.updateIfRevision({ ...note, title: 'Browser B', currentRevision: 2 }, 1)
 		]);
 		expect(results.filter(Boolean)).toHaveLength(1);
 	});
 	it('projects the searchable columns without the document body', async () => {
 		const { owner, note } = await seedNote('195');
-		const hits = await new NoteRecords(context.db).listSearchable(owner);
+		const hits = await new NoteRecords(owner, context.db).listSearchable();
 		expect(hits.find((entry) => entry.id === note.id)).toEqual({
 			id: note.id,
 			projectId: note.projectId,
@@ -262,21 +260,19 @@ describe('Postgres note repository invariants', () => {
 	});
 	it('keeps trashed notes out of the searchable projection', async () => {
 		const { owner, note } = await seedNote('196');
-		const repository = new NoteRecords(context.db);
+		const repository = new NoteRecords(owner, context.db);
 		await replaceNoteFixture({ ...note, archivedAt: now });
-		expect((await repository.listSearchable(owner)).map((entry) => entry.id)).not.toContain(
-			note.id
-		);
+		expect((await repository.listSearchable()).map((entry) => entry.id)).not.toContain(note.id);
 	});
 	it('scopes the searchable projection to one project', async () => {
 		const { owner } = await seedNote('197');
 		const other = await seedNote('198', owner);
-		const hits = await new NoteRecords(context.db).listSearchable(owner, other.project.id);
+		const hits = await new NoteRecords(owner, context.db).listSearchable(other.project.id);
 		expect(hits.map((entry) => entry.id)).toEqual([other.note.id]);
 	});
 	it('hides a searchable note when its project is archived', async () => {
 		const { owner, project } = await seedNote('199');
-		await new ProjectRecords(context.db).archive(owner, project.id);
-		expect(await new NoteRecords(context.db).listSearchable(owner)).toEqual([]);
+		await new ProjectRecords(owner, context.db).archive(project.id);
+		expect(await new NoteRecords(owner, context.db).listSearchable()).toEqual([]);
 	});
 });

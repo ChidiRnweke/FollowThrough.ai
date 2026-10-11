@@ -26,9 +26,9 @@ const document = (overrides: Partial<SearchDocument> = {}): SearchDocument => ({
 });
 
 const searchOver = async (documents: readonly SearchDocument[]) => {
-	const repository = new InMemorySearchRepository();
+	const repository = new InMemorySearchRepository(testActor());
 	for (const item of documents)
-		await repository.replaceForNote(testActor(), item.noteId ?? testNoteId(), [item]);
+		await repository.replaceForNote(item.noteId ?? testNoteId(), [item]);
 	const provider = new InMemoryRetrievalProvider();
 	provider.vectorsByContent.set('messaging', [1, 0, 0]);
 	return {
@@ -59,16 +59,16 @@ describe('knowledge search scope', () => {
 	it('rejects a query embedding without exactly one vector', async () => {
 		const { knowledge, provider } = await searchOver([document()]);
 		provider.returnWrongCount = true;
-		await expect(
-			knowledge.candidates(testActor(), 'messaging', { limit: 10 })
-		).rejects.toMatchObject({ code: 'INVALID_GENERATED_CONTENT' });
+		await expect(knowledge.candidates('messaging', { limit: 10 })).rejects.toMatchObject({
+			code: 'INVALID_GENERATED_CONTENT'
+		});
 	});
 	it('limits vector results to the requested project', async () => {
 		const { knowledge } = await searchOver([
 			document(),
 			document({ noteId: testNoteId(3), projectId: testProjectId(2) })
 		]);
-		const matches = await knowledge.candidates(testActor(), 'messaging', {
+		const matches = await knowledge.candidates('messaging', {
 			limit: 10,
 			projectId: testProjectId()
 		});
@@ -76,7 +76,7 @@ describe('knowledge search scope', () => {
 	});
 	it('limits vector results to the requested note', async () => {
 		const { knowledge } = await searchOver([document(), document({ noteId: testNoteId(3) })]);
-		const matches = await knowledge.candidates(testActor(), 'messaging', {
+		const matches = await knowledge.candidates('messaging', {
 			limit: 10,
 			filter: { noteId: testNoteId(3) }
 		});
@@ -86,10 +86,10 @@ describe('knowledge search scope', () => {
 
 describe('embedding backfill', () => {
 	it('embeds pending chunks with their source context', async () => {
-		const repository = new InMemorySearchRepository();
+		const repository = new InMemorySearchRepository(testActor());
 		const provider = new InMemoryRetrievalProvider();
 		const source = { kind: 'note' as const, noteId: testNoteId(2) };
-		await repository.stage(testActor(), source, [
+		await repository.stage(source, [
 			searchDocumentBuilder({
 				sourceTitle: 'Project decisions',
 				content: 'Keep accepted evidence.',
@@ -98,19 +98,17 @@ describe('embedding backfill', () => {
 			})
 		]);
 		await createTestContentIndex(repository, 'fake', undefined, false, provider).embedPending(
-			testActor(),
 			source
 		);
 		expect(provider.embeddingRequests).toEqual([['Project decisions\nKeep accepted evidence.']]);
 	});
 
 	it('splits provider requests at the token budget, in order, without splitting an input', async () => {
-		const repository = new InMemorySearchRepository();
+		const repository = new InMemorySearchRepository(testActor());
 		const provider = new InMemoryRetrievalProvider();
 		const source = { kind: 'note' as const, noteId: testNoteId(2) };
 		const contents = ['first', 'word '.repeat(31_000), 'second', 'third'];
 		await repository.stage(
-			testActor(),
 			source,
 			contents.map((content, chunkIndex) =>
 				searchDocumentBuilder({
@@ -128,7 +126,7 @@ describe('embedding backfill', () => {
 			undefined,
 			false,
 			provider
-		).embedPending(testActor(), source);
+		).embedPending(source);
 		expect({
 			requests: provider.embeddingRequests.map((request) => request.length),
 			chunks: embedded.chunks.length

@@ -20,6 +20,7 @@ import {
 	type ApplicationConfig,
 	type ProductionApplication
 } from '../application';
+import { createSystemApplication, type SystemApplication } from './system-factory';
 
 export type { ProductionApplication } from '../application';
 
@@ -35,17 +36,17 @@ export type { ProductionApplication } from '../application';
  * notification channel, the token codec) are built once; each request builds its own graph.
  */
 export interface ProductionComposition {
-	/** The graph for one authenticated user's request. */
+	/** The graph for one user: a request's authenticated actor, or the owner of listed work. */
 	forActor(actor: ActorContext): ProductionApplication;
-	/** The graph for work that acts for no request: startup recovery and the worker's tasks. */
-	system(): ProductionApplication;
+	/** The graph for work that acts for no user: startup recovery and the worker's tasks. */
+	system(): SystemApplication;
 }
 
 export function createProductionComposition(): ProductionComposition {
 	const config = productionConfig();
 	return {
-		forActor: () => createApplication(config),
-		system: () => createApplication(config)
+		forActor: (actor) => createApplication(actor, config),
+		system: () => createSystemApplication(config)
 	};
 }
 

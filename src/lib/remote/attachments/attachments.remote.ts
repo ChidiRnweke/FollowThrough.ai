@@ -28,7 +28,7 @@ export const initiateAttachmentUpload = command(
 	async (input) =>
 		AppFactory.forActor(requestActor())
 			.attachments()
-			.initiate(requestActor(), {
+			.initiate({
 				path: input.path,
 				mediaType: input.mediaType,
 				byteSize: input.byteSize,
@@ -41,7 +41,7 @@ export const initiateAttachmentUpload = command(
 export const completeAttachmentUpload = command(z.object({ uploadId: id }), async (input) => {
 	const view = await AppFactory.forActor(requestActor())
 		.attachments()
-		.complete(requestActor(), input.uploadId as AttachmentUploadId);
+		.complete(input.uploadId as AttachmentUploadId);
 	return view;
 });
 
@@ -56,11 +56,7 @@ export const completeTodoScreenshotUpload = command(
 	async (input) => {
 		const view = await AppFactory.forActor(requestActor())
 			.attachments()
-			.completeForTodo(
-				requestActor(),
-				input.uploadId as AttachmentUploadId,
-				input.todoId as TodoId
-			);
+			.completeForTodo(input.uploadId as AttachmentUploadId, input.todoId as TodoId);
 		return view;
 	}
 );
@@ -68,7 +64,7 @@ export const completeTodoScreenshotUpload = command(
 export const retryAttachment = command(z.object({ attachmentId: id }), async (input) => {
 	const view = await AppFactory.forActor(requestActor())
 		.attachments()
-		.retry(requestActor(), input.attachmentId as AttachmentId);
+		.retry(input.attachmentId as AttachmentId);
 	return view;
 });
 
@@ -77,19 +73,19 @@ export const retryAttachment = command(z.object({ attachmentId: id }), async (in
 export const downloadAttachment = command(z.object({ attachmentId: id }), async (input) =>
 	AppFactory.forActor(requestActor())
 		.attachments()
-		.downloadById(requestActor(), input.attachmentId as AttachmentId)
+		.downloadById(input.attachmentId as AttachmentId)
 );
 
 export const downloadAttachmentByPath = command(z.object({ noteId: id, path }), async (input) =>
 	AppFactory.forActor(requestActor())
 		.attachments()
-		.download(requestActor(), input.noteId as NoteId, input.path)
+		.download(input.noteId as NoteId, input.path)
 );
 
 export const removeAttachment = command(z.object({ attachmentId: id }), async (input) => {
 	const result = await AppFactory.forActor(requestActor())
 		.attachments()
-		.removeById(requestActor(), input.attachmentId as AttachmentId);
+		.removeById(input.attachmentId as AttachmentId);
 	return result;
 });
 
@@ -97,6 +93,6 @@ export const removeAttachment = command(z.object({ attachmentId: id }), async (i
 export const removeAttachmentByPath = form(z.object({ noteId: id, path }), async (input) => {
 	await AppFactory.forActor(requestActor())
 		.attachments()
-		.remove(requestActor(), input.noteId as NoteId, input.path);
+		.remove(input.noteId as NoteId, input.path);
 	return { removed: input.path };
 });

@@ -23,14 +23,14 @@ import { InMemoryAttachmentClaims } from '../fakes/claims';
 import type { AttachmentView } from '$lib/models/attachments';
 export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 480 }) => {
 	const repository = new InMemoryAttachmentRepository();
-	const notes = new InMemoryNoteRepository();
-	const search = new InMemorySearchRepository();
+	const notes = new InMemoryNoteRepository(testActor());
+	const search = new InMemorySearchRepository(testActor());
 	const claims = new InMemoryAttachmentClaims();
 	const extraction = new InMemoryAttachmentExtraction();
 	const storage = new InMemoryStorage();
-	const uploads = new AttachmentUploadService(repository, notes);
+	const uploads = new AttachmentUploadService(testActor(), repository, notes);
 	const reader = new AttachmentReadingService(repository);
-	const lifecycle = new AttachmentLifecycleService(repository, notes);
+	const lifecycle = new AttachmentLifecycleService(testActor(), repository, notes);
 	const worker = new AttachmentProcessing({
 		modelSelection: new AgentModelSelectionService(),
 		records: new AttachmentVersionService(repository),
@@ -66,7 +66,7 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 		storage,
 		process: async (view: AttachmentView) => {
 			repository.found = view;
-			const result = await worker.process(testActor(), view.version.id);
+			const result = await worker.process(view.version.id);
 			if (result.kind === 'failure') throw new Error(result.message);
 		}
 	};

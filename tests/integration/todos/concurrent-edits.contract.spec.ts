@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -18,9 +19,9 @@ import { context, seedNote } from '../database-harness';
 
 const editor = (connection: ReturnType<typeof connectPostgresTestDatabase>) => {
 	const { database, transactionRunner } = createTransactionContext(connection.db);
-	const projects = new ProjectRecords(database);
-	const notes = createNotesCapability({ db: database, projects });
-	const { services: catalog } = createTodosCapability({
+	const projects = new ProjectRecords(testActor(), database);
+	const notes = createNotesCapability(testActor(), { db: database, projects });
+	const { services: catalog } = createTodosCapability(testActor(), {
 		db: database,
 		projects,
 		notes: notes.repository,
@@ -28,6 +29,7 @@ const editor = (connection: ReturnType<typeof connectPostgresTestDatabase>) => {
 		provenance: notes.provenanceRepository
 	});
 	return new Todos(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
 			...agentToolResultsFixture(),
@@ -44,9 +46,8 @@ const editor = (connection: ReturnType<typeof connectPostgresTestDatabase>) => {
 
 it('preserves both independent edits when two task updates wait for the same row', async () => {
 	const { owner, project } = await seedNote('14901');
-	const records = new TodoRecords(context.db);
+	const records = new TodoRecords(owner, context.db);
 	const task = await records.insert(
-		owner,
 		todoBuilder({
 			id: testTodoId(14901),
 			userId: owner.userId,
@@ -70,8 +71,8 @@ it('preserves both independent edits when two task updates wait for the same row
 		const [firstBackend] = await first.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
 		const [secondBackend] = await second.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
 		const writes = Promise.all([
-			editor(first).update(owner, { todoId: task.id, title: 'New title' }),
-			editor(second).update(owner, { todoId: task.id, description: 'New description' })
+			editor(first).update({ todoId: task.id, title: 'New title' }),
+			editor(second).update({ todoId: task.id, description: 'New description' })
 		]);
 		await vi.waitFor(async () => {
 			const waiting = await blocker<
@@ -82,7 +83,7 @@ it('preserves both independent edits when two task updates wait for the same row
 		release.resolve();
 		await locking;
 		await writes;
-		const stored = await records.findById(owner, task.id);
+		const stored = await records.findById(task.id);
 		expect({ title: stored?.title, description: stored?.description }).toEqual({
 			title: 'New title',
 			description: 'New description'

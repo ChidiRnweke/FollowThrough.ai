@@ -32,19 +32,23 @@ import { context, seedUser } from '../database-harness';
 it('keeps a folder at the project root after reloading a completed move', async () => {
 	const owner = await seedUser('13901');
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const repository = new ProjectRecords(database);
-	const catalog = createProjectServices(repository, repository);
-	const project = await repository.insert(owner, { name: 'Root folder move' });
+	const repository = new ProjectRecords(owner, database);
+	const catalog = createProjectServices(owner, repository, repository);
+	const project = await repository.insert({ name: 'Root folder move' });
 	const creation = noteCreationControllers(
-		createNoteServices(new NoteRecords(database), new SourceAnchorRecords(database), repository)
-			.creator,
+		createNoteServices(
+			owner,
+			new NoteRecords(owner, database),
+			new SourceAnchorRecords(owner, database),
+			repository
+		).creator,
 		transactionRunner
 	);
-	const { folder: parent } = await creation.projects.createFolder(owner, {
+	const { folder: parent } = await creation.projects.createFolder({
 		projectId: project.id,
 		name: 'Parent'
 	});
-	const { folder: child } = await creation.projects.createFolder(owner, {
+	const { folder: child } = await creation.projects.createFolder({
 		projectId: project.id,
 		parentId: parent.id,
 		name: 'Child'
@@ -64,29 +68,35 @@ it('keeps a folder at the project root after reloading a completed move', async 
 			transactionRunner
 		})
 	);
-	await controller.move(owner, { projectId: project.id, entryId: child.id, position: 0 });
-	const reloaded = await controller.get(owner, { projectId: project.id });
+	await controller.move({ projectId: project.id, entryId: child.id, position: 0 });
+	const reloaded = await controller.get({ projectId: project.id });
 	expect(reloaded.tree.map(({ entry }) => entry.id)).toEqual([child.id, parent.id]);
 });
 
 it('restores a note at the root when its previous folder is archived', async () => {
 	const owner = await seedUser('13902');
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const projects = new ProjectRecords(database);
-	const project = await projects.insert(owner, { name: 'Restore at root' });
-	const repository = new NoteRecords(database);
-	const catalog = createNoteServices(repository, new SourceAnchorRecords(database), projects);
+	const projects = new ProjectRecords(owner, database);
+	const project = await projects.insert({ name: 'Restore at root' });
+	const repository = new NoteRecords(owner, database);
+	const catalog = createNoteServices(
+		owner,
+		repository,
+		new SourceAnchorRecords(owner, database),
+		projects
+	);
 	const creation = noteCreationControllers(catalog.creator, transactionRunner);
-	const { folder: parent } = await creation.projects.createFolder(owner, {
+	const { folder: parent } = await creation.projects.createFolder({
 		projectId: project.id,
 		name: 'Archived parent'
 	});
-	const { note } = await creation.notes.create(owner, {
+	const { note } = await creation.notes.create({
 		projectId: project.id,
 		parentId: parent.id,
 		title: 'Restored child'
 	});
 	const controller = new Notes(
+		owner,
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -107,14 +117,14 @@ it('restores a note at the root when its previous folder is archived', async () 
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			noteTrash: catalog.trash,
-			noteIndexer: new InMemoryNoteContent(),
+			noteIndexer: new InMemoryNoteContent(owner),
 			transactionRunner
 		})
 	);
-	await controller.archive(owner, { noteId: note.id });
-	await controller.archive(owner, { noteId: parent.id });
-	await controller.restore(owner, { noteId: note.id });
-	expect(await repository.findById(owner, note.id)).toMatchObject({
+	await controller.archive({ noteId: note.id });
+	await controller.archive({ noteId: parent.id });
+	await controller.restore({ noteId: note.id });
+	expect(await repository.findById(note.id)).toMatchObject({
 		parentId: undefined,
 		archivedAt: undefined
 	});

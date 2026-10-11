@@ -18,15 +18,17 @@ import {
 
 const setup = () => {
 	const actor = testActor();
-	const content = new InMemoryNoteContent();
-	const journal = new InMemoryWorkspaceJournal();
-	journal.createAccount(actor, 9007199254740992n);
+	const content = new InMemoryNoteContent(actor);
+	const journal = new InMemoryWorkspaceJournal(actor);
+	journal.createAccount(9007199254740992n);
 	const workspace = new Workspace(
 		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
 			transactionRunner: new InMemoryTransactionRunner([content]),
 			syncChanges: new WorkspaceJournal(journal),
-			resourceVersions: new WorkspaceResourceVersions(new InMemoryWorkspaceNoteReads(content)),
+			resourceVersions: new WorkspaceResourceVersions(
+				new InMemoryWorkspaceNoteReads(actor, content)
+			),
 			resourceKeys: new WorkspaceCommandRulesService()
 		})
 	);
@@ -37,17 +39,17 @@ it('assembles ordered exact bodies and composite tombstones without rounding the
 	const { actor, content, journal, workspace, since } = setup();
 	const note = noteBuilder({ userId: actor.userId, currentRevision: 4 });
 	content.notes.push(note);
-	journal.publish(actor, {
+	journal.publish({
 		kind: 'upsert',
 		identity: { type: 'notes', id: [note.id] },
 		version: 4n
 	});
-	journal.publish(actor, {
+	journal.publish({
 		kind: 'delete',
 		identity: { type: 'tool_preferences', id: [actor.userId, 'read_note'] },
 		version: 9007199254740993n
 	});
-	expect(await workspace.pullChangePage(actor, since)).toEqual({
+	expect(await workspace.pullChangePage(since)).toEqual({
 		cursor: '9007199254740994',
 		hasMore: false,
 		records: [
@@ -70,31 +72,31 @@ it('rejects the whole page when a selected body has a different version', async 
 	const { actor, content, journal, workspace, since } = setup();
 	const note = noteBuilder({ userId: actor.userId, currentRevision: 5 });
 	content.notes.push(note);
-	journal.publish(actor, {
+	journal.publish({
 		kind: 'upsert',
 		identity: { type: 'notes', id: [note.id] },
 		version: 4n
 	});
-	await expect(workspace.pullChangePage(actor, since)).rejects.toThrow(
+	await expect(workspace.pullChangePage(since)).rejects.toThrow(
 		'The synchronization journal does not match its resource'
 	);
 });
 
 it('rejects the whole page when a selected body is unavailable', async () => {
 	const { actor, journal, workspace, since } = setup();
-	journal.publish(actor, {
+	journal.publish({
 		kind: 'upsert',
 		identity: { type: 'notes', id: [testNoteId()] },
 		version: 4n
 	});
-	await expect(workspace.pullChangePage(actor, since)).rejects.toThrow(
+	await expect(workspace.pullChangePage(since)).rejects.toThrow(
 		'The synchronization journal does not match its resource'
 	);
 });
 
 it('returns an empty terminal page at the account head', async () => {
 	const { actor, workspace, since } = setup();
-	expect(await workspace.pullChangePage(actor, since)).toEqual({
+	expect(await workspace.pullChangePage(since)).toEqual({
 		cursor: since,
 		hasMore: false,
 		records: []
@@ -104,13 +106,13 @@ it('returns an empty terminal page at the account head', async () => {
 it('keeps every resource across the page checkpoint and terminal head', async () => {
 	const { actor, journal, workspace, since } = setup();
 	for (let i = 0; i < 129; i++)
-		journal.publish(actor, {
+		journal.publish({
 			kind: 'delete',
 			identity: { type: 'notes', id: [testNoteId(i)] },
 			version: 2n
 		});
-	const first = await workspace.pullChangePage(actor, since);
-	const last = await workspace.pullChangePage(actor, first.cursor);
+	const first = await workspace.pullChangePage(since);
+	const last = await workspace.pullChangePage(first.cursor);
 	expect({ first, last }).toEqual({
 		first: {
 			cursor: '9007199254741120',

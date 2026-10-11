@@ -19,14 +19,20 @@ import {
 import { describe, expect, it } from 'vitest';
 import { Memory, type MemoryDependencies } from './controller';
 const setup = () => {
-	const entries = new InMemoryMemoryEntryRepository();
-	const projects = new InMemoryProjectRepository();
+	const entries = new InMemoryMemoryEntryRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const search = new InMemorySearchRepository();
+	const search = new InMemorySearchRepository(testActor());
 	const indexEmbeddings = new InMemoryRetrievalProvider();
 	const indexWriter = createContentIndex(search, undefined, undefined, false, indexEmbeddings);
-	const memory = createMemoryServices(entries, projects, new InMemoryProvenanceRepository());
+	const memory = createMemoryServices(
+		testActor(),
+		entries,
+		projects,
+		new InMemoryProvenanceRepository(testActor())
+	);
 	const controller = new Memory(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
 			...agentToolResultsFixture(),
@@ -45,12 +51,10 @@ describe('Memory persistence and search', () => {
 	it('rolls back the memory when immediate embedding fails', async () => {
 		const { controller, entries, indexEmbeddings } = setup();
 		indexEmbeddings.embeddingFailure = new Error('Provider unavailable');
-		const outcome = await controller
-			.create(testActor(), { projectId: testProjectId(), content: 'Fact' })
-			.then(
-				() => 'created',
-				(error: Error) => error.message
-			);
+		const outcome = await controller.create({ projectId: testProjectId(), content: 'Fact' }).then(
+			() => 'created',
+			(error: Error) => error.message
+		);
 		expect({ outcome, entries: entries.entries }).toEqual({
 			outcome: 'Embedding generation failed',
 			entries: []
@@ -59,11 +63,11 @@ describe('Memory persistence and search', () => {
 
 	it('makes a shared memory searchable by vector before an immediate write returns', async () => {
 		const { controller, search } = setup();
-		const { entry } = await controller.create(testActor(), {
+		const { entry } = await controller.create({
 			projectId: testProjectId(),
 			content: 'Fact'
 		});
-		const matches = await search.searchByEmbedding(testActor(), [1, 0, 4], 10);
+		const matches = await search.searchByEmbedding([1, 0, 4], 10);
 		expect({
 			searchableIds: matches.map(({ document }) => document.memoryEntryId),
 			chunkIds: search.documents.map((item) => item.document.memoryEntryId)
@@ -71,7 +75,7 @@ describe('Memory persistence and search', () => {
 	});
 	it('does not index an entry withheld from agents', async () => {
 		const { search, controller } = await setup();
-		await controller.create(testActor(), {
+		await controller.create({
 			projectId: testProjectId(),
 			content: 'Fact',
 			shareWithAgents: false
@@ -80,40 +84,40 @@ describe('Memory persistence and search', () => {
 	});
 	it('removes chunks when sharing is switched off', async () => {
 		const { search, controller } = await setup();
-		const { entry } = await controller.create(testActor(), {
+		const { entry } = await controller.create({
 			projectId: testProjectId(),
 			content: 'Fact'
 		});
-		await controller.update(testActor(), { memoryEntryId: entry.id, shareWithAgents: false });
+		await controller.update({ memoryEntryId: entry.id, shareWithAgents: false });
 		expect(search.documents).toEqual([]);
 	});
 	it('reindexes edited content', async () => {
 		const { search, controller } = await setup();
-		const { entry } = await controller.create(testActor(), {
+		const { entry } = await controller.create({
 			projectId: testProjectId(),
 			content: 'Old fact'
 		});
-		await controller.update(testActor(), { memoryEntryId: entry.id, content: 'New fact' });
+		await controller.update({ memoryEntryId: entry.id, content: 'New fact' });
 		expect(search.documents[0]?.document.content).toBe('New fact');
 	});
 	it('removes chunks when an entry is removed', async () => {
 		const { search, controller } = await setup();
-		const { entry } = await controller.create(testActor(), {
+		const { entry } = await controller.create({
 			projectId: testProjectId(),
 			content: 'Fact'
 		});
-		await controller.remove(testActor(), { memoryEntryId: entry.id });
+		await controller.remove({ memoryEntryId: entry.id });
 		expect(search.documents).toEqual([]);
 	});
 	it('keeps profile entries out of the retrieval index', async () => {
 		const { search, controller } = await setup();
-		await controller.create(testActor(), { content: 'I lead the platform team.' });
+		await controller.create({ content: 'I lead the platform team.' });
 		expect(search.documents).toEqual([]);
 	});
 	it('rolls back a memory write when its search update fails', async () => {
 		const { controller, search, entries } = setup();
 		search.stageFailure = new Error('Search unavailable');
-		await controller.create(testActor(), { projectId: testProjectId(), content: 'Fact' }).then(
+		await controller.create({ projectId: testProjectId(), content: 'Fact' }).then(
 			() => {
 				throw new Error('Expected failure');
 			},

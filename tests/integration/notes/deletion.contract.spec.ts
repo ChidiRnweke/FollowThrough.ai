@@ -7,15 +7,15 @@ import { replaceNoteFixture, context, now, seedNote } from '../database-harness'
 
 it('refuses individual deletion after a concurrent restore commits', async () => {
 	const { owner, note } = await seedNote('19401');
-	const records = new NoteRecords(context.db);
+	const records = new NoteRecords(owner, context.db);
 	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await competingTreeWrites(
 		async (api) => {
-			await api.notes.restore(owner, { noteId: note.id });
+			await api.notes.restore({ noteId: note.id });
 		},
-		(api) => api.notes.deleteForever(owner, { noteId: note.id })
+		(api) => api.notes.deleteForever({ noteId: note.id })
 	);
-	expect({ result, stored: await records.findById(owner, note.id) }).toMatchObject({
+	expect({ result, stored: await records.findById(note.id) }).toMatchObject({
 		result: { kind: 'failure', error: { code: 'VALIDATION' } },
 		stored: { id: note.id, archivedAt: undefined }
 	});
@@ -23,15 +23,15 @@ it('refuses individual deletion after a concurrent restore commits', async () =>
 
 it('keeps a concurrently restored note when emptying project trash', async () => {
 	const { owner, note, project } = await seedNote('19402');
-	const records = new NoteRecords(context.db);
+	const records = new NoteRecords(owner, context.db);
 	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await competingTreeWrites(
 		async (api) => {
-			await api.notes.restore(owner, { noteId: note.id });
+			await api.notes.restore({ noteId: note.id });
 		},
-		(api) => api.notes.emptyTrash(owner, { projectId: project.id })
+		(api) => api.notes.emptyTrash({ projectId: project.id })
 	);
-	expect({ result, stored: await records.findById(owner, note.id) }).toMatchObject({
+	expect({ result, stored: await records.findById(note.id) }).toMatchObject({
 		result: { kind: 'success', value: { deletedNoteIds: [], deletedNotes: [] } },
 		stored: { id: note.id, archivedAt: undefined }
 	});
@@ -39,15 +39,15 @@ it('keeps a concurrently restored note when emptying project trash', async () =>
 
 it('refuses restoring a note after its permanent deletion commits', async () => {
 	const { owner, note } = await seedNote('19403');
-	const records = new NoteRecords(context.db);
+	const records = new NoteRecords(owner, context.db);
 	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await competingTreeWrites(
 		async (api) => {
-			await api.notes.deleteForever(owner, { noteId: note.id });
+			await api.notes.deleteForever({ noteId: note.id });
 		},
-		(api) => api.notes.restore(owner, { noteId: note.id })
+		(api) => api.notes.restore({ noteId: note.id })
 	);
-	expect({ result, stored: await records.findById(owner, note.id) }).toMatchObject({
+	expect({ result, stored: await records.findById(note.id) }).toMatchObject({
 		result: { kind: 'failure', error: { code: 'NOT_FOUND' } },
 		stored: undefined
 	});
@@ -55,9 +55,9 @@ it('refuses restoring a note after its permanent deletion commits', async () => 
 
 it('preserves a restored child while permanently deleting its previous folder', async () => {
 	const { owner, note } = await seedNote('19404');
-	const records = new NoteRecords(context.db);
+	const records = new NoteRecords(owner, context.db);
 	await replaceNoteFixture({ ...note, kind: 'folder', archivedAt: now });
-	const child = await records.insert(owner, {
+	const child = await records.insert({
 		...note,
 		id: crypto.randomUUID() as NoteId,
 		parentId: note.id,
@@ -66,13 +66,13 @@ it('preserves a restored child while permanently deleting its previous folder', 
 	});
 	await competingTreeWrites(
 		async (api) => {
-			await api.notes.restore(owner, { noteId: child.id });
+			await api.notes.restore({ noteId: child.id });
 		},
-		(api) => api.notes.deleteForever(owner, { noteId: note.id })
+		(api) => api.notes.deleteForever({ noteId: note.id })
 	);
 	expect({
-		parent: await records.findById(owner, note.id),
-		child: await records.findById(owner, child.id)
+		parent: await records.findById(note.id),
+		child: await records.findById(child.id)
 	}).toMatchObject({
 		parent: undefined,
 		child: { id: child.id, parentId: undefined, archivedAt: undefined }
@@ -81,15 +81,15 @@ it('preserves a restored child while permanently deleting its previous folder', 
 
 it('guards storage deletion against a restoration even without the controller project lock', async () => {
 	const { owner, note } = await seedNote('19405');
-	const records = new NoteRecords(context.db);
+	const records = new NoteRecords(owner, context.db);
 	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await competingTreeWrites(
 		async (api) => {
-			await api.notes.restore(owner, { noteId: note.id });
+			await api.notes.restore({ noteId: note.id });
 		},
-		(api) => api.records.deleteTrashed(owner, note.id)
+		(api) => api.records.deleteTrashed(note.id)
 	);
-	expect({ result, stored: await records.findById(owner, note.id) }).toMatchObject({
+	expect({ result, stored: await records.findById(note.id) }).toMatchObject({
 		result: { kind: 'success', value: undefined },
 		stored: { id: note.id, archivedAt: undefined }
 	});
@@ -97,14 +97,14 @@ it('guards storage deletion against a restoration even without the controller pr
 
 it('rolls back child deletion when PostgreSQL refuses the folder deletion', async () => {
 	const { owner, note } = await seedNote('19406');
-	const records = new NoteRecords(context.db);
+	const records = new NoteRecords(owner, context.db);
 	const parent = await replaceNoteFixture({
 		...note,
 		kind: 'folder',
 		archivedAt: now,
 		title: 'Purge rollback contract'
 	});
-	const child = await records.insert(owner, {
+	const child = await records.insert({
 		...note,
 		id: crypto.randomUUID() as NoteId,
 		parentId: note.id,
@@ -121,10 +121,10 @@ it('rolls back child deletion when PostgreSQL refuses the folder deletion', asyn
 	end $$`;
 	await context.client`create trigger reject_contract_note_deletion before delete on notes for each row execute function reject_contract_note_deletion()`;
 	try {
-		await api.notes.deleteForever(owner, { noteId: note.id }).catch(() => ({ kind: 'failure' }));
+		await api.notes.deleteForever({ noteId: note.id }).catch(() => ({ kind: 'failure' }));
 		expect({
-			parent: await records.findById(owner, note.id),
-			child: await records.findById(owner, child.id)
+			parent: await records.findById(note.id),
+			child: await records.findById(child.id)
 		}).toEqual({ parent, child });
 	} finally {
 		await context.client`drop trigger reject_contract_note_deletion on notes`;

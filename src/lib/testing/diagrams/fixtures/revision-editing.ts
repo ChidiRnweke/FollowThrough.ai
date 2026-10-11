@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	DiagramStudio,
 	type DiagramStudioDependencies
@@ -25,18 +26,20 @@ import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memor
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 
 export const diagramRevisionFixture = () => {
-	const sourceNotes = new InMemoryNoteContent();
+	const sourceNotes = new InMemoryNoteContent(testActor());
 	sourceNotes.notes = [noteBuilder()];
-	const diagrams = new InMemoryDiagramRepository();
-	const index = new InMemoryDiagrams();
+	const diagrams = new InMemoryDiagramRepository(testActor());
+	const index = new InMemoryDiagrams(testActor());
 	const library = createDiagramServices(
+		testActor(),
 		diagrams,
-		new InMemoryNoteRepository(),
-		new InMemoryAnchorRepository(),
-		new InMemoryProvenanceRepository(),
-		new InMemoryProjectRepository()
+		new InMemoryNoteRepository(testActor()),
+		new InMemoryAnchorRepository(testActor()),
+		new InMemoryProvenanceRepository(testActor()),
+		new InMemoryProjectRepository(testActor())
 	);
 	const controller = new DiagramStudio(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
 			...agentToolResultsFixture(),

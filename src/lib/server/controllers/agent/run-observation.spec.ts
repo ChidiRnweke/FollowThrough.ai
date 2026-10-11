@@ -11,7 +11,7 @@ import { AgentSdkHarness, type AgentHarnessDependencies } from './controller';
 const runId = '31000000-0000-4000-8000-000000000001' as AgentRunId;
 
 const setup = () => {
-	const runs = new InMemoryAgentRunPersistence();
+	const runs = new InMemoryAgentRunPersistence(testActor());
 	const run: WorkflowAgentRun = {
 		kind: 'workflow',
 		id: runId,
@@ -28,6 +28,7 @@ const setup = () => {
 	};
 	runs.runs.push(run);
 	const agent = new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
@@ -42,7 +43,7 @@ describe('run observation', () => {
 	it('signals the owner on each committed change until the subscription ends', async () => {
 		const { agent, runs } = setup();
 		const signals: string[] = [];
-		const unsubscribe = await agent.observeRun(testActor(), runId, () => signals.push('changed'));
+		const unsubscribe = await agent.observeRun(runId, () => signals.push('changed'));
 		await runs.append(runId, 1, { type: 'run_started', runId, attempt: 1 });
 		await Promise.resolve();
 		await unsubscribe();
@@ -53,7 +54,7 @@ describe('run observation', () => {
 
 	it('does not let another actor observe a run', async () => {
 		const { agent } = setup();
-		await expect(agent.observeRun(testActor(2), runId, () => {})).rejects.toMatchObject({
+		await expect(agent.observeRun(runId, () => {})).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});

@@ -33,12 +33,9 @@ import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/muta
  * and listing the models they can choose from.
  */
 export interface AgentSettingsController {
-	synchronize(
-		actor: ActorContext,
-		input: AgentPreferenceMutationRequest
-	): Promise<WorkspaceMutationResult>;
+	synchronize(input: AgentPreferenceMutationRequest): Promise<WorkspaceMutationResult>;
 	/** Read the user's current agent preferences. */
-	getPreferences(actor: ActorContext): Promise<AgentPreferences>;
+	getPreferences(): Promise<AgentPreferences>;
 	/**
 	 * Apply an update to the user's agent preferences, validating every value in one
 	 * place — the settings form and the agent's own `update_agent_preferences` tool both
@@ -49,22 +46,16 @@ export interface AgentSettingsController {
 	 * @throws ValidationError if a model is not selectable, the engine is unknown, or a
 	 * numeric limit falls outside its range.
 	 */
-	updatePreferences(
-		actor: ActorContext,
-		input: UpdateAgentPreferencesInput
-	): Promise<AgentPreferences>;
+	updatePreferences(input: UpdateAgentPreferencesInput): Promise<AgentPreferences>;
 	/**
 	 * {@link updatePreferences}, answered with the preferences before the update as well. A
 	 * preference is a bare scalar, so the result alone cannot say whether a value changed or
 	 * was restated; the before-image is read here, before the write, because reading it after
 	 * is the one moment it is guaranteed to be wrong.
 	 */
-	changePreferences(
-		actor: ActorContext,
-		input: UpdateAgentPreferencesInput
-	): Promise<AgentPreferenceChange>;
+	changePreferences(input: UpdateAgentPreferencesInput): Promise<AgentPreferenceChange>;
 	/** List the models the user can choose from for the agent. */
-	listModels(actor: ActorContext): Promise<readonly AgentModel[]>;
+	listModels(): Promise<readonly AgentModel[]>;
 	/**
 	 * The chat and vision models a conversation with no override of its own runs on.
 	 *
@@ -73,8 +64,8 @@ export interface AgentSettingsController {
 	 * deployment configuration the browser cannot see, and a guess there would label
 	 * a model the run does not use.
 	 */
-	resolveDefaults(actor: ActorContext): Promise<AgentModelDefaults>;
-	bootstrap(actor: ActorContext): Promise<WorkspaceBootstrap>;
+	resolveDefaults(): Promise<AgentModelDefaults>;
+	bootstrap(): Promise<WorkspaceBootstrap>;
 }
 
 export interface AgentSettingsDependencies {
@@ -97,21 +88,18 @@ export interface AgentSettingsDependencies {
 }
 
 export class AgentSettings implements AgentSettingsController {
-	async synchronize(
-		actor: ActorContext,
-		input: AgentPreferenceMutationRequest
-	): Promise<WorkspaceMutationResult> {
+	async synchronize(input: AgentPreferenceMutationRequest): Promise<WorkspaceMutationResult> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
 					const target = this.workspaceCommandRules.mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, {
+					const prepared = await this.dependencies.syncMutations.prepare(input, {
 						identity: target,
 						key: this.workspaceCommandRules.workspaceResourceKey(target)
 					});
 					if (prepared.kind === 'finished') return prepared.result;
-					await this.applySynchronizedCommand(actor, input);
-					return this.dependencies.syncMutations.complete(actor, input, target);
+					await this.applySynchronizedCommand(input);
+					return this.dependencies.syncMutations.complete(input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);
@@ -121,35 +109,27 @@ export class AgentSettings implements AgentSettingsController {
 		}
 	}
 
-	private async applySynchronizedCommand(
-		actor: ActorContext,
-		input: AgentPreferenceMutationRequest
-	): Promise<void> {
-		if (input.command.userId !== actor.userId)
+	private async applySynchronizedCommand(input: AgentPreferenceMutationRequest): Promise<void> {
+		if (input.command.userId !== this.actor.userId)
 			throw new ValidationError('The preferences belong to another account');
-		await this.updatePreferences(actor, input.command.patch);
+		await this.updatePreferences(input.command.patch);
 	}
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly workspaceCommandRules: WorkspaceCommandRules,
 		private readonly dependencies: AgentSettingsDependencies
 	) {}
 
-	getPreferences(actor: ActorContext): Promise<AgentPreferences> {
-		return this.dependencies.preferences.get(actor);
+	getPreferences(): Promise<AgentPreferences> {
+		return this.dependencies.preferences.get();
 	}
 
-	async changePreferences(
-		actor: ActorContext,
-		input: UpdateAgentPreferencesInput
-	): Promise<AgentPreferenceChange> {
-		const previous = await this.getPreferences(actor);
-		return { ...(await this.updatePreferences(actor, input)), previous };
+	async changePreferences(input: UpdateAgentPreferencesInput): Promise<AgentPreferenceChange> {
+		const previous = await this.getPreferences();
+		return { ...(await this.updatePreferences(input)), previous };
 	}
 
-	async updatePreferences(
-		actor: ActorContext,
-		input: UpdateAgentPreferencesInput
-	): Promise<AgentPreferences> {
+	async updatePreferences(input: UpdateAgentPreferencesInput): Promise<AgentPreferences> {
 		const choices: { modelId: string; role: 'chat' | 'vision' | 'generation' }[] = [];
 		if (input.defaultModel) choices.push({ modelId: input.defaultModel, role: 'chat' });
 		if (input.defaultVisionModel)
@@ -175,25 +155,24 @@ export class AgentSettings implements AgentSettingsController {
 		return this.dependencies.transactionRunner.run(async () => {
 			const resourceKey = this.workspaceCommandRules.workspaceResourceKey({
 				type: 'agent_preferences',
-				id: [actor.userId]
+				id: [this.actor.userId]
 			});
-			const stored = await this.dependencies.preferences.getForWrite(actor, resourceKey);
+			const stored = await this.dependencies.preferences.getForWrite(resourceKey);
 			const timestamp = this.dependencies.now();
-			const current = stored ?? this.dependencies.preferences.defaults(actor, timestamp);
+			const current = stored ?? this.dependencies.preferences.defaults(timestamp);
 			const preferences = this.dependencies.preferenceEditing.apply(current, input, timestamp);
-			return this.dependencies.preferences.persist(actor, preferences);
+			return this.dependencies.preferences.persist(preferences);
 		});
 	}
 
-	async listModels(_actor: ActorContext): Promise<readonly AgentModel[]> {
-		void _actor;
+	async listModels(): Promise<readonly AgentModel[]> {
 		return this.dependencies.modelChoices.configuredChatModels(
 			await this.dependencies.models.list(),
 			this.modelDefaults()
 		);
 	}
 
-	async bootstrap(actor: ActorContext): Promise<WorkspaceBootstrap> {
+	async bootstrap(): Promise<WorkspaceBootstrap> {
 		const agentDefaults = this.modelDefaults();
 		const webSearch = this.dependencies.runSettings.research(
 			this.dependencies.webSearchOverrides,
@@ -204,7 +183,7 @@ export class AgentSettings implements AgentSettingsController {
 			agentDefaults
 		);
 		return {
-			accountId: actor.userId,
+			accountId: this.actor.userId,
 			agentDefaults,
 			agentModels,
 			numericDefaults: {
@@ -229,8 +208,8 @@ export class AgentSettings implements AgentSettingsController {
 		};
 	}
 
-	async resolveDefaults(actor: ActorContext): Promise<AgentModelDefaults> {
-		const preferences = await this.dependencies.preferences.get(actor);
+	async resolveDefaults(): Promise<AgentModelDefaults> {
+		const preferences = await this.dependencies.preferences.get();
 		return {
 			chatModelId: this.dependencies.modelSelection.resolveDefaultAgentModel(
 				preferences,

@@ -21,7 +21,7 @@ const DEPLOYMENT_CHAT_MODEL = 'deepseek/deepseek-v4-flash';
 const DEPLOYMENT_VISION_MODEL = 'mistral/pixtral-large';
 const timestamp = '2026-09-23T12:00:00.000Z' as DateTime;
 const setup = () => {
-	const repository = new InMemoryAgentPreferencesRepository();
+	const repository = new InMemoryAgentPreferencesRepository(testActor());
 	repository.entries.set(testActor().userId, {
 		userId: testActor().userId,
 		executionMode: 'approval_required',
@@ -29,7 +29,7 @@ const setup = () => {
 		createdAt: testNow,
 		updatedAt: testNow
 	});
-	const preferences = new AgentPreferenceCatalog(repository);
+	const preferences = new AgentPreferenceCatalog(testActor(), repository);
 	const models = new InMemoryModelCatalog();
 	models.models = [
 		{
@@ -47,6 +47,7 @@ const setup = () => {
 		repository,
 		models,
 		controller: new AgentSettings(
+			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentSettingsDependencies>({
 				...agentToolResultsFixture(),

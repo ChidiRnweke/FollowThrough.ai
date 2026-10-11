@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import {
 	WidgetExportService,
 	type IWidgetExportService
@@ -72,16 +73,18 @@ export interface DeliverablesCapability {
 	readonly markdownToContent: NoteMarkdownReader;
 }
 export const createDeliverablesCapability = (
+	actor: ActorContext,
 	input: DeliverablesCapabilityInput
 ): DeliverablesCapability => ({
 	exportSettingsRules: new ExportSettingsRuleService(),
 	artifactFiles: new ArtifactFileService(),
-	templates: createTemplateServices(new TemplateRecords(input.db)),
+	templates: createTemplateServices(actor, new TemplateRecords(actor, input.db)),
 	templateStorage: input.storage,
 	templateStyles: new DocxTemplateStyleReader(),
 	artifacts: createArtifactServices(
-		new ArtifactRecords(input.db),
-		new ExportSettingsRecords(input.db)
+		actor,
+		new ArtifactRecords(actor, input.db),
+		new ExportSettingsRecords(actor, input.db)
 	),
 	artifactStorage: input.storage,
 	fetchImage: fetchRemoteDataUrl,

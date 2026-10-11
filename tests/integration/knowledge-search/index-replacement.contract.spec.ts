@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { describe, expect, it, onTestFinished } from 'vitest';
@@ -36,23 +37,23 @@ const embedAll: Embed = async (inputs) => ({ model, vectors: inputs.map(() => ve
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const repository = new KnowledgeIndexRecords(database);
-	const committed = new KnowledgeIndexRecords(context.db);
-	onTestFinished(() => committed.deleteForNote(seeded.owner, seeded.note.id));
+	const repository = new KnowledgeIndexRecords(testActor(), database);
+	const committed = new KnowledgeIndexRecords(testActor(), context.db);
+	onTestFinished(() => committed.deleteForNote(seeded.note.id));
 	const index = createTestContentIndex(repository, model, undefined, true);
 	const inline = createTestContentIndex(repository, model, undefined, false, provider(embedAll));
 	const note = await replaceNoteFixture({ ...seeded.note, plainText: 'original searchable text' });
-	await transactionRunner.run(() => inline.indexNote(seeded.owner, note));
+	await transactionRunner.run(() => inline.indexNote(note));
 	const save = async (text: string, revision: number) => {
 		const updated = await replaceNoteFixture({
 			...note,
 			plainText: text,
 			currentRevision: revision
 		});
-		await transactionRunner.run(() => index.indexNote(seeded.owner, updated));
+		await transactionRunner.run(() => index.indexNote(updated));
 	};
 	const contents = async () =>
-		(await committed.listForNote(seeded.owner, note.id))
+		(await committed.listForNote(note.id))
 			.map((row) => ({
 				content: row.content,
 				embedded: row.embedding !== undefined,
@@ -60,7 +61,7 @@ const setup = async (suffix: string) => {
 			}))
 			.sort((a, b) => a.content.localeCompare(b.content));
 	const semantic = async () =>
-		(await committed.searchByEmbedding(seeded.owner, vector, 10, seeded.project.id)).map(
+		(await committed.searchByEmbedding(vector, 10, seeded.project.id)).map(
 			(match) => match.document.content
 		);
 	const maintenance = (embed: Embed) =>
@@ -99,12 +100,12 @@ describe('PostgreSQL index replacement', () => {
 		await fixture.save('replacement searchable text', 2);
 		expect({
 			semantic: await fixture.semantic(),
-			oldLiteral: (
-				await fixture.committed.search(fixture.owner, 'original', 10, fixture.project.id)
-			).map((match) => match.document.content),
-			newLiteral: (
-				await fixture.committed.search(fixture.owner, 'replacement', 10, fixture.project.id)
-			).map((match) => match.document.content)
+			oldLiteral: (await fixture.committed.search('original', 10, fixture.project.id)).map(
+				(match) => match.document.content
+			),
+			newLiteral: (await fixture.committed.search('replacement', 10, fixture.project.id)).map(
+				(match) => match.document.content
+			)
 		}).toEqual({
 			semantic: ['original searchable text'],
 			oldLiteral: [],
@@ -185,8 +186,8 @@ describe('PostgreSQL index replacement', () => {
 				archivedAt: fixture.note.updatedAt
 			});
 			await fixture.transactionRunner.run(async () => {
-				await fixture.index.indexNote(fixture.owner, archived);
-				await new NoteRecords(fixture.database).deleteTrashed(fixture.owner, archived.id);
+				await fixture.index.indexNote(archived);
+				await new NoteRecords(fixture.owner, fixture.database).deleteTrashed(archived.id);
 			});
 		} finally {
 			release.resolve();
@@ -208,7 +209,7 @@ describe('PostgreSQL index replacement', () => {
 		const staged = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
 		const writing = fixture.transactionRunner.run(async () => {
-			await fixture.inline.indexNote(fixture.owner, updated);
+			await fixture.inline.indexNote(updated);
 			staged.resolve();
 			await release.promise;
 		});
@@ -217,7 +218,7 @@ describe('PostgreSQL index replacement', () => {
 		try {
 			await staged.promise;
 			beforeCommit = (
-				await new KnowledgeIndexRecords(reader.db).listForNote(fixture.owner, fixture.note.id)
+				await new KnowledgeIndexRecords(fixture.owner, reader.db).listForNote(fixture.note.id)
 			).map((row) => ({
 				content: row.content,
 				embedded: row.embedding !== undefined,
@@ -243,7 +244,7 @@ describe('PostgreSQL index replacement', () => {
 		});
 		const outcome = await fixture.transactionRunner
 			.run(async () => {
-				await fixture.index.indexNote(fixture.owner, updated);
+				await fixture.index.indexNote(updated);
 				throw new Error('Replacement rejected');
 			})
 			.then(

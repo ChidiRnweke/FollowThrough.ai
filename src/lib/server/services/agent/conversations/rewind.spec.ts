@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, expect, it } from 'vitest';
@@ -5,7 +6,7 @@ import { ConversationHistoryService } from './history';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 const history = new ConversationHistoryService(
 	new InMemoryAgentSessionRepository(),
-	new InMemoryAgentFiles(),
+	new InMemoryAgentFiles(testActor()),
 	testTokenizer
 );
 import {

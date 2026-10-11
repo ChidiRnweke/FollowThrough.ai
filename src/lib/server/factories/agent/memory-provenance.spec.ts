@@ -35,7 +35,7 @@ import {
 
 const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 	const actor = testActor();
-	const provenance = new InMemoryProvenanceRepository();
+	const provenance = new InMemoryProvenanceRepository(actor);
 	const identity = { id: testProvenanceId(), userId: actor.userId, createdAt: testNow };
 	const origin: Provenance =
 		surface === 'agent'
@@ -56,16 +56,22 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 					metadata: { scope: 'full' }
 				};
 	provenance.provenance = [origin];
-	const entries = new InMemoryMemoryEntryRepository();
-	const library = createMemoryServices(entries, new InMemoryProjectRepository(), provenance);
-	const suggestions = new InMemorySuggestions();
-	const effects = new InMemorySuggestionEffects();
-	const search = new InMemorySearchRepository();
+	const entries = new InMemoryMemoryEntryRepository(actor);
+	const library = createMemoryServices(
+		actor,
+		entries,
+		new InMemoryProjectRepository(actor),
+		provenance
+	);
+	const suggestions = new InMemorySuggestions(actor);
+	const effects = new InMemorySuggestionEffects(actor);
+	const search = new InMemorySearchRepository(actor);
 	const embeddings = new InMemoryRetrievalProvider();
 	const index = createContentIndex(search, undefined, undefined, false, embeddings);
-	const trust = new InMemoryTrustPolicyEvaluator();
+	const trust = new InMemoryTrustPolicyEvaluator(actor);
 	trust.autoAccept = trusted;
 	const controller = new Memory(
+		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
 			...agentToolResultsFixture(),

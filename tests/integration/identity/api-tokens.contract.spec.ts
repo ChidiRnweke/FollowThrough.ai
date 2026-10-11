@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ApiTokens } from '$lib/server/controllers/api-tokens/controller';
 import * as schema from '$lib/server/db/schema/identity';
 import { ApiTokenRecords } from '$lib/server/repositories/identity/postgres/api-tokens';
@@ -9,12 +10,12 @@ import { expect, it } from 'vitest';
 import { context } from '../database-harness';
 
 const setup = async () => {
-	const user = await new UserRecords(context.db).create({
+	const user = await new UserRecords(testActor(), context.db).create({
 		email: `tokens-${crypto.randomUUID()}@example.test`,
 		displayName: 'Token contract',
 		role: 'USER'
 	});
-	const tokens = new AccessTokens(new ApiTokenRecords(context.db));
+	const tokens = new AccessTokens(new ApiTokenRecords(testActor(), context.db));
 	return {
 		user,
 		actor: { userId: user.id },
@@ -35,7 +36,7 @@ it('stores only the credential hash and excludes it from public token records', 
 	expect({
 		storedHash: stored.tokenHash,
 		hashIsCredential: stored.tokenHash === minted.plaintext,
-		publicRecords: await controller.list(actor)
+		publicRecords: await controller.list()
 	}).toEqual({
 		storedHash: Buffer.from(
 			await crypto.subtle.digest('SHA-256', new TextEncoder().encode(minted.plaintext))
@@ -56,10 +57,10 @@ it.each(['read', 'full'] as const)('authenticates with the persisted %s scope', 
 it('stops accepting a revoked credential and removes it from active listings', async () => {
 	const { actor, tokens, controller } = await setup();
 	const minted = await tokens.mint(actor.userId, { name: 'Revoke contract', scope: 'full' });
-	await controller.revoke(actor, minted.token.id);
+	await controller.revoke(minted.token.id);
 	expect({
 		verified: await tokens.verify(`Bearer ${minted.plaintext}`),
-		listed: await controller.list(actor)
+		listed: await controller.list()
 	}).toEqual({ verified: null, listed: [] });
 });
 it('uses the current account role when validating an existing credential', async () => {
@@ -87,13 +88,13 @@ it('keeps another actor’s credential private and valid after a refused revocat
 		name: 'Owned contract',
 		scope: 'read'
 	});
-	const outcome = await foreign.controller.revoke(foreign.actor, minted.token.id).then(
+	const outcome = await foreign.controller.revoke(minted.token.id).then(
 		() => 'unexpected success',
 		(error: Error) => error.message
 	);
 	expect({
 		outcome,
-		listed: await foreign.controller.list(foreign.actor),
+		listed: await foreign.controller.list(),
 		verified: (await owner.tokens.verify(`Bearer ${minted.plaintext}`))?.user.id
 	}).toEqual({ outcome: 'Access token not found', listed: [], verified: owner.user.id });
 });

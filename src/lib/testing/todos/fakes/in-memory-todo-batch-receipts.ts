@@ -12,24 +12,21 @@ import type {
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export class InMemoryTodoBatchReceipts implements TodoBatchReceiptRepository, SnapshotParticipant {
+	constructor(private readonly actor: ActorContext) {}
 	receipts = new Map<string, { input: CreateTodoBatchInput; result: CreateTodoBatchOutput }>();
 	saveError?: Error;
 	async lock(): Promise<void> {}
-	async find(actor: ActorContext, input: CreateTodoBatchInput): Promise<TodoBatchLookup> {
-		const previous = this.receipts.get(`${actor.userId}:${input.requestId}`);
+	async find(input: CreateTodoBatchInput): Promise<TodoBatchLookup> {
+		const previous = this.receipts.get(`${this.actor.userId}:${input.requestId}`);
 		return !previous
 			? { kind: 'missing' }
 			: !isDeepStrictEqual(previous.input, input)
 				? { kind: 'reused' }
 				: { kind: 'saved', result: structuredClone(previous.result) };
 	}
-	async save(
-		actor: ActorContext,
-		input: CreateTodoBatchInput,
-		result: CreateTodoBatchOutput
-	): Promise<void> {
+	async save(input: CreateTodoBatchInput, result: CreateTodoBatchOutput): Promise<void> {
 		if (this.saveError) throw this.saveError;
-		const key = `${actor.userId}:${input.requestId}`;
+		const key = `${this.actor.userId}:${input.requestId}`;
 		if (this.receipts.has(key)) throw new Error('Duplicate task batch receipt');
 		this.receipts.set(key, structuredClone({ input, result }));
 	}

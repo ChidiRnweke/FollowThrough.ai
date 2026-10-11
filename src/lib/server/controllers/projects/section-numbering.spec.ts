@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { Projects, type ProjectsDependencies } from './controller';
 
 const setup = () => {
-	const projects = new InMemoryProjectRepository();
+	const projects = new InMemoryProjectRepository(testActor());
 	const controller = new Projects(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
@@ -24,7 +24,7 @@ const setup = () => {
 			noteCreationRules: new NoteLifecycleRulesService(),
 			details: new ProjectDetailService(),
 			presentation: new ProjectTreePresentationService(),
-			projectEditor: createProjectServices(projects, projects).editor
+			projectEditor: createProjectServices(testActor(), projects, projects).editor
 		})
 	);
 	return { projects, controller };
@@ -34,7 +34,7 @@ describe('Project section-numbering default', () => {
 	it.each([true, false])('stores the explicit %s default', async (enabled) => {
 		const { projects, controller } = setup();
 		projects.projects = [projectBuilder()];
-		const output = await controller.setSectionNumberingDefault(testActor(), {
+		const output = await controller.setSectionNumberingDefault({
 			projectId: testProjectId(),
 			enabled
 		});
@@ -44,7 +44,7 @@ describe('Project section-numbering default', () => {
 	it('clears back to inheriting the app default', async () => {
 		const { projects, controller } = setup();
 		projects.projects = [projectBuilder({ sectionNumberingDefault: false })];
-		const output = await controller.setSectionNumberingDefault(testActor(), {
+		const output = await controller.setSectionNumberingDefault({
 			projectId: testProjectId()
 		});
 		expect(output.project.sectionNumberingDefault).toBeUndefined();
@@ -54,7 +54,7 @@ describe('Project section-numbering default', () => {
 		const { projects, controller } = setup();
 		projects.projects = [projectBuilder({ userId: testActor(2).userId })];
 		await expect(
-			controller.setSectionNumberingDefault(testActor(), {
+			controller.setSectionNumberingDefault({
 				projectId: testProjectId(),
 				enabled: true
 			})
@@ -66,7 +66,7 @@ it('rejects changing the default of an archived project', async () => {
 	const { projects, controller } = setup();
 	projects.projects = [projectBuilder({ archivedAt: testNow })];
 	await expect(
-		controller.setSectionNumberingDefault(testActor(), {
+		controller.setSectionNumberingDefault({
 			projectId: testProjectId(),
 			enabled: true
 		})

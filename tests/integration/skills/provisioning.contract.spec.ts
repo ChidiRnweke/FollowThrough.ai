@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { NoteId } from '$lib/models/notes';
 import { syncCursorSchema } from '$lib/models/sync';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
@@ -32,14 +33,14 @@ const setup = () => {
 	const client = postgres(context.url, { max: 3 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const synchronization = createSyncCapability({ db: database });
-	const projects = new ProjectRecords(database);
-	const notes = new NoteRecords(database);
-	const capability = createSkillsCapability({
+	const synchronization = createSyncCapability(testActor(), { db: database });
+	const projects = new ProjectRecords(testActor(), database);
+	const notes = new NoteRecords(testActor(), database);
+	const capability = createSkillsCapability(testActor(), {
 		db: database,
 		projects,
 		notes,
-		provenance: new ProvenanceRecords(database)
+		provenance: new ProvenanceRecords(testActor(), database)
 	});
 	const dependencies = {
 		transactionRunner,
@@ -72,17 +73,15 @@ it('returns one complete built-in installation to simultaneous first requests', 
 	const state = setup();
 	const owner = await seedUser('811');
 	const results = await Promise.all([
-		state.skills.list(owner),
-		state.skills.list(owner),
-		state.skills.list(owner)
+		state.skills.list(),
+		state.skills.list(),
+		state.skills.list()
 	]);
-	const notes = await state.notes.listActive(owner);
-	const revisions = await Promise.all(
-		notes.map((note) => state.notes.listRevisions(owner, note.id))
-	);
+	const notes = await state.notes.listActive();
+	const revisions = await Promise.all(notes.map((note) => state.notes.listRevisions(note.id)));
 	expect({
 		catalogs: results.map((result) => result.skills.map((skill) => skill.name)),
-		projects: (await state.projects.listActive(owner)).map((project) => project.role),
+		projects: (await state.projects.listActive()).map((project) => project.role),
 		notes: notes.length,
 		revisions: revisions.map((history) => history.length)
 	}).toEqual({
@@ -95,10 +94,7 @@ it('returns one complete built-in installation to simultaneous first requests', 
 
 it('includes built-in skills and their Inbox in the first browser synchronization page', async () => {
 	const state = setup();
-	const page = await state.workspace.pullChangePage(
-		await seedUser('812'),
-		syncCursorSchema.parse('0')
-	);
+	const page = await state.workspace.pullChangePage(syncCursorSchema.parse('0'));
 	const records = page.records.flatMap((record) =>
 		record.resource.kind === 'found' ? [record.resource.snapshot.value] : []
 	);
@@ -113,11 +109,9 @@ it('includes built-in skills and their Inbox in the first browser synchronizatio
 it('provisions one replacement Inbox after archive without moving ordinary content', async () => {
 	const state = setup();
 	const owner = await seedUser('19801');
-	const initial = await state.skills.list(owner);
-	const previous = (await state.projects.listActive(owner)).find(
-		(project) => project.role === 'inbox'
-	)!;
-	const ordinary = await state.notes.insert(owner, {
+	const initial = await state.skills.list();
+	const previous = (await state.projects.listActive()).find((project) => project.role === 'inbox')!;
+	const ordinary = await state.notes.insert({
 		id: crypto.randomUUID() as NoteId,
 		userId: owner.userId,
 		projectId: previous.id,
@@ -132,9 +126,9 @@ it('provisions one replacement Inbox after archive without moving ordinary conte
 		createdAt: now,
 		updatedAt: now
 	});
-	await state.projects.archive(owner, previous.id);
-	const results = await Promise.all([state.skills.list(owner), state.skills.list(owner)]);
-	const replacement = (await state.projects.listActive(owner)).find(
+	await state.projects.archive(previous.id);
+	const results = await Promise.all([state.skills.list(), state.skills.list()]);
+	const replacement = (await state.projects.listActive()).find(
 		(project) => project.role === 'inbox'
 	)!;
 	const [archived] = await context.client<{ archived: boolean }[]>`
@@ -143,16 +137,13 @@ it('provisions one replacement Inbox after archive without moving ordinary conte
 		select project_id as "projectId", archived_at is not null as archived from notes where id = ${ordinary.id}`;
 	expect({
 		replaced: replacement.id !== previous.id,
-		activeInboxes: (await state.projects.listActive(owner)).filter(
-			(project) => project.role === 'inbox'
-		).length,
+		activeInboxes: (await state.projects.listActive()).filter((project) => project.role === 'inbox')
+			.length,
 		catalogs: results.map((result) => result.skills.map((skill) => skill.noteId).sort()),
 		archived: archived?.archived,
 		ordinary: stored,
-		visibleOrdinary: await state.notes.findById(owner, ordinary.id),
-		builtInProjects: [
-			...new Set((await state.notes.listActive(owner)).map((note) => note.projectId))
-		]
+		visibleOrdinary: await state.notes.findById(ordinary.id),
+		builtInProjects: [...new Set((await state.notes.listActive()).map((note) => note.projectId))]
 	}).toEqual({
 		replaced: true,
 		activeInboxes: 1,
@@ -167,16 +158,14 @@ it('provisions one replacement Inbox after archive without moving ordinary conte
 it('keeps an existing project named Inbox when choosing the replacement name', async () => {
 	const state = setup();
 	const owner = await seedUser('19802');
-	await state.skills.list(owner);
-	const previous = (await state.projects.listActive(owner)).find(
-		(project) => project.role === 'inbox'
-	)!;
-	await state.projects.update(owner, { projectId: previous.id, name: 'Old captures' });
-	const ordinary = await state.projects.insert(owner, { name: 'inbox', role: 'workspace' });
-	await state.projects.archive(owner, previous.id);
-	await state.skills.list(owner);
+	await state.skills.list();
+	const previous = (await state.projects.listActive()).find((project) => project.role === 'inbox')!;
+	await state.projects.update({ projectId: previous.id, name: 'Old captures' });
+	const ordinary = await state.projects.insert({ name: 'inbox', role: 'workspace' });
+	await state.projects.archive(previous.id);
+	await state.skills.list();
 	expect({
-		inbox: (await state.projects.listActive(owner)).find((project) => project.role === 'inbox'),
-		ordinary: await state.projects.findById(owner, ordinary.id)
+		inbox: (await state.projects.listActive()).find((project) => project.role === 'inbox'),
+		ordinary: await state.projects.findById(ordinary.id)
 	}).toMatchObject({ inbox: { name: 'Inbox (2)', role: 'inbox' }, ordinary });
 });

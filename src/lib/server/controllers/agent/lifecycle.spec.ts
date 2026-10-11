@@ -107,7 +107,7 @@ const setup = <T extends InMemoryAgentTurns | AgentTurnService>(
 		readonly tools?: readonly AgentTool[];
 	}
 ) => {
-	const runs = new InMemoryAgentRunPersistence();
+	const runs = new InMemoryAgentRunPersistence(testActor());
 	const sessions = new InMemoryAgentSessionRepository();
 	const journalled: { kind: 'text' | 'reasoning'; text: string; cursor?: string }[] = [];
 	const toolRows: ToolActivity[] = [];
@@ -131,6 +131,7 @@ const setup = <T extends InMemoryAgentTurns | AgentTurnService>(
 	runs.runs.push(run);
 	const transactions = new InMemoryTransactionRunner([runs, sessions]);
 	const lifecycle = new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
@@ -145,12 +146,15 @@ const setup = <T extends InMemoryAgentTurns | AgentTurnService>(
 			transactionRunner: transactions,
 			settlements: new RunSettlements(runs, runs),
 			contextFormatter: createAgentContext(),
-			contextNotes: new InMemoryNoteContent(),
+			contextNotes: new InMemoryNoteContent(testActor()),
 			contextSkills: new InMemorySkills(),
 			builtInSkills: builtInSkillsFixture().builtInSkills,
-			contextProjects: new InMemoryProjects(),
-			contextMemory: options?.contextMemory ?? new InMemoryMemoryEntryRepository(),
-			conversationSessions: new ConversationArchive(new InMemoryConversationRepository()),
+			contextProjects: new InMemoryProjects(testActor()),
+			contextMemory: options?.contextMemory ?? new InMemoryMemoryEntryRepository(testActor()),
+			conversationSessions: new ConversationArchive(
+				testActor(),
+				new InMemoryConversationRepository(testActor())
+			),
 			provenance: {
 				record: async () => {
 					throw new Error('Unexpected provenance record');
@@ -171,7 +175,11 @@ const setup = <T extends InMemoryAgentTurns | AgentTurnService>(
 			}),
 			...harnessTurnDependencies(
 				runner,
-				new ConversationHistoryService(sessions, new InMemoryAgentFiles(), testTokenizer),
+				new ConversationHistoryService(
+					sessions,
+					new InMemoryAgentFiles(testActor()),
+					testTokenizer
+				),
 				options?.tools ?? []
 			)
 		})
@@ -193,9 +201,9 @@ const stopMidStream = async () => {
 /** Drives a run to `cancelling` the way the controller does before aborting. */
 const requestCancellation = async (runs: InMemoryAgentRunPersistence) => {
 	const cancellations = new RunCancellation(runs);
-	const current = await cancellations.getForWrite(testActor(), testRunId);
+	const current = await cancellations.getForWrite(testRunId);
 	const change = cancellations.plan(current.status, testTime);
-	if (change) await cancellations.persist(testActor(), testRunId, change);
+	if (change) await cancellations.persist(testRunId, change);
 };
 
 const currentRun = (runs: InMemoryAgentRunPersistence) =>
@@ -352,7 +360,7 @@ describe('a cancellation that races preparation', () => {
 	 * settlement must not depend on abort timing.
 	 */
 	const racingSetup = () => {
-		const memory = new InMemoryGatedMemoryEntries();
+		const memory = new InMemoryGatedMemoryEntries(testActor());
 		const context = setup(abortingRunner(), {
 			contextMemory: memory
 		});

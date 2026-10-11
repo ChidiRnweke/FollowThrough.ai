@@ -29,17 +29,17 @@ const setup = () => {
 describe('inline completion ownership', () => {
 	it('uses the environment default when the user has no selected model', async () => {
 		const fixture = setup();
-		await fixture.controller.suggest(actor, request, new AbortController().signal);
+		await fixture.controller.suggest(request, new AbortController().signal);
 		expect(fixture.generator.requests.map((r) => r.model)).toEqual(['default-inline-model']);
 	});
 	it('normalizes the preference model and forwards the request cancellation signal', async () => {
 		const fixture = setup();
-		await fixture.preferences.persist(actor, {
-			...(await fixture.preferences.get(actor)),
+		await fixture.preferences.persist({
+			...(await fixture.preferences.get()),
 			inlineModel: 'provider:chosen-model'
 		});
 		const signal = new AbortController().signal;
-		await fixture.controller.suggest(actor, request, signal);
+		await fixture.controller.suggest(request, signal);
 		expect(fixture.generator.requests.map((r) => ({ model: r.model, signal: r.signal }))).toEqual([
 			{ model: 'provider/chosen-model', signal }
 		]);
@@ -47,7 +47,7 @@ describe('inline completion ownership', () => {
 	it('publishes the completion with the grounding it used', async () => {
 		const fixture = setup();
 		fixture.generator.text = ' replicas. Then fail over.';
-		expect(await fixture.controller.suggest(actor, request, new AbortController().signal)).toEqual({
+		expect(await fixture.controller.suggest(request, new AbortController().signal)).toEqual({
 			outcome: 'suggested',
 			text: ' replicas. Then fail over.',
 			grounding: { currentNote: true, userMemoryCount: 0, projectPassageCount: 0 }
@@ -56,7 +56,7 @@ describe('inline completion ownership', () => {
 	it('reports an empty completion as no suggestion', async () => {
 		const fixture = setup();
 		fixture.generator.text = '';
-		expect(await fixture.controller.suggest(actor, request, new AbortController().signal)).toEqual({
+		expect(await fixture.controller.suggest(request, new AbortController().signal)).toEqual({
 			outcome: 'no_suggestion',
 			reason: 'empty_model'
 		});
@@ -64,12 +64,10 @@ describe('inline completion ownership', () => {
 	it('propagates a completion failure', async () => {
 		const fixture = setup();
 		fixture.generator.failure = new Error('Inline completion provider failed');
-		const outcome = await fixture.controller
-			.suggest(actor, request, new AbortController().signal)
-			.then(
-				(result) => result.outcome,
-				(error) => error.message
-			);
+		const outcome = await fixture.controller.suggest(request, new AbortController().signal).then(
+			(result) => result.outcome,
+			(error) => error.message
+		);
 		expect(outcome).toBe('Inline completion provider failed');
 	});
 	it('preserves cancellation errors after a provider abort', async () => {
@@ -88,7 +86,7 @@ describe('inline completion ownership', () => {
 		});
 		cancelling.notes.notes = [noteBuilder()];
 		cancelling.generator.failure = failure;
-		const outcome = await cancelling.controller.suggest(actor, request, abort.signal).then(
+		const outcome = await cancelling.controller.suggest(request, abort.signal).then(
 			(result) => result,
 			(error) => error
 		);

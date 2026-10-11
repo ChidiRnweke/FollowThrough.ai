@@ -15,11 +15,11 @@ import {
 
 const setup = async (scope: 'project' | 'user' = 'project') => {
 	const actor = testActor();
-	const entries = new InMemoryMemoryEntryRepository();
-	const projects = new InMemoryProjectRepository();
-	const provenance = new InMemoryProvenanceRepository();
+	const entries = new InMemoryMemoryEntryRepository(actor);
+	const projects = new InMemoryProjectRepository(actor);
+	const provenance = new InMemoryProvenanceRepository(actor);
 	projects.projects = [projectBuilder()];
-	await provenance.insert(actor, {
+	await provenance.insert({
 		id: testProvenanceId(),
 		userId: actor.userId,
 		producerKind: 'agent',
@@ -28,9 +28,8 @@ const setup = async (scope: 'project' | 'user' = 'project') => {
 		metadata: {},
 		createdAt: testNow
 	});
-	const library = createMemoryServices(entries, projects, provenance);
+	const library = createMemoryServices(actor, entries, projects, provenance);
 	const entry = await library.creator.create(
-		actor,
 		memoryEntryBuilder({ projectId: scope === 'project' ? testProjectId() : undefined })
 	);
 	return { actor, entries, projects, library, entry };
@@ -41,12 +40,12 @@ describe('memory owned by an archived project', () => {
 		'rejects %s after project archival',
 		async (operation) => {
 			const { actor, projects, library, entry } = await setup();
-			await projects.archive(actor, testProjectId());
+			await projects.archive(testProjectId());
 			await expect(
 				{
-					get: () => library.reader.get(actor, entry.id),
-					getForEdit: () => library.editor.getForEdit(actor, entry.id),
-					remove: () => library.deleter.remove(actor, entry.id)
+					get: () => library.reader.get(entry.id),
+					getForEdit: () => library.editor.getForEdit(entry.id),
+					remove: () => library.deleter.remove(entry.id)
 				}[operation]()
 			).rejects.toThrow('Memory project was not found');
 		}
@@ -71,8 +70,8 @@ describe('memory owned by an archived project', () => {
 							operation,
 							memoryEntryId: entry.id
 						};
-			await projects.archive(actor, testProjectId());
-			const outcome = await library.changes.apply(actor, payload, testProvenanceId()).then(
+			await projects.archive(testProjectId());
+			const outcome = await library.changes.apply(payload, testProvenanceId()).then(
 				() => 'unexpected success',
 				(error: Error) => error.message
 			);
@@ -85,8 +84,8 @@ describe('memory owned by an archived project', () => {
 
 	it('preserves a resolved edit when its project has since been archived', async () => {
 		const { actor, entries, projects, library, entry } = await setup();
-		await projects.archive(actor, testProjectId());
-		const outcome = await library.editor.update(actor, { ...entry, content: 'Replacement' }).then(
+		await projects.archive(testProjectId());
+		const outcome = await library.editor.update({ ...entry, content: 'Replacement' }).then(
 			() => 'unexpected success',
 			(error: Error) => error.message
 		);
@@ -98,14 +97,14 @@ describe('memory owned by an archived project', () => {
 
 	it('retains the stored record after its project is archived', async () => {
 		const { actor, entries, projects, entry } = await setup();
-		await projects.archive(actor, testProjectId());
-		expect(await entries.findById(actor, entry.id)).toEqual(entry);
+		await projects.archive(testProjectId());
+		expect(await entries.findById(entry.id)).toEqual(entry);
 	});
 
 	it('allows profile memory edits after an unrelated project is archived', async () => {
 		const { actor, projects, library, entry } = await setup('user');
-		await projects.archive(actor, testProjectId());
-		const updated = await library.editor.update(actor, {
+		await projects.archive(testProjectId());
+		const updated = await library.editor.update({
 			...entry,
 			content: 'Profile replacement'
 		});
@@ -114,8 +113,8 @@ describe('memory owned by an archived project', () => {
 
 	it('allows edits while the project remains active', async () => {
 		const { actor, library, entry } = await setup();
-		const current = await library.editor.getForEdit(actor, entry.id);
-		const updated = await library.editor.update(actor, {
+		const current = await library.editor.getForEdit(entry.id);
+		const updated = await library.editor.update({
 			...current,
 			content: 'Active replacement'
 		});

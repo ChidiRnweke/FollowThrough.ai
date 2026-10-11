@@ -14,7 +14,7 @@ import type { AgentRunRepository } from '$lib/server/repositories/agent';
 
 export interface ChatRunPreparation {
 	claim(runId: AgentRunId, timestamp: DateTime): Promise<ResolvedAgentRun | undefined>;
-	getForWrite(actor: ActorContext, runId: AgentRunId): Promise<ResolvedAgentRun>;
+	getForWrite(runId: AgentRunId): Promise<ResolvedAgentRun>;
 	provenance(
 		current: Pick<ResolvedAgentRun, 'provenanceId'>,
 		provenanceId: ProvenanceId,
@@ -25,16 +25,8 @@ export interface ChatRunPreparation {
 		context: AgentRunContext,
 		timestamp: DateTime
 	): AgentContextWrite;
-	persistProvenance(
-		actor: ActorContext,
-		runId: AgentRunId,
-		change: AgentProvenanceWrite
-	): Promise<ResolvedAgentRun>;
-	persistContext(
-		actor: ActorContext,
-		runId: AgentRunId,
-		change: AgentContextWrite
-	): Promise<PreparedAgentRun>;
+	persistProvenance(runId: AgentRunId, change: AgentProvenanceWrite): Promise<ResolvedAgentRun>;
+	persistContext(runId: AgentRunId, change: AgentContextWrite): Promise<PreparedAgentRun>;
 }
 
 /** The controller owns the lock through each targeted write and the start event. */
@@ -50,8 +42,8 @@ export class RunPreparation implements ChatRunPreparation {
 		});
 	}
 
-	async getForWrite(actor: ActorContext, runId: AgentRunId): Promise<ResolvedAgentRun> {
-		const run = await this.runs.findForWrite(actor, runId);
+	async getForWrite(runId: AgentRunId): Promise<ResolvedAgentRun> {
+		const run = await this.runs.findForWrite(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		if (run.kind !== 'agent') throw new ValidationError('The run is not a chat run');
 		if (run.status === 'cancelling' || run.status === 'cancelled')
@@ -76,19 +68,11 @@ export class RunPreparation implements ChatRunPreparation {
 		return { contextSnapshot: current.contextSnapshot ?? context, updatedAt: timestamp };
 	}
 
-	persistProvenance(
-		actor: ActorContext,
-		runId: AgentRunId,
-		change: AgentProvenanceWrite
-	): Promise<ResolvedAgentRun> {
-		return this.runs.updateAgentProvenance(actor, runId, change);
+	persistProvenance(runId: AgentRunId, change: AgentProvenanceWrite): Promise<ResolvedAgentRun> {
+		return this.runs.updateAgentProvenance(runId, change);
 	}
 
-	persistContext(
-		actor: ActorContext,
-		runId: AgentRunId,
-		change: AgentContextWrite
-	): Promise<PreparedAgentRun> {
-		return this.runs.updateAgentContext(actor, runId, change);
+	persistContext(runId: AgentRunId, change: AgentContextWrite): Promise<PreparedAgentRun> {
+		return this.runs.updateAgentContext(runId, change);
 	}
 }

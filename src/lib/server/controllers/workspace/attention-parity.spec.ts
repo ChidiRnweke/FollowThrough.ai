@@ -29,14 +29,14 @@ import { Workspace, type WorkspaceDependencies } from './controller';
 
 it('shows the same profile and visible-project memory attention from server and cached facts', async () => {
 	const actor = testActor();
-	const users = new InMemoryUserRepository();
-	await users.ensureLocal(actor);
-	const projects = new InMemoryProjects();
+	const users = new InMemoryUserRepository(actor);
+	await users.ensureLocal();
+	const projects = new InMemoryProjects(actor);
 	projects.projects = [
 		projectBuilder(),
 		projectBuilder({ id: testProjectId(2), archivedAt: testNow })
 	];
-	const suggestions = new InMemorySuggestionReader();
+	const suggestions = new InMemorySuggestionReader(actor);
 	suggestions.suggestions = [
 		memorySuggestionBuilder(),
 		...projects.projects.map((project, index) =>
@@ -83,17 +83,18 @@ it('shows the same profile and visible-project memory attention from server and 
 			...builtInSkillsFixture(),
 			userReader: new UserDirectory(users),
 			projectLister: projects,
-			noteTreeReader: new InMemoryNoteContent(),
+			noteTreeReader: new InMemoryNoteContent(actor),
 			suggestionLister: suggestions,
 			suggestionExpirer: suggestions,
 			skillFinder: createSkillServices(
-				new InMemorySkillRepository(new InMemoryNoteRepository()),
-				new InMemoryNoteRepository(),
-				new InMemoryProvenanceRepository()
+				actor,
+				new InMemorySkillRepository(new InMemoryNoteRepository(actor)),
+				new InMemoryNoteRepository(actor),
+				new InMemoryProvenanceRepository(actor)
 			).finder
 		})
 	);
-	const actual = await server.getShellContext(actor);
+	const actual = await server.getShellContext();
 	expect({
 		pending: actual.pendingSuggestionCount,
 		memory: actual.pendingMemoryNotifications

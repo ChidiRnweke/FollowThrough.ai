@@ -51,7 +51,7 @@ describe('widgets in document exports', () => {
 				return Buffer.from('pdf');
 			}
 		});
-		await service.generateDocument(testActor(), { ...input, format: 'pdf' });
+		await service.generateDocument({ ...input, format: 'pdf' });
 		expect(prepared[0]?.widgets.get(ticked.id)?.blocks).toEqual([
 			{ kind: 'heading', text: 'Checklist', level: 3 },
 			{ kind: 'check', label: 'Ship the beta', checked: true }
@@ -66,13 +66,13 @@ describe('widgets in document exports', () => {
 				return bytes;
 			}
 		});
-		await service.generateDocument(testActor(), input);
+		await service.generateDocument(input);
 		const xml = new AdmZip(written[0]).readAsText('word/document.xml');
 		expect(xml).toContain('☑ Ship the beta');
 	});
 	it('refuses to export a note whose widget is in the trash', async () => {
 		const { service } = setup(widgetBuilder({ archivedAt: testNow }));
-		await expect(service.generateDocument(testActor(), input)).rejects.toThrow(
+		await expect(service.generateDocument(input)).rejects.toThrow(
 			'An exported widget is unavailable'
 		);
 	});
@@ -101,7 +101,7 @@ describe('widgets that show workspace data in exports', () => {
 				completedAt: testNow
 			})
 		];
-		await fixture.service.generateDocument(testActor(), { ...input, format: 'pdf' });
+		await fixture.service.generateDocument({ ...input, format: 'pdf' });
 		expect(
 			prepared[0]?.widgets.get(dashboard.id)?.blocks.find((block) => block.kind === 'metric')
 		).toEqual({ kind: 'metric', label: 'Open todos', value: '2' });

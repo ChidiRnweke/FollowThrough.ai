@@ -13,7 +13,7 @@ const setup = (configuration: Parameters<typeof agentSubmissionFixture>[1] = {})
 };
 afterEach(async () => {
 	for (const fixture of active.splice(0)) {
-		for (const run of fixture.runs.runs) await fixture.controller.cancel(testActor(), run.id);
+		for (const run of fixture.runs.runs) await fixture.controller.cancel(run.id);
 		fixture.release();
 		await vi.waitFor(() => {
 			if (fixture.runs.runs.some((run) => !runStatus.isTerminal(run.status)))
@@ -24,7 +24,7 @@ afterEach(async () => {
 
 it('freezes the deployment research defaults with a new run', async () => {
 	const fixture = setup();
-	await fixture.controller.submit(testActor(), {
+	await fixture.controller.submit({
 		requestId: crypto.randomUUID(),
 		input: 'Research this'
 	});
@@ -38,10 +38,10 @@ it('freezes selected account settings together with deployment defaults', async 
 		webSearchOverrides: { engine: 'firecrawl', maxResults: 17, maxTotalResults: 34 }
 	});
 	fixture.preferenceRecords.entries.set(testActor().userId, {
-		...fixture.preferences.defaults(testActor(), testNow),
+		...fixture.preferences.defaults(testNow),
 		webSearchMaxResults: 5
 	});
-	await fixture.controller.submit(testActor(), {
+	await fixture.controller.submit({
 		requestId: crypto.randomUUID(),
 		input: 'Research this'
 	});
@@ -57,7 +57,7 @@ it('freezes selected account settings together with deployment defaults', async 
 it('executes the frozen budget after injected deployment defaults change', async () => {
 	const defaults = { ...CHAT_WEB_SEARCH_DEFAULTS, maxResults: 7 };
 	const fixture = setup({ webSearchOverrides: defaults });
-	await fixture.controller.submit(testActor(), {
+	await fixture.controller.submit({
 		requestId: crypto.randomUUID(),
 		input: 'Research this'
 	});
@@ -72,17 +72,17 @@ it('executes the frozen budget after injected deployment defaults change', async
 
 it('retains frozen research settings on retry after account preferences change', async () => {
 	const fixture = setup();
-	const receipt = await fixture.controller.submit(testActor(), {
+	const receipt = await fixture.controller.submit({
 		requestId: crypto.randomUUID(),
 		input: 'Research this'
 	});
-	await fixture.controller.cancel(testActor(), receipt.runId);
+	await fixture.controller.cancel(receipt.runId);
 	fixture.preferenceRecords.entries.set(testActor().userId, {
-		...fixture.preferences.defaults(testActor(), testNow),
+		...fixture.preferences.defaults(testNow),
 		webSearchEngine: 'perplexity',
 		webSearchMaxResults: 5
 	});
-	const retry = await fixture.controller.retry(testActor(), receipt.runId, crypto.randomUUID());
+	const retry = await fixture.controller.retry(receipt.runId, crypto.randomUUID());
 	const run = fixture.runs.runs.find((run) => run.id === retry.runId);
 	if (run?.kind !== 'agent') throw new Error('Expected a saved retry');
 	expect(run.inputSnapshot.webSearch).toEqual(CHAT_WEB_SEARCH_DEFAULTS);
@@ -92,7 +92,7 @@ it('resolves missing fields of a legacy saved request before provider execution'
 	const fixture = setup({
 		webSearchOverrides: { engine: 'firecrawl', maxResults: 17, maxTotalResults: 34 }
 	});
-	const receipt = await fixture.controller.submit(testActor(), {
+	const receipt = await fixture.controller.submit({
 		requestId: crypto.randomUUID(),
 		input: 'Research this'
 	});

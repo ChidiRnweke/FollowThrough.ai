@@ -91,7 +91,7 @@ describe('Revision-bound skill content approvals', () => {
 		async (operation) => {
 			const fixture = setup('skill', operation);
 			const pending = await fixture.prepare();
-			await fixture.controller.save(testActor(), {
+			await fixture.controller.save({
 				note: { ...fixture.note, ...noteMarkdown.read('Check releases on Friday.') }
 			});
 			const result = await fixture.invoke(fixture.registry([pending]));
@@ -163,7 +163,7 @@ describe('Revision-bound skill content approvals', () => {
 	});
 	it('does not save when the requested skill text cannot be matched', async () => {
 		const fixture = setup('skill', 'patch');
-		await fixture.controller.save(testActor(), {
+		await fixture.controller.save({
 			note: { ...fixture.note, ...noteMarkdown.read('Check releases on Friday.') }
 		});
 		const before = fixture.content.notes[0];

@@ -9,6 +9,7 @@ import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 
 /** Compact journal storage, with account-local cursors and latest resource versions. */
 export class InMemoryWorkspaceJournal implements SyncChangesRepository {
+	constructor(private readonly actor: ActorContext) {}
 	private readonly accounts = new Map<
 		UserId,
 		{
@@ -18,20 +19,20 @@ export class InMemoryWorkspaceJournal implements SyncChangesRepository {
 	>();
 	private readonly keys = new WorkspaceCommandRulesService();
 
-	createAccount(actor: ActorContext, head = 0n) {
-		this.accounts.set(actor.userId, { head, changes: new Map() });
+	createAccount(head = 0n) {
+		this.accounts.set(this.actor.userId, { head, changes: new Map() });
 	}
 
-	publish(actor: ActorContext, change: WorkspaceJournalChange) {
-		const account = this.account(actor);
+	publish(change: WorkspaceJournalChange) {
+		const account = this.account();
 		account.changes.set(this.keys.workspaceResourceKey(change.identity), {
 			cursor: ++account.head,
 			change
 		});
 	}
 
-	async readSelection(actor: ActorContext, since: SyncCursor): Promise<WorkspaceJournalSelection> {
-		const account = this.account(actor);
+	async readSelection(since: SyncCursor): Promise<WorkspaceJournalSelection> {
+		const account = this.account();
 		const remaining = [...account.changes.values()]
 			.filter(({ cursor }) => cursor > BigInt(since))
 			.sort((a, b) => (a.cursor < b.cursor ? -1 : 1));
@@ -44,8 +45,8 @@ export class InMemoryWorkspaceJournal implements SyncChangesRepository {
 		};
 	}
 
-	private account(actor: ActorContext) {
-		const account = this.accounts.get(actor.userId);
+	private account() {
+		const account = this.accounts.get(this.actor.userId);
 		if (!account) throw new Error('The account has no synchronization head');
 		return account;
 	}

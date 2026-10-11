@@ -37,8 +37,8 @@ const setup = () => {
 describe('inline suggestion admission', () => {
 	it('refuses a completion past the per-minute budget', async () => {
 		const fixture = setup();
-		await fixture.controller.suggest(testActor(), request, signal());
-		expect(await fixture.controller.suggest(testActor(), request, signal())).toEqual({
+		await fixture.controller.suggest(request, signal());
+		expect(await fixture.controller.suggest(request, signal())).toEqual({
 			outcome: 'rate_limited',
 			retryAfterMs: 60_000
 		});
@@ -46,21 +46,17 @@ describe('inline suggestion admission', () => {
 
 	it('admits again after the budget window rolls over', async () => {
 		const fixture = setup();
-		await fixture.controller.suggest(testActor(), request, signal());
+		await fixture.controller.suggest(request, signal());
 		fixture.clock.now += 60_001;
-		expect((await fixture.controller.suggest(testActor(), request, signal())).outcome).toBe(
-			'suggested'
-		);
+		expect((await fixture.controller.suggest(request, signal())).outcome).toBe('suggested');
 	});
 
 	it('keeps each user on their own budget', async () => {
 		const fixture = setup();
-		await fixture.controller.suggest(testActor(), request, signal());
+		await fixture.controller.suggest(request, signal());
 		fixture.notes.notes = [
 			noteBuilder({ title: 'Migration', plainText: 'Saved note text', userId: testActor(2).userId })
 		];
-		expect((await fixture.controller.suggest(testActor(2), request, signal())).outcome).toBe(
-			'suggested'
-		);
+		expect((await fixture.controller.suggest(request, signal())).outcome).toBe('suggested');
 	});
 });

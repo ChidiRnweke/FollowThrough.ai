@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { type AgentRunId, type DiagramActionInput } from '$lib/models/agent';
@@ -48,8 +49,11 @@ const setup = async (suffix: string) => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const notes = createNotesCapability({ db: database, projects: new ProjectRecords(database) });
-	const suggestions = createSuggestionsCapability({
+	const notes = createNotesCapability(testActor(), {
+		db: database,
+		projects: new ProjectRecords(testActor(), database)
+	});
+	const suggestions = createSuggestionsCapability(testActor(), {
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
@@ -69,10 +73,10 @@ const setup = async (suffix: string) => {
 		text
 	};
 	const fixture = diagramGenerationFixture();
-	const runs = new AgentRunRecords(database);
-	const events = new AgentRunEventRecords(database);
-	const conversations = new ConversationRecords(database);
-	const requests = new NoteActionRequests(runs, events, conversations);
+	const runs = new AgentRunRecords(testActor(), database);
+	const events = new AgentRunEventRecords(testActor(), database);
+	const conversations = new ConversationRecords(testActor(), database);
+	const requests = new NoteActionRequests(testActor(), runs, events, conversations);
 	const settlements = new RunSettlements(runs, events);
 	const dependencies = capabilityDependencies<DiagramsDependencies>({
 		...agentToolResultsFixture(),
@@ -81,9 +85,9 @@ const setup = async (suffix: string) => {
 		generation: {
 			...fixture.generation,
 			contextNotes: notes.services.reader,
-			conversations: new ConversationArchive(conversations),
-			conversationMessages: new ConversationArchive(conversations),
-			runs: new AgentRunLedger(runs),
+			conversations: new ConversationArchive(testActor(), conversations),
+			conversationMessages: new ConversationArchive(testActor(), conversations),
+			runs: new AgentRunLedger(testActor(), runs),
 			runContext: new DiagramRunContext(runs),
 			provenance: notes.provenance
 		},
@@ -96,13 +100,14 @@ const setup = async (suffix: string) => {
 		runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 	});
 	const agent = new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
-			decisions: new AgentRunDecisionRecords(database),
+			decisions: new AgentRunDecisionRecords(testActor(), database),
 			settlements,
 			transactionRunner,
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
@@ -110,14 +115,14 @@ const setup = async (suffix: string) => {
 	);
 	const prepare = (input: DiagramActionInput = { operation: 'generate', selection }) =>
 		transactionRunner.run(() =>
-			requests.prepare(seeded.owner, {
+			requests.prepare({
 				requestId: crypto.randomUUID(),
 				context: { kind: 'diagram_action', model: 'test/model', input }
 			})
 		);
 	const finished = async (runId: AgentRunId) => {
 		await vi.waitFor(async () => {
-			const run = await runs.findById(seeded.owner, runId);
+			const run = await runs.findById(runId);
 			if (!run || !runStatus.isTerminal(run.status)) throw new Error('Diagram has not settled');
 		});
 	};
@@ -133,7 +138,7 @@ const setup = async (suffix: string) => {
 		finished,
 		provider: fixture.provider,
 		models: fixture.models,
-		controller: new Diagrams(dependencies)
+		controller: new Diagrams(testActor(), dependencies)
 	};
 };
 
@@ -141,12 +146,12 @@ it('creates one diagram run and proposal for concurrent duplicate submissions', 
 	const state = await setup('13201');
 	const input = { requestId: crypto.randomUUID(), selection: state.selection };
 	const receipts = await Promise.all([
-		state.controller.startGenerateMermaid(state.owner, input),
-		state.controller.startGenerateMermaid(state.owner, input)
+		state.controller.startGenerateMermaid(input),
+		state.controller.startGenerateMermaid(input)
 	]);
 	await state.finished(receipts[0].runId);
 	state.models.failure = new Error('Model catalog is offline');
-	const repeated = await state.controller.startGenerateMermaid(state.owner, input);
+	const repeated = await state.controller.startGenerateMermaid(input);
 	const [counts] =
 		await context.client`select (select count(*)::int from agent_runs where user_id = ${state.owner.userId}) as runs, (select count(*)::int from conversations where user_id = ${state.owner.userId}) as conversations, (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions`;
 	expect({
@@ -165,10 +170,10 @@ it('saves no diagram proposal after cancellation during provider execution', asy
 	const receipt = await state.prepare();
 	const gate = Promise.withResolvers<void>();
 	state.provider.completion = gate.promise;
-	const execution = state.controller.executeDiagramRun(state.owner, receipt.runId);
+	const execution = state.controller.executeDiagramRun(receipt.runId);
 	try {
 		await state.provider.started.promise;
-		await state.agent.cancel(state.owner, receipt.runId);
+		await state.agent.cancel(receipt.runId);
 	} finally {
 		gate.resolve();
 	}
@@ -176,7 +181,7 @@ it('saves no diagram proposal after cancellation during provider execution', asy
 	const [counts] =
 		await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 	expect({
-		status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+		status: (await state.runs.findById(receipt.runId))?.status,
 		counts
 	}).toEqual({ status: 'cancelled', counts: { suggestions: 0, anchors: 0 } });
 });
@@ -186,11 +191,11 @@ it('rolls back the generated diagram when result-event storage fails', async () 
 	const receipt = await state.prepare();
 	await context.client`alter table agent_run_events add constraint diagram_result_failure check (not (event->>'type' = 'workflow_result' and event->>'action' = 'diagram')) not valid`;
 	try {
-		await state.controller.executeDiagramRun(state.owner, receipt.runId);
+		await state.controller.executeDiagramRun(receipt.runId);
 		const [counts] =
 			await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 		expect({
-			status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+			status: (await state.runs.findById(receipt.runId))?.status,
 			counts
 		}).toEqual({ status: 'failed', counts: { suggestions: 0, anchors: 0 } });
 	} finally {
@@ -205,12 +210,12 @@ it('resumes a queued draw.io conversion from its persisted source after reconstr
 		noteId: state.note.id,
 		source: 'flowchart LR\nA --> B'
 	});
-	await new Diagrams(state.dependencies).recoverQueuedDiagramRuns();
+	await new Diagrams(testActor(), state.dependencies).recoverQueuedDiagramRuns();
 	await state.finished(receipt.runId);
 	const rows =
 		await context.client`select payload->>'kind' as kind from suggestions where user_id = ${state.owner.userId}`;
 	expect({
-		status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+		status: (await state.runs.findById(receipt.runId))?.status,
 		proposals: rows.map((row) => row.kind)
 	}).toEqual({ status: 'completed', proposals: ['drawio'] });
 });

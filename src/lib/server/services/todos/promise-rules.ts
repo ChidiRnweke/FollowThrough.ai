@@ -53,11 +53,7 @@ export interface IPromiseRules {
 		candidates: readonly PromiseCandidate[],
 		responsibility: TodoResponsibility
 	): readonly PromiseCandidate[];
-	extract(
-		actor: ActorContext,
-		selection: TextSelection,
-		requestedAt: DateTime
-	): Promise<readonly PromiseCandidate[]>;
+	extract(selection: TextSelection, requestedAt: DateTime): Promise<readonly PromiseCandidate[]>;
 }
 
 export class DeterministicPromiseExtractor implements IPromiseRules {
@@ -69,7 +65,6 @@ export class DeterministicPromiseExtractor implements IPromiseRules {
 	}
 
 	async extract(
-		_actor: ActorContext,
 		selection: TextSelection,
 		requestedAt: DateTime
 	): Promise<readonly PromiseCandidate[]> {

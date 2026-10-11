@@ -3,6 +3,6 @@ import type { ActorContext } from '$lib/models/identity';
 import type { WorkspaceWriteRecovery } from '$lib/models/workspace-mutations';
 
 export interface SyncWriteRecovery {
-	cancel(actor: ActorContext, input: WorkspaceWriteCancellation): Promise<WorkspaceWriteRecovery>;
+	cancel(input: WorkspaceWriteCancellation): Promise<WorkspaceWriteRecovery>;
 }
 export type { SyncReceiptRepository as SyncReceiptWriter } from '$lib/server/repositories/workspace/sync-receipts';

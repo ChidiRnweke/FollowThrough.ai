@@ -1,7 +1,6 @@
 import type { ProvenanceId } from '$lib/models/provenance';
-import type { ActorContext, ApiTokenScope, Session, User } from '$lib/models/identity';
+import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
 import type { IAccessTokens, MintedApiToken } from '$lib/server/services/identity/api-tokens';
-import type { ISessionRegistry } from '$lib/server/services/identity/sessions';
 import type { LocalUserProvisioner, UserReader } from '$lib/server/services/identity/users';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 
@@ -13,27 +12,20 @@ export interface McpAccess {
 }
 
 /**
- * Request access: browser sessions, API token issuance, and MCP client attribution. Minting
+ * The authenticated user's access: API token issuance and MCP request attribution. Minting
  * lives here rather than on the agent-facing token controller, so no agent tool can issue a
  * credential that acts as the user.
  */
 export interface AccessController {
-	/** Resume a browser session; an expired session is removed. Returns null for an unusable id. */
-	resumeSession(sessionId: string): Promise<{ user: User; session: Session } | null>;
-	endSession(sessionId: string): Promise<void>;
 	/** The plaintext credential is returned once and is not recoverable. */
-	issueApiToken(
-		actor: ActorContext,
-		input: { name: string; scope: ApiTokenScope }
-	): Promise<MintedApiToken>;
-	/** Verify a bearer credential and attribute the request. Returns null for anything unusable. */
-	authenticateMcp(authorizationHeader: string | null): Promise<McpAccess | null>;
+	issueApiToken(input: { name: string; scope: ApiTokenScope }): Promise<MintedApiToken>;
+	/** Attribute an MCP request whose bearer credential was verified for this user. */
+	attributeMcp(scope: ApiTokenScope): Promise<McpAccess>;
 	/** Single-user mode: establish the local profile, then attribute the request with full scope. */
-	attributeLocalMcp(actor: ActorContext): Promise<McpAccess>;
+	attributeLocalMcp(): Promise<McpAccess>;
 }
 
 export interface AccessDependencies {
-	readonly sessions: ISessionRegistry;
 	readonly tokens: IAccessTokens;
 	readonly provisioner: LocalUserProvisioner;
 	readonly users: UserReader;
@@ -41,43 +33,33 @@ export interface AccessDependencies {
 }
 
 export class Access implements AccessController {
-	constructor(private readonly dependencies: AccessDependencies) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly dependencies: AccessDependencies
+	) {}
 
-	resumeSession(sessionId: string): Promise<{ user: User; session: Session } | null> {
-		return this.dependencies.sessions.validateSession(sessionId);
+	issueApiToken(input: { name: string; scope: ApiTokenScope }): Promise<MintedApiToken> {
+		return this.dependencies.tokens.mint(input);
 	}
 
-	endSession(sessionId: string): Promise<void> {
-		return this.dependencies.sessions.logout(sessionId);
+	attributeMcp(scope: ApiTokenScope): Promise<McpAccess> {
+		return this.attribute(scope);
 	}
 
-	issueApiToken(
-		actor: ActorContext,
-		input: { name: string; scope: ApiTokenScope }
-	): Promise<MintedApiToken> {
-		return this.dependencies.tokens.mint(actor.userId, input);
+	async attributeLocalMcp(): Promise<McpAccess> {
+		await this.dependencies.provisioner.ensureLocal();
+		await this.dependencies.users.get();
+		return this.attribute('full');
 	}
 
-	async authenticateMcp(authorizationHeader: string | null): Promise<McpAccess | null> {
-		const verified = await this.dependencies.tokens.verify(authorizationHeader);
-		if (!verified) return null;
-		return this.attribute({ userId: verified.user.id }, verified.scope);
-	}
-
-	async attributeLocalMcp(actor: ActorContext): Promise<McpAccess> {
-		await this.dependencies.provisioner.ensureLocal(actor);
-		await this.dependencies.users.get(actor);
-		return this.attribute(actor, 'full');
-	}
-
-	private async attribute(actor: ActorContext, scope: ApiTokenScope): Promise<McpAccess> {
+	private async attribute(scope: ApiTokenScope): Promise<McpAccess> {
 		// Every write through a tool is attributable to this request.
-		const provenance = await this.dependencies.provenance.record(actor, {
+		const provenance = await this.dependencies.provenance.record({
 			producerKind: 'agent',
 			producerName: 'MCP client',
 			pipeline: 'agent',
 			metadata: { scope }
 		});
-		return { actor, scope, provenanceId: provenance.id };
+		return { actor: this.actor, scope, provenanceId: provenance.id };
 	}
 }

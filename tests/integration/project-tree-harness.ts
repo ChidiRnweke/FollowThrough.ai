@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
 import { ReferencePresentationService } from '$lib/services/references/presentation';
@@ -32,10 +33,15 @@ import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content'
 import { context } from './database-harness';
 
 export const treeControllers = (database: Database, transactionRunner: TransactionRunner) => {
-	const projects = new ProjectRecords(database);
-	const catalog = createProjectServices(projects, projects);
-	const records = new NoteRecords(database);
-	const notes = createNoteServices(records, new SourceAnchorRecords(database), projects);
+	const projects = new ProjectRecords(testActor(), database);
+	const catalog = createProjectServices(testActor(), projects, projects);
+	const records = new NoteRecords(testActor(), database);
+	const notes = createNoteServices(
+		testActor(),
+		records,
+		new SourceAnchorRecords(testActor(), database),
+		projects
+	);
 	return {
 		records,
 		projects: new Projects(
@@ -53,6 +59,7 @@ export const treeControllers = (database: Database, transactionRunner: Transacti
 			})
 		),
 		notes: new Notes(
+			testActor(),
 			new BacklinkPresentationService(),
 			new ReferencePresentationService(),
 			new WorkspaceCommandRulesService(),
@@ -74,7 +81,7 @@ export const treeControllers = (database: Database, transactionRunner: Transacti
 				noteCreation: notes.creator,
 				noteTrash: notes.trash,
 				noteDeletion: notes.deletion,
-				noteIndexer: new InMemoryNoteContent(),
+				noteIndexer: new InMemoryNoteContent(testActor()),
 				transactionRunner
 			})
 		)

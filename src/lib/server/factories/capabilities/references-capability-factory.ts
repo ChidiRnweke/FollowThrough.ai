@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
 import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
 
@@ -48,12 +49,14 @@ export interface ReferencesCapability extends ReferenceServices {
 }
 
 export const createReferencesCapability = (
+	actor: ActorContext,
 	input: ReferencesCapabilityInput
 ): ReferencesCapability => ({
 	ranking: new ReferenceRanking(),
 	model: normalizeLanguageModelId(input.defaultModel),
 	...createReferenceServices(
-		new ReferenceRecords(input.db),
+		actor,
+		new ReferenceRecords(actor, input.db),
 		input.notes,
 		input.anchors,
 		input.provenance
@@ -77,6 +80,7 @@ export interface ReferenceServices {
 	readonly contexts: ReferenceContextReader;
 }
 export const createReferenceServices = (
+	actor: ActorContext,
 	references: ReferenceRepository,
 	notes: NoteRepository,
 	anchors: SourceAnchorRepository,
@@ -84,7 +88,7 @@ export const createReferenceServices = (
 ): ReferenceServices => {
 	const reading = new ReferenceReadingService(references, notes, anchors);
 	return {
-		creator: new ReferenceWritingService(references, notes, anchors, provenance),
+		creator: new ReferenceWritingService(actor, references, notes, anchors, provenance),
 		lister: reading,
 		contexts: reading
 	};

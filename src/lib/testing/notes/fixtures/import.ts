@@ -46,12 +46,18 @@ export const archiveBytes = (files: Readonly<Record<string, string>>): Uint8Arra
 };
 
 export const importedNotesFixture = () => {
-	const records = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository(records);
+	const records = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor(), records);
 	projects.projects = [projectBuilder()];
-	const catalog = createNoteServices(records, new InMemoryAnchorRepository(), projects);
-	const consequences = new InMemoryNoteContent();
+	const catalog = createNoteServices(
+		testActor(),
+		records,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
+	const consequences = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -83,7 +89,7 @@ export const importedNotesFixture = () => {
 	const run = (files: Readonly<Record<string, string>>) => {
 		const archive = readMarkdownArchive(archiveBytes(files));
 		if (!archive.ok) throw new Error(describeArchiveRejection(archive.rejection));
-		return controller.importMarkdownArchive(testActor(), {
+		return controller.importMarkdownArchive({
 			projectId: testProjectId(),
 			notes: archive.result.entries.map(parseMarkdownNote),
 			skipped: archive.result.skipped

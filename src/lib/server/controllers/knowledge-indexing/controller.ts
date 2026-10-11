@@ -1,101 +1,60 @@
-import type { ScheduledTask } from '$lib/models/maintenance';
 import type { MaintenanceProgress } from '$lib/server/services/maintenance/progress';
-import type { ActorContext } from '$lib/models/identity';
 import type { IndexSource, PendingIndexSource } from '$lib/models/knowledge-search';
+import type { IndexBacklog } from '$lib/server/services/knowledge-search/backlog';
 import type { IndexBackfill } from '$lib/server/services/knowledge-search/retrieval';
 
 interface TransactionRunner {
 	run<T>(work: () => Promise<T>): Promise<T>;
 }
 
-const DEFAULT_INTERVAL_MS = 10 * 60 * 1000;
-const DEFAULT_MAX_SOURCES = 200;
-export interface EmbeddingBackfillOptions {
-	readonly intervalMs?: number;
-	readonly maxSourcesPerTick?: number;
-	readonly logger?: Pick<Console, 'error' | 'log'>;
+/**
+ * The embedding backlog across every user. There is no job table: the queue is `search_chunks`
+ * rows with no embedding, so the backlog is exactly the durable state and a crashed tick simply
+ * leaves work for the next one. The caller embeds each listed source as its owner.
+ */
+export interface EmbeddingBacklogController {
+	/** The next sources to embed, continuing the saved traversal or restarting it when it ran out. */
+	next(limit: number): Promise<readonly PendingIndexSource[]>;
+	/** Records that the traversal has passed a source, whether or not it embedded. */
+	advance(cursor: string): Promise<void>;
+}
+export class EmbeddingBacklog implements EmbeddingBacklogController {
+	constructor(
+		private readonly backlog: IndexBacklog,
+		private readonly progress: MaintenanceProgress
+	) {}
+	async next(limit: number): Promise<readonly PendingIndexSource[]> {
+		const resumed = await this.progress.resume(EMBEDDING_BACKFILL);
+		const pending = await this.backlog.pendingSources(limit, resumed?.after);
+		if (pending.length || !resumed) return pending;
+		await this.progress.restart(EMBEDDING_BACKFILL);
+		return this.backlog.pendingSources(limit);
+	}
+	advance(cursor: string): Promise<void> {
+		return this.progress.advance(EMBEDDING_BACKFILL, { after: cursor });
+	}
 }
 
-/**
- * Fills in the vectors that the write path deliberately skipped.
- *
- * There is no job table: the queue is `search_chunks` rows with no embedding, so
- * the backlog is exactly the durable state and a crashed tick simply leaves work
- * for the next one. Failures are per-source — one poisoned document must not
- * stall every other user's index.
- */
-export class EmbeddingMaintenance implements ScheduledTask {
-	readonly name = 'embedding-backfill';
-	readonly intervalMs: number;
-	private readonly maxSourcesPerTick: number;
-	private readonly logger: Pick<Console, 'error' | 'log'>;
-
+/** Fills in the vectors that the user's write path deliberately skipped. */
+export interface KnowledgeIndexingController {
+	/** Embed one source's pending chunks; answers how many chunks were embedded. */
+	backfill(source: IndexSource): Promise<number>;
+}
+export class KnowledgeIndexing implements KnowledgeIndexingController {
 	constructor(
-		private readonly backlog: IndexBackfill,
-		private readonly transactions: TransactionRunner,
-		private readonly progress: MaintenanceProgress,
-		options: EmbeddingBackfillOptions = {}
-	) {
-		this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
-		this.maxSourcesPerTick = options.maxSourcesPerTick ?? DEFAULT_MAX_SOURCES;
-		this.logger = options.logger ?? console;
-	}
-
-	async run(): Promise<void> {
-		const resumed = await this.progress.resume(this.name);
-		let pending = await this.backlog.pendingSources(this.maxSourcesPerTick, resumed?.after);
-		if (!pending.length && resumed) {
-			await this.progress.restart(this.name);
-			pending = await this.backlog.pendingSources(this.maxSourcesPerTick);
-		}
-		if (!pending.length) return;
-
-		let embedded = 0;
-		let failed = 0;
-		for (const entry of pending) {
-			try {
-				embedded += await this.backfill(entry);
-				// audit-allow: silent-catch — the scheduled batch counts and reports this failed source while leaving it pending for retry.
-			} catch (error) {
-				failed += 1;
-				this.logger.error(
-					`[embedding-backfill] ${entry.source.kind} ${sourceId(entry.source)} failed:`,
-					error
-				);
-			} finally {
-				// Failed sources stay pending, but cannot monopolize the next tick.
-				await this.progress.advance(this.name, { after: entry.cursor });
-			}
-		}
-		this.logger.log(
-			`[embedding-backfill] embedded ${embedded} chunk(s) across ${pending.length - failed} source(s)` +
-				(failed ? `, ${failed} failed` : '')
-		);
-	}
-
-	private async backfill(entry: PendingIndexSource): Promise<number> {
-		const actor: ActorContext = { userId: entry.userId };
+		private readonly index: IndexBackfill,
+		private readonly transactions: TransactionRunner
+	) {}
+	async backfill(source: IndexSource): Promise<number> {
 		// Embedding happens outside the transaction: it is a network call to a third
 		// party, and holding row locks across it is the very thing this worker exists
 		// to stop the request path from doing.
-		const embedded = await this.backlog.embedPending(actor, entry.source);
+		const embedded = await this.index.embedPending(source);
 		if (!embedded.chunks.length) return 0;
-		await this.transactions.run(() => this.backlog.completePending(actor, embedded));
+		await this.transactions.run(() => this.index.completePending(embedded));
 		return embedded.chunks.length;
 	}
 }
 
-const sourceId = (source: IndexSource): string => {
-	switch (source.kind) {
-		case 'note':
-			return source.noteId;
-		case 'diagram':
-			return source.diagramId;
-		case 'widget':
-			return source.widgetId;
-		case 'memory':
-			return source.memoryEntryId;
-		case 'attachment':
-			return source.attachmentId;
-	}
-};
+/** The maintenance traversal the embedding backlog resumes from. */
+export const EMBEDDING_BACKFILL = 'embedding-backfill';

@@ -1,7 +1,7 @@
+import type { ActorContext } from '$lib/models/identity';
 import type { TokenCodec } from '$lib/models/tokenization';
 import type { KnowledgeRetrievalCapabilities } from './services/knowledge-search/retrieval';
 import type { ToolRanking, ToolSeeding } from './services/agent/tools/tool-search';
-import type { ScheduledTask } from '$lib/models/maintenance';
 import type { WebReferenceClient } from '$lib/server/services/references/web-research';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import {
@@ -91,11 +91,6 @@ export interface ProductionApplication {
 	readonly mcpSurface: McpSurfaceFactory;
 	readonly controllers: ControllerFactory;
 	/**
-	 * Periodic work for the worker sidecar to run. The web process builds these
-	 * like everything else and simply never starts them.
-	 */
-	readonly backgroundTasks: readonly ScheduledTask[];
-	/**
 	 * Not reachable through `ControllerFactory`, but the MCP server needs to
 	 * mint a provenance row per session so tool writes are attributable.
 	 */
@@ -110,7 +105,10 @@ export interface ProductionApplication {
  * environment; isolated runners supply a testcontainer database and cached or
  * faked external edges.
  */
-export function createApplication(config: ApplicationConfig): ProductionApplication {
+export function createApplication(
+	actor: ActorContext,
+	config: ApplicationConfig
+): ProductionApplication {
 	const db = config.db;
 	const transactionRunner = config.transactionRunner;
 	const overrides = config.overrides ?? {};
@@ -123,18 +121,21 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ??
 		defaultAgentModel;
 	const deferEmbedding = config.deferEmbedding ?? false;
-	const identity = createIdentityCapability({ db });
-	const synchronization = createSyncCapability({ db, deferEmbedding });
-	const projectCapability = createProjectsCapability({ db });
-	const noteCapability = createNotesCapability({ db, projects: projectCapability.repository });
-	const todoCapability = createTodosCapability({
+	const identity = createIdentityCapability(actor, { db });
+	const synchronization = createSyncCapability(actor, { db, deferEmbedding });
+	const projectCapability = createProjectsCapability(actor, { db });
+	const noteCapability = createNotesCapability(actor, {
+		db,
+		projects: projectCapability.repository
+	});
+	const todoCapability = createTodosCapability(actor, {
 		db,
 		projects: projectCapability.repository,
 		notes: noteCapability.repository,
 		anchors: noteCapability.anchors,
 		provenance: noteCapability.provenanceRepository
 	});
-	const relationshipCapability = createRelationshipsCapability({
+	const relationshipCapability = createRelationshipsCapability(actor, {
 		db,
 		notes: noteCapability.repository,
 		anchors: noteCapability.anchors,
@@ -144,7 +145,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		appURL,
 		defaultModel: DEFAULT_GENERATION_MODEL
 	});
-	const referenceCapability = createReferencesCapability({
+	const referenceCapability = createReferencesCapability(actor, {
 		db,
 		notes: noteCapability.repository,
 		anchors: noteCapability.anchors,
@@ -155,13 +156,13 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		defaultModel: defaultAgentModel,
 		client: overrides.referenceClient
 	});
-	const suggestionCapability = createSuggestionsCapability({
+	const suggestionCapability = createSuggestionsCapability(actor, {
 		db,
 		notes: noteCapability.repository,
 		anchors: noteCapability.anchors,
 		provenance: noteCapability.provenanceRepository
 	});
-	const skillCapability = createSkillsCapability({
+	const skillCapability = createSkillsCapability(actor, {
 		db,
 		projects: projectCapability.repository,
 		notes: noteCapability.repository,
@@ -176,7 +177,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const notes = noteCapability.services;
 	const provenance = noteCapability.provenance;
 	const todos = todoCapability.services;
-	const knowledgeSearch = createKnowledgeSearchCapability({
+	const knowledgeSearch = createKnowledgeSearchCapability(actor, {
 		db,
 		transactionRunner,
 		tokenizer: config.tokenizer,
@@ -192,23 +193,23 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const diagramIndexer = knowledge;
 	const memoryIndexer = knowledge;
 	const toolRetriever = knowledgeSearch.toolRetriever;
-	const agentFilesCapability = createAgentFilesCapability({
+	const agentFilesCapability = createAgentFilesCapability(actor, {
 		tokens: knowledgeSearch.tokenizer,
 		db,
 		projects: projectRepository,
 		notes: noteRepository
 	});
-	const widgets = createWidgetsCapability({
+	const widgets = createWidgetsCapability(actor, {
 		db,
 		projects: projectRepository,
 		notes: noteRepository
 	});
-	const memory = createMemoryCapability({
+	const memory = createMemoryCapability(actor, {
 		db,
 		projects: projectRepository,
 		provenance: provenanceRepository
 	});
-	const agentCapability = createAgentCapability({
+	const agentCapability = createAgentCapability(actor, {
 		tokens: knowledgeSearch.tokenizer,
 		db,
 		notifications: config.notifications,
@@ -237,8 +238,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		runSignals
 	} = agentCapability;
 	const finalizedKnowledgeSearch = knowledgeSearch.finalize({ preferences });
-	const feedback = createFeedbackCapability({ db });
-	const attachmentCapability = createAttachmentsCapability({
+	const feedback = createFeedbackCapability(actor, { db });
+	const attachmentCapability = createAttachmentsCapability(actor, {
 		claims: config.attachmentClaims,
 		transactionRunner,
 		visionModel: defaultVisionModel,
@@ -256,7 +257,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		storage: overrides.attachmentStorage
 	});
 	const attachmentStorage = attachmentCapability.storage;
-	const deliverables = createDeliverablesCapability({
+	const deliverables = createDeliverablesCapability(actor, {
 		db,
 		storage: attachmentStorage
 	});
@@ -267,7 +268,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 
 	const suggestions = suggestionCapability;
 	const skills = skillCapability.services;
-	const diagramCapability = createDiagramsCapability({
+	const diagramCapability = createDiagramsCapability(actor, {
 		contextNotes: notes.reader,
 		contextSkills: skills.finder,
 		contextMemory: memory.lister,
@@ -728,18 +729,14 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			admission: finalizedKnowledgeSearch.admission,
 			now: Date.now
 		},
-		feedback
+		feedback,
+		attachmentProcessing: attachmentCapability.processing,
+		knowledgeIndexing: knowledgeSearch.indexing
 	};
-	const controllerFactory = new ProductionControllerFactory(dependencies);
+	const controllerFactory = new ProductionControllerFactory(actor, dependencies);
 	return {
 		controllers: controllerFactory,
 		mcpSurface: agentCapability.mcpSurface,
-		backgroundTasks: [
-			knowledgeSearch.maintenance,
-			attachmentCapability.retention,
-			attachmentCapability.objectRemoval,
-			attachmentCapability.processing
-		],
 		provenance,
 		toolRetriever
 	};

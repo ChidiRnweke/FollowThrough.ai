@@ -26,7 +26,7 @@ describe('durable attachment processing', () => {
 		repository.found = view('application/pdf');
 		const versionId = repository.found.version.id;
 		extraction.beforeExtract = async () => claims.lose(versionId);
-		await worker.process(testActor(), versionId);
+		await worker.process(versionId);
 		expect(repository.found.version.processingStatus).toBe('processing');
 		expect(search.documents).toEqual([]);
 	});
@@ -59,7 +59,7 @@ describe('durable attachment processing', () => {
 		repository.found = view('application/pdf');
 		const versionId = repository.found.version.id;
 		extraction.beforeExtract = async () => claims.lose(versionId);
-		await worker.process(testActor(), versionId);
+		await worker.process(versionId);
 		extraction.beforeExtract = async () => {};
 		await worker.run();
 		expect(repository.found.version.processingStatus).toBe('ready');
@@ -68,7 +68,7 @@ describe('durable attachment processing', () => {
 		const { repository, worker, search } = setupAttachments();
 		repository.found = view('application/pdf');
 		search.stageFailure = new Error('Search unavailable');
-		await worker.process(testActor(), repository.found.version.id);
+		await worker.process(repository.found.version.id);
 		expect(repository.found.version.processingStatus).toBe('processing');
 	});
 });

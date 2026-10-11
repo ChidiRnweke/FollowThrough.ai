@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import {
 	AgentRunDecisionService,
 	AgentRunEventService,
@@ -190,10 +191,16 @@ export interface AgentCapability {
 	readonly runSignals: RunSignals;
 }
 
-export const createAgentCapability = (input: AgentCapabilityInput): AgentCapability => {
-	const conversationRepository = new ConversationRecords(input.db);
-	const conversations = new ConversationArchive(conversationRepository);
-	const preferences = new AgentPreferenceCatalog(new AgentPreferenceRecords(input.db));
+export const createAgentCapability = (
+	actor: ActorContext,
+	input: AgentCapabilityInput
+): AgentCapability => {
+	const conversationRepository = new ConversationRecords(actor, input.db);
+	const conversations = new ConversationArchive(actor, conversationRepository);
+	const preferences = new AgentPreferenceCatalog(
+		actor,
+		new AgentPreferenceRecords(actor, input.db)
+	);
 	const models =
 		input.modelCatalog ??
 		new AgentModels(
@@ -205,18 +212,18 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 			new Set(input.recommendedModels.map(normalizeLanguageModelId))
 		);
 	const tokens = input.tokens;
-	const runs = new AgentRunRecords(input.db);
-	const runLedger = new AgentRunLedger(runs);
-	const runEvents = new AgentRunEventRecords(input.db);
+	const runs = new AgentRunRecords(actor, input.db);
+	const runLedger = new AgentRunLedger(actor, runs);
+	const runEvents = new AgentRunEventRecords(actor, input.db);
 	const settlements = new RunSettlements(runs, runEvents);
-	const runDecisions = new AgentRunDecisionRecords(input.db);
-	const sessions = new AgentSessionRecords(input.db);
+	const runDecisions = new AgentRunDecisionRecords(actor, input.db);
+	const sessions = new AgentSessionRecords(actor, input.db);
 	const runSignals = new RunSignalService(
 		new AgentRunNotificationRecords(input.notifications),
 		runs
 	);
 	const context = createAgentContext(tokens);
-	const toolPreferences = new ToolAccess(new ToolPreferenceRecords(input.db));
+	const toolPreferences = new ToolAccess(new ToolPreferenceRecords(actor, input.db));
 	return {
 		mcpSurface: createMcpToolSurface,
 		imagePreparation: new AgentImagePreparationService(),
@@ -238,7 +245,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		modelChoices: new AgentModelChoiceService(),
 		toolPreferences,
 		toolCatalog: new AgentToolCatalogService(),
-		trust: new ToolTrust(new TrustPolicyRecords(input.db)),
+		trust: new ToolTrust(actor, new TrustPolicyRecords(actor, input.db)),
 		cancellations: new RunCancellation(runs),
 		approvals: new RunApprovals(runs),
 		preparation: new RunPreparation(runs),
@@ -247,9 +254,9 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		sessions,
 		harnessRecords: {
 			runs: new AgentRunService(runs),
-			events: new AgentRunEventService(runEvents),
-			decisions: new AgentRunDecisionService(runDecisions),
-			sessions: new AgentSessionService(sessions)
+			events: new AgentRunEventService(actor, runEvents),
+			decisions: new AgentRunDecisionService(actor, runDecisions),
+			sessions: new AgentSessionService(actor, sessions)
 		},
 		context,
 		turns: new AgentTurnService(
@@ -265,7 +272,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		toolConstruction: createAgentToolConstruction(input.controllers),
 		observeTurn: traceAgentTurn,
 		settlements,
-		noteActionRequests: new NoteActionRequests(runs, runEvents, conversationRepository),
+		noteActionRequests: new NoteActionRequests(actor, runs, runEvents, conversationRepository),
 		runSignals
 	};
 };

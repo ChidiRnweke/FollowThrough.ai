@@ -86,7 +86,7 @@ export async function runCase(
 ): Promise<AgentRunResult> {
 	const startedAt = Date.now();
 	const agent = lab.controllers.agentHarness();
-	const receipt = await agent.submit(actor, {
+	const receipt = await agent.submit({
 		requestId: randomUUID(),
 		input: input.prompt,
 		...(input.conversationId ? { conversationId: input.conversationId } : {}),
@@ -104,7 +104,7 @@ export async function runCase(
 	const cancelledStatus = new Promise<AgentRunStatus>((resolve, reject) => {
 		deadline = setTimeout(() => {
 			void agent
-				.cancel(actor, receipt.runId)
+				.cancel(receipt.runId)
 				.then(() => terminalStatus)
 				.then(resolve, reject);
 		}, evalCaseDeadlineMs());
@@ -115,8 +115,8 @@ export async function runCase(
 	} finally {
 		if (deadline) clearTimeout(deadline);
 	}
-	const snapshot = await agent.getRun(actor, receipt.runId);
-	const stored = await agent.listRunEvents(actor, receipt.runId, '0');
+	const snapshot = await agent.getRun(receipt.runId);
+	const stored = await agent.listRunEvents(receipt.runId, '0');
 	const events = stored.map((record) => {
 		if (record.kind === 'unreadable')
 			throw new Error(
@@ -171,7 +171,7 @@ function waitForTerminalStatus(
 			// audit-allow: silent-catch — the polling Promise propagates lookup failure through its reject continuation.
 			lab.controllers
 				.agentHarness()
-				.getRun(actor, runId)
+				.getRun(runId)
 				.then((snapshot) => {
 					if (TERMINAL.includes(snapshot.run.status)) finish(() => resolve(snapshot.run.status));
 				})
@@ -181,7 +181,7 @@ function waitForTerminalStatus(
 		// audit-allow: silent-catch — a failed subscription rejects the wait through `finish`.
 		lab.controllers
 			.agentHarness()
-			.observeRun(actor, runId, check)
+			.observeRun(runId, check)
 			.then(
 				(stop) => {
 					if (settled) void stop();

@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import { SignIn } from '$lib/server/controllers/identity/controller';
 import { AuthentikClient } from '$lib/server/repositories/identity/authentik';
@@ -31,7 +32,7 @@ const setup = (suffix: string) => {
 		sessions,
 		controller: new SignIn({
 			authorization: new OAuthAuthorization(new AuthentikClient(config, fetch), config),
-			accounts: new ProviderAccounts(new UserRecords(context.db)),
+			accounts: new ProviderAccounts(new UserRecords(testActor(), context.db)),
 			sessions
 		})
 	};

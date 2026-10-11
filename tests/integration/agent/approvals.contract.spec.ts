@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -38,8 +39,8 @@ import { actor, context, now, seedProvenance, notifications } from '../database-
 
 const seed = async (suffix: string) => {
 	const owner = actor(suffix);
-	await new UserRecords(context.db).ensureLocal(owner);
-	const conversation = await new ConversationRecords(context.db).insert(owner, {
+	await new UserRecords(owner, context.db).ensureLocal();
+	const conversation = await new ConversationRecords(owner, context.db).insert({
 		id: crypto.randomUUID() as ConversationId,
 		userId: owner.userId,
 		kind: 'chat',
@@ -47,7 +48,7 @@ const seed = async (suffix: string) => {
 		updatedAt: now
 	});
 	const provenance = await seedProvenance(owner, suffix);
-	const run = await new AgentRunRecords(context.db).insert(owner, {
+	const run = await new AgentRunRecords(owner, context.db).insert({
 		kind: 'agent',
 		id: crypto.randomUUID() as AgentRunId,
 		userId: owner.userId,
@@ -69,29 +70,36 @@ const seed = async (suffix: string) => {
 
 const approvalController = (db: typeof context.db) => {
 	const { database, transactionRunner } = createTransactionContext(db);
-	const runs = new AgentRunRecords(database);
-	const events = new AgentRunEventRecords(database);
+	const runs = new AgentRunRecords(testActor(), database);
+	const events = new AgentRunEventRecords(testActor(), database);
 	const runner = new InMemoryAgentTurns();
 	const completion = Promise.withResolvers<void>();
 	runner.completion = completion.promise;
 	runner.abortable = true;
 	const controller = new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
 			approvals: new RunApprovals(runs),
-			sessions: new AgentSessionRecords(database),
+			sessions: new AgentSessionRecords(testActor(), database),
 			...harnessTurnDependencies(
 				runner,
 				new ConversationHistoryService(
-					new AgentSessionRecords(database),
-					new InMemoryAgentFiles(),
+					new AgentSessionRecords(testActor(), database),
+					new InMemoryAgentFiles(testActor()),
 					testTokenizer
 				)
 			),
-			conversationMessages: new ConversationArchive(new ConversationRecords(database)),
-			conversationSessions: new ConversationArchive(new ConversationRecords(database)),
+			conversationMessages: new ConversationArchive(
+				testActor(),
+				new ConversationRecords(testActor(), database)
+			),
+			conversationSessions: new ConversationArchive(
+				testActor(),
+				new ConversationRecords(testActor(), database)
+			),
 			events,
 			transactionRunner,
 			cancellations: new RunCancellation(runs),
@@ -99,7 +107,7 @@ const approvalController = (db: typeof context.db) => {
 			checkpoints: new RunCheckpoints(runs),
 			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			settlements: new RunSettlements(runs, events),
-			decisions: new AgentRunDecisionRecords(database),
+			decisions: new AgentRunDecisionRecords(testActor(), database),
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
@@ -121,7 +129,7 @@ it('does not append another requeue after a concurrent approval already queued t
 	try {
 		await locked.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const decision = controller.decide(owner, {
+		const decision = controller.decide({
 			runId: run.id,
 			callId: 'call-a',
 			decision: 'approve'
@@ -136,8 +144,8 @@ it('does not append another requeue after a concurrent approval already queued t
 		await queuing;
 		await decision;
 		// The concurrent writer owns the queued execution. This decision must not start another.
-		const events = await new AgentRunEventRecords(context.db).replay(owner, run.id, '0');
-		const decisions = await new AgentRunDecisionRecords(context.db).loadUnconsumed(run.id);
+		const events = await new AgentRunEventRecords(owner, context.db).replay(run.id, '0');
+		const decisions = await new AgentRunDecisionRecords(owner, context.db).loadUnconsumed(run.id);
 		expect({
 			requeues: events.filter(
 				(record) => record.kind === 'readable' && record.event.type === 'run_queued'
@@ -147,10 +155,10 @@ it('does not append another requeue after a concurrent approval already queued t
 	} finally {
 		release.resolve();
 		await queuing;
-		await controller.cancel(owner, run.id);
+		await controller.cancel(run.id);
 		completion.resolve();
 		await vi.waitFor(async () => {
-			const current = await new AgentRunRecords(context.db).findById(owner, run.id);
+			const current = await new AgentRunRecords(owner, context.db).findById(run.id);
 			if (current?.status !== 'cancelled') throw new Error('Cancellation has not settled');
 		});
 		await Promise.all([writer.close(), blocker.end()]);
@@ -173,7 +181,7 @@ it('rejects an approval after concurrent cancellation without recording a decisi
 		await locked.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
 		const decision = controller
-			.decide(owner, { runId: run.id, callId: 'call-a', decision: 'approve' })
+			.decide({ runId: run.id, callId: 'call-a', decision: 'approve' })
 			.catch((error) => {
 				if (!(error instanceof Error) || error.message !== 'The agent run is not awaiting approval')
 					throw error;
@@ -190,7 +198,7 @@ it('rejects an approval after concurrent cancellation without recording a decisi
 		const result = await decision;
 		expect({
 			rejected: 'kind' in result && result.kind === 'failure',
-			decisions: await new AgentRunDecisionRecords(context.db).loadUnconsumed(run.id)
+			decisions: await new AgentRunDecisionRecords(owner, context.db).loadUnconsumed(run.id)
 		}).toEqual({ rejected: true, decisions: [] });
 	} finally {
 		release.resolve();

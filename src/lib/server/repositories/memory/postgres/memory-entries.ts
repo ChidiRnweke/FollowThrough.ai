@@ -8,31 +8,35 @@ import * as schema from '$lib/server/db/schema/memory';
 import { toMemoryEntry } from '$lib/server/db/mappers';
 
 export class MemoryRecords implements MemoryEntryRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async findById(actor: ActorContext, id: MemoryEntryId): Promise<MemoryEntry | undefined> {
+	async findById(id: MemoryEntryId): Promise<MemoryEntry | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.memoryEntries)
-			.where(and(eq(schema.memoryEntries.id, id), eq(schema.memoryEntries.userId, actor.userId)));
+			.where(
+				and(eq(schema.memoryEntries.id, id), eq(schema.memoryEntries.userId, this.actor.userId))
+			);
 		return row ? toMemoryEntry(row) : undefined;
 	}
 
-	async findByIdForUpdate(
-		actor: ActorContext,
-		id: MemoryEntryId
-	): Promise<MemoryEntry | undefined> {
+	async findByIdForUpdate(id: MemoryEntryId): Promise<MemoryEntry | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.memoryEntries)
-			.where(and(eq(schema.memoryEntries.id, id), eq(schema.memoryEntries.userId, actor.userId)))
+			.where(
+				and(eq(schema.memoryEntries.id, id), eq(schema.memoryEntries.userId, this.actor.userId))
+			)
 			.for('update');
 		return row ? toMemoryEntry(row) : undefined;
 	}
 
-	async list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]> {
+	async list(filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]> {
 		const conditions = [
-			eq(schema.memoryEntries.userId, actor.userId),
+			eq(schema.memoryEntries.userId, this.actor.userId),
 			filter.projectId
 				? eq(schema.memoryEntries.projectId, filter.projectId)
 				: isNull(schema.memoryEntries.projectId)
@@ -47,12 +51,12 @@ export class MemoryRecords implements MemoryEntryRepository {
 		).map(toMemoryEntry);
 	}
 
-	async insert(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry> {
+	async insert(entry: MemoryEntry): Promise<MemoryEntry> {
 		const [row] = await this.database
 			.insert(schema.memoryEntries)
 			.values({
 				id: entry.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				projectId: entry.projectId,
 				content: entry.content,
 				type: entry.type,
@@ -67,7 +71,7 @@ export class MemoryRecords implements MemoryEntryRepository {
 		return toMemoryEntry(row!);
 	}
 
-	async update(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry> {
+	async update(entry: MemoryEntry): Promise<MemoryEntry> {
 		const [row] = await this.database
 			.update(schema.memoryEntries)
 			.set({
@@ -80,7 +84,10 @@ export class MemoryRecords implements MemoryEntryRepository {
 				updatedAt: new Date(entry.updatedAt)
 			})
 			.where(
-				and(eq(schema.memoryEntries.id, entry.id), eq(schema.memoryEntries.userId, actor.userId))
+				and(
+					eq(schema.memoryEntries.id, entry.id),
+					eq(schema.memoryEntries.userId, this.actor.userId)
+				)
 			)
 			.returning();
 		if (!row) throw new NotFoundError('Memory entry was not found');

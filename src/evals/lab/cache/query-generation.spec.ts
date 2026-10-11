@@ -49,8 +49,7 @@ const setup = (path: string, content = '  deployment  ', status = 200) => {
 		cache,
 		requests,
 		spans,
-		search: () =>
-			controller.search(testActor(), { query: 'follow up', conversationId: testConversationId() })
+		search: () => controller.search({ query: 'follow up', conversationId: testConversationId() })
 	};
 };
 

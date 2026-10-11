@@ -29,8 +29,8 @@ import { actor, context, replaceNoteFixture, seedNote } from '../database-harnes
 
 it('restores to the root after a concurrent parent archive commits', async () => {
 	const { owner, note } = await seedNote('16405');
-	const records = new NoteRecords(context.db);
-	const parent = await records.insert(owner, {
+	const records = new NoteRecords(owner, context.db);
+	const parent = await records.insert({
 		...note,
 		id: crypto.randomUUID() as NoteId,
 		kind: 'folder',
@@ -42,11 +42,12 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
 	const { database, transactionRunner } = createTransactionContext(writer.db);
-	const { services: catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability(owner, {
 		db: database,
-		projects: new ProjectRecords(database)
+		projects: new ProjectRecords(owner, database)
 	});
 	const controller = new Notes(
+		owner,
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -67,7 +68,7 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			noteTrash: catalog.trash,
-			noteIndexer: new InMemoryNoteContent(),
+			noteIndexer: new InMemoryNoteContent(owner),
 			transactionRunner
 		})
 	);
@@ -81,7 +82,7 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 	try {
 		await locked.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const restoring = controller.restore(owner, { noteId: note.id });
+		const restoring = controller.restore({ noteId: note.id });
 		await vi.waitFor(async () => {
 			const waiting = await blocker<
 				{ pid: number }[]
@@ -91,7 +92,7 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 		release.resolve();
 		await archiving;
 		await restoring;
-		expect(await records.findById(owner, note.id)).toMatchObject({
+		expect(await records.findById(note.id)).toMatchObject({
 			parentId: undefined,
 			archivedAt: undefined,
 			position: 1
@@ -108,11 +109,12 @@ it('archives the authoritative note after a concurrent note edit commits', async
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
 	const { database, transactionRunner } = createTransactionContext(writer.db);
-	const { services: catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability(owner, {
 		db: database,
-		projects: new ProjectRecords(database)
+		projects: new ProjectRecords(owner, database)
 	});
 	const controller = new Notes(
+		owner,
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -133,7 +135,7 @@ it('archives the authoritative note after a concurrent note edit commits', async
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			noteTrash: catalog.trash,
-			noteIndexer: new InMemoryNoteContent(),
+			noteIndexer: new InMemoryNoteContent(owner),
 			transactionRunner
 		})
 	);
@@ -147,7 +149,7 @@ it('archives the authoritative note after a concurrent note edit commits', async
 	try {
 		await locked.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const archiving = controller.archive(owner, { noteId: note.id });
+		const archiving = controller.archive({ noteId: note.id });
 		await vi.waitFor(async () => {
 			const waiting = await blocker<
 				{ pid: number }[]
@@ -157,7 +159,7 @@ it('archives the authoritative note after a concurrent note edit commits', async
 		release.resolve();
 		await editing;
 		const result = await archiving;
-		const stored = await new NoteRecords(context.db).findById(owner, note.id);
+		const stored = await new NoteRecords(owner, context.db).findById(note.id);
 		expect({
 			title: stored?.title,
 			revision: stored?.currentRevision,
@@ -181,16 +183,16 @@ it('does not expose another actor’s note through a locking read', async () => 
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	expect(
 		await transactionRunner.run(() =>
-			new NoteRecords(database).findForWrite(actor('16403'), note.id)
+			new NoteRecords(actor('16403'), database).findForWrite(note.id)
 		)
 	).toBeUndefined();
 });
 
 it('does not expose notes in an archived project through a locking read', async () => {
 	const { owner, note, project } = await seedNote('16404');
-	await new ProjectRecords(context.db).archive(owner, project.id);
+	await new ProjectRecords(owner, context.db).archive(project.id);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	expect(
-		await transactionRunner.run(() => new NoteRecords(database).findForWrite(owner, note.id))
+		await transactionRunner.run(() => new NoteRecords(owner, database).findForWrite(note.id))
 	).toBeUndefined();
 });

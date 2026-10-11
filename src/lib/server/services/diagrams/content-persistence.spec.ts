@@ -16,7 +16,7 @@ import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const diagrams = new InMemoryDiagramRepository();
+	const diagrams = new InMemoryDiagramRepository(testActor());
 	const current = drawioBuilder({
 		provenanceId: testProvenanceId(),
 		source: VALID_DRAWIO_XML.replace('API &amp; worker', 'Before'),
@@ -26,11 +26,12 @@ const setup = () => {
 	});
 	diagrams.diagrams = [current];
 	const library = createDiagramServices(
+		testActor(),
 		diagrams,
-		new InMemoryNoteRepository(),
-		new InMemoryAnchorRepository(),
-		new InMemoryProvenanceRepository(),
-		new InMemoryProjectRepository()
+		new InMemoryNoteRepository(testActor()),
+		new InMemoryAnchorRepository(testActor()),
+		new InMemoryProvenanceRepository(testActor()),
+		new InMemoryProjectRepository(testActor())
 	);
 	const write: DiagramContentWrite = {
 		kind: 'drawio',
@@ -48,7 +49,7 @@ const setup = () => {
 
 it('preserves placement, provenance and publication state when storing reviewed content', async () => {
 	const { current, library, write } = setup();
-	expect(await library.writer.persistContent(testActor(), write)).toEqual({
+	expect(await library.writer.persistContent(write)).toEqual({
 		...current,
 		source: write.source,
 		renderedSvg: write.renderedSvg,
@@ -58,7 +59,7 @@ it('preserves placement, provenance and publication state when storing reviewed 
 
 it('refuses content writes for another actor', async () => {
 	const { library, write } = setup();
-	await expect(library.writer.persistContent(testActor(2), write)).rejects.toMatchObject({
+	await expect(library.writer.persistContent(write)).rejects.toMatchObject({
 		code: 'STALE_REVISION'
 	});
 });
@@ -73,7 +74,7 @@ it('refuses content writes after publication state changes', async () => {
 			currentRevision: current.currentRevision + 1
 		}
 	];
-	await expect(library.writer.persistContent(testActor(), write)).rejects.toMatchObject({
+	await expect(library.writer.persistContent(write)).rejects.toMatchObject({
 		code: 'STALE_REVISION'
 	});
 });
@@ -82,7 +83,7 @@ it('refuses Mermaid content without owned provenance', async () => {
 	const { current, library, write, diagrams } = setup();
 	diagrams.diagrams = [mermaidBuilder({ id: current.id })];
 	await expect(
-		library.writer.persistContent(testActor(), {
+		library.writer.persistContent({
 			kind: 'mermaid',
 			diagramId: current.id,
 			source: 'flowchart LR\nA --> C',

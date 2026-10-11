@@ -10,32 +10,32 @@ import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const { owner, project, note } = await seedNote(suffix);
-	const records = new DiagramRecords(context.db);
+	const records = new DiagramRecords(owner, context.db);
 	const diagram = drawioBuilder({
 		id: crypto.randomUUID() as DiagramId,
 		userId: owner.userId,
 		projectId: project.id,
 		sourceNoteId: note.id
 	});
-	await records.insert(owner, diagram);
-	await new ProjectRecords(context.db).archive(owner, project.id);
+	await records.insert(diagram);
+	await new ProjectRecords(owner, context.db).archive(project.id);
 	return { owner, project, records, diagram };
 };
 it('hides direct diagrams when their project is archived', async () => {
 	const { owner, records, diagram } = await setup('32711');
-	expect(await records.findById(owner, diagram.id)).toBeUndefined();
+	expect(await records.findById(diagram.id)).toBeUndefined();
 });
 it('refuses locking reads in archived projects', async () => {
 	const { owner, records, diagram } = await setup('32712');
-	expect(await records.findForWrite(owner, diagram.id)).toBeUndefined();
+	expect(await records.findForWrite(diagram.id)).toBeUndefined();
 });
 it('excludes archived projects from diagram counts', async () => {
 	const { owner, project, records } = await setup('32713');
-	expect(await records.countForProject(owner, project.id)).toBe(0);
+	expect(await records.countForProject(project.id)).toBe(0);
 });
 it('does not expose revision history from archived projects', async () => {
 	const { owner, records, diagram } = await setup('32714');
-	await expect(records.listRevisions(owner, diagram.id)).rejects.toBeInstanceOf(NotFoundError);
+	await expect(records.listRevisions(diagram.id)).rejects.toBeInstanceOf(NotFoundError);
 });
 it('keeps diagram lifecycle unchanged by project archival', async () => {
 	const { diagram } = await setup('32715');

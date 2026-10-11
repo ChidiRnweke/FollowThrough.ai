@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { OperationObserver } from '$lib/models/telemetry';
 import {
 	Retrieval,
@@ -21,7 +22,7 @@ export const searchControllerFixture = <
 		readonly observer?: OperationObserver;
 	} = {}
 ) => {
-	const repository = new InMemorySearchRepository();
+	const repository = new InMemorySearchRepository(testActor());
 	const provider = options.provider ?? new InMemoryRetrievalProvider();
 	const knowledge = createTestContentIndex(
 		repository,

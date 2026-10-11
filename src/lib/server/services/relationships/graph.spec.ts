@@ -16,17 +16,17 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const relationships = new InMemoryRelationshipRepository();
-	const notes = new InMemoryNoteRepository();
-	const anchors = new InMemoryAnchorRepository();
-	const provenance = new InMemoryProvenanceRepository();
+	const relationships = new InMemoryRelationshipRepository(testActor());
+	const notes = new InMemoryNoteRepository(testActor());
+	const anchors = new InMemoryAnchorRepository(testActor());
+	const provenance = new InMemoryProvenanceRepository(testActor());
 	notes.notes = [noteBuilder(), noteBuilder({ id: testNoteId(2) })];
 	return {
 		relationships,
 		notes,
 		anchors,
 		provenance,
-		service: createRelationshipServices(relationships, notes, anchors, provenance)
+		service: createRelationshipServices(testActor(), relationships, notes, anchors, provenance)
 	};
 };
 
@@ -35,7 +35,7 @@ describe('Relationship management invariants', () => {
 		const { service } = setup();
 		await expect(
 			service.creator
-				.createWithChange(testActor(), {
+				.createWithChange({
 					sourceNoteId: testNoteId(),
 					targetNoteId: testNoteId(),
 					kind: 'mentions'
@@ -49,7 +49,7 @@ describe('Relationship management invariants', () => {
 		notes.notes[1] = noteBuilder({ id: testNoteId(2), projectId: testProjectId(2) });
 		await expect(
 			service.creator
-				.createWithChange(testActor(), {
+				.createWithChange({
 					sourceNoteId: testNoteId(),
 					targetNoteId: testNoteId(2),
 					kind: 'mentions'
@@ -63,7 +63,7 @@ describe('Relationship management invariants', () => {
 		anchors.anchors = [anchorBuilder({ noteId: testNoteId(2) })];
 		await expect(
 			service.creator
-				.createWithChange(testActor(), {
+				.createWithChange({
 					sourceNoteId: testNoteId(),
 					targetNoteId: testNoteId(2),
 					kind: 'mentions',
@@ -89,7 +89,7 @@ describe('Relationship management invariants', () => {
 			}
 		];
 		const relationship = await service.creator
-			.createWithChange(testActor(), {
+			.createWithChange({
 				sourceNoteId: testNoteId(),
 				targetNoteId: testNoteId(2),
 				kind: 'prior_decision',
@@ -116,13 +116,11 @@ describe('Relationship management invariants', () => {
 describe('Reconciling a note’s links', () => {
 	const source = () => noteBuilder();
 	const listMentions = async (relationships: InMemoryRelationshipRepository) =>
-		(await relationships.listForNote(testActor(), testNoteId())).filter(
-			(row) => row.kind === 'mentions'
-		);
+		(await relationships.listForNote(testNoteId())).filter((row) => row.kind === 'mentions');
 
 	it('creates a row for a new link', async () => {
 		const { service, relationships } = setup();
-		await service.reconciler.reconcile(testActor(), source(), [testNoteId(2)]);
+		await service.reconciler.reconcile(source(), [testNoteId(2)]);
 		expect((await listMentions(relationships)).map((row) => row.targetNoteId)).toEqual([
 			testNoteId(2)
 		]);
@@ -130,16 +128,16 @@ describe('Reconciling a note’s links', () => {
 
 	it('creates nothing twice for the same link', async () => {
 		const { service, relationships } = setup();
-		await service.reconciler.reconcile(testActor(), source(), [testNoteId(2)]);
-		await service.reconciler.reconcile(testActor(), source(), [testNoteId(2)]);
+		await service.reconciler.reconcile(source(), [testNoteId(2)]);
+		await service.reconciler.reconcile(source(), [testNoteId(2)]);
 		expect(await listMentions(relationships)).toHaveLength(1);
 	});
 
 	/** Editing a link out of the document must stop it producing a backlink. */
 	it('removes a row for a link deleted from the document', async () => {
 		const { service, relationships } = setup();
-		await service.reconciler.reconcile(testActor(), source(), [testNoteId(2)]);
-		await service.reconciler.reconcile(testActor(), source(), []);
+		await service.reconciler.reconcile(source(), [testNoteId(2)]);
+		await service.reconciler.reconcile(source(), []);
 		expect(await listMentions(relationships)).toHaveLength(0);
 	});
 
@@ -150,20 +148,20 @@ describe('Reconciling a note’s links', () => {
 	it('leaves an AI-inferred relationship untouched', async () => {
 		const { service, relationships } = setup();
 		await service.creator
-			.createWithChange(testActor(), {
+			.createWithChange({
 				sourceNoteId: testNoteId(),
 				targetNoteId: testNoteId(2),
 				kind: 'elaborates'
 			})
 			.then((change) => change.after);
-		await service.reconciler.reconcile(testActor(), source(), []);
-		const remaining = await relationships.listForNote(testActor(), testNoteId());
+		await service.reconciler.reconcile(source(), []);
+		const remaining = await relationships.listForNote(testNoteId());
 		expect(remaining.map((row) => row.kind)).toEqual(['elaborates']);
 	});
 
 	it('never links a note to itself', async () => {
 		const { service, relationships } = setup();
-		await service.reconciler.reconcile(testActor(), source(), [testNoteId()]);
+		await service.reconciler.reconcile(source(), [testNoteId()]);
 		expect(await listMentions(relationships)).toHaveLength(0);
 	});
 
@@ -174,13 +172,13 @@ describe('Reconciling a note’s links', () => {
 			noteBuilder(),
 			noteBuilder({ id: testNoteId(2), projectId: testProjectId(2) as never })
 		];
-		await service.reconciler.reconcile(testActor(), source(), [testNoteId(2)]);
+		await service.reconciler.reconcile(source(), [testNoteId(2)]);
 		expect(await listMentions(relationships)).toHaveLength(0);
 	});
 
 	it('skips a target that no longer exists', async () => {
 		const { service, relationships } = setup();
-		await service.reconciler.reconcile(testActor(), source(), [testNoteId(9)]);
+		await service.reconciler.reconcile(source(), [testNoteId(9)]);
 		expect(await listMentions(relationships)).toHaveLength(0);
 	});
 });

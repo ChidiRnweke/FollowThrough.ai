@@ -76,7 +76,11 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Chat run control belongs to the user and application lifecycle.'
 		},
-		recoverInterruptedRuns: {
+		recoverInterrupted: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		resumeQueued: {
 			kind: 'excluded',
 			reason: 'Chat run control belongs to the user and application lifecycle.'
 		},
@@ -269,7 +273,7 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'The application executes persisted promise extraction requests.'
 		},
-		recoverQueuedPromiseRuns: {
+		resumeQueuedPromiseRun: {
 			kind: 'excluded',
 			reason: 'The application resumes queued promise extraction requests after startup.'
 		},
@@ -285,7 +289,7 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'The Relationships controller executes a saved related-note request.'
 		},
-		recoverQueuedRelatedNoteRuns: {
+		resumeQueuedRelatedNoteRun: {
 			kind: 'excluded',
 			reason: 'Startup resumes queued related-note searches.'
 		},
@@ -301,7 +305,7 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'The References controller executes a stored editor request.'
 		},
-		recoverQueuedReferenceRuns: {
+		resumeQueuedReferenceRun: {
 			kind: 'excluded',
 			reason: 'Startup recovers committed reference searches.'
 		},
@@ -346,7 +350,7 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Executes a saved diagram action after its durable claim.'
 		},
-		recoverQueuedDiagramRuns: {
+		resumeQueuedDiagramRun: {
 			kind: 'excluded',
 			reason: 'Startup recovery resumes saved diagram actions.'
 		}

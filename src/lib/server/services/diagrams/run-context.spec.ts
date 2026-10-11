@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import type { AgentRunStatus, WorkflowAgentRun, WorkflowRunContext } from '$lib/models/agent';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
@@ -32,7 +33,7 @@ const prepared: Extract<WorkflowRunContext, { kind: 'diagram'; state: 'prepared'
 
 it('keeps the frozen diagram action alongside its prepared context', () => {
 	const current = run();
-	const contexts = new DiagramRunContext(new InMemoryAgentRunPersistence());
+	const contexts = new DiagramRunContext(new InMemoryAgentRunPersistence(testActor()));
 	expect(contexts.prepare(current, prepared, testNow)).toEqual({
 		contextSnapshot: {
 			...current.contextSnapshot,
@@ -43,7 +44,7 @@ it('keeps the frozen diagram action alongside its prepared context', () => {
 });
 
 it('prepares a direct diagram request without introducing a durable action payload', () => {
-	const contexts = new DiagramRunContext(new InMemoryAgentRunPersistence());
+	const contexts = new DiagramRunContext(new InMemoryAgentRunPersistence(testActor()));
 	expect(
 		contexts.prepare(
 			{ ...run(), contextSnapshot: { kind: 'diagram', state: 'unprepared', operation: 'convert' } },
@@ -61,12 +62,12 @@ it.each<AgentRunStatus>([
 	'completed',
 	'failed'
 ])('rejects preparation after the authoritative run becomes %s', (status) => {
-	const contexts = new DiagramRunContext(new InMemoryAgentRunPersistence());
+	const contexts = new DiagramRunContext(new InMemoryAgentRunPersistence(testActor()));
 	expect(() => contexts.prepare(run(status), prepared, testNow)).toThrow('no longer running');
 });
 
 it('keeps another workflow kind from being replaced by diagram context', () => {
-	const contexts = new DiagramRunContext(new InMemoryAgentRunPersistence());
+	const contexts = new DiagramRunContext(new InMemoryAgentRunPersistence(testActor()));
 	expect(() =>
 		contexts.prepare(
 			{

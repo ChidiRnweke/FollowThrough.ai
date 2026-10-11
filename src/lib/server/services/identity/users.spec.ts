@@ -5,6 +5,6 @@ import { UserDirectory } from './users';
 
 it('rejects an ordinary read when the user does not exist', async () => {
 	await expect(
-		new UserDirectory(new InMemoryUserRepository()).get(testActor())
+		new UserDirectory(new InMemoryUserRepository(testActor())).get()
 	).rejects.toMatchObject({ code: 'NOT_FOUND' });
 });

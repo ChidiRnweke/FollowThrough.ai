@@ -17,9 +17,9 @@ import { expect, it } from 'vitest';
 import { Workspace, type WorkspaceDependencies } from './controller';
 
 it('counts pending proposals after expiry when assembling Today', async () => {
-	const proposals = new InMemorySuggestionReader();
+	const proposals = new InMemorySuggestionReader(testActor());
 	proposals.suggestions = [memorySuggestionBuilder({ expiresAt: testNow })];
-	const tasks = new InMemoryTodos();
+	const tasks = new InMemoryTodos(testActor());
 	const controller = new Workspace(
 		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
@@ -28,20 +28,19 @@ it('counts pending proposals after expiry when assembling Today', async () => {
 			memoryPresentation: new MemoryPresentationService(),
 			suggestionExpirer: proposals,
 			suggestionLister: proposals,
-			noteTreeReader: new InMemoryNoteContent(),
+			noteTreeReader: new InMemoryNoteContent(testActor()),
 			todoLister: tasks,
 			waitingOnFinder: tasks,
 			todoContextReader: tasks
 		})
 	);
 	expect(
-		(await controller.getTodayView(testActor(), { today: '2026-07-11' as LocalDate }))
-			.pendingSuggestionCount
+		(await controller.getTodayView({ today: '2026-07-11' as LocalDate })).pendingSuggestionCount
 	).toBe(0);
 });
 
 it('reports expiry failure before returning shell attention', async () => {
-	const proposals = new InMemorySuggestionReader();
+	const proposals = new InMemorySuggestionReader(testActor());
 	proposals.expiryFailure = new Error('Expiry storage is unavailable');
 	const controller = new Workspace(
 		new TodayPresentationService(),
@@ -53,7 +52,5 @@ it('reports expiry failure before returning shell attention', async () => {
 			suggestionExpirer: proposals
 		})
 	);
-	await expect(controller.getShellContext(testActor())).rejects.toThrow(
-		'Expiry storage is unavailable'
-	);
+	await expect(controller.getShellContext()).rejects.toThrow('Expiry storage is unavailable');
 });

@@ -65,18 +65,18 @@ const setup = async (suffix: string) => {
 		.set({ currentVersionId: attachment.currentVersionId })
 		.where(eq(schema.attachments.id, attachment.id));
 	const transaction = createTransactionContext(context.db);
-	const repository = new KnowledgeIndexRecords(transaction.database);
+	const repository = new KnowledgeIndexRecords(owner, transaction.database);
 	await createContentIndex(repository, client.model, {
 		targetTokens: 30,
 		overlapTokens: 5
-	}).indexAttachment(owner, attachment, text);
+	}).indexAttachment(attachment, text);
 	return { owner, project, attachment, repository, transaction };
 };
 
 describe('attachment search tail in PostgreSQL', () => {
 	it('finds accepted tail text before embeddings are ready', async () => {
 		const { owner, project, repository } = await setup('9741');
-		const matches = await repository.search(owner, 'amberfalcon', 10, project.id);
+		const matches = await repository.search('amberfalcon', 10, project.id);
 		expect(
 			matches.map(({ document }) => ({
 				tail: document.chunkIndex >= 50,
@@ -92,7 +92,7 @@ describe('attachment search tail in PostgreSQL', () => {
 			transaction.transactionRunner,
 			new InMemoryMaintenanceProgress()
 		).run();
-		const matches = await repository.searchByEmbedding(owner, vector(true), 1, project.id);
+		const matches = await repository.searchByEmbedding(vector(true), 1, project.id);
 		expect(
 			matches.map(({ document }) => ({
 				id: document.attachmentId,

@@ -16,19 +16,22 @@ import * as schema from '$lib/server/db/schema/suggestions';
 import { toStoredSuggestion, toSuggestion } from '$lib/server/db/mappers';
 
 export class SuggestionRecords implements SuggestionRepository {
-	constructor(private readonly database: Database) {}
-	async findById(actor: ActorContext, id: SuggestionId): Promise<Suggestion | undefined> {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
+	async findById(id: SuggestionId): Promise<Suggestion | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.suggestions)
-			.where(and(eq(schema.suggestions.id, id), eq(schema.suggestions.userId, actor.userId)));
+			.where(and(eq(schema.suggestions.id, id), eq(schema.suggestions.userId, this.actor.userId)));
 		return row ? toSuggestion(row) : undefined;
 	}
-	async list(
-		actor: ActorContext,
-		filter: { noteId?: Suggestion['noteId']; status?: SuggestionStatus }
-	): Promise<readonly StoredSuggestion[]> {
-		const conditions = [eq(schema.suggestions.userId, actor.userId)];
+	async list(filter: {
+		noteId?: Suggestion['noteId'];
+		status?: SuggestionStatus;
+	}): Promise<readonly StoredSuggestion[]> {
+		const conditions = [eq(schema.suggestions.userId, this.actor.userId)];
 		if (filter.noteId) conditions.push(eq(schema.suggestions.noteId, filter.noteId));
 		if (filter.status) conditions.push(eq(schema.suggestions.status, filter.status));
 		return (
@@ -47,12 +50,12 @@ export class SuggestionRecords implements SuggestionRepository {
 				.orderBy(asc(schema.suggestions.createdAt))
 		).map((row) => toStoredSuggestion(row.suggestion));
 	}
-	async insert(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion> {
+	async insert(suggestion: Suggestion): Promise<Suggestion> {
 		const [row] = await this.database
 			.insert(schema.suggestions)
 			.values({
 				id: suggestion.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				noteId: suggestion.noteId,
 				kind: suggestion.kind,
 				status: suggestion.status,
@@ -72,7 +75,6 @@ export class SuggestionRecords implements SuggestionRepository {
 		return toSuggestion(row!);
 	}
 	async transition(
-		actor: ActorContext,
 		id: SuggestionId,
 		expectedStatus: SuggestionStatus,
 		patch: SuggestionTransition
@@ -90,20 +92,20 @@ export class SuggestionRecords implements SuggestionRepository {
 			.where(
 				and(
 					eq(schema.suggestions.id, id),
-					eq(schema.suggestions.userId, actor.userId),
+					eq(schema.suggestions.userId, this.actor.userId),
 					eq(schema.suggestions.status, expectedStatus)
 				)
 			)
 			.returning();
 		return row ? toSuggestion(row) : undefined;
 	}
-	async expireProposedThrough(actor: ActorContext, through: DateTime): Promise<number> {
+	async expireProposedThrough(through: DateTime): Promise<number> {
 		const rows = await this.database
 			.update(schema.suggestions)
 			.set({ status: 'expired', decidedAt: new Date(through), updatedAt: new Date(through) })
 			.where(
 				and(
-					eq(schema.suggestions.userId, actor.userId),
+					eq(schema.suggestions.userId, this.actor.userId),
 					eq(schema.suggestions.status, 'proposed'),
 					lte(schema.suggestions.expiresAt, new Date(through))
 				)

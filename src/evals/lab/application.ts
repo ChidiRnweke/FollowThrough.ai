@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 const toolCatalogRules = new AgentToolCatalogService();
 import { InMemoryAttachmentClaims } from '$lib/testing/attachments/fakes/claims';
@@ -94,8 +95,8 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	});
 	const tokenizer = new Cl100kTokenizer();
 	const observer = { run: operationObserver.run };
-	const knowledge = new KnowledgeRetrieval({
-		repository: new KnowledgeIndexRecords(database),
+	const knowledge = new KnowledgeRetrieval(testActor(), {
+		repository: new KnowledgeIndexRecords(testActor(), database),
 		provider: provider.client,
 		rerank: provider.rerank,
 		models: { embedding: DEFAULT_EMBEDDING_MODEL, query: DEFAULT_SEARCH_QUERY_MODEL },
@@ -112,7 +113,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		observer
 	});
 
-	const application = createApplication({
+	const application = createApplication(testActor(), {
 		attachmentClaims: new InMemoryAttachmentClaims(),
 		db: database,
 		notifications,

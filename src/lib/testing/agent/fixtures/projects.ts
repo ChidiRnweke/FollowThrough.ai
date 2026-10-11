@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { Project } from '$lib/models/projects';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
@@ -7,9 +8,9 @@ import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { agentToolResultsFixture } from './tool-results';
 export const agentProjectsFixture = (projects: Project[] = []) => {
-	const repository = new InMemoryProjectRepository();
+	const repository = new InMemoryProjectRepository(testActor());
 	repository.projects = projects;
-	const services = createProjectServices(repository, repository);
+	const services = createProjectServices(testActor(), repository, repository);
 	const controller = new Projects(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({

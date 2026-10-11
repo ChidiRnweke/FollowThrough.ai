@@ -17,9 +17,9 @@ import { describe, expect, it } from 'vitest';
 import { Projects, type ProjectsDependencies } from './controller';
 
 const setup = () => {
-	const repository = new InMemoryProjectRepository();
+	const repository = new InMemoryProjectRepository(testActor());
 	repository.projects = [projectBuilder()];
-	const catalog = createProjectServices(repository, repository);
+	const catalog = createProjectServices(testActor(), repository, repository);
 	return {
 		repository,
 		controller: new Projects(
@@ -46,7 +46,7 @@ describe('Project placement', () => {
 			noteBuilder({ id: testNoteId(2), kind: 'folder', parentId: testNoteId(1) })
 		];
 		await expect(
-			controller.move(testActor(), {
+			controller.move({
 				projectId: projectBuilder().id,
 				entryId: testNoteId(1),
 				parentId: testNoteId(2),
@@ -62,7 +62,7 @@ describe('Project placement', () => {
 			noteBuilder({ id: testNoteId(2), position: 1 }),
 			noteBuilder({ id: testNoteId(3), kind: 'folder', position: 2 })
 		];
-		await controller.move(testActor(), {
+		await controller.move({
 			projectId: projectBuilder().id,
 			entryId: testNoteId(2),
 			parentId: testNoteId(3),
@@ -83,7 +83,7 @@ describe('Project placement', () => {
 			noteBuilder({ id: testNoteId(2), parentId: testNoteId(1) }),
 			noteBuilder({ id: testNoteId(3), kind: 'folder' })
 		];
-		await controller.move(testActor(), {
+		await controller.move({
 			projectId: projectBuilder().id,
 			entryId: testNoteId(1),
 			parentId: testNoteId(3),

@@ -29,8 +29,9 @@ import { Notes, type NotesDependencies } from './controller';
 const noteMarkdown = new NoteMarkdownCodec();
 
 const setup = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -71,20 +72,20 @@ describe('Note revision restore invariants', () => {
 		const originalBody = noteMarkdown.read('# Snapshot heading\n\nThe original **body**.');
 		content.notes = [noteBuilder({ ...originalBody, title: 'First name' })];
 		const publishedNote = content.notes[0]!;
-		await controller.publish(testActor(), {
+		await controller.publish({
 			noteId: publishedNote.id,
 			baseEtag: noteEtag(publishedNote.id, publishedNote.currentRevision)
 		});
 		const changedBody = noteMarkdown.read('# Current heading\n\nThe changed *body*.');
-		await controller.save(testActor(), {
+		await controller.save({
 			note: { ...content.notes[0]!, ...changedBody, title: 'Second name' }
 		});
-		const { revisions: savedRevisions } = await controller.listRevisions(testActor(), {
+		const { revisions: savedRevisions } = await controller.listRevisions({
 			noteId: publishedNote.id
 		});
 		const revision = savedRevisions[0]!;
 		content.indexedNoteIds = [];
-		const result = await controller.restoreRevision(testActor(), {
+		const result = await controller.restoreRevision({
 			noteId: publishedNote.id,
 			revisionId: revision.id
 		});
@@ -93,7 +94,7 @@ describe('Note revision restore invariants', () => {
 		);
 		expect(result.note.title).toBe('First name');
 		expect(result.note.currentRevision).toBeGreaterThan(revision.revision);
-		const { revisions } = await controller.listRevisions(testActor(), { noteId: publishedNote.id });
+		const { revisions } = await controller.listRevisions({ noteId: publishedNote.id });
 		expect(revisions.map((entry) => entry.id)).toContain(revision.id);
 		expect(content.restoredAttachmentRevisionIds).toEqual([revision.id]);
 		expect(content.indexedNoteIds).toEqual([testNoteId()]);
@@ -103,7 +104,7 @@ describe('Note revision restore invariants', () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder()];
 		await expect(
-			controller.restoreRevision(testActor(), {
+			controller.restoreRevision({
 				noteId: testNoteId(),
 				revisionId: `${testNoteId(2)}:r1` as never
 			})

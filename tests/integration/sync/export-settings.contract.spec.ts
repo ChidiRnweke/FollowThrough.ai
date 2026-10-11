@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import {
 	Deliverables,
@@ -17,10 +18,11 @@ import { actor, context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database });
-	const settings = new ExportSettingsRecords(database);
-	const artifacts = new ArtifactSettingsService(settings);
+	const sync = createSyncCapability(testActor(), { db: database });
+	const settings = new ExportSettingsRecords(testActor(), database);
+	const artifacts = new ArtifactSettingsService(testActor(), settings);
 	const controller = new Deliverables(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
 			...agentToolResultsFixture(),
@@ -48,14 +50,14 @@ describe('guarded export default writes', () => {
 				settings: selected
 			}
 		};
-		await controller.synchronize(owner, input);
-		await controller.synchronize(owner, input);
-		expect(await settings.find(owner, project.id)).toEqual(selected);
+		await controller.synchronize(input);
+		await controller.synchronize(input);
+		expect(await settings.find(project.id)).toEqual(selected);
 	});
 	it('preserves another client’s override when an absent-base form is submitted late', async () => {
 		const { owner, project, controller, settings } = await setup('9392');
-		await settings.upsert(owner, project.id, { ...defaultExportSettings, fontSize: 16 });
-		const result = await controller.synchronize(owner, {
+		await settings.upsert(project.id, { ...defaultExportSettings, fontSize: 16 });
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: null,
 			command: {
@@ -65,7 +67,7 @@ describe('guarded export default writes', () => {
 				settings: defaultExportSettings
 			}
 		});
-		expect({ kind: result.kind, settings: await settings.find(owner, project.id) }).toEqual({
+		expect({ kind: result.kind, settings: await settings.find(project.id) }).toEqual({
 			kind: 'conflict',
 			settings: { ...defaultExportSettings, fontSize: 16 }
 		});
@@ -73,7 +75,7 @@ describe('guarded export default writes', () => {
 	it('rejects writes to a project owned by another account', async () => {
 		const { project, controller } = await setup('9393');
 		const outsider = actor('9394');
-		const result = await controller.synchronize(outsider, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: null,
 			command: {

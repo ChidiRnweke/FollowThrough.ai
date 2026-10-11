@@ -13,7 +13,7 @@ export class InMemorySelectionOrigins extends SelectionOrigins {
 	constructor(notes: InMemoryNoteContent, provenance: InMemoryProvenanceRecorder) {
 		super(
 			capabilityDependencies<NoteRepository>({
-				findById: (actor, noteId) => notes.get(actor, noteId)
+				findById: (actor, noteId) => notes.get(noteId)
 			}),
 			capabilityDependencies<SourceAnchorRepository>({
 				insert: async (_actor, anchor) => {
@@ -22,7 +22,7 @@ export class InMemorySelectionOrigins extends SelectionOrigins {
 				}
 			}),
 			capabilityDependencies<ProvenanceRepository>({
-				insert: (actor, record) => provenance.record(actor, record)
+				insert: (actor, record) => provenance.record(record)
 			})
 		);
 	}

@@ -13,10 +13,10 @@ import {
 import type { MemoryEntryType } from '$lib/models/memory';
 
 const replace = async (type?: MemoryEntryType) => {
-	const entries = new InMemoryMemoryEntryRepository();
-	const projects = new InMemoryProjectRepository();
+	const entries = new InMemoryMemoryEntryRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const provenance = new InMemoryProvenanceRepository();
+	const provenance = new InMemoryProvenanceRepository(testActor());
 	provenance.provenance = [
 		{
 			id: testProvenanceId(),
@@ -28,14 +28,12 @@ const replace = async (type?: MemoryEntryType) => {
 			metadata: { scope: 'full' }
 		}
 	];
-	const library = createMemoryServices(entries, projects, provenance);
+	const library = createMemoryServices(testActor(), entries, projects, provenance);
 	const original = await library.creator.create(
-		testActor(),
 		memoryEntryBuilder({ type, content: 'Original convention' })
 	);
 	if (!original.projectId) throw new Error('The fixture must have a project');
 	const { entry } = await library.changes.apply(
-		testActor(),
 		{
 			scope: 'project',
 			projectId: original.projectId,

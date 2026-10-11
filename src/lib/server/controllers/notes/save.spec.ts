@@ -30,8 +30,9 @@ import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -72,7 +73,7 @@ describe('Note revision invariants', () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
-		const result = await controller.save(testActor(), {
+		const result = await controller.save({
 			note: { ...note, plainText: 'Changed' }
 		});
 		expect(result.note.currentRevision).toBe(2);
@@ -82,7 +83,7 @@ describe('Note revision invariants', () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
-		await controller.save(testActor(), { note: { ...note, plainText: 'Changed' } });
+		await controller.save({ note: { ...note, plainText: 'Changed' } });
 		expect(content.recordedRevisions).toHaveLength(0);
 	});
 
@@ -91,7 +92,7 @@ describe('Note revision invariants', () => {
 		const note = noteBuilder();
 		content.notes = [note];
 		content.recordedRevisions = [noteRevisionBuilder({ revision: note.currentRevision })];
-		await controller.save(testActor(), { note });
+		await controller.save({ note });
 		expect(content.recordedRevisions).toHaveLength(1);
 	});
 
@@ -99,7 +100,7 @@ describe('Note revision invariants', () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder({ currentRevision: 2 })];
 		await expect(
-			controller.save(testActor(), { note: noteBuilder({ currentRevision: 1 }) })
+			controller.save({ note: noteBuilder({ currentRevision: 1 }) })
 		).rejects.toMatchObject({ code: 'STALE_REVISION' });
 	});
 
@@ -108,7 +109,7 @@ describe('Note revision invariants', () => {
 		const note = noteBuilder();
 		content.notes = [note];
 		content.anchors = [anchorBuilder()];
-		const result = await controller.save(testActor(), { note });
+		const result = await controller.save({ note });
 		expect(result.repairedAnchorIds).toEqual([testAnchorId()]);
 	});
 });
@@ -119,12 +120,10 @@ describe('Note save transaction invariants', () => {
 		const note = noteBuilder();
 		content.notes = [note];
 		content.failIndex = true;
-		const outcome = await controller
-			.save(testActor(), { note: { ...note, plainText: 'Changed' } })
-			.then(
-				() => ({ kind: 'success' as const }),
-				(error: Error) => ({ kind: 'failure' as const, code: (error as { code?: string }).code })
-			);
+		const outcome = await controller.save({ note: { ...note, plainText: 'Changed' } }).then(
+			() => ({ kind: 'success' as const }),
+			(error: Error) => ({ kind: 'failure' as const, code: (error as { code?: string }).code })
+		);
 		expect(outcome).toEqual({ kind: 'failure', code: 'EXTERNAL_SERVICE' });
 		expect(content.notes[0]?.currentRevision).toBe(note.currentRevision);
 		expect(content.notes[0]?.id).toBe(note.id);
@@ -135,7 +134,7 @@ describe('Note save transaction invariants', () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder()];
 		await expect(
-			controller.save(testActor(2), { note: noteBuilder({ userId: testActor(2).userId }) })
+			controller.save({ note: noteBuilder({ userId: testActor(2).userId }) })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 });
@@ -147,7 +146,7 @@ describe('Note publish invariants', () => {
 		content.notes = [note];
 		content.publicationFailure = new Error('Publication storage unavailable');
 		await controller
-			.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note.id, note.currentRevision) })
+			.publish({ noteId: note.id, baseEtag: noteEtag(note.id, note.currentRevision) })
 			.catch(() => ({ kind: 'failure' }));
 		expect({ notes: content.notes, snapshots: content.recordedRevisions }).toEqual({
 			notes: [note],
@@ -159,7 +158,7 @@ describe('Note publish invariants', () => {
 		const note = noteBuilder({ archivedAt: noteBuilder().updatedAt });
 		content.notes = [note];
 		await expect(
-			controller.publish(testActor(), {
+			controller.publish({
 				noteId: note.id,
 				baseEtag: noteEtag(note.id, note.currentRevision)
 			})
@@ -169,7 +168,7 @@ describe('Note publish invariants', () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
-		await controller.publish(testActor(), {
+		await controller.publish({
 			noteId: note.id,
 			baseEtag: noteEtag(note.id, note.currentRevision)
 		});
@@ -182,7 +181,7 @@ describe('Note publish invariants', () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
-		const result = await controller.publish(testActor(), {
+		const result = await controller.publish({
 			noteId: note.id,
 			baseEtag: noteEtag(note.id, note.currentRevision)
 		});
@@ -196,7 +195,7 @@ describe('Note publish invariants', () => {
 		const note = noteBuilder();
 		content.notes = [note];
 		await expect(
-			controller.publish(testActor(), {
+			controller.publish({
 				noteId: note.id,
 				baseEtag: noteEtag(note.id, 99)
 			})
@@ -210,16 +209,16 @@ describe('Note discard draft invariants', () => {
 		const note = noteBuilder({ plainText: 'Original' });
 		content.notes = [note];
 		// Publish the original
-		await controller.publish(testActor(), {
+		await controller.publish({
 			noteId: note.id,
 			baseEtag: noteEtag(note.id, note.currentRevision)
 		});
 		// Edit (draft save)
-		const _saved = await controller.save(testActor(), {
+		const _saved = await controller.save({
 			note: { ...content.notes[0]!, plainText: 'Draft change' }
 		});
 		// Discard
-		const discarded = await controller.discardDraft(testActor(), { noteId: note.id });
+		const discarded = await controller.discardDraft({ noteId: note.id });
 		expect(discarded.note.plainText).toBe('Original');
 	});
 
@@ -227,42 +226,42 @@ describe('Note discard draft invariants', () => {
 		const { content, controller } = setup();
 		const note = noteBuilder({ plainText: 'Published' });
 		content.notes = [note];
-		await controller.publish(testActor(), {
+		await controller.publish({
 			noteId: note.id,
 			baseEtag: noteEtag(note.id, note.currentRevision)
 		});
-		const { note: draft } = await controller.save(testActor(), {
+		const { note: draft } = await controller.save({
 			note: { ...content.notes[0]!, plainText: 'Imported draft' }
 		});
-		await content.record(testActor(), draft);
-		const result = await controller.discardDraft(testActor(), { noteId: note.id });
+		await content.record(draft);
+		const result = await controller.discardDraft({ noteId: note.id });
 		expect(result.note.plainText).toBe('Published');
 	});
 	it('restores the published attachment snapshot when discarding a draft', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder({ plainText: 'Published' });
 		content.notes = [note];
-		await controller.publish(testActor(), {
+		await controller.publish({
 			noteId: note.id,
 			baseEtag: noteEtag(note.id, note.currentRevision)
 		});
-		await controller.save(testActor(), { note: { ...content.notes[0]!, plainText: 'Draft' } });
-		await controller.discardDraft(testActor(), { noteId: note.id });
+		await controller.save({ note: { ...content.notes[0]!, plainText: 'Draft' } });
+		await controller.discardDraft({ noteId: note.id });
 		expect(content.restoredAttachmentRevisionIds).toEqual([content.recordedRevisions[0]!.id]);
 	});
 	it('rolls back a discarded draft when its search update fails', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder({ plainText: 'Published' });
 		content.notes = [note];
-		await controller.publish(testActor(), {
+		await controller.publish({
 			noteId: note.id,
 			baseEtag: noteEtag(note.id, note.currentRevision)
 		});
-		const { note: draft } = await controller.save(testActor(), {
+		const { note: draft } = await controller.save({
 			note: { ...content.notes[0]!, plainText: 'Draft' }
 		});
 		content.failIndex = true;
-		await controller.discardDraft(testActor(), { noteId: note.id }).catch(() => undefined);
+		await controller.discardDraft({ noteId: note.id }).catch(() => undefined);
 		expect({ note: content.notes[0], attachments: content.restoredAttachmentRevisionIds }).toEqual({
 			note: draft,
 			attachments: []
@@ -272,7 +271,7 @@ describe('Note discard draft invariants', () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
-		await expect(controller.discardDraft(testActor(), { noteId: note.id })).rejects.toMatchObject({
+		await expect(controller.discardDraft({ noteId: note.id })).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});
@@ -287,7 +286,7 @@ describe('Note link invariants', () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
-		await controller.save(testActor(), {
+		await controller.save({
 			note: {
 				...note,
 				plainText: 'see the decision',
@@ -315,7 +314,7 @@ describe('Note link invariants', () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
-		await controller.save(testActor(), { note: { ...note, plainText: 'Plain prose.' } });
+		await controller.save({ note: { ...note, plainText: 'Plain prose.' } });
 		expect(content.noteLinkTargets.get(note.id)).toEqual([]);
 	});
 });

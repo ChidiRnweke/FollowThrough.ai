@@ -9,7 +9,7 @@ import type { AgentPreferencesRepository } from '$lib/server/repositories/agent'
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export interface AgentPreferencesStore {
-	get(actor: ActorContext): Promise<AgentPreferences>;
+	get(): Promise<AgentPreferences>;
 }
 
 export interface AgentModelCatalog {
@@ -17,33 +17,36 @@ export interface AgentModelCatalog {
 }
 
 export interface AgentPreferenceEditor extends AgentPreferencesStore {
-	defaults(actor: ActorContext, timestamp: DateTime): AgentPreferences;
-	getForWrite(actor: ActorContext, resourceKey: string): Promise<AgentPreferences | undefined>;
-	persist(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences>;
+	defaults(timestamp: DateTime): AgentPreferences;
+	getForWrite(resourceKey: string): Promise<AgentPreferences | undefined>;
+	persist(preferences: AgentPreferences): Promise<AgentPreferences>;
 }
 
 export class AgentPreferenceCatalog implements AgentPreferencesStore, AgentPreferenceEditor {
-	constructor(private readonly repository: AgentPreferencesRepository) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly repository: AgentPreferencesRepository
+	) {}
 
-	defaults(actor: ActorContext, timestamp: DateTime): AgentPreferences {
+	defaults(timestamp: DateTime): AgentPreferences {
 		return {
-			userId: actor.userId,
+			userId: this.actor.userId,
 			executionMode: 'approval_required',
 			inlineSuggestionsEnabled: true,
 			createdAt: timestamp,
 			updatedAt: timestamp
 		};
 	}
-	async get(actor: ActorContext): Promise<AgentPreferences> {
-		return (await this.repository.get(actor)) ?? this.defaults(actor, now());
+	async get(): Promise<AgentPreferences> {
+		return (await this.repository.get()) ?? this.defaults(now());
 	}
-	getForWrite(actor: ActorContext, resourceKey: string): Promise<AgentPreferences | undefined> {
-		return this.repository.getForWrite(actor, resourceKey);
+	getForWrite(resourceKey: string): Promise<AgentPreferences | undefined> {
+		return this.repository.getForWrite(resourceKey);
 	}
-	persist(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences> {
-		if (preferences.userId !== actor.userId)
+	persist(preferences: AgentPreferences): Promise<AgentPreferences> {
+		if (preferences.userId !== this.actor.userId)
 			throw new ValidationError('The preferences belong to another account');
-		return this.repository.upsert(actor, preferences);
+		return this.repository.upsert(preferences);
 	}
 }
 

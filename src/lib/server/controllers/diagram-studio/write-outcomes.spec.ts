@@ -11,7 +11,7 @@ describe('Diagram write outcomes', () => {
 		diagrams.diagrams = [original];
 		index.failIndex = true;
 		await controller
-			.renameProjectDiagram(testActor(), {
+			.renameProjectDiagram({
 				diagramId: original.id,
 				title: 'Renamed diagram',
 				baseEtag: diagramEtag(original.id, original.currentRevision)
@@ -25,7 +25,7 @@ describe('Diagram write outcomes', () => {
 		diagrams.diagrams = [original];
 		index.failIndex = true;
 		await controller
-			.saveProjectDiagramDraft(testActor(), {
+			.saveProjectDiagramDraft({
 				diagramId: original.id,
 				source: '<mxfile>replacement</mxfile>',
 				baseEtag: diagramEtag(original.id, original.currentRevision)
@@ -38,9 +38,7 @@ describe('Diagram write outcomes', () => {
 		const original = drawioBuilder();
 		diagrams.diagrams = [original];
 		index.failIndex = true;
-		await controller
-			.archiveProjectDiagram(testActor(), { diagramId: original.id })
-			.catch(() => undefined);
+		await controller.archiveProjectDiagram({ diagramId: original.id }).catch(() => undefined);
 		expect(diagrams.diagrams).toEqual([original]);
 	});
 	it('retains a trashed diagram when restoring its search entries fails', async () => {
@@ -48,9 +46,7 @@ describe('Diagram write outcomes', () => {
 		const original = drawioBuilder({ archivedAt: drawioBuilder().createdAt });
 		diagrams.diagrams = [original];
 		index.failIndex = true;
-		await controller
-			.restoreProjectDiagram(testActor(), { diagramId: original.id })
-			.catch(() => undefined);
+		await controller.restoreProjectDiagram({ diagramId: original.id }).catch(() => undefined);
 		expect(diagrams.diagrams).toEqual([original]);
 	});
 	it('returns the authoritative version for a conflicting draft save', async () => {
@@ -59,7 +55,7 @@ describe('Diagram write outcomes', () => {
 		diagrams.diagrams = [remote];
 		const baseEtag = diagramEtag(drawioBuilder().id, drawioBuilder().currentRevision);
 		expect(
-			await controller.saveProjectDiagramDraft(testActor(), {
+			await controller.saveProjectDiagramDraft({
 				diagramId: remote.id,
 				source: '<mxfile>different</mxfile>',
 				baseEtag
@@ -76,7 +72,7 @@ describe('Diagram write outcomes', () => {
 		const remote = drawioBuilder({ currentRevision: 2 });
 		diagrams.diagrams = [remote];
 		expect(
-			await controller.saveProjectDiagramDraft(testActor(), {
+			await controller.saveProjectDiagramDraft({
 				diagramId: remote.id,
 				source: remote.source,
 				baseEtag: diagramEtag(drawioBuilder().id, drawioBuilder().currentRevision)
@@ -94,7 +90,7 @@ describe('Diagram write outcomes', () => {
 		diagrams.diagrams = [remote];
 		expect(
 			(
-				await controller.renameProjectDiagram(testActor(), {
+				await controller.renameProjectDiagram({
 					diagramId: remote.id,
 					title: 'Different',
 					baseEtag: diagramEtag(drawioBuilder().id, drawioBuilder().currentRevision)
@@ -109,7 +105,7 @@ describe('Diagram write outcomes', () => {
 		diagrams.diagrams = [remote];
 		expect(
 			(
-				await controller.publishProjectDiagram(testActor(), {
+				await controller.publishProjectDiagram({
 					diagramId: remote.id,
 					source: '<mxfile>different</mxfile>',
 					renderedSvg: '<svg/>',

@@ -39,14 +39,14 @@ const reader = (body = content): AgentVirtualFiles =>
 			diagrams: capabilityDependencies<DiagramRepository>({
 				listForProject: async () => ({ diagrams: [], total: 0 })
 			}),
-			stored: new InMemoryAgentFiles(),
+			stored: new InMemoryAgentFiles(testActor()),
 			noteMarkdown: { write: () => body }
 		})
 	);
 
 describe('AgentVirtualFiles ls', () => {
 	it('always reports size and identity metadata for a file', async () => {
-		const result = await reader().ls(testActor(), notePath);
+		const result = await reader().ls(notePath);
 
 		expect(result).toMatchObject({
 			kind: 'listed',
@@ -67,7 +67,7 @@ describe('AgentVirtualFiles ls', () => {
 	});
 
 	it('returns a typed missing-path recovery without guessing', async () => {
-		const result = await reader().ls(testActor(), `${notePath}.wrong`);
+		const result = await reader().ls(`${notePath}.wrong`);
 
 		expect(result).toMatchObject({
 			kind: 'error',
@@ -95,14 +95,12 @@ describe('AgentVirtualFiles ls', () => {
 				diagrams: capabilityDependencies<DiagramRepository>({
 					listForProject: async () => ({ diagrams: [], total: 0 })
 				}),
-				stored: new InMemoryAgentFiles(),
+				stored: new InMemoryAgentFiles(testActor()),
 				noteMarkdown: { write: () => 'published body' }
 			})
 		);
 
-		expect(
-			await service.ls(testActor(), `/projects/${projectId}/notes/${noteId}/versions`)
-		).toMatchObject({
+		expect(await service.ls(`/projects/${projectId}/notes/${noteId}/versions`)).toMatchObject({
 			kind: 'listed',
 			entries: [{ path: `/projects/${projectId}/notes/${noteId}/versions/7.md`, lineCount: 1 }]
 		});
@@ -111,7 +109,7 @@ describe('AgentVirtualFiles ls', () => {
 
 describe('AgentVirtualFiles grep', () => {
 	it('uses regex and Unix match exit semantics', async () => {
-		const result = await reader().grep(testActor(), {
+		const result = await reader().grep({
 			pattern: 'warn(ing)?',
 			path: `/projects/${projectId}`,
 			fixed: false,
@@ -126,7 +124,7 @@ describe('AgentVirtualFiles grep', () => {
 	});
 
 	it('distinguishes no matches from a failed search', async () => {
-		const result = await reader().grep(testActor(), {
+		const result = await reader().grep({
 			pattern: 'not present',
 			path: notePath,
 			fixed: true,
@@ -137,7 +135,7 @@ describe('AgentVirtualFiles grep', () => {
 	});
 
 	it('turns invalid regex into an exact fixed-string retry', async () => {
-		const result = await reader().grep(testActor(), {
+		const result = await reader().grep({
 			pattern: '[',
 			path: notePath,
 			fixed: false,
@@ -155,7 +153,7 @@ describe('AgentVirtualFiles grep', () => {
 describe('AgentVirtualFiles sed', () => {
 	it('returns typed recovery for a malformed id instead of querying a repository', async () => {
 		const malformed = `/projects/${projectId}/notes/77e6cf7b-e4a8-4343-bd11-41bdbd7859290.md`;
-		const result = await reader().sed(testActor(), malformed, {
+		const result = await reader().sed(malformed, {
 			kind: 'to_end',
 			startLine: 1
 		});
@@ -168,7 +166,7 @@ describe('AgentVirtualFiles sed', () => {
 	});
 
 	it('reads an inclusive line range', async () => {
-		const result = await reader().sed(testActor(), notePath, {
+		const result = await reader().sed(notePath, {
 			kind: 'lines',
 			startLine: 2,
 			endLine: 3
@@ -184,7 +182,7 @@ describe('AgentVirtualFiles sed', () => {
 	});
 
 	it('does not clamp a start after EOF', async () => {
-		const result = await reader().sed(testActor(), notePath, {
+		const result = await reader().sed(notePath, {
 			kind: 'to_end',
 			startLine: 9
 		});
@@ -204,7 +202,7 @@ describe('AgentVirtualFiles sed', () => {
 
 	it('reports a directory with an ls correction', async () => {
 		const directory = `/projects/${projectId}/notes`;
-		const result = await reader().sed(testActor(), directory, {
+		const result = await reader().sed(directory, {
 			kind: 'to_end',
 			startLine: 1
 		});
@@ -217,7 +215,7 @@ describe('AgentVirtualFiles sed', () => {
 	});
 
 	it('reports an empty file instead of suggesting line zero', async () => {
-		const result = await reader('').sed(testActor(), notePath, {
+		const result = await reader('').sed(notePath, {
 			kind: 'to_end',
 			startLine: 1
 		});
@@ -233,7 +231,7 @@ describe('AgentVirtualFiles sed', () => {
 const tokens = testTokenizer;
 
 it.each(['/', '.'])('searches every file beneath root %s', async (path) => {
-	const result = await reader('root needle').grep(testActor(), {
+	const result = await reader('root needle').grep({
 		path,
 		pattern: 'needle',
 		fixed: true,

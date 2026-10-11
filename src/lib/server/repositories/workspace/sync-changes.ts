@@ -9,15 +9,18 @@ import {
 } from '$lib/models/workspace-sync-reads';
 
 export interface SyncChangesRepository {
-	readSelection(actor: ActorContext, since: SyncCursor): Promise<WorkspaceJournalSelection>;
+	readSelection(since: SyncCursor): Promise<WorkspaceJournalSelection>;
 }
 
 export class WorkspaceSyncChanges implements SyncChangesRepository {
-	constructor(private readonly db: Database) {}
-	async readSelection(actor: ActorContext, since: SyncCursor): Promise<WorkspaceJournalSelection> {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly db: Database
+	) {}
+	async readSelection(since: SyncCursor): Promise<WorkspaceJournalSelection> {
 		const result = await this.db.execute(sql`
-			with head as (select cursor from workspace_sync_heads where account_id = ${actor.userId}),
-			page as (select c.* from workspace_sync_changes c, head h where c.account_id = ${actor.userId}
+			with head as (select cursor from workspace_sync_heads where account_id = ${this.actor.userId}),
+			page as (select c.* from workspace_sync_changes c, head h where c.account_id = ${this.actor.userId}
 				and c.cursor > ${since}::bigint and c.cursor <= h.cursor order by c.cursor limit ${syncChangePageSize + 1}),
 			selected as (select * from page order by cursor limit ${syncChangePageSize})
 			select h.cursor::text as head, (select count(*) > ${syncChangePageSize} from page) as more,

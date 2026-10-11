@@ -4,14 +4,14 @@ import type { WorkspaceJournalPage } from '$lib/models/workspace-sync-reads';
 import type { SyncChangesRepository } from '$lib/server/repositories/workspace/sync-changes';
 
 export interface WorkspaceJournalReader {
-	selectPage(actor: ActorContext, since: SyncCursor): Promise<WorkspaceJournalPage>;
+	selectPage(since: SyncCursor): Promise<WorkspaceJournalPage>;
 }
 
 export class WorkspaceJournal implements WorkspaceJournalReader {
 	constructor(private readonly repository: SyncChangesRepository) {}
 
-	async selectPage(actor: ActorContext, since: SyncCursor): Promise<WorkspaceJournalPage> {
-		const selection = await this.repository.readSelection(actor, since);
+	async selectPage(since: SyncCursor): Promise<WorkspaceJournalPage> {
+		const selection = await this.repository.readSelection(since);
 		if (BigInt(since) > BigInt(selection.head))
 			throw new Error('The client cursor is ahead of this account');
 		return {

@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { AgentStreamPresentationService } from '$lib/server/services/agent/runs/stream-presentation';
 import {
 	DiagramLabelPresentationService,
@@ -132,9 +133,13 @@ export interface DiagramsCapability {
 	readonly now: () => DateTime;
 }
 
-export const createDiagramsCapability = (input: DiagramsCapabilityInput): DiagramsCapability => {
+export const createDiagramsCapability = (
+	actor: ActorContext,
+	input: DiagramsCapabilityInput
+): DiagramsCapability => {
 	const services = createDiagramServices(
-		new DiagramRecords(input.db),
+		actor,
+		new DiagramRecords(actor, input.db),
 		input.notes,
 		input.anchors,
 		input.provenanceRepository,
@@ -166,7 +171,7 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 			preferences: input.preferences,
 			models: input.models,
 			runs: input.runs,
-			runContext: new DiagramRunContext(new AgentRunRecords(input.db)),
+			runContext: new DiagramRunContext(new AgentRunRecords(actor, input.db)),
 			provenance: input.provenance,
 			builtInSkills: input.builtInSkills,
 			defaultModel: input.defaultModel,
@@ -190,6 +195,7 @@ export interface DiagramServices {
 	readonly lifecycle: DiagramLifecycle;
 }
 export function createDiagramServices(
+	actor: ActorContext,
 	diagrams: DiagramRepository,
 	notes: NoteRepository,
 	anchors: SourceAnchorRepository,
@@ -197,15 +203,15 @@ export function createDiagramServices(
 	projects: ProjectRepository
 ): DiagramServices {
 	const reader = new DiagramReadingService(diagrams, notes);
-	const revisions = new DiagramRevisionService(diagrams);
+	const revisions = new DiagramRevisionService(actor, diagrams);
 	return {
 		finder: reader,
 		lister: reader,
 		conversations: reader,
 		references: reader,
-		writer: new DiagramWritingService(diagrams, notes, anchors, provenance, projects),
+		writer: new DiagramWritingService(actor, diagrams, notes, anchors, provenance, projects),
 		draftWriter: revisions,
 		revisionReader: revisions,
-		lifecycle: new DiagramLifecycleService(diagrams)
+		lifecycle: new DiagramLifecycleService(actor, diagrams)
 	};
 }

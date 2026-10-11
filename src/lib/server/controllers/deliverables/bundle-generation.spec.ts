@@ -33,7 +33,7 @@ const archiveOf = (storage: InMemoryAttachmentStorage): AdmZip =>
 describe('Document bundle invariants', () => {
 	it('writes one document per selected note', async () => {
 		const { service, storage, notes, artifacts, provenance } = setup();
-		const output = await service.generateBundle(testActor(), {
+		const output = await service.generateBundle({
 			projectId: testProjectId(),
 			entries: twoNotes(notes),
 			title: 'Research',
@@ -55,7 +55,7 @@ describe('Document bundle invariants', () => {
 
 	it('packs the chosen format', async () => {
 		const { service, storage, notes } = setup();
-		await service.generateBundle(testActor(), {
+		await service.generateBundle({
 			projectId: testProjectId(),
 			entries: twoNotes(notes),
 			title: 'Research',
@@ -72,7 +72,7 @@ describe('Document bundle invariants', () => {
 	it('rejects an empty selection', async () => {
 		const { service } = setup();
 		await expect(
-			service.generateBundle(testActor(), {
+			service.generateBundle({
 				projectId: testProjectId(),
 				entries: [],
 				title: 'Research',
@@ -85,7 +85,7 @@ describe('Document bundle invariants', () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
 		await expect(
-			service.generateBundle(testActor(), {
+			service.generateBundle({
 				projectId: testProjectId(),
 				entries: Array.from({ length: 51 }, (_, index) => ({
 					noteId: testNoteId() as NoteId,

@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryAttachmentStorage } from '$lib/testing/attachments/fakes/in-memory-deliverables';
 import { NotFoundError } from '$lib/errors';
 import {
@@ -25,9 +26,8 @@ import { treeControllers } from '../project-tree-harness';
 const setup = async (identity: number) => {
 	const seeded = await seedNote(String(identity));
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const records = new TodoRecords(database);
+	const records = new TodoRecords(testActor(), database);
 	const todo = await records.insert(
-		seeded.owner,
 		todoBuilder({
 			id: testTodoId(identity),
 			userId: seeded.owner.userId,
@@ -35,11 +35,12 @@ const setup = async (identity: number) => {
 		})
 	);
 	const catalog = createTodoServices(
+		testActor(),
 		records,
-		new ProjectRecords(database),
-		new SourceAnchorRecords(database),
-		new NoteRecords(database),
-		new ProvenanceRecords(database)
+		new ProjectRecords(testActor(), database),
+		new SourceAnchorRecords(testActor(), database),
+		new NoteRecords(testActor(), database),
+		new ProvenanceRecords(testActor(), database)
 	);
 	// Attachment effects stay outside the database transaction, like object storage.
 	// Rejection must precede completion; a database rollback cannot undo this fake.
@@ -65,8 +66,8 @@ const setup = async (identity: number) => {
 
 it('does not finalize a screenshot when its task was deleted before completion', async () => {
 	const { owner, todo, records, controller, attachments } = await setup(21601);
-	await records.softDelete(owner, todo.id, now);
-	const outcome = await controller.completeForTodo(owner, UPLOAD_ID, todo.id).then(
+	await records.softDelete(todo.id, now);
+	const outcome = await controller.completeForTodo(UPLOAD_ID, todo.id).then(
 		() => 'completed',
 		(error: Error) => error.message
 	);
@@ -80,10 +81,10 @@ it('does not finalize a screenshot when its task was deleted before completion',
 it('does not finalize a screenshot after its task project is archived', async () => {
 	const { owner, project, todo, controller, attachments, database, transactionRunner } =
 		await setup(21602);
-	await treeControllers(database, transactionRunner).projects.archive(owner, {
+	await treeControllers(database, transactionRunner).projects.archive({
 		projectId: project.id
 	});
-	const outcome = await controller.completeForTodo(owner, UPLOAD_ID, todo.id).then(
+	const outcome = await controller.completeForTodo(UPLOAD_ID, todo.id).then(
 		() => 'completed',
 		(error: Error) => error.message
 	);
@@ -97,7 +98,7 @@ it('does not finalize a screenshot after its task project is archived', async ()
 it('does not finalize an owned upload for another accounts task', async () => {
 	const { controller, attachments } = await setup(21603);
 	const foreign = await setup(21604);
-	const outcome = await controller.completeForTodo(actor('21603'), UPLOAD_ID, foreign.todo.id).then(
+	const outcome = await controller.completeForTodo(UPLOAD_ID, foreign.todo.id).then(
 		() => 'completed',
 		(error: Error) => error.message
 	);
@@ -110,25 +111,23 @@ it('does not finalize an owned upload for another accounts task', async () => {
 
 it('completes and lists a screenshot for an active owned task', async () => {
 	const { owner, todo, controller } = await setup(21605);
-	await controller.completeForTodo(owner, UPLOAD_ID, todo.id);
-	expect(
-		(await controller.listForTodo(owner, todo.id)).map(({ attachment }) => attachment.id)
-	).toEqual([ATTACHMENT_ID]);
+	await controller.completeForTodo(UPLOAD_ID, todo.id);
+	expect((await controller.listForTodo(todo.id)).map(({ attachment }) => attachment.id)).toEqual([
+		ATTACHMENT_ID
+	]);
 });
 
 it('rejects screenshot listing after project archival', async () => {
 	const { owner, project, todo, controller, database, transactionRunner } = await setup(21606);
-	await controller.completeForTodo(owner, UPLOAD_ID, todo.id);
-	await treeControllers(database, transactionRunner).projects.archive(owner, {
+	await controller.completeForTodo(UPLOAD_ID, todo.id);
+	await treeControllers(database, transactionRunner).projects.archive({
 		projectId: project.id
 	});
-	await expect(controller.listForTodo(owner, todo.id)).rejects.toBeInstanceOf(NotFoundError);
+	await expect(controller.listForTodo(todo.id)).rejects.toBeInstanceOf(NotFoundError);
 });
 
 it('rejects screenshot listing for another accounts task', async () => {
 	const { owner, todo, controller } = await setup(21607);
-	await controller.completeForTodo(owner, UPLOAD_ID, todo.id);
-	await expect(controller.listForTodo(actor('21608'), todo.id)).rejects.toBeInstanceOf(
-		NotFoundError
-	);
+	await controller.completeForTodo(UPLOAD_ID, todo.id);
+	await expect(controller.listForTodo(todo.id)).rejects.toBeInstanceOf(NotFoundError);
 });

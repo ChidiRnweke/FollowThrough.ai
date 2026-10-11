@@ -8,7 +8,10 @@ import type {
 	User,
 	UserId
 } from '$lib/models/identity';
-import type { ApiTokenRepository } from '$lib/server/repositories/identity';
+import type {
+	ApiTokenCredentialRepository,
+	ApiTokenRepository
+} from '$lib/server/repositories/identity';
 
 /** Distinguishes our credentials from anything else pasted into a client config. */
 const TOKEN_PREFIX = 'ftm_';
@@ -25,15 +28,11 @@ export interface VerifiedApiToken {
 	readonly tokenId: ApiTokenId;
 }
 
+/** The user's API tokens. */
 export interface IAccessTokens {
-	mint(
-		userId: UserId,
-		input: { name: string; scope: ApiTokenScope; expiresAt?: Date }
-	): Promise<MintedApiToken>;
-	/** Takes the raw `Authorization` header; returns null for anything unusable. */
-	verify(authorizationHeader: string | null): Promise<VerifiedApiToken | null>;
-	list(actor: ActorContext): Promise<readonly ApiToken[]>;
-	revoke(actor: ActorContext, id: ApiTokenId): Promise<Pick<ApiToken, 'id' | 'name'>>;
+	mint(input: { name: string; scope: ApiTokenScope; expiresAt?: Date }): Promise<MintedApiToken>;
+	list(): Promise<readonly ApiToken[]>;
+	revoke(id: ApiTokenId): Promise<Pick<ApiToken, 'id' | 'name'>>;
 }
 
 const generatePlaintext = (): string => {
@@ -63,13 +62,13 @@ const bearerToken = (header: string | null): string | null => {
 export class AccessTokens implements IAccessTokens {
 	constructor(private readonly tokens: ApiTokenRepository) {}
 
-	async mint(
-		userId: UserId,
-		input: { name: string; scope: ApiTokenScope; expiresAt?: Date }
-	): Promise<MintedApiToken> {
+	async mint(input: {
+		name: string;
+		scope: ApiTokenScope;
+		expiresAt?: Date;
+	}): Promise<MintedApiToken> {
 		const plaintext = generatePlaintext();
 		const token = await this.tokens.create({
-			userId,
 			name: input.name,
 			tokenHash: hashApiToken(plaintext),
 			scope: input.scope,
@@ -77,6 +76,25 @@ export class AccessTokens implements IAccessTokens {
 		});
 		return { token, plaintext };
 	}
+
+	list(): Promise<readonly ApiToken[]> {
+		return this.tokens.listForUser();
+	}
+
+	async revoke(id: ApiTokenId): Promise<Pick<ApiToken, 'id' | 'name'>> {
+		const token = await this.tokens.revoke(id);
+		if (!token) throw new NotFoundError('Access token not found');
+		return { id: token.id, name: token.name };
+	}
+}
+
+/** Bearer credentials checked before any user is known. */
+export interface TokenVerifier {
+	/** Takes the raw `Authorization` header; returns null for anything unusable. */
+	verify(authorizationHeader: string | null): Promise<VerifiedApiToken | null>;
+}
+export class TokenVerification implements TokenVerifier {
+	constructor(private readonly tokens: ApiTokenCredentialRepository) {}
 
 	async verify(authorizationHeader: string | null): Promise<VerifiedApiToken | null> {
 		const plaintext = bearerToken(authorizationHeader);
@@ -97,15 +115,5 @@ export class AccessTokens implements IAccessTokens {
 			.catch((error) => console.warn('Could not update API token last-used timestamp', error));
 
 		return { user: result.user, scope: result.token.scope, tokenId: result.token.id };
-	}
-
-	list(actor: ActorContext): Promise<readonly ApiToken[]> {
-		return this.tokens.listForUser(actor);
-	}
-
-	async revoke(actor: ActorContext, id: ApiTokenId): Promise<Pick<ApiToken, 'id' | 'name'>> {
-		const token = await this.tokens.revoke(actor, id);
-		if (!token) throw new NotFoundError('Access token not found');
-		return { id: token.id, name: token.name };
 	}
 }

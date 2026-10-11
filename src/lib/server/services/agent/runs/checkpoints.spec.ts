@@ -1,9 +1,10 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunCheckpoints } from './checkpoints';
 
-const checkpoints = new RunCheckpoints(new InMemoryAgentRunPersistence());
+const checkpoints = new RunCheckpoints(new InMemoryAgentRunPersistence(testActor()));
 const checkpoint = { serializedState: 'provider-state', pendingDecisions: [] };
 
 it('uses the provider trace when a resumed execution supplies it', () => {

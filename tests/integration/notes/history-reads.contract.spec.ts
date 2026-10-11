@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { Note } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -36,12 +37,13 @@ const content = (text: string): Pick<Note, 'title' | 'plainText' | 'document'> =
 const setup = async (suffix: string) => {
 	const seed = await seedNote(suffix);
 	const tx = createTransactionContext(context.db);
-	const { services: catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability(testActor(), {
 		db: tx.database,
-		projects: new ProjectRecords(tx.database)
+		projects: new ProjectRecords(testActor(), tx.database)
 	});
-	const effects = new InMemoryNoteContent();
+	const effects = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -72,21 +74,21 @@ const setup = async (suffix: string) => {
 			noteIndexer: effects
 		})
 	);
-	const first = await controller.save(seed.owner, {
+	const first = await controller.save({
 		note: { ...seed.note, ...content('First publication') }
 	});
-	const published = await controller.publish(seed.owner, {
+	const published = await controller.publish({
 		noteId: seed.note.id,
 		baseEtag: noteEtag(first.note.id, first.note.currentRevision)
 	});
-	const second = await controller.save(seed.owner, {
+	const second = await controller.save({
 		note: { ...published.note, ...content('Second publication') }
 	});
-	await controller.publish(seed.owner, {
+	await controller.publish({
 		noteId: seed.note.id,
 		baseEtag: noteEtag(second.note.id, second.note.currentRevision)
 	});
-	const { revisions } = await controller.listRevisions(seed.owner, { noteId: seed.note.id });
+	const { revisions } = await controller.listRevisions({ noteId: seed.note.id });
 	return { ...seed, controller, revisions };
 };
 it('lists published snapshots newest first with the current publication marked', async () => {
@@ -99,7 +101,7 @@ it('lists published snapshots newest first with the current publication marked',
 it('reads the selected old snapshot instead of the current body', async () => {
 	const { controller, owner, note, revisions } = await setup('28002');
 	const selected = revisions[1]!;
-	const { revision } = await controller.getRevision(owner, {
+	const { revision } = await controller.getRevision({
 		noteId: note.id,
 		revisionId: selected.id
 	});
@@ -113,35 +115,34 @@ it('does not expose a revision to another established account', async () => {
 	const { controller, note, revisions } = await setup('28003');
 	const foreign = await seedNote('28004');
 	await expect(
-		controller.getRevision(foreign.owner, { noteId: note.id, revisionId: revisions[0]!.id })
+		controller.getRevision({ noteId: note.id, revisionId: revisions[0]!.id })
 	).rejects.toMatchObject({ code: 'NOT_FOUND' });
 });
 it('does not read a snapshot through a different note owned by the same account', async () => {
 	const { controller, owner, revisions } = await setup('28005');
 	const other = await seedNote('28006', owner);
 	await expect(
-		controller.getRevision(owner, { noteId: other.note.id, revisionId: revisions[0]!.id })
+		controller.getRevision({ noteId: other.note.id, revisionId: revisions[0]!.id })
 	).rejects.toMatchObject({ code: 'NOT_FOUND' });
 });
 it('makes stored history unavailable when its project is archived', async () => {
 	const { controller, owner, note, project, revisions } = await setup('28007');
-	await new ProjectRecords(context.db).archive(owner, project.id);
+	await new ProjectRecords(owner, context.db).archive(project.id);
 	await expect(
-		controller.getRevision(owner, { noteId: note.id, revisionId: revisions[0]!.id })
+		controller.getRevision({ noteId: note.id, revisionId: revisions[0]!.id })
 	).rejects.toMatchObject({ code: 'NOT_FOUND' });
 });
 
 it('reads the old publication from the agent version path', async () => {
 	const { owner, note, project, revisions } = await setup('28008');
-	const { reader } = createAgentFilesCapability({
+	const { reader } = createAgentFilesCapability(owner, {
 		tokens: testTokenizer,
 		db: context.db,
-		projects: new ProjectRecords(context.db),
-		notes: new NoteRecords(context.db)
+		projects: new ProjectRecords(owner, context.db),
+		notes: new NoteRecords(owner, context.db)
 	});
 	expect(
 		await reader.sed(
-			owner,
 			`/projects/${project.id}/notes/${note.id}/versions/${revisions[1]!.revision}.md`,
 			{ kind: 'to_end', startLine: 1 }
 		)

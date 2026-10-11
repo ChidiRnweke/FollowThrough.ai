@@ -37,7 +37,7 @@ const requestFor = (
 });
 
 const useSubjectModel = async (lab: Lab, actor: ActorContext): Promise<void> => {
-	await lab.controllers.agentSettings().updatePreferences(actor, { inlineModel: lab.model });
+	await lab.controllers.agentSettings().updatePreferences({ inlineModel: lab.model });
 };
 
 export const inlineSuggestionCases: readonly EvalCase[] = [
@@ -57,11 +57,7 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 
 			const suggestion = await lab.controllers
 				.inlineSuggestions()
-				.suggest(
-					workspace.actor,
-					requestFor(projectId, noteId, prefix),
-					new AbortController().signal
-				);
+				.suggest(requestFor(projectId, noteId, prefix), new AbortController().signal);
 
 			const text = suggestion.outcome === 'suggested' ? suggestion.text : '';
 			const lower = text.trim().toLowerCase();
@@ -113,11 +109,7 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 			const controller = lab.controllers.inlineSuggestions();
 			const request = requestFor(projectId, noteId, prefix);
 
-			const suggestion = await controller.suggest(
-				workspace.actor,
-				request,
-				new AbortController().signal
-			);
+			const suggestion = await controller.suggest(request, new AbortController().signal);
 
 			const text = suggestion.outcome === 'suggested' ? suggestion.text : '';
 			const hasProjectContext =

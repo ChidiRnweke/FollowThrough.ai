@@ -10,7 +10,7 @@ import { seedUser, context, seedNote } from '../database-harness';
 describe('stable offline creation identities', () => {
 	it('keeps the caller-assigned project identity', async () => {
 		const id = crypto.randomUUID() as ProjectId;
-		const project = await new ProjectRecords(context.db).insert(await seedUser('9001'), {
+		const project = await new ProjectRecords(await seedUser('9001'), context.db).insert({
 			id,
 			name: 'Offline project'
 		});
@@ -21,14 +21,14 @@ describe('stable offline creation identities', () => {
 		const { owner, project } = await seedNote('9002');
 		const id = crypto.randomUUID() as NoteId;
 		const { database, transactionRunner } = createTransactionContext(context.db);
-		const { services: catalog } = createNotesCapability({
+		const { services: catalog } = createNotesCapability(owner, {
 			db: database,
-			projects: new ProjectRecords(database)
+			projects: new ProjectRecords(owner, database)
 		});
 		const { folder } = await noteCreationControllers(
 			catalog.creator,
 			transactionRunner
-		).projects.createFolder(owner, {
+		).projects.createFolder({
 			id,
 			projectId: project.id,
 			name: 'Offline folder'

@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { SkillPortabilityService } from '$lib/services/skills/manifest';
@@ -28,14 +29,19 @@ import { context } from '../database-harness';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 
 export const skillController = (database: Database, transactionRunner: TransactionRunner) => {
-	const projects = new ProjectRecords(database);
-	const notes = new NoteRecords(database);
-	const skills = new SkillRecords(database);
-	const provenance = new ProvenanceRecords(database);
-	const library = createSkillServices(skills, notes, provenance);
-	const catalog = createNoteServices(notes, new SourceAnchorRecords(database), projects);
-	const content = new InMemoryNoteContent();
-	const sync = createSyncCapability({ db: database });
+	const projects = new ProjectRecords(testActor(), database);
+	const notes = new NoteRecords(testActor(), database);
+	const skills = new SkillRecords(testActor(), database);
+	const provenance = new ProvenanceRecords(testActor(), database);
+	const library = createSkillServices(testActor(), skills, notes, provenance);
+	const catalog = createNoteServices(
+		testActor(),
+		notes,
+		new SourceAnchorRecords(testActor(), database),
+		projects
+	);
+	const content = new InMemoryNoteContent(testActor());
+	const sync = createSyncCapability(testActor(), { db: database });
 	return new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
@@ -45,10 +51,15 @@ export const skillController = (database: Database, transactionRunner: Transacti
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
-			selectionOrigins: new SelectionOrigins(notes, new SourceAnchorRecords(database), provenance),
+			selectionOrigins: new SelectionOrigins(
+				testActor(),
+				notes,
+				new SourceAnchorRecords(testActor(), database),
+				provenance
+			),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
-			builtInSkills: new BuiltInSkills(projects, notes, skills, {
+			builtInSkills: new BuiltInSkills(testActor(), projects, notes, skills, {
 				active: BUILT_INS,
 				retired: RETIRED_BUILT_INS
 			}),

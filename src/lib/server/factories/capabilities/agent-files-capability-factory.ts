@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import type { TokenCounter } from '$lib/models/tokenization';
@@ -28,10 +29,11 @@ export interface AgentFilesCapability {
 }
 
 export const createAgentFilesCapability = (
+	actor: ActorContext,
 	input: AgentFilesCapabilityInput
 ): AgentFilesCapability => {
 	const tokens = input.tokens;
-	const repository = new AgentFileRecords(input.db, tokens);
+	const repository = new AgentFileRecords(actor, input.db, tokens);
 	return {
 		repository,
 		references: new AgentFileReferenceService(tokens),
@@ -39,8 +41,8 @@ export const createAgentFilesCapability = (
 			tokens,
 			projects: input.projects,
 			notes: input.notes,
-			attachments: new AttachmentRecords(input.db),
-			diagrams: new DiagramRecords(input.db),
+			attachments: new AttachmentRecords(actor, input.db),
+			diagrams: new DiagramRecords(actor, input.db),
 			stored: repository,
 			noteMarkdown: new NoteMarkdownCodec()
 		})

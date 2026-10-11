@@ -15,13 +15,10 @@ import type { ProjectId } from '$lib/models/projects';
 /** One repository for both diagram kinds; `Diagram` is the `MermaidDiagram | DrawioDiagram` union, distinguished by `kind`. */
 export interface DiagramRepository {
 	/** Lock the owned row within the caller transaction. */
-	findForWrite(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined>;
-	findById(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined>;
+	findForWrite(id: DiagramId): Promise<Diagram | undefined>;
+	findById(id: DiagramId): Promise<Diagram | undefined>;
 	/** The diagram a studio conversation produced, if it has been promoted yet. */
-	findByConversation(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<Diagram | undefined>;
+	findByConversation(conversationId: ConversationId): Promise<Diagram | undefined>;
 	/**
 	 * How many notes render this diagram.
 	 *
@@ -29,10 +26,9 @@ export interface DiagramRepository {
 	 * reads the documents. It runs once, when a delete is being confirmed — not on
 	 * any write path — which is why no index is maintained for it.
 	 */
-	countReferencingNotes(actor: ActorContext, id: DiagramId): Promise<number>;
-	listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly Diagram[]>;
+	countReferencingNotes(id: DiagramId): Promise<number>;
+	listForNote(noteId: NoteId): Promise<readonly Diagram[]>;
 	listForProject(
-		actor: ActorContext,
 		projectId: ProjectId,
 		params?: ListProjectDiagramsParams
 	): Promise<ListProjectDiagramsOutput>;
@@ -43,29 +39,20 @@ export interface DiagramRepository {
 	 * that read as "ask for no rows and use the total", an unwritten convention
 	 * every implementation had to know to honour.
 	 */
-	countForProject(
-		actor: ActorContext,
-		projectId: ProjectId,
-		params?: ListProjectDiagramsParams
-	): Promise<number>;
-	insert(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
-	updateContent(actor: ActorContext, write: DiagramContentWrite): Promise<Diagram | undefined>;
+	countForProject(projectId: ProjectId, params?: ListProjectDiagramsParams): Promise<number>;
+	insert(diagram: Diagram): Promise<Diagram>;
+	updateContent(write: DiagramContentWrite): Promise<Diagram | undefined>;
 	updateIfRevision(
-		actor: ActorContext,
 		diagram: DrawioDiagram,
 		expected: number,
 		expectedPublishedRevision: number
 	): Promise<DrawioDiagram | undefined>;
-	insertRevision(actor: ActorContext, revision: DiagramRevision): Promise<DiagramRevision>;
-	listRevisions(actor: ActorContext, id: DiagramId): Promise<readonly DiagramRevision[]>;
-	findRevision(
-		actor: ActorContext,
-		id: DiagramId,
-		revisionId: DiagramRevisionId
-	): Promise<DiagramRevision | undefined>;
+	insertRevision(revision: DiagramRevision): Promise<DiagramRevision>;
+	listRevisions(id: DiagramId): Promise<readonly DiagramRevision[]>;
+	findRevision(id: DiagramId, revisionId: DiagramRevisionId): Promise<DiagramRevision | undefined>;
 	/** Atomically refuse deletion if a concurrent restore made the diagram active. */
-	deleteArchived(actor: ActorContext, id: DiagramId): Promise<boolean>;
+	deleteArchived(id: DiagramId): Promise<boolean>;
 	/** Persist resolved trash fields without replacing diagram content. */
-	updateTrash(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
-	listArchived(actor: ActorContext, projectId?: ProjectId): Promise<readonly Diagram[]>;
+	updateTrash(diagram: Diagram): Promise<Diagram>;
+	listArchived(projectId?: ProjectId): Promise<readonly Diagram[]>;
 }

@@ -18,15 +18,18 @@ const rows = z.array(
 );
 
 export class TodoBatchReceiptRecords implements TodoBatchReceiptRepository {
-	constructor(private readonly db: Database) {}
-	async lock(actor: ActorContext, requestId: string): Promise<void> {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly db: Database
+	) {}
+	async lock(requestId: string): Promise<void> {
 		await this.db.execute(
-			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${'todo-batch:' + requestId}))`
+			sql`select pg_advisory_xact_lock(hashtext(${this.actor.userId}), hashtext(${'todo-batch:' + requestId}))`
 		);
 	}
-	async find(actor: ActorContext, input: CreateTodoBatchInput): Promise<TodoBatchLookup> {
+	async find(input: CreateTodoBatchInput): Promise<TodoBatchLookup> {
 		const result = await this.db.execute(
-			sql`select request = ${JSON.stringify(input)}::jsonb as matches, result from todo_batch_receipts where user_id = ${actor.userId} and request_id = ${input.requestId}`
+			sql`select request = ${JSON.stringify(input)}::jsonb as matches, result from todo_batch_receipts where user_id = ${this.actor.userId} and request_id = ${input.requestId}`
 		);
 		const row = z
 			.union([rows, z.object({ rows })])
@@ -38,13 +41,9 @@ export class TodoBatchReceiptRecords implements TodoBatchReceiptRepository {
 				? { kind: 'reused' }
 				: { kind: 'saved', result: row.result };
 	}
-	async save(
-		actor: ActorContext,
-		input: CreateTodoBatchInput,
-		result: CreateTodoBatchOutput
-	): Promise<void> {
+	async save(input: CreateTodoBatchInput, result: CreateTodoBatchOutput): Promise<void> {
 		await this.db.execute(
-			sql`insert into todo_batch_receipts (user_id, request_id, request, result) values (${actor.userId}, ${input.requestId}, ${JSON.stringify(input)}::jsonb, ${JSON.stringify(result)}::jsonb)`
+			sql`insert into todo_batch_receipts (user_id, request_id, request, result) values (${this.actor.userId}, ${input.requestId}, ${JSON.stringify(input)}::jsonb, ${JSON.stringify(result)}::jsonb)`
 		);
 	}
 }

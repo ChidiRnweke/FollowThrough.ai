@@ -4,8 +4,8 @@ import { InMemoryUserRepository } from '$lib/testing/identity/fakes/in-memory-us
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 it('rejects an absent user instead of creating an administrator during a read', async () => {
-	const repository = new InMemoryUserRepository();
-	await expect(new UserDirectory(repository).get(testActor())).rejects.toMatchObject({
+	const repository = new InMemoryUserRepository(testActor());
+	await expect(new UserDirectory(repository).get()).rejects.toMatchObject({
 		code: 'NOT_FOUND'
 	});
 });

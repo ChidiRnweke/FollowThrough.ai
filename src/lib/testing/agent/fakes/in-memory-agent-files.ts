@@ -7,23 +7,24 @@ import type { AgentFileRepository } from '$lib/server/repositories/agent-files/a
 const encoding = getEncoding('cl100k_base');
 
 export class InMemoryAgentFiles implements AgentFileRepository {
+	constructor(private readonly actor: ActorContext) {}
 	files: StoredAgentFile[] = [];
 	private readonly owners = new Map<AgentFileId, ActorContext['userId']>();
 
-	async list(actor: ActorContext): Promise<readonly StoredAgentFile[]> {
-		return this.files.filter((file) => this.owners.get(file.metadata.id) === actor.userId);
+	async list(): Promise<readonly StoredAgentFile[]> {
+		return this.files.filter((file) => this.owners.get(file.metadata.id) === this.actor.userId);
 	}
 
-	async findByPath(actor: ActorContext, path: string): Promise<StoredAgentFile | undefined> {
-		return (await this.list(actor)).find((file) => file.metadata.path === path);
+	async findByPath(path: string): Promise<StoredAgentFile | undefined> {
+		return (await this.list()).find((file) => file.metadata.path === path);
 	}
 
-	async store(_actor: ActorContext, input: StoreAgentFileInput): Promise<StoredAgentFile> {
+	async store(input: StoreAgentFileInput): Promise<StoredAgentFile> {
 		const existing = this.files.find(
 			(file) =>
 				file.conversationId === input.conversationId &&
 				file.metadata.path === input.path &&
-				this.owners.get(file.metadata.id) === _actor.userId
+				this.owners.get(file.metadata.id) === this.actor.userId
 		);
 		const file: StoredAgentFile = {
 			conversationId: input.conversationId,
@@ -39,7 +40,7 @@ export class InMemoryAgentFiles implements AgentFileRepository {
 			},
 			content: input.content
 		};
-		this.owners.set(file.metadata.id, _actor.userId);
+		this.owners.set(file.metadata.id, this.actor.userId);
 		this.files = [...this.files.filter((candidate) => candidate !== existing), file];
 		return file;
 	}

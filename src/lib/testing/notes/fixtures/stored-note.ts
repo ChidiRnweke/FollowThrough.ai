@@ -9,7 +9,6 @@ export const storedNote = (
 	input: Pick<Note, 'projectId' | 'title' | 'kind'>
 ): Promise<Note> =>
 	catalog.insert(
-		actor,
 		noteBuilder({
 			...input,
 			userId: actor.userId,

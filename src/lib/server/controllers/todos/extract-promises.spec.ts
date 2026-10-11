@@ -35,7 +35,7 @@ describe('Promise extraction orchestration invariants', () => {
 				candidate('Send the draft', { responsibility: 'waiting_on', ownerName: 'Maya' })
 			];
 			trust.autoAccept = autoAccept;
-			const result = await controller.extractPromises(testActor(), {
+			const result = await controller.extractPromises({
 				selection: { ...selection, text, to: text.length }
 			});
 			expect({
@@ -49,7 +49,7 @@ describe('Promise extraction orchestration invariants', () => {
 		const { extractor, trust, controller } = setup();
 		extractor.candidates = [candidate('Send the draft', { ownerName: 'I' })];
 		trust.autoAccept = true;
-		const result = await controller.extractPromises(testActor(), { selection });
+		const result = await controller.extractPromises({ selection });
 		expect({
 			proposal: result.suggestions[0].payload.waitingOn,
 			task: result.createdTodos[0].waitingOn
@@ -59,7 +59,7 @@ describe('Promise extraction orchestration invariants', () => {
 	it('preserves extracted promise order', async () => {
 		const { extractor, controller } = setup();
 		extractor.candidates = [candidate('Send it'), candidate('Review it')];
-		const result = await controller.extractPromises(testActor(), { selection });
+		const result = await controller.extractPromises({ selection });
 		expect(
 			result.suggestions.map((item) => (item.kind === 'todo' ? item.payload.title : ''))
 		).toEqual(['Send it', 'Review it']);
@@ -71,7 +71,7 @@ describe('Promise extraction orchestration invariants', () => {
 			candidate('Clean up the runbook'),
 			candidate('Wire the alert', { responsibility: 'waiting_on', ownerName: 'Maya' })
 		];
-		const result = await controller.extractPromises(testActor(), {
+		const result = await controller.extractPromises({
 			selection,
 			responsibility: 'mine'
 		});
@@ -83,7 +83,7 @@ describe('Promise extraction orchestration invariants', () => {
 	it('leaves a todo pending when the pipeline is not trusted', async () => {
 		const { extractor, provenance, controller } = setup();
 		extractor.candidates = [candidate('Send it')];
-		const result = await controller.extractPromises(testActor(), { selection });
+		const result = await controller.extractPromises({ selection });
 		expect({
 			createdTodos: result.createdTodos,
 			status: result.suggestions[0]?.status,
@@ -95,7 +95,7 @@ describe('Promise extraction orchestration invariants', () => {
 		const { extractor, trust, controller } = setup();
 		extractor.candidates = [candidate('Send it')];
 		trust.autoAccept = true;
-		const result = await controller.extractPromises(testActor(), { selection });
+		const result = await controller.extractPromises({ selection });
 		const task = result.createdTodos[0];
 		expect(task).toMatchObject({
 			projectId: testProjectId(),
@@ -117,7 +117,7 @@ describe('Promise extraction transaction invariants', () => {
 		trust.autoAccept = true;
 		suggestions.failAcceptance = true;
 		try {
-			await controller.extractPromises(testActor(), { selection });
+			await controller.extractPromises({ selection });
 		} catch {
 			// The restored todo collection is the invariant under test.
 		}

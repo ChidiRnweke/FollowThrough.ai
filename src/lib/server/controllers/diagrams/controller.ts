@@ -91,7 +91,6 @@ export interface DiagramsController {
 	 * and review suggestion in one transaction.
 	 */
 	generateMermaid(
-		actor: ActorContext,
 		input: GenerateMermaidDiagramInput,
 		signal?: AbortSignal
 	): Promise<GenerateMermaidDiagramOutput<DiagramSuggestion>>;
@@ -102,13 +101,9 @@ export interface DiagramsController {
 	 * @throws UnsupportedDiagramOperationError if the diagram is not Mermaid — only
 	 * Mermaid can be revised by AI.
 	 */
-	reviseMermaid(
-		actor: ActorContext,
-		input: ReviseMermaidDiagramInput
-	): Promise<ReviseMermaidDiagramOutput>;
+	reviseMermaid(input: ReviseMermaidDiagramInput): Promise<ReviseMermaidDiagramOutput>;
 	/** Revise an inline Mermaid diagram in a note's document (one never promoted to a standalone diagram). */
 	reviseInlineMermaid(
-		actor: ActorContext,
 		input: ReviseInlineMermaidInput,
 		signal?: AbortSignal
 	): Promise<ReviseInlineMermaidOutput>;
@@ -117,7 +112,6 @@ export interface DiagramsController {
 	 * validating the generated XML and recording provenance before anything is offered.
 	 */
 	convertInlineMermaid(
-		actor: ActorContext,
 		input: ConvertInlineMermaidInput,
 		signal?: AbortSignal
 	): Promise<ConvertInlineMermaidOutput<DiagramSuggestion>>;
@@ -127,10 +121,7 @@ export interface DiagramsController {
 	 *
 	 * @throws UnsupportedDiagramOperationError if the source is not Mermaid.
 	 */
-	promote(
-		actor: ActorContext,
-		input: PromoteDiagramInput
-	): Promise<PromoteDiagramOutput<DiagramSuggestion>>;
+	promote(input: PromoteDiagramInput): Promise<PromoteDiagramOutput<DiagramSuggestion>>;
 	/**
 	 * Start {@link generateMermaid} as a cancellable run and return once the run is
 	 * durable, long before the diagram exists.
@@ -140,22 +131,14 @@ export interface DiagramsController {
 	 * The receipt names the run to attach to, and its result arrives as a
 	 * `workflow_result` event on that run's stream.
 	 */
-	startGenerateMermaid(
-		actor: ActorContext,
-		input: StartGenerateMermaidInput
-	): Promise<AgentRunReceipt>;
+	startGenerateMermaid(input: StartGenerateMermaidInput): Promise<AgentRunReceipt>;
 	/** Start {@link reviseInlineMermaid} as a cancellable run. See {@link startGenerateMermaid}. */
-	startReviseInlineMermaid(
-		actor: ActorContext,
-		input: StartReviseInlineMermaidInput
-	): Promise<AgentRunReceipt>;
+	startReviseInlineMermaid(input: StartReviseInlineMermaidInput): Promise<AgentRunReceipt>;
 	/** Start {@link convertInlineMermaid} as a cancellable run. See {@link startGenerateMermaid}. */
-	startConvertInlineMermaid(
-		actor: ActorContext,
-		input: StartConvertInlineMermaidInput
-	): Promise<AgentRunReceipt>;
-	executeDiagramRun(actor: ActorContext, runId: AgentRunId): Promise<void>;
-	recoverQueuedDiagramRuns(): Promise<number>;
+	startConvertInlineMermaid(input: StartConvertInlineMermaidInput): Promise<AgentRunReceipt>;
+	executeDiagramRun(runId: AgentRunId): Promise<void>;
+	/** Start a queued run the previous process never started. */
+	resumeQueuedDiagramRun(runId: AgentRunId): Promise<void>;
 }
 
 type DiagramWorkflowObserver = <T>(
@@ -182,7 +165,7 @@ export interface DiagramAgentDependencies {
 		'recordUserPrompt' | 'recordAssistantText' | 'recordToolActivity'
 	>;
 	readonly toolActivity: ToolActivityReader;
-	readonly preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
+	readonly preferences: { get(): Promise<AgentPreferences> };
 	readonly models: { list(): Promise<readonly AgentModel[]> };
 	readonly runs: Pick<
 		WorkflowRunLedger,
@@ -195,11 +178,11 @@ export interface DiagramAgentDependencies {
 	>;
 	readonly runContext: DiagramRunContexts;
 	readonly provenance: {
-		record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
+		record(input: ProvenanceRequest): Promise<Provenance>;
 	};
 	readonly builtInSkills: {
-		ensure(actor: ActorContext): Promise<void>;
-		load(actor: ActorContext, key: string): Promise<Skill<Note>>;
+		ensure(): Promise<void>;
+		load(key: string): Promise<Skill<Note>>;
 	};
 	readonly defaultModel: string;
 	readonly defaultVisionModel: string;
@@ -230,15 +213,16 @@ export interface DiagramsDependencies {
 }
 
 export class Diagrams implements DiagramsController {
-	constructor(private readonly dependencies: DiagramsDependencies) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly dependencies: DiagramsDependencies
+	) {}
 
 	generateMermaid(
-		actor: ActorContext,
 		input: GenerateMermaidDiagramInput,
 		signal?: AbortSignal
 	): Promise<GenerateMermaidDiagramOutput<DiagramSuggestion>> {
 		return this.publishGeneration(
-			actor,
 			{
 				operation: 'generate',
 				noteId: input.selection.noteId,
@@ -248,63 +232,51 @@ export class Diagrams implements DiagramsController {
 			},
 			async (draft) => {
 				if (draft.kind !== 'mermaid') throw new ValidationError('Expected a Mermaid diagram');
-				return this.saveGeneratedMermaid(actor, input.selection, draft);
+				return this.saveGeneratedMermaid(input.selection, draft);
 			}
 		);
 	}
 
 	async reviseInlineMermaid(
-		actor: ActorContext,
 		input: ReviseInlineMermaidInput,
 		signal?: AbortSignal
 	): Promise<ReviseInlineMermaidOutput> {
-		return this.publishGeneration(
-			actor,
-			{ operation: 'revise', ...input, signal },
-			async (draft) => ({ source: draft.source, ...(draft.title ? { title: draft.title } : {}) })
-		);
+		return this.publishGeneration({ operation: 'revise', ...input, signal }, async (draft) => ({
+			source: draft.source,
+			...(draft.title ? { title: draft.title } : {})
+		}));
 	}
 
-	startGenerateMermaid(
-		actor: ActorContext,
-		input: StartGenerateMermaidInput
-	): Promise<AgentRunReceipt> {
+	startGenerateMermaid(input: StartGenerateMermaidInput): Promise<AgentRunReceipt> {
 		const { requestId, ...submitted } = input;
-		return this.startDiagramRun(actor, requestId, { operation: 'generate', ...submitted });
+		return this.startDiagramRun(requestId, { operation: 'generate', ...submitted });
 	}
 
-	startReviseInlineMermaid(
-		actor: ActorContext,
-		input: StartReviseInlineMermaidInput
-	): Promise<AgentRunReceipt> {
+	startReviseInlineMermaid(input: StartReviseInlineMermaidInput): Promise<AgentRunReceipt> {
 		const { requestId, ...submitted } = input;
-		return this.startDiagramRun(actor, requestId, { operation: 'revise', ...submitted });
+		return this.startDiagramRun(requestId, { operation: 'revise', ...submitted });
 	}
 
-	startConvertInlineMermaid(
-		actor: ActorContext,
-		input: StartConvertInlineMermaidInput
-	): Promise<AgentRunReceipt> {
+	startConvertInlineMermaid(input: StartConvertInlineMermaidInput): Promise<AgentRunReceipt> {
 		const { requestId, ...submitted } = input;
-		return this.startDiagramRun(actor, requestId, { operation: 'convert', ...submitted });
+		return this.startDiagramRun(requestId, { operation: 'convert', ...submitted });
 	}
 
 	private async startDiagramRun(
-		actor: ActorContext,
 		requestId: string,
 		input: DiagramActionInput
 	): Promise<AgentRunReceipt> {
 		this.dependencies.generationRules.validate(input);
-		const existing = await this.dependencies.noteActionRequests.findExisting(actor, {
+		const existing = await this.dependencies.noteActionRequests.findExisting({
 			requestId,
 			context: { kind: 'diagram_action', input }
 		});
 		if (existing) {
-			if (existing.status === 'queued') this.launchDiagramRun(actor, existing.runId);
+			if (existing.status === 'queued') this.launchDiagramRun(existing.runId);
 			return existing;
 		}
 		const renderedPngDataUrl = input.operation === 'revise' ? input.renderedPngDataUrl : undefined;
-		const preferences = await this.dependencies.generation.preferences.get(actor);
+		const preferences = await this.dependencies.generation.preferences.get();
 		const configuredModel = this.dependencies.generation.modelSelection.resolveAgentModel(
 			{},
 			preferences,
@@ -326,32 +298,30 @@ export class Diagrams implements DiagramsController {
 		let receipt: AgentRunReceipt;
 		try {
 			receipt = await this.dependencies.transactionRunner.run(() =>
-				this.dependencies.noteActionRequests.prepare(actor, request)
+				this.dependencies.noteActionRequests.prepare(request)
 			);
 		} catch (error) {
 			if (!(error instanceof DuplicateNoteActionRequest)) throw error;
-			receipt = await this.dependencies.noteActionRequests.existing(actor, request);
+			receipt = await this.dependencies.noteActionRequests.existing(request);
 		}
-		if (receipt.status === 'queued') this.launchDiagramRun(actor, receipt.runId);
+		if (receipt.status === 'queued') this.launchDiagramRun(receipt.runId);
 		return receipt;
 	}
 
-	private launchDiagramRun(actor: ActorContext, runId: AgentRunId): void {
+	private launchDiagramRun(runId: AgentRunId): void {
 		// audit-allow: silent-catch — detached execution persists its terminal state; settlement failures are emitted for operational repair.
-		void this.executeDiagramRun(actor, runId).catch((error) =>
+		void this.executeDiagramRun(runId).catch((error) =>
 			console.error(`[diagram-run] Could not settle ${runId}:`, error)
 		);
 	}
 
-	async recoverQueuedDiagramRuns(): Promise<number> {
-		const queued = await this.dependencies.noteActionRequests.queued('diagram_action');
-		for (const run of queued) this.launchDiagramRun(run.actor, run.runId);
-		return queued.length;
+	async resumeQueuedDiagramRun(runId: AgentRunId): Promise<void> {
+		this.launchDiagramRun(runId);
 	}
 
-	async executeDiagramRun(actor: ActorContext, runId: AgentRunId): Promise<void> {
+	async executeDiagramRun(runId: AgentRunId): Promise<void> {
 		const run = await this.dependencies.transactionRunner.run(() =>
-			this.dependencies.noteActionRequests.claim(actor, runId, 'diagram_action')
+			this.dependencies.noteActionRequests.claim(runId, 'diagram_action')
 		);
 		if (!run) return;
 		const active = new AbortController();
@@ -363,7 +333,7 @@ export class Diagrams implements DiagramsController {
 				input.operation === 'generate'
 					? { ...input, noteId: input.selection.noteId, signal: active.signal }
 					: { ...input, signal: active.signal };
-			const draft = await this.generateForRun(actor, task, run);
+			const draft = await this.generateForRun(task, run);
 			active.signal.throwIfAborted();
 			const saved = await this.dependencies.transactionRunner.run(async () => {
 				const claim = await this.dependencies.runSettlements.claim(runId, {
@@ -372,7 +342,7 @@ export class Diagrams implements DiagramsController {
 					model: run.model
 				});
 				if (claim.kind === 'lost') return false;
-				const result = await this.saveDiagramAction(actor, input, draft);
+				const result = await this.saveDiagramAction(input, draft);
 				await this.dependencies.noteActionRequests.recordResult(runId, result);
 				await this.dependencies.runSettlements.complete(claim);
 				return true;
@@ -428,7 +398,6 @@ export class Diagrams implements DiagramsController {
 	}
 
 	private async saveDiagramAction(
-		actor: ActorContext,
 		input: DiagramActionInput,
 		draft: DiagramSubmission & { readonly provenanceId: ProvenanceId }
 	): Promise<NoteActionResult> {
@@ -441,39 +410,33 @@ export class Diagrams implements DiagramsController {
 			if (draft.kind !== 'drawio') throw new ValidationError('Expected a draw.io diagram');
 			return {
 				action: 'convert',
-				result: await this.saveConvertedDiagram(actor, input.noteId, draft)
+				result: await this.saveConvertedDiagram(input.noteId, draft)
 			};
 		}
 		if (draft.kind !== 'mermaid') throw new ValidationError('Expected a Mermaid diagram');
 		return {
 			action: 'diagram',
-			result: await this.saveGeneratedMermaid(actor, input.selection, draft)
+			result: await this.saveGeneratedMermaid(input.selection, draft)
 		};
 	}
 
 	convertInlineMermaid(
-		actor: ActorContext,
 		input: ConvertInlineMermaidInput,
 		signal?: AbortSignal
 	): Promise<ConvertInlineMermaidOutput<DiagramSuggestion>> {
-		return this.publishGeneration(
-			actor,
-			{ operation: 'convert', ...input, signal },
-			async (draft) => {
-				if (draft.kind !== 'drawio') throw new ValidationError('Expected a draw.io diagram');
-				return this.saveConvertedDiagram(actor, input.noteId, draft);
-			}
-		);
+		return this.publishGeneration({ operation: 'convert', ...input, signal }, async (draft) => {
+			if (draft.kind !== 'drawio') throw new ValidationError('Expected a draw.io diagram');
+			return this.saveConvertedDiagram(input.noteId, draft);
+		});
 	}
 
 	private async saveGeneratedMermaid(
-		actor: ActorContext,
 		selection: TextSelection,
 		draft: Extract<DiagramSubmission, { kind: 'mermaid' }> & { readonly provenanceId: ProvenanceId }
 	): Promise<GenerateMermaidDiagramOutput<DiagramSuggestion>> {
 		const { provenanceId, ...diagram } = draft;
-		const { anchor } = await this.dependencies.selectionOrigins.resolve(actor, selection);
-		const suggestion = await this.dependencies.suggestionCreator.create(actor, {
+		const { anchor } = await this.dependencies.selectionOrigins.resolve(selection);
+		const suggestion = await this.dependencies.suggestionCreator.create({
 			kind: 'diagram',
 			noteId: selection.noteId,
 			provenanceId,
@@ -484,13 +447,12 @@ export class Diagrams implements DiagramsController {
 	}
 
 	private async saveConvertedDiagram(
-		actor: ActorContext,
 		noteId: NoteId,
 		draft: Extract<DiagramSubmission, { kind: 'drawio' }> & { readonly provenanceId: ProvenanceId }
 	): Promise<ConvertInlineMermaidOutput<DiagramSuggestion>> {
 		const { provenanceId, ...diagram } = draft;
 		this.dependencies.drawioXmlValidator.validate(diagram.source);
-		const suggestion = await this.dependencies.suggestionCreator.create(actor, {
+		const suggestion = await this.dependencies.suggestionCreator.create({
 			kind: 'diagram',
 			noteId,
 			provenanceId,
@@ -499,17 +461,13 @@ export class Diagrams implements DiagramsController {
 		return { suggestion };
 	}
 
-	async reviseMermaid(
-		actor: ActorContext,
-		input: ReviseMermaidDiagramInput
-	): Promise<ReviseMermaidDiagramOutput> {
-		const existing = await this.dependencies.diagramFinder.get(actor, input.diagramId);
+	async reviseMermaid(input: ReviseMermaidDiagramInput): Promise<ReviseMermaidDiagramOutput> {
+		const existing = await this.dependencies.diagramFinder.get(input.diagramId);
 		if (existing.kind !== 'mermaid')
 			throw new UnsupportedDiagramOperationError('Only Mermaid diagrams can be revised by AI');
 		if (existing.sourceNoteId === undefined)
 			throw new ValidationError('This operation needs a diagram created from a note.');
 		return this.publishGeneration(
-			actor,
 			{
 				operation: 'revise',
 				noteId: existing.sourceNoteId,
@@ -517,7 +475,7 @@ export class Diagrams implements DiagramsController {
 				instruction: input.instruction
 			},
 			async (draft) => {
-				const current = await this.dependencies.diagramFinder.getForWrite(actor, existing.id);
+				const current = await this.dependencies.diagramFinder.getForWrite(existing.id);
 				const revised = this.dependencies.generationRules.revision(
 					current,
 					existing,
@@ -526,7 +484,7 @@ export class Diagrams implements DiagramsController {
 				);
 				const renderedSvg = await this.dependencies.mermaidRenderer.render(revised.source);
 				const searchableText = await this.dependencies.textExtractor.extract(revised);
-				const saved = await this.dependencies.diagramWriter.persistContent(actor, {
+				const saved = await this.dependencies.diagramWriter.persistContent({
 					kind: 'mermaid',
 					diagramId: revised.id,
 					title: revised.title,
@@ -539,17 +497,14 @@ export class Diagrams implements DiagramsController {
 				});
 				if (saved.kind !== 'mermaid')
 					throw new UnsupportedDiagramOperationError('Expected a Mermaid diagram after saving');
-				await this.indexDiagram(actor, saved);
+				await this.indexDiagram(saved);
 				return { diagram: saved };
 			}
 		);
 	}
 
-	async promote(
-		actor: ActorContext,
-		input: PromoteDiagramInput
-	): Promise<PromoteDiagramOutput<DiagramSuggestion>> {
-		const source = await this.dependencies.diagramFinder.get(actor, input.diagramId);
+	async promote(input: PromoteDiagramInput): Promise<PromoteDiagramOutput<DiagramSuggestion>> {
+		const source = await this.dependencies.diagramFinder.get(input.diagramId);
 		if (source.kind !== 'mermaid')
 			throw new UnsupportedDiagramOperationError('Only Mermaid diagrams can be promoted');
 		// This is the note-inline promotion, which raises a suggestion against the
@@ -560,7 +515,6 @@ export class Diagrams implements DiagramsController {
 				'Only a diagram created from a note can be promoted here'
 			);
 		return this.publishGeneration(
-			actor,
 			{
 				operation: 'convert',
 				noteId: sourceNoteId,
@@ -570,7 +524,7 @@ export class Diagrams implements DiagramsController {
 				if (draft.kind !== 'drawio') throw new ValidationError('Expected a draw.io diagram');
 				this.dependencies.drawioXmlValidator.validate(draft.source);
 				const provenanceId = draft.provenanceId;
-				const suggestion = await this.dependencies.suggestionCreator.create(actor, {
+				const suggestion = await this.dependencies.suggestionCreator.create({
 					kind: 'diagram',
 					noteId: sourceNoteId,
 					provenanceId,
@@ -585,27 +539,26 @@ export class Diagrams implements DiagramsController {
 			}
 		);
 	}
-	private async indexDiagram(actor: ActorContext, diagram: Diagram): Promise<void> {
+	private async indexDiagram(diagram: Diagram): Promise<void> {
 		const requirement = this.dependencies.diagramIndexer.diagramContextRequirement(diagram);
 		const context: DiagramIndexContext =
 			requirement.kind === 'standalone'
 				? { kind: 'standalone' }
 				: {
 						kind: 'note',
-						title: (await this.dependencies.diagramSourceNotes.get(actor, requirement.noteId)).title
+						title: (await this.dependencies.diagramSourceNotes.get(requirement.noteId)).title
 					};
-		await this.dependencies.diagramIndexer.indexDiagram(actor, diagram, context);
+		await this.dependencies.diagramIndexer.indexDiagram(diagram, context);
 	}
 
 	private async publishGeneration<Result>(
-		actor: ActorContext,
 		task: DiagramTask,
 		publish: (draft: DiagramSubmission & { readonly provenanceId: ProvenanceId }) => Promise<Result>
 	): Promise<Result> {
 		const renderedPngDataUrl = task.operation === 'revise' ? task.renderedPngDataUrl : undefined;
 		this.dependencies.generationRules.validate(task);
 
-		const preferences = await this.dependencies.generation.preferences.get(actor);
+		const preferences = await this.dependencies.generation.preferences.get();
 		const configuredModel = this.dependencies.generation.modelSelection.resolveAgentModel(
 			{},
 			preferences,
@@ -621,7 +574,7 @@ export class Diagrams implements DiagramsController {
 			preferences.defaultVisionModel ?? this.dependencies.generation.defaultVisionModel
 		);
 		const run = await this.dependencies.transactionRunner.run(async () => {
-			const conversation = await this.dependencies.generation.conversations.createWorkflow(actor, {
+			const conversation = await this.dependencies.generation.conversations.createWorkflow({
 				title:
 					task.operation === 'generate'
 						? 'Generate Mermaid diagram'
@@ -631,7 +584,6 @@ export class Diagrams implements DiagramsController {
 				contextNoteId: task.noteId
 			});
 			const prepared = this.dependencies.generation.runs.prepareCreation(
-				actor,
 				{
 					conversationId: conversation.id,
 					model,
@@ -645,7 +597,7 @@ export class Diagrams implements DiagramsController {
 				},
 				this.dependencies.now()
 			);
-			return this.dependencies.generation.runs.persistCreated(actor, prepared);
+			return this.dependencies.generation.runs.persistCreated(prepared);
 		});
 		// A cancel from any process aborts the generation; the caller's signal still applies.
 		const cancellation = new AbortController();
@@ -655,28 +607,27 @@ export class Diagrams implements DiagramsController {
 			const signal = task.signal
 				? AbortSignal.any([task.signal, cancellation.signal])
 				: cancellation.signal;
-			const draft = await this.generateForRun(actor, { ...task, signal }, run);
+			const draft = await this.generateForRun({ ...task, signal }, run);
 			signal.throwIfAborted();
 			return await this.dependencies.transactionRunner.run(async () => {
-				const current = await this.dependencies.generation.runs.getForWrite(actor, run.id);
+				const current = await this.dependencies.generation.runs.getForWrite(run.id);
 				const change = this.dependencies.generation.runs.prepareCompletion(
 					current.status,
 					this.dependencies.now()
 				);
 				const result = await publish(draft);
-				await this.dependencies.generation.runs.persistSettlement(actor, run.id, change);
+				await this.dependencies.generation.runs.persistSettlement(run.id, change);
 				return result;
 			});
 		} catch (error) {
 			await this.dependencies.transactionRunner.run(async () => {
-				const current = await this.dependencies.generation.runs.getForWrite(actor, run.id);
+				const current = await this.dependencies.generation.runs.getForWrite(run.id);
 				const change = this.dependencies.generation.runs.prepareFailure(
 					current.status,
 					error instanceof Error ? error.message : String(error),
 					this.dependencies.now()
 				);
-				if (change)
-					await this.dependencies.generation.runs.persistSettlement(actor, run.id, change);
+				if (change) await this.dependencies.generation.runs.persistSettlement(run.id, change);
 			});
 			// A run cancelled mid-generation is settled here, where its generation stopped.
 			await this.settleDiagramRun(run.id, {
@@ -689,7 +640,6 @@ export class Diagrams implements DiagramsController {
 		}
 	}
 	private async generateForRun(
-		actor: ActorContext,
 		task: DiagramTask,
 		run: AgentRun
 	): Promise<DiagramSubmission & { readonly provenanceId: ProvenanceId }> {
@@ -697,10 +647,10 @@ export class Diagrams implements DiagramsController {
 		const model = run.model;
 		const renderedPngDataUrl = task.operation === 'revise' ? task.renderedPngDataUrl : undefined;
 		await this.dependencies.transactionRunner.run(() =>
-			this.dependencies.generation.builtInSkills.ensure(actor)
+			this.dependencies.generation.builtInSkills.ensure()
 		);
-		const diagramming = await this.dependencies.generation.builtInSkills.load(actor, 'diagramming');
-		const provenance = await this.dependencies.generation.provenance.record(actor, {
+		const diagramming = await this.dependencies.generation.builtInSkills.load('diagramming');
+		const provenance = await this.dependencies.generation.provenance.record({
 			producerKind: 'agent',
 			producerName: 'Diagram Agent',
 			pipeline: 'agent',
@@ -716,14 +666,13 @@ export class Diagrams implements DiagramsController {
 			prompt: this.prompt(task)
 		};
 		await this.dependencies.generation.conversationMessages.recordUserPrompt(
-			actor,
 			run.conversationId,
 			input.prompt
 		);
 		const context: WorkflowRunContext = {
 			kind: 'diagram',
 			state: 'prepared',
-			context: await this.buildDiagramContext(actor, input),
+			context: await this.buildDiagramContext(input),
 			conversationId: run.conversationId,
 			effectiveModel: model,
 			executionMode: 'auto_accept',
@@ -731,13 +680,13 @@ export class Diagrams implements DiagramsController {
 			diagramOperation: task.operation
 		};
 		await this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.generation.runContext.getForWrite(actor, run.id);
+			const current = await this.dependencies.generation.runContext.getForWrite(run.id);
 			const change = this.dependencies.generation.runContext.prepare(
 				current,
 				context,
 				this.dependencies.now()
 			);
-			await this.dependencies.generation.runContext.persist(actor, run.id, change);
+			await this.dependencies.generation.runContext.persist(run.id, change);
 		});
 
 		return await this.dependencies.generation.observeWorkflow(
@@ -745,7 +694,7 @@ export class Diagrams implements DiagramsController {
 			{
 				input: input.prompt,
 				sessionId: run.conversationId,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				// Two arms rather than a conditional spread: an absent note must not
 				// be spelled as `noteId: undefined` in trace metadata.
 				metadata: task.noteId
@@ -782,7 +731,6 @@ export class Diagrams implements DiagramsController {
 								toolEvent && this.dependencies.generation.toolActivity.activity(toolEvent);
 							if (activity)
 								await this.dependencies.generation.conversationMessages.recordToolActivity(
-									actor,
 									run.conversationId,
 									activity
 								);
@@ -798,7 +746,6 @@ export class Diagrams implements DiagramsController {
 						throw new ValidationError('The Diagram Agent submitted the wrong diagram format.');
 					if (assistantText)
 						await this.dependencies.generation.conversationMessages.recordAssistantText(
-							actor,
 							run.conversationId,
 							assistantText,
 							model
@@ -812,18 +759,15 @@ export class Diagrams implements DiagramsController {
 		);
 	}
 
-	private async buildDiagramContext(
-		actor: ActorContext,
-		input: RunAgentInput
-	): Promise<AgentRunContext> {
+	private async buildDiagramContext(input: RunAgentInput): Promise<AgentRunContext> {
 		const deps = this.dependencies.generation;
 		const current = input.noteId
-			? { kind: 'note' as const, note: await deps.contextNotes.get(actor, input.noteId) }
+			? { kind: 'note' as const, note: await deps.contextNotes.get(input.noteId) }
 			: { kind: 'no_current_note' as const };
 		const base = deps.contextFormatter.base(input, current);
 		const [skills, profileMemory] = await Promise.all([
-			deps.contextSkills.listEnabled(actor, base.projectId),
-			deps.contextMemory.list(actor, {})
+			deps.contextSkills.listEnabled(base.projectId),
+			deps.contextMemory.list({})
 		]);
 		return deps.contextFormatter.build(input, {
 			base,

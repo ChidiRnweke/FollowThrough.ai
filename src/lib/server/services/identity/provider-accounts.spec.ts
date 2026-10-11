@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { InMemoryUserRepository } from '$lib/testing/identity/fakes/in-memory-users';
 import { ProviderAccounts } from './provider-accounts';
@@ -10,7 +11,7 @@ const profile = {
 };
 describe('provider account resolution', () => {
 	it('creates a waiting account for a new provider identity', async () => {
-		const users = new InMemoryUserRepository();
+		const users = new InMemoryUserRepository(testActor());
 		expect(await new ProviderAccounts(users).resolve(profile)).toMatchObject({
 			email: profile.email,
 			displayName: profile.name,
@@ -20,13 +21,13 @@ describe('provider account resolution', () => {
 		});
 	});
 	it('keeps the existing account when its provider id matches', async () => {
-		const users = new InMemoryUserRepository();
+		const users = new InMemoryUserRepository(testActor());
 		const accounts = new ProviderAccounts(users);
 		const existing = await accounts.resolve(profile);
 		expect(await accounts.resolve({ ...profile, email: 'changed@example.test' })).toEqual(existing);
 	});
 	it('retains the existing email-linking policy without changing admission', async () => {
-		const users = new InMemoryUserRepository();
+		const users = new InMemoryUserRepository(testActor());
 		const existing = await users.create({
 			email: profile.email,
 			displayName: 'Existing Person',

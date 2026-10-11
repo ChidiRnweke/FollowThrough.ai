@@ -9,24 +9,30 @@ import * as schema from '$lib/server/db/schema/relationships';
 import { toRelationship } from '$lib/server/db/mappers';
 
 export class RelationshipRecords implements NoteRelationshipRepository {
-	constructor(private readonly database: Database) {}
-	async findById(actor: ActorContext, id: RelationshipId): Promise<NoteRelationship | undefined> {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
+	async findById(id: RelationshipId): Promise<NoteRelationship | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.noteRelationships)
 			.where(
-				and(eq(schema.noteRelationships.id, id), eq(schema.noteRelationships.userId, actor.userId))
+				and(
+					eq(schema.noteRelationships.id, id),
+					eq(schema.noteRelationships.userId, this.actor.userId)
+				)
 			);
 		return row ? toRelationship(row) : undefined;
 	}
-	async listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRelationship[]> {
+	async listForNote(noteId: NoteId): Promise<readonly NoteRelationship[]> {
 		return (
 			await this.database
 				.select()
 				.from(schema.noteRelationships)
 				.where(
 					and(
-						eq(schema.noteRelationships.userId, actor.userId),
+						eq(schema.noteRelationships.userId, this.actor.userId),
 						or(
 							eq(schema.noteRelationships.sourceNoteId, noteId),
 							eq(schema.noteRelationships.targetNoteId, noteId)
@@ -36,12 +42,12 @@ export class RelationshipRecords implements NoteRelationshipRepository {
 		).map(toRelationship);
 	}
 
-	async insert(actor: ActorContext, relationship: NoteRelationship): Promise<NoteRelationship> {
+	async insert(relationship: NoteRelationship): Promise<NoteRelationship> {
 		const [row] = await this.database
 			.insert(schema.noteRelationships)
 			.values({
 				id: relationship.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				sourceNoteId: relationship.sourceNoteId,
 				targetNoteId: relationship.targetNoteId,
 				kind: relationship.kind,
@@ -56,19 +62,18 @@ export class RelationshipRecords implements NoteRelationshipRepository {
 		return toRelationship(row);
 	}
 	async findForWrite(
-		actor: ActorContext,
 		edge: Pick<NoteRelationship, 'sourceNoteId' | 'targetNoteId' | 'kind'>
 	): Promise<NoteRelationship | undefined> {
 		const key = JSON.stringify([edge.sourceNoteId, edge.targetNoteId, edge.kind]);
 		await this.database.execute(
-			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}),hashtext(${key}))`
+			sql`select pg_advisory_xact_lock(hashtext(${this.actor.userId}),hashtext(${key}))`
 		);
 		const [row] = await this.database
 			.select()
 			.from(schema.noteRelationships)
 			.where(
 				and(
-					eq(schema.noteRelationships.userId, actor.userId),
+					eq(schema.noteRelationships.userId, this.actor.userId),
 					eq(schema.noteRelationships.sourceNoteId, edge.sourceNoteId),
 					eq(schema.noteRelationships.targetNoteId, edge.targetNoteId),
 					eq(schema.noteRelationships.kind, edge.kind)
@@ -78,7 +83,7 @@ export class RelationshipRecords implements NoteRelationshipRepository {
 		return row ? toRelationship(row) : undefined;
 	}
 
-	async update(actor: ActorContext, relationship: NoteRelationship): Promise<NoteRelationship> {
+	async update(relationship: NoteRelationship): Promise<NoteRelationship> {
 		const [row] = await this.database
 			.update(schema.noteRelationships)
 			.set({
@@ -88,7 +93,7 @@ export class RelationshipRecords implements NoteRelationshipRepository {
 			.where(
 				and(
 					eq(schema.noteRelationships.id, relationship.id),
-					eq(schema.noteRelationships.userId, actor.userId)
+					eq(schema.noteRelationships.userId, this.actor.userId)
 				)
 			)
 			.returning();
@@ -96,11 +101,14 @@ export class RelationshipRecords implements NoteRelationshipRepository {
 		return toRelationship(row);
 	}
 
-	async delete(actor: ActorContext, id: RelationshipId): Promise<void> {
+	async delete(id: RelationshipId): Promise<void> {
 		const [row] = await this.database
 			.delete(schema.noteRelationships)
 			.where(
-				and(eq(schema.noteRelationships.id, id), eq(schema.noteRelationships.userId, actor.userId))
+				and(
+					eq(schema.noteRelationships.id, id),
+					eq(schema.noteRelationships.userId, this.actor.userId)
+				)
 			)
 			.returning({ id: schema.noteRelationships.id });
 		if (!row) throw new NotFoundError('Relationship was not found');

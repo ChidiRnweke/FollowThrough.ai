@@ -10,32 +10,33 @@ import type {
 
 /** Widget storage with the Postgres revision guard: a write from an older revision is refused. */
 export class InMemoryWidgetRepository implements WidgetRepository, SnapshotParticipant {
+	constructor(private readonly actor: ActorContext) {}
 	widgets: Widget[] = [];
 
-	async findById(actor: ActorContext, id: WidgetId): Promise<Widget | undefined> {
-		return this.widgets.find((widget) => widget.id === id && widget.userId === actor.userId);
+	async findById(id: WidgetId): Promise<Widget | undefined> {
+		return this.widgets.find((widget) => widget.id === id && widget.userId === this.actor.userId);
 	}
 
-	async findByIdForUpdate(actor: ActorContext, id: WidgetId): Promise<Widget | undefined> {
-		return this.findById(actor, id);
+	async findByIdForUpdate(id: WidgetId): Promise<Widget | undefined> {
+		return this.findById(id);
 	}
 
-	async listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly Widget[]> {
+	async listForProject(projectId: ProjectId): Promise<readonly Widget[]> {
 		return this.widgets.filter(
 			(widget) =>
-				widget.userId === actor.userId &&
+				widget.userId === this.actor.userId &&
 				widget.projectId === projectId &&
 				widget.archivedAt === undefined
 		);
 	}
 
-	async insert(_actor: ActorContext, widget: Widget): Promise<Widget> {
+	async insert(widget: Widget): Promise<Widget> {
 		this.widgets.push(widget);
 		return widget;
 	}
 
-	async update(actor: ActorContext, widget: Widget, from: WidgetRevisions): Promise<Widget> {
-		const current = await this.findById(actor, widget.id);
+	async update(widget: Widget, from: WidgetRevisions): Promise<Widget> {
+		const current = await this.findById(widget.id);
 		if (
 			!current ||
 			current.layoutRevision !== from.layoutRevision ||
@@ -46,8 +47,8 @@ export class InMemoryWidgetRepository implements WidgetRepository, SnapshotParti
 		return widget;
 	}
 
-	async deleteArchived(actor: ActorContext, id: WidgetId): Promise<void> {
-		const current = await this.findById(actor, id);
+	async deleteArchived(id: WidgetId): Promise<void> {
+		const current = await this.findById(id);
 		if (!current?.archivedAt)
 			throw new NotFoundError('Widget was not found in the trash', { widgetId: id });
 		this.widgets = this.widgets.filter((widget) => widget.id !== id);

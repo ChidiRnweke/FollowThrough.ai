@@ -10,23 +10,19 @@ import type { DateTime } from '$lib/models/workspace';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';
 
 export interface DiagramRunContexts {
-	getForWrite(actor: ActorContext, runId: AgentRunId): Promise<WorkflowAgentRun>;
+	getForWrite(runId: AgentRunId): Promise<WorkflowAgentRun>;
 	prepare(
 		run: Pick<WorkflowAgentRun, 'status' | 'contextSnapshot'>,
 		context: Extract<WorkflowRunContext, { kind: 'diagram'; state: 'prepared' }>,
 		timestamp: DateTime
 	): WorkflowContextWrite;
-	persist(
-		actor: ActorContext,
-		runId: AgentRunId,
-		change: WorkflowContextWrite
-	): Promise<WorkflowAgentRun>;
+	persist(runId: AgentRunId, change: WorkflowContextWrite): Promise<WorkflowAgentRun>;
 }
 export class DiagramRunContext implements DiagramRunContexts {
 	constructor(private readonly runs: AgentRunRepository) {}
 
-	async getForWrite(actor: ActorContext, runId: AgentRunId): Promise<WorkflowAgentRun> {
-		const run = await this.runs.findForWrite(actor, runId);
+	async getForWrite(runId: AgentRunId): Promise<WorkflowAgentRun> {
+		const run = await this.runs.findForWrite(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		if (run.kind !== 'workflow')
 			throw new ValidationError('Only workflow runs accept workflow context updates');
@@ -53,11 +49,7 @@ export class DiagramRunContext implements DiagramRunContexts {
 		};
 	}
 
-	persist(
-		actor: ActorContext,
-		runId: AgentRunId,
-		change: WorkflowContextWrite
-	): Promise<WorkflowAgentRun> {
-		return this.runs.updateWorkflowContext(actor, runId, change);
+	persist(runId: AgentRunId, change: WorkflowContextWrite): Promise<WorkflowAgentRun> {
+		return this.runs.updateWorkflowContext(runId, change);
 	}
 }

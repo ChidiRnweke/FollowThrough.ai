@@ -37,22 +37,22 @@ import { actor, context, now, seedProvenance, notifications } from '../database-
 
 const setup = async (suffix: string) => {
 	const owner = actor(suffix);
-	await new UserRecords(context.db).ensureLocal(owner);
+	await new UserRecords(owner, context.db).ensureLocal();
 	const transaction = createTransactionContext(context.db);
-	const conversations = new ConversationRecords(transaction.database);
-	const conversation = await conversations.insert(owner, {
+	const conversations = new ConversationRecords(owner, transaction.database);
+	const conversation = await conversations.insert({
 		id: crypto.randomUUID() as ConversationId,
 		userId: owner.userId,
 		kind: 'chat',
 		createdAt: now,
 		updatedAt: now
 	});
-	const runs = new AgentRunRecords(transaction.database);
-	const events = new AgentRunEventRecords(transaction.database);
-	const sessions = new AgentSessionRecords(transaction.database);
-	const decisions = new AgentRunDecisionRecords(transaction.database);
+	const runs = new AgentRunRecords(owner, transaction.database);
+	const events = new AgentRunEventRecords(owner, transaction.database);
+	const sessions = new AgentSessionRecords(owner, transaction.database);
+	const decisions = new AgentRunDecisionRecords(owner, transaction.database);
 	const provenance = await seedProvenance(owner, suffix);
-	const run = await runs.insert(owner, {
+	const run = await runs.insert({
 		kind: 'agent',
 		id: crypto.randomUUID() as AgentRunId,
 		userId: owner.userId,
@@ -71,6 +71,7 @@ const setup = async (suffix: string) => {
 	const runner = new InMemoryAgentTurns();
 	runner.events = [{ type: 'text_delta', text: 'Done' }];
 	const controller = new AgentSdkHarness(
+		owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
@@ -84,12 +85,12 @@ const setup = async (suffix: string) => {
 			transactionRunner: transaction.transactionRunner,
 			decisions,
 			settlements: new RunSettlements(runs, events),
-			conversationMessages: new ConversationArchive(conversations),
-			conversationSessions: new ConversationArchive(conversations),
+			conversationMessages: new ConversationArchive(owner, conversations),
+			conversationSessions: new ConversationArchive(owner, conversations),
 			toolActivity: new ToolActivityProjection(),
 			...harnessTurnDependencies(
 				runner,
-				new ConversationHistoryService(sessions, new InMemoryAgentFiles(), testTokenizer)
+				new ConversationHistoryService(sessions, new InMemoryAgentFiles(owner), testTokenizer)
 			),
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
@@ -116,7 +117,7 @@ describe('atomic execution settlement', () => {
 			conversationId: run.conversationId,
 			model: run.model
 		});
-		expect({ claim, status: (await runs.findById(owner, run.id))?.status }).toEqual({
+		expect({ claim, status: (await runs.findById(run.id))?.status }).toEqual({
 			claim: { kind: 'lost' },
 			status: 'queued'
 		});
@@ -137,19 +138,19 @@ describe('atomic execution settlement', () => {
 		await controller.execute(run.id, new AbortController().signal);
 		await transactionRunner.run(async () => {
 			const approvals = new RunApprovals(runs);
-			const current = await approvals.getForWrite(owner, run.id);
+			const current = await approvals.getForWrite(run.id);
 			const change = approvals.plan(current, ['create-1'], now);
 			if (!change) throw new Error('Expected a reviewed checkpoint');
-			await decisions.record(owner, {
+			await decisions.record({
 				runId: run.id,
 				callId: 'create-1',
 				decision: 'approve'
 			});
-			await approvals.persist(owner, run.id, change);
+			await approvals.persist(run.id, change);
 		});
 		runner.outcome = { type: 'completed', sessionItems: [] };
 		await controller.execute(run.id, new AbortController().signal);
-		const saved = await runs.findById(owner, run.id);
+		const saved = await runs.findById(run.id);
 		const [row] =
 			await context.client`select serialized_state from agent_runs where id = ${run.id}`;
 		expect({
@@ -183,19 +184,19 @@ describe('atomic execution settlement', () => {
 		const execution = controller.execute(run.id, new AbortController().signal);
 		try {
 			await runner.started.promise;
-			await controller.cancel(owner, run.id);
+			await controller.cancel(run.id);
 		} finally {
 			completion.resolve();
 		}
 		const outcome = await execution;
-		const saved = await runs.findById(owner, run.id);
+		const saved = await runs.findById(run.id);
 		expect({
 			outcome,
 			status: saved?.status,
 			checkpoint: saved?.serializedState,
 			pending: saved?.pendingDecisions,
-			session: await sessions.list(owner, run.conversationId),
-			events: (await events.replay(owner, run.id, '0')).map((record) =>
+			session: await sessions.list(run.conversationId),
+			events: (await events.replay(run.id, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			)
 		}).toEqual({
@@ -245,13 +246,13 @@ describe('atomic execution settlement', () => {
 			await context.client`drop trigger reject_contract_checkpoint on agent_run_events`;
 			await context.client`drop function reject_contract_checkpoint()`;
 		}
-		const saved = await runs.findById(owner, run.id);
+		const saved = await runs.findById(run.id);
 		expect({
 			status: saved?.status,
 			checkpoint: saved?.serializedState,
 			pending: saved?.pendingDecisions,
-			session: await sessions.list(owner, run.conversationId),
-			events: (await events.replay(owner, run.id, '0')).map((record) =>
+			session: await sessions.list(run.conversationId),
+			events: (await events.replay(run.id, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			)
 		}).toEqual({
@@ -270,11 +271,11 @@ describe('atomic execution settlement', () => {
 			controller.execute(run.id, new AbortController().signal)
 		]);
 		expect({
-			status: (await runs.findById(owner, run.id))?.status,
-			events: (await events.replay(owner, run.id, '0')).map((record) =>
+			status: (await runs.findById(run.id))?.status,
+			events: (await events.replay(run.id, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			),
-			messages: (await conversations.listMessages(owner, run.conversationId)).length
+			messages: (await conversations.listMessages(run.conversationId)).length
 		}).toEqual({
 			status: 'completed',
 			events: ['run_started', 'text_delta', 'completed'],
@@ -290,16 +291,16 @@ describe('atomic execution settlement', () => {
 		await runner.started.promise;
 		await transactionRunner.run(async () => {
 			const cancellations = new RunCancellation(runs);
-			const current = await cancellations.getForWrite(owner, run.id);
+			const current = await cancellations.getForWrite(run.id);
 			const change = cancellations.plan(current.status, now);
 			if (!change) throw new Error('Expected an active run');
-			await cancellations.persist(owner, run.id, change);
+			await cancellations.persist(run.id, change);
 		});
 		completion.resolve();
 		await Promise.all([execution, controller.finishCancellation(run.id)]);
 		expect({
-			status: (await runs.findById(owner, run.id))?.status,
-			events: (await events.replay(owner, run.id, '0')).map((record) =>
+			status: (await runs.findById(run.id))?.status,
+			events: (await events.replay(run.id, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			)
 		}).toEqual({ status: 'cancelled', events: ['run_started', 'cancelled'] });
@@ -310,7 +311,7 @@ describe('atomic execution settlement', () => {
 			type: 'user_message',
 			content: 'Original request'
 		};
-		await sessions.append(owner, run.conversationId, [original]);
+		await sessions.append(run.conversationId, [original]);
 		await context.client`create function reject_contract_completion() returns trigger language plpgsql as $$
 		begin
 			if NEW.event->>'type' = 'completed' and exists (
@@ -339,12 +340,12 @@ describe('atomic execution settlement', () => {
 			await context.client`drop function reject_contract_completion()`;
 		}
 		expect({
-			status: (await runs.findById(owner, run.id))?.status,
-			events: (await events.replay(owner, run.id, '0')).map((record) =>
+			status: (await runs.findById(run.id))?.status,
+			events: (await events.replay(run.id, '0')).map((record) =>
 				record.kind === 'readable' ? record.event.type : record.kind
 			),
-			session: (await sessions.list(owner, run.conversationId)).map((row) => row.item),
-			messages: await conversations.listMessages(owner, run.conversationId)
+			session: (await sessions.list(run.conversationId)).map((row) => row.item),
+			messages: await conversations.listMessages(run.conversationId)
 		}).toEqual({
 			status: 'running',
 			events: ['run_started', 'text_delta'],

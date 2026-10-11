@@ -6,11 +6,13 @@ import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-b
 import { WorkspaceResourceVersions } from './resource-versions';
 
 it('does not substitute another account’s body for an exact version', async () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	const note = noteBuilder({ userId: testActor(2).userId, currentRevision: 4 });
 	content.notes.push(note);
-	const versions = new WorkspaceResourceVersions(new InMemoryWorkspaceNoteReads(content));
+	const versions = new WorkspaceResourceVersions(
+		new InMemoryWorkspaceNoteReads(testActor(), content)
+	);
 	await expect(
-		versions.readVersion(testActor(1), { type: 'notes', id: [note.id] }, syncEtag(4n))
+		versions.readVersion({ type: 'notes', id: [note.id] }, syncEtag(4n))
 	).rejects.toThrow('The synchronization journal does not match its resource');
 });

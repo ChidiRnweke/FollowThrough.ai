@@ -59,16 +59,12 @@ export interface ConversationHistory {
 		items: readonly PersistedSessionItem[],
 		ordinal: number
 	): readonly PersistedSessionItem[] | undefined;
-	load(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<readonly PersistedSessionItem[]>;
+	load(conversationId: ConversationId): Promise<readonly PersistedSessionItem[]>;
 	/**
 	 * The items to store after a turn: inline images are dropped, and large replay content
 	 * moves into agent files the model can read back with grep or sed.
 	 */
 	snapshot(
-		actor: ActorContext,
 		conversationId: ConversationId,
 		items: readonly PersistedSessionItem[]
 	): Promise<readonly PersistedSessionItem[]>;
@@ -86,32 +82,26 @@ export class ConversationHistoryService implements ConversationHistory {
 	): readonly PersistedSessionItem[] | undefined {
 		return rewindToUserItem(items, ordinal);
 	}
-	async load(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<readonly PersistedSessionItem[]> {
-		const rows = await this.repository.list(actor, conversationId);
+	async load(conversationId: ConversationId): Promise<readonly PersistedSessionItem[]> {
+		const rows = await this.repository.list(conversationId);
 		return rows.map((row) => withoutInlineImages(row.item));
 	}
 	snapshot(
-		actor: ActorContext,
 		conversationId: ConversationId,
 		items: readonly PersistedSessionItem[]
 	): Promise<readonly PersistedSessionItem[]> {
 		return Promise.all(
-			items.map(withoutInlineImages).map((item) => this.virtualize(actor, conversationId, item))
+			items.map(withoutInlineImages).map((item) => this.virtualize(conversationId, item))
 		);
 	}
 
 	private virtualize(
-		actor: ActorContext,
 		conversationId: ConversationId,
 		item: PersistedSessionItem
 	): Promise<PersistedSessionItem> | PersistedSessionItem {
 		const prepared = this.prepare(item);
 		if (prepared.kind === 'unchanged') return prepared.item;
 		return this.apply(
-			actor,
 			conversationId,
 			prepared.kind === 'arguments'
 				? { ...prepared, value: sessionJsonSchema.parse(JSON.parse(prepared.item.arguments)) }
@@ -135,7 +125,6 @@ export class ConversationHistoryService implements ConversationHistory {
 		}
 	}
 	private async apply(
-		actor: ActorContext,
 		conversationId: ConversationId,
 		content: ReplayContent
 	): Promise<PersistedSessionItem> {
@@ -144,7 +133,6 @@ export class ConversationHistoryService implements ConversationHistory {
 				...content.item,
 				arguments: JSON.stringify(
 					await this.walk(
-						actor,
 						conversationId,
 						content.value,
 						safeSegment(content.item.callId),
@@ -154,10 +142,9 @@ export class ConversationHistoryService implements ConversationHistory {
 			};
 		const item = content.item;
 		if (item.type === 'function_call_result')
-			return this.walk(actor, conversationId, item, safeSegment(item.callId), 'item');
+			return this.walk(conversationId, item, safeSegment(item.callId), 'item');
 		// A message has no call id; its content hash is the stable storage identity.
 		return this.walk(
-			actor,
 			conversationId,
 			item,
 			safeSegment(createHash('sha256').update(JSON.stringify(item)).digest('hex').slice(0, 16)),
@@ -166,7 +153,6 @@ export class ConversationHistoryService implements ConversationHistory {
 	}
 
 	private async walk<T>(
-		actor: ActorContext,
 		conversationId: ConversationId,
 		value: T,
 		callId: string,
@@ -177,7 +163,7 @@ export class ConversationHistoryService implements ConversationHistory {
 			const checksum = createHash('sha256').update(value).digest('hex');
 			const category = location.startsWith('message.') ? 'history' : 'tool-results';
 			const path = `/conversations/${conversationId}/${category}/${callId}/${safeSegment(location)}-${checksum.slice(0, 12)}.txt`;
-			const stored = await this.files.store(actor, {
+			const stored = await this.files.store({
 				conversationId,
 				path,
 				mediaType: 'text/plain',
@@ -188,7 +174,7 @@ export class ConversationHistoryService implements ConversationHistory {
 		if (Array.isArray(value)) {
 			return (await Promise.all(
 				value.map((entry, index) =>
-					this.walk(actor, conversationId, entry, callId, `${location}.${index}`)
+					this.walk(conversationId, entry, callId, `${location}.${index}`)
 				)
 			)) as T;
 		}
@@ -196,7 +182,7 @@ export class ConversationHistoryService implements ConversationHistory {
 		const entries = await Promise.all(
 			Object.entries(value).map(async ([key, entry]) => [
 				key,
-				await this.walk(actor, conversationId, entry, callId, `${location}.${key}`)
+				await this.walk(conversationId, entry, callId, `${location}.${key}`)
 			])
 		);
 		return Object.fromEntries(entries) as T;

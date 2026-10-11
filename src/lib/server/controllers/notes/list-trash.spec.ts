@@ -34,12 +34,18 @@ import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository();
+	const notes = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const service = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
-	const indexer = new InMemoryNoteContent();
+	const service = createNoteServices(
+		testActor(),
+		notes,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
+	const indexer = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -76,7 +82,7 @@ describe('Note trash listing invariants', () => {
 			noteBuilder({ id: testNoteId(2), archivedAt: testNow, plainText: 'Secret body' }),
 			noteBuilder({ id: testNoteId(3), kind: 'skill', archivedAt: testNow })
 		];
-		const result = await controller.listTrash(testActor(), {});
+		const result = await controller.listTrash({});
 		expect(result.notes).toEqual([
 			expect.objectContaining({ id: testNoteId(2), projectName: 'Project Alpha' })
 		]);
@@ -86,7 +92,7 @@ describe('Note trash listing invariants', () => {
 	it('scopes the listing to one project when asked', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		const result = await controller.listTrash(testActor(), { projectId: testProjectId(2) });
+		const result = await controller.listTrash({ projectId: testProjectId(2) });
 		expect(result.notes).toEqual([]);
 	});
 });

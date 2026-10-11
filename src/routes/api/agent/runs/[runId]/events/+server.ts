@@ -20,7 +20,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 	// Subscribe before the stream starts, so a notification between the ownership check and the
 	// first replay still triggers a flush.
 	let changed = () => {};
-	const unsubscribe = await agent.observeRun(actor, runId, () => changed());
+	const unsubscribe = await agent.observeRun(runId, () => changed());
 	const stopObserving = () => {
 		// audit-allow: silent-catch — the stream is already closing; a failed UNLISTEN only leaves an idle listener on the shared connection.
 		unsubscribe().catch((error: unknown) =>
@@ -66,7 +66,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 				try {
 					do {
 						pendingFlush = false;
-						const records = await agent.listRunEvents(actor, runId, cursor);
+						const records = await agent.listRunEvents(runId, cursor);
 						for (const record of records) {
 							if (closed) return;
 							try {
@@ -82,7 +82,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 							}
 							cursor = record.cursor;
 						}
-						if (await agent.isRunStreamComplete(actor, runId, cursor)) {
+						if (await agent.isRunStreamComplete(runId, cursor)) {
 							close();
 							return;
 						}

@@ -21,16 +21,21 @@ const reader: User = {
 };
 
 const setup = () => {
-	const users = new InMemoryUserRepository();
+	const users = new InMemoryUserRepository(testActor());
 	const directory = new UserDirectory(users);
-	const provenance = new InMemoryProvenanceRepository();
-	const tokens = new AccessTokens(new InMemoryApiTokenRepository([reader]));
+	const provenance = new InMemoryProvenanceRepository(testActor());
+	const tokens = new AccessTokens(new InMemoryApiTokenRepository(testActor(), [reader]));
 	const access = new Access(
+		testActor(),
 		capabilityDependencies<AccessDependencies>({
 			tokens,
 			provisioner: directory,
 			users: directory,
-			provenance: new NoteProvenance(provenance, new InMemoryAnchorRepository())
+			provenance: new NoteProvenance(
+				testActor(),
+				provenance,
+				new InMemoryAnchorRepository(testActor())
+			)
 		})
 	);
 	return { access, tokens, users, provenance };
@@ -62,7 +67,7 @@ describe('MCP access', () => {
 
 	it('establishes the local profile before attributing a single-user request', async () => {
 		const { access, users, provenance } = setup();
-		const result = await access.attributeLocalMcp(testActor());
+		const result = await access.attributeLocalMcp();
 		expect({
 			scope: result.scope,
 			profiles: users.users.map((user) => user.id),

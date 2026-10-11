@@ -7,14 +7,13 @@ import type { SyncObjectRepository } from '$lib/server/repositories/workspace/sy
 /** One workspace resource as the client syncs it, answered as unchanged when the ETag still holds. */
 export interface SyncObjectReader {
 	read(
-		actor: ActorContext,
 		identity: WorkspaceResourceIdentity,
 		etag: SyncEtag | null
 	): Promise<SyncObjectRead<WorkspaceRecord>>;
 }
 export class SyncObjectService implements SyncObjectReader {
 	constructor(private readonly repository: SyncObjectRepository) {}
-	read(actor: ActorContext, identity: WorkspaceResourceIdentity, etag: SyncEtag | null) {
-		return this.repository.read(actor, identity, etag);
+	read(identity: WorkspaceResourceIdentity, etag: SyncEtag | null) {
+		return this.repository.read(identity, etag);
 	}
 }

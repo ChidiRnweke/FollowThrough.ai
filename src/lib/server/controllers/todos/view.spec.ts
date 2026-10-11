@@ -24,9 +24,9 @@ import { expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
 
 it('clearing a linked note restores the extraction origin in the returned task view', async () => {
-	const tasks = new InMemoryTodoRepository();
-	const notes = new InMemoryNoteRepository();
-	const anchors = new InMemoryAnchorRepository();
+	const tasks = new InMemoryTodoRepository(testActor());
+	const notes = new InMemoryNoteRepository(testActor());
+	const anchors = new InMemoryAnchorRepository(testActor());
 	const origin = noteBuilder({ title: 'Meeting' });
 	const linked = noteBuilder({ id: testNoteId(2), title: 'Work plan' });
 	const anchor = anchorBuilder({ noteId: origin.id });
@@ -35,13 +35,15 @@ it('clearing a linked note restores the extraction origin in the returned task v
 	notes.notes = [origin, linked];
 	anchors.anchors = [anchor];
 	const catalog = createTodoServices(
+		testActor(),
 		tasks,
-		new InMemoryProjectRepository(),
+		new InMemoryProjectRepository(testActor()),
 		anchors,
 		notes,
-		new InMemoryProvenanceRepository()
+		new InMemoryProvenanceRepository(testActor())
 	);
 	const controller = new Todos(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
 			...agentToolResultsFixture(),
@@ -54,7 +56,7 @@ it('clearing a linked note restores the extraction origin in the returned task v
 			transactionRunner: new InMemoryTransactionRunner([tasks])
 		})
 	);
-	const result = await controller.update(testActor(), { todoId: task.id, linkedNoteId: null });
+	const result = await controller.update({ todoId: task.id, linkedNoteId: null });
 	expect({
 		linked: result.todo.linkedNoteId,
 		source: result.view.sourceNote,

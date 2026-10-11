@@ -9,8 +9,8 @@ import { actor, context, now, notifications, seedProvenance } from '../database-
 
 const seedRun = async (suffix: string) => {
 	const owner = actor(suffix);
-	await new UserRecords(context.db).ensureLocal(owner);
-	const conversation = await new ConversationRecords(context.db).insert(owner, {
+	await new UserRecords(owner, context.db).ensureLocal();
+	const conversation = await new ConversationRecords(owner, context.db).insert({
 		id: crypto.randomUUID() as ConversationId,
 		userId: owner.userId,
 		kind: 'chat',
@@ -18,7 +18,7 @@ const seedRun = async (suffix: string) => {
 		updatedAt: now
 	});
 	const provenance = await seedProvenance(owner, suffix);
-	return new AgentRunRecords(context.db).insert(owner, {
+	return new AgentRunRecords(owner, context.db).insert({
 		kind: 'agent',
 		id: crypto.randomUUID() as AgentRunId,
 		userId: owner.userId,

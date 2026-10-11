@@ -17,10 +17,11 @@ import { Suggestions, type SuggestionsDependencies } from './controller';
 it('returns the same memory review view from server and downloaded records', async () => {
 	const suggestion = memorySuggestionBuilder();
 	const context = memorySuggestionContext(suggestion);
-	const reader = new InMemorySuggestionReader();
+	const reader = new InMemorySuggestionReader(testActor());
 	reader.suggestions = [suggestion];
 	reader.contexts = [context];
 	const controller = new Suggestions(
+		testActor(),
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
 			...agentToolResultsFixture(),
@@ -39,6 +40,6 @@ it('returns the same memory review view from server and downloaded records', asy
 		new Map(records.map((record) => [JSON.stringify([record.type, record.value.id]), record]))
 	);
 	expect(downloaded.memorySuggestions()).toEqual(
-		(await controller.listPendingMemory(testActor(), {})).suggestions
+		(await controller.listPendingMemory({})).suggestions
 	);
 });

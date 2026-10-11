@@ -71,7 +71,7 @@ const scenarios: readonly Scenario[] = [
 
 it.each(scenarios)('persists the memory policy outcome for $name', async (scenario) => {
 	const actor = testActor();
-	const provenance = new InMemoryProvenanceRepository();
+	const provenance = new InMemoryProvenanceRepository(actor);
 	provenance.provenance = [
 		{
 			id: testProvenanceId(),
@@ -83,22 +83,29 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 			createdAt: testNow
 		}
 	];
-	const entries = new InMemoryMemoryEntryRepository();
-	const library = createMemoryServices(entries, new InMemoryProjectRepository(), provenance);
-	const records = new InMemorySuggestionRepository();
-	const inbox = createSuggestionServices(
-		records,
-		new InMemoryNoteRepository(),
-		provenance,
-		new InMemoryAnchorRepository()
+	const entries = new InMemoryMemoryEntryRepository(actor);
+	const library = createMemoryServices(
+		actor,
+		entries,
+		new InMemoryProjectRepository(actor),
+		provenance
 	);
-	const trust = new ToolTrust(new InMemoryTrustPolicyRepository());
-	if (scenario.policy) await trust.upsert(scenario.policy.actor, scenario.policy.input);
-	const effects = new InMemorySuggestionEffects();
-	const search = new InMemorySearchRepository();
+	const records = new InMemorySuggestionRepository(actor);
+	const inbox = createSuggestionServices(
+		actor,
+		records,
+		new InMemoryNoteRepository(actor),
+		provenance,
+		new InMemoryAnchorRepository(actor)
+	);
+	const trust = new ToolTrust(actor, new InMemoryTrustPolicyRepository(actor));
+	if (scenario.policy) await trust.upsert(scenario.policy.input);
+	const effects = new InMemorySuggestionEffects(actor);
+	const search = new InMemorySearchRepository(actor);
 	const embeddings = new InMemoryRetrievalProvider();
 	const index = createContentIndex(search, undefined, undefined, false, embeddings);
 	const controller = new Memory(
+		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
 			...agentToolResultsFixture(),
@@ -113,20 +120,20 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 			transactionRunner: new InMemoryTransactionRunner([entries, effects, search])
 		})
 	);
-	const result = await controller.propose(actor, {
+	const result = await controller.propose({
 		scope: 'user',
 		operation: 'add',
 		content: 'Prefer concise replies.',
 		provenanceId: testProvenanceId(),
 		confidence: scenario.confidence
 	});
-	const stored = await records.findById(actor, result.suggestion.id);
+	const stored = await records.findById(result.suggestion.id);
 	expect({
 		returned: result.suggestion,
 		status: stored?.status,
 		autoAccepted: stored?.isAutoAccepted,
 		applied: result.appliedEntry,
-		entries: await library.lister.list(actor, {}),
+		entries: await library.lister.list({}),
 		effectCount: effects.repository.effects.size
 	}).toEqual({
 		returned: stored,

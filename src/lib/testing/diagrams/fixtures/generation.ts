@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
@@ -23,13 +24,13 @@ import { InMemoryDiagramGeneration } from '$lib/testing/diagrams/fakes/in-memory
 import { noteBuilder, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
 export const diagramGenerationFixture = () => {
-	const persistence = new InMemoryAgentRunPersistence();
-	const conversations = new InMemoryConversationRepository();
-	const notes = new InMemoryNoteContent();
+	const persistence = new InMemoryAgentRunPersistence(testActor());
+	const conversations = new InMemoryConversationRepository(testActor());
+	const notes = new InMemoryNoteContent(testActor());
 	notes.notes = [noteBuilder()];
 	const skills = builtInSkillsFixture();
 	const provider = new InMemoryDiagramGeneration();
-	const provenance = new InMemoryProvenanceRecorder();
+	const provenance = new InMemoryProvenanceRecorder(testActor());
 	const models = new InMemoryModelCatalog();
 	models.models = [
 		{
@@ -46,13 +47,16 @@ export const diagramGenerationFixture = () => {
 		contextFormatter: createAgentContext(),
 		contextNotes: notes,
 		contextSkills: skills.skillFinder,
-		contextMemory: new InMemoryMemoryEntryRepository(),
-		conversations: new ConversationArchive(conversations),
-		conversationMessages: new ConversationArchive(conversations),
+		contextMemory: new InMemoryMemoryEntryRepository(testActor()),
+		conversations: new ConversationArchive(testActor(), conversations),
+		conversationMessages: new ConversationArchive(testActor(), conversations),
 		toolActivity: new ToolActivityProjection(),
-		preferences: new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository()),
+		preferences: new AgentPreferenceCatalog(
+			testActor(),
+			new InMemoryAgentPreferencesRepository(testActor())
+		),
 		models,
-		runs: new AgentRunLedger(persistence),
+		runs: new AgentRunLedger(testActor(), persistence),
 		runContext: new DiagramRunContext(persistence),
 		provenance,
 		builtInSkills: skills.builtInSkills,

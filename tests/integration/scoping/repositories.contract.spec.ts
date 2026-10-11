@@ -16,8 +16,8 @@ import { actor, context, now, seedNote, seedProvenance } from '../database-harne
 describe('Postgres actor-scoping matrix', () => {
 	it('limits diagram project listing to the requesting actor', async () => {
 		const { owner, project, note } = await seedNote('32');
-		const repository = new DiagramRecords(context.db);
-		await repository.insert(owner, {
+		const repository = new DiagramRecords(owner, context.db);
+		await repository.insert({
 			id: 'a0000000-0000-4000-8000-000000000032' as DiagramId,
 			userId: owner.userId,
 			projectId: project.id,
@@ -29,28 +29,28 @@ describe('Postgres actor-scoping matrix', () => {
 			updatedAt: now
 		});
 		expect(
-			(await repository.listForProject(owner, project.id)).diagrams.map((item) => item.sourceNoteId)
+			(await repository.listForProject(project.id)).diagrams.map((item) => item.sourceNoteId)
 		).toEqual([note.id]);
 	});
 
 	it('does not reveal another actor’s user record', async () => {
 		const owner = actor('5');
-		const repository = new UserRecords(context.db);
-		await repository.ensureLocal(owner);
-		expect(await repository.findById(actor('6'), owner.userId)).toBeUndefined();
+		const repository = new UserRecords(owner, context.db);
+		await repository.ensureLocal();
+		expect(await repository.findById(owner.userId)).toBeUndefined();
 	});
 
 	it('does not reveal provenance to another actor', async () => {
 		const { owner } = await seedNote('23');
 		const provenance = await seedProvenance(owner, '23');
 		expect(
-			await new ProvenanceRecords(context.db).findById(actor('24'), provenance.id)
+			await new ProvenanceRecords(actor('24'), context.db).findById(provenance.id)
 		).toBeUndefined();
 	});
 
 	it('lists only references owned by the actor', async () => {
 		const { owner, note } = await seedNote('30');
-		const repository = new ReferenceRecords(context.db);
+		const repository = new ReferenceRecords(owner, context.db);
 		const reference: ExternalReference = {
 			id: '90000000-0000-4000-8000-000000000030' as ReferenceId,
 			userId: owner.userId,
@@ -61,7 +61,7 @@ describe('Postgres actor-scoping matrix', () => {
 			relevanceNote: 'Contract',
 			createdAt: now
 		};
-		await repository.insert(owner, reference);
-		expect(await repository.listForNote(actor('31'), note.id)).toEqual([]);
+		await repository.insert(reference);
+		expect(await repository.listForNote(note.id)).toEqual([]);
 	});
 });

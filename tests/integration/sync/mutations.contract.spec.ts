@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { NoteId } from '$lib/models/notes';
 import { workspaceMutationRequestSchema } from '$lib/models/workspace-mutations';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -37,13 +38,14 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const synchronization = createSyncCapability({ db: database });
-	const { services: catalog } = createNotesCapability({
+	const synchronization = createSyncCapability(testActor(), { db: database });
+	const { services: catalog } = createNotesCapability(testActor(), {
 		db: database,
-		projects: new ProjectRecords(database)
+		projects: new ProjectRecords(testActor(), database)
 	});
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -79,7 +81,6 @@ const setup = async (suffix: string) => {
 		})
 	);
 	const resource = await synchronization.objects.read(
-		seeded.owner,
 		{ type: 'notes', id: [seeded.note.id] },
 		null
 	);
@@ -113,8 +114,8 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 			baseEtag,
 			command: { kind: 'renameNote' as const, noteId: note.id, title: 'Renamed once' }
 		};
-		await controller.synchronize(owner, request);
-		await controller.synchronize(owner, request);
+		await controller.synchronize(request);
+		await controller.synchronize(request);
 		const rows = await context.client<
 			{ revision: number }[]
 		>`select current_revision as revision from notes where id = ${note.id}`;
@@ -124,7 +125,7 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 	it('rejects a stale base without overwriting another client’s edit', async () => {
 		const { owner, note, controller, baseEtag } = await setup('9102');
 		await context.client`update notes set title = 'Other device' where id = ${note.id}`;
-		const outcome = await controller.synchronize(owner, {
+		const outcome = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag,
 			command: { kind: 'renameNote', noteId: note.id, title: 'Stale rename' }
@@ -141,7 +142,7 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 	it('creates a new note using its stable local identity with no server base', async () => {
 		const { owner, project, controller } = await setup('9103');
 		const id = crypto.randomUUID() as NoteId;
-		const outcome = await controller.synchronize(owner, {
+		const outcome = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: null,
 			command: { kind: 'createNote', id, projectId: project.id, title: 'Offline creation' }
@@ -152,7 +153,7 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 
 	it('publishes the guarded current note using the domain’s document revision check', async () => {
 		const { owner, note, controller, baseEtag } = await setup('9104');
-		await controller.synchronize(owner, {
+		await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag,
 			command: { kind: 'publishNote', noteId: note.id }
@@ -167,7 +168,7 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 describe('imported note metadata', () => {
 	it('preserves explicitly edited metadata across a later document-only save', async () => {
 		const { owner, note, controller, synchronization, baseEtag } = await setup('9105');
-		const outcome = await controller.synchronize(owner, {
+		const outcome = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag,
 			command: {
@@ -180,13 +181,9 @@ describe('imported note metadata', () => {
 				sectionNumbering: true
 			}
 		});
-		const resource = await synchronization.objects.read(
-			owner,
-			{ type: 'notes', id: [note.id] },
-			null
-		);
+		const resource = await synchronization.objects.read({ type: 'notes', id: [note.id] }, null);
 		if (resource.kind !== 'found') throw new Error('Updated note was not readable');
-		const omittedOutcome = await controller.synchronize(owner, {
+		const omittedOutcome = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: resource.snapshot.etag,
 			command: {
@@ -215,24 +212,20 @@ describe('guarded note trash actions', () => {
 			baseEtag,
 			command: { kind: 'archiveNote' as const, noteId: note.id }
 		};
-		const first = await controller.synchronize(owner, request);
-		expect(await controller.synchronize(owner, request)).toEqual(first);
+		const first = await controller.synchronize(request);
+		expect(await controller.synchronize(request)).toEqual(first);
 	});
 	it('restores the guarded note through the owning trash rules', async () => {
 		const { owner, note, controller, synchronization, catalog } = await setup('9108');
-		await controller.archive(owner, { noteId: note.id });
-		const current = await synchronization.objects.read(
-			owner,
-			{ type: 'notes', id: [note.id] },
-			null
-		);
+		await controller.archive({ noteId: note.id });
+		const current = await synchronization.objects.read({ type: 'notes', id: [note.id] }, null);
 		if (current.kind !== 'found') throw new Error('The archived note must exist');
-		const result = await controller.synchronize(owner, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: current.snapshot.etag,
 			command: { kind: 'restoreNote', noteId: note.id }
 		});
-		const restored = await catalog.reader.get(owner, note.id);
+		const restored = await catalog.reader.get(note.id);
 		expect({ result: result.kind, archivedAt: restored.archivedAt }).toEqual({
 			result: 'applied',
 			archivedAt: undefined
@@ -278,8 +271,8 @@ it('matches cancellation to normalized input after an applied response is lost',
 		command: { kind: 'renameNote', noteId: note.id, title: 'Plan ' }
 	});
 	if (input.command.kind !== 'renameNote') throw new Error('Expected a note rename');
-	const applied = await controller.synchronize(owner, { ...input, command: input.command });
-	const recovered = await workspace.cancelMutation(owner, {
+	const applied = await controller.synchronize({ ...input, command: input.command });
+	const recovered = await workspace.cancelMutation({
 		operationId: input.operationId,
 		request: JSON.stringify(input)
 	});
@@ -302,7 +295,7 @@ it('recovers a completed write while another transaction locks its resource', as
 		baseEtag,
 		command: { kind: 'renameNote' as const, noteId: note.id, title: 'Completed rename' }
 	};
-	const applied = await controller.synchronize(owner, request);
+	const applied = await controller.synchronize(request);
 	const other = connectPostgresTestDatabase(context.url);
 	try {
 		const replayed = await other.db.transaction(async (transaction) => {
@@ -310,7 +303,7 @@ it('recovers a completed write while another transaction locks its resource', as
 			return transactionRunner.run(async () => {
 				// Fail promptly if receipt recovery starts waiting for the busy source row.
 				await database.execute(sql`set local lock_timeout = '1s'`);
-				return controller.synchronize(owner, request);
+				return controller.synchronize(request);
 			});
 		});
 		expect(replayed).toEqual(applied);

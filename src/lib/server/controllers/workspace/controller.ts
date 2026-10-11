@@ -45,20 +45,16 @@ import type {
  * parallel because none depends on another's result.
  */
 export interface WorkspaceController {
-	pullChangePage(actor: ActorContext, since: SyncCursor): Promise<SyncPage<WorkspaceRecord>>;
-	cancelMutation(
-		actor: ActorContext,
-		input: WorkspaceWriteCancellation
-	): Promise<WorkspaceWriteRecovery>;
+	pullChangePage(since: SyncCursor): Promise<SyncPage<WorkspaceRecord>>;
+	cancelMutation(input: WorkspaceWriteCancellation): Promise<WorkspaceWriteRecovery>;
 	readResource(
-		actor: ActorContext,
 		identity: WorkspaceResourceIdentity,
 		etag: SyncEtag | null
 	): Promise<SyncObjectRead<WorkspaceRecord>>;
 	/** Load the shell context for the signed-in user. */
-	getShellContext(actor: ActorContext): Promise<ShellContext>;
+	getShellContext(): Promise<ShellContext>;
 	/** Assemble the today view: overdue/due-today todos, waiting-on items, pending suggestion count, and notes. */
-	getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView>;
+	getTodayView(input: GetTodayViewInput): Promise<TodayView>;
 }
 export interface WorkspaceDependencies {
 	readonly todoPresentation: TodoPresentation;
@@ -86,14 +82,12 @@ export class Workspace implements WorkspaceController {
 		private readonly todayPresentation: TodayPresentation,
 		private readonly dependencies: WorkspaceDependencies
 	) {}
-	async pullChangePage(actor: ActorContext, since: SyncCursor) {
+	async pullChangePage(since: SyncCursor) {
 		if (since === '0')
-			await this.dependencies.transactionRunner.run(() =>
-				this.dependencies.builtInSkills.ensure(actor)
-			);
+			await this.dependencies.transactionRunner.run(() => this.dependencies.builtInSkills.ensure());
 		return this.dependencies.transactionRunner.run(
 			async () => {
-				const page = await this.dependencies.syncChanges.selectPage(actor, since);
+				const page = await this.dependencies.syncChanges.selectPage(since);
 				const records: SyncPage<WorkspaceRecord>['records'][number][] = [];
 				for (const change of page.changes) {
 					const key = this.dependencies.resourceKeys.workspaceResourceKey(change.identity);
@@ -101,7 +95,7 @@ export class Workspace implements WorkspaceController {
 					const resource =
 						change.kind === 'delete'
 							? { kind: 'deleted' as const, etag }
-							: await this.dependencies.resourceVersions.readVersion(actor, change.identity, etag);
+							: await this.dependencies.resourceVersions.readVersion(change.identity, etag);
 					records.push({ key, resource });
 				}
 				return { cursor: page.cursor, hasMore: page.hasMore, records };
@@ -109,27 +103,25 @@ export class Workspace implements WorkspaceController {
 			{ retry: 'never', mode: 'read-only-snapshot' }
 		);
 	}
-	cancelMutation(actor: ActorContext, input: WorkspaceWriteCancellation) {
+	cancelMutation(input: WorkspaceWriteCancellation) {
 		return this.dependencies.transactionRunner.run(
-			() => this.dependencies.writeRecovery.cancel(actor, input),
+			() => this.dependencies.writeRecovery.cancel(input),
 			{ retry: 'database-only' }
 		);
 	}
 
-	readResource(actor: ActorContext, identity: WorkspaceResourceIdentity, etag: SyncEtag | null) {
-		return this.dependencies.syncObjects.read(actor, identity, etag);
+	readResource(identity: WorkspaceResourceIdentity, etag: SyncEtag | null) {
+		return this.dependencies.syncObjects.read(identity, etag);
 	}
-	async getShellContext(actor: ActorContext): Promise<ShellContext> {
-		await this.dependencies.transactionRunner.run(() =>
-			this.dependencies.builtInSkills.ensure(actor)
-		);
-		await this.dependencies.suggestionExpirer.expire(actor);
+	async getShellContext(): Promise<ShellContext> {
+		await this.dependencies.transactionRunner.run(() => this.dependencies.builtInSkills.ensure());
+		await this.dependencies.suggestionExpirer.expire();
 		const [user, projects, noteTree, skills, pendingSuggestions] = await Promise.all([
-			this.dependencies.userReader.get(actor),
-			this.dependencies.projectLister.list(actor),
-			this.dependencies.noteTreeReader.list(actor),
-			this.dependencies.skillFinder.listEnabled(actor),
-			this.dependencies.suggestionLister.listByStatus(actor, 'proposed')
+			this.dependencies.userReader.get(),
+			this.dependencies.projectLister.list(),
+			this.dependencies.noteTreeReader.list(),
+			this.dependencies.skillFinder.listEnabled(),
+			this.dependencies.suggestionLister.listByStatus('proposed')
 		]);
 		return {
 			user,
@@ -143,21 +135,18 @@ export class Workspace implements WorkspaceController {
 			)
 		};
 	}
-	async getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView> {
-		await this.dependencies.suggestionExpirer.expire(actor);
+	async getTodayView(input: GetTodayViewInput): Promise<TodayView> {
+		await this.dependencies.suggestionExpirer.expire();
 		const [due, waiting, pendingSuggestionCount, notes] = await Promise.all([
-			this.dependencies.todoLister.list(actor, {
+			this.dependencies.todoLister.list({
 				dueBefore: input.today,
 				responsibility: 'mine'
 			}),
-			this.dependencies.waitingOnFinder.findWaitingOn(actor),
-			this.dependencies.suggestionLister.countByStatus(actor, 'proposed'),
-			this.dependencies.noteTreeReader.list(actor)
+			this.dependencies.waitingOnFinder.findWaitingOn(),
+			this.dependencies.suggestionLister.countByStatus('proposed'),
+			this.dependencies.noteTreeReader.list()
 		]);
-		const contexts = await this.dependencies.todoContextReader.readContexts(actor, [
-			...due,
-			...waiting
-		]);
+		const contexts = await this.dependencies.todoContextReader.readContexts([...due, ...waiting]);
 		const views = contexts.map((context) =>
 			this.dependencies.todoPresentation.view(context.todo, context)
 		);

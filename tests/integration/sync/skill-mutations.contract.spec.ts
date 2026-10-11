@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -19,21 +20,24 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const source = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const notes = createNotesCapability({ db: database, projects: new ProjectRecords(database) });
+	const notes = createNotesCapability(testActor(), {
+		db: database,
+		projects: new ProjectRecords(testActor(), database)
+	});
 	const note = await storedNote(notes.services.creator, source.owner, {
 		projectId: source.note.projectId,
 		title: 'Writing',
 		kind: 'skill'
 	});
 	const seeded = { ...source, note };
-	const sync = createSyncCapability({ db: database });
-	const { services: library } = createSkillsCapability({
+	const sync = createSyncCapability(testActor(), { db: database });
+	const { services: library } = createSkillsCapability(testActor(), {
 		db: database,
-		projects: new ProjectRecords(database),
+		projects: new ProjectRecords(testActor(), database),
 		notes: notes.repository,
 		provenance: notes.provenanceRepository
 	});
-	await library.creator.create(seeded.owner, seeded.note, {
+	await library.creator.create(seeded.note, {
 		name: 'Writing',
 		description: 'Write clearly',
 		triggerHints: []
@@ -55,11 +59,7 @@ const setup = async (suffix: string) => {
 			transactionRunner
 		})
 	);
-	const base = await sync.objects.read(
-		seeded.owner,
-		{ type: 'skills', id: [seeded.note.id] },
-		null
-	);
+	const base = await sync.objects.read({ type: 'skills', id: [seeded.note.id] }, null);
 	if (base.kind !== 'found') throw new Error('The skill metadata must exist');
 	return { ...seeded, controller, base: base.snapshot.etag };
 };
@@ -74,8 +74,8 @@ describe('guarded skill metadata writes', () => {
 			baseEtag: base,
 			command: { kind: 'updateSkill' as const, noteId: note.id, description: 'Offline description' }
 		};
-		await controller.synchronize(owner, input);
-		await controller.synchronize(owner, input);
+		await controller.synchronize(input);
+		await controller.synchronize(input);
 		expect({
 			notes:
 				await context.client`select document, current_revision from notes where id = ${note.id}`,
@@ -85,7 +85,7 @@ describe('guarded skill metadata writes', () => {
 	it('preserves a concurrent description instead of overwriting it with a stale toggle', async () => {
 		const { owner, note, controller, base } = await setup('9382');
 		await context.client`update skills set description = 'Other client' where note_id = ${note.id}`;
-		const result = await controller.synchronize(owner, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: base,
 			command: { kind: 'updateSkill', noteId: note.id, isEnabled: false }

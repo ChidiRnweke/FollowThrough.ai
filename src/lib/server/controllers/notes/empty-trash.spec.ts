@@ -34,11 +34,17 @@ import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository();
+	const notes = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder(), projectBuilder({ id: testProjectId(2), name: 'Beta' })];
-	const service = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
+	const service = createNoteServices(
+		testActor(),
+		notes,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -72,21 +78,21 @@ describe('Empty trash invariants', () => {
 			noteBuilder({ archivedAt: testNow }),
 			noteBuilder({ id: testNoteId(2), archivedAt: testNow })
 		];
-		await controller.emptyTrash(testActor(), {});
+		await controller.emptyTrash({});
 		expect(notes.notes).toEqual([]);
 	});
 
 	it('leaves the active notes untouched', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder(), noteBuilder({ id: testNoteId(2), archivedAt: testNow })];
-		await controller.emptyTrash(testActor(), {});
+		await controller.emptyTrash({});
 		expect(notes.notes.map((note) => note.id)).toEqual([testNoteId()]);
 	});
 
 	it('reports the ids it destroyed', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		const result = await controller.emptyTrash(testActor(), {});
+		const result = await controller.emptyTrash({});
 		expect(result.deletedNoteIds).toEqual([testNoteId()]);
 	});
 
@@ -96,7 +102,7 @@ describe('Empty trash invariants', () => {
 			noteBuilder({ archivedAt: testNow }),
 			noteBuilder({ id: testNoteId(2), projectId: testProjectId(2), archivedAt: testNow })
 		];
-		await controller.emptyTrash(testActor(), { projectId: testProjectId(2) });
+		await controller.emptyTrash({ projectId: testProjectId(2) });
 		expect(notes.notes.map((note) => note.id)).toEqual([testNoteId()]);
 	});
 
@@ -105,20 +111,20 @@ describe('Empty trash invariants', () => {
 	it('spares trashed skills', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ kind: 'skill', archivedAt: testNow })];
-		await controller.emptyTrash(testActor(), {});
+		await controller.emptyTrash({});
 		expect(notes.notes).toHaveLength(1);
 	});
 
 	it('leaves another user’s trash alone', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		await controller.emptyTrash(testActor(2), {});
+		await controller.emptyTrash({});
 		expect(notes.notes).toHaveLength(1);
 	});
 
 	it('does nothing when the trash is already empty', async () => {
 		const { controller } = setup();
-		const result = await controller.emptyTrash(testActor(), {});
+		const result = await controller.emptyTrash({});
 		expect(result.deletedNoteIds).toEqual([]);
 	});
 
@@ -129,7 +135,7 @@ describe('Empty trash invariants', () => {
 			noteBuilder({ id: testNoteId(2), projectId: testProjectId(2), archivedAt: testNow })
 		];
 		notes.deleteFailures.add(testNoteId(2));
-		await controller.emptyTrash(testActor(), {}).catch(() => undefined);
+		await controller.emptyTrash({}).catch(() => undefined);
 		expect(notes.notes.map((note) => note.id)).toEqual([testNoteId(), testNoteId(2)]);
 	});
 });

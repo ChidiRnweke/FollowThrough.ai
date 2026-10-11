@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
 import { ToolPreferences } from '$lib/server/controllers/agent/tool-preferences/controller';
 import { TrustPolicies } from '$lib/server/controllers/agent/trust-policies/controller';
@@ -16,9 +17,9 @@ import { actor, context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database });
-	const preferences = new ToolPreferenceRecords(database);
-	const tools = new ToolPreferences(new WorkspaceCommandRulesService(), {
+	const sync = createSyncCapability(testActor(), { db: database });
+	const preferences = new ToolPreferenceRecords(testActor(), database);
+	const tools = new ToolPreferences(testActor(), new WorkspaceCommandRulesService(), {
 		...agentToolResultsFixture(),
 		syncMutations: sync.mutations,
 		syncRetry: sync.mutationRetry,
@@ -26,12 +27,12 @@ const setup = async (suffix: string) => {
 		preferences: new ToolAccess(preferences),
 		catalog: new AgentToolCatalogService()
 	});
-	const policies = new TrustPolicies(new WorkspaceCommandRulesService(), {
+	const policies = new TrustPolicies(testActor(), new WorkspaceCommandRulesService(), {
 		...agentToolResultsFixture(),
 		syncMutations: sync.mutations,
 		syncRetry: sync.mutationRetry,
 		transactionRunner,
-		trustPolicyStore: new ToolTrust(new TrustPolicyRecords(database))
+		trustPolicyStore: new ToolTrust(testActor(), new TrustPolicyRecords(testActor(), database))
 	});
 	return { ...seeded, sync, preferences, tools, policies };
 };
@@ -49,31 +50,30 @@ describe('guarded tool and policy preferences', () => {
 				enabled: false
 			}
 		};
-		await tools.synchronize(owner, input);
-		await tools.synchronize(owner, input);
-		expect(await preferences.listForUser(owner)).toEqual([
+		await tools.synchronize(input);
+		await tools.synchronize(input);
+		expect(await preferences.listForUser()).toEqual([
 			{ toolName: 'archive_project', enabled: false }
 		]);
 	});
 	it('rejects a stale reset instead of deleting a newer project override', async () => {
 		const { owner, project, tools, preferences, sync } = await setup('9412');
-		await tools.setEnabled(owner, {
+		await tools.setEnabled({
 			projectId: project.id,
 			toolName: 'archive_project',
 			enabled: false
 		});
 		const base = await sync.objects.read(
-			owner,
 			{ type: 'project_tool_overrides', id: [owner.userId, project.id, 'archive_project'] },
 			null
 		);
 		if (base.kind !== 'found') throw new Error('The override must exist');
-		await tools.setEnabled(owner, {
+		await tools.setEnabled({
 			projectId: project.id,
 			toolName: 'archive_project',
 			enabled: true
 		});
-		const result = await tools.synchronize(owner, {
+		const result = await tools.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: base.snapshot.etag,
 			command: {
@@ -85,23 +85,22 @@ describe('guarded tool and policy preferences', () => {
 		});
 		expect({
 			kind: result.kind,
-			overrides: await preferences.listForProject(owner, project.id)
+			overrides: await preferences.listForProject(project.id)
 		}).toEqual({ kind: 'conflict', overrides: [{ toolName: 'archive_project', enabled: true }] });
 	});
 	it('returns a durable tombstone when resetting a project override', async () => {
 		const { owner, project, tools, sync } = await setup('9413');
-		await tools.setEnabled(owner, {
+		await tools.setEnabled({
 			projectId: project.id,
 			toolName: 'archive_project',
 			enabled: false
 		});
 		const base = await sync.objects.read(
-			owner,
 			{ type: 'project_tool_overrides', id: [owner.userId, project.id, 'archive_project'] },
 			null
 		);
 		if (base.kind !== 'found') throw new Error('The override must exist');
-		const result = await tools.synchronize(owner, {
+		const result = await tools.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: base.snapshot.etag,
 			command: {
@@ -123,13 +122,12 @@ describe('guarded tool and policy preferences', () => {
 			minimumConfidence: 85
 		});
 		if (command.kind !== 'updateTrustPolicy') throw new Error('Expected a policy command');
-		await policies.synchronize(owner, {
+		await policies.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: null,
 			command
 		});
 		const stored = await sync.objects.read(
-			owner,
 			{ type: 'trust_policies', id: [owner.userId, 'memory'] },
 			null
 		);
@@ -141,7 +139,7 @@ describe('guarded tool and policy preferences', () => {
 	});
 	it('rejects an old queued chat-policy update without storing an ineffective setting', async () => {
 		const { owner, policies } = await setup('9801');
-		const result = await policies.synchronize(owner, {
+		const result = await policies.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: null,
 			command: {
@@ -153,7 +151,7 @@ describe('guarded tool and policy preferences', () => {
 		});
 		expect({
 			kind: result.kind,
-			stored: await new TrustPolicyRecords(context.db).list(owner)
+			stored: await new TrustPolicyRecords(owner, context.db).list()
 		}).toEqual({ kind: 'rejected', stored: [] });
 	});
 });
@@ -161,7 +159,7 @@ describe('guarded tool and policy preferences', () => {
 it('rejects a project override for a project owned by another account', async () => {
 	const { project, tools } = await setup('9415');
 	const other = await actor('9416');
-	const result = await tools.synchronize(other, {
+	const result = await tools.synchronize({
 		operationId: crypto.randomUUID(),
 		baseEtag: null,
 		command: {

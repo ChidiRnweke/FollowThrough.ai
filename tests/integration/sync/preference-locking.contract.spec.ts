@@ -23,14 +23,15 @@ it('serializes synchronized creation behind an ordinary absent-row preference wr
 	const release = Promise.withResolvers<void>();
 	const setup = (connection: typeof first) => {
 		const { database, transactionRunner } = createTransactionContext(connection.db);
-		const sync = createSyncCapability({ db: database });
+		const sync = createSyncCapability(owner, { db: database });
 		const settings = new AgentSettings(
+			owner,
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentSettingsDependencies>({
 				...agentToolResultsFixture(),
 				...agentRulesFixture(),
 				preferenceEditing: new AgentPreferenceEditingService(),
-				preferences: new AgentPreferenceCatalog(new AgentPreferenceRecords(database)),
+				preferences: new AgentPreferenceCatalog(owner, new AgentPreferenceRecords(owner, database)),
 				transactionRunner,
 				now: () => now,
 				syncMutations: sync.mutations,
@@ -51,14 +52,14 @@ it('serializes synchronized creation behind an ordinary absent-row preference wr
 		}
 	};
 	const writing = normal.transactionRunner.run(async () => {
-		await normal.settings.updatePreferences(owner, { webSearchMaxResults: 17 });
+		await normal.settings.updatePreferences({ webSearchMaxResults: 17 });
 		ready.resolve();
 		await release.promise;
 	});
 	try {
 		await Promise.race([ready.promise, writing]);
 		const [backend] = await second.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const syncing = synchronized.settings.synchronize(owner, input);
+		const syncing = synchronized.settings.synchronize(input);
 		await vi.waitFor(async () => {
 			const waiting = await context.client<
 				{ pid: number }[]
@@ -69,7 +70,7 @@ it('serializes synchronized creation behind an ordinary absent-row preference wr
 		release.resolve();
 		await writing;
 		const result = await syncing;
-		const saved = await new AgentPreferenceRecords(context.db).get(owner);
+		const saved = await new AgentPreferenceRecords(owner, context.db).get();
 		expect({
 			result: result.kind,
 			results: saved?.webSearchMaxResults,

@@ -41,9 +41,9 @@ const addInput = (overrides: Partial<ProjectAddition> = {}): ProjectAddition => 
 });
 
 const setup = () => {
-	const entries = new InMemoryMemoryEntryRepository();
-	const projects = new InMemoryProjectRepository();
-	const provenanceRepository = new InMemoryProvenanceRepository();
+	const entries = new InMemoryMemoryEntryRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
+	const provenanceRepository = new InMemoryProvenanceRepository(testActor());
 	provenanceRepository.provenance = [
 		{
 			id: testProvenanceId(),
@@ -55,15 +55,16 @@ const setup = () => {
 			createdAt: testNow
 		}
 	];
-	const suggestions = new InMemorySuggestions();
-	const effects = new InMemorySuggestionEffects();
-	const trust = new InMemoryTrustPolicyEvaluator();
+	const suggestions = new InMemorySuggestions(testActor());
+	const effects = new InMemorySuggestionEffects(testActor());
+	const trust = new InMemoryTrustPolicyEvaluator(testActor());
 	projects.projects = [projectBuilder()];
-	const search = new InMemorySearchRepository();
+	const search = new InMemorySearchRepository(testActor());
 	const indexEmbeddings = new InMemoryRetrievalProvider();
 	const indexWriter = createContentIndex(search, undefined, undefined, false, indexEmbeddings);
-	const memory = createMemoryServices(entries, projects, provenanceRepository);
+	const memory = createMemoryServices(testActor(), entries, projects, provenanceRepository);
 	const controller = new Memory(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
 			...agentToolResultsFixture(),
@@ -97,7 +98,7 @@ const setup = () => {
 describe('Memory proposal orchestration invariants', () => {
 	it('records provenance for a reviewable proposal without creating the entry', async () => {
 		const { entries, controller } = setup();
-		const result = await controller.propose(testActor(), addInput());
+		const result = await controller.propose(addInput());
 		expect({
 			kind: result.suggestion.kind,
 			provenanceId: result.suggestion.provenanceId,
@@ -108,7 +109,7 @@ describe('Memory proposal orchestration invariants', () => {
 	it('applies and links a trusted suggestion to its entry', async () => {
 		const { entries, trust, controller } = setup();
 		trust.autoAccept = true;
-		const result = await controller.propose(testActor(), addInput());
+		const result = await controller.propose(addInput());
 		expect({
 			entryCount: entries.entries.length,
 			accepted: result.suggestion.isAutoAccepted,
@@ -125,7 +126,7 @@ describe('Memory proposal orchestration invariants', () => {
 	it('creates a profile entry when a trusted user-scoped proposal is applied', async () => {
 		const { entries, trust, controller } = setup();
 		trust.autoAccept = true;
-		await controller.propose(testActor(), {
+		await controller.propose({
 			provenanceId: testProvenanceId(),
 			scope: 'user',
 			operation: 'add',
@@ -137,7 +138,6 @@ describe('Memory proposal orchestration invariants', () => {
 	it('rejects a profile proposal targeting project memory before recording a suggestion', async () => {
 		const { controller, memory, suggestions } = setup();
 		const target = await memory.creator.create(
-			testActor(),
 			memoryEntryBuilder({
 				id: testMemoryEntryId(1),
 				projectId: testProjectId(),
@@ -145,7 +145,7 @@ describe('Memory proposal orchestration invariants', () => {
 			})
 		);
 		const outcome = await controller
-			.propose(testActor(), {
+			.propose({
 				provenanceId: testProvenanceId(),
 				scope: 'user',
 				operation: 'remove',
@@ -164,7 +164,6 @@ describe('Memory proposal orchestration invariants', () => {
 		const { controller, memory, projects } = setup();
 		projects.projects.push(projectBuilder({ id: testProjectId(2) }));
 		const target = await memory.creator.create(
-			testActor(),
 			memoryEntryBuilder({
 				id: testMemoryEntryId(2),
 				projectId: testProjectId(2),
@@ -172,7 +171,7 @@ describe('Memory proposal orchestration invariants', () => {
 			})
 		);
 		await expect(
-			controller.propose(testActor(), {
+			controller.propose({
 				provenanceId: testProvenanceId(),
 				scope: 'project',
 				projectId: testProjectId(),
@@ -190,7 +189,7 @@ describe('Memory proposal transaction invariants', () => {
 		trust.autoAccept = true;
 		suggestions.failAcceptance = true;
 		try {
-			await controller.propose(testActor(), addInput());
+			await controller.propose(addInput());
 		} catch {
 			// The restored entry collection is the invariant under test.
 		}
@@ -202,9 +201,9 @@ describe('Memory proposal search updates', () => {
 	it('keeps only replacement chunks after a trusted update', async () => {
 		const { controller, trust, search } = setup();
 		trust.autoAccept = true;
-		const original = await controller.propose(testActor(), addInput());
+		const original = await controller.propose(addInput());
 		if (!original.appliedEntry) throw new Error('Trusted addition must produce a memory');
-		const replacement = await controller.propose(testActor(), {
+		const replacement = await controller.propose({
 			...addInput(),
 			operation: 'update',
 			memoryEntryId: original.appliedEntry.id,

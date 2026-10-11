@@ -33,15 +33,11 @@ const restoredItemsSchema = z.array(
 export class InMemoryAgentSessionRepository implements AgentSessionRepository, SnapshotParticipant {
 	items: AgentSessionItem[] = [];
 
-	async listCanvasResults(actor: ActorContext, conversationId: ConversationId) {
-		return (await this.list(actor, conversationId)).map((row) => readCanvasSessionResult(row.item));
+	async listCanvasResults(conversationId: ConversationId) {
+		return (await this.list(conversationId)).map((row) => readCanvasSessionResult(row.item));
 	}
 
-	async list(
-		_actor: ActorContext,
-		conversationId: ConversationId,
-		limit?: number
-	): Promise<readonly AgentSessionItem[]> {
+	async list(conversationId: ConversationId, limit?: number): Promise<readonly AgentSessionItem[]> {
 		const owned = this.items
 			.filter((item) => item.conversationId === conversationId)
 			.sort((left, right) => left.position - right.position);
@@ -49,7 +45,6 @@ export class InMemoryAgentSessionRepository implements AgentSessionRepository, S
 	}
 
 	async append(
-		_actor: ActorContext,
 		conversationId: ConversationId,
 		items: readonly PersistedSessionItem[]
 	): Promise<void> {
@@ -68,18 +63,15 @@ export class InMemoryAgentSessionRepository implements AgentSessionRepository, S
 		);
 	}
 
-	async pop(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<AgentSessionItem | undefined> {
-		const owned = await this.list(actor, conversationId);
+	async pop(conversationId: ConversationId): Promise<AgentSessionItem | undefined> {
+		const owned = await this.list(conversationId);
 		const latest = owned[owned.length - 1];
 		if (!latest) return undefined;
 		this.items = this.items.filter((item) => item.id !== latest.id);
 		return latest;
 	}
 
-	async clear(_actor: ActorContext, conversationId: ConversationId): Promise<void> {
+	async clear(conversationId: ConversationId): Promise<void> {
 		this.items = this.items.filter((item) => item.conversationId !== conversationId);
 	}
 

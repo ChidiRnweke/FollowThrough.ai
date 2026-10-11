@@ -30,12 +30,10 @@ export class InMemoryPromiseExtractor implements PromiseExtractor {
 	readonly modelCandidates = new Map<string, readonly PromiseCandidate[]>();
 
 	async extract(
-		_actor: ActorContext,
 		_selection: TextSelection,
-		context: Parameters<PromiseExtractor['extract']>[2],
+		context: Parameters<PromiseExtractor['extract']>[1],
 		_signal?: AbortSignal
 	): Promise<readonly PromiseCandidate[]> {
-		void _actor;
 		void _selection;
 		void _signal;
 		this.started.resolve();
@@ -122,17 +120,18 @@ export class InMemoryWebReferenceClient implements WebReferenceClient {
 }
 
 export class InMemoryProvenanceRecorder implements ProvenanceRecorder, SnapshotParticipant {
+	constructor(private readonly actor: ActorContext) {}
 	records: Provenance[] = [];
 	readonly started = Promise.withResolvers<void>();
 	completion: Promise<void> = Promise.resolve();
 
-	async record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance> {
+	async record(input: ProvenanceRequest): Promise<Provenance> {
 		this.started.resolve();
 		await this.completion;
 		const provenance = provenanceSchema.parse({
 			...input,
 			id: testProvenanceId(this.records.length + 1),
-			userId: actor.userId,
+			userId: this.actor.userId,
 			createdAt: testNow
 		});
 		this.records.push(provenance);
@@ -148,14 +147,10 @@ export class InMemoryProvenanceRecorder implements ProvenanceRecorder, SnapshotP
 }
 
 export class InMemoryTrustPolicyEvaluator implements TrustPolicyEvaluator {
+	constructor(private readonly actor: ActorContext) {}
 	autoAccept = false;
 
-	async shouldAutoAccept(
-		_actor: ActorContext,
-		pipeline: PipelineKind,
-		_suggestion: Suggestion
-	): Promise<boolean> {
-		void _actor;
+	async shouldAutoAccept(pipeline: PipelineKind, _suggestion: Suggestion): Promise<boolean> {
 		void _suggestion;
 		return pipeline !== 'reference' && this.autoAccept;
 	}

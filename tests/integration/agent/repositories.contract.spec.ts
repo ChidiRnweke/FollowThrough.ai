@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 
@@ -53,8 +54,8 @@ import { actor, context, now, seedNote } from '../database-harness';
 describe('Postgres conversation repository invariants', () => {
 	it('returns messages in chronological order', async () => {
 		const owner = actor('7');
-		await new UserRecords(context.db).ensureLocal(owner);
-		const repository = new ConversationRecords(context.db);
+		await new UserRecords(owner, context.db).ensureLocal();
+		const repository = new ConversationRecords(owner, context.db);
 		const conversation: Conversation = {
 			id: '20000000-0000-4000-8000-000000000007' as ConversationId,
 			userId: owner.userId,
@@ -63,7 +64,7 @@ describe('Postgres conversation repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		};
-		await repository.insert(owner, conversation);
+		await repository.insert(conversation);
 		for (const [index, text] of ['first', 'second'].entries()) {
 			const message: Message = {
 				id: `30000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}` as MessageId,
@@ -72,9 +73,9 @@ describe('Postgres conversation repository invariants', () => {
 				content: { text },
 				createdAt: new Date(Date.parse(now) + index * 1000).toISOString() as DateTime
 			};
-			await repository.appendMessage(owner, message);
+			await repository.appendMessage(message);
 		}
-		const messages = await repository.listMessages(owner, conversation.id);
+		const messages = await repository.listMessages(conversation.id);
 		expect(
 			messages.map((message) => (message.kind === 'readable' ? message.content.text : undefined))
 		).toEqual(['first', 'second']);
@@ -84,8 +85,8 @@ describe('Postgres conversation repository invariants', () => {
 	// could hold but the type could not describe used to be a dead transcript.
 	it('reads a message whose stored content is not an object as unreadable', async () => {
 		const owner = actor('85');
-		await new UserRecords(context.db).ensureLocal(owner);
-		const repository = new ConversationRecords(context.db);
+		await new UserRecords(owner, context.db).ensureLocal();
+		const repository = new ConversationRecords(owner, context.db);
 		const conversation: Conversation = {
 			id: '20000000-0000-4000-8000-000000000085' as ConversationId,
 			userId: owner.userId,
@@ -93,7 +94,7 @@ describe('Postgres conversation repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		};
-		await repository.insert(owner, conversation);
+		await repository.insert(conversation);
 		await context.db.insert(schema.messages).values({
 			id: '30000000-0000-4000-8000-000000000085',
 			conversationId: conversation.id,
@@ -102,14 +103,14 @@ describe('Postgres conversation repository invariants', () => {
 			content: 'not a payload' as unknown as AgentPayloadObject,
 			createdAt: new Date(now)
 		});
-		const [message] = await repository.listMessages(owner, conversation.id);
+		const [message] = await repository.listMessages(conversation.id);
 		expect(message?.kind).toBe('unreadable');
 	});
 
 	it('keeps the columns of an unreadable message so it holds its place', async () => {
 		const owner = actor('86');
-		await new UserRecords(context.db).ensureLocal(owner);
-		const repository = new ConversationRecords(context.db);
+		await new UserRecords(owner, context.db).ensureLocal();
+		const repository = new ConversationRecords(owner, context.db);
 		const conversation: Conversation = {
 			id: '20000000-0000-4000-8000-000000000086' as ConversationId,
 			userId: owner.userId,
@@ -117,7 +118,7 @@ describe('Postgres conversation repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		};
-		await repository.insert(owner, conversation);
+		await repository.insert(conversation);
 		await context.db.insert(schema.messages).values({
 			id: '30000000-0000-4000-8000-000000000086',
 			conversationId: conversation.id,
@@ -126,14 +127,14 @@ describe('Postgres conversation repository invariants', () => {
 			content: 42 as unknown as AgentPayloadObject,
 			createdAt: new Date(now)
 		});
-		const [message] = await repository.listMessages(owner, conversation.id);
+		const [message] = await repository.listMessages(conversation.id);
 		expect(message?.role).toBe('assistant');
 	});
 
 	it('does not reveal a conversation to another actor', async () => {
 		const owner = actor('8');
-		await new UserRecords(context.db).ensureLocal(owner);
-		const repository = new ConversationRecords(context.db);
+		await new UserRecords(owner, context.db).ensureLocal();
+		const repository = new ConversationRecords(owner, context.db);
 		const conversation: Conversation = {
 			id: '20000000-0000-4000-8000-000000000008' as ConversationId,
 			userId: owner.userId,
@@ -141,17 +142,17 @@ describe('Postgres conversation repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		};
-		await repository.insert(owner, conversation);
-		expect(await repository.findById(actor('9'), conversation.id)).toBeUndefined();
+		await repository.insert(conversation);
+		expect(await repository.findById(conversation.id)).toBeUndefined();
 	});
 	it('lists only sessions owned by the actor', async () => {
 		const owner = actor('14');
 		const other = actor('15');
-		const users = new UserRecords(context.db);
-		await users.ensureLocal(owner);
-		await users.ensureLocal(other);
-		const repository = new ConversationRecords(context.db);
-		await repository.insert(owner, {
+		const users = new UserRecords(owner, context.db);
+		await users.ensureLocal();
+		await users.ensureLocal();
+		const repository = new ConversationRecords(owner, context.db);
+		await repository.insert({
 			id: '20000000-0000-4000-8000-000000000014' as ConversationId,
 			userId: owner.userId,
 			kind: 'chat',
@@ -159,7 +160,7 @@ describe('Postgres conversation repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		await repository.insert(other, {
+		await repository.insert({
 			id: '20000000-0000-4000-8000-000000000015' as ConversationId,
 			userId: other.userId,
 			kind: 'chat',
@@ -167,13 +168,13 @@ describe('Postgres conversation repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		const sessions = await repository.list(owner);
+		const sessions = await repository.list();
 		expect(sessions.map((session) => session.title)).toEqual(['Owned session']);
 	});
 	it('deletes only the named messages of a rewound turn', async () => {
 		const owner = actor('16');
-		await new UserRecords(context.db).ensureLocal(owner);
-		const repository = new ConversationRecords(context.db);
+		await new UserRecords(owner, context.db).ensureLocal();
+		const repository = new ConversationRecords(owner, context.db);
 		const conversation: Conversation = {
 			id: '20000000-0000-4000-8000-000000000016' as ConversationId,
 			userId: owner.userId,
@@ -182,30 +183,30 @@ describe('Postgres conversation repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		};
-		await repository.insert(owner, conversation);
+		await repository.insert(conversation);
 		// Same instant on purpose: the cut is by identity, not by timestamp.
 		for (const [index, text] of ['keep', 'discard', 'discard too'].entries())
-			await repository.appendMessage(owner, {
+			await repository.appendMessage({
 				id: `31000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}` as MessageId,
 				conversationId: conversation.id,
 				role: 'user',
 				content: { text },
 				createdAt: now
 			});
-		await repository.deleteMessages(owner, conversation.id, [
+		await repository.deleteMessages(conversation.id, [
 			'31000000-0000-4000-8000-000000000002' as MessageId,
 			'31000000-0000-4000-8000-000000000003' as MessageId
 		]);
-		const messages = await repository.listMessages(owner, conversation.id);
+		const messages = await repository.listMessages(conversation.id);
 		expect(
 			messages.map((message) => (message.kind === 'readable' ? message.content.text : undefined))
 		).toEqual(['keep']);
 	});
 	it('persists conversation model and execution-mode overrides', async () => {
 		const owner = actor('71');
-		await new UserRecords(context.db).ensureLocal(owner);
-		const repository = new ConversationRecords(context.db);
-		const conversation = await repository.insert(owner, {
+		await new UserRecords(owner, context.db).ensureLocal();
+		const repository = new ConversationRecords(owner, context.db);
+		const conversation = await repository.insert({
 			id: '20000000-0000-4000-8000-000000000071' as ConversationId,
 			userId: owner.userId,
 			kind: 'chat',
@@ -223,9 +224,9 @@ describe('Postgres conversation repository invariants', () => {
 describe('Postgres agent settings repository invariants', () => {
 	it('persists the actor default model and execution mode', async () => {
 		const owner = actor('72');
-		await new UserRecords(context.db).ensureLocal(owner);
-		const repository = new AgentPreferenceRecords(context.db);
-		const preferences = await repository.upsert(owner, {
+		await new UserRecords(owner, context.db).ensureLocal();
+		const repository = new AgentPreferenceRecords(owner, context.db);
+		const preferences = await repository.upsert({
 			userId: owner.userId,
 			defaultModel: 'anthropic/claude-test',
 			executionMode: 'auto_accept',
@@ -240,16 +241,16 @@ describe('Postgres agent settings repository invariants', () => {
 	});
 	it('does not reveal a paused run to another actor', async () => {
 		const owner = actor('73');
-		await new UserRecords(context.db).ensureLocal(owner);
-		const conversations = new ConversationRecords(context.db);
-		const conversation = await conversations.insert(owner, {
+		await new UserRecords(owner, context.db).ensureLocal();
+		const conversations = new ConversationRecords(owner, context.db);
+		const conversation = await conversations.insert({
 			id: '20000000-0000-4000-8000-000000000073' as ConversationId,
 			userId: owner.userId,
 			kind: 'chat',
 			createdAt: now,
 			updatedAt: now
 		});
-		const repository = new AgentRunRecords(context.db);
+		const repository = new AgentRunRecords(owner, context.db);
 		const run: AgentRun = {
 			kind: 'agent',
 			id: '70000000-0000-4000-8000-000000000073' as AgentRunId,
@@ -267,22 +268,22 @@ describe('Postgres agent settings repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		};
-		await repository.insert(owner, run);
-		expect(await repository.findById(actor('74'), run.id)).toBeUndefined();
+		await repository.insert(run);
+		expect(await repository.findById(run.id)).toBeUndefined();
 	});
 	it('round-trips serialized paused-run decisions', async () => {
 		const owner = actor('75');
-		await new UserRecords(context.db).ensureLocal(owner);
-		const conversations = new ConversationRecords(context.db);
-		const conversation = await conversations.insert(owner, {
+		await new UserRecords(owner, context.db).ensureLocal();
+		const conversations = new ConversationRecords(owner, context.db);
+		const conversation = await conversations.insert({
 			id: '20000000-0000-4000-8000-000000000075' as ConversationId,
 			userId: owner.userId,
 			kind: 'chat',
 			createdAt: now,
 			updatedAt: now
 		});
-		const repository = new AgentRunRecords(context.db);
-		const run = await repository.insert(owner, {
+		const repository = new AgentRunRecords(owner, context.db);
+		const run = await repository.insert({
 			kind: 'agent',
 			id: '70000000-0000-4000-8000-000000000075' as AgentRunId,
 			userId: owner.userId,
@@ -308,15 +309,15 @@ describe('Postgres agent settings repository invariants', () => {
 describe('Postgres durable agent run repository invariants', () => {
 	const seedQueuedRun = async (suffix: string): Promise<AgentRun> => {
 		const owner = actor(suffix);
-		await new UserRecords(context.db).ensureLocal(owner);
-		const conversation = await new ConversationRecords(context.db).insert(owner, {
+		await new UserRecords(owner, context.db).ensureLocal();
+		const conversation = await new ConversationRecords(owner, context.db).insert({
 			id: `21000000-0000-4000-8000-${suffix.padStart(12, '0')}` as ConversationId,
 			userId: owner.userId,
 			kind: 'chat',
 			createdAt: now,
 			updatedAt: now
 		});
-		return new AgentRunRecords(context.db).insert(owner, {
+		return new AgentRunRecords(owner, context.db).insert({
 			kind: 'agent',
 			id: `71000000-0000-4000-8000-${suffix.padStart(12, '0')}` as AgentRunId,
 			userId: owner.userId,
@@ -335,7 +336,7 @@ describe('Postgres durable agent run repository invariants', () => {
 	it('lets a consumer advance past an unreadable terminal event', async () => {
 		const run = await seedQueuedRun('97107');
 		const owner = actor('97107');
-		const events = new AgentRunEventRecords(context.db);
+		const events = new AgentRunEventRecords(owner, context.db);
 		const terminal = await events.append(run.id, 1, {
 			type: 'completed',
 			conversationId: run.conversationId
@@ -343,7 +344,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		await context.db.execute(
 			sql`update agent_run_events set event = '{"type":"future_completion"}'::jsonb where cursor = ${terminal.cursor}`
 		);
-		const runs = new AgentRunRecords(context.db);
+		const runs = new AgentRunRecords(owner, context.db);
 		await new RunPreparation(runs).claim(run.id, now);
 		await new RunSettlements(runs, events).claim(run.id, {
 			kind: 'completed',
@@ -351,6 +352,7 @@ describe('Postgres durable agent run repository invariants', () => {
 			model: run.model
 		});
 		const controller = new AgentSdkHarness(
+			owner,
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentHarnessDependencies>({
 				...agentRulesFixture(),
@@ -358,15 +360,15 @@ describe('Postgres durable agent run repository invariants', () => {
 				runs
 			})
 		);
-		const replay = await controller.listRunEvents(owner, run.id, '0');
+		const replay = await controller.listRunEvents(run.id, '0');
 		const tail = replay.at(-1);
 		if (!tail) throw new Error('Replay dropped its terminal cursor');
 		expect({
 			kind: tail.kind,
 			cursor: tail.cursor,
-			latest: await events.latestCursor(owner, run.id),
-			next: await controller.listRunEvents(owner, run.id, tail.cursor),
-			complete: await controller.isRunStreamComplete(owner, run.id, tail.cursor)
+			latest: await events.latestCursor(run.id),
+			next: await controller.listRunEvents(run.id, tail.cursor),
+			complete: await controller.isRunStreamComplete(run.id, tail.cursor)
 		}).toEqual({
 			kind: 'unreadable',
 			cursor: terminal.cursor,
@@ -379,9 +381,9 @@ describe('Postgres durable agent run repository invariants', () => {
 	it('reconstructs one attempt without merging across an unreadable stored event', async () => {
 		const run = await seedQueuedRun('17901');
 		const other = await seedQueuedRun('17902');
-		const runs = new AgentRunRecords(context.db);
+		const runs = new AgentRunRecords(testActor(), context.db);
 		await new RunPreparation(runs).claim(run.id, now);
-		const events = new AgentRunEventRecords(context.db);
+		const events = new AgentRunEventRecords(testActor(), context.db);
 		const first = await events.append(run.id, 1, { type: 'text_delta', text: 'Before.' });
 		await events.append(run.id, 2, { type: 'text_delta', text: 'Another attempt.' });
 		const unreadable = await events.append(run.id, 1, {
@@ -414,16 +416,15 @@ describe('Postgres durable agent run repository invariants', () => {
 	it('does not expose another actor’s run through event-stream completion', async () => {
 		const run = await seedQueuedRun('17803');
 		const controller = new AgentSdkHarness(
+			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentHarnessDependencies>({
 				...agentRulesFixture(),
-				runs: new AgentRunRecords(context.db),
-				events: new AgentRunEventRecords(context.db)
+				runs: new AgentRunRecords(testActor(), context.db),
+				events: new AgentRunEventRecords(testActor(), context.db)
 			})
 		);
-		await expect(controller.isRunStreamComplete(actor('17804'), run.id, '0')).rejects.toThrow(
-			'not found'
-		);
+		await expect(controller.isRunStreamComplete(run.id, '0')).rejects.toThrow('not found');
 	});
 
 	it('preserves a reviewed note change in PostgreSQL checkpoints and event replay', async () => {
@@ -436,14 +437,14 @@ describe('Postgres durable agent run repository invariants', () => {
 			arguments: { noteId: noteReviewBuilder().change.noteId, markdown: 'Tuesday' },
 			review
 		};
-		const runs = new AgentRunRecords(context.db);
+		const runs = new AgentRunRecords(owner, context.db);
 		await new RunPreparation(runs).claim(run.id, now);
 		const checkpoints = new RunCheckpoints(runs);
 		await checkpoints.persist(
 			run.id,
 			checkpoints.prepare(run, { serializedState: 'checkpoint', pendingDecisions: [pending] }, now)
 		);
-		const events = new AgentRunEventRecords(context.db);
+		const events = new AgentRunEventRecords(owner, context.db);
 		await events.append(run.id, 1, {
 			type: 'approval_required',
 			runId: run.id,
@@ -452,8 +453,8 @@ describe('Postgres durable agent run repository invariants', () => {
 			arguments: pending.arguments,
 			review
 		});
-		const reread = await runs.findById(owner, run.id);
-		const replay = await events.replay(owner, run.id, '0');
+		const reread = await runs.findById(run.id);
+		const replay = await events.replay(run.id, '0');
 		expect({
 			pending: reread?.pendingDecisions,
 			replay: replay.map((row) =>
@@ -465,7 +466,7 @@ describe('Postgres durable agent run repository invariants', () => {
 	});
 	it('orders replayed events by their global cursor', async () => {
 		const run = await seedQueuedRun('93');
-		const events = new AgentRunEventRecords(context.db);
+		const events = new AgentRunEventRecords(testActor(), context.db);
 		await Promise.all([
 			events.append(run.id, 0, {
 				type: 'run_queued',
@@ -476,7 +477,7 @@ describe('Postgres durable agent run repository invariants', () => {
 			events.append(run.id, 1, { type: 'text_delta', text: 'next' })
 		]);
 		const owner = actor('93');
-		const replay = await events.replay(owner, run.id, '0');
+		const replay = await events.replay(run.id, '0');
 		expect(replay.map((event) => event.cursor)).toEqual(
 			[...replay.map((event) => event.cursor)].sort((left, right) => Number(left) - Number(right))
 		);
@@ -490,7 +491,7 @@ describe('Postgres durable agent run repository invariants', () => {
 	 */
 	it('replays a reported failure with both the message and the value it came from', async () => {
 		const run = await seedQueuedRun('95');
-		const events = new AgentRunEventRecords(context.db);
+		const events = new AgentRunEventRecords(testActor(), context.db);
 		await events.append(run.id, 1, {
 			type: 'tool_reported_failure',
 			callId: 'call-95',
@@ -498,7 +499,7 @@ describe('Postgres durable agent run repository invariants', () => {
 			failure: 'No edits were applied.',
 			output: { failure: 'No edits were applied.', problems: ['oldText was not found.'] }
 		});
-		const [replayed] = await events.replay(actor('95'), run.id, '0');
+		const [replayed] = await events.replay(run.id, '0');
 		expect(replayed?.kind === 'readable' && replayed.event).toEqual({
 			type: 'tool_reported_failure',
 			callId: 'call-95',
@@ -516,7 +517,7 @@ describe('Postgres durable agent run repository invariants', () => {
 	 */
 	it('round-trips a parked tool call through the pending_decisions column', async () => {
 		const run = await seedQueuedRun('103');
-		const runs = new AgentRunRecords(context.db);
+		const runs = new AgentRunRecords(testActor(), context.db);
 		const parked = {
 			callId: 'call-103',
 			toolName: 'archive_note' as const,
@@ -528,7 +529,7 @@ describe('Postgres durable agent run repository invariants', () => {
 			run.id,
 			checkpoints.prepare(run, { serializedState: 'checkpoint', pendingDecisions: [parked] }, now)
 		);
-		const reread = await runs.findById(actor('103'), run.id);
+		const reread = await runs.findById(run.id);
 		expect(reread?.pendingDecisions).toEqual([parked]);
 	});
 
@@ -538,19 +539,19 @@ describe('Postgres durable agent run repository invariants', () => {
 	 */
 	it('reads an unparked run back with no pending decisions', async () => {
 		const run = await seedQueuedRun('104');
-		const runs = new AgentRunRecords(context.db);
-		expect((await runs.findById(actor('104'), run.id))?.pendingDecisions).toEqual([]);
+		const runs = new AgentRunRecords(testActor(), context.db);
+		expect((await runs.findById(run.id))?.pendingDecisions).toEqual([]);
 	});
 
 	it('replays a success that returned nothing without inventing a result', async () => {
 		const run = await seedQueuedRun('96');
-		const events = new AgentRunEventRecords(context.db);
+		const events = new AgentRunEventRecords(testActor(), context.db);
 		await events.append(run.id, 1, {
 			type: 'tool_succeeded',
 			callId: 'call-96',
 			name: 'save_note'
 		});
-		const [replayed] = await events.replay(actor('96'), run.id, '0');
+		const [replayed] = await events.replay(run.id, '0');
 		expect(replayed?.kind === 'readable' && replayed.event).toEqual({
 			type: 'tool_succeeded',
 			callId: 'call-96',
@@ -560,17 +561,17 @@ describe('Postgres durable agent run repository invariants', () => {
 	it('returns the same durable decision for an identical retry', async () => {
 		const run = await seedQueuedRun('94');
 		const owner = actor('94');
-		const decisions = new AgentRunDecisionRecords(context.db);
+		const decisions = new AgentRunDecisionRecords(owner, context.db);
 		const input = { runId: run.id, callId: 'call-94', decision: 'approve' as const };
-		const first = await decisions.record(owner, input);
-		const duplicate = await decisions.record(owner, input);
+		const first = await decisions.record(input);
+		const duplicate = await decisions.record(input);
 		expect(duplicate).toEqual(first);
 	});
 	it('rejects overlapping active runs in one conversation', async () => {
 		const run = await seedQueuedRun('97');
-		const repository = new AgentRunRecords(context.db);
+		const repository = new AgentRunRecords(testActor(), context.db);
 		await expect(
-			repository.insert(actor('97'), {
+			repository.insert({
 				...run,
 				id: '71000000-0000-4000-8000-000000000197' as AgentRunId,
 				requestId: 'request-97-overlap'
@@ -581,8 +582,8 @@ describe('Postgres durable agent run repository invariants', () => {
 describe('Postgres agent session repository invariants', () => {
 	const seedConversation = async (suffix: string) => {
 		const owner = actor(suffix);
-		await new UserRecords(context.db).ensureLocal(owner);
-		const conversation = await new ConversationRecords(context.db).insert(owner, {
+		await new UserRecords(owner, context.db).ensureLocal();
+		const conversation = await new ConversationRecords(owner, context.db).insert({
 			id: crypto.randomUUID() as ConversationId,
 			userId: owner.userId,
 			kind: 'chat',
@@ -602,54 +603,50 @@ describe('Postgres agent session repository invariants', () => {
 
 	it('returns every arm it was given, through the jsonb column', async () => {
 		const { owner, conversationId } = await seedConversation('81');
-		const repository = new AgentSessionRecords(context.db);
-		await repository.append(owner, conversationId, transcript);
-		expect((await repository.list(owner, conversationId)).map((row) => row.item)).toEqual(
-			transcript
-		);
+		const repository = new AgentSessionRecords(owner, context.db);
+		await repository.append(conversationId, transcript);
+		expect((await repository.list(conversationId)).map((row) => row.item)).toEqual(transcript);
 	});
 
 	it('recovers the latest saved canvas through ordered persisted results', async () => {
 		const { owner, conversationId } = await seedConversation('85');
-		const repository = new AgentSessionRecords(context.db);
-		await repository.append(owner, conversationId, [
+		const repository = new AgentSessionRecords(owner, context.db);
+		await repository.append(conversationId, [
 			resultItem('create_diagram', 'old', JSON.stringify({ diagramId: testDiagramId(1) })),
 			resultItem('edit_diagram', 'new', JSON.stringify({ diagramId: testDiagramId(2) })),
 			resultItem('edit_diagram', 'failed', JSON.stringify({ failure: 'Stale revision' }))
 		]);
-		expect(await new PresentedCanvasSource(repository).latest(owner, conversationId)).toBe(
+		expect(await new PresentedCanvasSource(repository).latest(conversationId)).toBe(
 			testDiagramId(2)
 		);
 	});
 
 	it('refuses to read canvas results from another account conversation', async () => {
 		const { owner, conversationId } = await seedConversation('86');
-		const repository = new AgentSessionRecords(context.db);
-		await repository.append(owner, conversationId, [
+		const repository = new AgentSessionRecords(owner, context.db);
+		await repository.append(conversationId, [
 			resultItem('create_diagram', 'call', JSON.stringify({ diagramId: testDiagramId() }))
 		]);
-		await expect(repository.listCanvasResults(actor('87'), conversationId)).rejects.toThrow(
+		await expect(repository.listCanvasResults(conversationId)).rejects.toThrow(
 			'Conversation was not found'
 		);
 	});
 
 	it('fails when canvas selection reaches corrupt persisted output', async () => {
 		const { owner, conversationId } = await seedConversation('88');
-		const repository = new AgentSessionRecords(context.db);
-		await repository.append(owner, conversationId, [resultItem('edit_diagram', 'corrupt', '{')]);
-		await expect(
-			new PresentedCanvasSource(repository).latest(owner, conversationId)
-		).rejects.toThrow();
+		const repository = new AgentSessionRecords(owner, context.db);
+		await repository.append(conversationId, [resultItem('edit_diagram', 'corrupt', '{')]);
+		await expect(new PresentedCanvasSource(repository).latest(conversationId)).rejects.toThrow();
 	});
 
 	it('recovers a newer persisted canvas after a superseded corrupt result', async () => {
 		const { owner, conversationId } = await seedConversation('89');
-		const repository = new AgentSessionRecords(context.db);
-		await repository.append(owner, conversationId, [
+		const repository = new AgentSessionRecords(owner, context.db);
+		await repository.append(conversationId, [
 			resultItem('edit_diagram', 'corrupt', '{'),
 			resultItem('create_diagram', 'saved', JSON.stringify({ diagramId: testDiagramId() }))
 		]);
-		expect(await new PresentedCanvasSource(repository).latest(owner, conversationId)).toBe(
+		expect(await new PresentedCanvasSource(repository).latest(conversationId)).toBe(
 			testDiagramId()
 		);
 	});
@@ -658,10 +655,10 @@ describe('Postgres agent session repository invariants', () => {
 	// met must not make the conversation unreadable.
 	it('round-trips an unrecognised stored row without changing its data', async () => {
 		const { owner, conversationId } = await seedConversation('82');
-		const repository = new AgentSessionRecords(context.db);
+		const repository = new AgentSessionRecords(owner, context.db);
 		const item = unrecognisedItem('compaction');
-		await repository.append(owner, conversationId, [item]);
-		const [row] = await repository.list(owner, conversationId);
+		await repository.append(conversationId, [item]);
+		const [row] = await repository.list(conversationId);
 		expect(row?.item).toEqual(item);
 	});
 
@@ -674,7 +671,7 @@ describe('Postgres agent session repository invariants', () => {
 			// audit-allow: shape-cast — the point of the test is a column the mapper's own writer cannot produce, so the row is inserted past the typed write path
 			item: 'not an item' as unknown as StoredSessionItem
 		});
-		await expect(new AgentSessionRecords(context.db).list(owner, conversationId)).rejects.toThrow(
+		await expect(new AgentSessionRecords(owner, context.db).list(conversationId)).rejects.toThrow(
 			'Invalid input'
 		);
 	});
@@ -682,15 +679,15 @@ describe('Postgres agent session repository invariants', () => {
 describe('Postgres trust-policy repository invariants', () => {
 	it('lists only policies owned by the actor', async () => {
 		const { owner } = await seedNote('25');
-		const repository = new TrustPolicyRecords(context.db);
-		await repository.upsert(owner, {
+		const repository = new TrustPolicyRecords(owner, context.db);
+		await repository.upsert({
 			userId: owner.userId,
 			pipeline: 'agent',
 			autoAcceptEnabled: false,
 			createdAt: now,
 			updatedAt: now
 		});
-		expect(await repository.list(actor('26'))).toEqual([]);
+		expect(await repository.list()).toEqual([]);
 	});
 });
 describe('Postgres tool-embedding repository invariants', () => {

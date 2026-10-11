@@ -14,14 +14,14 @@ it('stores the existing classification on the active replacement entry', async (
 	const { owner, project } = await seedNote('22901');
 	const provenance = await seedProvenance(owner, '22901');
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const entries = new MemoryRecords(database);
+	const entries = new MemoryRecords(owner, database);
 	const library = createMemoryServices(
+		owner,
 		entries,
-		new ProjectRecords(database),
-		new ProvenanceRecords(database)
+		new ProjectRecords(owner, database),
+		new ProvenanceRecords(owner, database)
 	);
 	const original = await library.creator.create(
-		owner,
 		memoryEntryBuilder({
 			id: testMemoryEntryId(22901),
 			userId: owner.userId,
@@ -32,7 +32,6 @@ it('stores the existing classification on the active replacement entry', async (
 	);
 	const { entry } = await transactionRunner.run(() =>
 		library.changes.apply(
-			owner,
 			{
 				scope: 'project',
 				projectId: project.id,
@@ -44,7 +43,7 @@ it('stores the existing classification on the active replacement entry', async (
 		)
 	);
 	expect(
-		(await entries.list(owner, { projectId: project.id })).map((item) => ({
+		(await entries.list({ projectId: project.id })).map((item) => ({
 			id: item.id,
 			type: item.type,
 			content: item.content

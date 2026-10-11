@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { MemoryEditingService, type IMemoryEditingService } from '$lib/services/memory/edits';
 import {
 	MemoryPresentationService,
@@ -38,12 +39,13 @@ export interface MemoryCapability {
 	readonly changes: MemoryChanges;
 }
 export const createMemoryServices = (
+	actor: ActorContext,
 	entries: MemoryEntryRepository,
 	projects: ProjectRepository,
 	provenance: ProvenanceRepository
 ): MemoryCapability => {
-	const reading = new MemoryReadingService(entries, projects);
-	const writing = new MemoryWritingService(entries, projects);
+	const reading = new MemoryReadingService(actor, entries, projects);
+	const writing = new MemoryWritingService(actor, entries, projects);
 	return {
 		editing: new MemoryEditingService(),
 		presentation: new MemoryPresentationService(),
@@ -51,9 +53,12 @@ export const createMemoryServices = (
 		lister: reading,
 		creator: writing,
 		editor: writing,
-		deleter: new MemoryLifecycleService(entries, projects),
-		changes: new MemoryProposalService(entries, projects, provenance)
+		deleter: new MemoryLifecycleService(actor, entries, projects),
+		changes: new MemoryProposalService(actor, entries, projects, provenance)
 	};
 };
-export const createMemoryCapability = (input: MemoryCapabilityInput): MemoryCapability =>
-	createMemoryServices(new MemoryRecords(input.db), input.projects, input.provenance);
+export const createMemoryCapability = (
+	actor: ActorContext,
+	input: MemoryCapabilityInput
+): MemoryCapability =>
+	createMemoryServices(actor, new MemoryRecords(actor, input.db), input.projects, input.provenance);

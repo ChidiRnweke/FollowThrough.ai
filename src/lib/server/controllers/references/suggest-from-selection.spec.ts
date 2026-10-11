@@ -21,14 +21,14 @@ const reference = (
 describe('Reference workflow invariants', () => {
 	it('returns an honest empty outcome when search finds nothing', async () => {
 		const { reference: controller } = setup();
-		const result = await controller.suggestFromSelection(testActor(), { selection });
+		const result = await controller.suggestFromSelection({ selection });
 		expect(result.outcome).toBe('nothing_relevant');
 	});
 
 	it('ranks official sources before community sources', async () => {
 		const { references, reference: controller } = setup();
 		references.candidates = [reference('Blog', 'community', 99), reference('Spec', 'official', 70)];
-		const result = await controller.suggestFromSelection(testActor(), { selection });
+		const result = await controller.suggestFromSelection({ selection });
 		expect(
 			result.outcome === 'found' && result.suggestions[0]?.kind === 'reference'
 				? result.suggestions[0].payload.title
@@ -39,7 +39,7 @@ describe('Reference workflow invariants', () => {
 	it('keeps reference results in proposed state', async () => {
 		const { references, reference: controller } = setup();
 		references.candidates = [reference('Spec', 'standard', 90)];
-		const result = await controller.suggestFromSelection(testActor(), { selection });
+		const result = await controller.suggestFromSelection({ selection });
 		expect(result.outcome === 'found' ? result.suggestions[0]?.status : undefined).toBe('proposed');
 	});
 
@@ -48,7 +48,7 @@ describe('Reference workflow invariants', () => {
 		references.candidates = [reference('Spec', 'standard', 90)];
 		suggestions.failCreation = true;
 		try {
-			await controller.suggestFromSelection(testActor(), { selection });
+			await controller.suggestFromSelection({ selection });
 		} catch {
 			// The restored anchor collection is the invariant under test.
 		}

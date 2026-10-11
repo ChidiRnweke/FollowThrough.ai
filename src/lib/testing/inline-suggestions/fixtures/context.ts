@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { InlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
 import {
@@ -19,14 +20,18 @@ import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memo
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
 export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDependencies> = {}) => {
-	const notes = new InMemoryNoteContent();
-	const memory = new InMemoryMemoryEntryRepository();
-	const search = new InMemorySearchRepository();
+	const notes = new InMemoryNoteContent(testActor());
+	const memory = new InMemoryMemoryEntryRepository(testActor());
+	const search = new InMemorySearchRepository(testActor());
 	const provider = new InMemoryRetrievalProvider();
 	const generator = new InMemoryInlineCompletion();
-	const preferences = new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository());
+	const preferences = new AgentPreferenceCatalog(
+		testActor(),
+		new InMemoryAgentPreferencesRepository(testActor())
+	);
 	const attempts = new InMemoryInlineAttempts();
 	const controller = new InlineSuggestions(
+		testActor(),
 		capabilityDependencies<InlineSuggestionsDependencies>({
 			context: new InlineContextService(testTokenizer),
 			noteReader: notes,

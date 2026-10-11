@@ -4,26 +4,24 @@ import { projectBuilder, testActor } from '$lib/testing/workspace/fixtures/domai
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 
 const setup = () => {
-	const repository = new InMemoryProjectRepository();
+	const repository = new InMemoryProjectRepository(testActor());
 	repository.projects = [projectBuilder()];
-	return { repository, service: createProjectServices(repository, repository) };
+	return { repository, service: createProjectServices(testActor(), repository, repository) };
 };
 
 describe('Project management invariants', () => {
 	it('hides a project tree after the project is archived', async () => {
 		const { service } = setup();
-		await service.lifecycle.archive(testActor(), projectBuilder().id);
-		await expect(
-			service.treeReader.readEntries(testActor(), projectBuilder().id)
-		).rejects.toMatchObject({
+		await service.lifecycle.archive(projectBuilder().id);
+		await expect(service.treeReader.readEntries(projectBuilder().id)).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});
 
 	it('allows an archived project name to be reused', async () => {
 		const { service } = setup();
-		await service.lifecycle.archive(testActor(), projectBuilder().id);
-		const replacement = await service.creator.create(testActor(), {
+		await service.lifecycle.archive(projectBuilder().id);
+		const replacement = await service.creator.create({
 			name: projectBuilder().name,
 			description: undefined
 		});
@@ -32,9 +30,9 @@ describe('Project management invariants', () => {
 
 	it('rejects renaming to another active project name', async () => {
 		const { service } = setup();
-		await service.creator.create(testActor(), { name: 'Other', description: undefined });
+		await service.creator.create({ name: 'Other', description: undefined });
 		await expect(
-			service.editor.rename(testActor(), {
+			service.editor.rename({
 				projectId: projectBuilder().id,
 				name: 'other',
 				description: undefined

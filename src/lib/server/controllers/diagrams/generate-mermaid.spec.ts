@@ -17,11 +17,12 @@ import { Diagrams, type DiagramsDependencies } from './controller';
 
 const setup = () => {
 	const generation = diagramGenerationFixture();
-	const notes = new InMemoryNoteContent();
+	const notes = new InMemoryNoteContent(testActor());
 	notes.notes = [noteBuilder({ plainText: 'Service A calls Service B' })];
-	const suggestions = new InMemorySuggestions();
-	const provenance = new InMemoryProvenanceRecorder();
+	const suggestions = new InMemorySuggestions(testActor());
+	const provenance = new InMemoryProvenanceRecorder(testActor());
 	const controller = new Diagrams(
+		testActor(),
 		capabilityDependencies<DiagramsDependencies>({
 			...agentToolResultsFixture(),
 			generationRules: new DiagramGenerationRuleService(),
@@ -54,7 +55,7 @@ const input = {
 describe('Generate Mermaid workflow invariants', () => {
 	it('returns a Mermaid suggestion rather than mutating a diagram directly', async () => {
 		const { controller } = setup();
-		const result = await controller.generateMermaid(testActor(), input);
+		const result = await controller.generateMermaid(input);
 		expect(result.suggestion.kind).toBe('diagram');
 
 		expect(
@@ -65,7 +66,7 @@ describe('Generate Mermaid workflow invariants', () => {
 	it('rolls back the source anchor when suggestion persistence fails', async () => {
 		const { controller, notes, suggestions } = setup();
 		suggestions.failCreation = true;
-		await controller.generateMermaid(testActor(), input).catch(() => undefined);
+		await controller.generateMermaid(input).catch(() => undefined);
 		expect(notes.anchors).toEqual([]);
 	});
 });

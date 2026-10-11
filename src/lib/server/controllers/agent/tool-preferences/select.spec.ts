@@ -22,10 +22,11 @@ const catalog: readonly ResolvedToolCatalogEntry[] = [
 
 const controller = () =>
 	new ToolPreferences(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ToolPreferencesDependencies>({
 			...agentToolResultsFixture(),
-			preferences: new ToolAccess(new InMemoryToolPreferenceRepository()),
+			preferences: new ToolAccess(new InMemoryToolPreferenceRepository(testActor())),
 			catalog: new InMemoryToolCatalog(catalog)
 		})
 	);
@@ -35,14 +36,14 @@ const stateOf = (view: readonly { name: string; enabled: boolean }[], name: stri
 
 describe('Selecting tools', () => {
 	it('lists every tool in the catalog', async () => {
-		expect((await controller().list(testActor())).map(({ name }) => name).sort()).toEqual([
+		expect((await controller().list()).map(({ name }) => name).sort()).toEqual([
 			'archive_project',
 			'load_skill'
 		]);
 	});
 
 	it('returns the tool as disabled after turning it off', async () => {
-		const view = await controller().setEnabled(testActor(), {
+		const view = await controller().setEnabled({
 			toolName: 'archive_project',
 			enabled: false
 		});
@@ -51,22 +52,22 @@ describe('Selecting tools', () => {
 
 	it('scopes a project override to that project', async () => {
 		const tools = controller();
-		await tools.setEnabled(testActor(), {
+		await tools.setEnabled({
 			toolName: 'archive_project',
 			enabled: false,
 			projectId: testProjectId()
 		});
-		expect(stateOf(await tools.list(testActor()), 'archive_project').enabled).toBe(true);
+		expect(stateOf(await tools.list(), 'archive_project').enabled).toBe(true);
 	});
 
 	it('restores the workspace default when an override is cleared', async () => {
 		const tools = controller();
-		await tools.setEnabled(testActor(), {
+		await tools.setEnabled({
 			toolName: 'archive_project',
 			enabled: false,
 			projectId: testProjectId()
 		});
-		const view = await tools.clearOverride(testActor(), {
+		const view = await tools.clearOverride({
 			toolName: 'archive_project',
 			projectId: testProjectId()
 		});
@@ -75,13 +76,13 @@ describe('Selecting tools', () => {
 
 	it('refuses to turn off a locked tool', async () => {
 		await expect(
-			controller().setEnabled(testActor(), { toolName: 'load_skill', enabled: false })
+			controller().setEnabled({ toolName: 'load_skill', enabled: false })
 		).rejects.toThrow(ValidationError);
 	});
 
 	it('refuses a tool name that does not exist', async () => {
 		await expect(
-			controller().setEnabled(testActor(), { toolName: 'summon_kraken', enabled: false })
+			controller().setEnabled({ toolName: 'summon_kraken', enabled: false })
 		).rejects.toThrow(ValidationError);
 	});
 });

@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -35,15 +36,19 @@ const application = (
 	transaction: ReturnType<typeof createTransactionContext<typeof context.db>>
 ) => {
 	const { database, transactionRunner } = transaction;
-	const suggestions = new SuggestionRecords(database);
-	const notes = new NoteRecords(database);
-	const provenance = new ProvenanceRecords(database);
-	const anchors = new SourceAnchorRecords(database);
-	const inbox = createSuggestionServices(suggestions, notes, provenance, anchors);
-	const repository = new SuggestionEffectRecords(database, new WorkspaceSyncObjects(database));
-	const entries = new MemoryRecords(database);
-	const relationships = new RelationshipRecords(database);
-	const search = new KnowledgeIndexRecords(database);
+	const suggestions = new SuggestionRecords(testActor(), database);
+	const notes = new NoteRecords(testActor(), database);
+	const provenance = new ProvenanceRecords(testActor(), database);
+	const anchors = new SourceAnchorRecords(testActor(), database);
+	const inbox = createSuggestionServices(testActor(), suggestions, notes, provenance, anchors);
+	const repository = new SuggestionEffectRecords(
+		testActor(),
+		database,
+		new WorkspaceSyncObjects(testActor(), database)
+	);
+	const entries = new MemoryRecords(testActor(), database);
+	const relationships = new RelationshipRecords(testActor(), database);
+	const search = new KnowledgeIndexRecords(testActor(), database);
 	const embeddings = new InMemoryRetrievalProvider();
 	for (const content of ['Original', 'Replacement', 'Accepted']) {
 		embeddings.vectorsByContent.set(
@@ -53,6 +58,7 @@ const application = (
 	}
 	const index = createContentIndex(search, undefined, undefined, false, embeddings);
 	const controller = new Suggestions(
+		testActor(),
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
 			...agentToolResultsFixture(),
@@ -62,10 +68,19 @@ const application = (
 			suggestionAccepter: inbox.accepter,
 			suggestionReverter: inbox.reverter,
 			suggestionEffects: new SuggestionEffects(repository),
-			memoryChanges: createMemoryServices(entries, new ProjectRecords(database), provenance)
-				.changes,
-			relationshipCreator: createRelationshipServices(relationships, notes, anchors, provenance)
-				.creator,
+			memoryChanges: createMemoryServices(
+				testActor(),
+				entries,
+				new ProjectRecords(testActor(), database),
+				provenance
+			).changes,
+			relationshipCreator: createRelationshipServices(
+				testActor(),
+				relationships,
+				notes,
+				anchors,
+				provenance
+			).creator,
 			memoryIndexer: index,
 			transactionRunner,
 			now: () => now
@@ -91,7 +106,7 @@ const setup = async (suffix: string) => {
 };
 const memoryReplacement = async (suffix: string) => {
 	const state = await setup(suffix);
-	const original = await state.entries.insert(state.owner, {
+	const original = await state.entries.insert({
 		id: crypto.randomUUID() as MemoryEntryId,
 		userId: state.owner.userId,
 		projectId: state.project.id,
@@ -100,7 +115,7 @@ const memoryReplacement = async (suffix: string) => {
 		createdAt: now,
 		updatedAt: now
 	});
-	const suggestion = await state.inbox.creator.create(state.owner, {
+	const suggestion = await state.inbox.creator.create({
 		kind: 'memory',
 		provenanceId: state.provenance.id,
 		payload: {
@@ -111,33 +126,31 @@ const memoryReplacement = async (suffix: string) => {
 			content: 'Replacement'
 		}
 	});
-	const accepted = await state.controller.accept(state.owner, { suggestionId: suggestion.id });
-	const replacement = await state.entries.findById(
-		state.owner,
-		accepted.artifact.id as MemoryEntryId
-	);
+	const accepted = await state.controller.accept({ suggestionId: suggestion.id });
+	const replacement = await state.entries.findById(accepted.artifact.id as MemoryEntryId);
 	if (!replacement) throw new Error('Accepted memory replacement was not stored');
 	return { ...state, original, replacement, suggestion };
 };
 const activeMemory = async (state: Awaited<ReturnType<typeof memoryReplacement>>) =>
-	(await state.entries.list(state.owner, { projectId: state.project.id })).map(
-		({ id, content }) => ({ id, content })
-	);
+	(await state.entries.list({ projectId: state.project.id })).map(({ id, content }) => ({
+		id,
+		content
+	}));
 
 describe('Durable proposal application effects', () => {
 	it('restores both memory records and their search index through the controller', async () => {
 		const state = await memoryReplacement('9501');
-		const result = await state.controller.revert(state.owner, {
+		const result = await state.controller.revert({
 			suggestionId: state.suggestion.id
 		});
 		expect({
 			status: result.status,
-			stored: await state.suggestions.findById(state.owner, result.id),
+			stored: await state.suggestions.findById(result.id),
 			active: await activeMemory(state),
-			originalChunks: (await state.search.listForMemoryEntry(state.owner, state.original.id)).map(
+			originalChunks: (await state.search.listForMemoryEntry(state.original.id)).map(
 				(c) => c.content
 			),
-			replacementChunks: await state.search.listForMemoryEntry(state.owner, state.replacement.id)
+			replacementChunks: await state.search.listForMemoryEntry(state.replacement.id)
 		}).toEqual({
 			status: 'reverted',
 			stored: result,
@@ -148,17 +161,15 @@ describe('Durable proposal application effects', () => {
 	});
 	it('refuses stale undo before restoring either memory record', async () => {
 		const state = await memoryReplacement('9502');
-		await state.entries.update(state.owner, { ...state.replacement, content: 'Later edit' });
-		const outcome = await state.controller
-			.revert(state.owner, { suggestionId: state.suggestion.id })
-			.then(
-				() => 'unexpected success',
-				(error: Error) => error.message
-			);
+		await state.entries.update({ ...state.replacement, content: 'Later edit' });
+		const outcome = await state.controller.revert({ suggestionId: state.suggestion.id }).then(
+			() => 'unexpected success',
+			(error: Error) => error.message
+		);
 		expect({
 			outcome,
 			active: await activeMemory(state),
-			status: (await state.suggestions.findById(state.owner, state.suggestion.id))?.status
+			status: (await state.suggestions.findById(state.suggestion.id))?.status
 		}).toEqual({
 			outcome: 'Cannot undo this suggestion because its saved data has changed.',
 			active: [{ id: state.replacement.id, content: 'Later edit' }],
@@ -167,12 +178,12 @@ describe('Durable proposal application effects', () => {
 	});
 	it('preserves an existing relationship when undo restores its justification', async () => {
 		const state = await setup('9503');
-		const target = await state.notes.insert(state.owner, {
+		const target = await state.notes.insert({
 			...state.note,
 			id: crypto.randomUUID() as NoteId,
 			position: 1
 		});
-		const original = await state.relationships.insert(state.owner, {
+		const original = await state.relationships.insert({
 			id: crypto.randomUUID() as RelationshipId,
 			userId: state.owner.userId,
 			sourceNoteId: state.note.id,
@@ -182,7 +193,7 @@ describe('Durable proposal application effects', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		const suggestion = await state.inbox.creator.create(state.owner, {
+		const suggestion = await state.inbox.creator.create({
 			kind: 'backlink',
 			noteId: state.note.id,
 			provenanceId: state.provenance.id,
@@ -193,9 +204,9 @@ describe('Durable proposal application effects', () => {
 				justification: 'Suggested'
 			}
 		});
-		await state.controller.accept(state.owner, { suggestionId: suggestion.id });
-		await state.controller.revert(state.owner, { suggestionId: suggestion.id });
-		expect(await state.relationships.findById(state.owner, original.id)).toMatchObject({
+		await state.controller.accept({ suggestionId: suggestion.id });
+		await state.controller.revert({ suggestionId: suggestion.id });
+		expect(await state.relationships.findById(original.id)).toMatchObject({
 			id: original.id,
 			justification: 'Original'
 		});
@@ -204,17 +215,17 @@ describe('Durable proposal application effects', () => {
 		const state = await memoryReplacement('9505');
 		await state.transactionRunner
 			.run(async () => {
-				await state.controller.revert(state.owner, { suggestionId: state.suggestion.id });
+				await state.controller.revert({ suggestionId: state.suggestion.id });
 				throw new Error('Rejected surrounding write');
 			})
 			.catch((error) => ({ kind: 'failure', error }));
 		expect({
 			active: await activeMemory(state),
-			status: (await state.suggestions.findById(state.owner, state.suggestion.id))?.status,
-			replacementChunks: (
-				await state.search.listForMemoryEntry(state.owner, state.replacement.id)
-			).map((c) => c.content),
-			originalChunks: await state.search.listForMemoryEntry(state.owner, state.original.id)
+			status: (await state.suggestions.findById(state.suggestion.id))?.status,
+			replacementChunks: (await state.search.listForMemoryEntry(state.replacement.id)).map(
+				(c) => c.content
+			),
+			originalChunks: await state.search.listForMemoryEntry(state.original.id)
 		}).toEqual({
 			active: [{ id: state.replacement.id, content: 'Replacement' }],
 			status: 'accepted',
@@ -228,13 +239,13 @@ describe('Durable proposal application effects', () => {
 		try {
 			const second = application(createTransactionContext(connection.db));
 			const results = await Promise.allSettled([
-				state.controller.revert(state.owner, { suggestionId: state.suggestion.id }),
-				second.controller.revert(state.owner, { suggestionId: state.suggestion.id })
+				state.controller.revert({ suggestionId: state.suggestion.id }),
+				second.controller.revert({ suggestionId: state.suggestion.id })
 			]);
 			expect({
 				outcomes: results.map((r) => r.status).sort(),
 				active: await activeMemory(state),
-				status: (await state.suggestions.findById(state.owner, state.suggestion.id))?.status
+				status: (await state.suggestions.findById(state.suggestion.id))?.status
 			}).toEqual({
 				outcomes: ['fulfilled', 'rejected'],
 				active: [{ id: state.original.id, content: 'Original' }],
@@ -246,7 +257,7 @@ describe('Durable proposal application effects', () => {
 	});
 	it('serializes competing controller acceptances with one effect and one artifact', async () => {
 		const state = await setup('9508');
-		const suggestion = await state.inbox.creator.create(state.owner, {
+		const suggestion = await state.inbox.creator.create({
 			kind: 'memory',
 			provenanceId: state.provenance.id,
 			payload: {
@@ -260,17 +271,14 @@ describe('Durable proposal application effects', () => {
 		try {
 			const second = application(createTransactionContext(connection.db));
 			const results = await Promise.allSettled([
-				state.controller.accept(state.owner, { suggestionId: suggestion.id }),
-				second.controller.accept(state.owner, { suggestionId: suggestion.id })
+				state.controller.accept({ suggestionId: suggestion.id }),
+				second.controller.accept({ suggestionId: suggestion.id })
 			]);
-			const accepted = await state.suggestions.findById(state.owner, suggestion.id);
+			const accepted = await state.suggestions.findById(suggestion.id);
 			expect({
 				outcomes: results.map((r) => r.status).sort(),
-				artifactIds: (await state.entries.list(state.owner, { projectId: state.project.id })).map(
-					(e) => e.id
-				),
-				effectId: (await state.repository.find(state.owner, suggestion.id))?.changes[0]?.after.value
-					.id
+				artifactIds: (await state.entries.list({ projectId: state.project.id })).map((e) => e.id),
+				effectId: (await state.repository.find(suggestion.id))?.changes[0]?.after.value.id
 			}).toEqual({
 				outcomes: ['fulfilled', 'rejected'],
 				artifactIds: [accepted?.appliedArtifactId],
@@ -282,7 +290,7 @@ describe('Durable proposal application effects', () => {
 	});
 	it('rejects an invalid stored effect at the repository boundary', async () => {
 		const state = await setup('9507');
-		const suggestion = await state.inbox.creator.create(state.owner, {
+		const suggestion = await state.inbox.creator.create({
 			kind: 'memory',
 			provenanceId: state.provenance.id,
 			payload: { scope: 'user', operation: 'add', content: 'Original' }
@@ -290,21 +298,19 @@ describe('Durable proposal application effects', () => {
 		await state.database.execute(
 			sql`insert into suggestion_application_effects(suggestion_id,user_id,effect) values (${suggestion.id},${state.owner.userId},'{"changes":[]}'::jsonb)`
 		);
-		await expect(state.repository.find(state.owner, suggestion.id)).rejects.toThrow();
+		await expect(state.repository.find(suggestion.id)).rejects.toThrow();
 	});
 	it('keeps acceptance and replacement intact when restored memory cannot be indexed', async () => {
 		const state = await memoryReplacement('23101');
 		state.embeddings.embeddingFailure = new Error('Embedding unavailable');
-		const outcome = await state.controller
-			.revert(state.owner, { suggestionId: state.suggestion.id })
-			.then(
-				() => 'unexpected success',
-				(error: Error) => error.message
-			);
+		const outcome = await state.controller.revert({ suggestionId: state.suggestion.id }).then(
+			() => 'unexpected success',
+			(error: Error) => error.message
+		);
 		expect({
 			outcome,
 			active: await activeMemory(state),
-			status: (await state.suggestions.findById(state.owner, state.suggestion.id))?.status
+			status: (await state.suggestions.findById(state.suggestion.id))?.status
 		}).toEqual({
 			outcome: 'Embedding generation failed',
 			active: [{ id: state.replacement.id, content: 'Replacement' }],
@@ -314,12 +320,10 @@ describe('Durable proposal application effects', () => {
 	it('refuses a different actor without restoring the owned replacement', async () => {
 		const state = await memoryReplacement('23102');
 		const foreign = await seedNote('23112');
-		const outcome = await state.controller
-			.revert(foreign.owner, { suggestionId: state.suggestion.id })
-			.then(
-				() => 'unexpected success',
-				(error: Error) => error.message
-			);
+		const outcome = await state.controller.revert({ suggestionId: state.suggestion.id }).then(
+			() => 'unexpected success',
+			(error: Error) => error.message
+		);
 		expect({ outcome, active: await activeMemory(state) }).toEqual({
 			outcome: 'Suggestion was not found',
 			active: [{ id: state.replacement.id, content: 'Replacement' }]

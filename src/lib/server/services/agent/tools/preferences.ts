@@ -8,17 +8,14 @@ import type { ToolPreferenceRepository } from '$lib/server/repositories/agent';
 export interface ToolPreferenceCapability {
 	/** The full catalog with each tool's resolved state, for the settings UI. */
 	view(
-		actor: ActorContext,
 		catalog: readonly ResolvedToolCatalogEntry[],
 		projectId?: ProjectId
 	): Promise<readonly ToolPreference[]>;
 	setEnabled(
-		actor: ActorContext,
 		catalog: readonly ResolvedToolCatalogEntry[],
 		input: { toolName: string; enabled: boolean; projectId?: ProjectId }
 	): Promise<void>;
 	clearOverride(
-		actor: ActorContext,
 		catalog: readonly ResolvedToolCatalogEntry[],
 		projectId: ProjectId,
 		toolName: string
@@ -32,11 +29,10 @@ export class ToolAccess implements ToolPreferenceCapability {
 	constructor(private readonly repository: ToolPreferenceRepository) {}
 
 	async view(
-		actor: ActorContext,
 		catalog: readonly ResolvedToolCatalogEntry[],
 		projectId?: ProjectId
 	): Promise<readonly ToolPreference[]> {
-		const { user, project } = await this.storedRows(actor, projectId);
+		const { user, project } = await this.storedRows(projectId);
 		return catalog.map((entry) => {
 			const { enabled, source } = this.resolveEntry(entry, user, project);
 			return {
@@ -51,24 +47,22 @@ export class ToolAccess implements ToolPreferenceCapability {
 	}
 
 	async setEnabled(
-		actor: ActorContext,
 		catalog: readonly ResolvedToolCatalogEntry[],
 		input: { toolName: string; enabled: boolean; projectId?: ProjectId }
 	): Promise<void> {
 		this.assertSelectable(catalog, input.toolName);
 		const preference = { toolName: input.toolName, enabled: input.enabled };
-		if (input.projectId) await this.repository.upsertForProject(actor, input.projectId, preference);
-		else await this.repository.upsertForUser(actor, preference);
+		if (input.projectId) await this.repository.upsertForProject(input.projectId, preference);
+		else await this.repository.upsertForUser(preference);
 	}
 
 	async clearOverride(
-		actor: ActorContext,
 		catalog: readonly ResolvedToolCatalogEntry[],
 		projectId: ProjectId,
 		toolName: string
 	): Promise<void> {
 		this.assertSelectable(catalog, toolName);
-		await this.repository.deleteProjectOverride(actor, projectId, toolName);
+		await this.repository.deleteProjectOverride(projectId, toolName);
 	}
 
 	/**
@@ -84,10 +78,10 @@ export class ToolAccess implements ToolPreferenceCapability {
 			);
 	}
 
-	private async storedRows(actor: ActorContext, projectId?: ProjectId) {
-		const user = byName(await this.repository.listForUser(actor));
+	private async storedRows(projectId?: ProjectId) {
+		const user = byName(await this.repository.listForUser());
 		const project = projectId
-			? byName(await this.repository.listForProject(actor, projectId))
+			? byName(await this.repository.listForProject(projectId))
 			: new Map<string, boolean>();
 		return { user, project };
 	}

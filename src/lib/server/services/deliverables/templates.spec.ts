@@ -12,20 +12,32 @@ const input = {
 };
 describe('template upload reservations', () => {
 	it('rejects an empty upload reservation', async () => {
-		const templates = new TemplateUploadService(new InMemoryTemplateRepository(), () => testNow);
-		await expect(
-			templates.reserveUpload(testActor(), { ...input, byteSize: 0 })
-		).rejects.toMatchObject({ code: 'VALIDATION' });
+		const templates = new TemplateUploadService(
+			testActor(),
+			new InMemoryTemplateRepository(testActor()),
+			() => testNow
+		);
+		await expect(templates.reserveUpload({ ...input, byteSize: 0 })).rejects.toMatchObject({
+			code: 'VALIDATION'
+		});
 	});
 	it('rejects a malformed checksum', async () => {
-		const templates = new TemplateUploadService(new InMemoryTemplateRepository(), () => testNow);
+		const templates = new TemplateUploadService(
+			testActor(),
+			new InMemoryTemplateRepository(testActor()),
+			() => testNow
+		);
 		await expect(
-			templates.reserveUpload(testActor(), { ...input, checksumSha256: 'invalid' })
+			templates.reserveUpload({ ...input, checksumSha256: 'invalid' })
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 	it('normalizes the checksum and retains the declared size in the reservation', async () => {
-		const templates = new TemplateUploadService(new InMemoryTemplateRepository(), () => testNow);
-		const upload = await templates.reserveUpload(testActor(), {
+		const templates = new TemplateUploadService(
+			testActor(),
+			new InMemoryTemplateRepository(testActor()),
+			() => testNow
+		);
+		const upload = await templates.reserveUpload({
 			...input,
 			checksumSha256: 'A'.repeat(64)
 		});

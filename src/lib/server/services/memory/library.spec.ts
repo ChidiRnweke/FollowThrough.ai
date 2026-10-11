@@ -19,9 +19,9 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = async () => {
-	const entries = new InMemoryMemoryEntryRepository();
-	const projects = new InMemoryProjectRepository();
-	const provenance = new InMemoryProvenanceRepository();
+	const entries = new InMemoryMemoryEntryRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
+	const provenance = new InMemoryProvenanceRepository(testActor());
 	projects.projects = [projectBuilder()];
 	const record: Provenance = {
 		id: testProvenanceId(),
@@ -32,8 +32,8 @@ const setup = async () => {
 		metadata: {},
 		createdAt: testNow
 	};
-	await provenance.insert(testActor(), record);
-	const service = createMemoryServices(entries, projects, provenance);
+	await provenance.insert(record);
+	const service = createMemoryServices(testActor(), entries, projects, provenance);
 	return { entries, projects, provenance, service };
 };
 
@@ -49,7 +49,6 @@ describe('Memory entry management invariants', () => {
 		const { service } = await setup();
 		await expect(
 			service.creator.create(
-				testActor(),
 				memoryEntryBuilder({
 					id: testMemoryEntryId(1),
 					projectId: testProjectId(99),
@@ -62,11 +61,10 @@ describe('Memory entry management invariants', () => {
 	it('hides a removed entry from the project list', async () => {
 		const { service } = await setup();
 		const entry = await service.creator.create(
-			testActor(),
 			memoryEntryBuilder({ id: testMemoryEntryId(2), projectId: testProjectId(), content: 'Fact' })
 		);
-		await service.deleter.remove(testActor(), entry.id);
-		expect(await service.lister.list(testActor(), { projectId: testProjectId() })).toEqual([]);
+		await service.deleter.remove(entry.id);
+		expect(await service.lister.list({ projectId: testProjectId() })).toEqual([]);
 	});
 });
 
@@ -74,7 +72,6 @@ describe('User profile memory invariants', () => {
 	it('creates a profile entry without any project', async () => {
 		const { service } = await setup();
 		const entry = await service.creator.create(
-			testActor(),
 			memoryEntryBuilder({
 				id: testMemoryEntryId(3),
 				projectId: undefined,
@@ -87,7 +84,6 @@ describe('User profile memory invariants', () => {
 	it('lists profile entries without project entries', async () => {
 		const { service } = await setup();
 		await service.creator.create(
-			testActor(),
 			memoryEntryBuilder({
 				id: testMemoryEntryId(4),
 				projectId: testProjectId(),
@@ -95,22 +91,18 @@ describe('User profile memory invariants', () => {
 			})
 		);
 		const profile = await service.creator.create(
-			testActor(),
 			memoryEntryBuilder({
 				id: testMemoryEntryId(5),
 				projectId: undefined,
 				content: 'I prefer short answers.'
 			})
 		);
-		expect((await service.lister.list(testActor(), {})).map((item) => item.id)).toEqual([
-			profile.id
-		]);
+		expect((await service.lister.list({})).map((item) => item.id)).toEqual([profile.id]);
 	});
 
 	it('lists project entries without profile entries', async () => {
 		const { service } = await setup();
 		const project = await service.creator.create(
-			testActor(),
 			memoryEntryBuilder({
 				id: testMemoryEntryId(6),
 				projectId: testProjectId(),
@@ -118,7 +110,6 @@ describe('User profile memory invariants', () => {
 			})
 		);
 		await service.creator.create(
-			testActor(),
 			memoryEntryBuilder({
 				id: testMemoryEntryId(7),
 				projectId: undefined,
@@ -126,16 +117,13 @@ describe('User profile memory invariants', () => {
 			})
 		);
 		expect(
-			(await service.lister.list(testActor(), { projectId: testProjectId() })).map(
-				(item) => item.id
-			)
+			(await service.lister.list({ projectId: testProjectId() })).map((item) => item.id)
 		).toEqual([project.id]);
 	});
 
 	it('applies a user-scoped add as a profile entry', async () => {
 		const { service } = await setup();
 		const { entry } = await service.changes.apply(
-			testActor(),
 			{ scope: 'user', operation: 'add', content: 'I am the founder.' },
 			testProvenanceId()
 		);
@@ -148,12 +136,12 @@ describe('Memory change application invariants', () => {
 		'rejects a profile %s against project memory before writing',
 		async (operation) => {
 			const { service, entries } = await setup();
-			const { entry } = await service.changes.apply(testActor(), addPayload(), testProvenanceId());
+			const { entry } = await service.changes.apply(addPayload(), testProvenanceId());
 			const payload: MemoryChangePayload =
 				operation === 'update'
 					? { scope: 'user', operation, memoryEntryId: entry.id, content: 'Replacement' }
 					: { scope: 'user', operation, memoryEntryId: entry.id };
-			const outcome = await service.changes.apply(testActor(), payload, testProvenanceId()).then(
+			const outcome = await service.changes.apply(payload, testProvenanceId()).then(
 				() => 'unexpected success',
 				(error: Error) => error.message
 			);
@@ -166,7 +154,6 @@ describe('Memory change application invariants', () => {
 	it('rejects a project replacement targeting profile memory', async () => {
 		const { service } = await setup();
 		const target = await service.creator.create(
-			testActor(),
 			memoryEntryBuilder({
 				id: testMemoryEntryId(8),
 				projectId: undefined,
@@ -175,7 +162,6 @@ describe('Memory change application invariants', () => {
 		);
 		await expect(
 			service.changes.apply(
-				testActor(),
 				{
 					scope: 'project',
 					projectId: testProjectId(),
@@ -189,26 +175,21 @@ describe('Memory change application invariants', () => {
 	});
 	it('rejects an apply with unknown provenance', async () => {
 		const { service } = await setup();
-		await expect(
-			service.changes.apply(testActor(), addPayload(), testProvenanceId(99))
-		).rejects.toBeInstanceOf(NotFoundError);
+		await expect(service.changes.apply(addPayload(), testProvenanceId(99))).rejects.toBeInstanceOf(
+			NotFoundError
+		);
 	});
 
 	it('creates an entry with provenance on add', async () => {
 		const { service } = await setup();
-		const { entry } = await service.changes.apply(testActor(), addPayload(), testProvenanceId());
+		const { entry } = await service.changes.apply(addPayload(), testProvenanceId());
 		expect(entry.provenanceId).toBe(testProvenanceId());
 	});
 
 	it('rejects an update against a superseded entry', async () => {
 		const { service } = await setup();
-		const { entry: original } = await service.changes.apply(
-			testActor(),
-			addPayload(),
-			testProvenanceId()
-		);
+		const { entry: original } = await service.changes.apply(addPayload(), testProvenanceId());
 		await service.changes.apply(
-			testActor(),
 			{
 				scope: 'project',
 				projectId: testProjectId(),
@@ -219,7 +200,6 @@ describe('Memory change application invariants', () => {
 		);
 		await expect(
 			service.changes.apply(
-				testActor(),
 				{
 					scope: 'project',
 					projectId: testProjectId(),
@@ -236,13 +216,8 @@ describe('Memory change application invariants', () => {
 describe('Memory application effects', () => {
 	it('records both sides of a memory replacement', async () => {
 		const { service } = await setup();
-		const { entry: original } = await service.changes.apply(
-			testActor(),
-			addPayload(),
-			testProvenanceId()
-		);
+		const { entry: original } = await service.changes.apply(addPayload(), testProvenanceId());
 		const result = await service.changes.apply(
-			testActor(),
 			{
 				scope: 'project',
 				projectId: testProjectId(),
@@ -255,7 +230,7 @@ describe('Memory application effects', () => {
 		expect({
 			changes: result.changes,
 			replacesEntryId: result.entry.replacesEntryId,
-			oldTargetDeletedAt: (await service.reader.get(testActor(), original.id)).deletedAt
+			oldTargetDeletedAt: (await service.reader.get(original.id)).deletedAt
 		}).toEqual({
 			changes: [
 				{
@@ -271,13 +246,8 @@ describe('Memory application effects', () => {
 	});
 	it('records the original entry before removing it', async () => {
 		const { service } = await setup();
-		const { entry: original } = await service.changes.apply(
-			testActor(),
-			addPayload(),
-			testProvenanceId()
-		);
+		const { entry: original } = await service.changes.apply(addPayload(), testProvenanceId());
 		const result = await service.changes.apply(
-			testActor(),
 			{
 				scope: 'project',
 				projectId: testProjectId(),
@@ -288,7 +258,7 @@ describe('Memory application effects', () => {
 		);
 		expect({
 			changes: result.changes,
-			visibleEntries: await service.lister.list(testActor(), { projectId: testProjectId() })
+			visibleEntries: await service.lister.list({ projectId: testProjectId() })
 		}).toEqual({
 			changes: [{ kind: 'modified', before: original, after: result.entry }],
 			visibleEntries: []

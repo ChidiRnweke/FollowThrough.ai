@@ -47,55 +47,42 @@ const now = (): DateTime => new Date().toISOString() as DateTime;
  * signs the upload, inspects and promotes the stored object between these steps.
  */
 export interface AttachmentUploads {
-	initiate(
-		actor: ActorContext,
-		input: {
-			projectId?: ProjectId;
-			noteId?: NoteId;
-			path: string;
-			mediaType: string;
-			byteSize: number;
-			checksumSha256: string;
-		}
-	): Promise<{ upload: AttachmentUpload; requiredHeaders: Record<string, string> }>;
+	initiate(input: {
+		projectId?: ProjectId;
+		noteId?: NoteId;
+		path: string;
+		mediaType: string;
+		byteSize: number;
+		checksumSha256: string;
+	}): Promise<{ upload: AttachmentUpload; requiredHeaders: Record<string, string> }>;
 	/** @throws NotFoundError if the upload is unknown or has expired. */
-	pending(actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentUpload>;
+	pending(uploadId: AttachmentUpload['id']): Promise<AttachmentUpload>;
 	/**
 	 * The version a verified upload becomes, stored under its own key.
 	 *
 	 * @throws ValidationError if the stored object does not match the declared size and checksum.
 	 */
-	planVersion(
-		actor: ActorContext,
-		upload: AttachmentUpload,
-		stored: StoredObjectInfo
-	): AttachmentVersion;
-	finalize(
-		actor: ActorContext,
-		upload: AttachmentUpload,
-		version: AttachmentVersion
-	): Promise<AttachmentView>;
+	planVersion(upload: AttachmentUpload, stored: StoredObjectInfo): AttachmentVersion;
+	finalize(upload: AttachmentUpload, version: AttachmentVersion): Promise<AttachmentView>;
 }
 export class AttachmentUploadService implements AttachmentUploads {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly attachments: AttachmentRepository,
 		private readonly notes: NoteRepository
 	) {}
 
-	async initiate(
-		actor: ActorContext,
-		input: {
-			projectId?: ProjectId;
-			noteId?: NoteId;
-			path: string;
-			mediaType: string;
-			byteSize: number;
-			checksumSha256: string;
-		}
-	) {
+	async initiate(input: {
+		projectId?: ProjectId;
+		noteId?: NoteId;
+		path: string;
+		mediaType: string;
+		byteSize: number;
+		checksumSha256: string;
+	}) {
 		if ((input.noteId ? 1 : 0) + (input.projectId ? 1 : 0) !== 1)
 			throw new ValidationError('Provide exactly one attachment owner');
-		const note = input.noteId ? await this.notes.findById(actor, input.noteId) : undefined;
+		const note = input.noteId ? await this.notes.findById(input.noteId) : undefined;
 		if (input.noteId && !note) throw new NotFoundError('Note was not found');
 		if (note?.archivedAt) throw new ValidationError('Archived notes cannot receive attachments');
 		const projectId = note?.projectId ?? input.projectId!;
@@ -106,8 +93,8 @@ export class AttachmentUploadService implements AttachmentUploads {
 			throw new ValidationError('Attachment checksum must be a SHA-256 hex digest');
 		const timestamp = now();
 		const uploadId = crypto.randomUUID() as AttachmentUploadId;
-		const objectKey = `staging/${actor.userId}/${projectId}/${uploadId}`;
-		const upload = await this.attachments.createUpload(actor, {
+		const objectKey = `staging/${this.actor.userId}/${projectId}/${uploadId}`;
+		const upload = await this.attachments.createUpload({
 			id: uploadId,
 			projectId,
 			...(input.noteId ? { noteId: input.noteId } : {}),
@@ -128,18 +115,14 @@ export class AttachmentUploadService implements AttachmentUploads {
 		};
 	}
 
-	async pending(actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentUpload> {
-		const upload = await this.attachments.findUpload(actor, uploadId);
+	async pending(uploadId: AttachmentUpload['id']): Promise<AttachmentUpload> {
+		const upload = await this.attachments.findUpload(uploadId);
 		if (!upload || new Date(upload.expiresAt).getTime() <= Date.now())
 			throw new NotFoundError('Attachment upload was not found or has expired');
 		return upload;
 	}
 
-	planVersion(
-		actor: ActorContext,
-		upload: AttachmentUpload,
-		stored: StoredObjectInfo
-	): AttachmentVersion {
+	planVersion(upload: AttachmentUpload, stored: StoredObjectInfo): AttachmentVersion {
 		if (
 			stored.byteSize !== upload.byteSize ||
 			stored.checksumSha256?.toLowerCase() !== upload.checksumSha256
@@ -151,7 +134,7 @@ export class AttachmentUploadService implements AttachmentUploads {
 		return {
 			id: versionId,
 			attachmentId: crypto.randomUUID() as AttachmentId,
-			objectKey: `objects/${actor.userId}/${upload.projectId}/${versionId}`,
+			objectKey: `objects/${this.actor.userId}/${upload.projectId}/${versionId}`,
 			mediaType: upload.mediaType,
 			byteSize: upload.byteSize,
 			checksumSha256: upload.checksumSha256,
@@ -167,27 +150,22 @@ export class AttachmentUploadService implements AttachmentUploads {
 	 * editor's next autosave look stale and raised a spurious conflict for every
 	 * pasted or dropped image. Attachments live beside the document, not in it.
 	 */
-	finalize(
-		actor: ActorContext,
-		upload: AttachmentUpload,
-		version: AttachmentVersion
-	): Promise<AttachmentView> {
-		return this.attachments.finalize(actor, upload, version);
+	finalize(upload: AttachmentUpload, version: AttachmentVersion): Promise<AttachmentView> {
+		return this.attachments.finalize(upload, version);
 	}
 }
 
 export interface AttachmentLookup {
-	get(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView>;
+	get(attachmentId: AttachmentId): Promise<AttachmentView>;
 }
 export interface AttachmentReader extends AttachmentLookup {
-	list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]>;
-	listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly AttachmentView[]>;
-	listForTodo(actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]>;
-	get(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView>;
+	list(noteId: NoteId): Promise<readonly AttachmentView[]>;
+	listForProject(projectId: ProjectId): Promise<readonly AttachmentView[]>;
+	listForTodo(todoId: TodoId): Promise<readonly AttachmentView[]>;
+	get(attachmentId: AttachmentId): Promise<AttachmentView>;
 	/** @throws NotFoundError if no attachment of the note has this path. */
-	locate(actor: ActorContext, noteId: NoteId, path: string): Promise<AttachmentView>;
+	locate(noteId: NoteId, path: string): Promise<AttachmentView>;
 	read(
-		actor: ActorContext,
 		noteId: NoteId,
 		path: string,
 		offset?: number,
@@ -197,38 +175,32 @@ export interface AttachmentReader extends AttachmentLookup {
 export class AttachmentReadingService implements AttachmentReader, AttachmentLookup {
 	constructor(private readonly attachments: AttachmentRepository) {}
 
-	list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]> {
-		return this.attachments.list(actor, noteId);
+	list(noteId: NoteId): Promise<readonly AttachmentView[]> {
+		return this.attachments.list(noteId);
 	}
 
-	listForProject(actor: ActorContext, projectId: ProjectId) {
-		return this.attachments.listForProject(actor, projectId);
+	listForProject(projectId: ProjectId) {
+		return this.attachments.listForProject(projectId);
 	}
 
-	listForTodo(actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]> {
-		return this.attachments.listForTodo(actor, todoId);
+	listForTodo(todoId: TodoId): Promise<readonly AttachmentView[]> {
+		return this.attachments.listForTodo(todoId);
 	}
 
-	async get(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView> {
-		const found = await this.attachments.findById(actor, attachmentId);
+	async get(attachmentId: AttachmentId): Promise<AttachmentView> {
+		const found = await this.attachments.findById(attachmentId);
 		if (!found) throw new NotFoundError('Attachment was not found');
 		return found;
 	}
 
-	async locate(actor: ActorContext, noteId: NoteId, path: string): Promise<AttachmentView> {
-		const found = await this.attachments.findByPath(actor, noteId, validateAttachmentPath(path));
+	async locate(noteId: NoteId, path: string): Promise<AttachmentView> {
+		const found = await this.attachments.findByPath(noteId, validateAttachmentPath(path));
 		if (!found) throw new NotFoundError('Attachment was not found');
 		return found;
 	}
 
-	async read(
-		actor: ActorContext,
-		noteId: NoteId,
-		path: string,
-		offset = 0,
-		limit = MAX_READ_CHARS
-	) {
-		const found = await this.attachments.findByPath(actor, noteId, validateAttachmentPath(path));
+	async read(noteId: NoteId, path: string, offset = 0, limit = MAX_READ_CHARS) {
+		const found = await this.attachments.findByPath(noteId, validateAttachmentPath(path));
 		if (!found) throw new NotFoundError('Attachment was not found');
 		if (!found.version.parserKind) throw new ValidationError('Attachment has no safe text parser');
 		const text = found.version.extractedText ?? '';
@@ -245,27 +217,28 @@ export class AttachmentReadingService implements AttachmentReader, AttachmentLoo
 }
 
 export interface AttachmentLifecycle {
-	linkToTodo(actor: ActorContext, attachmentId: AttachmentId, todoId: TodoId): Promise<void>;
-	retry(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView>;
-	removeById(actor: ActorContext, attachmentId: AttachmentId): Promise<RemoveAttachmentResult>;
-	remove(actor: ActorContext, noteId: NoteId, path: string): Promise<AttachmentId | undefined>;
+	linkToTodo(attachmentId: AttachmentId, todoId: TodoId): Promise<void>;
+	retry(attachmentId: AttachmentId): Promise<AttachmentView>;
+	removeById(attachmentId: AttachmentId): Promise<RemoveAttachmentResult>;
+	remove(noteId: NoteId, path: string): Promise<AttachmentId | undefined>;
 }
 export class AttachmentLifecycleService implements AttachmentLifecycle {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly attachments: AttachmentRepository,
 		private readonly notes: NoteRepository
 	) {}
 
-	linkToTodo(actor: ActorContext, attachmentId: AttachmentId, todoId: TodoId): Promise<void> {
-		return this.attachments.linkToTodo(actor, attachmentId, todoId);
+	linkToTodo(attachmentId: AttachmentId, todoId: TodoId): Promise<void> {
+		return this.attachments.linkToTodo(attachmentId, todoId);
 	}
 
-	async retry(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView> {
-		const found = await this.attachments.findById(actor, attachmentId);
+	async retry(attachmentId: AttachmentId): Promise<AttachmentView> {
+		const found = await this.attachments.findById(attachmentId);
 		if (!found) throw new NotFoundError('Attachment was not found');
 		if (found.version.processingStatus !== 'failed')
 			throw new ValidationError('Only failed attachments can be retried');
-		const queued = await this.attachments.updateVersion(actor, {
+		const queued = await this.attachments.updateVersion({
 			...found.version,
 			processingStatus: 'queued',
 			processingFailure: undefined,
@@ -274,33 +247,26 @@ export class AttachmentLifecycleService implements AttachmentLifecycle {
 		return queued;
 	}
 
-	async removeById(
-		actor: ActorContext,
-		attachmentId: AttachmentId
-	): Promise<RemoveAttachmentResult> {
-		const found = await this.attachments.findById(actor, attachmentId);
+	async removeById(attachmentId: AttachmentId): Promise<RemoveAttachmentResult> {
+		const found = await this.attachments.findById(attachmentId);
 		if (!found) throw new NotFoundError('Attachment was not found');
 		if (found.attachment.noteId) {
-			const note = await this.notes.findById(actor, found.attachment.noteId);
+			const note = await this.notes.findById(found.attachment.noteId);
 			if (!note) throw new NotFoundError('Containing note was not found');
 			if (documentReferencesAttachment(note.document, attachmentId))
 				return { kind: 'referenced-by-note', note: { id: note.id, title: note.title } };
-			await this.attachments.remove(actor, note.id, found.attachment.path);
+			await this.attachments.remove(note.id, found.attachment.path);
 			return { kind: 'removed' };
 		}
-		await this.attachments.removeById(actor, attachmentId);
+		await this.attachments.removeById(attachmentId);
 		return { kind: 'removed' };
 	}
 
-	async remove(
-		actor: ActorContext,
-		noteId: NoteId,
-		path: string
-	): Promise<AttachmentId | undefined> {
+	async remove(noteId: NoteId, path: string): Promise<AttachmentId | undefined> {
 		const validatedPath = validateAttachmentPath(path);
-		const found = await this.attachments.findByPath(actor, noteId, validatedPath);
+		const found = await this.attachments.findByPath(noteId, validatedPath);
 		if (!found) return undefined;
-		const result = await this.removeById(actor, found.attachment.id);
+		const result = await this.removeById(found.attachment.id);
 		if (result.kind === 'referenced-by-note')
 			throw new ValidationError('The note still embeds this attachment. Remove the image first.');
 		return found.attachment.id;

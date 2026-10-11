@@ -33,17 +33,14 @@ export interface AttachmentsController {
 	 * Nothing is visible to other readers until {@link complete} is called, so a failed
 	 * or abandoned upload never surfaces a half-uploaded file.
 	 */
-	initiate(
-		actor: ActorContext,
-		input: Parameters<AttachmentUploads['initiate']>[1]
-	): Promise<AttachmentUploadStart>;
+	initiate(input: Parameters<AttachmentUploads['initiate']>[0]): Promise<AttachmentUploadStart>;
 	/**
 	 * Finalize a completed upload and return the resulting attachment view.
 	 *
 	 * The worker discovers the queued version after this transaction commits.
 	 * A restart between upload completion and extraction leaves that version queued.
 	 */
-	complete(actor: ActorContext, uploadId: AttachmentUploadId): Promise<AttachmentView>;
+	complete(uploadId: AttachmentUploadId): Promise<AttachmentView>;
 	/**
 	 * Finalize an upload and, in the same transaction, record that a todo's
 	 * description references it.
@@ -51,45 +48,34 @@ export interface AttachmentsController {
 	 * Check that the task is available before touching uploaded bytes. The database
 	 * link and attachment commit together; saving the description is a later edit.
 	 */
-	completeForTodo(
-		actor: ActorContext,
-		uploadId: AttachmentUploadId,
-		todoId: TodoId
-	): Promise<AttachmentView>;
+	completeForTodo(uploadId: AttachmentUploadId, todoId: TodoId): Promise<AttachmentView>;
 	/** List the attachments attached to a note, in display order. */
-	list(actor: ActorContext, noteId: NoteId): ReturnType<AttachmentReader['list']>;
+	list(noteId: NoteId): ReturnType<AttachmentReader['list']>;
 	/** List the attachments a todo's description references, in display order. */
-	listForTodo(actor: ActorContext, todoId: TodoId): ReturnType<AttachmentReader['listForTodo']>;
+	listForTodo(todoId: TodoId): ReturnType<AttachmentReader['listForTodo']>;
 	/** List every attachment in a project regardless of which note owns it, for project-wide browsing. */
-	listForProject(
-		actor: ActorContext,
-		projectId: ProjectId
-	): ReturnType<AttachmentReader['listForProject']>;
+	listForProject(projectId: ProjectId): ReturnType<AttachmentReader['listForProject']>;
 	/** Return a presigned URL that streams the original file bytes. */
-	downloadById(actor: ActorContext, attachmentId: AttachmentId): Promise<{ url: string }>;
+	downloadById(attachmentId: AttachmentId): Promise<{ url: string }>;
 	/** Re-run processing for an attachment whose earlier attempt failed, returning the refreshed view. */
-	retry(actor: ActorContext, attachmentId: AttachmentId): ReturnType<AttachmentLifecycle['retry']>;
+	retry(attachmentId: AttachmentId): ReturnType<AttachmentLifecycle['retry']>;
 	/** Remove an attachment unless its containing note still embeds it. */
-	removeById(
-		actor: ActorContext,
-		attachmentId: AttachmentId
-	): ReturnType<AttachmentLifecycle['removeById']>;
+	removeById(attachmentId: AttachmentId): ReturnType<AttachmentLifecycle['removeById']>;
 	/** Return a presigned URL that streams the original file at a note-relative path. */
-	download(actor: ActorContext, noteId: NoteId, path: string): Promise<{ url: string }>;
+	download(noteId: NoteId, path: string): Promise<{ url: string }>;
 	/**
 	 * Read a slice of an attachment's parsed text content by byte offset, returning the
 	 * slice plus the next offset to continue from — lets a client page through a large
 	 * document without ever downloading it.
 	 */
 	read(
-		actor: ActorContext,
 		noteId: NoteId,
 		path: string,
 		offset?: number,
 		limit?: number
 	): ReturnType<AttachmentReader['read']>;
 	/** Detach an unreferenced note attachment while retaining file versions for revision restore. */
-	remove(actor: ActorContext, noteId: NoteId, path: string): Promise<void>;
+	remove(noteId: NoteId, path: string): Promise<void>;
 }
 
 /** Everything the {@link AttachmentsController} needs: the attachment manager and a transaction runner for atomic mutations. */
@@ -106,10 +92,9 @@ export interface AttachmentsDependencies {
 export class Attachments implements AttachmentsController {
 	constructor(private readonly dependencies: AttachmentsDependencies) {}
 	async initiate(
-		actor: ActorContext,
-		input: Parameters<AttachmentUploads['initiate']>[1]
+		input: Parameters<AttachmentUploads['initiate']>[0]
 	): Promise<AttachmentUploadStart> {
-		const { upload, requiredHeaders } = await this.dependencies.uploads.initiate(actor, input);
+		const { upload, requiredHeaders } = await this.dependencies.uploads.initiate(input);
 		const uploadUrl = await this.dependencies.storage.createUploadUrl({
 			objectKey: upload.objectKey,
 			mediaType: upload.mediaType,
@@ -119,67 +104,63 @@ export class Attachments implements AttachmentsController {
 		});
 		return { upload, uploadUrl, requiredHeaders };
 	}
-	complete(actor: ActorContext, uploadId: AttachmentUploadId) {
-		return this.dependencies.transactionRunner.run(() => this.completeUpload(actor, uploadId));
+	complete(uploadId: AttachmentUploadId) {
+		return this.dependencies.transactionRunner.run(() => this.completeUpload(uploadId));
 	}
-	completeForTodo(actor: ActorContext, uploadId: AttachmentUploadId, todoId: TodoId) {
+	completeForTodo(uploadId: AttachmentUploadId, todoId: TodoId) {
 		return this.dependencies.transactionRunner.run(async () => {
-			await this.dependencies.todoReader.get(actor, todoId);
-			const completed = await this.completeUpload(actor, uploadId);
-			await this.dependencies.lifecycle.linkToTodo(actor, completed.attachment.id, todoId);
+			await this.dependencies.todoReader.get(todoId);
+			const completed = await this.completeUpload(uploadId);
+			await this.dependencies.lifecycle.linkToTodo(completed.attachment.id, todoId);
 			return completed;
 		});
 	}
 	/** Verifies the stored bytes, moves them under the new version's key and records the version. */
-	private async completeUpload(
-		actor: ActorContext,
-		uploadId: AttachmentUploadId
-	): Promise<AttachmentView> {
+	private async completeUpload(uploadId: AttachmentUploadId): Promise<AttachmentView> {
 		const { uploads, storage } = this.dependencies;
-		const upload = await uploads.pending(actor, uploadId);
-		const version = uploads.planVersion(actor, upload, await storage.stat(upload.objectKey));
+		const upload = await uploads.pending(uploadId);
+		const version = uploads.planVersion(upload, await storage.stat(upload.objectKey));
 		await storage.promote(upload.objectKey, version.objectKey);
-		return uploads.finalize(actor, upload, version);
+		return uploads.finalize(upload, version);
 	}
-	list(actor: ActorContext, noteId: NoteId) {
-		return this.dependencies.reader.list(actor, noteId);
+	list(noteId: NoteId) {
+		return this.dependencies.reader.list(noteId);
 	}
-	async listForTodo(actor: ActorContext, todoId: TodoId) {
-		await this.dependencies.todoReader.get(actor, todoId);
-		return this.dependencies.reader.listForTodo(actor, todoId);
+	async listForTodo(todoId: TodoId) {
+		await this.dependencies.todoReader.get(todoId);
+		return this.dependencies.reader.listForTodo(todoId);
 	}
-	listForProject(actor: ActorContext, projectId: ProjectId) {
-		return this.dependencies.reader.listForProject(actor, projectId);
+	listForProject(projectId: ProjectId) {
+		return this.dependencies.reader.listForProject(projectId);
 	}
-	async downloadById(actor: ActorContext, attachmentId: AttachmentId) {
-		const found = await this.dependencies.reader.get(actor, attachmentId);
+	async downloadById(attachmentId: AttachmentId) {
+		const found = await this.dependencies.reader.get(attachmentId);
 		return { url: await this.dependencies.storage.createDownloadUrl(found.version.objectKey, 300) };
 	}
-	retry(actor: ActorContext, attachmentId: AttachmentId) {
+	retry(attachmentId: AttachmentId) {
 		return this.dependencies.transactionRunner.run(() =>
-			this.dependencies.lifecycle.retry(actor, attachmentId)
+			this.dependencies.lifecycle.retry(attachmentId)
 		);
 	}
-	removeById(actor: ActorContext, attachmentId: AttachmentId) {
+	removeById(attachmentId: AttachmentId) {
 		return this.dependencies.transactionRunner.run(async () => {
-			const result = await this.dependencies.lifecycle.removeById(actor, attachmentId);
+			const result = await this.dependencies.lifecycle.removeById(attachmentId);
 			if (result.kind === 'removed')
-				await this.dependencies.attachmentIndexer.removeAttachment(actor, attachmentId);
+				await this.dependencies.attachmentIndexer.removeAttachment(attachmentId);
 			return result;
 		});
 	}
-	async download(actor: ActorContext, noteId: NoteId, path: string) {
-		const found = await this.dependencies.reader.locate(actor, noteId, path);
+	async download(noteId: NoteId, path: string) {
+		const found = await this.dependencies.reader.locate(noteId, path);
 		return { url: await this.dependencies.storage.createDownloadUrl(found.version.objectKey, 300) };
 	}
-	read(actor: ActorContext, noteId: NoteId, path: string, offset?: number, limit?: number) {
-		return this.dependencies.reader.read(actor, noteId, path, offset, limit);
+	read(noteId: NoteId, path: string, offset?: number, limit?: number) {
+		return this.dependencies.reader.read(noteId, path, offset, limit);
 	}
-	remove(actor: ActorContext, noteId: NoteId, path: string) {
+	remove(noteId: NoteId, path: string) {
 		return this.dependencies.transactionRunner.run(async () => {
-			const attachmentId = await this.dependencies.lifecycle.remove(actor, noteId, path);
-			if (attachmentId)
-				await this.dependencies.attachmentIndexer.removeAttachment(actor, attachmentId);
+			const attachmentId = await this.dependencies.lifecycle.remove(noteId, path);
+			if (attachmentId) await this.dependencies.attachmentIndexer.removeAttachment(attachmentId);
 		});
 	}
 }

@@ -24,26 +24,35 @@ const contentOf = (message: StoredMessage | undefined): AgentPayloadObject => {
 
 describe('Conversation visibility invariants', () => {
 	it('does not list workflow conversations as chat sessions', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		await journal.getOrCreate(testActor(), { prompt: 'Hello' });
-		await journal.createWorkflow(testActor(), {
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		await journal.getOrCreate({ prompt: 'Hello' });
+		await journal.createWorkflow({
 			title: 'Generate Mermaid diagram',
 			contextNoteId: testNoteId()
 		});
-		expect(await journal.listConversations(testActor())).toHaveLength(1);
+		expect(await journal.listConversations()).toHaveLength(1);
 	});
 
 	it('marks background diagram conversations as workflows', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		const conversation = await journal.createWorkflow(testActor(), {
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		const conversation = await journal.createWorkflow({
 			title: 'Generate Mermaid diagram'
 		});
 		expect(conversation.kind).toBe('workflow');
 	});
 
 	it('captures the project that triggered a new chat', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		const conversation = await journal.getOrCreate(testActor(), {
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		const conversation = await journal.getOrCreate({
 			prompt: 'Summarise this project',
 			projectId: testProjectId(3)
 		});
@@ -51,28 +60,36 @@ describe('Conversation visibility invariants', () => {
 	});
 
 	it('limits recent chat sessions at the journal boundary', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		for (const prompt of ['One', 'Two', 'Three'])
-			await journal.getOrCreate(testActor(), { prompt });
-		expect(await journal.listConversations(testActor(), { limit: 2 })).toHaveLength(2);
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		for (const prompt of ['One', 'Two', 'Three']) await journal.getOrCreate({ prompt });
+		expect(await journal.listConversations({ limit: 2 })).toHaveLength(2);
 	});
 
 	it('trims a renamed chat title', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Original' });
-		const renamed = await journal.rename(testActor(), conversation.id, '  Decision notes  ');
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		const conversation = await journal.getOrCreate({ prompt: 'Original' });
+		const renamed = await journal.rename(conversation.id, '  Decision notes  ');
 		expect(renamed.title).toBe('Decision notes');
 	});
 
 	it('discards the rewound question and later turns while keeping the earlier exchange', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		const conversation = await journal.getOrCreate(testActor(), { prompt: 'First' });
-		await journal.recordUserPrompt(testActor(), conversation.id, 'First');
-		await journal.recordAssistantText(testActor(), conversation.id, 'First answer');
-		await journal.recordUserPrompt(testActor(), conversation.id, 'Second');
-		await journal.recordAssistantText(testActor(), conversation.id, 'Second answer');
-		await journal.truncateFromUserMessage(testActor(), conversation.id, 2);
-		const remaining = await journal.listMessages(testActor(), conversation.id);
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		const conversation = await journal.getOrCreate({ prompt: 'First' });
+		await journal.recordUserPrompt(conversation.id, 'First');
+		await journal.recordAssistantText(conversation.id, 'First answer');
+		await journal.recordUserPrompt(conversation.id, 'Second');
+		await journal.recordAssistantText(conversation.id, 'Second answer');
+		await journal.truncateFromUserMessage(conversation.id, 2);
+		const remaining = await journal.listMessages(conversation.id);
 		expect({
 			count: remaining.length,
 			contents: remaining.map((message) => contentOf(message).text)
@@ -80,23 +97,32 @@ describe('Conversation visibility invariants', () => {
 	});
 
 	it('leaves the transcript alone when the ordinal is past the last question', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Only' });
-		await journal.recordUserPrompt(testActor(), conversation.id, 'Only');
-		await journal.truncateFromUserMessage(testActor(), conversation.id, 2);
-		expect(await journal.listMessages(testActor(), conversation.id)).toHaveLength(1);
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		const conversation = await journal.getOrCreate({ prompt: 'Only' });
+		await journal.recordUserPrompt(conversation.id, 'Only');
+		await journal.truncateFromUserMessage(conversation.id, 2);
+		expect(await journal.listMessages(conversation.id)).toHaveLength(1);
 	});
 
 	it('permanently removes a chat session', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Temporary' });
-		await journal.remove(testActor(), conversation.id);
-		expect(await journal.listConversations(testActor())).toHaveLength(0);
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		const conversation = await journal.getOrCreate({ prompt: 'Temporary' });
+		await journal.remove(conversation.id);
+		expect(await journal.listConversations()).toHaveLength(0);
 	});
 
 	it('stores pasted images on the journaled user message', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Look at this' });
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		const conversation = await journal.getOrCreate({ prompt: 'Look at this' });
 		const images = [
 			{
 				id: 'img-1',
@@ -105,31 +131,37 @@ describe('Conversation visibility invariants', () => {
 				name: 'shot.png'
 			}
 		];
-		await journal.recordUserPrompt(testActor(), conversation.id, 'Look at this', undefined, images);
-		const [message] = await journal.listMessages(testActor(), conversation.id);
+		await journal.recordUserPrompt(conversation.id, 'Look at this', undefined, images);
+		const [message] = await journal.listMessages(conversation.id);
 		expect(contentOf(message).images).toEqual(images);
 	});
 
 	it('leaves a text-only turn without an images key', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Hello' });
-		await journal.recordUserPrompt(testActor(), conversation.id, 'Hello');
-		const [message] = await journal.listMessages(testActor(), conversation.id);
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		const conversation = await journal.getOrCreate({ prompt: 'Hello' });
+		await journal.recordUserPrompt(conversation.id, 'Hello');
+		const [message] = await journal.listMessages(conversation.id);
 		expect(contentOf(message)).toEqual({ type: 'text', text: 'Hello' });
 	});
 });
 
 describe('journaling tool outcomes', () => {
 	it('journals a succeeded call without output as null rather than raising', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Hello' });
-		await journal.recordToolActivity(testActor(), conversation.id, {
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		const conversation = await journal.getOrCreate({ prompt: 'Hello' });
+		await journal.recordToolActivity(conversation.id, {
 			callId: 'call-1',
 			name: 'revoke_api_token',
 			input: {},
 			status: 'succeeded'
 		});
-		const [message] = await journal.listMessages(testActor(), conversation.id);
+		const [message] = await journal.listMessages(conversation.id);
 		expect(contentOf(message).output).toBeNull();
 	});
 
@@ -140,34 +172,40 @@ describe('journaling tool outcomes', () => {
 	// The reading is covered where it happens: `payload.spec.ts` for the reader,
 	// and the tool factory's own output check for the tool results that use it.
 	it('journals a succeeded call output as the value it was given', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Hello' });
-		await journal.recordToolActivity(testActor(), conversation.id, {
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		const conversation = await journal.getOrCreate({ prompt: 'Hello' });
+		await journal.recordToolActivity(conversation.id, {
 			callId: 'call-1',
 			name: 'get_note',
 			input: {},
 			status: 'succeeded',
 			output: { noteId: 'note-1' }
 		});
-		const [message] = await journal.listMessages(testActor(), conversation.id);
+		const [message] = await journal.listMessages(conversation.id);
 		expect(contentOf(message).output).toEqual({ noteId: 'note-1' });
 	});
 });
 
 describe('Journalled note review', () => {
 	it('retains the domain review when saving the approval transcript', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Change launch day' });
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor())
+		);
+		const conversation = await journal.getOrCreate({ prompt: 'Change launch day' });
 		const noteReview = noteReviewBuilder();
 		const review = { kind: 'note_change' as const, content: JSON.stringify(noteReview) };
-		await journal.recordToolActivity(testActor(), conversation.id, {
+		await journal.recordToolActivity(conversation.id, {
 			callId: 'review-1',
 			name: 'save_note',
 			input: { noteId: noteReview.change.noteId, markdown: 'Tuesday' },
 			status: 'approval_required',
 			review
 		});
-		const [message] = await journal.listMessages(testActor(), conversation.id);
+		const [message] = await journal.listMessages(conversation.id);
 		expect(contentOf(message).review).toEqual(review);
 	});
 });

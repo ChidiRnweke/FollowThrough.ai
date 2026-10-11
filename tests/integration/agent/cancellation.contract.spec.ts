@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -29,8 +30,8 @@ import { actor, context, now, seedProvenance, notifications } from '../database-
 
 const seed = async (suffix: string) => {
 	const owner = actor(suffix);
-	await new UserRecords(context.db).ensureLocal(owner);
-	const conversation = await new ConversationRecords(context.db).insert(owner, {
+	await new UserRecords(owner, context.db).ensureLocal();
+	const conversation = await new ConversationRecords(owner, context.db).insert({
 		id: crypto.randomUUID() as ConversationId,
 		userId: owner.userId,
 		kind: 'chat',
@@ -38,7 +39,7 @@ const seed = async (suffix: string) => {
 		updatedAt: now
 	});
 	const provenance = await seedProvenance(owner, suffix);
-	const run = await new AgentRunRecords(context.db).insert(owner, {
+	const run = await new AgentRunRecords(owner, context.db).insert({
 		kind: 'agent',
 		id: crypto.randomUUID() as AgentRunId,
 		userId: owner.userId,
@@ -59,20 +60,27 @@ const seed = async (suffix: string) => {
 
 const cancellationController = (db: typeof context.db) => {
 	const { database, transactionRunner } = createTransactionContext(db);
-	const runs = new AgentRunRecords(database);
-	const events = new AgentRunEventRecords(database);
+	const runs = new AgentRunRecords(testActor(), database);
+	const events = new AgentRunEventRecords(testActor(), database);
 	return new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			runs,
-			conversationMessages: new ConversationArchive(new ConversationRecords(database)),
-			conversationSessions: new ConversationArchive(new ConversationRecords(database)),
+			conversationMessages: new ConversationArchive(
+				testActor(),
+				new ConversationRecords(testActor(), database)
+			),
+			conversationSessions: new ConversationArchive(
+				testActor(),
+				new ConversationRecords(testActor(), database)
+			),
 			events,
 			transactionRunner,
 			cancellations: new RunCancellation(runs),
 			settlements: new RunSettlements(runs, events),
-			decisions: new AgentRunDecisionRecords(database),
+			decisions: new AgentRunDecisionRecords(testActor(), database),
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
@@ -83,7 +91,7 @@ it('aborts a running execution in another process after it wins the row lock', a
 	const execution = new AbortController();
 	const watching = new RunSignalService(
 		new AgentRunNotificationRecords(notifications),
-		new AgentRunRecords(context.db)
+		new AgentRunRecords(owner, context.db)
 	);
 	const stopWatching = await watching.abortOnCancel(run.id, execution);
 	const writer = connectPostgresTestDatabase(context.url);
@@ -99,7 +107,7 @@ it('aborts a running execution in another process after it wins the row lock', a
 	try {
 		await locked.promise;
 		const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const cancellation = controller.cancel(owner, run.id);
+		const cancellation = controller.cancel(run.id);
 		await vi.waitFor(async () => {
 			const waiting = await blocker<
 				{ pid: number }[]
@@ -130,10 +138,10 @@ it('stores one terminal event when two connections cancel the same queued run', 
 	const writer = connectPostgresTestDatabase(context.url);
 	try {
 		await Promise.all([
-			cancellationController(context.db).cancel(owner, run.id),
-			cancellationController(writer.db).cancel(owner, run.id)
+			cancellationController(context.db).cancel(run.id),
+			cancellationController(writer.db).cancel(run.id)
 		]);
-		const events = await new AgentRunEventRecords(context.db).replay(owner, run.id, '0');
+		const events = await new AgentRunEventRecords(owner, context.db).replay(run.id, '0');
 		expect(
 			events.map((record) => (record.kind === 'readable' ? record.event.type : record.kind))
 		).toEqual(['cancelled']);
@@ -146,7 +154,7 @@ it.each(['awaiting_approval', 'queued'] as const)(
 	'returns cleared approvals after cancelling a %s checkpoint',
 	async (status) => {
 		const { owner, run } = await seed(status === 'queued' ? '17602' : '17601');
-		const records = new AgentRunRecords(context.db);
+		const records = new AgentRunRecords(owner, context.db);
 		await new RunPreparation(records).claim(run.id, now);
 		const checkpoints = new RunCheckpoints(records);
 		await checkpoints.persist(
@@ -167,19 +175,19 @@ it.each(['awaiting_approval', 'queued'] as const)(
 			)
 		);
 		if (status === 'queued') {
-			await new AgentRunDecisionRecords(context.db).record(owner, {
+			await new AgentRunDecisionRecords(owner, context.db).record({
 				runId: run.id,
 				callId: 'call-cleared',
 				decision: 'approve'
 			});
 			const approvals = new RunApprovals(records);
-			const current = await approvals.getForWrite(owner, run.id);
+			const current = await approvals.getForWrite(run.id);
 			const change = approvals.plan(current, ['call-cleared'], now);
 			if (!change) throw new Error('Expected approval to queue the checkpoint');
-			await approvals.persist(owner, run.id, change);
+			await approvals.persist(run.id, change);
 		}
-		const snapshot = await cancellationController(context.db).cancel(owner, run.id);
-		const stored = await records.findById(owner, run.id);
+		const snapshot = await cancellationController(context.db).cancel(run.id);
+		const stored = await records.findById(run.id);
 		expect({
 			status: snapshot.run.status,
 			run: snapshot.run.pendingDecisions,
@@ -191,7 +199,5 @@ it.each(['awaiting_approval', 'queued'] as const)(
 
 it('does not expose another actor’s run through the locking read', async () => {
 	const { run } = await seed('17103');
-	await expect(cancellationController(context.db).cancel(actor('17104'), run.id)).rejects.toThrow(
-		'not found'
-	);
+	await expect(cancellationController(context.db).cancel(run.id)).rejects.toThrow('not found');
 });

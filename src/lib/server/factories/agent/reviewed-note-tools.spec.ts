@@ -231,9 +231,10 @@ describe('Revision-bound note tool approvals', () => {
 describe('A note change that fails while it is being prepared', () => {
 	const faulty = () => {
 		const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.'), title: 'Release' });
-		const content = new InMemoryNoteContent();
+		const content = new InMemoryNoteContent(testActor());
 		content.notes = [note];
 		const controller = new Notes(
+			testActor(),
 			new BacklinkPresentationService(),
 			new ReferencePresentationService(),
 			new WorkspaceCommandRulesService(),

@@ -39,7 +39,7 @@ const media = (data: Uint8Array) =>
 
 describe('current diagram images in document exports', () => {
 	it('rejects a saved preview that belongs to an older draw.io revision', async () => {
-		const diagrams = new InMemoryDiagrams();
+		const diagrams = new InMemoryDiagrams(testActor());
 		const diagram = drawioBuilder({
 			currentRevision: 2,
 			publishedRevision: 1,
@@ -52,9 +52,7 @@ describe('current diagram images in document exports', () => {
 				document: { type: 'doc', content: [{ type: 'drawio', attrs: { diagramId: diagram.id } }] }
 			})
 		];
-		await expect(service.generateDocument(testActor(), input)).rejects.toThrow(
-			'preview is out of date'
-		);
+		await expect(service.generateDocument(input)).rejects.toThrow('preview is out of date');
 	});
 	it('regenerates DOCX images from changed Mermaid source without browser renders', async () => {
 		const { service, notes, storage } = exportControllerFixture({
@@ -65,11 +63,11 @@ describe('current diagram images in document exports', () => {
 		notes.notes = [
 			noteBuilder({ document: mermaidDocument('flowchart LR\n A[Before] --> B[Export]') })
 		];
-		const original = await service.generateDocument(testActor(), input);
+		const original = await service.generateDocument(input);
 		notes.notes = [
 			noteBuilder({ document: mermaidDocument('flowchart TD\n A[After] --> B[Current document]') })
 		];
-		const regenerated = await service.regenerateArtifact(testActor(), original.artifact.id);
+		const regenerated = await service.regenerateArtifact(original.artifact.id);
 		const before = media(storage.objects.get(original.artifact.objectKey)!.data);
 		const after = media(storage.objects.get(regenerated.artifact.objectKey)!.data);
 		expect({ before: before.length, after: after.length, changed: before[0] !== after[0] }).toEqual(
@@ -83,11 +81,11 @@ describe('current diagram images in document exports', () => {
 			pdfRendering
 		});
 		notes.notes = [noteBuilder({ document: mermaidDocument('flowchart LR\n A --> B') })];
-		const result = await service.previewDocument(testActor(), input);
+		const result = await service.previewDocument(input);
 		expect(Buffer.from(result.data, 'base64').toString('latin1')).toContain('/Subtype /Image');
 	}, 30_000);
 	it('includes saved draw.io diagrams in bundled documents', async () => {
-		const diagrams = new InMemoryDiagrams();
+		const diagrams = new InMemoryDiagrams(testActor());
 		const diagram = drawioBuilder({
 			sourceNoteId: testNoteId(2),
 			renderedSvg:
@@ -105,7 +103,7 @@ describe('current diagram images in document exports', () => {
 				document: { type: 'doc', content: [{ type: 'drawio', attrs: { diagramId: diagram.id } }] }
 			})
 		];
-		await service.generateBundle(testActor(), {
+		await service.generateBundle({
 			...input,
 			entries: [{ noteId: testNoteId(), path: 'Diagram' }]
 		});
@@ -113,7 +111,7 @@ describe('current diagram images in document exports', () => {
 		expect(media(archive.getEntry('Diagram.docx')!.getData()).length).toBe(1);
 	}, 30_000);
 	it('rejects a draw.io reference owned by another project', async () => {
-		const diagrams = new InMemoryDiagrams();
+		const diagrams = new InMemoryDiagrams(testActor());
 		const diagram = drawioBuilder({ projectId: testProjectId(2), sourceNoteId: undefined });
 		diagrams.diagrams = [diagram];
 		const { service, notes } = exportControllerFixture({ diagramReader: diagrams });
@@ -122,12 +120,12 @@ describe('current diagram images in document exports', () => {
 				document: { type: 'doc', content: [{ type: 'drawio', attrs: { diagramId: diagram.id } }] }
 			})
 		];
-		await expect(service.generateDocument(testActor(), input)).rejects.toThrow(
+		await expect(service.generateDocument(input)).rejects.toThrow(
 			'unavailable in the source note’s project'
 		);
 	});
 	it('reports a missing draw.io preview before persisting an incomplete export', async () => {
-		const diagrams = new InMemoryDiagrams();
+		const diagrams = new InMemoryDiagrams(testActor());
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
 		const { service, notes } = exportControllerFixture({ diagramReader: diagrams });
@@ -136,8 +134,6 @@ describe('current diagram images in document exports', () => {
 				document: { type: 'doc', content: [{ type: 'drawio', attrs: { diagramId: diagram.id } }] }
 			})
 		];
-		await expect(service.generateDocument(testActor(), input)).rejects.toThrow(
-			'preview is missing'
-		);
+		await expect(service.generateDocument(input)).rejects.toThrow('preview is missing');
 	});
 });

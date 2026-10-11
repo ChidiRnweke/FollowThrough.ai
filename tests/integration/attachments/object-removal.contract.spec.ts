@@ -11,12 +11,12 @@ import { context, now, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const { owner, project } = await seedNote(suffix);
 	const transaction = createTransactionContext(context.db);
-	const records = new AttachmentRecords(transaction.database);
+	const records = new AttachmentRecords(owner, transaction.database);
 	const keys = [`objects/${suffix}/first`, `objects/${suffix}/second`];
 	const attachmentId = crypto.randomUUID() as AttachmentId;
 	for (const objectKey of keys) {
 		await transaction.transactionRunner.run(async () => {
-			const upload = await records.createUpload(owner, {
+			const upload = await records.createUpload({
 				id: crypto.randomUUID() as AttachmentUploadId,
 				projectId: project.id,
 				path: 'document.txt',
@@ -27,7 +27,7 @@ const setup = async (suffix: string) => {
 				expiresAt: now,
 				createdAt: now
 			});
-			await records.finalize(owner, upload, {
+			await records.finalize(upload, {
 				id: crypto.randomUUID() as AttachmentVersionId,
 				attachmentId,
 				objectKey,
@@ -44,10 +44,10 @@ const setup = async (suffix: string) => {
 
 it('commits every version key for cleanup when permanently removing an attachment', async () => {
 	const { owner, records, keys, attachmentId } = await setup('32811');
-	await records.removeById(owner, attachmentId);
-	const persisted = new AttachmentRecords(context.db);
+	await records.removeById(attachmentId);
+	const persisted = new AttachmentRecords(owner, context.db);
 	expect({
-		attachment: await persisted.findById(owner, attachmentId),
+		attachment: await persisted.findById(attachmentId),
 		keys: (await persisted.listPendingObjectRemovals()).filter((key) => keys.includes(key)).sort()
 	}).toEqual({ attachment: undefined, keys });
 });
@@ -56,17 +56,17 @@ it('rolls back cleanup work with the attachment when downstream indexing fails',
 	const { owner, transaction, records, keys, attachmentId } = await setup('32812');
 	const result = await transaction.transactionRunner
 		.run(async () => {
-			await records.removeById(owner, attachmentId);
+			await records.removeById(attachmentId);
 			throw new Error('Index failed');
 		})
 		.then(
 			() => 'unexpected success',
 			(error: Error) => error.message
 		);
-	const persisted = new AttachmentRecords(context.db);
+	const persisted = new AttachmentRecords(owner, context.db);
 	expect({
 		result,
-		objectKey: (await persisted.findById(owner, attachmentId))?.version.objectKey,
+		objectKey: (await persisted.findById(attachmentId))?.version.objectKey,
 		keys: (await persisted.listPendingObjectRemovals()).filter((key) => keys.includes(key))
 	}).toEqual({ result: 'Index failed', objectKey: keys[1], keys: [] });
 });

@@ -19,13 +19,14 @@ const policy = (overrides: Partial<TrustPolicy> = {}): TrustPolicy => ({
 
 describe('trust policy controller behavior', () => {
 	it('returns the actor’s policy collection', async () => {
-		const repository = new InMemoryTrustPolicyRepository();
+		const repository = new InMemoryTrustPolicyRepository(testActor());
 		repository.policies = [
 			policy({ userId: testActor(2).userId, autoAcceptEnabled: true }),
 			policy()
 		];
-		const trustPolicyStore = new ToolTrust(repository);
+		const trustPolicyStore = new ToolTrust(testActor(), repository);
 		const controller = new TrustPolicies(
+			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<TrustPoliciesDependencies>({
 				...agentToolResultsFixture(),
@@ -33,7 +34,7 @@ describe('trust policy controller behavior', () => {
 			})
 		);
 		expect(
-			(await controller.list(testActor())).policies.map(({ pipeline, autoAcceptEnabled }) => ({
+			(await controller.list()).policies.map(({ pipeline, autoAcceptEnabled }) => ({
 				pipeline,
 				autoAcceptEnabled
 			}))
@@ -44,8 +45,12 @@ describe('trust policy controller behavior', () => {
 	});
 
 	it('returns the updated policy', async () => {
-		const trustPolicyStore = new ToolTrust(new InMemoryTrustPolicyRepository());
+		const trustPolicyStore = new ToolTrust(
+			testActor(),
+			new InMemoryTrustPolicyRepository(testActor())
+		);
 		const controller = new TrustPolicies(
+			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<TrustPoliciesDependencies>({
 				...agentToolResultsFixture(),
@@ -56,7 +61,7 @@ describe('trust policy controller behavior', () => {
 			pipeline: 'extract_promises' as PipelineKind,
 			autoAcceptEnabled: true
 		};
-		const result = await controller.update(testActor(), input);
+		const result = await controller.update(input);
 		expect(result.policy.autoAcceptEnabled).toBe(true);
 	});
 });

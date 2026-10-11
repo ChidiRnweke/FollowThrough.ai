@@ -43,7 +43,6 @@ describe('Resuming reviewed tool calls', () => {
 	it('restores the saved preparation before resumed execution can write', async () => {
 		const fixture = setup();
 		const review = await fixture.controller.prepareChange(
-			testActor(),
 			{
 				kind: 'patch',
 				noteId: fixture.note.id,

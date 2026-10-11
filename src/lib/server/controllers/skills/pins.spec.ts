@@ -22,10 +22,10 @@ import { expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
+	const notes = new InMemoryNoteRepository(testActor());
 	const note = noteBuilder({ kind: 'skill', isPinned: true });
 	notes.notes = [note];
-	const projects = new InMemoryProjectRepository();
+	const projects = new InMemoryProjectRepository(testActor());
 	const project = projectBuilder({ id: testProjectId(2), name: 'Launch' });
 	projects.projects = [projectBuilder(), project];
 	const skills = new InMemorySkillRepository(notes);
@@ -59,12 +59,12 @@ const setup = () => {
 it('pins a skill stored elsewhere only in the selected project, idempotently', async () => {
 	const { controller, skills, note, project } = setup();
 	const change = { noteId: note.id, projectId: project.id, pinned: true };
-	await controller.setPinned(testActor(), change);
-	await controller.setPinned(testActor(), change);
+	await controller.setPinned(change);
+	await controller.setPinned(change);
 	expect({
 		pins: skills.pins,
-		selected: (await skills.listAll(testActor(), project.id)).map((skill) => skill.isPinned),
-		global: (await skills.listAll(testActor())).map((skill) => skill.isPinned)
+		selected: (await skills.listAll(project.id)).map((skill) => skill.isPinned),
+		global: (await skills.listAll()).map((skill) => skill.isPinned)
 	}).toEqual({
 		pins: [{ skillNoteId: note.id, projectId: project.id }],
 		selected: [true],
@@ -74,18 +74,18 @@ it('pins a skill stored elsewhere only in the selected project, idempotently', a
 
 it('unpins one project without changing another project’s pin or the note pin', async () => {
 	const { controller, skills, notes, note, project } = setup();
-	await controller.setPinned(testActor(), {
+	await controller.setPinned({
 		noteId: note.id,
 		projectId: note.projectId,
 		pinned: true
 	});
-	await controller.setPinned(testActor(), { noteId: note.id, projectId: project.id, pinned: true });
-	await controller.setPinned(testActor(), {
+	await controller.setPinned({ noteId: note.id, projectId: project.id, pinned: true });
+	await controller.setPinned({
 		noteId: note.id,
 		projectId: project.id,
 		pinned: false
 	});
-	await controller.setPinned(testActor(), {
+	await controller.setPinned({
 		noteId: note.id,
 		projectId: project.id,
 		pinned: false
@@ -105,7 +105,7 @@ it.each(['target', 'source'] as const)(
 			item.id === id ? { ...item, archivedAt: testNow } : item
 		);
 		await expect(
-			controller.setPinned(testActor(), { noteId: note.id, projectId: project.id, pinned: true })
+			controller.setPinned({ noteId: note.id, projectId: project.id, pinned: true })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	}
 );
@@ -114,7 +114,7 @@ it('rejects a pin in another actor’s project', async () => {
 	const { controller, projects, note, project } = setup();
 	projects.projects[1] = { ...project, userId: testActor(2).userId };
 	await expect(
-		controller.setPinned(testActor(), { noteId: note.id, projectId: project.id, pinned: true })
+		controller.setPinned({ noteId: note.id, projectId: project.id, pinned: true })
 	).rejects.toMatchObject({ code: 'NOT_FOUND' });
 });
 
@@ -122,6 +122,6 @@ it('rejects a pin for an archived skill note', async () => {
 	const { controller, notes, note, project } = setup();
 	notes.notes = [{ ...note, archivedAt: testNow }];
 	await expect(
-		controller.setPinned(testActor(), { noteId: note.id, projectId: project.id, pinned: true })
+		controller.setPinned({ noteId: note.id, projectId: project.id, pinned: true })
 	).rejects.toMatchObject({ code: 'VALIDATION' });
 });

@@ -26,13 +26,13 @@ export const now = '2026-07-12T08:00:00.000Z' as DateTime;
 
 export const seedUser = async (suffix: string) => {
 	const owner = actor(suffix);
-	await new UserRecords(context.db).ensureLocal(owner);
+	await new UserRecords(owner, context.db).ensureLocal();
 	return owner;
 };
 
 export const seedNote = async (suffix: string, owner = actor(suffix)) => {
-	await new UserRecords(context.db).ensureLocal(owner);
-	const project = await new ProjectRecords(context.db).insert(owner, {
+	await new UserRecords(owner, context.db).ensureLocal();
+	const project = await new ProjectRecords(owner, context.db).insert({
 		name: `Contract project ${suffix}`
 	});
 	const note: Note = {
@@ -50,7 +50,7 @@ export const seedNote = async (suffix: string, owner = actor(suffix)) => {
 		createdAt: now,
 		updatedAt: now
 	};
-	await new NoteRecords(context.db).insert(owner, note);
+	await new NoteRecords(owner, context.db).insert(note);
 	return { owner, project, note };
 };
 
@@ -94,7 +94,7 @@ export const seedProvenance = async (owner: ReturnType<typeof actor>, suffix: st
 		metadata: {},
 		createdAt: now
 	};
-	await new ProvenanceRecords(context.db).insert(owner, provenance);
+	await new ProvenanceRecords(owner, context.db).insert(provenance);
 	return provenance;
 };
 
@@ -116,7 +116,7 @@ export const seedArtifact = async (
 		createdAt: now,
 		...patch
 	};
-	await new ArtifactRecords(context.db).insert(owner, artifact);
+	await new ArtifactRecords(owner, context.db).insert(artifact);
 	return artifact;
 };
 

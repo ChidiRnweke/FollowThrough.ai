@@ -34,23 +34,25 @@ import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 const setup = (
 	index: DiagramStudioDependencies['diagramIndexer']['indexDiagram'] = async () => {}
 ) => {
-	const sourceNotes = new InMemoryNoteContent();
+	const sourceNotes = new InMemoryNoteContent(testActor());
 	sourceNotes.notes = [noteBuilder()];
-	const diagrams = new InMemoryDiagramRepository();
-	const projects = new InMemoryProjectRepository();
+	const diagrams = new InMemoryDiagramRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	// A diagram is created in a project, and creating one verifies the project is
 	// there — the same rule that stopped notes being filed wherever sorted first.
 	projects.projects = [projectBuilder({ id: testProjectId() })];
 	const library = createDiagramServices(
+		testActor(),
 		diagrams,
-		new InMemoryNoteRepository(),
-		new InMemoryAnchorRepository(),
-		new InMemoryProvenanceRepository(),
+		new InMemoryNoteRepository(testActor()),
+		new InMemoryAnchorRepository(testActor()),
+		new InMemoryProvenanceRepository(testActor()),
 		projects
 	);
 	return {
 		diagrams,
 		controller: new DiagramStudio(
+			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
 				...agentToolResultsFixture(),
@@ -66,7 +68,7 @@ const setup = (
 				// Indexing is a downstream effect, not part of what these tests state.
 				diagramIndexer: {
 					diagramContextRequirement: (diagram) =>
-						new InMemoryDiagrams().diagramContextRequirement(diagram),
+						new InMemoryDiagrams(testActor()).diagramContextRequirement(diagram),
 					indexDiagram: index
 				},
 				drawioXmlValidator: { validate: (source: string) => source },
@@ -88,7 +90,7 @@ describe('Creating a diagram', () => {
 	// diagram was the one agent output that could vanish when a chat closed.
 	it('writes the diagram it was asked to create', async () => {
 		const { controller, diagrams } = setup();
-		const output = await controller.createDiagram(testActor(), creating());
+		const output = await controller.createDiagram(creating());
 		expect(diagrams.diagrams).toHaveLength(1);
 
 		expect(diagrams.diagrams[0]?.renderedSvg).toBeUndefined();
@@ -109,13 +111,14 @@ describe('Creating a diagram', () => {
 	// used to be refused because the row was unique on the conversation.
 	it('lets one conversation create more than one diagram', async () => {
 		const { controller, diagrams } = setup();
-		await controller.createDiagram(testActor(), creating());
-		await controller.createDiagram(testActor(), creating());
+		await controller.createDiagram(creating());
+		await controller.createDiagram(creating());
 		expect(diagrams.diagrams).toHaveLength(2);
 	});
 
 	it('validates draw.io XML before storing it', async () => {
 		const controller = new DiagramStudio(
+			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
 				...agentToolResultsFixture(),
@@ -128,7 +131,7 @@ describe('Creating a diagram', () => {
 				}
 			})
 		);
-		await expect(controller.createDiagram(testActor(), creating())).rejects.toThrow();
+		await expect(controller.createDiagram(creating())).rejects.toThrow();
 	});
 });
 
@@ -137,7 +140,7 @@ describe('Editing a diagram', () => {
 		const { controller, diagrams } = setup();
 		const target = drawioBuilder({ source: '<mxfile>before</mxfile>' });
 		diagrams.diagrams = [target];
-		const output = await controller.editDiagram(testActor(), {
+		const output = await controller.editDiagram({
 			source: VALID_DRAWIO_XML,
 			diagramId: target.id
 		});
@@ -155,7 +158,7 @@ describe('Editing a diagram', () => {
 	it('rejects a diagram the actor cannot read', async () => {
 		const { controller } = setup();
 		await expect(
-			controller.editDiagram(testActor(), {
+			controller.editDiagram({
 				source: VALID_DRAWIO_XML,
 				diagramId: drawioBuilder().id
 			})
@@ -170,7 +173,7 @@ describe('Reading a saved diagram', () => {
 		const { controller, diagrams } = setup();
 		const diagram = drawioBuilder({ source: VALID_DRAWIO_XML });
 		diagrams.diagrams = [diagram];
-		const result = await controller.readProjectDiagram(testActor(), { diagramId: diagram.id });
+		const result = await controller.readProjectDiagram({ diagramId: diagram.id });
 		expect(result.labels).not.toContain('mxfile');
 
 		expect(result.projectId).toBe(diagram.projectId);
@@ -180,7 +183,7 @@ describe('Reading a saved diagram', () => {
 		const { controller, diagrams } = setup();
 		const diagram = mermaidBuilder();
 		diagrams.diagrams = [diagram];
-		const result = await controller.readProjectDiagram(testActor(), { diagramId: diagram.id });
+		const result = await controller.readProjectDiagram({ diagramId: diagram.id });
 		expect(result.labels).toBe(diagram.source);
 	});
 
@@ -188,7 +191,7 @@ describe('Reading a saved diagram', () => {
 		const { controller, diagrams } = setup();
 		const diagram = mermaidBuilder({ title: 'Ingest pipeline' });
 		diagrams.diagrams = [diagram];
-		const result = await controller.readProjectDiagram(testActor(), { diagramId: diagram.id });
+		const result = await controller.readProjectDiagram({ diagramId: diagram.id });
 		expect(result.title).toBe('Ingest pipeline');
 	});
 });
@@ -198,7 +201,7 @@ it('does not retain a newly created diagram when indexing fails', async () => {
 		throw new Error('Index unavailable');
 	});
 	const result = await controller
-		.createDiagram(testActor(), {
+		.createDiagram({
 			source: VALID_DRAWIO_XML,
 			projectId: testProjectId(),
 			conversationId: testConversationId()

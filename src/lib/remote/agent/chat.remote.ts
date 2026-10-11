@@ -18,11 +18,11 @@ const conversationId = z
 	.transform((value) => value as ConversationId);
 
 export const submitAgentRun = command(submitAgentRunSchema, async (input) =>
-	AppFactory.forActor(requestActor()).agentHarness().submit(requestActor(), input)
+	AppFactory.forActor(requestActor()).agentHarness().submit(input)
 );
 
 export const getAgentRun = command(runIdInput, async ({ runId }) =>
-	AppFactory.forActor(requestActor()).agentHarness().getRun(requestActor(), runId)
+	AppFactory.forActor(requestActor()).agentHarness().getRun(runId)
 );
 
 export const decideAgentRun = command(
@@ -32,7 +32,7 @@ export const decideAgentRun = command(
 		decision: z.enum(['approve', 'reject']),
 		message: z.string().optional()
 	}),
-	async (input) => AppFactory.forActor(requestActor()).agentHarness().decide(requestActor(), input)
+	async (input) => AppFactory.forActor(requestActor()).agentHarness().decide(input)
 );
 
 export const decideAgentRunBatch = command(
@@ -42,22 +42,19 @@ export const decideAgentRunBatch = command(
 		decision: z.enum(['approve', 'reject']),
 		message: z.string().optional()
 	}),
-	async (input) =>
-		AppFactory.forActor(requestActor()).agentHarness().decideMany(requestActor(), input)
+	async (input) => AppFactory.forActor(requestActor()).agentHarness().decideMany(input)
 );
 
 export const cancelAgentRun = command(runIdInput, async ({ runId }) =>
-	AppFactory.forActor(requestActor()).agentHarness().cancel(requestActor(), runId)
+	AppFactory.forActor(requestActor()).agentHarness().cancel(runId)
 );
 
 export const retryAgentRun = command(
 	z.object({ runId: agentRunId, requestId: z.string().uuid() }),
 	async ({ runId, requestId }) =>
-		AppFactory.forActor(requestActor()).agentHarness().retry(requestActor(), runId, requestId)
+		AppFactory.forActor(requestActor()).agentHarness().retry(runId, requestId)
 );
 
 export const deleteSession = command(z.object({ conversationId }), async ({ conversationId }) => {
-	await AppFactory.forActor(requestActor())
-		.agentHarness()
-		.deleteSession(requestActor(), conversationId);
+	await AppFactory.forActor(requestActor()).agentHarness().deleteSession(conversationId);
 });

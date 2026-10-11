@@ -26,7 +26,7 @@ import { expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 
 const setup = async () => {
-	const notes = new InMemoryNoteRepository();
+	const notes = new InMemoryNoteRepository(testActor());
 	const note = noteBuilder({ kind: 'skill', currentRevision: 3, publishedRevision: 2 });
 	notes.notes = [note];
 	notes.revisions = [1, 2].map((revision) => ({
@@ -39,18 +39,24 @@ const setup = async () => {
 		createdAt: testNow
 	}));
 	const library = createSkillServices(
+		testActor(),
 		new InMemorySkillRepository(notes),
 		notes,
-		new InMemoryProvenanceRepository()
+		new InMemoryProvenanceRepository(testActor())
 	);
-	await library.creator.create(testActor(), note, {
+	await library.creator.create(note, {
 		name: 'Review',
 		description: 'Review changes',
 		triggerHints: []
 	});
-	const projects = new InMemoryProjectRepository();
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const catalog = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
+	const catalog = createNoteServices(
+		testActor(),
+		notes,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
@@ -68,14 +74,14 @@ const setup = async () => {
 };
 it('lists the newest immutable skill revision first', async () => {
 	const { controller, note } = await setup();
-	expect(
-		(await controller.listVersions(testActor(), { noteId: note.id })).map((item) => item.revision)
-	).toEqual([2, 1]);
+	expect((await controller.listVersions({ noteId: note.id })).map((item) => item.revision)).toEqual(
+		[2, 1]
+	);
 });
 it('does not offer revisions of an archived skill', async () => {
 	const { controller, notes, note } = await setup();
 	notes.notes = [{ ...note, archivedAt: testNow }];
-	await expect(controller.listVersions(testActor(), { noteId: note.id })).rejects.toMatchObject({
+	await expect(controller.listVersions({ noteId: note.id })).rejects.toMatchObject({
 		code: 'NOT_FOUND'
 	});
 });

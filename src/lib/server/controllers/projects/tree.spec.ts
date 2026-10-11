@@ -16,9 +16,9 @@ import { describe, expect, it } from 'vitest';
 import { Projects, type ProjectsDependencies } from './controller';
 
 const setup = () => {
-	const repository = new InMemoryProjectRepository();
+	const repository = new InMemoryProjectRepository(testActor());
 	repository.projects = [projectBuilder()];
-	const catalog = createProjectServices(repository, repository);
+	const catalog = createProjectServices(testActor(), repository, repository);
 	const controller = new Projects(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
@@ -43,7 +43,7 @@ describe('Project tree presentation', () => {
 			noteBuilder({ id: testNoteId(1), kind: 'folder' }),
 			noteBuilder({ id: testNoteId(2), parentId: testNoteId(1) })
 		];
-		const { tree } = await controller.get(testActor(), { projectId: projectBuilder().id });
+		const { tree } = await controller.get({ projectId: projectBuilder().id });
 		expect(tree[0]?.children[0]?.entry.id).toBe(testNoteId(2));
 	});
 
@@ -55,7 +55,7 @@ describe('Project tree presentation', () => {
 			noteBuilder({ id: testNoteId(3), kind: 'skill', parentId: testNoteId(1) }),
 			noteBuilder({ id: testNoteId(4), kind: 'skill' })
 		];
-		const { tree } = await controller.get(testActor(), { projectId: projectBuilder().id });
+		const { tree } = await controller.get({ projectId: projectBuilder().id });
 		expect(
 			tree.map((node) => ({
 				id: node.entry.id,

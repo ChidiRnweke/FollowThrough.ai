@@ -26,8 +26,9 @@ import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -62,7 +63,7 @@ describe('Note rename invariants', () => {
 	it('renames the note', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder()];
-		const result = await controller.rename(testActor(), {
+		const result = await controller.rename({
 			noteId: testNoteId(),
 			title: 'Renamed'
 		});
@@ -78,15 +79,15 @@ describe('Note rename invariants', () => {
 	it('rejects an empty title', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder()];
-		await expect(
-			controller.rename(testActor(), { noteId: testNoteId(), title: '   ' })
-		).rejects.toMatchObject({ code: 'VALIDATION' });
+		await expect(controller.rename({ noteId: testNoteId(), title: '   ' })).rejects.toMatchObject({
+			code: 'VALIDATION'
+		});
 	});
 
 	it('rejects renaming a note that does not exist', async () => {
 		const { controller } = setup();
 		await expect(
-			controller.rename(testActor(), { noteId: testNoteId(9), title: 'Renamed' })
+			controller.rename({ noteId: testNoteId(9), title: 'Renamed' })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 });

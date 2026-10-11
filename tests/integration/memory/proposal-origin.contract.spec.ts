@@ -20,8 +20,8 @@ import { context, now, seedNote, seedProvenance } from '../database-harness';
 const setup = async (suffix: string) => {
 	const { owner } = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const provenance = new ProvenanceRecords(database);
-	const origin = await provenance.insert(owner, {
+	const provenance = new ProvenanceRecords(owner, database);
+	const origin = await provenance.insert({
 		id: crypto.randomUUID() as ProvenanceId,
 		userId: owner.userId,
 		producerKind: 'agent',
@@ -30,19 +30,22 @@ const setup = async (suffix: string) => {
 		metadata: { scope: 'full' },
 		createdAt: now
 	});
-	const suggestions = new SuggestionRecords(database);
+	const suggestions = new SuggestionRecords(owner, database);
 	const inbox = createSuggestionServices(
+		owner,
 		suggestions,
-		new NoteRecords(database),
+		new NoteRecords(owner, database),
 		provenance,
-		new SourceAnchorRecords(database)
+		new SourceAnchorRecords(owner, database)
 	);
 	const library = createMemoryServices(
-		new MemoryRecords(database),
-		new ProjectRecords(database),
+		owner,
+		new MemoryRecords(owner, database),
+		new ProjectRecords(owner, database),
 		provenance
 	);
 	const controller = new Memory(
+		owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
 			...agentToolResultsFixture(),
@@ -50,7 +53,7 @@ const setup = async (suffix: string) => {
 			presentation: new MemoryPresentationService(),
 			memoryChanges: library.changes,
 			suggestionCreator: inbox.creator,
-			trustPolicyEvaluator: new InMemoryTrustPolicyEvaluator(),
+			trustPolicyEvaluator: new InMemoryTrustPolicyEvaluator(owner),
 			transactionRunner
 		})
 	);
@@ -58,13 +61,13 @@ const setup = async (suffix: string) => {
 };
 it('keeps the owned caller source and its recorded MCP scope', async () => {
 	const { owner, origin, controller, provenance } = await setup('22801');
-	const result = await controller.propose(owner, {
+	const result = await controller.propose({
 		scope: 'user',
 		operation: 'add',
 		content: 'Prefer concise answers.',
 		provenanceId: origin.id
 	});
-	expect(await provenance.findById(owner, result.suggestion.provenanceId)).toEqual(origin);
+	expect(await provenance.findById(result.suggestion.provenanceId)).toEqual(origin);
 });
 it.each(['foreign', 'missing'] as const)(
 	'refuses a %s source without persisting a proposal',
@@ -76,7 +79,7 @@ it.each(['foreign', 'missing'] as const)(
 			provenanceId = (await seedProvenance(foreign.owner, '22812')).id;
 		} else provenanceId = crypto.randomUUID() as ProvenanceId;
 		const outcome = await controller
-			.propose(owner, {
+			.propose({
 				scope: 'user',
 				operation: 'add',
 				content: 'Prefer concise answers.',
@@ -86,7 +89,7 @@ it.each(['foreign', 'missing'] as const)(
 				() => 'unexpected success',
 				(error: Error) => error.message
 			);
-		expect({ outcome, proposals: await suggestions.list(owner, { status: 'proposed' }) }).toEqual({
+		expect({ outcome, proposals: await suggestions.list({ status: 'proposed' }) }).toEqual({
 			outcome: 'Suggestion provenance was not found',
 			proposals: []
 		});

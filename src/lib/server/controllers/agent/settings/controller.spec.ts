@@ -18,7 +18,7 @@ const DEPLOYMENT_CHAT_MODEL = 'deepseek/deepseek-v4-flash';
 const DEPLOYMENT_VISION_MODEL = 'mistral/pixtral-large';
 const timestamp = '2026-09-23T12:00:00.000Z' as DateTime;
 const setup = () => {
-	const repository = new InMemoryAgentPreferencesRepository();
+	const repository = new InMemoryAgentPreferencesRepository(testActor());
 	repository.entries.set(testActor().userId, {
 		userId: testActor().userId,
 		executionMode: 'approval_required',
@@ -26,7 +26,7 @@ const setup = () => {
 		createdAt: testNow,
 		updatedAt: testNow
 	});
-	const preferences = new AgentPreferenceCatalog(repository);
+	const preferences = new AgentPreferenceCatalog(testActor(), repository);
 	const models = new InMemoryModelCatalog();
 	models.models = [
 		{
@@ -44,6 +44,7 @@ const setup = () => {
 		repository,
 		models,
 		controller: new AgentSettings(
+			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentSettingsDependencies>({
 				...agentToolResultsFixture(),
@@ -71,9 +72,7 @@ describe('agent settings controller behavior', () => {
 		'accepts the configured deployment model for %s when the provider omits it',
 		async (field, modelId) => {
 			const { controller } = setup();
-			expect((await controller.updatePreferences(testActor(), { [field]: modelId }))[field]).toBe(
-				modelId
-			);
+			expect((await controller.updatePreferences({ [field]: modelId }))[field]).toBe(modelId);
 		}
 	);
 	it('rejects a newly selected chat model without tool support', async () => {
@@ -90,22 +89,20 @@ describe('agent settings controller behavior', () => {
 			}
 		];
 		await expect(
-			controller.updatePreferences(testActor(), { defaultModel: 'vendor/text' })
+			controller.updatePreferences({ defaultModel: 'vendor/text' })
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 	it('reports a catalog failure instead of treating it as an empty catalog', async () => {
 		const { controller, models } = setup();
 		models.failure = new Error('Catalog unavailable');
 		await expect(
-			controller.updatePreferences(testActor(), { defaultModel: DEPLOYMENT_CHAT_MODEL })
+			controller.updatePreferences({ defaultModel: DEPLOYMENT_CHAT_MODEL })
 		).rejects.toThrow('Catalog unavailable');
 	});
 	it('creates the first preferences with one timestamp and the requested settings', async () => {
 		const { controller, repository } = setup();
 		repository.entries.clear();
-		expect(
-			await controller.updatePreferences(testActor(), { inlineSuggestionsEnabled: false })
-		).toEqual({
+		expect(await controller.updatePreferences({ inlineSuggestionsEnabled: false })).toEqual({
 			userId: testActor().userId,
 			executionMode: 'approval_required',
 			inlineSuggestionsEnabled: false,
@@ -117,9 +114,9 @@ describe('agent settings controller behavior', () => {
 		'rejects a non-vision model for %s',
 		async (field) => {
 			const { controller } = setup();
-			await expect(
-				controller.updatePreferences(testActor(), { [field]: 'vendor/tool-model' })
-			).rejects.toThrow('cannot read images');
+			await expect(controller.updatePreferences({ [field]: 'vendor/tool-model' })).rejects.toThrow(
+				'cannot read images'
+			);
 		}
 	);
 	it('allows a catalog model without tool support for inline completion', async () => {
@@ -134,39 +131,38 @@ describe('agent settings controller behavior', () => {
 			capabilities: []
 		});
 		expect(
-			(await controller.updatePreferences(testActor(), { inlineModel: 'vendor/completion' }))
-				.inlineModel
+			(await controller.updatePreferences({ inlineModel: 'vendor/completion' })).inlineModel
 		).toBe('vendor/completion');
 	});
 	it('rejects an unavailable inline model', async () => {
 		const { controller } = setup();
-		await expect(
-			controller.updatePreferences(testActor(), { inlineModel: 'vendor/missing' })
-		).rejects.toThrow('unavailable');
+		await expect(controller.updatePreferences({ inlineModel: 'vendor/missing' })).rejects.toThrow(
+			'unavailable'
+		);
 	});
 	it('matches offline nullable edits while retaining unrelated fields', async () => {
 		const { controller, repository, preferences } = setup();
 		const current = {
-			...(await preferences.get(testActor())),
+			...(await preferences.get()),
 			defaultModel: 'vendor/old',
 			webSearchMaxResults: 12
 		};
 		repository.entries.set(testActor().userId, current);
 		const patch = { defaultModel: null, inlineSuggestionsEnabled: false };
-		const saved = await controller.updatePreferences(testActor(), patch);
+		const saved = await controller.updatePreferences(patch);
 		expect({ type: 'agent_preferences', value: saved }).toEqual(
 			(await agentPreferenceWrite(current, patch, timestamp)).local
 		);
 	});
 	it('keeps another account’s preferences separate', async () => {
 		const { controller, preferences } = setup();
-		const original = await preferences.get(testActor());
-		await controller.updatePreferences(testActor(2), { inlineSuggestionsEnabled: false });
-		expect(await controller.getPreferences(testActor())).toEqual(original);
+		const original = await preferences.get();
+		await controller.updatePreferences({ inlineSuggestionsEnabled: false });
+		expect(await controller.getPreferences()).toEqual(original);
 	});
 	it('includes the deployment chat model alongside provider models', async () => {
 		const { controller, models } = setup();
-		expect(await controller.listModels(testActor())).toEqual([
+		expect(await controller.listModels()).toEqual([
 			...models.models,
 			{
 				id: DEPLOYMENT_CHAT_MODEL,
@@ -181,16 +177,16 @@ describe('agent settings controller behavior', () => {
 	});
 	it('persists a selectable default model', async () => {
 		const { controller } = setup();
-		const updated = await controller.updatePreferences(testActor(), {
+		const updated = await controller.updatePreferences({
 			defaultModel: 'vendor/tool-model'
 		});
 		expect(updated.defaultModel).toBe('vendor/tool-model');
 	});
 	it('does not persist an unavailable default model', async () => {
 		const { controller } = setup();
-		await expect(
-			controller.updatePreferences(testActor(), { defaultModel: 'missing/model' })
-		).rejects.toThrow('unavailable or does not support tools');
+		await expect(controller.updatePreferences({ defaultModel: 'missing/model' })).rejects.toThrow(
+			'unavailable or does not support tools'
+		);
 	});
 });
 /**
@@ -201,22 +197,22 @@ describe('agent settings controller behavior', () => {
 describe('agent settings model defaults', () => {
 	it('resolves deployment chat and vision defaults when the user has chosen none', async () => {
 		const { controller } = setup();
-		expect(await controller.resolveDefaults(testActor())).toEqual({
+		expect(await controller.resolveDefaults()).toEqual({
 			chatModelId: DEPLOYMENT_CHAT_MODEL,
 			visionModelId: DEPLOYMENT_VISION_MODEL
 		});
 	});
 	it('prefers the user default chat model over the deployment one', async () => {
 		const { controller } = setup();
-		await controller.updatePreferences(testActor(), { defaultModel: 'vendor/tool-model' });
-		expect((await controller.resolveDefaults(testActor())).chatModelId).toBe('vendor/tool-model');
+		await controller.updatePreferences({ defaultModel: 'vendor/tool-model' });
+		expect((await controller.resolveDefaults()).chatModelId).toBe('vendor/tool-model');
 	});
 });
 describe('offline bootstrap deployment defaults', () => {
 	it('keeps deployment models independent of the users current overrides', async () => {
 		const { controller } = setup();
-		await controller.updatePreferences(testActor(), { defaultModel: 'vendor/tool-model' });
-		expect((await controller.bootstrap(testActor())).agentDefaults).toEqual({
+		await controller.updatePreferences({ defaultModel: 'vendor/tool-model' });
+		expect((await controller.bootstrap()).agentDefaults).toEqual({
 			chatModelId: DEPLOYMENT_CHAT_MODEL,
 			visionModelId: DEPLOYMENT_VISION_MODEL
 		});

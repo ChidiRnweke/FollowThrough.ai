@@ -33,20 +33,23 @@ const toArtifact = (row: typeof schema.artifacts.$inferSelect): Artifact => ({
 });
 
 export class ArtifactRecords implements ArtifactRepository {
-	constructor(private readonly database: Database) {}
-	private activeProjectIds(actor: ActorContext) {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
+	private activeProjectIds() {
 		return this.database
 			.select({ id: projects.id })
 			.from(projects)
-			.where(and(eq(projects.userId, actor.userId), projectIsNull(projects.archivedAt)));
+			.where(and(eq(projects.userId, this.actor.userId), projectIsNull(projects.archivedAt)));
 	}
 
-	async insert(actor: ActorContext, artifact: Artifact): Promise<Artifact> {
+	async insert(artifact: Artifact): Promise<Artifact> {
 		const [row] = await this.database
 			.insert(schema.artifacts)
 			.values({
 				id: artifact.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				projectId: artifact.projectId,
 				title: artifact.title,
 				format: artifact.format,
@@ -63,7 +66,6 @@ export class ArtifactRecords implements ArtifactRepository {
 	}
 
 	async listByProject(
-		actor: ActorContext,
 		projectId: ProjectId,
 		params: ListArtifactsParams = {}
 	): Promise<ListArtifactsOutput> {
@@ -78,8 +80,8 @@ export class ArtifactRecords implements ArtifactRepository {
 		const filters = and(
 			eq(schema.artifacts.projectId, projectId),
 			and(
-				eq(schema.artifacts.userId, actor.userId),
-				inArray(schema.artifacts.projectId, this.activeProjectIds(actor))
+				eq(schema.artifacts.userId, this.actor.userId),
+				inArray(schema.artifacts.projectId, this.activeProjectIds())
 			),
 			search
 		);
@@ -126,7 +128,7 @@ export class ArtifactRecords implements ArtifactRepository {
 		};
 	}
 
-	async findById(actor: ActorContext, id: ArtifactId): Promise<Artifact | undefined> {
+	async findById(id: ArtifactId): Promise<Artifact | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.artifacts)
@@ -134,23 +136,23 @@ export class ArtifactRecords implements ArtifactRepository {
 				and(
 					eq(schema.artifacts.id, id),
 					and(
-						eq(schema.artifacts.userId, actor.userId),
-						inArray(schema.artifacts.projectId, this.activeProjectIds(actor))
+						eq(schema.artifacts.userId, this.actor.userId),
+						inArray(schema.artifacts.projectId, this.activeProjectIds())
 					)
 				)
 			);
 		return row ? toArtifact(row) : undefined;
 	}
 
-	async delete(actor: ActorContext, id: ArtifactId): Promise<void> {
+	async delete(id: ArtifactId): Promise<void> {
 		await this.database
 			.delete(schema.artifacts)
 			.where(
 				and(
 					eq(schema.artifacts.id, id),
 					and(
-						eq(schema.artifacts.userId, actor.userId),
-						inArray(schema.artifacts.projectId, this.activeProjectIds(actor))
+						eq(schema.artifacts.userId, this.actor.userId),
+						inArray(schema.artifacts.projectId, this.activeProjectIds())
 					)
 				)
 			);

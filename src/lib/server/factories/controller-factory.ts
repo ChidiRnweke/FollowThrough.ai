@@ -1,3 +1,5 @@
+import type { AttachmentProcessingController } from '$lib/server/controllers/attachment-processing/controller';
+import type { KnowledgeIndexingController } from '$lib/server/controllers/knowledge-indexing/controller';
 import type { AgentHarness } from '../controllers/agent/controller';
 import type { AgentFilesController } from '../controllers/agent-files/controller';
 import type { AgentSettingsController } from '../controllers/agent/settings/controller';
@@ -48,4 +50,6 @@ export interface ControllerFactory {
 	retrieval(): RetrievalController;
 	inlineSuggestions(): InlineSuggestionsController;
 	feedback(): FeedbackController;
+	attachmentProcessing(): AttachmentProcessingController;
+	knowledgeIndexing(): KnowledgeIndexingController;
 }

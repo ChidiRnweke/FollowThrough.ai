@@ -21,9 +21,10 @@ import { expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 
 it('reports expiry failure before presenting a note’s pending proposals', async () => {
-	const proposals = new InMemorySuggestionReader();
+	const proposals = new InMemorySuggestionReader(testActor());
 	proposals.expiryFailure = new Error('Expiry storage is unavailable');
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -46,7 +47,7 @@ it('reports expiry failure before presenting a note’s pending proposals', asyn
 			suggestionExpirer: proposals
 		})
 	);
-	await expect(controller.get(testActor(), { noteId: testNoteId() })).rejects.toThrow(
+	await expect(controller.get({ noteId: testNoteId() })).rejects.toThrow(
 		'Expiry storage is unavailable'
 	);
 });

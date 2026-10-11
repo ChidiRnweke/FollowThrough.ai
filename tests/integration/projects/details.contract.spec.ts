@@ -31,12 +31,12 @@ it.each([
 	}
 ])('$case', async ({ suffix, description, expected }) => {
 	const owner = await seedUser(suffix);
-	const repository = new ProjectRecords(context.db);
-	const project = await repository.insert(owner, {
+	const repository = new ProjectRecords(owner, context.db);
+	const project = await repository.insert({
 		name: 'Project details',
 		description: 'Keep this context'
 	});
-	const catalog = createProjectServices(repository, repository);
+	const catalog = createProjectServices(owner, repository, repository);
 	const controller = new Projects(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
@@ -49,8 +49,8 @@ it.each([
 			projectEditor: catalog.editor
 		})
 	);
-	await controller.rename(owner, { projectId: project.id, name: ' Renamed ', description });
-	const saved = await repository.findById(owner, project.id);
+	await controller.rename({ projectId: project.id, name: ' Renamed ', description });
+	const saved = await repository.findById(project.id);
 	expect({ name: saved?.name, description: saved?.description }).toEqual({
 		name: 'Renamed',
 		description: expected

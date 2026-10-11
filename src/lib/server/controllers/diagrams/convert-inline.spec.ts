@@ -15,10 +15,11 @@ import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
 
 const setup = () => {
-	const suggestions = new InMemorySuggestions();
+	const suggestions = new InMemorySuggestions(testActor());
 	const generation = diagramGenerationFixture();
 	const converter = generation.provider;
 	const controller = new Diagrams(
+		testActor(),
 		capabilityDependencies<DiagramsDependencies>({
 			...agentToolResultsFixture(),
 			generationRules: new DiagramGenerationRuleService(),
@@ -41,7 +42,7 @@ const input = { noteId: testNoteId(), source: 'mindmap\n  Root\n    Child' };
 describe('Inline Mermaid conversion invariants', () => {
 	it('creates an ordinary draw.io suggestion', async () => {
 		const { controller } = setup();
-		const result = await controller.convertInlineMermaid(testActor(), input);
+		const result = await controller.convertInlineMermaid(input);
 		expect(result.suggestion.kind === 'diagram' ? result.suggestion.payload.kind : undefined).toBe(
 			'drawio'
 		);
@@ -56,7 +57,7 @@ describe('Inline Mermaid conversion invariants', () => {
 	it('does not persist a suggestion after terminal XML validation failure', async () => {
 		const { controller, converter, suggestions } = setup();
 		converter.source = '<mxfile />';
-		await controller.convertInlineMermaid(testActor(), input).catch(() => undefined);
+		await controller.convertInlineMermaid(input).catch(() => undefined);
 		expect(suggestions.suggestions).toEqual([]);
 	});
 });

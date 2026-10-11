@@ -11,43 +11,33 @@ interface Row extends StoredToolPreference {
 }
 
 export class InMemoryToolPreferenceRepository implements ToolPreferenceRepository {
+	constructor(private readonly actor: ActorContext) {}
 	rows: Row[] = [];
 
-	async listForUser(actor: ActorContext): Promise<readonly StoredToolPreference[]> {
+	async listForUser(): Promise<readonly StoredToolPreference[]> {
 		return this.rows
-			.filter((row) => row.userId === actor.userId && row.projectId === undefined)
+			.filter((row) => row.userId === this.actor.userId && row.projectId === undefined)
 			.map(({ toolName, enabled }) => ({ toolName, enabled }));
 	}
 
-	async listForProject(
-		actor: ActorContext,
-		projectId: ProjectId
-	): Promise<readonly StoredToolPreference[]> {
+	async listForProject(projectId: ProjectId): Promise<readonly StoredToolPreference[]> {
 		return this.rows
-			.filter((row) => row.userId === actor.userId && row.projectId === projectId)
+			.filter((row) => row.userId === this.actor.userId && row.projectId === projectId)
 			.map(({ toolName, enabled }) => ({ toolName, enabled }));
 	}
 
-	async upsertForUser(actor: ActorContext, preference: StoredToolPreference): Promise<void> {
-		this.replace({ userId: actor.userId, ...preference });
+	async upsertForUser(preference: StoredToolPreference): Promise<void> {
+		this.replace({ userId: this.actor.userId, ...preference });
 	}
 
-	async upsertForProject(
-		actor: ActorContext,
-		projectId: ProjectId,
-		preference: StoredToolPreference
-	): Promise<void> {
-		this.replace({ userId: actor.userId, projectId, ...preference });
+	async upsertForProject(projectId: ProjectId, preference: StoredToolPreference): Promise<void> {
+		this.replace({ userId: this.actor.userId, projectId, ...preference });
 	}
 
-	async deleteProjectOverride(
-		actor: ActorContext,
-		projectId: ProjectId,
-		toolName: string
-	): Promise<void> {
+	async deleteProjectOverride(projectId: ProjectId, toolName: string): Promise<void> {
 		this.rows = this.rows.filter(
 			(row) =>
-				row.userId !== actor.userId || row.projectId !== projectId || row.toolName !== toolName
+				row.userId !== this.actor.userId || row.projectId !== projectId || row.toolName !== toolName
 		);
 	}
 

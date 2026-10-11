@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { AgentFiles } from '$lib/server/controllers/agent-files/controller';
 import { AgentVirtualFiles } from '$lib/server/services/agent-files/virtual-files';
@@ -13,11 +14,11 @@ export const agentFilesFixture = () =>
 		...agentToolResultsFixture(),
 		reader: new AgentVirtualFiles({
 			tokens: testTokenizer,
-			projects: new InMemoryProjectRepository(),
-			notes: new InMemoryNoteRepository(),
+			projects: new InMemoryProjectRepository(testActor()),
+			notes: new InMemoryNoteRepository(testActor()),
 			attachments: new InMemoryAttachmentRepository(),
-			diagrams: new InMemoryDiagramRepository(),
-			stored: new InMemoryAgentFiles(),
+			diagrams: new InMemoryDiagramRepository(testActor()),
+			stored: new InMemoryAgentFiles(testActor()),
 			noteMarkdown: new NoteMarkdownCodec()
 		})
 	});

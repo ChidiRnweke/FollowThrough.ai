@@ -28,11 +28,12 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 	const { owner, project } = await seedNote('21401');
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const skills = skillController(database, transactionRunner);
-	const { services: catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability(owner, {
 		db: database,
-		projects: new ProjectRecords(database)
+		projects: new ProjectRecords(owner, database)
 	});
 	const notes = new Notes(
+		owner,
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -57,12 +58,12 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 			revisionRecorder: catalog.revisionRecorder
 		})
 	);
-	const created = await skills.create(owner, { projectId: project.id, name: 'Review' });
-	await notes.publish(owner, {
+	const created = await skills.create({ projectId: project.id, name: 'Review' });
+	await notes.publish({
 		noteId: created.skill.note.id,
 		baseEtag: noteEtag(created.skill.note.id, created.skill.note.currentRevision)
 	});
-	const second = await skills.update(owner, {
+	const second = await skills.update({
 		noteId: created.skill.note.id,
 		content: {
 			kind: 'instructions',
@@ -70,11 +71,11 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 			baseRevision: created.skill.note.currentRevision
 		}
 	});
-	await notes.publish(owner, {
+	await notes.publish({
 		noteId: second.skill.note.id,
 		baseEtag: noteEtag(second.skill.note.id, second.skill.note.currentRevision)
 	});
-	await skills.update(owner, {
+	await skills.update({
 		noteId: second.skill.note.id,
 		content: {
 			kind: 'instructions',
@@ -83,7 +84,7 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 		}
 	});
 	expect(
-		(await skills.listVersions(owner, { noteId: created.skill.note.id })).map((item) => ({
+		(await skills.listVersions({ noteId: created.skill.note.id })).map((item) => ({
 			revision: item.revision,
 			text: item.plainText
 		}))
@@ -96,8 +97,8 @@ it('refuses another account’s skill history', async () => {
 	const { owner, project } = await seedNote('21402');
 	const tx = createTransactionContext(context.db);
 	const skills = skillController(tx.database, tx.transactionRunner);
-	const { skill } = await skills.create(owner, { projectId: project.id, name: 'Review' });
-	await expect(
-		skills.listVersions(actor('21403'), { noteId: skill.note.id })
-	).rejects.toMatchObject({ code: 'NOT_FOUND' });
+	const { skill } = await skills.create({ projectId: project.id, name: 'Review' });
+	await expect(skills.listVersions({ noteId: skill.note.id })).rejects.toMatchObject({
+		code: 'NOT_FOUND'
+	});
 });

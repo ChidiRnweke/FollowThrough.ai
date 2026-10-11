@@ -308,11 +308,11 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 			const workspace = await seedWorkspace(lab, temporalNotesWorkspace());
 			const actor = workspace.actor;
 
-			const recent = await lab.controllers.retrieval().search(actor, {
+			const recent = await lab.controllers.retrieval().search({
 				query: this.input.query as string,
 				createdAfter: cutoff
 			});
-			const old = await lab.controllers.retrieval().search(actor, {
+			const old = await lab.controllers.retrieval().search({
 				query: this.input.query as string,
 				createdBefore: cutoff
 			});

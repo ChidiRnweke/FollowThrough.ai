@@ -16,15 +16,15 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
-	const diagrams = new InMemoryDiagramRepository();
-	const stored = new InMemoryAgentFiles();
+	const notes = new InMemoryNoteRepository(testActor());
+	const diagrams = new InMemoryDiagramRepository(testActor());
+	const stored = new InMemoryAgentFiles(testActor());
 	const files = new AgentVirtualFiles(
 		capabilityDependencies<AgentVirtualFilesDependencies>({
 			notes,
 			diagrams,
 			stored,
-			projects: new InMemoryProjectRepository(),
+			projects: new InMemoryProjectRepository(testActor()),
 			tokens: testTokenizer,
 			noteMarkdown: new NoteMarkdownCodec()
 		})
@@ -38,7 +38,7 @@ it('does not read another actor’s note content', async () => {
 	const note = noteBuilder();
 	notes.notes = [note];
 	expect(
-		await files.sed(testActor(2), `/projects/${note.projectId}/notes/${note.id}.md`, wholeFile)
+		await files.sed(`/projects/${note.projectId}/notes/${note.id}.md`, wholeFile)
 	).toMatchObject({ kind: 'error', code: 'path_not_found' });
 });
 it('rejects a note mounted under a different project', async () => {
@@ -46,7 +46,7 @@ it('rejects a note mounted under a different project', async () => {
 	const note = noteBuilder();
 	notes.notes = [note];
 	expect(
-		await files.sed(testActor(), `/projects/${testProjectId(2)}/notes/${note.id}.md`, wholeFile)
+		await files.sed(`/projects/${testProjectId(2)}/notes/${note.id}.md`, wholeFile)
 	).toMatchObject({ kind: 'error', code: 'path_not_found' });
 });
 it('does not read another actor’s diagram source', async () => {
@@ -54,22 +54,18 @@ it('does not read another actor’s diagram source', async () => {
 	const diagram = diagramBuilder();
 	diagrams.diagrams = [diagram];
 	expect(
-		await files.sed(
-			testActor(2),
-			`/projects/${diagram.projectId}/diagrams/${diagram.id}.mmd`,
-			wholeFile
-		)
+		await files.sed(`/projects/${diagram.projectId}/diagrams/${diagram.id}.mmd`, wholeFile)
 	).toMatchObject({ kind: 'error', code: 'path_not_found' });
 });
 it('retains the persisted identity of stored files', async () => {
 	const { files, stored } = setup();
-	const file = await stored.store(testActor(), {
+	const file = await stored.store({
 		conversationId: testConversationId(),
 		path: '/history/result.txt',
 		mediaType: 'text/plain',
 		content: 'Saved result'
 	});
-	expect(await files.ls(testActor(), file.metadata.path)).toEqual({
+	expect(await files.ls(file.metadata.path)).toEqual({
 		kind: 'listed',
 		path: file.metadata.path,
 		entries: [file.metadata]
@@ -77,13 +73,13 @@ it('retains the persisted identity of stored files', async () => {
 });
 it('does not disclose stored files belonging to another actor', async () => {
 	const { files, stored } = setup();
-	const file = await stored.store(testActor(), {
+	const file = await stored.store({
 		conversationId: testConversationId(),
 		path: '/history/result.txt',
 		mediaType: 'text/plain',
 		content: 'Saved result'
 	});
-	expect(await files.sed(testActor(2), file.metadata.path, wholeFile)).toMatchObject({
+	expect(await files.sed(file.metadata.path, wholeFile)).toMatchObject({
 		kind: 'error',
 		code: 'path_not_found'
 	});

@@ -35,7 +35,6 @@ import type { RunSignals } from '$lib/server/services/agent/runs/signals';
  */
 export interface ReferencesController {
 	suggestFromSelection(
-		actor: ActorContext,
 		input: FindReferencesInput,
 		options?: ReferenceSearchOptions
 	): Promise<FindReferencesOutput<ReferenceSuggestion>>;
@@ -44,12 +43,10 @@ export interface ReferencesController {
 	 * is durable. Its result arrives as a `workflow_result` event, so a refresh mid-run
 	 * still collects the suggestions.
 	 */
-	startSuggestFromSelection(
-		actor: ActorContext,
-		input: StartFindReferencesInput
-	): Promise<AgentRunReceipt>;
-	executeReferenceRun(actor: ActorContext, runId: AgentRunId): Promise<void>;
-	recoverQueuedReferenceRuns(): Promise<number>;
+	startSuggestFromSelection(input: StartFindReferencesInput): Promise<AgentRunReceipt>;
+	executeReferenceRun(runId: AgentRunId): Promise<void>;
+	/** Start a queued run the previous process never started. */
+	resumeQueuedReferenceRun(runId: AgentRunId): Promise<void>;
 }
 
 export interface ReferencesDependencies {
@@ -70,10 +67,7 @@ export interface ReferencesDependencies {
 export class References implements ReferencesController {
 	constructor(private readonly dependencies: ReferencesDependencies) {}
 
-	async startSuggestFromSelection(
-		actor: ActorContext,
-		input: StartFindReferencesInput
-	): Promise<AgentRunReceipt> {
+	async startSuggestFromSelection(input: StartFindReferencesInput): Promise<AgentRunReceipt> {
 		const request: NoteActionRequest = {
 			requestId: input.requestId,
 			context: {
@@ -85,32 +79,30 @@ export class References implements ReferencesController {
 		let receipt: AgentRunReceipt;
 		try {
 			receipt = await this.dependencies.transactionRunner.run(() =>
-				this.dependencies.noteActionRequests.prepare(actor, request)
+				this.dependencies.noteActionRequests.prepare(request)
 			);
 		} catch (error) {
 			if (!(error instanceof DuplicateNoteActionRequest)) throw error;
-			receipt = await this.dependencies.noteActionRequests.existing(actor, request);
+			receipt = await this.dependencies.noteActionRequests.existing(request);
 		}
-		if (receipt.status === 'queued') this.launchReferenceRun(actor, receipt.runId);
+		if (receipt.status === 'queued') this.launchReferenceRun(receipt.runId);
 		return receipt;
 	}
 
-	private launchReferenceRun(actor: ActorContext, runId: AgentRunId): void {
+	private launchReferenceRun(runId: AgentRunId): void {
 		// audit-allow: silent-catch — detached execution persists its terminal state; settlement failures are emitted for operational repair.
-		void this.executeReferenceRun(actor, runId).catch((error) =>
+		void this.executeReferenceRun(runId).catch((error) =>
 			console.error(`[reference-run] Could not settle ${runId}:`, error)
 		);
 	}
 
-	async recoverQueuedReferenceRuns(): Promise<number> {
-		const queued = await this.dependencies.noteActionRequests.queued('reference_search');
-		for (const run of queued) this.launchReferenceRun(run.actor, run.runId);
-		return queued.length;
+	async resumeQueuedReferenceRun(runId: AgentRunId): Promise<void> {
+		this.launchReferenceRun(runId);
 	}
 
-	async executeReferenceRun(actor: ActorContext, runId: AgentRunId): Promise<void> {
+	async executeReferenceRun(runId: AgentRunId): Promise<void> {
 		const run = await this.dependencies.transactionRunner.run(() =>
-			this.dependencies.noteActionRequests.claim(actor, runId, 'reference_search')
+			this.dependencies.noteActionRequests.claim(runId, 'reference_search')
 		);
 		if (!run) return;
 		const active = new AbortController();
@@ -118,7 +110,7 @@ export class References implements ReferencesController {
 		try {
 			stopWatching = await this.dependencies.runSignals.abortOnCancel(runId, active);
 			const input = run.contextSnapshot;
-			const ranked = await this.findCandidates(actor, input, {
+			const ranked = await this.findCandidates(input, {
 				model: input.model,
 				signal: active.signal
 			});
@@ -130,7 +122,7 @@ export class References implements ReferencesController {
 					model: run.model
 				});
 				if (claim.kind === 'lost') return false;
-				const result = await this.saveReferences(actor, input, ranked);
+				const result = await this.saveReferences(input, ranked);
 				await this.dependencies.noteActionRequests.recordResult(runId, {
 					action: 'reference',
 					result
@@ -177,21 +169,19 @@ export class References implements ReferencesController {
 	}
 
 	async suggestFromSelection(
-		actor: ActorContext,
 		input: FindReferencesInput,
 		options?: ReferenceSearchOptions
 	): Promise<FindReferencesOutput<ReferenceSuggestion>> {
-		const ranked = await this.findCandidates(actor, input, options);
+		const ranked = await this.findCandidates(input, options);
 		options?.signal?.throwIfAborted();
-		return this.dependencies.transactionRunner.run(() => this.saveReferences(actor, input, ranked));
+		return this.dependencies.transactionRunner.run(() => this.saveReferences(input, ranked));
 	}
 
 	private async findCandidates(
-		actor: ActorContext,
 		input: FindReferencesInput,
 		options?: ReferenceSearchOptions
 	): Promise<readonly ReferenceCandidate[]> {
-		await this.dependencies.selectionOrigins.validate(actor, input.selection);
+		await this.dependencies.selectionOrigins.validate(input.selection);
 		const found = await this.searchReferences(input.selection, {
 			model: options?.model ?? this.dependencies.referenceModel,
 			...(options?.signal ? { signal: options.signal } : {})
@@ -227,14 +217,13 @@ export class References implements ReferencesController {
 		}
 	}
 	private async saveReferences(
-		actor: ActorContext,
 		input: FindReferencesInput,
 		ranked: readonly ReferenceCandidate[]
 	): Promise<FindReferencesOutput<ReferenceSuggestion>> {
-		const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
+		const source = await this.dependencies.selectionOrigins.resolve(input.selection);
 		const { anchor } = source;
 		if (ranked.length === 0) return { outcome: 'nothing_relevant', anchorId: anchor.id };
-		const origin = await this.dependencies.selectionOrigins.record(actor, source, {
+		const origin = await this.dependencies.selectionOrigins.record(source, {
 			producerKind: 'pipeline',
 			producerName: 'Reference',
 			pipeline: 'reference',
@@ -242,7 +231,7 @@ export class References implements ReferencesController {
 		});
 		const suggestions = await Promise.all(
 			ranked.map((candidate) =>
-				this.dependencies.suggestionCreator.createFromSelection(actor, origin, {
+				this.dependencies.suggestionCreator.createFromSelection(origin, {
 					kind: 'reference',
 					confidence: candidate.confidence,
 					payload: {

@@ -12,7 +12,7 @@ export const importSkillMarkdown = command(
 	async (input) => {
 		await AppFactory.forActor(requestActor())
 			.skills()
-			.update(requestActor(), {
+			.update({
 				noteId: input.noteId as NoteId,
 				content: {
 					kind: 'manifest',

@@ -6,8 +6,9 @@ import { InMemoryUserPreferencesRepository } from '$lib/testing/identity/fakes/i
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const preferences = new InMemoryUserPreferencesRepository();
+	const preferences = new InMemoryUserPreferencesRepository(testActor());
 	const controller = new UserSettings(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<UserSettingsDependencies>({ preferences })
 	);
@@ -17,13 +18,13 @@ const setup = () => {
 describe('User document preferences', () => {
 	it('reads every setting as unset when nothing was ever stored', async () => {
 		const { controller } = setup();
-		const preferences = await controller.getPreferences(testActor());
+		const preferences = await controller.getPreferences();
 		expect(preferences.sectionNumberingDefault).toBeUndefined();
 	});
 
 	it('returns the effect of a write without a second read', async () => {
 		const { controller } = setup();
-		const preferences = await controller.updatePreferences(testActor(), {
+		const preferences = await controller.updatePreferences({
 			sectionNumberingDefault: true
 		});
 		expect(preferences.sectionNumberingDefault).toBe(true);
@@ -31,8 +32,8 @@ describe('User document preferences', () => {
 
 	it('keeps users’ preferences apart', async () => {
 		const { controller } = setup();
-		await controller.updatePreferences(testActor(2), { sectionNumberingDefault: true });
-		const preferences = await controller.getPreferences(testActor());
+		await controller.updatePreferences({ sectionNumberingDefault: true });
+		const preferences = await controller.getPreferences();
 		expect(preferences.sectionNumberingDefault).toBeUndefined();
 	});
 });

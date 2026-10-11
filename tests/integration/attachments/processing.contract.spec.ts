@@ -38,17 +38,17 @@ afterAll(async () => {
 });
 const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapTokens: 480 }) => {
 	const owner = actor(suffix);
-	await new UserRecords(context.db).ensureLocal(owner);
+	await new UserRecords(owner, context.db).ensureLocal();
 	const { note } = await seedNote(suffix, owner);
 	const client = postgres(context.url, { max: 3 });
 	clients.push(client);
 	const transaction = createTransactionContext(drizzle(client, { schema }));
-	const records = new AttachmentRecords(transaction.database);
-	const search = new KnowledgeIndexRecords(transaction.database);
+	const records = new AttachmentRecords(owner, transaction.database);
+	const search = new KnowledgeIndexRecords(owner, transaction.database);
 	const finalize = () =>
 		transaction.transactionRunner.run(async () => {
 			const versionId = crypto.randomUUID() as AttachmentVersionId;
-			const upload = await records.createUpload(owner, {
+			const upload = await records.createUpload({
 				id: crypto.randomUUID() as AttachmentUploadId,
 				projectId: note.projectId,
 				noteId: note.id,
@@ -60,7 +60,7 @@ const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapToke
 				expiresAt: now,
 				createdAt: now
 			});
-			return records.finalize(owner, upload, {
+			return records.finalize(upload, {
 				id: versionId,
 				attachmentId: crypto.randomUUID() as AttachmentId,
 				objectKey: `object/${versionId}`,
@@ -114,7 +114,7 @@ describe('attachment processing persistence', () => {
 				{ length: 60 },
 				(_, index) => `Section ${index}. ${'Document evidence. '.repeat(10)}`
 			).join('\n\n') + '\n\nRecovery marker amberfalcon.';
-		await records.updateVersion(owner, {
+		await records.updateVersion({
 			...view.version,
 			processingStatus: 'partial',
 			parserKind: 'text',
@@ -124,8 +124,8 @@ describe('attachment processing persistence', () => {
 			throw new Error('Parsing is unavailable');
 		};
 		await worker.run();
-		const saved = await records.findById(owner, view.attachment.id);
-		const matches = await search.search(owner, 'amberfalcon', 10, view.attachment.projectId);
+		const saved = await records.findById(view.attachment.id);
+		const matches = await search.search('amberfalcon', 10, view.attachment.projectId);
 		expect({
 			status: saved?.version.processingStatus,
 			tail: matches.map(({ document }) => document.chunkIndex >= 50)
@@ -135,12 +135,12 @@ describe('attachment processing persistence', () => {
 	it('rescans interrupted versions and saves searchable text', async () => {
 		const { owner, records, search, view, worker, transaction } = await setup('9711');
 		await transaction.transactionRunner.run(() =>
-			records.updateVersion(owner, { ...view.version, processingStatus: 'processing' })
+			records.updateVersion({ ...view.version, processingStatus: 'processing' })
 		);
-		await worker.process(owner, view.version.id);
+		await worker.process(view.version.id);
 		expect({
-			status: (await records.findById(owner, view.attachment.id))?.version.processingStatus,
-			text: (await search.listForAttachment(owner, view.attachment.id)).map((item) => item.content)
+			status: (await records.findById(view.attachment.id))?.version.processingStatus,
+			text: (await search.listForAttachment(view.attachment.id)).map((item) => item.content)
 		}).toEqual({ status: 'ready', text: ['Extracted document'] });
 	});
 	it('does not publish older text when another upload becomes current during extraction', async () => {
@@ -148,16 +148,16 @@ describe('attachment processing persistence', () => {
 		extraction.beforeExtract = async () => {
 			await finalize();
 		};
-		await worker.process(owner, view.version.id);
+		await worker.process(view.version.id);
 		expect({
-			current: (await records.findById(owner, view.attachment.id))?.version.processingStatus,
-			chunks: await search.listForAttachment(owner, view.attachment.id)
+			current: (await records.findById(view.attachment.id))?.version.processingStatus,
+			chunks: await search.listForAttachment(view.attachment.id)
 		}).toEqual({ current: 'queued', chunks: [] });
 	});
 	it('lists both queued and interrupted versions in the durable backlog', async () => {
 		const { owner, records, view, finalize, transaction } = await setup('9713');
 		await transaction.transactionRunner.run(() =>
-			records.updateVersion(owner, { ...view.version, processingStatus: 'processing' })
+			records.updateVersion({ ...view.version, processingStatus: 'processing' })
 		);
 		const latest = await finalize();
 		expect(
@@ -170,7 +170,7 @@ describe('attachment processing persistence', () => {
 	it('clears a previous failure when retry queues a version', async () => {
 		const { owner, records, view, transaction } = await setup('9714');
 		await transaction.transactionRunner.run(() =>
-			records.updateVersion(owner, {
+			records.updateVersion({
 				...view.version,
 				processingStatus: 'failed',
 				processingFailure: 'OCR unavailable',
@@ -178,19 +178,17 @@ describe('attachment processing persistence', () => {
 			})
 		);
 		await transaction.transactionRunner.run(() =>
-			records.updateVersion(owner, { ...view.version, processingStatus: 'queued' })
+			records.updateVersion({ ...view.version, processingStatus: 'queued' })
 		);
-		expect(
-			(await records.findById(owner, view.attachment.id))?.version.processingFailure
-		).toBeUndefined();
+		expect((await records.findById(view.attachment.id))?.version.processingFailure).toBeUndefined();
 	});
 });
 
 it('preserves successful empty extraction when the version is read back', async () => {
 	const { owner, records, view, extraction, worker } = await setup('21701');
 	extraction.results.text = { text: '', parserKind: 'text' };
-	await worker.process(owner, view.version.id);
-	expect((await records.findById(owner, view.attachment.id))?.version).toMatchObject({
+	await worker.process(view.version.id);
+	expect((await records.findById(view.attachment.id))?.version).toMatchObject({
 		processingStatus: 'ready',
 		parserKind: 'text',
 		extractedText: ''
@@ -199,11 +197,11 @@ it('preserves successful empty extraction when the version is read back', async 
 		capabilityDependencies<AgentVirtualFilesDependencies>({
 			tokens: testTokenizer,
 			attachments: records,
-			stored: new InMemoryAgentFiles()
+			stored: new InMemoryAgentFiles(owner)
 		})
 	);
 	const path = `/projects/${view.attachment.projectId}/attachments/${view.attachment.id}.txt`;
-	expect(await files.ls(owner, path)).toMatchObject({
+	expect(await files.ls(path)).toMatchObject({
 		kind: 'listed',
 		entries: [{ kind: 'file', path, byteSize: 0, lineCount: 0 }]
 	});
@@ -211,7 +209,5 @@ it('preserves successful empty extraction when the version is read back', async 
 
 it('does not invent extracted text for a queued attachment', async () => {
 	const { owner, records, view } = await setup('21703');
-	expect(
-		(await records.findById(owner, view.attachment.id))?.version.extractedText
-	).toBeUndefined();
+	expect((await records.findById(view.attachment.id))?.version.extractedText).toBeUndefined();
 });

@@ -33,9 +33,9 @@ import { expect, it } from 'vitest';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 
 const setup = () => {
-	const notes = new InMemoryNoteContent();
+	const notes = new InMemoryNoteContent(testActor());
 	notes.notes = [noteBuilder({ title: 'Deployment decisions' })];
-	const diagrams = new InMemoryDiagramRepository();
+	const diagrams = new InMemoryDiagramRepository(testActor());
 	const original = drawioBuilder({
 		source: VALID_DRAWIO_XML.replace('API &amp; worker', 'Before'),
 		searchableText: 'Before',
@@ -43,16 +43,18 @@ const setup = () => {
 	});
 	diagrams.diagrams = [original];
 	const library = createDiagramServices(
+		testActor(),
 		diagrams,
-		new InMemoryNoteRepository(),
-		new InMemoryAnchorRepository(),
-		new InMemoryProvenanceRepository(),
-		new InMemoryProjectRepository()
+		new InMemoryNoteRepository(testActor()),
+		new InMemoryAnchorRepository(testActor()),
+		new InMemoryProvenanceRepository(testActor()),
+		new InMemoryProjectRepository(testActor())
 	);
-	const search = new InMemorySearchRepository();
+	const search = new InMemorySearchRepository(testActor());
 	const embeddings = new InMemoryRetrievalProvider();
 	const index = createContentIndex(search, undefined, undefined, false, embeddings);
 	const controller = new DiagramStudio(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
 			...agentToolResultsFixture(),
@@ -87,15 +89,13 @@ const savedDiagram = (result: DiagramWriteOutcome) => {
 
 it('rejects publication without a preview', async () => {
 	const { controller, input } = setup();
-	await expect(
-		controller.publishProjectDiagram(testActor(), { ...input, renderedSvg: '' })
-	).rejects.toThrow();
+	await expect(controller.publishProjectDiagram({ ...input, renderedSvg: '' })).rejects.toThrow();
 });
 
 it('rolls back the diagram and its history when embedding fails', async () => {
 	const { controller, input, diagrams, original, embeddings } = setup();
 	embeddings.embeddingFailure = new Error('Embedding failed');
-	await controller.publishProjectDiagram(testActor(), input).catch((error) => {
+	await controller.publishProjectDiagram(input).catch((error) => {
 		if (!(error instanceof Error) || error.message !== 'Embedding generation failed') throw error;
 		return { kind: 'failure' as const };
 	});
@@ -108,7 +108,7 @@ it('rolls back the diagram and its history when embedding fails', async () => {
 it('rejects invalid XML without replacing the saved diagram', async () => {
 	const { controller, input, diagrams, original } = setup();
 	await controller
-		.publishProjectDiagram(testActor(), { ...input, source: '<mxfile />' })
+		.publishProjectDiagram({ ...input, source: '<mxfile />' })
 		.catch(() => ({ kind: 'failure' as const }));
 	expect(diagrams.diagrams).toEqual([original]);
 });
@@ -116,7 +116,7 @@ it('rejects invalid XML without replacing the saved diagram', async () => {
 it('sanitizes the published preview', async () => {
 	const { controller, input } = setup();
 	const saved = await controller
-		.publishProjectDiagram(testActor(), {
+		.publishProjectDiagram({
 			...input,
 			renderedSvg:
 				'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><text>API</text></svg>'
@@ -127,7 +127,7 @@ it('sanitizes the published preview', async () => {
 
 it('extracts searchable labels from the published XML', async () => {
 	const { controller, input } = setup();
-	const saved = await controller.publishProjectDiagram(testActor(), input).then(savedDiagram);
+	const saved = await controller.publishProjectDiagram(input).then(savedDiagram);
 	expect(saved.searchableText).toBe('API & worker');
 
 	expect({
@@ -140,16 +140,16 @@ it('extracts searchable labels from the published XML', async () => {
 it('publishes rich, repeated and blank labels with the same policy as browser review', async () => {
 	const { controller, input } = setup();
 	const saved = await controller
-		.publishProjectDiagram(testActor(), { ...input, source: RICH_DRAWIO_LABELS_XML })
+		.publishProjectDiagram({ ...input, source: RICH_DRAWIO_LABELS_XML })
 		.then(savedDiagram);
 	expect(saved.searchableText).toBe('Browser\nQueue');
 });
 
 it('makes published labels searchable with the source-note title', async () => {
 	const { controller, input, search } = setup();
-	await controller.publishProjectDiagram(testActor(), input);
+	await controller.publishProjectDiagram(input);
 	expect(
-		(await search.searchByEmbedding(testActor(), [1, 0, 1], 10)).map(({ document }) => ({
+		(await search.searchByEmbedding([1, 0, 1], 10)).map(({ document }) => ({
 			id: document.diagramId,
 			title: document.sourceTitle
 		}))
@@ -159,7 +159,7 @@ it('makes published labels searchable with the source-note title', async () => {
 it('rolls back publication when the source-note context is missing', async () => {
 	const { controller, input, notes, diagrams, original } = setup();
 	notes.notes = [];
-	await controller.publishProjectDiagram(testActor(), input).catch((error) => {
+	await controller.publishProjectDiagram(input).catch((error) => {
 		if (!(error instanceof Error) || !error.message.includes('not found')) throw error;
 		return { kind: 'failure' as const };
 	});
@@ -171,7 +171,7 @@ it('rolls back publication when the source-note context is missing', async () =>
 
 it('rejects another actor’s publication', async () => {
 	const { controller, input } = setup();
-	await expect(controller.publishProjectDiagram(testActor(2), input)).rejects.toMatchObject({
+	await expect(controller.publishProjectDiagram(input)).rejects.toMatchObject({
 		code: 'NOT_FOUND'
 	});
 });
@@ -179,7 +179,7 @@ it('rejects another actor’s publication', async () => {
 it('rejects draw.io publication for a Mermaid diagram', async () => {
 	const { controller, input, diagrams } = setup();
 	diagrams.diagrams = [mermaidBuilder({ id: input.diagramId })];
-	await expect(controller.publishProjectDiagram(testActor(), input)).rejects.toMatchObject({
+	await expect(controller.publishProjectDiagram(input)).rejects.toMatchObject({
 		code: 'UNSUPPORTED_DIAGRAM_OPERATION'
 	});
 });
@@ -188,7 +188,7 @@ it('publishes a standalone diagram without requiring a source-note lookup', asyn
 	const { controller, input, notes, diagrams, original, search } = setup();
 	diagrams.diagrams = [{ ...original, sourceNoteId: undefined }];
 	notes.notes = [];
-	await controller.publishProjectDiagram(testActor(), input);
+	await controller.publishProjectDiagram(input);
 	expect(search.documents.map(({ document }) => document.sourceTitle)).toEqual([
 		'Diagram: Architecture'
 	]);
@@ -196,9 +196,9 @@ it('publishes a standalone diagram without requiring a source-note lookup', asyn
 
 it('removes empty diagram chunks without requiring unavailable source-note context', async () => {
 	const { controller, input, notes, search } = setup();
-	const published = await controller.publishProjectDiagram(testActor(), input).then(savedDiagram);
+	const published = await controller.publishProjectDiagram(input).then(savedDiagram);
 	notes.notes = [];
-	await controller.publishProjectDiagram(testActor(), {
+	await controller.publishProjectDiagram({
 		...input,
 		baseEtag: diagramEtag(published.id, published.currentRevision),
 		source: VALID_DRAWIO_XML.replace('API &amp; worker', '   ')
@@ -208,8 +208,8 @@ it('removes empty diagram chunks without requiring unavailable source-note conte
 
 it('removes archived diagram chunks without requiring unavailable source-note context', async () => {
 	const { controller, input, notes, search } = setup();
-	await controller.publishProjectDiagram(testActor(), input);
+	await controller.publishProjectDiagram(input);
 	notes.notes = [];
-	await controller.archiveProjectDiagram(testActor(), { diagramId: input.diagramId });
+	await controller.archiveProjectDiagram({ diagramId: input.diagramId });
 	expect(search.documents).toEqual([]);
 });

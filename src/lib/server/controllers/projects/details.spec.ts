@@ -11,9 +11,9 @@ import { describe, expect, it } from 'vitest';
 import { Projects, type ProjectsDependencies } from './controller';
 
 const setup = () => {
-	const repository = new InMemoryProjectRepository();
+	const repository = new InMemoryProjectRepository(testActor());
 	repository.projects = [projectBuilder()];
-	const catalog = createProjectServices(repository, repository);
+	const catalog = createProjectServices(testActor(), repository, repository);
 	const controller = new Projects(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
@@ -35,7 +35,7 @@ const setup = () => {
 describe('Project detail preparation', () => {
 	it('normalizes a project name at the domain boundary', async () => {
 		const { controller } = setup();
-		const { project } = await controller.create(testActor(), { name: '  Migration  ' });
+		const { project } = await controller.create({ name: '  Migration  ' });
 		expect(project.name).toBe('Migration');
 	});
 });
@@ -50,7 +50,7 @@ it.each([
 		const { repository, controller } = setup();
 		const original = projectBuilder({ description: 'Keep this context' });
 		repository.projects = [original];
-		const { project } = await controller.rename(testActor(), {
+		const { project } = await controller.rename({
 			projectId: original.id,
 			name: '  Renamed  ',
 			description

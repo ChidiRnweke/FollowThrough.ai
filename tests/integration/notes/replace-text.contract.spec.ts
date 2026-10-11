@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -31,11 +32,11 @@ const setup = async (suffix: string) => {
 	const first = await seedNote(suffix);
 	const second = await seedNote(`${suffix}1`, first.owner);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { services: catalog, markdown } = createNotesCapability({
+	const { services: catalog, markdown } = createNotesCapability(testActor(), {
 		db: database,
-		projects: new ProjectRecords(database)
+		projects: new ProjectRecords(testActor(), database)
 	});
-	const search = new KnowledgeIndexRecords(database);
+	const search = new KnowledgeIndexRecords(testActor(), database);
 	const index = createContentIndex(
 		search,
 		new InMemoryRetrievalProvider().model,
@@ -50,10 +51,11 @@ const setup = async (suffix: string) => {
 			})
 		)
 	);
-	for (const note of original) await index.indexNote(first.owner, note);
-	const effects = new InMemoryNoteContent();
+	for (const note of original) await index.indexNote(note);
+	const effects = new InMemoryNoteContent(testActor());
 	const faults = { secondIndex: false };
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -81,7 +83,7 @@ const setup = async (suffix: string) => {
 			noteLinkReconciler: effects,
 			noteIndexer: {
 				indexNote: async (actor, note) => {
-					const result = await index.indexNote(actor, note);
+					const result = await index.indexNote(note);
 					if (faults.secondIndex && note.id === second.note.id)
 						throw new Error('Second index write failed');
 					return result;
@@ -99,8 +101,8 @@ const setup = async (suffix: string) => {
 	const read = async () =>
 		Promise.all(
 			original.map(async (note) => ({
-				note: await catalog.reader.get(first.owner, note.id),
-				index: await search.listForNote(first.owner, note.id)
+				note: await catalog.reader.get(note.id),
+				index: await search.listForNote(note.id)
 			}))
 		);
 	return { controller, owner: first.owner, faults, input, read };
@@ -111,15 +113,15 @@ describe('atomic server text replacement', () => {
 		const { controller, owner, faults, input, read } = await setup('9791');
 		const before = await read();
 		faults.secondIndex = true;
-		await controller.replaceText(owner, input).catch(() => undefined);
+		await controller.replaceText(input).catch(() => undefined);
 		expect(await read()).toEqual(before);
 	});
 	it('retries a failed batch without leaving a double revision on the first note', async () => {
 		const { controller, owner, faults, input, read } = await setup('9792');
 		faults.secondIndex = true;
-		await controller.replaceText(owner, input).catch(() => undefined);
+		await controller.replaceText(input).catch(() => undefined);
 		faults.secondIndex = false;
-		await controller.replaceText(owner, input);
+		await controller.replaceText(input);
 		expect(
 			(await read()).map(({ note }) => ({ text: note.plainText, revision: note.currentRevision }))
 		).toEqual([

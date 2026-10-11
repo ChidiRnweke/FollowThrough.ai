@@ -3,17 +3,17 @@ import type { DateTime } from '$lib/models/workspace';
 import type { Todo, TodoId, TodoListFilter } from '$lib/models/todos';
 
 export interface TodoRepository {
-	findForUpdate(actor: ActorContext, id: TodoId): Promise<Todo | undefined>;
-	findById(actor: ActorContext, id: TodoId): Promise<Todo | undefined>;
-	list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]>;
+	findForUpdate(id: TodoId): Promise<Todo | undefined>;
+	findById(id: TodoId): Promise<Todo | undefined>;
+	list(filter: TodoListFilter): Promise<readonly Todo[]>;
 	/**
 	 * Count matching todos without assembling views. The agent context bar runs on
 	 * every navigation, so it must not pay for the full list-and-assemble path.
 	 */
-	count(actor: ActorContext, filter: TodoListFilter): Promise<number>;
+	count(filter: TodoListFilter): Promise<number>;
 	/** Distinct non-empty categories across the actor's live todos, for filter menus. */
-	listCategories(actor: ActorContext): Promise<readonly string[]>;
-	insert(actor: ActorContext, todo: Todo): Promise<Todo>;
-	update(actor: ActorContext, todo: Todo): Promise<Todo>;
-	softDelete(actor: ActorContext, id: TodoId, deletedAt: DateTime): Promise<void>;
+	listCategories(): Promise<readonly string[]>;
+	insert(todo: Todo): Promise<Todo>;
+	update(todo: Todo): Promise<Todo>;
+	softDelete(id: TodoId, deletedAt: DateTime): Promise<void>;
 }

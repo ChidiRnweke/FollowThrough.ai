@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { AttachmentExtraction } from '$lib/server/services/attachments/extraction';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/retrieval';
@@ -5,18 +6,25 @@ import type { ScheduledTask } from '$lib/models/maintenance';
 import { MaintenanceProgressService } from '$lib/server/services/maintenance/progress';
 import { MaintenanceCursorRecords } from '$lib/server/repositories/maintenance/postgres/cursors';
 import { AttachmentObjectRemoval } from '$lib/server/controllers/attachments/object-removal';
-import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
+import {
+	AttachmentProcessing,
+	type AttachmentProcessingController
+} from '$lib/server/controllers/attachment-processing/controller';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments';
 import type { AttachmentClaims } from '$lib/server/repositories/attachments/claims';
 import {
-	AttachmentCleanupService,
+	AttachmentBacklogService,
 	AttachmentClaimService,
-	AttachmentVersionService
+	AttachmentVersionService,
+	type AttachmentBacklog
 } from '$lib/server/services/attachments/records';
 import type { AtomicOperation } from '$lib/models/workspace';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
-import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
+import {
+	AttachmentBacklogRecords,
+	AttachmentRecords
+} from '$lib/server/repositories/attachments/postgres/attachments';
 import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
 import { AttachmentFormatService } from '$lib/server/services/attachments/formats';
 import { AttachmentProcessingService } from '$lib/server/services/attachments/content';
@@ -66,28 +74,15 @@ export interface AttachmentsCapability {
 	readonly uploads: AttachmentUploads;
 	readonly reader: AttachmentReader;
 	readonly lifecycle: AttachmentLifecycle;
-	readonly retention: ScheduledTask;
-	readonly objectRemoval: ScheduledTask;
-	readonly processing: ScheduledTask;
+	readonly processing: AttachmentProcessingController;
 }
 
 export const createAttachmentsCapability = (
+	actor: ActorContext,
 	input: AttachmentsCapabilityInput
 ): AttachmentsCapability => {
-	const repository = new AttachmentRecords(input.db);
-	const storage =
-		input.storage ??
-		new AttachmentStorage(
-			input.s3 ?? {
-				endpoint: 'http://localhost:9000',
-				region: 'us-east-1',
-				accessKeyId: 'followthrough',
-				secretAccessKey: 'followthrough-local-secret',
-				bucket: 'followthrough-attachments',
-				forcePathStyle: true
-			}
-		);
-	const cleanup = new AttachmentCleanupService(repository);
+	const repository = new AttachmentRecords(actor, input.db);
+	const storage = createAttachmentStorage(input);
 	const extraction = new AttachmentExtraction({
 		ocr: {
 			url: `${input.mistralBaseURL ?? DEFAULT_MISTRAL_BASE_URL}/ocr`,
@@ -106,9 +101,9 @@ export const createAttachmentsCapability = (
 	return {
 		repository,
 		storage,
-		uploads: new AttachmentUploadService(repository, input.notes),
+		uploads: new AttachmentUploadService(actor, repository, input.notes),
 		reader: new AttachmentReadingService(repository),
-		lifecycle: new AttachmentLifecycleService(repository, input.notes),
+		lifecycle: new AttachmentLifecycleService(actor, repository, input.notes),
 		processing: new AttachmentProcessing({
 			modelSelection: new AgentModelSelectionService(),
 			records: new AttachmentVersionService(repository),
@@ -120,24 +115,52 @@ export const createAttachmentsCapability = (
 			preferences: input.preferences,
 			indexer: input.indexer,
 			transactionRunner: input.transactionRunner,
-			visionModel: input.visionModel,
-			logger: console
-		}),
-		objectRemoval: new AttachmentObjectRemoval(cleanup, storage),
-		retention: new UploadRetention(
-			cleanup,
-			storage,
-			new MaintenanceProgressService(new MaintenanceCursorRecords(input.db)),
-			{
-				...optionalProperty(
-					'intervalMs',
-					positiveNumberFromEnvironment('UPLOAD_SWEEP_INTERVAL_MS')
-				),
-				...optionalProperty(
-					'maxPerTick',
-					positiveNumberFromEnvironment('UPLOAD_SWEEP_MAX_PER_TICK')
-				)
-			}
-		)
+			visionModel: input.visionModel
+		})
+	};
+};
+
+/** The object storage provider: the configured S3 bucket, or an override such as an in-memory store. */
+export const createAttachmentStorage = (
+	input: Pick<AttachmentsCapabilityInput, 's3' | 'storage'>
+): IAttachmentStorage =>
+	input.storage ??
+	new AttachmentStorage(
+		input.s3 ?? {
+			endpoint: 'http://localhost:9000',
+			region: 'us-east-1',
+			accessKeyId: 'followthrough',
+			secretAccessKey: 'followthrough-local-secret',
+			bucket: 'followthrough-attachments',
+			forcePathStyle: true
+		}
+	);
+
+/** Attachment upkeep that acts for no user: expired upload reservations and orphaned objects. */
+export const createAttachmentMaintenance = (
+	input: Pick<AttachmentsCapabilityInput, 'db' | 's3' | 'storage'>
+): { readonly backlog: AttachmentBacklog; readonly tasks: readonly ScheduledTask[] } => {
+	const backlog = new AttachmentBacklogService(new AttachmentBacklogRecords(input.db));
+	const storage = createAttachmentStorage(input);
+	return {
+		backlog,
+		tasks: [
+			new AttachmentObjectRemoval(backlog, storage),
+			new UploadRetention(
+				backlog,
+				storage,
+				new MaintenanceProgressService(new MaintenanceCursorRecords(input.db)),
+				{
+					...optionalProperty(
+						'intervalMs',
+						positiveNumberFromEnvironment('UPLOAD_SWEEP_INTERVAL_MS')
+					),
+					...optionalProperty(
+						'maxPerTick',
+						positiveNumberFromEnvironment('UPLOAD_SWEEP_MAX_PER_TICK')
+					)
+				}
+			)
+		]
 	};
 };

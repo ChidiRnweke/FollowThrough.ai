@@ -73,15 +73,15 @@ const listFor = (
 ): Promise<readonly SearchDocument[]> => {
 	switch (source.kind) {
 		case 'note':
-			return repository.listForNote(actor, source.noteId);
+			return repository.listForNote(source.noteId);
 		case 'diagram':
-			return repository.listForDiagram(actor, source.diagramId);
+			return repository.listForDiagram(source.diagramId);
 		case 'widget':
-			return repository.listForWidget(actor, source.widgetId);
+			return repository.listForWidget(source.widgetId);
 		case 'memory':
-			return repository.listForMemoryEntry(actor, source.memoryEntryId);
+			return repository.listForMemoryEntry(source.memoryEntryId);
 		case 'attachment':
-			return repository.listForAttachment(actor, source.attachmentId);
+			return repository.listForAttachment(source.attachmentId);
 	}
 };
 
@@ -92,15 +92,15 @@ const deleteFor = (
 ): Promise<void> => {
 	switch (source.kind) {
 		case 'note':
-			return repository.deleteForNote(actor, source.noteId);
+			return repository.deleteForNote(source.noteId);
 		case 'diagram':
-			return repository.deleteForDiagram(actor, source.diagramId);
+			return repository.deleteForDiagram(source.diagramId);
 		case 'widget':
-			return repository.deleteForWidget(actor, source.widgetId);
+			return repository.deleteForWidget(source.widgetId);
 		case 'memory':
-			return repository.deleteForMemoryEntry(actor, source.memoryEntryId);
+			return repository.deleteForMemoryEntry(source.memoryEntryId);
 		case 'attachment':
-			return repository.deleteForAttachment(actor, source.attachmentId);
+			return repository.deleteForAttachment(source.attachmentId);
 	}
 };
 
@@ -176,7 +176,7 @@ const applyIndex = async (
 				input: `${embedPrefix}\n${contents[index]!}`
 			}))
 		};
-	await repository.stage(actor, source, documents);
+	await repository.stage(source, documents);
 	return { kind: 'stored' };
 };
 
@@ -194,43 +194,34 @@ export interface KnowledgeRetrievalDependencies {
 }
 
 export interface NoteIndexing {
-	indexNote(actor: ActorContext, note: Note): Promise<void>;
+	indexNote(note: Note): Promise<void>;
 }
 export interface AttachmentIndexing {
-	indexAttachment(actor: ActorContext, attachment: Attachment, text: string): Promise<void>;
-	removeAttachment(actor: ActorContext, attachmentId: Attachment['id']): Promise<void>;
+	indexAttachment(attachment: Attachment, text: string): Promise<void>;
+	removeAttachment(attachmentId: Attachment['id']): Promise<void>;
 }
 export interface MemoryIndexing {
-	indexMemory(actor: ActorContext, entry: MemoryEntry): Promise<void>;
+	indexMemory(entry: MemoryEntry): Promise<void>;
 }
 export interface DiagramIndexing {
 	diagramContextRequirement(diagram: Diagram): DiagramIndexContextRequirement;
-	indexDiagram(actor: ActorContext, diagram: Diagram, context: DiagramIndexContext): Promise<void>;
+	indexDiagram(diagram: Diagram, context: DiagramIndexContext): Promise<void>;
 }
 export interface WidgetIndexing {
-	indexWidget(actor: ActorContext, widget: Widget, searchableText: string): Promise<void>;
+	indexWidget(widget: Widget, searchableText: string): Promise<void>;
 }
 /** The durable embedding queue: pending chunks are the work. */
 export interface IndexBackfill {
-	pendingSources(limit: number, after?: string): Promise<readonly PendingIndexSource[]>;
 	/** Embed one source's pending chunks. No write; the caller owns the transaction. */
-	embedPending(actor: ActorContext, source: IndexSource): Promise<EmbeddedSource>;
-	completePending(actor: ActorContext, embedded: EmbeddedSource): Promise<void>;
+	embedPending(source: IndexSource): Promise<EmbeddedSource>;
+	completePending(embedded: EmbeddedSource): Promise<void>;
 }
 /** Semantic search over indexed knowledge, ranked under ADR 0036. */
 export interface KnowledgeSearch {
 	/** Nearest neighbours, then a rerank of the candidate pool. */
-	retrieve(
-		actor: ActorContext,
-		query: string,
-		scope: RetrievalScope
-	): Promise<readonly SearchMatch[]>;
+	retrieve(query: string, scope: RetrievalScope): Promise<readonly SearchMatch[]>;
 	/** Nearest neighbours only, for a caller that filters before ranking. */
-	candidates(
-		actor: ActorContext,
-		query: string,
-		scope: RetrievalScope
-	): Promise<readonly SearchMatch[]>;
+	candidates(query: string, scope: RetrievalScope): Promise<readonly SearchMatch[]>;
 	/** Rerank candidates; a provider failure keeps vector order, cancellation propagates. */
 	rank(
 		query: string,
@@ -263,7 +254,10 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 	private readonly embeddingModel: string;
 	private readonly encoding: TokenCodec;
 	private readonly defer: boolean;
-	constructor(private readonly dependencies: KnowledgeRetrievalDependencies) {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly dependencies: KnowledgeRetrievalDependencies
+	) {
 		const { targetTokens, overlapTokens } = dependencies.chunking;
 		if (!Number.isInteger(targetTokens) || targetTokens <= 0)
 			throw new Error('Retrieval chunk target must be a positive integer');
@@ -277,12 +271,8 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 		this.defer = dependencies.defer;
 	}
 
-	async retrieve(
-		actor: ActorContext,
-		query: string,
-		scope: RetrievalScope
-	): Promise<readonly SearchMatch[]> {
-		const candidates = await this.candidates(actor, query, {
+	async retrieve(query: string, scope: RetrievalScope): Promise<readonly SearchMatch[]> {
+		const candidates = await this.candidates(query, {
 			...scope,
 			// Preserve the accepted candidate pool (ADR 0036).
 			limit: Math.max(40, scope.limit * 5)
@@ -292,24 +282,14 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 			: candidates;
 	}
 
-	async candidates(
-		actor: ActorContext,
-		query: string,
-		scope: RetrievalScope
-	): Promise<readonly SearchMatch[]> {
+	async candidates(query: string, scope: RetrievalScope): Promise<readonly SearchMatch[]> {
 		const batch = await this.embed([query], scope.signal);
 		scope.signal?.throwIfAborted();
 		const vector = batch.vectors[0];
 		// A query has exactly one vector; malformed provider output cannot become an empty search.
 		if (!vector || batch.vectors.length !== 1)
 			throw new InvalidGeneratedContentError('Query embedding returned an invalid result');
-		return this.repository.searchByEmbedding(
-			actor,
-			vector,
-			scope.limit,
-			scope.projectId,
-			scope.filter
-		);
+		return this.repository.searchByEmbedding(vector, scope.limit, scope.projectId, scope.filter);
 	}
 
 	async rank(
@@ -387,12 +367,8 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 		}
 	}
 
-	pendingSources(limit: number, after?: string): Promise<readonly PendingIndexSource[]> {
-		return this.repository.listPendingSources(limit, after);
-	}
-
-	async embedPending(actor: ActorContext, source: IndexSource): Promise<EmbeddedSource> {
-		const documents = await this.repository.listPending(actor, source);
+	async embedPending(source: IndexSource): Promise<EmbeddedSource> {
+		const documents = await this.repository.listPending(source);
 		const batch = await this.embed(documents.map(embeddingInput));
 		if (batch.vectors.length !== documents.length)
 			throw new InvalidGeneratedContentError('Embedding result count did not match chunk count');
@@ -406,12 +382,12 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 		};
 	}
 
-	completePending(actor: ActorContext, embedded: EmbeddedSource): Promise<void> {
-		return this.repository.completePending(actor, embedded.source, embedded.chunks, embedded.model);
+	completePending(embedded: EmbeddedSource): Promise<void> {
+		return this.repository.completePending(embedded.source, embedded.chunks, embedded.model);
 	}
 
-	async removeAttachment(actor: ActorContext, attachmentId: Attachment['id']): Promise<void> {
-		await this.apply(actor, { kind: 'remove', source: { kind: 'attachment', attachmentId } });
+	async removeAttachment(attachmentId: Attachment['id']): Promise<void> {
+		await this.apply({ kind: 'remove', source: { kind: 'attachment', attachmentId } });
 	}
 
 	/** Decide whether the owning operation needs an authorized source-note title. */
@@ -425,8 +401,8 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 		return diagram.archivedAt === undefined && diagram.searchableText.trim().length > 0;
 	}
 
-	private async apply(actor: ActorContext, plan: IndexPlan, defer = this.defer): Promise<void> {
-		const result = await applyIndex(this.repository, this.embeddingModel, defer, actor, plan);
+	private async apply(plan: IndexPlan, defer = this.defer): Promise<void> {
+		const result = await applyIndex(this.repository, this.embeddingModel, defer, this.actor, plan);
 		if (result.kind === 'stored') return;
 		const batch = await this.embed(result.missing.map((chunk) => chunk.input));
 		if (batch.model !== result.model || batch.vectors.length !== result.missing.length)
@@ -435,7 +411,6 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 			result.missing.map((chunk, index) => [chunk.id, batch.vectors[index]!])
 		);
 		await this.repository.stage(
-			actor,
 			result.source,
 			result.documents.map((document) => {
 				const embedding = vectors.get(document.id);
@@ -601,9 +576,8 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 			});
 		}
 	}
-	async indexNote(actor: ActorContext, note: Note): Promise<void> {
+	async indexNote(note: Note): Promise<void> {
 		return this.apply(
-			actor,
 			decideIndexPlan({
 				source: { kind: 'note', noteId: note.id },
 				contents: note.archivedAt ? [] : this.chunk(note.plainText),
@@ -618,11 +592,10 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 			})
 		);
 	}
-	async indexAttachment(actor: ActorContext, attachment: Attachment, text: string): Promise<void> {
+	async indexAttachment(attachment: Attachment, text: string): Promise<void> {
 		const contents = this.chunk(text);
 		const sourceTitle = attachment.path.split('/').at(-1) ?? attachment.path;
 		await this.apply(
-			actor,
 			decideIndexPlan({
 				source: { kind: 'attachment', attachmentId: attachment.id },
 				contents,
@@ -640,20 +613,19 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 			true
 		);
 	}
-	async indexMemory(actor: ActorContext, entry: MemoryEntry): Promise<void> {
+	async indexMemory(entry: MemoryEntry): Promise<void> {
 		// User-profile entries (no project) are injected into agent context directly and
 		// never enter the retrieval index.
 		const projectId = entry.projectId;
 		const contents =
 			!projectId || entry.deletedAt || !entry.shareWithAgents ? [] : this.chunk(entry.content);
 		if (!contents.length || !projectId) {
-			return this.apply(actor, {
+			return this.apply({
 				kind: 'remove',
 				source: { kind: 'memory', memoryEntryId: entry.id }
 			});
 		}
 		return this.apply(
-			actor,
 			decideIndexPlan({
 				source: { kind: 'memory', memoryEntryId: entry.id },
 				contents,
@@ -668,18 +640,14 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 			})
 		);
 	}
-	async indexDiagram(
-		actor: ActorContext,
-		diagram: Diagram,
-		context: DiagramIndexContext
-	): Promise<void> {
+	async indexDiagram(diagram: Diagram, context: DiagramIndexContext): Promise<void> {
 		const contents = this.chunk(diagram.searchableText);
 		// A diagram in the trash answers no searches, for the same reason one with no
 		// labels does not: the index describes what the project currently holds. Both
 		// conditions land here rather than in a second port, so "make the index agree
 		// with this row" stays one call whatever changed about the row.
 		if (!this.isDiagramIndexable(diagram) || !contents.length) {
-			return this.apply(actor, {
+			return this.apply({
 				kind: 'remove',
 				source: { kind: 'diagram', diagramId: diagram.id }
 			});
@@ -695,7 +663,6 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 		const sourceTitle =
 			context.kind === 'note' ? `Diagram in ${sectionPath}` : `Diagram: ${sectionPath}`;
 		return this.apply(
-			actor,
 			decideIndexPlan({
 				source: { kind: 'diagram', diagramId: diagram.id },
 				contents,
@@ -716,14 +683,13 @@ export class KnowledgeRetrieval implements KnowledgeRetrievalCapabilities {
 	 * A widget is indexed by the words it shows, which its controller derives. A widget in the
 	 * trash, or one that shows no words, answers no searches.
 	 */
-	async indexWidget(actor: ActorContext, widget: Widget, searchableText: string): Promise<void> {
+	async indexWidget(widget: Widget, searchableText: string): Promise<void> {
 		const contents = widget.archivedAt ? [] : this.chunk(searchableText);
 		if (!contents.length)
-			return this.apply(actor, { kind: 'remove', source: { kind: 'widget', widgetId: widget.id } });
+			return this.apply({ kind: 'remove', source: { kind: 'widget', widgetId: widget.id } });
 		// A widget chunk is a list of labels, so its title is the context the reranker gets.
 		const sourceTitle = `Widget: ${widget.title}`;
 		return this.apply(
-			actor,
 			decideIndexPlan({
 				source: { kind: 'widget', widgetId: widget.id },
 				contents,

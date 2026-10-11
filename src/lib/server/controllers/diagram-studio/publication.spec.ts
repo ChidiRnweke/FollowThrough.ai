@@ -16,7 +16,7 @@ describe('Diagram publication invariants', () => {
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
 		const result = await controller
-			.renameProjectDiagram(testActor(), {
+			.renameProjectDiagram({
 				diagramId: diagram.id,
 				title: '  Architecture  ',
 				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
@@ -30,7 +30,7 @@ describe('Diagram publication invariants', () => {
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
 		await expect(
-			controller.renameProjectDiagram(testActor(), {
+			controller.renameProjectDiagram({
 				diagramId: diagram.id,
 				title: '   ',
 				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
@@ -46,7 +46,7 @@ describe('Diagram publication invariants', () => {
 		});
 		await expect(
 			controller
-				.saveProjectDiagramDraft(testActor(), {
+				.saveProjectDiagramDraft({
 					diagramId: diagram.id,
 					source: diagram.source,
 					baseEtag: diagramEtag(foreign.id, foreign.currentRevision)
@@ -60,7 +60,7 @@ describe('Diagram publication invariants', () => {
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
 		const saved = await controller
-			.saveProjectDiagramDraft(testActor(), {
+			.saveProjectDiagramDraft({
 				diagramId: diagram.id,
 				source: '<mxfile>new</mxfile>',
 				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
@@ -68,7 +68,7 @@ describe('Diagram publication invariants', () => {
 			.then(savedDiagram);
 		expect(
 			await controller
-				.saveProjectDiagramDraft(testActor(), {
+				.saveProjectDiagramDraft({
 					diagramId: diagram.id,
 					source: saved.source,
 					baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
@@ -82,7 +82,7 @@ describe('Diagram publication invariants', () => {
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
 		const saved = await controller
-			.renameProjectDiagram(testActor(), {
+			.renameProjectDiagram({
 				diagramId: diagram.id,
 				title: 'New title',
 				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
@@ -90,7 +90,7 @@ describe('Diagram publication invariants', () => {
 			.then(savedDiagram);
 		expect(
 			await controller
-				.renameProjectDiagram(testActor(), {
+				.renameProjectDiagram({
 					diagramId: diagram.id,
 					title: 'New title',
 					baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
@@ -104,7 +104,7 @@ describe('Diagram publication invariants', () => {
 		const diagram = drawioBuilder({ publishedRevision: 0 });
 		diagrams.diagrams = [diagram];
 		const saved = await controller
-			.publishProjectDiagram(testActor(), {
+			.publishProjectDiagram({
 				diagramId: diagram.id,
 				source: '<mxfile>new</mxfile>',
 				renderedSvg: '<svg/>',
@@ -113,7 +113,7 @@ describe('Diagram publication invariants', () => {
 			.then(savedDiagram);
 		expect(
 			await controller
-				.publishProjectDiagram(testActor(), {
+				.publishProjectDiagram({
 					diagramId: diagram.id,
 					source: saved.source,
 					renderedSvg: '<svg>regenerated</svg>',
@@ -128,7 +128,7 @@ describe('Diagram publication invariants', () => {
 		const diagram = drawioBuilder({ publishedRevision: 0 });
 		diagrams.diagrams = [diagram];
 		await controller
-			.publishProjectDiagram(testActor(), {
+			.publishProjectDiagram({
 				diagramId: diagram.id,
 				source: diagram.source,
 				renderedSvg: '<svg/>',
@@ -136,7 +136,7 @@ describe('Diagram publication invariants', () => {
 			})
 			.then(savedDiagram);
 		await controller
-			.publishProjectDiagram(testActor(), {
+			.publishProjectDiagram({
 				diagramId: diagram.id,
 				source: diagram.source,
 				renderedSvg: '<svg>regenerated</svg>',
@@ -151,7 +151,7 @@ describe('Diagram publication invariants', () => {
 		const diagram = drawioBuilder({ publishedRevision: 0 });
 		diagrams.diagrams = [diagram];
 		const published = await controller
-			.publishProjectDiagram(testActor(), {
+			.publishProjectDiagram({
 				diagramId: diagram.id,
 				source: diagram.source,
 				renderedSvg: '<svg/>',
@@ -160,21 +160,21 @@ describe('Diagram publication invariants', () => {
 			.then(savedDiagram);
 		const snapshot = diagrams.diagramRevisions[0]!;
 		const edited = await controller
-			.saveProjectDiagramDraft(testActor(), {
+			.saveProjectDiagramDraft({
 				diagramId: diagram.id,
 				source: '<mxfile>new</mxfile>',
 				baseEtag: diagramEtag(published.id, published.currentRevision)
 			})
 			.then(savedDiagram);
 		const restored = await controller
-			.restoreDiagramRevision(testActor(), {
+			.restoreDiagramRevision({
 				diagramId: diagram.id,
 				revisionId: snapshot.id,
 				baseEtag: diagramEtag(edited.id, edited.currentRevision)
 			})
 			.then(savedDiagram);
 		const retried = await controller
-			.restoreDiagramRevision(testActor(), {
+			.restoreDiagramRevision({
 				diagramId: diagram.id,
 				revisionId: snapshot.id,
 				baseEtag: diagramEtag(edited.id, edited.currentRevision)
@@ -196,7 +196,7 @@ describe('Diagram publication invariants', () => {
 		const diagram = drawioBuilder({ currentRevision: 2, publishedRevision: 1 });
 		diagrams.diagrams = [diagram];
 		await expect(
-			controller.publishProjectDiagram(testActor(), {
+			controller.publishProjectDiagram({
 				diagramId: diagram.id,
 				source: '<mxfile>other</mxfile>',
 				renderedSvg: '<svg/>',
@@ -210,7 +210,7 @@ describe('Diagram publication invariants', () => {
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
 		const saved = await controller
-			.saveProjectDiagramDraft(testActor(), {
+			.saveProjectDiagramDraft({
 				diagramId: diagram.id,
 				source: '<mxfile>draft</mxfile>',
 				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
@@ -228,7 +228,7 @@ describe('Diagram publication invariants', () => {
 		});
 		diagrams.diagrams = [diagram];
 		await controller
-			.publishProjectDiagram(testActor(), {
+			.publishProjectDiagram({
 				diagramId: diagram.id,
 				source: diagram.source,
 				renderedSvg: '<svg/>',
@@ -247,7 +247,7 @@ describe('Diagram publication invariants', () => {
 		});
 		diagrams.diagrams = [diagram];
 		const published = await controller
-			.publishProjectDiagram(testActor(), {
+			.publishProjectDiagram({
 				diagramId: diagram.id,
 				source: diagram.source,
 				renderedSvg: '<svg/>',
@@ -262,7 +262,7 @@ describe('Diagram publication invariants', () => {
 		const diagram = drawioBuilder({ currentRevision: 2 });
 		diagrams.diagrams = [diagram];
 		await expect(
-			controller.saveProjectDiagramDraft(testActor(), {
+			controller.saveProjectDiagramDraft({
 				diagramId: diagram.id,
 				source: '<mxfile>draft</mxfile>',
 				baseEtag: diagramEtag(drawioBuilder().id, drawioBuilder().currentRevision)

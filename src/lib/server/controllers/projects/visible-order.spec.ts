@@ -17,9 +17,9 @@ import { expect, it } from 'vitest';
 import { Projects, type ProjectsDependencies } from './controller';
 
 const setup = () => {
-	const repository = new InMemoryProjectRepository();
+	const repository = new InMemoryProjectRepository(testActor());
 	repository.projects = [projectBuilder()];
-	const catalog = createProjectServices(repository, repository);
+	const catalog = createProjectServices(testActor(), repository, repository);
 	const controller = new Projects(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
@@ -43,15 +43,13 @@ const setup = () => {
 };
 it('reorders a note by the visible tree position when skills precede its siblings', async () => {
 	const { controller, first, second } = setup();
-	await controller.move(testActor(), {
+	await controller.move({
 		projectId: first.projectId,
 		entryId: first.id,
 		position: 1
 	});
 	expect(
-		(await controller.get(testActor(), { projectId: first.projectId })).tree.map(
-			(node) => node.entry.id
-		)
+		(await controller.get({ projectId: first.projectId })).tree.map((node) => node.entry.id)
 	).toEqual([second.id, first.id]);
 });
 it('appends after visible siblings when hidden skills occupy the destination', async () => {
@@ -70,20 +68,18 @@ it('appends after visible siblings when hidden skills occupy the destination', a
 		),
 		folder
 	];
-	await controller.move(testActor(), {
+	await controller.move({
 		projectId: first.projectId,
 		entryId: first.id,
 		position: 2
 	});
 	expect(
-		(await controller.get(testActor(), { projectId: first.projectId })).tree.map(
-			(node) => node.entry.id
-		)
+		(await controller.get({ projectId: first.projectId })).tree.map((node) => node.entry.id)
 	).toEqual([second.id, folder.id, first.id]);
 });
 it('preserves hidden skill records while reordering the visible tree', async () => {
 	const { repository, controller, skill, first } = setup();
-	await controller.move(testActor(), {
+	await controller.move({
 		projectId: first.projectId,
 		entryId: first.id,
 		position: 1
@@ -92,7 +88,7 @@ it('preserves hidden skill records while reordering the visible tree', async () 
 });
 it('keeps the existing full-sibling position semantics for a direct skill move', async () => {
 	const { repository, controller, skill } = setup();
-	await controller.move(testActor(), {
+	await controller.move({
 		projectId: skill.projectId,
 		entryId: skill.id,
 		position: 2
@@ -102,14 +98,12 @@ it('keeps the existing full-sibling position semantics for a direct skill move',
 it('places a visible entry before the requested sibling despite interleaved skills', async () => {
 	const { repository, controller, skill, first, second } = setup();
 	repository.entries = [{ ...first, position: 0 }, { ...skill, position: 1 }, second];
-	await controller.move(testActor(), {
+	await controller.move({
 		projectId: first.projectId,
 		entryId: second.id,
 		position: 0
 	});
 	expect(
-		(await controller.get(testActor(), { projectId: first.projectId })).tree.map(
-			(node) => node.entry.id
-		)
+		(await controller.get({ projectId: first.projectId })).tree.map((node) => node.entry.id)
 	).toEqual([second.id, first.id]);
 });

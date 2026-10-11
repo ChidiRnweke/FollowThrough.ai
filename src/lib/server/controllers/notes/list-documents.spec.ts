@@ -25,8 +25,9 @@ import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -67,7 +68,7 @@ describe('Note document batch invariants', () => {
 	it('returns a document per requested note, in the order asked for', async () => {
 		const { content, controller } = setup();
 		twoNotes(content);
-		const documents = await controller.listDocuments(testActor(), {
+		const documents = await controller.listDocuments({
 			noteIds: [testNoteId(2), testNoteId(1)]
 		});
 		expect(documents.map((document) => document.title)).toEqual(['Findings', 'Kickoff']);
@@ -80,14 +81,14 @@ describe('Note document batch invariants', () => {
 	it('reads nothing for an empty request', async () => {
 		const { content, controller } = setup();
 		twoNotes(content);
-		expect(await controller.listDocuments(testActor(), { noteIds: [] })).toEqual([]);
+		expect(await controller.listDocuments({ noteIds: [] })).toEqual([]);
 	});
 
 	it('returns every requested document beyond fifty in order', async () => {
 		const { content, controller } = setup();
 		content.notes = Array.from({ length: 51 }, (_, i) => noteBuilder({ id: testNoteId(i + 1) }));
 		const ids = content.notes.map((note) => note.id).reverse();
-		const documents = await controller.listDocuments(testActor(), { noteIds: ids });
+		const documents = await controller.listDocuments({ noteIds: ids });
 		expect(documents.map((note) => note.id)).toEqual(ids);
 	});
 });

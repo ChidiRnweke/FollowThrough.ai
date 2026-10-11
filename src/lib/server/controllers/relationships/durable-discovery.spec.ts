@@ -11,11 +11,11 @@ const prepare = async (
 	generation: SelectionGeneration = { kind: 'model', model: 'test/model' }
 ) => {
 	const state = relatedNoteFixture();
-	await state.repository.replaceForNote(testActor(), testNoteId(2), [
+	await state.repository.replaceForNote(testNoteId(2), [
 		searchDocumentBuilder({ content: 'The team chose OAuth.' })
 	]);
 	const receipt = await state.transactions.run(() =>
-		state.requests.prepare(testActor(), {
+		state.requests.prepare({
 			requestId: crypto.randomUUID(),
 			context: { kind: 'related_notes', generation, selection: relatedSelection }
 		})
@@ -31,7 +31,7 @@ it('uses the stored classification model after deployment settings change', asyn
 		confidence: 90
 	});
 	state.dependencies.relationshipGeneration = { kind: 'rules' };
-	await state.controller.executeRelatedNoteRun(testActor(), state.receipt.runId);
+	await state.controller.executeRelatedNoteRun(state.receipt.runId);
 	expect(
 		state.suggestions.suggestions.map((suggestion) =>
 			suggestion.kind === 'backlink' ? suggestion.payload.justification : suggestion.kind
@@ -42,7 +42,7 @@ it('uses the stored classification model after deployment settings change', asyn
 it('keeps rules for a queued request after a model becomes configured', async () => {
 	const state = await prepare({ kind: 'rules' });
 	state.client.failure = new Error('This request does not use a model');
-	await state.controller.executeRelatedNoteRun(testActor(), state.receipt.runId);
+	await state.controller.executeRelatedNoteRun(state.receipt.runId);
 	expect(
 		state.suggestions.suggestions.map((suggestion) =>
 			suggestion.kind === 'backlink' ? suggestion.payload.kind : suggestion.kind
@@ -68,9 +68,9 @@ it('saves no anchor or backlink proposals when cancellation wins during classifi
 	const state = await prepare();
 	const gate = Promise.withResolvers<void>();
 	state.client.completion = gate.promise;
-	const execution = state.controller.executeRelatedNoteRun(testActor(), state.receipt.runId);
+	const execution = state.controller.executeRelatedNoteRun(state.receipt.runId);
 	await state.client.started.promise;
-	await state.agent.cancel(testActor(), state.receipt.runId);
+	await state.agent.cancel(state.receipt.runId);
 	gate.resolve();
 	await execution;
 	expect({
@@ -84,7 +84,7 @@ it('rejects a source revision edited during classification', async () => {
 	const state = await prepare();
 	const gate = Promise.withResolvers<void>();
 	state.client.completion = gate.promise;
-	const execution = state.controller.executeRelatedNoteRun(testActor(), state.receipt.runId);
+	const execution = state.controller.executeRelatedNoteRun(state.receipt.runId);
 	await state.client.started.promise;
 	state.content.notes[0] = { ...state.content.notes[0], currentRevision: 2 };
 	gate.resolve();
@@ -97,7 +97,7 @@ it('rejects a source revision edited during classification', async () => {
 it('rolls back backlink proposals and anchors when the result event fails', async () => {
 	const state = await prepare();
 	state.runs.failedEvent = 'workflow_result';
-	await state.controller.executeRelatedNoteRun(testActor(), state.receipt.runId);
+	await state.controller.executeRelatedNoteRun(state.receipt.runId);
 	expect({
 		status: state.runs.runs[0].status,
 		anchors: state.content.anchors,
@@ -113,13 +113,13 @@ it('rolls back backlink proposals and anchors when the result event fails', asyn
 
 it('returns the same completed discovery when a request is delivered again', async () => {
 	const state = relatedNoteFixture();
-	await state.repository.replaceForNote(testActor(), testNoteId(2), [searchDocumentBuilder()]);
+	await state.repository.replaceForNote(testNoteId(2), [searchDocumentBuilder()]);
 	const request = { requestId: crypto.randomUUID(), selection: relatedSelection };
-	const first = await state.controller.startSuggestFromSelection(testActor(), request);
+	const first = await state.controller.startSuggestFromSelection(request);
 	await vi.waitFor(() => {
 		if (state.runs.runs[0].status !== 'completed') throw new Error('Discovery has not settled');
 	});
-	const second = await state.controller.startSuggestFromSelection(testActor(), request);
+	const second = await state.controller.startSuggestFromSelection(request);
 	expect({
 		sameRun: first.runId === second.runId,
 		suggestions: state.suggestions.suggestions.length,
@@ -129,8 +129,8 @@ it('returns the same completed discovery when a request is delivered again', asy
 
 it('does not publish the result again after completion', async () => {
 	const state = await prepare();
-	await state.controller.executeRelatedNoteRun(testActor(), state.receipt.runId);
-	await state.controller.executeRelatedNoteRun(testActor(), state.receipt.runId);
+	await state.controller.executeRelatedNoteRun(state.receipt.runId);
+	await state.controller.executeRelatedNoteRun(state.receipt.runId);
 	expect(
 		state.runs.events.filter((record) => record.event.type === 'workflow_result')
 	).toHaveLength(1);

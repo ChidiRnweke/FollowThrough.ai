@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
@@ -40,14 +41,15 @@ export const agentSubmissionFixture = (
 			pendingDecisions: [{ callId: 'call-1', toolName: 'archive_note', arguments: {} }]
 		};
 	}
-	const conversations = new InMemoryConversationRepository((runId) =>
+	const conversations = new InMemoryConversationRepository(testActor(), (runId) =>
 		runs.runs.some((run) => run.id === runId)
 	);
-	const journal = new ConversationArchive(conversations);
+	const journal = new ConversationArchive(testActor(), conversations);
 	const models = new InMemoryModelCatalog();
-	const preferenceRecords = new InMemoryAgentPreferencesRepository();
-	const preferences = new AgentPreferenceCatalog(preferenceRecords);
+	const preferenceRecords = new InMemoryAgentPreferencesRepository(testActor());
+	const preferences = new AgentPreferenceCatalog(testActor(), preferenceRecords);
 	const controller = new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),

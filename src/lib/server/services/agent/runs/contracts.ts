@@ -7,17 +7,10 @@ import type { Suggestion } from '$lib/models/suggestions';
 import type { ExtractPromisesOutput } from '$lib/models/todos';
 
 export interface AgentWorkflowToolbox {
-	extractPromises(
-		actor: ActorContext,
-		selection: TextSelection
-	): Promise<ExtractPromisesOutput<Suggestion>>;
-	relate(actor: ActorContext, selection: TextSelection): Promise<RelateSelectionOutput<Suggestion>>;
-	reference(
-		actor: ActorContext,
-		selection: TextSelection
-	): Promise<FindReferencesOutput<Suggestion>>;
+	extractPromises(selection: TextSelection): Promise<ExtractPromisesOutput<Suggestion>>;
+	relate(selection: TextSelection): Promise<RelateSelectionOutput<Suggestion>>;
+	reference(selection: TextSelection): Promise<FindReferencesOutput<Suggestion>>;
 	generateDiagram(
-		actor: ActorContext,
 		selection: TextSelection,
 		instruction?: string
 	): Promise<GenerateMermaidDiagramOutput<Suggestion>>;

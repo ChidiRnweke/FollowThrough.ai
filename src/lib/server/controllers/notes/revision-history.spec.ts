@@ -27,8 +27,9 @@ import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -70,11 +71,11 @@ const publishRepeatedly = async (
 ): Promise<void> => {
 	for (let round = 0; round < times; round += 1) {
 		const current = content.notes[0]!;
-		await controller.publish(testActor(), {
+		await controller.publish({
 			noteId: current.id,
 			baseEtag: noteEtag(current.id, current.currentRevision)
 		});
-		await controller.save(testActor(), {
+		await controller.save({
 			note: { ...content.notes[0]!, plainText: `Body ${round}` }
 		});
 	}
@@ -84,7 +85,7 @@ describe('Note revision history invariants', () => {
 	it('lists nothing before the note has ever been published', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder()];
-		const result = await controller.listRevisions(testActor(), { noteId: testNoteId() });
+		const result = await controller.listRevisions({ noteId: testNoteId() });
 		expect(result.revisions).toEqual([]);
 	});
 
@@ -92,7 +93,7 @@ describe('Note revision history invariants', () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder()];
 		await publishRepeatedly(content, controller, 1);
-		const result = await controller.listRevisions(testActor(), { noteId: testNoteId() });
+		const result = await controller.listRevisions({ noteId: testNoteId() });
 		expect(result.revisions).toHaveLength(1);
 
 		expect(result.revisions[0]).not.toHaveProperty('document');
@@ -102,7 +103,7 @@ describe('Note revision history invariants', () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder()];
 		await publishRepeatedly(content, controller, 3);
-		const result = await controller.listRevisions(testActor(), { noteId: testNoteId() });
+		const result = await controller.listRevisions({ noteId: testNoteId() });
 		expect(result.revisions.map((revision) => revision.revision)).toEqual([3, 2, 1]);
 	});
 
@@ -110,7 +111,7 @@ describe('Note revision history invariants', () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder()];
 		await publishRepeatedly(content, controller, 2);
-		const result = await controller.listRevisions(testActor(), { noteId: testNoteId() });
+		const result = await controller.listRevisions({ noteId: testNoteId() });
 		expect(result.revisions.filter((revision) => revision.isPublished)).toHaveLength(1);
 	});
 
@@ -120,7 +121,7 @@ describe('Note revision history invariants', () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder()];
 		await publishRepeatedly(content, controller, NOTE_REVISION_HISTORY_LIMIT + 5);
-		const result = await controller.listRevisions(testActor(), { noteId: testNoteId() });
+		const result = await controller.listRevisions({ noteId: testNoteId() });
 		expect(result.revisions).toHaveLength(NOTE_REVISION_HISTORY_LIMIT);
 
 		expect(result.revisions.at(-1)?.revision).toBe(6);
@@ -130,8 +131,8 @@ describe('Note revision history invariants', () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder({ plainText: 'Original' })];
 		await publishRepeatedly(content, controller, 1);
-		const { revisions } = await controller.listRevisions(testActor(), { noteId: testNoteId() });
-		const result = await controller.getRevision(testActor(), {
+		const { revisions } = await controller.listRevisions({ noteId: testNoteId() });
+		const result = await controller.getRevision({
 			noteId: testNoteId(),
 			revisionId: revisions[0]!.id
 		});
@@ -143,7 +144,7 @@ describe('Note revision history invariants', () => {
 		content.notes = [noteBuilder()];
 		await publishRepeatedly(content, controller, 1);
 		await expect(
-			controller.getRevision(testActor(), {
+			controller.getRevision({
 				noteId: testNoteId(),
 				revisionId: `${testNoteId()}:r999` as never
 			})

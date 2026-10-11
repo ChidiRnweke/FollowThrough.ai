@@ -13,35 +13,33 @@ import {
 import { WidgetLibrary } from './library';
 
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository();
+	const notes = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const widgets = new InMemoryWidgetRepository();
-	return { notes, widgets, library: new WidgetLibrary(widgets, projects, notes) };
+	const widgets = new InMemoryWidgetRepository(testActor());
+	return { notes, widgets, library: new WidgetLibrary(testActor(), widgets, projects, notes) };
 };
 it('keeps a widget source in its own project', async () => {
 	const { notes, library } = setup();
 	notes.notes = [noteBuilder()];
-	expect(await library.create(testActor(), widgetBuilder())).toEqual(widgetBuilder());
+	expect(await library.create(widgetBuilder())).toEqual(widgetBuilder());
 });
 it('rejects a missing widget source', async () => {
 	const { library } = setup();
-	await expect(library.create(testActor(), widgetBuilder())).rejects.toBeInstanceOf(NotFoundError);
+	await expect(library.create(widgetBuilder())).rejects.toBeInstanceOf(NotFoundError);
 });
 it('rejects a source owned by another account', async () => {
 	const { notes, library } = setup();
 	notes.notes = [noteBuilder({ userId: testActor(2).userId })];
-	await expect(library.create(testActor(), widgetBuilder())).rejects.toBeInstanceOf(NotFoundError);
+	await expect(library.create(widgetBuilder())).rejects.toBeInstanceOf(NotFoundError);
 });
 it('rejects a source in another owned project', async () => {
 	const { notes, library } = setup();
 	notes.notes = [noteBuilder({ projectId: testProjectId(2) })];
-	await expect(library.create(testActor(), widgetBuilder())).rejects.toBeInstanceOf(
-		ValidationError
-	);
+	await expect(library.create(widgetBuilder())).rejects.toBeInstanceOf(ValidationError);
 });
 it('allows a widget without a source note', async () => {
 	const { library } = setup();
 	const widget = widgetBuilder({ sourceNoteId: undefined });
-	expect(await library.create(testActor(), widget)).toEqual(widget);
+	expect(await library.create(widget)).toEqual(widget);
 });

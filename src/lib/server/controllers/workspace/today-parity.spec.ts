@@ -32,16 +32,16 @@ import { Workspace, type WorkspaceDependencies } from './controller';
 describe('Today projection parity', () => {
 	it('shows the same due groups, waiting work, notes and pending count from server and cached facts', async () => {
 		const today = '2026-09-16' as LocalDate;
-		const tasks = new InMemoryTodos();
+		const tasks = new InMemoryTodos(testActor());
 		tasks.todos = [
 			todoBuilder({ dueDate: '2026-09-15' as LocalDate }),
 			todoBuilder({ id: testTodoId(2), dueDate: today }),
 			todoBuilder({ id: testTodoId(3), dueDate: '2026-09-17' as LocalDate }),
 			todoBuilder({ id: testTodoId(4), responsibility: 'waiting_on', waitingOn: 'Reviewer' })
 		];
-		const notes = new InMemoryNoteContent();
+		const notes = new InMemoryNoteContent(testActor());
 		notes.notes = [noteBuilder({ isPinned: true }), noteBuilder({ id: testNoteId(2) })];
-		const suggestions = new InMemorySuggestionReader();
+		const suggestions = new InMemorySuggestionReader(testActor());
 		suggestions.suggestions = [
 			suggestionBuilder(),
 			memorySuggestionBuilder({ id: testSuggestionId(2) }),
@@ -79,6 +79,6 @@ describe('Today projection parity', () => {
 				suggestionExpirer: suggestions
 			})
 		);
-		expect(await server.getTodayView(testActor(), { today })).toEqual(browser.today(today));
+		expect(await server.getTodayView({ today })).toEqual(browser.today(today));
 	});
 });

@@ -27,11 +27,7 @@ const INELIGIBLE: InlineSuggestion = { outcome: 'no_suggestion', reason: 'inelig
  * happens, because a completion is a nicety that must never cost a keystroke.
  */
 export interface InlineSuggestionsController {
-	suggest(
-		actor: ActorContext,
-		request: InlineSuggestionRequest,
-		signal: AbortSignal
-	): Promise<InlineSuggestion>;
+	suggest(request: InlineSuggestionRequest, signal: AbortSignal): Promise<InlineSuggestion>;
 }
 
 export interface InlineSuggestionsDependencies {
@@ -49,18 +45,17 @@ export interface InlineSuggestionsDependencies {
 }
 
 export class InlineSuggestions implements InlineSuggestionsController {
-	constructor(private readonly dependencies: InlineSuggestionsDependencies) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly dependencies: InlineSuggestionsDependencies
+	) {}
 
-	async suggest(
-		actor: ActorContext,
-		request: InlineSuggestionRequest,
-		signal: AbortSignal
-	): Promise<InlineSuggestion> {
+	async suggest(request: InlineSuggestionRequest, signal: AbortSignal): Promise<InlineSuggestion> {
 		if (!this.dependencies.context.eligibleInlinePrefix(request.prefix)) return INELIGIBLE;
 		// One read serves both the on/off gate and the model choice; ghost text
 		// fires on every typing pause, so a second round trip here is not free.
-		const preferences = await this.dependencies.preferences.get(actor);
-		const note = await this.authorize(actor, request, preferences.inlineSuggestionsEnabled);
+		const preferences = await this.dependencies.preferences.get();
+		const note = await this.authorize(request, preferences.inlineSuggestionsEnabled);
 		if (!note) return INELIGIBLE;
 		const authoritativeRequest = { ...request, projectId: note.projectId };
 		return this.dependencies.workflow.run(
@@ -73,7 +68,7 @@ export class InlineSuggestions implements InlineSuggestionsController {
 					headingPath: request.headingPath,
 					blockType: request.blockType
 				}),
-				userId: actor.userId,
+				userId: this.actor.userId,
 				metadata: {
 					requestId: request.requestId,
 					noteId: request.noteId,
@@ -84,9 +79,9 @@ export class InlineSuggestions implements InlineSuggestionsController {
 				tags: ['inline', 'suggestion']
 			},
 			async () => {
-				const context = await this.buildContext(actor, authoritativeRequest, note, signal);
+				const context = await this.buildContext(authoritativeRequest, note, signal);
 				const budget = await this.dependencies.admission.consume(
-					actor.userId,
+					this.actor.userId,
 					this.dependencies.now()
 				);
 				if (!budget.allowed) return { outcome: budget.reason, retryAfterMs: budget.retryAfterMs };
@@ -114,7 +109,6 @@ export class InlineSuggestions implements InlineSuggestionsController {
 	}
 
 	private async buildContext(
-		actor: ActorContext,
 		request: InlineSuggestionRequest,
 		note: Note,
 		signal: AbortSignal
@@ -131,14 +125,14 @@ export class InlineSuggestions implements InlineSuggestionsController {
 						'retrieval.vector-search',
 						{ input: query, outputMimeType: MimeType.JSON, kind: OpenInferenceSpanKind.RETRIEVER },
 						() =>
-							knowledge.candidates(actor, query, {
+							knowledge.candidates(query, {
 								limit: this.dependencies.context.limits.projectCandidates,
 								projectId: note.projectId,
 								signal
 							}),
 						(matches) => this.dependencies.context.vectorSearchTraceOutput(matches)
 					),
-					memory.list(actor, {})
+					memory.list({})
 				]);
 				signal.throwIfAborted();
 				const candidates = this.dependencies.context.inlineProjectCandidates(matches, note);
@@ -176,12 +170,11 @@ export class InlineSuggestions implements InlineSuggestionsController {
 	}
 
 	private async authorize(
-		actor: ActorContext,
 		request: InlineSuggestionRequest,
 		enabled: boolean
 	): Promise<Note | undefined> {
 		if (!enabled) return undefined;
-		const note = await this.dependencies.noteReader.get(actor, request.noteId);
+		const note = await this.dependencies.noteReader.get(request.noteId);
 		return this.dependencies.context.eligibleInlineNote(note) ? note : undefined;
 	}
 }

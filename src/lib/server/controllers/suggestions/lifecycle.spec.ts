@@ -27,7 +27,7 @@ import { Suggestions, type SuggestionsDependencies } from './controller';
 
 describe('Pending memory review invariants', () => {
 	it('returns only profile memory suggestions for the profile scope', async () => {
-		const reader = new InMemorySuggestionReader();
+		const reader = new InMemorySuggestionReader(testActor());
 		reader.suggestions = [
 			memorySuggestionBuilder(),
 			memorySuggestionBuilder({
@@ -45,6 +45,7 @@ describe('Pending memory review invariants', () => {
 			suggestion.kind === 'memory' ? [memorySuggestionContext(suggestion)] : []
 		);
 		const controller = new Suggestions(
+			testActor(),
 			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
 				...agentToolResultsFixture(),
@@ -55,12 +56,12 @@ describe('Pending memory review invariants', () => {
 				suggestionContextReader: reader
 			})
 		);
-		const result = await controller.listPendingMemory(testActor(), {});
+		const result = await controller.listPendingMemory({});
 		expect(result.suggestions.map((view) => view.suggestion.id)).toEqual([testSuggestionId()]);
 	});
 
 	it('returns only memory suggestions for the requested project', async () => {
-		const reader = new InMemorySuggestionReader();
+		const reader = new InMemorySuggestionReader(testActor());
 		reader.suggestions = [
 			memorySuggestionBuilder(),
 			memorySuggestionBuilder({
@@ -86,6 +87,7 @@ describe('Pending memory review invariants', () => {
 			suggestion.kind === 'memory' ? [memorySuggestionContext(suggestion)] : []
 		);
 		const controller = new Suggestions(
+			testActor(),
 			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
 				...agentToolResultsFixture(),
@@ -96,16 +98,17 @@ describe('Pending memory review invariants', () => {
 				suggestionContextReader: reader
 			})
 		);
-		const result = await controller.listPendingMemory(testActor(), { projectId: testProjectId() });
+		const result = await controller.listPendingMemory({ projectId: testProjectId() });
 		expect(result.suggestions.map((view) => view.suggestion.id)).toEqual([testSuggestionId(2)]);
 	});
 });
 
 const setup = () => {
-	const suggestions = new InMemorySuggestions();
-	const artifacts = new InMemorySuggestionArtifacts();
+	const suggestions = new InMemorySuggestions(testActor());
+	const artifacts = new InMemorySuggestionArtifacts(testActor());
 	const transactionRunner = new InMemoryTransactionRunner([suggestions, artifacts]);
 	const controller = new Suggestions(
+		testActor(),
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
 			...agentToolResultsFixture(),
@@ -143,7 +146,7 @@ describe('Suggestion lifecycle invariants', () => {
 				}
 			})
 		];
-		await accept.accept(testActor(), { suggestionId: testSuggestionId() });
+		await accept.accept({ suggestionId: testSuggestionId() });
 		const artifact = artifacts.artifacts[0];
 		expect({
 			artifact: expect.objectContaining({
@@ -170,7 +173,7 @@ describe('Suggestion lifecycle invariants', () => {
 	it('accepting a proposal applies its artifact and transitions it to accepted', async () => {
 		const { suggestions, artifacts, accept } = setup();
 		suggestions.suggestions = [suggestionBuilder()];
-		const result = await accept.accept(testActor(), { suggestionId: testSuggestionId() });
+		const result = await accept.accept({ suggestionId: testSuggestionId() });
 		expect({
 			status: result.suggestion.status,
 			artifacts: artifacts.artifacts.map((artifact) => artifact.title)
@@ -180,7 +183,7 @@ describe('Suggestion lifecycle invariants', () => {
 	it('rejecting a proposal transitions it without applying an artifact', async () => {
 		const { suggestions, artifacts, reject } = setup();
 		suggestions.suggestions = [suggestionBuilder()];
-		const result = await reject.reject(testActor(), { suggestionId: testSuggestionId() });
+		const result = await reject.reject({ suggestionId: testSuggestionId() });
 		expect({ status: result.status, artifacts: artifacts.artifacts }).toEqual({
 			status: 'rejected',
 			artifacts: []
@@ -192,9 +195,9 @@ describe('Suggestion lifecycle invariants', () => {
 		suggestions.suggestions = [
 			suggestionBuilder({ expiresAt: '2020-01-01T00:00:00.000Z' as never })
 		];
-		await expect(
-			accept.accept(testActor(), { suggestionId: testSuggestionId() })
-		).rejects.toMatchObject({ code: 'EXPIRED_SUGGESTION' });
+		await expect(accept.accept({ suggestionId: testSuggestionId() })).rejects.toMatchObject({
+			code: 'EXPIRED_SUGGESTION'
+		});
 	});
 
 	it('an accepted suggestion can be reverted', async () => {
@@ -206,10 +209,10 @@ describe('Suggestion lifecycle invariants', () => {
 			})
 		];
 		artifacts.artifacts = [todoBuilder()];
-		await artifacts.effects.record(testActor(), testSuggestionId(), [
+		await artifacts.effects.record(testSuggestionId(), [
 			{ kind: 'created', after: { type: 'todos', value: todoBuilder() } }
 		]);
-		const result = await revert.revert(testActor(), { suggestionId: testSuggestionId() });
+		const result = await revert.revert({ suggestionId: testSuggestionId() });
 		expect({ status: result.status, remainingArtifacts: artifacts.artifacts }).toEqual({
 			status: 'reverted',
 			remainingArtifacts: []
@@ -222,7 +225,7 @@ describe('Suggestion transaction invariants', () => {
 		const { suggestions, artifacts, accept } = setup();
 		suggestions.suggestions = [suggestionBuilder()];
 		suggestions.failAcceptance = true;
-		const failure = await accept.accept(testActor(), { suggestionId: testSuggestionId() }).then(
+		const failure = await accept.accept({ suggestionId: testSuggestionId() }).then(
 			() => ({ kind: 'unexpected-success' }),
 			(error: { code?: string }) => ({ kind: 'failure', code: error.code })
 		);
@@ -241,12 +244,12 @@ describe('Suggestion transaction invariants', () => {
 			})
 		];
 		artifacts.artifacts = [todoBuilder()];
-		await artifacts.effects.record(testActor(), testSuggestionId(), [
+		await artifacts.effects.record(testSuggestionId(), [
 			{ kind: 'created', after: { type: 'todos', value: todoBuilder() } }
 		]);
 		artifacts.failRevert = true;
 		try {
-			await revert.revert(testActor(), { suggestionId: testSuggestionId() });
+			await revert.revert({ suggestionId: testSuggestionId() });
 		} catch {
 			// The invariant under test is the restored state.
 		}
@@ -273,12 +276,10 @@ describe('Draw.io acceptance invariants', () => {
 	it('refuses a draw.io suggestion accepted without its review', async () => {
 		const { suggestions, accept } = setup();
 		suggestions.suggestions = [drawioSuggestion()];
-		const failure = await accept
-			.acceptReviewed(testActor(), { suggestionId: testSuggestionId(9) })
-			.then(
-				() => ({ kind: 'unexpected-success' }),
-				(error: { code?: string }) => ({ kind: 'failure', code: error.code })
-			);
+		const failure = await accept.acceptReviewed({ suggestionId: testSuggestionId(9) }).then(
+			() => ({ kind: 'unexpected-success' }),
+			(error: { code?: string }) => ({ kind: 'failure', code: error.code })
+		);
 		expect({ failure, status: suggestions.suggestions[0]?.status }).toEqual({
 			failure: { kind: 'failure', code: 'VALIDATION' },
 			status: 'proposed'

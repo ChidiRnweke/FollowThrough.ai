@@ -130,29 +130,26 @@ export class AgentFileReferenceService implements AgentFileReferences {
 }
 
 export interface AgentFileReader {
-	ls(actor: ActorContext, path?: string): Promise<AgentLsResult>;
-	grep(
-		actor: ActorContext,
-		input: {
-			readonly pattern: string;
-			readonly path: string;
-			readonly fixed: boolean;
-			readonly ignoreCase: boolean;
-		}
-	): Promise<AgentGrepResult>;
-	sed(actor: ActorContext, path: string, range: AgentSedRange): Promise<AgentSedResult>;
+	ls(path?: string): Promise<AgentLsResult>;
+	grep(input: {
+		readonly pattern: string;
+		readonly path: string;
+		readonly fixed: boolean;
+		readonly ignoreCase: boolean;
+	}): Promise<AgentGrepResult>;
+	sed(path: string, range: AgentSedRange): Promise<AgentSedResult>;
 }
 
 export class AgentVirtualFiles implements AgentFileReader {
 	constructor(private readonly dependencies: AgentVirtualFilesDependencies) {}
 
-	private async exactFile(actor: ActorContext, path: string): Promise<AgentFile | undefined> {
-		const stored = await this.dependencies.stored.findByPath(actor, path);
+	private async exactFile(path: string): Promise<AgentFile | undefined> {
+		const stored = await this.dependencies.stored.findByPath(path);
 		if (stored) return stored;
 
 		const resource = readAgentResourcePath(path);
 		if (resource?.kind === 'note') {
-			const found = await this.dependencies.notes.findById(actor, resource.noteId);
+			const found = await this.dependencies.notes.findById(resource.noteId);
 			if (!found || found.projectId !== resource.projectId || found.kind === 'folder')
 				return undefined;
 			return agentFileOf(
@@ -164,9 +161,9 @@ export class AgentVirtualFiles implements AgentFileReader {
 		}
 
 		if (resource?.kind === 'version') {
-			const found = await this.dependencies.notes.findById(actor, resource.noteId);
+			const found = await this.dependencies.notes.findById(resource.noteId);
 			if (!found || found.projectId !== resource.projectId) return undefined;
-			const revision = (await this.dependencies.notes.listRevisions(actor, found.id)).find(
+			const revision = (await this.dependencies.notes.listRevisions(found.id)).find(
 				(candidate) => candidate.revision === resource.revision
 			);
 			return revision
@@ -180,7 +177,7 @@ export class AgentVirtualFiles implements AgentFileReader {
 		}
 
 		if (resource?.kind === 'attachment') {
-			const found = await this.dependencies.attachments.findById(actor, resource.attachmentId);
+			const found = await this.dependencies.attachments.findById(resource.attachmentId);
 			if (
 				!found ||
 				found.attachment.projectId !== resource.projectId ||
@@ -191,7 +188,7 @@ export class AgentVirtualFiles implements AgentFileReader {
 		}
 
 		if (resource?.kind === 'diagram') {
-			const found = await this.dependencies.diagrams.findById(actor, resource.diagramId);
+			const found = await this.dependencies.diagrams.findById(resource.diagramId);
 			if (
 				!found ||
 				found.projectId !== resource.projectId ||
@@ -208,24 +205,24 @@ export class AgentVirtualFiles implements AgentFileReader {
 		return undefined;
 	}
 
-	private async files(actor: ActorContext): Promise<readonly AgentFile[]> {
+	private async files(): Promise<readonly AgentFile[]> {
 		const [projects, stored] = await Promise.all([
-			this.dependencies.projects.listActive(actor),
-			this.dependencies.stored.list(actor)
+			this.dependencies.projects.listActive(),
+			this.dependencies.stored.list()
 		]);
 		const files = await Promise.all(
 			projects.map(async (project) => {
 				const [notes, attachments, diagramPage] = await Promise.all([
-					this.dependencies.notes.listActive(actor, project.id),
-					this.dependencies.attachments.listForProject(actor, project.id),
-					this.dependencies.diagrams.listForProject(actor, project.id)
+					this.dependencies.notes.listActive(project.id),
+					this.dependencies.attachments.listForProject(project.id),
+					this.dependencies.diagrams.listForProject(project.id)
 				]);
 				const revisionFiles = (
 					await Promise.all(
 						notes
 							.filter((note) => note.kind !== 'folder')
 							.map(async (note) =>
-								(await this.dependencies.notes.listRevisions(actor, note.id)).map((revision) =>
+								(await this.dependencies.notes.listRevisions(note.id)).map((revision) =>
 									agentFileOf(
 										this.dependencies.tokens,
 										`/projects/${project.id}/notes/${note.id}/versions/${revision.revision}.md`,
@@ -294,11 +291,11 @@ export class AgentVirtualFiles implements AgentFileReader {
 		return new Map([...children].map(([path, entries]) => [path, entries.size]));
 	}
 
-	async ls(actor: ActorContext, requestedPath = '.'): Promise<AgentLsResult> {
+	async ls(requestedPath = '.'): Promise<AgentLsResult> {
 		const path = normalizePath(requestedPath);
-		const resolved = await this.exactFile(actor, path);
+		const resolved = await this.exactFile(path);
 		if (resolved) return { kind: 'listed', path, entries: [resolved.metadata] };
-		const files = await this.files(actor);
+		const files = await this.files();
 		const directories = this.directories(files);
 		if (!directories.has(path)) return pathMissing(path, parentOf(path));
 		const prefix = path === '/' ? '/' : `${path}/`;
@@ -318,17 +315,14 @@ export class AgentVirtualFiles implements AgentFileReader {
 		};
 	}
 
-	async grep(
-		actor: ActorContext,
-		input: {
-			readonly pattern: string;
-			readonly path: string;
-			readonly fixed: boolean;
-			readonly ignoreCase: boolean;
-		}
-	): Promise<AgentGrepResult> {
+	async grep(input: {
+		readonly pattern: string;
+		readonly path: string;
+		readonly fixed: boolean;
+		readonly ignoreCase: boolean;
+	}): Promise<AgentGrepResult> {
 		const path = normalizePath(input.path);
-		const files = await this.files(actor);
+		const files = await this.files();
 		const directories = this.directories(files);
 		const targets = files.filter(
 			(file) =>
@@ -383,11 +377,11 @@ export class AgentVirtualFiles implements AgentFileReader {
 		};
 	}
 
-	async sed(actor: ActorContext, pathInput: string, range: AgentSedRange): Promise<AgentSedResult> {
+	async sed(pathInput: string, range: AgentSedRange): Promise<AgentSedResult> {
 		const path = normalizePath(pathInput);
-		const file = await this.exactFile(actor, path);
+		const file = await this.exactFile(path);
 		if (!file) {
-			const files = await this.files(actor);
+			const files = await this.files();
 			if (this.directories(files).has(path))
 				return {
 					kind: 'error',

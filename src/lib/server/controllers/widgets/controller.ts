@@ -48,33 +48,27 @@ import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/muta
  * widget, so the browser's optimistic result and the saved result come from one rule.
  */
 export interface WidgetsController {
-	synchronize(actor: ActorContext, input: WidgetMutationRequest): Promise<WorkspaceMutationResult>;
-	get(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
+	synchronize(input: WidgetMutationRequest): Promise<WorkspaceMutationResult>;
+	get(input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
 	/** The catalog a layout must fit, written for an agent that is about to write one. */
-	catalog(actor: ActorContext): Promise<{ catalogVersion: number; reference: string }>;
+	catalog(): Promise<{ catalogVersion: number; reference: string }>;
 	/** @throws ProjectChoiceRequiredError if the request names no project. */
-	list(
-		actor: ActorContext,
-		input: { readonly projectId?: ProjectId }
-	): Promise<{ widgets: readonly Widget[] }>;
+	list(input: { readonly projectId?: ProjectId }): Promise<{ widgets: readonly Widget[] }>;
 	/**
 	 * @throws ValidationError if the draft uses a component or prop the catalog rejects.
 	 * @throws ProjectChoiceRequiredError if the request names no project.
 	 */
-	create(
-		actor: ActorContext,
-		input: WithProjectChoice<CreateWidgetInput>
-	): Promise<{ widget: Widget }>;
+	create(input: WithProjectChoice<CreateWidgetInput>): Promise<{ widget: Widget }>;
 	/**
 	 * @throws StaleRevisionError if the edited part changed since the edit was made.
 	 * @throws ValidationError if the patch does not apply or its result is not a valid widget.
 	 */
-	edit(actor: ActorContext, input: EditWidgetInput): Promise<{ widget: Widget }>;
+	edit(input: EditWidgetInput): Promise<{ widget: Widget }>;
 	/** Move a widget to the trash. Notes that embed it show it as in the trash. */
-	archive(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
-	restore(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
+	archive(input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
+	restore(input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
 	/** @throws ValidationError unless the widget is in the trash. */
-	delete(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<void>;
+	delete(input: { readonly widgetId: WidgetId }): Promise<void>;
 }
 
 export interface WidgetsDependencies {
@@ -118,19 +112,17 @@ const decided = (result: WidgetEditResult): Widget => {
 
 export class Widgets implements WidgetsController {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly workspaceCommandRules: WorkspaceCommandRules,
 		private readonly dependencies: WidgetsDependencies
 	) {}
 
-	async synchronize(
-		actor: ActorContext,
-		input: WidgetMutationRequest
-	): Promise<WorkspaceMutationResult> {
+	async synchronize(input: WidgetMutationRequest): Promise<WorkspaceMutationResult> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
 					const target = this.workspaceCommandRules.mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, {
+					const prepared = await this.dependencies.syncMutations.prepare(input, {
 						identity: target,
 						key: this.workspaceCommandRules.workspaceResourceKey(target)
 					});
@@ -138,24 +130,24 @@ export class Widgets implements WidgetsController {
 					const command = input.command;
 					switch (command.kind) {
 						case 'createWidget':
-							await this.create(actor, command);
+							await this.create(command);
 							break;
 						case 'editWidget':
-							await this.write(actor, command.widgetId, (current) =>
+							await this.write(command.widgetId, (current) =>
 								this.applyWidgetChange(current, command.change, widgetCatalog, now())
 							);
 							break;
 						case 'archiveWidget':
-							await this.archive(actor, command);
+							await this.archive(command);
 							break;
 						case 'restoreWidget':
-							await this.restore(actor, command);
+							await this.restore(command);
 							break;
 						case 'deleteWidget':
-							await this.delete(actor, command);
+							await this.delete(command);
 							break;
 					}
-					return this.dependencies.syncMutations.complete(actor, input, target);
+					return this.dependencies.syncMutations.complete(input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);
@@ -165,15 +157,11 @@ export class Widgets implements WidgetsController {
 		}
 	}
 
-	async get(
-		actor: ActorContext,
-		input: { readonly widgetId: WidgetId }
-	): Promise<{ widget: Widget }> {
-		return { widget: await this.dependencies.widgetReader.get(actor, input.widgetId) };
+	async get(input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }> {
+		return { widget: await this.dependencies.widgetReader.get(input.widgetId) };
 	}
 
-	async catalog(actor: ActorContext): Promise<{ catalogVersion: number; reference: string }> {
-		void actor;
+	async catalog(): Promise<{ catalogVersion: number; reference: string }> {
 		return {
 			catalogVersion: widgetCatalog.version,
 			reference: this.dependencies.catalog.describe(
@@ -182,27 +170,21 @@ export class Widgets implements WidgetsController {
 		};
 	}
 
-	async list(
-		actor: ActorContext,
-		input: { readonly projectId?: ProjectId }
-	): Promise<{ widgets: readonly Widget[] }> {
+	async list(input: { readonly projectId?: ProjectId }): Promise<{ widgets: readonly Widget[] }> {
 		const projectId =
 			input.projectId ??
 			this.dependencies.projectChoice.requireChoice(
-				await this.dependencies.projectLister.list(actor),
+				await this.dependencies.projectLister.list(),
 				'list widgets'
 			);
-		return { widgets: await this.dependencies.widgetLister.listForProject(actor, projectId) };
+		return { widgets: await this.dependencies.widgetLister.listForProject(projectId) };
 	}
 
-	async create(
-		actor: ActorContext,
-		input: WithProjectChoice<CreateWidgetInput>
-	): Promise<{ widget: Widget }> {
+	async create(input: WithProjectChoice<CreateWidgetInput>): Promise<{ widget: Widget }> {
 		const projectId =
 			input.projectId ??
 			this.dependencies.projectChoice.requireChoice(
-				await this.dependencies.projectLister.list(actor),
+				await this.dependencies.projectLister.list(),
 				'create a widget'
 			);
 		return this.dependencies.transactionRunner.run(async () => {
@@ -211,7 +193,7 @@ export class Widgets implements WidgetsController {
 					input.draft,
 					{
 						id: input.id,
-						userId: actor.userId,
+						userId: this.actor.userId,
 						projectId,
 						...(input.sourceNoteId ? { sourceNoteId: input.sourceNoteId } : {}),
 						now: now()
@@ -219,49 +201,39 @@ export class Widgets implements WidgetsController {
 					widgetCatalog
 				)
 			);
-			const created = await this.dependencies.widgetWriter.create(actor, widget);
-			await this.index(actor, created);
+			const created = await this.dependencies.widgetWriter.create(widget);
+			await this.index(created);
 			return { widget: created };
 		});
 	}
 
-	async edit(actor: ActorContext, input: EditWidgetInput): Promise<{ widget: Widget }> {
+	async edit(input: EditWidgetInput): Promise<{ widget: Widget }> {
 		return {
-			widget: await this.write(actor, input.widgetId, (current) =>
+			widget: await this.write(input.widgetId, (current) =>
 				this.applyWidgetEdit(current, input.edit, widgetCatalog, now())
 			)
 		};
 	}
 
-	async archive(
-		actor: ActorContext,
-		input: { readonly widgetId: WidgetId }
-	): Promise<{ widget: Widget }> {
-		return { widget: await this.moveTrash(actor, input.widgetId, 'archive') };
+	async archive(input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }> {
+		return { widget: await this.moveTrash(input.widgetId, 'archive') };
 	}
 
-	async restore(
-		actor: ActorContext,
-		input: { readonly widgetId: WidgetId }
-	): Promise<{ widget: Widget }> {
-		return { widget: await this.moveTrash(actor, input.widgetId, 'restore') };
+	async restore(input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }> {
+		return { widget: await this.moveTrash(input.widgetId, 'restore') };
 	}
 
-	async delete(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<void> {
+	async delete(input: { readonly widgetId: WidgetId }): Promise<void> {
 		await this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.widgetWriter.getForEdit(actor, input.widgetId);
+			const current = await this.dependencies.widgetWriter.getForEdit(input.widgetId);
 			const decision = this.dependencies.lifecycle.decide('delete', current);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-			await this.dependencies.widgetWriter.deleteArchived(actor, input.widgetId);
+			await this.dependencies.widgetWriter.deleteArchived(input.widgetId);
 		});
 	}
 
-	private async moveTrash(
-		actor: ActorContext,
-		widgetId: WidgetId,
-		action: 'archive' | 'restore'
-	): Promise<Widget> {
-		return this.write(actor, widgetId, (current) => {
+	private async moveTrash(widgetId: WidgetId, action: 'archive' | 'restore'): Promise<Widget> {
+		return this.write(widgetId, (current) => {
 			const change = this.dependencies.lifecycle.change(action, current, now());
 			return change.kind === 'change'
 				? { kind: 'applied', widget: change.widget }
@@ -271,25 +243,23 @@ export class Widgets implements WidgetsController {
 
 	/** Decide a change against the locked current widget and save it from that revision. */
 	private async write(
-		actor: ActorContext,
 		widgetId: WidgetId,
 		decide: (current: Widget) => WidgetEditResult
 	): Promise<Widget> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.widgetWriter.getForEdit(actor, widgetId);
-			const saved = await this.dependencies.widgetWriter.update(actor, decided(decide(current)), {
+			const current = await this.dependencies.widgetWriter.getForEdit(widgetId);
+			const saved = await this.dependencies.widgetWriter.update(decided(decide(current)), {
 				layoutRevision: current.layoutRevision,
 				dataRevision: current.dataRevision
 			});
-			await this.index(actor, saved);
+			await this.index(saved);
 			return saved;
 		});
 	}
 
 	/** Index what the widget now shows. */
-	private index(actor: ActorContext, widget: Widget): Promise<void> {
+	private index(widget: Widget): Promise<void> {
 		return this.dependencies.widgetIndexer.indexWidget(
-			actor,
 			widget,
 			this.dependencies.search.text(widget)
 		);

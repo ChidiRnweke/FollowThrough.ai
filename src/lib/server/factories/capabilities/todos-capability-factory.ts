@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { TodoBoardExportService, type TodoBoardExport } from '$lib/services/todos/board-export';
 import {
 	TodoEditingRulesService,
@@ -67,14 +68,18 @@ export interface TodosCapability {
 	readonly promiseGeneration: SelectionGeneration;
 }
 
-export const createTodosCapability = (input: TodosCapabilityInput): TodosCapability => ({
+export const createTodosCapability = (
+	actor: ActorContext,
+	input: TodosCapabilityInput
+): TodosCapability => ({
 	boardExport: new TodoBoardExportService(),
 	creationRules: new TodoEditingRulesService(),
 	editingRules: new TodoEditingRulesService(),
 	presentation: new TodoPresentationService(),
-	batchReceipts: new TodoBatchReceipts(new TodoBatchReceiptRecords(input.db)),
+	batchReceipts: new TodoBatchReceipts(new TodoBatchReceiptRecords(actor, input.db)),
 	services: createTodoServices(
-		new TodoRecords(input.db),
+		actor,
+		new TodoRecords(actor, input.db),
 		input.projects,
 		input.anchors,
 		input.notes,
@@ -103,6 +108,7 @@ export interface TodoServices {
 	readonly context: TodoContextReader;
 }
 export const createTodoServices = (
+	actor: ActorContext,
 	todos: TodoRepository,
 	projects: ProjectRepository,
 	anchors: SourceAnchorRepository,
@@ -112,12 +118,12 @@ export const createTodoServices = (
 ): TodoServices => {
 	const reading = new TodoReadingService(todos);
 	return {
-		creator: new TodoCreationService(todos, projects, anchors, notes, provenance),
+		creator: new TodoCreationService(actor, todos, projects, anchors, notes, provenance),
 		reader: reading,
 		lister: reading,
 		waitingOn: reading,
-		editor: new TodoEditingService(todos, anchors, notes, provenance),
-		deleter: new TodoLifecycleService(todos, clock),
-		context: new TodoContextService(anchors, notes, provenance)
+		editor: new TodoEditingService(actor, todos, anchors, notes, provenance),
+		deleter: new TodoLifecycleService(actor, todos, clock),
+		context: new TodoContextService(actor, anchors, notes, provenance)
 	};
 };

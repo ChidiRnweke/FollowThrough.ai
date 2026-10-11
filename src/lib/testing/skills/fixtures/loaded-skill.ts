@@ -32,7 +32,7 @@ export const loadedSkillFixture = (body = 'Number every finding.') => {
 		title: 'Compliance format',
 		...noteMarkdown.read(body)
 	});
-	const notes = new InMemoryNoteRepository();
+	const notes = new InMemoryNoteRepository(testActor());
 	notes.notes = [note];
 	const skills = new InMemorySkillRepository(notes);
 	skills.skills = [
@@ -46,7 +46,7 @@ export const loadedSkillFixture = (body = 'Number every finding.') => {
 			isEnabled: true
 		}
 	];
-	const provenance = new InMemoryProvenanceRepository();
+	const provenance = new InMemoryProvenanceRepository(testActor());
 	provenance.provenance = [
 		{
 			id: testProvenanceId(),
@@ -60,8 +60,8 @@ export const loadedSkillFixture = (body = 'Number every finding.') => {
 			createdAt: testNow
 		}
 	];
-	const library = createSkillServices(skills, notes, provenance);
-	const projects = new InMemoryProjectRepository();
+	const library = createSkillServices(testActor(), skills, notes, provenance);
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),

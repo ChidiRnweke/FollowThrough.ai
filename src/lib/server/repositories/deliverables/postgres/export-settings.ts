@@ -15,31 +15,30 @@ const toSettings = (stored: unknown): ExportSettings => ({
 });
 
 export class ExportSettingsRecords implements ExportSettingsRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async find(actor: ActorContext, projectId: ProjectId): Promise<ExportSettings | undefined> {
-		await this.requireProject(actor, projectId);
+	async find(projectId: ProjectId): Promise<ExportSettings | undefined> {
+		await this.requireProject(projectId);
 		const [row] = await this.database
 			.select()
 			.from(schema.exportSettings)
 			.where(
 				and(
-					eq(schema.exportSettings.userId, actor.userId),
+					eq(schema.exportSettings.userId, this.actor.userId),
 					eq(schema.exportSettings.projectId, projectId)
 				)
 			);
 		return row ? toSettings(row.settings) : undefined;
 	}
 
-	async upsert(
-		actor: ActorContext,
-		projectId: ProjectId,
-		settings: ExportSettings
-	): Promise<ExportSettings> {
-		await this.requireProject(actor, projectId);
+	async upsert(projectId: ProjectId, settings: ExportSettings): Promise<ExportSettings> {
+		await this.requireProject(projectId);
 		const [row] = await this.database
 			.insert(schema.exportSettings)
-			.values({ userId: actor.userId, projectId, settings: { ...settings } })
+			.values({ userId: this.actor.userId, projectId, settings: { ...settings } })
 			.onConflictDoUpdate({
 				target: [schema.exportSettings.userId, schema.exportSettings.projectId],
 				set: { settings: { ...settings }, updatedAt: new Date() }
@@ -47,14 +46,14 @@ export class ExportSettingsRecords implements ExportSettingsRepository {
 			.returning();
 		return toSettings(row!.settings);
 	}
-	private async requireProject(actor: ActorContext, projectId: ProjectId): Promise<void> {
+	private async requireProject(projectId: ProjectId): Promise<void> {
 		const [project] = await this.database
 			.select({ id: projects.id })
 			.from(projects)
 			.where(
 				and(
 					eq(projects.id, projectId),
-					eq(projects.userId, actor.userId),
+					eq(projects.userId, this.actor.userId),
 					isNull(projects.archivedAt)
 				)
 			);

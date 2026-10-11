@@ -80,7 +80,7 @@ export class InMemoryAttachments
 	initiate(): Promise<{ upload: AttachmentUpload; requiredHeaders: Record<string, string> }> {
 		throw new Error('not used');
 	}
-	async pending(_actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentUpload> {
+	async pending(uploadId: AttachmentUpload['id']): Promise<AttachmentUpload> {
 		const reserved = this.uploads.get(uploadId);
 		if (!reserved) throw new NotFoundError('Attachment upload was not found');
 		return {
@@ -95,26 +95,18 @@ export class InMemoryAttachments
 			createdAt: testNow
 		};
 	}
-	planVersion(
-		_actor: ActorContext,
-		upload: AttachmentUpload,
-		_stored: StoredObjectInfo
-	): AttachmentVersion {
+	planVersion(upload: AttachmentUpload, _stored: StoredObjectInfo): AttachmentVersion {
 		const reserved = this.uploads.get(upload.id);
 		if (!reserved) throw new NotFoundError('Attachment upload was not found');
 		return reserved.version;
 	}
-	async finalize(
-		_actor: ActorContext,
-		upload: AttachmentUpload,
-		_version: AttachmentVersion
-	): Promise<AttachmentView> {
+	async finalize(upload: AttachmentUpload, _version: AttachmentVersion): Promise<AttachmentView> {
 		const reserved = this.uploads.get(upload.id);
 		if (!reserved) throw new NotFoundError('Attachment upload was not found');
 		this.finalized = [...this.finalized, reserved];
 		return reserved;
 	}
-	async get(_actor: ActorContext, id: AttachmentId): Promise<AttachmentView> {
+	async get(id: AttachmentId): Promise<AttachmentView> {
 		const found = this.finalized.find((view) => view.attachment.id === id);
 		if (!found) throw new NotFoundError('Attachment was not found');
 		return found;
@@ -125,15 +117,11 @@ export class InMemoryAttachments
 	listForProject(): Promise<readonly AttachmentView[]> {
 		throw new Error('not used');
 	}
-	async linkToTodo(
-		_actor: ActorContext,
-		attachmentId: AttachmentId,
-		todoId: TodoId
-	): Promise<void> {
+	async linkToTodo(attachmentId: AttachmentId, todoId: TodoId): Promise<void> {
 		if (this.linkFails) throw new NotFoundError('Attachment was not found');
 		this.todoLinks = [...this.todoLinks, { attachmentId, todoId }];
 	}
-	async listForTodo(_actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]> {
+	async listForTodo(todoId: TodoId): Promise<readonly AttachmentView[]> {
 		return this.todoLinks
 			.filter((link) => link.todoId === todoId)
 			.flatMap((link) => this.finalized.filter((view) => view.attachment.id === link.attachmentId));
@@ -150,7 +138,7 @@ export class InMemoryAttachments
 	read(): Promise<{ text: string; offset: number; nextOffset?: number; parserKind: string }> {
 		throw new Error('not used');
 	}
-	remove(_actor: ActorContext, _noteId: NoteId, _path: string): Promise<AttachmentId | undefined> {
+	remove(_noteId: NoteId, _path: string): Promise<AttachmentId | undefined> {
 		throw new Error('not used');
 	}
 }

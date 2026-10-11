@@ -20,15 +20,17 @@ import { expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
 
 const setup = () => {
-	const records = new InMemorySuggestionRepository();
+	const records = new InMemorySuggestionRepository(testActor());
 	const inbox = createSuggestionServices(
+		testActor(),
 		records,
-		new InMemoryNoteRepository(),
-		new InMemoryProvenanceRepository(),
-		new InMemoryAnchorRepository(),
+		new InMemoryNoteRepository(testActor()),
+		new InMemoryProvenanceRepository(testActor()),
+		new InMemoryAnchorRepository(testActor()),
 		{ now: () => testNow }
 	);
 	const controller = new Suggestions(
+		testActor(),
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
 			...agentToolResultsFixture(),
@@ -45,7 +47,7 @@ it('returns and stores rejection with its decision time and no applied artifact'
 	const { records, controller } = setup();
 	const proposal = suggestionBuilder();
 	records.suggestions = [proposal];
-	const result = await controller.reject(testActor(), { suggestionId: proposal.id });
+	const result = await controller.reject({ suggestionId: proposal.id });
 	const rejected = { ...proposal, status: 'rejected', decidedAt: testNow, updatedAt: testNow };
 	expect({ result, stored: records.suggestions }).toEqual({ result: rejected, stored: [rejected] });
 });
@@ -55,7 +57,7 @@ it.each(['accepted', 'rejected', 'reverted', 'expired'] as const)(
 		const { records, controller } = setup();
 		const terminal = suggestionBuilder({ status });
 		records.suggestions = [terminal];
-		const outcome = await controller.reject(testActor(), { suggestionId: terminal.id }).then(
+		const outcome = await controller.reject({ suggestionId: terminal.id }).then(
 			() => 'unexpected success',
 			(error: Error) => error.message
 		);
@@ -69,7 +71,7 @@ it('refuses another actor without changing the proposal', async () => {
 	const { records, controller } = setup();
 	const proposal = suggestionBuilder();
 	records.suggestions = [proposal];
-	const outcome = await controller.reject(testActor(2), { suggestionId: proposal.id }).then(
+	const outcome = await controller.reject({ suggestionId: proposal.id }).then(
 		() => 'unexpected success',
 		(error: Error) => error.message
 	);
@@ -83,12 +85,11 @@ it('preserves a decision that won after the pending proposal was read', async ()
 	const proposal = suggestionBuilder();
 	records.suggestions = [proposal];
 	const accepted = await inbox.accepter.accept(
-		testActor(),
 		proposal,
 		'00000000-0000-4000-8005-000000000001',
 		false
 	);
-	const outcome = await inbox.rejecter.reject(testActor(), proposal).then(
+	const outcome = await inbox.rejecter.reject(proposal).then(
 		() => 'unexpected success',
 		(error: Error) => error.message
 	);

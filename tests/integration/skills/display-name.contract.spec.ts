@@ -27,17 +27,18 @@ const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 const setup = async (suffix: string) => {
 	const { owner, project } = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { services: catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability(owner, {
 		db: database,
-		projects: new ProjectRecords(database)
+		projects: new ProjectRecords(owner, database)
 	});
-	const records = new SkillRecords(database);
+	const records = new SkillRecords(owner, database);
 	const library = createSkillServices(
+		owner,
 		records,
-		new NoteRecords(database),
-		new ProvenanceRecords(database)
+		new NoteRecords(owner, database),
+		new ProvenanceRecords(owner, database)
 	);
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(owner);
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
@@ -62,7 +63,7 @@ const setup = async (suffix: string) => {
 		projectId: project.id,
 		title: 'Release checklist'
 	});
-	await records.insert(owner, {
+	await records.insert({
 		note,
 		slug: 'release-checklist',
 		description: 'Release instructions',
@@ -85,17 +86,17 @@ const setup = async (suffix: string) => {
 describe('Skill display name authority', () => {
 	it('renames the note through a legacy display-name command', async () => {
 		const { owner, note, controller, records } = await setup('12201');
-		await controller.update(owner, { noteId: note.id, displayName: 'Ship checklist' });
-		expect((await records.findByNoteId(owner, note.id))?.note.title).toBe('Ship checklist');
+		await controller.update({ noteId: note.id, displayName: 'Ship checklist' });
+		expect((await records.findByNoteId(note.id))?.note.title).toBe('Ship checklist');
 	});
 	it('publishes the renamed skill and note resources with the derived database name', async () => {
 		const { owner, note, catalog, workspace, transactionRunner } = await setup('12202');
-		const initial = await workspace.pullChangePage(owner, initialSyncCursor);
+		const initial = await workspace.pullChangePage(initialSyncCursor);
 		await saveNoteDraft(catalog.editor, transactionRunner, owner, {
 			...note,
 			title: 'Ship checklist'
 		});
-		const batch = await workspace.pullChangePage(owner, initial.cursor);
+		const batch = await workspace.pullChangePage(initial.cursor);
 		expect({
 			resources: batch.records,
 			storedName: await context.client`select name from skills where note_id = ${note.id}`
@@ -122,7 +123,7 @@ describe('Skill display name authority', () => {
 	});
 	it('rolls back both sync resources with a rejected rename', async () => {
 		const { owner, note, catalog, transactionRunner, workspace } = await setup('12206');
-		const initial = await workspace.pullChangePage(owner, initialSyncCursor);
+		const initial = await workspace.pullChangePage(initialSyncCursor);
 		await transactionRunner
 			.run(async () => {
 				await saveNoteDraft(catalog.editor, transactionRunner, owner, {
@@ -133,7 +134,7 @@ describe('Skill display name authority', () => {
 			})
 			.catch(() => ({ kind: 'failure' }));
 		expect({
-			batch: await workspace.pullChangePage(owner, initial.cursor),
+			batch: await workspace.pullChangePage(initial.cursor),
 			projection:
 				await context.client`select notes.title, skills.name from notes join skills on skills.note_id = notes.id where notes.id = ${note.id}`
 		}).toEqual({

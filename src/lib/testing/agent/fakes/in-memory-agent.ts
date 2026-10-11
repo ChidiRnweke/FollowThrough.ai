@@ -30,27 +30,19 @@ export class InMemoryToolRetriever implements ToolRetriever, ToolRanking {
 }
 
 export class InMemoryAgentToolbox implements AgentWorkflowToolbox {
-	async extractPromises(_actor: ActorContext, _selection: TextSelection): Promise<never> {
-		void _actor;
+	async extractPromises(_selection: TextSelection): Promise<never> {
 		void _selection;
 		throw new Error('Unexpected extractPromises tool invocation');
 	}
-	async relate(_actor: ActorContext, _selection: TextSelection): Promise<never> {
-		void _actor;
+	async relate(_selection: TextSelection): Promise<never> {
 		void _selection;
 		throw new Error('Unexpected relate tool invocation');
 	}
-	async reference(_actor: ActorContext, _selection: TextSelection): Promise<never> {
-		void _actor;
+	async reference(_selection: TextSelection): Promise<never> {
 		void _selection;
 		throw new Error('Unexpected reference tool invocation');
 	}
-	async generateDiagram(
-		_actor: ActorContext,
-		_selection: TextSelection,
-		_instruction?: string
-	): Promise<never> {
-		void _actor;
+	async generateDiagram(_selection: TextSelection, _instruction?: string): Promise<never> {
 		void _selection;
 		void _instruction;
 		throw new Error('Unexpected generateDiagram tool invocation');
@@ -78,14 +70,13 @@ export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
 		};
 	}
 
-	async listEnabled(_actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
-		void _actor;
+	async listEnabled(projectId?: ProjectId): Promise<readonly SkillSummary[]> {
 		return this.skills
 			.filter((skill) => skill.isEnabled)
 			.map((skill) => this.summarize(skill, projectId));
 	}
-	async listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
-		const enabled = await this.listEnabled(actor, projectId);
+	async listAll(projectId?: ProjectId): Promise<readonly SkillSummary[]> {
+		const enabled = await this.listEnabled(projectId);
 		const enabledIds = new Set(enabled.map((skill) => skill.noteId));
 		return [
 			...enabled,
@@ -95,18 +86,17 @@ export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
 		];
 	}
 
-	async load(_actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
-		void _actor;
+	async load(noteId: NoteId): Promise<Skill<Note>> {
 		const skill = this.skills.find((candidate) => candidate.note.id === noteId);
 		if (!skill) throw new NotFoundError('Skill was not found');
 		return skill;
 	}
 
-	async record(
-		_actor: ActorContext,
-		input: { skillNoteId: NoteId; contextNoteId?: NoteId; provenanceId: ProvenanceId }
-	): Promise<void> {
-		void _actor;
+	async record(input: {
+		skillNoteId: NoteId;
+		contextNoteId?: NoteId;
+		provenanceId: ProvenanceId;
+	}): Promise<void> {
 		this.usages.push(input);
 	}
 }

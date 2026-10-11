@@ -26,13 +26,23 @@ import {
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository();
+	const notes = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
 	const skills = new InMemorySkillRepository(notes);
-	const service = createSkillServices(skills, notes, new InMemoryProvenanceRepository());
-	const catalog = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
-	const content = new InMemoryNoteContent();
+	const service = createSkillServices(
+		testActor(),
+		skills,
+		notes,
+		new InMemoryProvenanceRepository(testActor())
+	);
+	const catalog = createNoteServices(
+		testActor(),
+		notes,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
+	const content = new InMemoryNoteContent(testActor());
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
@@ -91,7 +101,7 @@ describe('Skill restoration', () => {
 				isEnabled: true
 			}
 		];
-		const { skill: restored } = await controller.restoreVersion(testActor(), {
+		const { skill: restored } = await controller.restoreVersion({
 			noteId: current.id,
 			revision: 1
 		});

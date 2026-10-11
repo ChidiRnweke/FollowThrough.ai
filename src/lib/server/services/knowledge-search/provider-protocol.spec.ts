@@ -21,14 +21,14 @@ const direct: OperationObserver = { run: (_name, _context, body) => body() };
 const retrieval = (
 	baseURL: string,
 	observer: OperationObserver = direct,
-	repository = new InMemorySearchRepository()
+	repository = new InMemorySearchRepository(testActor())
 ) => {
 	const provider = createRetrievalProvider({
 		apiKey: 'synthetic-key',
 		baseURL,
 		appURL: 'https://app.example.test'
 	});
-	return new KnowledgeRetrieval({
+	return new KnowledgeRetrieval(testActor(), {
 		repository,
 		provider: provider.client,
 		rerank: provider.rerank,
@@ -51,10 +51,9 @@ const embeddingsResponse = (
 
 /** A source with three pending chunks, whose embedding order the provider controls. */
 const pendingSource = async () => {
-	const repository = new InMemorySearchRepository();
+	const repository = new InMemorySearchRepository(testActor());
 	const source = { kind: 'note' as const, noteId: testNoteId(2) };
 	await repository.stage(
-		testActor(),
 		source,
 		['a', 'b', 'c'].map((content, chunkIndex) =>
 			searchDocumentBuilder({
@@ -92,7 +91,7 @@ describe('embedding protocol', () => {
 			embeddingsResponse([{ index: 0, embedding: [0.25, 0.5] }])
 		);
 		try {
-			await retrieval(provider.baseURL).candidates(testActor(), 'source', { limit: 5 });
+			await retrieval(provider.baseURL).candidates('source', { limit: 5 });
 			expect(provider.requests).toEqual([
 				{
 					method: 'POST',
@@ -123,10 +122,7 @@ describe('embedding protocol', () => {
 		);
 		try {
 			const { repository, source } = await pendingSource();
-			const embedded = await retrieval(provider.baseURL, direct, repository).embedPending(
-				testActor(),
-				source
-			);
+			const embedded = await retrieval(provider.baseURL, direct, repository).embedPending(source);
 			expect(embedded.chunks.map((chunk) => chunk.embedding)).toEqual([[0], [1], [2]]);
 		} finally {
 			await provider.close();
@@ -156,7 +152,7 @@ describe('embedding protocol', () => {
 		try {
 			const { repository, source } = await pendingSource();
 			await expect(
-				retrieval(provider.baseURL, direct, repository).embedPending(testActor(), source)
+				retrieval(provider.baseURL, direct, repository).embedPending(source)
 			).rejects.toMatchObject({ code: 'INVALID_GENERATED_CONTENT' });
 		} finally {
 			await provider.close();
@@ -167,7 +163,7 @@ describe('embedding protocol', () => {
 		const provider = await rerankProvider('{}', 400);
 		try {
 			await expect(
-				retrieval(provider.baseURL).candidates(testActor(), 'source', { limit: 5 })
+				retrieval(provider.baseURL).candidates('source', { limit: 5 })
 			).rejects.toMatchObject({ code: 'EXTERNAL_SERVICE', message: 'Embedding generation failed' });
 		} finally {
 			await provider.close();
@@ -182,7 +178,7 @@ describe('embedding protocol', () => {
 			return body();
 		};
 		try {
-			const embedded = await retrieval(provider.baseURL, { run }).embedPending(testActor(), {
+			const embedded = await retrieval(provider.baseURL, { run }).embedPending({
 				kind: 'note',
 				noteId: testNoteId(2)
 			});
@@ -207,7 +203,7 @@ describe('embedding protocol', () => {
 			return result;
 		};
 		try {
-			await retrieval(provider.baseURL, { run }).candidates(testActor(), 'source', { limit: 5 });
+			await retrieval(provider.baseURL, { run }).candidates('source', { limit: 5 });
 			expect(spans).toEqual([
 				{
 					name: 'embedding.batch',
@@ -234,7 +230,7 @@ describe('embedding protocol', () => {
 		const provider = await inlineCompletionProvider(response.promise);
 		const cancellation = new AbortController();
 		try {
-			const pending = retrieval(provider.baseURL).candidates(testActor(), 'source', {
+			const pending = retrieval(provider.baseURL).candidates('source', {
 				limit: 5,
 				signal: cancellation.signal
 			});

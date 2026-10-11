@@ -17,9 +17,9 @@ export class InMemoryGatedMemoryEntries extends InMemoryMemoryEntryRepository {
 		this.released();
 	}
 
-	override async list(actor: ActorContext, filter: MemoryEntryListFilter) {
+	override async list(filter: MemoryEntryListFilter) {
 		this.entered();
 		await this.gate;
-		return super.list(actor, filter);
+		return super.list(filter);
 	}
 }

@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import type { Database } from '$lib/server/db';
 import { ApiTokenRecords } from '$lib/server/repositories/identity/postgres/api-tokens';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
@@ -20,8 +21,11 @@ export interface IdentityCapability {
 	readonly userPreferences: UserPreferencesReader & UserPreferencesWriter;
 }
 
-export const createIdentityCapability = (input: IdentityCapabilityInput): IdentityCapability => ({
-	userReader: new UserDirectory(new UserRecords(input.db)),
-	apiTokens: new AccessTokens(new ApiTokenRecords(input.db)),
-	userPreferences: new UserPreferenceStore(new UserPreferencesRecords(input.db))
+export const createIdentityCapability = (
+	actor: ActorContext,
+	input: IdentityCapabilityInput
+): IdentityCapability => ({
+	userReader: new UserDirectory(new UserRecords(actor, input.db)),
+	apiTokens: new AccessTokens(new ApiTokenRecords(actor, input.db)),
+	userPreferences: new UserPreferenceStore(new UserPreferencesRecords(actor, input.db))
 });

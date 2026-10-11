@@ -1,3 +1,6 @@
+import type { AttachmentProcessingController } from '$lib/server/controllers/attachment-processing/controller';
+import type { KnowledgeIndexingController } from '$lib/server/controllers/knowledge-indexing/controller';
+import type { ActorContext } from '$lib/models/identity';
 import { TodayPresentationService } from '$lib/services/workspace/today';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
@@ -81,10 +84,15 @@ export interface ProductionControllerDependencies {
 	retrieval: RetrievalDependencies;
 	inlineSuggestions: InlineSuggestionsDependencies;
 	feedback: FeedbackDependencies;
+	attachmentProcessing: AttachmentProcessingController;
+	knowledgeIndexing: KnowledgeIndexingController;
 }
 
 export class ProductionControllerFactory implements ControllerFactory {
-	constructor(private readonly dependencies: ProductionControllerDependencies) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly dependencies: ProductionControllerDependencies
+	) {}
 	// Every controller is wrapped at construction: one `domain.method` span plus
 	// info/debug/error logs per call, covering UI, MCP and agent-tool callers.
 	agentFiles(): ReturnType<ControllerFactory['agentFiles']> {
@@ -112,6 +120,7 @@ export class ProductionControllerFactory implements ControllerFactory {
 		return instrumentedController(
 			'notes',
 			new Notes(
+				this.actor,
 				new BacklinkPresentationService(),
 				new ReferencePresentationService(),
 				new WorkspaceCommandRulesService(),
@@ -124,7 +133,7 @@ export class ProductionControllerFactory implements ControllerFactory {
 	todos(): ReturnType<ControllerFactory['todos']> {
 		return instrumentedController(
 			'todos',
-			new Todos(new WorkspaceCommandRulesService(), this.dependencies.todos),
+			new Todos(this.actor, new WorkspaceCommandRulesService(), this.dependencies.todos),
 			controllerSurfaces.todos
 		);
 	}
@@ -145,21 +154,29 @@ export class ProductionControllerFactory implements ControllerFactory {
 	diagrams(): ReturnType<ControllerFactory['diagrams']> {
 		return instrumentedController(
 			'diagrams',
-			new Diagrams(this.dependencies.diagrams),
+			new Diagrams(this.actor, this.dependencies.diagrams),
 			controllerSurfaces.diagrams
 		);
 	}
 	diagramStudio(): ReturnType<ControllerFactory['diagramStudio']> {
 		return instrumentedController(
 			'diagramStudio',
-			new DiagramStudio(new WorkspaceCommandRulesService(), this.dependencies.diagramStudio),
+			new DiagramStudio(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.diagramStudio
+			),
 			controllerSurfaces.diagramStudio
 		);
 	}
 	suggestions(): ReturnType<ControllerFactory['suggestions']> {
 		return instrumentedController(
 			'suggestions',
-			new Suggestions(new ProvenancePresentationService(), this.dependencies.suggestions),
+			new Suggestions(
+				this.actor,
+				new ProvenancePresentationService(),
+				this.dependencies.suggestions
+			),
 			controllerSurfaces.suggestions
 		);
 	}
@@ -173,21 +190,33 @@ export class ProductionControllerFactory implements ControllerFactory {
 	agentHarness(): ReturnType<ControllerFactory['agentHarness']> {
 		return instrumentedController(
 			'agentHarness',
-			new AgentSdkHarness(new WorkspaceCommandRulesService(), this.dependencies.agentHarness),
+			new AgentSdkHarness(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.agentHarness
+			),
 			controllerSurfaces.agentHarness
 		);
 	}
 	agentSettings(): ReturnType<ControllerFactory['agentSettings']> {
 		return instrumentedController(
 			'agentSettings',
-			new AgentSettings(new WorkspaceCommandRulesService(), this.dependencies.agentSettings),
+			new AgentSettings(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.agentSettings
+			),
 			controllerSurfaces.agentSettings
 		);
 	}
 	userSettings(): ReturnType<ControllerFactory['userSettings']> {
 		return instrumentedController(
 			'userSettings',
-			new UserSettings(new WorkspaceCommandRulesService(), this.dependencies.userSettings),
+			new UserSettings(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.userSettings
+			),
 			controllerSurfaces.userSettings
 		);
 	}
@@ -201,7 +230,11 @@ export class ProductionControllerFactory implements ControllerFactory {
 	toolPreferences(): ReturnType<ControllerFactory['toolPreferences']> {
 		return instrumentedController(
 			'toolPreferences',
-			new ToolPreferences(new WorkspaceCommandRulesService(), this.dependencies.toolPreferences),
+			new ToolPreferences(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.toolPreferences
+			),
 			controllerSurfaces.toolPreferences
 		);
 	}
@@ -215,28 +248,36 @@ export class ProductionControllerFactory implements ControllerFactory {
 	deliverables(): ReturnType<ControllerFactory['deliverables']> {
 		return instrumentedController(
 			'deliverables',
-			new Deliverables(new WorkspaceCommandRulesService(), this.dependencies.deliverables),
+			new Deliverables(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.deliverables
+			),
 			controllerSurfaces.deliverables
 		);
 	}
 	trustPolicies(): ReturnType<ControllerFactory['trustPolicies']> {
 		return instrumentedController(
 			'trustPolicies',
-			new TrustPolicies(new WorkspaceCommandRulesService(), this.dependencies.trustPolicies),
+			new TrustPolicies(
+				this.actor,
+				new WorkspaceCommandRulesService(),
+				this.dependencies.trustPolicies
+			),
 			controllerSurfaces.trustPolicies
 		);
 	}
 	memory(): ReturnType<ControllerFactory['memory']> {
 		return instrumentedController(
 			'memory',
-			new Memory(new WorkspaceCommandRulesService(), this.dependencies.memory),
+			new Memory(this.actor, new WorkspaceCommandRulesService(), this.dependencies.memory),
 			controllerSurfaces.memory
 		);
 	}
 	widgets(): ReturnType<ControllerFactory['widgets']> {
 		return instrumentedController(
 			'widgets',
-			new Widgets(new WorkspaceCommandRulesService(), this.dependencies.widgets),
+			new Widgets(this.actor, new WorkspaceCommandRulesService(), this.dependencies.widgets),
 			controllerSurfaces.widgets
 		);
 	}
@@ -250,7 +291,7 @@ export class ProductionControllerFactory implements ControllerFactory {
 	inlineSuggestions(): ReturnType<ControllerFactory['inlineSuggestions']> {
 		return instrumentedController(
 			'inlineSuggestions',
-			new InlineSuggestions(this.dependencies.inlineSuggestions),
+			new InlineSuggestions(this.actor, this.dependencies.inlineSuggestions),
 			controllerSurfaces.inlineSuggestions
 		);
 	}
@@ -259,6 +300,20 @@ export class ProductionControllerFactory implements ControllerFactory {
 			'feedback',
 			new Feedback(this.dependencies.feedback),
 			controllerSurfaces.feedback
+		);
+	}
+	attachmentProcessing(): ReturnType<ControllerFactory['attachmentProcessing']> {
+		return instrumentedController(
+			'attachmentProcessing',
+			this.dependencies.attachmentProcessing,
+			controllerSurfaces.attachmentProcessing
+		);
+	}
+	knowledgeIndexing(): ReturnType<ControllerFactory['knowledgeIndexing']> {
+		return instrumentedController(
+			'knowledgeIndexing',
+			this.dependencies.knowledgeIndexing,
+			controllerSurfaces.knowledgeIndexing
 		);
 	}
 }

@@ -15,42 +15,31 @@ export type { OwnedAttachmentUpload, UploadRetentionCursor } from '$lib/models/a
 
 /** `finalize` is the only path that makes an attachment visible: nothing before it is observable to any reader but the uploader. */
 export interface AttachmentRepository {
-	listPendingObjectRemovals(): Promise<readonly string[]>;
-	completeObjectRemoval(objectKey: string): Promise<void>;
-	createUpload(actor: ActorContext, upload: AttachmentUpload): Promise<AttachmentUpload>;
-	findUpload(
-		actor: ActorContext,
-		id: AttachmentUpload['id']
-	): Promise<AttachmentUpload | undefined>;
-	deleteUpload(actor: ActorContext, id: AttachmentUpload['id']): Promise<void>;
-	list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]>;
-	listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly AttachmentView[]>;
+	createUpload(upload: AttachmentUpload): Promise<AttachmentUpload>;
+	findUpload(id: AttachmentUpload['id']): Promise<AttachmentUpload | undefined>;
+	deleteUpload(id: AttachmentUpload['id']): Promise<void>;
+	list(noteId: NoteId): Promise<readonly AttachmentView[]>;
+	listForProject(projectId: ProjectId): Promise<readonly AttachmentView[]>;
 	/**
 	 * Record that a todo's description references an already-finalized attachment.
 	 * The attachment stays project-owned; this only adds the todo link, so linking
 	 * the same attachment twice is a no-op rather than an error.
 	 */
-	linkToTodo(actor: ActorContext, id: Attachment['id'], todoId: TodoId): Promise<void>;
-	listForTodo(actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]>;
-	findById(actor: ActorContext, id: Attachment['id']): Promise<AttachmentView | undefined>;
-	findByPath(
-		actor: ActorContext,
-		noteId: NoteId,
-		path: string
-	): Promise<AttachmentView | undefined>;
-	finalize(
-		actor: ActorContext,
-		upload: AttachmentUpload,
-		version: AttachmentVersion
-	): Promise<AttachmentView>;
-	remove(actor: ActorContext, noteId: NoteId, path: string): Promise<void>;
-	removeById(actor: ActorContext, id: Attachment['id']): Promise<void>;
-	updateVersion(actor: ActorContext, version: AttachmentVersion): Promise<AttachmentView>;
-	listPendingVersions(): Promise<readonly { userId: UserId; versionId: AttachmentVersion['id'] }[]>;
-	findVersionForUpdate(
-		actor: ActorContext,
-		versionId: AttachmentVersion['id']
-	): Promise<AttachmentView | undefined>;
+	linkToTodo(id: Attachment['id'], todoId: TodoId): Promise<void>;
+	listForTodo(todoId: TodoId): Promise<readonly AttachmentView[]>;
+	findById(id: Attachment['id']): Promise<AttachmentView | undefined>;
+	findByPath(noteId: NoteId, path: string): Promise<AttachmentView | undefined>;
+	finalize(upload: AttachmentUpload, version: AttachmentVersion): Promise<AttachmentView>;
+	remove(noteId: NoteId, path: string): Promise<void>;
+	removeById(id: Attachment['id']): Promise<void>;
+	updateVersion(version: AttachmentVersion): Promise<AttachmentView>;
+	findVersionForUpdate(versionId: AttachmentVersion['id']): Promise<AttachmentView | undefined>;
+}
+
+/** Attachment work across every user, for the worker. */
+export interface AttachmentBacklogRepository {
+	/** Drops an upload reservation that expired without being finalized. */
+	deleteExpiredUpload(id: AttachmentUpload['id']): Promise<void>;
 	/**
 	 * Upload reservations that expired before `before` and were never finalized.
 	 * Their staged objects are still sitting in the bucket; the sweep worker uses
@@ -61,4 +50,7 @@ export interface AttachmentRepository {
 		limit: number,
 		after?: UploadRetentionCursor
 	): Promise<readonly OwnedAttachmentUpload[]>;
+	listPendingObjectRemovals(): Promise<readonly string[]>;
+	completeObjectRemoval(objectKey: string): Promise<void>;
+	listPendingVersions(): Promise<readonly { userId: UserId; versionId: AttachmentVersion['id'] }[]>;
 }

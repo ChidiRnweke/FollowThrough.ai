@@ -21,7 +21,7 @@ import type { Lab } from './application';
  * they get the same destination a real capture would, found by role.
  */
 async function labInboxProjectId(lab: Lab, actor: ActorContext): Promise<ProjectId> {
-	const { projects } = await lab.controllers.projects().list(actor);
+	const { projects } = await lab.controllers.projects().list();
 	const inbox = projects.find((project) => project.role === 'inbox');
 	if (!inbox) throw new Error('The lab workspace has no inbox; provisioning did not run.');
 	return inbox.id;
@@ -97,7 +97,7 @@ export async function selectionFromSeededNote(
 	noteId: NoteId,
 	selectedText: string
 ): Promise<TextSelection> {
-	const { note } = await lab.controllers.notes().get(workspace.actor, { noteId });
+	const { note } = await lab.controllers.notes().get({ noteId });
 	const from = note.plainText.indexOf(selectedText);
 	if (from < 0)
 		throw new Error(
@@ -115,9 +115,9 @@ export async function selectionFromSeededNote(
 /** The lab has no HTTP local-mode boundary, so establish its account before workspace writes. */
 export async function seedActor(lab: Pick<Lab, 'db' | 'controllers'>): Promise<ActorContext> {
 	const actor: ActorContext = { userId: randomUUID() as UserId };
-	const users = new UserDirectory(new UserRecords(lab.db));
-	await new LocalIdentity({ provisioner: users, users }).initializeLocal(actor);
-	await lab.controllers.workspace().getShellContext(actor);
+	const users = new UserDirectory(new UserRecords(actor, lab.db));
+	await new LocalIdentity({ provisioner: users, users }).initializeLocal();
+	await lab.controllers.workspace().getShellContext();
 	return actor;
 }
 
@@ -140,29 +140,29 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 	const widgetIds = new Map<string, WidgetId>();
 
 	for (const content of fixture.memories ?? []) {
-		await lab.controllers.memory().create(actor, { content, shareWithAgents: true });
+		await lab.controllers.memory().create({ content, shareWithAgents: true });
 	}
 
 	for (const seedProject of fixture.projects ?? []) {
-		const { project } = await lab.controllers.projects().create(actor, { name: seedProject.name });
+		const { project } = await lab.controllers.projects().create({ name: seedProject.name });
 		projectIds.set(seedProject.name, project.id);
 
 		for (const content of seedProject.memories ?? []) {
 			await lab.controllers
 				.memory()
-				.create(actor, { projectId: project.id, content, shareWithAgents: true });
+				.create({ projectId: project.id, content, shareWithAgents: true });
 		}
 
 		for (const seedNote of seedProject.notes ?? []) {
 			const { note } = await lab.controllers
 				.notes()
-				.create(actor, { projectId: project.id, title: seedNote.title });
+				.create({ projectId: project.id, title: seedNote.title });
 			noteIds.set(seedNote.title, note.id);
 			// Composite key for disambiguation when multiple projects share a note title.
 			noteIds.set(`${seedNote.title}|${seedProject.name}`, note.id);
 			const embedded: WidgetId[] = [];
 			for (const draft of seedNote.widgets ?? []) {
-				const { widget } = await lab.controllers.widgets().create(actor, {
+				const { widget } = await lab.controllers.widgets().create({
 					id: randomUUID() as WidgetId,
 					projectId: project.id,
 					sourceNoteId: note.id,
@@ -172,7 +172,7 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 				embedded.push(widget.id);
 			}
 			// Saving is what indexes the body; creation only establishes the title.
-			await lab.controllers.notes().save(actor, {
+			await lab.controllers.notes().save({
 				note: {
 					...note,
 					plainText: seedNote.body,
@@ -205,7 +205,7 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 		// Nothing here may leave the project unstated: `create` requires it.
 		const named = seedSkill.projectName ? projectIds.get(seedSkill.projectName) : undefined;
 		const projectId = named ?? (await labInboxProjectId(lab, actor));
-		const { skill } = await lab.controllers.skills().create(actor, {
+		const { skill } = await lab.controllers.skills().create({
 			name: seedSkill.name,
 			projectId,
 			...(seedSkill.description ? { description: seedSkill.description } : {}),
@@ -216,7 +216,7 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 		// save_skill use at runtime — so load_skill returns it as Markdown. The
 		// `raw` manifest path is not used because the fixture body is a plain
 		// instruction body, not a full SKILL.md with YAML frontmatter.
-		await lab.controllers.notes().save(actor, {
+		await lab.controllers.notes().save({
 			note: { ...skill.note, ...noteMarkdown.read(seedSkill.body) }
 		});
 	}
@@ -227,7 +227,7 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 			throw new Error(
 				`Todo "${seedTodo.title}" references unknown project "${seedTodo.projectName}"`
 			);
-		const { todo } = await lab.controllers.todos().create(actor, {
+		const { todo } = await lab.controllers.todos().create({
 			title: seedTodo.title,
 			projectId,
 			...(seedTodo.status ? { status: seedTodo.status } : {}),

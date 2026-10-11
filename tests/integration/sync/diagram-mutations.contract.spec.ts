@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { DiagramId } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/models/diagrams';
@@ -33,11 +34,12 @@ const source =
 const setup = async (suffix: string, title: string | null = 'Architecture') => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database });
-	const projects = createProjectsCapability({ db: database });
-	const notes = createNotesCapability({ db: database, projects: projects.repository });
-	const records = new DiagramRecords(database);
+	const sync = createSyncCapability(testActor(), { db: database });
+	const projects = createProjectsCapability(testActor(), { db: database });
+	const notes = createNotesCapability(testActor(), { db: database, projects: projects.repository });
+	const records = new DiagramRecords(testActor(), database);
 	const library = createDiagramServices(
+		testActor(),
 		records,
 		notes.repository,
 		notes.anchors,
@@ -51,17 +53,18 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 		projectId: seeded.project.id,
 		sourceNoteId: seeded.note.id
 	});
-	await records.insert(seeded.owner, diagram);
-	const search = new KnowledgeIndexRecords(database);
+	await records.insert(diagram);
+	const search = new KnowledgeIndexRecords(testActor(), database);
 	const index = createContentIndex(
 		search,
 		new InMemoryRetrievalProvider().model,
 		{ targetTokens: 2400, overlapTokens: 480 },
 		true
 	);
-	await index.indexDiagram(seeded.owner, diagram, { kind: 'note', title: seeded.note.title });
+	await index.indexDiagram(diagram, { kind: 'note', title: seeded.note.title });
 	const faults = { afterIndex: false };
 	const controller = new DiagramStudio(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
 			...agentToolResultsFixture(),
@@ -79,7 +82,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 			diagramIndexer: {
 				diagramContextRequirement: (diagram) => index.diagramContextRequirement(diagram),
 				indexDiagram: async (actor, value, sourceContext) => {
-					const result = await index.indexDiagram(actor, value, sourceContext);
+					const result = await index.indexDiagram(value, sourceContext);
 					if (faults.afterIndex) throw new Error('Index transaction failed');
 					return result;
 				}
@@ -90,7 +93,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 			drawioLabels: new DrawioLabelReader()
 		})
 	);
-	const base = await sync.objects.read(seeded.owner, { type: 'diagrams', id: [diagram.id] }, null);
+	const base = await sync.objects.read({ type: 'diagrams', id: [diagram.id] }, null);
 	if (base.kind !== 'found') throw new Error('Expected the created diagram');
 	return { ...seeded, controller, sync, diagram, search, faults, baseEtag: base.snapshot.etag };
 };
@@ -98,23 +101,23 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 describe('diagram edits through the shared mutation boundary', () => {
 	it('clears the saved title when restoring an untitled publication', async () => {
 		const { owner, controller, diagram } = await setup('18401', null);
-		const published = await controller.publishProjectDiagram(owner, {
+		const published = await controller.publishProjectDiagram({
 			diagramId: diagram.id,
 			source,
 			renderedSvg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
 			baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 		});
 		if (published.outcome !== 'saved') throw new Error('Expected publication');
-		const { revisions } = await controller.listDiagramRevisions(owner, { diagramId: diagram.id });
+		const { revisions } = await controller.listDiagramRevisions({ diagramId: diagram.id });
 		const revision = revisions[0];
 		if (!revision) throw new Error('Expected a publication snapshot');
-		const renamed = await controller.renameProjectDiagram(owner, {
+		const renamed = await controller.renameProjectDiagram({
 			diagramId: diagram.id,
 			title: 'Later title',
 			baseEtag: published.etag
 		});
 		if (renamed.outcome !== 'saved') throw new Error('Expected rename');
-		const restored = await controller.restoreDiagramRevision(owner, {
+		const restored = await controller.restoreDiagramRevision({
 			diagramId: diagram.id,
 			revisionId: revision.id,
 			baseEtag: renamed.etag
@@ -129,54 +132,54 @@ describe('diagram edits through the shared mutation boundary', () => {
 
 	it('rolls back a rename and its search rows when indexing fails', async () => {
 		const { owner, controller, diagram, search, faults } = await setup('18402');
-		const before = await search.listForDiagram(owner, diagram.id);
+		const before = await search.listForDiagram(diagram.id);
 		faults.afterIndex = true;
 		await controller
-			.renameProjectDiagram(owner, {
+			.renameProjectDiagram({
 				diagramId: diagram.id,
 				title: 'New indexed title',
 				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.catch(() => ({ kind: 'failure' }));
 		expect({
-			diagram: await controller.getProjectDiagram(owner, { diagramId: diagram.id }),
-			search: await search.listForDiagram(owner, diagram.id)
+			diagram: await controller.getProjectDiagram({ diagramId: diagram.id }),
+			search: await search.listForDiagram(diagram.id)
 		}).toEqual({ diagram, search: before });
 	});
 	it('rolls back both the draft and its staged search rows after an indexing failure', async () => {
 		const { owner, controller, diagram, search, faults } = await setup('9781');
-		const before = await search.listForDiagram(owner, diagram.id);
+		const before = await search.listForDiagram(diagram.id);
 		faults.afterIndex = true;
 		await controller
-			.saveProjectDiagramDraft(owner, {
+			.saveProjectDiagramDraft({
 				diagramId: diagram.id,
 				source,
 				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.catch(() => undefined);
 		expect({
-			diagram: await controller.getProjectDiagram(owner, { diagramId: diagram.id }),
-			search: await search.listForDiagram(owner, diagram.id)
+			diagram: await controller.getProjectDiagram({ diagramId: diagram.id }),
+			search: await search.listForDiagram(diagram.id)
 		}).toEqual({ diagram, search: before });
 	});
 	it('rolls back a trash move and the removed search rows after an indexing failure', async () => {
 		const { owner, controller, diagram, search, faults } = await setup('9782');
-		const before = await search.listForDiagram(owner, diagram.id);
+		const before = await search.listForDiagram(diagram.id);
 		faults.afterIndex = true;
-		await controller.archiveProjectDiagram(owner, { diagramId: diagram.id }).catch(() => undefined);
+		await controller.archiveProjectDiagram({ diagramId: diagram.id }).catch(() => undefined);
 		expect({
-			diagram: await controller.getProjectDiagram(owner, { diagramId: diagram.id }),
-			search: await search.listForDiagram(owner, diagram.id)
+			diagram: await controller.getProjectDiagram({ diagramId: diagram.id }),
+			search: await search.listForDiagram(diagram.id)
 		}).toEqual({ diagram, search: before });
 	});
 	it('retains a trashed diagram and its absent search rows when restoration fails', async () => {
 		const { owner, controller, diagram, search, faults } = await setup('9783');
-		const archived = await controller.archiveProjectDiagram(owner, { diagramId: diagram.id });
+		const archived = await controller.archiveProjectDiagram({ diagramId: diagram.id });
 		faults.afterIndex = true;
-		await controller.restoreProjectDiagram(owner, { diagramId: diagram.id }).catch(() => undefined);
+		await controller.restoreProjectDiagram({ diagramId: diagram.id }).catch(() => undefined);
 		expect({
-			diagram: await controller.getProjectDiagram(owner, { diagramId: diagram.id }),
-			search: await search.listForDiagram(owner, diagram.id)
+			diagram: await controller.getProjectDiagram({ diagramId: diagram.id }),
+			search: await search.listForDiagram(diagram.id)
 		}).toEqual({ diagram: archived, search: [] });
 	});
 	it('acknowledges the normalized draft and does not apply a replay twice', async () => {
@@ -186,9 +189,9 @@ describe('diagram edits through the shared mutation boundary', () => {
 			baseEtag,
 			command: { kind: 'saveDiagram' as const, diagramId: diagram.id, source }
 		};
-		const first = await controller.synchronize(owner, input);
-		const replay = await controller.synchronize(owner, input);
-		const saved = await controller.getProjectDiagram(owner, { diagramId: diagram.id });
+		const first = await controller.synchronize(input);
+		const replay = await controller.synchronize(input);
+		const saved = await controller.getProjectDiagram({ diagramId: diagram.id });
 		expect({
 			sameReceipt: JSON.stringify(first) === JSON.stringify(replay),
 			revision: saved.kind === 'drawio' ? saved.currentRevision : null,
@@ -198,14 +201,14 @@ describe('diagram edits through the shared mutation boundary', () => {
 	it('retains another client edit when the device submits an older diagram version', async () => {
 		const { owner, controller, diagram, baseEtag } = await setup('9362');
 		await context.client`update diagrams set title = 'Other client' where id = ${diagram.id}`;
-		const result = await controller.synchronize(owner, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag,
 			command: { kind: 'renameDiagram', diagramId: diagram.id, title: 'Offline title' }
 		});
 		expect({
 			kind: result.kind,
-			title: (await controller.getProjectDiagram(owner, { diagramId: diagram.id })).title
+			title: (await controller.getProjectDiagram({ diagramId: diagram.id })).title
 		}).toEqual({ kind: 'conflict', title: 'Other client' });
 	});
 	it('records publication once when the response is lost', async () => {
@@ -220,18 +223,18 @@ describe('diagram edits through the shared mutation boundary', () => {
 				renderedSvg: '<svg xmlns="http://www.w3.org/2000/svg"><text>Offline edit</text></svg>'
 			}
 		};
-		await controller.synchronize(owner, input);
-		await controller.synchronize(owner, input);
+		await controller.synchronize(input);
+		await controller.synchronize(input);
 		expect(
 			await context.client`select revision from diagram_revisions where diagram_id = ${diagram.id}`
 		).toEqual([{ revision: 2 }]);
 	});
 	it('returns an authoritative tombstone after a guarded permanent deletion', async () => {
 		const { owner, controller, diagram, sync } = await setup('9364');
-		await controller.archiveProjectDiagram(owner, { diagramId: diagram.id });
-		const base = await sync.objects.read(owner, { type: 'diagrams', id: [diagram.id] }, null);
+		await controller.archiveProjectDiagram({ diagramId: diagram.id });
+		const base = await sync.objects.read({ type: 'diagrams', id: [diagram.id] }, null);
 		if (base.kind !== 'found') throw new Error('Expected the trashed diagram');
-		const result = await controller.synchronize(owner, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: base.snapshot.etag,
 			command: { kind: 'deleteDiagram', diagramId: diagram.id }

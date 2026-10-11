@@ -6,7 +6,6 @@ import type { StructuredPromiseClient } from '$lib/server/repositories/todos/cla
 
 export interface PromiseExtractor {
 	extract(
-		actor: ActorContext,
 		selection: TextSelection,
 		context: PromiseModelContext,
 		signal?: AbortSignal
@@ -16,12 +15,10 @@ export class PromiseDiscovery implements PromiseExtractor {
 	constructor(private readonly client: StructuredPromiseClient) {}
 
 	async extract(
-		actor: ActorContext,
 		selection: TextSelection,
 		context: PromiseModelContext,
 		signal?: AbortSignal
 	): Promise<readonly PromiseCandidate[]> {
-		void actor;
 		try {
 			const promises = await this.client.extract(selection.text, context, signal);
 			if (!promises)

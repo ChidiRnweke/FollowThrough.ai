@@ -1,6 +1,7 @@
 import type { HandleServerError, ServerInit } from '@sveltejs/kit';
 import { building } from '$app/env';
 import { AppFactory } from '$lib/server/factories/app-factory';
+import type { OwnedRun } from '$lib/server/services/agent/runs/backlog';
 import {
 	getSessionCookie,
 	setSessionCookie,
@@ -20,16 +21,42 @@ const configurationDisabled = (): boolean => building || process.env.NODE_ENV ==
 export const init: ServerInit = async () => {
 	if (configurationDisabled()) return;
 	await hydrateEnvironment();
-	const controllers = AppFactory.system();
-	// Agent recovery first: it fails every interrupted run, and the workflow
-	// recoveries below move queued runs to running.
-	const interrupted = await controllers.agentHarness().recoverInterruptedRuns();
-	const queued =
-		(await controllers.todos().recoverQueuedPromiseRuns()) +
-		(await controllers.references().recoverQueuedReferenceRuns()) +
-		(await controllers.relationships().recoverQueuedRelatedNoteRuns()) +
-		(await controllers.diagrams().recoverQueuedDiagramRuns());
-	const recovered = interrupted + queued;
+	// Recovery lists runs across every user, then acts on each as its owner. Interrupted runs
+	// settle first, then queued agent runs and queued note-action workflows start.
+	const recovery = AppFactory.system().runRecovery();
+	const interrupted = await recovery.interrupted();
+	for (const run of interrupted)
+		await AppFactory.forActor(run.owner).agentHarness().recoverInterrupted(run.runId);
+	const queuedAgents = await recovery.queuedAgentRuns();
+	for (const run of queuedAgents)
+		await AppFactory.forActor(run.owner).agentHarness().resumeQueued(run.runId);
+	const workflows = [
+		[
+			'promise_extraction',
+			(run: OwnedRun) => AppFactory.forActor(run.owner).todos().resumeQueuedPromiseRun(run.runId)
+		],
+		[
+			'reference_search',
+			(run: OwnedRun) =>
+				AppFactory.forActor(run.owner).references().resumeQueuedReferenceRun(run.runId)
+		],
+		[
+			'related_notes',
+			(run: OwnedRun) =>
+				AppFactory.forActor(run.owner).relationships().resumeQueuedRelatedNoteRun(run.runId)
+		],
+		[
+			'diagram_action',
+			(run: OwnedRun) => AppFactory.forActor(run.owner).diagrams().resumeQueuedDiagramRun(run.runId)
+		]
+	] as const;
+	let queuedWorkflows = 0;
+	for (const [kind, resume] of workflows) {
+		const queued = await recovery.queuedWorkflowRuns(kind);
+		queuedWorkflows += queued.length;
+		for (const run of queued) await resume(run);
+	}
+	const recovered = interrupted.length + queuedAgents.length + queuedWorkflows;
 	if (recovered > 0)
 		console.log(`[agent-run] Recovered ${recovered} interrupted run(s) on startup`);
 };
@@ -69,7 +96,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// If auth is enabled, validate sessions
 	if (AppFactory.isAuthEnabled()) {
 		if (sessionId) {
-			const result = await AppFactory.access().resumeSession(sessionId);
+			const result = await AppFactory.authentication().resumeSession(sessionId);
 			if (result) {
 				// Session validation may extend the stored deadline. Keep the browser in sync.
 				setSessionCookie(
@@ -119,7 +146,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// Establish the local profile before any workspace or tool write.
 		setWorkspaceAccountCookie(
 			event.cookies,
-			(await AppFactory.localIdentity().initializeLocal(AppFactory.actor())).id,
+			(await AppFactory.localIdentity(AppFactory.actor()).initializeLocal()).id,
 			event.url.protocol === 'https:'
 		);
 	}

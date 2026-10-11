@@ -39,33 +39,36 @@ const toUpload = (row: typeof schema.templateUploads.$inferSelect): TemplateUplo
 });
 
 export class TemplateRecords implements TemplateRepository {
-	constructor(private readonly database: Database) {}
-	private activeProjectIds(actor: ActorContext) {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
+	private activeProjectIds() {
 		return this.database
 			.select({ id: projects.id })
 			.from(projects)
-			.where(and(eq(projects.userId, actor.userId), projectIsNull(projects.archivedAt)));
+			.where(and(eq(projects.userId, this.actor.userId), projectIsNull(projects.archivedAt)));
 	}
 
-	async insertUpload(actor: ActorContext, upload: TemplateUpload): Promise<TemplateUpload> {
+	async insertUpload(upload: TemplateUpload): Promise<TemplateUpload> {
 		const [project] = await this.database
 			.select({ id: schema.projects.id })
 			.from(schema.projects)
 			.where(
 				and(
 					eq(schema.projects.id, upload.projectId),
-					eq(schema.projects.userId, actor.userId),
+					eq(schema.projects.userId, this.actor.userId),
 					projectIsNull(schema.projects.archivedAt)
 				)
 			);
 		if (!project) throw new NotFoundError('Project not found');
 		const [row] = await this.database
 			.insert(schema.templateUploads)
-			.values({ ...upload, userId: actor.userId, createdAt: new Date(upload.createdAt) })
+			.values({ ...upload, userId: this.actor.userId, createdAt: new Date(upload.createdAt) })
 			.returning();
 		return toUpload(row!);
 	}
-	async findUpload(actor: ActorContext, id: TemplateId): Promise<TemplateUpload | undefined> {
+	async findUpload(id: TemplateId): Promise<TemplateUpload | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.templateUploads)
@@ -73,17 +76,14 @@ export class TemplateRecords implements TemplateRepository {
 				and(
 					eq(schema.templateUploads.id, id),
 					and(
-						eq(schema.templateUploads.userId, actor.userId),
-						inArray(schema.templateUploads.projectId, this.activeProjectIds(actor))
+						eq(schema.templateUploads.userId, this.actor.userId),
+						inArray(schema.templateUploads.projectId, this.activeProjectIds())
 					)
 				)
 			);
 		return row ? toUpload(row) : undefined;
 	}
-	async findUploadForUpdate(
-		actor: ActorContext,
-		id: TemplateId
-	): Promise<TemplateUpload | undefined> {
+	async findUploadForUpdate(id: TemplateId): Promise<TemplateUpload | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.templateUploads)
@@ -91,28 +91,28 @@ export class TemplateRecords implements TemplateRepository {
 				and(
 					eq(schema.templateUploads.id, id),
 					and(
-						eq(schema.templateUploads.userId, actor.userId),
-						inArray(schema.templateUploads.projectId, this.activeProjectIds(actor))
+						eq(schema.templateUploads.userId, this.actor.userId),
+						inArray(schema.templateUploads.projectId, this.activeProjectIds())
 					)
 				)
 			)
 			.for('update');
 		return row ? toUpload(row) : undefined;
 	}
-	async deleteUpload(actor: ActorContext, id: TemplateId): Promise<void> {
+	async deleteUpload(id: TemplateId): Promise<void> {
 		await this.database
 			.delete(schema.templateUploads)
 			.where(
-				and(eq(schema.templateUploads.id, id), eq(schema.templateUploads.userId, actor.userId))
+				and(eq(schema.templateUploads.id, id), eq(schema.templateUploads.userId, this.actor.userId))
 			);
 	}
 
-	async insert(actor: ActorContext, template: ProjectTemplate): Promise<ProjectTemplate> {
+	async insert(template: ProjectTemplate): Promise<ProjectTemplate> {
 		const [row] = await this.database
 			.insert(schema.projectTemplates)
 			.values({
 				id: template.id,
-				userId: actor.userId,
+				userId: this.actor.userId,
 				projectId: template.projectId,
 				name: template.name,
 				objectKey: template.objectKey,
@@ -127,7 +127,7 @@ export class TemplateRecords implements TemplateRepository {
 		return toTemplate(row!);
 	}
 
-	async findById(actor: ActorContext, id: TemplateId): Promise<ProjectTemplate | undefined> {
+	async findById(id: TemplateId): Promise<ProjectTemplate | undefined> {
 		const [row] = await this.database
 			.select()
 			.from(schema.projectTemplates)
@@ -135,8 +135,8 @@ export class TemplateRecords implements TemplateRepository {
 				and(
 					eq(schema.projectTemplates.id, id),
 					and(
-						eq(schema.projectTemplates.userId, actor.userId),
-						inArray(schema.projectTemplates.projectId, this.activeProjectIds(actor))
+						eq(schema.projectTemplates.userId, this.actor.userId),
+						inArray(schema.projectTemplates.projectId, this.activeProjectIds())
 					),
 					isNotNull(schema.projectTemplates.extractedStyles)
 				)
@@ -144,10 +144,7 @@ export class TemplateRecords implements TemplateRepository {
 		return row ? toTemplate(row) : undefined;
 	}
 
-	async listByProject(
-		actor: ActorContext,
-		projectId: ProjectId
-	): Promise<readonly ProjectTemplate[]> {
+	async listByProject(projectId: ProjectId): Promise<readonly ProjectTemplate[]> {
 		return (
 			await this.database
 				.select()
@@ -156,8 +153,8 @@ export class TemplateRecords implements TemplateRepository {
 					and(
 						eq(schema.projectTemplates.projectId, projectId),
 						and(
-							eq(schema.projectTemplates.userId, actor.userId),
-							inArray(schema.projectTemplates.projectId, this.activeProjectIds(actor))
+							eq(schema.projectTemplates.userId, this.actor.userId),
+							inArray(schema.projectTemplates.projectId, this.activeProjectIds())
 						),
 						isNotNull(schema.projectTemplates.extractedStyles)
 					)
@@ -166,7 +163,7 @@ export class TemplateRecords implements TemplateRepository {
 		).map(toTemplate);
 	}
 
-	async update(actor: ActorContext, template: ProjectTemplate): Promise<ProjectTemplate> {
+	async update(template: ProjectTemplate): Promise<ProjectTemplate> {
 		const [row] = await this.database
 			.update(schema.projectTemplates)
 			.set({
@@ -182,8 +179,8 @@ export class TemplateRecords implements TemplateRepository {
 				and(
 					eq(schema.projectTemplates.id, template.id),
 					and(
-						eq(schema.projectTemplates.userId, actor.userId),
-						inArray(schema.projectTemplates.projectId, this.activeProjectIds(actor))
+						eq(schema.projectTemplates.userId, this.actor.userId),
+						inArray(schema.projectTemplates.projectId, this.activeProjectIds())
 					)
 				)
 			)
@@ -191,15 +188,15 @@ export class TemplateRecords implements TemplateRepository {
 		return toTemplate(row!);
 	}
 
-	async delete(actor: ActorContext, id: TemplateId): Promise<void> {
+	async delete(id: TemplateId): Promise<void> {
 		await this.database
 			.delete(schema.projectTemplates)
 			.where(
 				and(
 					eq(schema.projectTemplates.id, id),
 					and(
-						eq(schema.projectTemplates.userId, actor.userId),
-						inArray(schema.projectTemplates.projectId, this.activeProjectIds(actor))
+						eq(schema.projectTemplates.userId, this.actor.userId),
+						inArray(schema.projectTemplates.projectId, this.activeProjectIds())
 					)
 				)
 			);

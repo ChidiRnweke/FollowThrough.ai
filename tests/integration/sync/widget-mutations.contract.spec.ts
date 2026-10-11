@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { widgetTemplates, type WidgetId } from '$lib/models/widgets';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -16,20 +17,21 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database });
-	const widgets = createWidgetsCapability({
+	const sync = createSyncCapability(testActor(), { db: database });
+	const widgets = createWidgetsCapability(testActor(), {
 		db: database,
-		projects: new ProjectRecords(database),
-		notes: new NoteRecords(database)
+		projects: new ProjectRecords(testActor(), database),
+		notes: new NoteRecords(testActor(), database)
 	});
 	// Deferred, as production is: chunks land without vectors and the worker embeds them (ADR 0021).
 	const index = createContentIndex(
-		new KnowledgeIndexRecords(database),
+		new KnowledgeIndexRecords(testActor(), database),
 		'contract',
 		undefined,
 		true
 	);
 	const controller = new Widgets(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<WidgetsDependencies>({
 			...agentToolResultsFixture(),
@@ -51,7 +53,7 @@ const setup = async (suffix: string) => {
 	);
 	const create = async () => {
 		const id = crypto.randomUUID() as WidgetId;
-		await controller.synchronize(seeded.owner, {
+		await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: null,
 			command: {
@@ -62,7 +64,7 @@ const setup = async (suffix: string) => {
 				draft: widgetTemplates.checklist
 			}
 		});
-		const base = await sync.objects.read(seeded.owner, { type: 'widgets', id: [id] }, null);
+		const base = await sync.objects.read({ type: 'widgets', id: [id] }, null);
 		if (base.kind !== 'found') throw new Error('The created widget must be readable through sync');
 		return { id, etag: base.snapshot.etag };
 	};
@@ -78,13 +80,13 @@ describe('guarded widget mutations', () => {
 	it('publish a created widget as a workspace record', async () => {
 		const { owner, sync, create } = await setup('7711');
 		const { id } = await create();
-		const read = await sync.objects.read(owner, { type: 'widgets', id: [id] }, null);
+		const read = await sync.objects.read({ type: 'widgets', id: [id] }, null);
 		expect(read.kind === 'found' && read.snapshot.value.type).toBe('widgets');
 	});
 	it('apply a data edit and save it with the next data revision', async () => {
 		const { owner, controller, create } = await setup('7712');
 		const { id, etag } = await create();
-		const result = await controller.synchronize(owner, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: etag,
 			command: { kind: 'editWidget', widgetId: id, change: tick(0) }
@@ -98,7 +100,7 @@ describe('guarded widget mutations', () => {
 		const { owner, controller, create } = await setup('7713');
 		const { id, etag } = await create();
 		await context.client`update widgets set title = 'Other client' where id = ${id}`;
-		const result = await controller.synchronize(owner, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: etag,
 			command: { kind: 'editWidget', widgetId: id, change: tick(0) }
@@ -111,16 +113,16 @@ describe('guarded widget mutations', () => {
 	it('apply a change replayed onto a remote edit of another item', async () => {
 		const { owner, controller, sync, create } = await setup('7715');
 		const { id, etag } = await create();
-		await controller.synchronize(owner, {
+		await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: etag,
 			command: { kind: 'editWidget', widgetId: id, change: tick(1) }
 		});
 		// The device's queue replays its edit onto the remote version and resends the same change
 		// with the remote version as its base (ADR 0042).
-		const remote = await sync.objects.read(owner, { type: 'widgets', id: [id] }, null);
+		const remote = await sync.objects.read({ type: 'widgets', id: [id] }, null);
 		if (remote.kind !== 'found') throw new Error('The edited widget must be readable');
-		const result = await controller.synchronize(owner, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: remote.snapshot.etag,
 			command: { kind: 'editWidget', widgetId: id, change: tick(0) }
@@ -133,7 +135,7 @@ describe('guarded widget mutations', () => {
 	it('reject a layout the catalog does not allow, leaving the widget unchanged', async () => {
 		const { owner, controller, create } = await setup('7714');
 		const { id, etag } = await create();
-		const result = await controller.synchronize(owner, {
+		const result = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: etag,
 			command: {
@@ -151,7 +153,7 @@ describe('guarded widget mutations', () => {
 		const { owner, controller, create } = await setup('7719');
 		const { id, etag } = await create();
 		const formulas = (derived: Record<string, string>) =>
-			controller.synchronize(owner, {
+			controller.synchronize({
 				operationId: crypto.randomUUID(),
 				baseEtag: etag,
 				command: {
@@ -175,19 +177,19 @@ describe('guarded widget mutations', () => {
 	it('move a widget to the trash and delete it only from there', async () => {
 		const { owner, controller, sync, create } = await setup('7716');
 		const { id, etag } = await create();
-		const early = await controller.synchronize(owner, {
+		const early = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: etag,
 			command: { kind: 'deleteWidget', widgetId: id }
 		});
-		await controller.synchronize(owner, {
+		await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: etag,
 			command: { kind: 'archiveWidget', widgetId: id }
 		});
-		const trashed = await sync.objects.read(owner, { type: 'widgets', id: [id] }, null);
+		const trashed = await sync.objects.read({ type: 'widgets', id: [id] }, null);
 		if (trashed.kind !== 'found') throw new Error('The trashed widget must stay readable');
-		const deleted = await controller.synchronize(owner, {
+		const deleted = await controller.synchronize({
 			operationId: crypto.randomUUID(),
 			baseEtag: trashed.snapshot.etag,
 			command: { kind: 'deleteWidget', widgetId: id }
@@ -201,8 +203,8 @@ describe('guarded widget mutations', () => {
 	it('restore a widget from the trash with its data intact', async () => {
 		const { owner, controller, create } = await setup('7717');
 		const { id } = await create();
-		await controller.archive(owner, { widgetId: id });
-		await controller.restore(owner, { widgetId: id });
+		await controller.archive({ widgetId: id });
+		await controller.restore({ widgetId: id });
 		expect(
 			await context.client`select archived_at is null as active, jsonb_array_length(data->'items') as items from widgets where id = ${id}`
 		).toEqual([{ active: true, items: 3 }]);
@@ -212,7 +214,7 @@ describe('guarded widget mutations', () => {
 		const { id } = await create();
 		const indexed =
 			await context.client`select source_title, content from search_chunks where widget_id = ${id}`;
-		await controller.archive(owner, { widgetId: id });
+		await controller.archive({ widgetId: id });
 		const trashed = await context.client`select id from search_chunks where widget_id = ${id}`;
 		expect({
 			title: indexed[0]?.source_title,

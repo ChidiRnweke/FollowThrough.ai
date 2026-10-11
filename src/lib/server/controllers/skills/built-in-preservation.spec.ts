@@ -20,19 +20,25 @@ import { expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 
 const setup = async () => {
-	const notes = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository(notes);
+	const notes = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor(), notes);
 	const skills = new InMemorySkillRepository(notes);
-	const library = createSkillServices(skills, notes, new InMemoryProvenanceRepository());
+	const library = createSkillServices(
+		testActor(),
+		skills,
+		notes,
+		new InMemoryProvenanceRepository(testActor())
+	);
 	const transactionRunner = new InMemoryTransactionRunner([projects, notes, skills]);
 	const released = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough');
 	if (!released) throw new Error('The released guide fixture is required');
 	await transactionRunner.run(() =>
-		new BuiltInSkills(projects, notes, skills, { active: [released], retired: [] }).ensure(
-			testActor()
-		)
+		new BuiltInSkills(testActor(), projects, notes, skills, {
+			active: [released],
+			retired: []
+		}).ensure()
 	);
-	const note = await notes.findByBuiltInKey(testActor(), released.key);
+	const note = await notes.findByBuiltInKey(released.key);
 	if (!note) throw new Error('The installed guide is required');
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),
@@ -47,7 +53,7 @@ const setup = async () => {
 			skillEditor: library.editor,
 			skillFinder: library.finder,
 			skillUsageLister: library.usageLister,
-			builtInSkills: new BuiltInSkills(projects, notes, skills, {
+			builtInSkills: new BuiltInSkills(testActor(), projects, notes, skills, {
 				active: BUILT_INS,
 				retired: RETIRED_BUILT_INS
 			})
@@ -66,9 +72,9 @@ it.each(metadataEdits)(
 	'preserves a released guide after the user changes its $name',
 	async ({ input }) => {
 		const { controller, library, note, released } = await setup();
-		const edited = await controller.update(testActor(), { noteId: note.id, ...input });
-		await controller.list(testActor());
-		const retained = await library.editor.getForEdit(testActor(), note.id);
+		const edited = await controller.update({ noteId: note.id, ...input });
+		await controller.list();
+		const retained = await library.editor.getForEdit(note.id);
 		expect({
 			text: retained.note.plainText,
 			revision: retained.note.currentRevision,
@@ -84,9 +90,9 @@ it.each(metadataEdits)(
 );
 it('upgrades stock content without re-enabling a guide disabled through the controller', async () => {
 	const { controller, library, note } = await setup();
-	await controller.update(testActor(), { noteId: note.id, isEnabled: false });
-	await controller.list(testActor());
-	const retained = await library.editor.getForEdit(testActor(), note.id);
+	await controller.update({ noteId: note.id, isEnabled: false });
+	await controller.list();
+	const retained = await library.editor.getForEdit(note.id);
 	expect({
 		text: retained.note.plainText,
 		revision: retained.note.currentRevision,

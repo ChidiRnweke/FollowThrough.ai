@@ -1,15 +1,14 @@
 import type { AttachmentUpload } from '$lib/models/attachments';
-import type { UserId } from '$lib/models/identity';
 import type {
 	OwnedAttachmentUpload,
 	UploadRetentionCursor
 } from '$lib/server/repositories/attachments/attachments';
 import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
-import type { AttachmentCleanup } from '$lib/server/services/attachments/records';
+import type { AttachmentBacklog } from '$lib/server/services/attachments/records';
 
 export class InMemoryUploadReservations implements Pick<
-	AttachmentCleanup,
-	'listExpiredUploads' | 'deleteUpload'
+	AttachmentBacklog,
+	'listExpiredUploads' | 'deleteExpiredUpload'
 > {
 	deleted: string[] = [];
 	cutoffs: Date[] = [];
@@ -39,11 +38,10 @@ export class InMemoryUploadReservations implements Pick<
 			.slice(0, limit);
 	}
 
-	async deleteUpload(actor: { userId: UserId }, id: AttachmentUpload['id']): Promise<void> {
+	async deleteExpiredUpload(id: AttachmentUpload['id']): Promise<void> {
 		if (this.deleteFailures.has(id)) throw new Error('Reservation deletion failed');
-		if (this.rows.some((row) => row.userId === actor.userId && row.upload.id === id))
-			this.deleted.push(id);
-		this.rows = this.rows.filter((row) => row.userId !== actor.userId || row.upload.id !== id);
+		if (this.rows.some((row) => row.upload.id === id)) this.deleted.push(id);
+		this.rows = this.rows.filter((row) => row.upload.id !== id);
 	}
 }
 

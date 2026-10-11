@@ -6,7 +6,6 @@ import type { SyncObjectRepository } from '$lib/server/repositories/workspace/sy
 
 export interface WorkspaceResourceVersionReader {
 	readVersion(
-		actor: ActorContext,
 		identity: WorkspaceResourceIdentity,
 		etag: SyncEtag
 	): Promise<Extract<SyncObjectRead<WorkspaceRecord>, { kind: 'found' }>>;
@@ -15,8 +14,8 @@ export interface WorkspaceResourceVersionReader {
 export class WorkspaceResourceVersions implements WorkspaceResourceVersionReader {
 	constructor(private readonly repository: SyncObjectRepository) {}
 
-	async readVersion(actor: ActorContext, identity: WorkspaceResourceIdentity, etag: SyncEtag) {
-		const resource = await this.repository.read(actor, identity, null);
+	async readVersion(identity: WorkspaceResourceIdentity, etag: SyncEtag) {
+		const resource = await this.repository.read(identity, null);
 		if (resource.kind !== 'found' || resource.snapshot.etag !== etag)
 			throw new Error('The synchronization journal does not match its resource');
 		return resource;

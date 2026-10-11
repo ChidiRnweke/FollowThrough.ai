@@ -16,23 +16,23 @@ const toPreference = (row: { toolName: string; enabled: boolean }): StoredToolPr
 });
 
 export class ToolPreferenceRecords implements ToolPreferenceRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async listForUser(actor: ActorContext): Promise<readonly StoredToolPreference[]> {
+	async listForUser(): Promise<readonly StoredToolPreference[]> {
 		const rows = await this.database
 			.select({
 				toolName: schema.toolPreferences.toolName,
 				enabled: schema.toolPreferences.enabled
 			})
 			.from(schema.toolPreferences)
-			.where(eq(schema.toolPreferences.userId, actor.userId));
+			.where(eq(schema.toolPreferences.userId, this.actor.userId));
 		return rows.map(toPreference);
 	}
 
-	async listForProject(
-		actor: ActorContext,
-		projectId: ProjectId
-	): Promise<readonly StoredToolPreference[]> {
+	async listForProject(projectId: ProjectId): Promise<readonly StoredToolPreference[]> {
 		const rows = await this.database
 			.select({
 				toolName: schema.projectToolOverrides.toolName,
@@ -41,18 +41,18 @@ export class ToolPreferenceRecords implements ToolPreferenceRepository {
 			.from(schema.projectToolOverrides)
 			.where(
 				and(
-					eq(schema.projectToolOverrides.userId, actor.userId),
+					eq(schema.projectToolOverrides.userId, this.actor.userId),
 					eq(schema.projectToolOverrides.projectId, projectId)
 				)
 			);
 		return rows.map(toPreference);
 	}
 
-	async upsertForUser(actor: ActorContext, preference: StoredToolPreference): Promise<void> {
+	async upsertForUser(preference: StoredToolPreference): Promise<void> {
 		await this.database
 			.insert(schema.toolPreferences)
 			.values({
-				userId: actor.userId,
+				userId: this.actor.userId,
 				toolName: preference.toolName,
 				enabled: preference.enabled
 			})
@@ -62,20 +62,16 @@ export class ToolPreferenceRecords implements ToolPreferenceRepository {
 			});
 	}
 
-	async upsertForProject(
-		actor: ActorContext,
-		projectId: ProjectId,
-		preference: StoredToolPreference
-	): Promise<void> {
+	async upsertForProject(projectId: ProjectId, preference: StoredToolPreference): Promise<void> {
 		const [project] = await this.database
 			.select({ id: projects.id })
 			.from(projects)
-			.where(and(eq(projects.id, projectId), eq(projects.userId, actor.userId)));
+			.where(and(eq(projects.id, projectId), eq(projects.userId, this.actor.userId)));
 		if (!project) throw new NotFoundError('Project was not found');
 		await this.database
 			.insert(schema.projectToolOverrides)
 			.values({
-				userId: actor.userId,
+				userId: this.actor.userId,
 				projectId,
 				toolName: preference.toolName,
 				enabled: preference.enabled
@@ -90,16 +86,12 @@ export class ToolPreferenceRecords implements ToolPreferenceRepository {
 			});
 	}
 
-	async deleteProjectOverride(
-		actor: ActorContext,
-		projectId: ProjectId,
-		toolName: string
-	): Promise<void> {
+	async deleteProjectOverride(projectId: ProjectId, toolName: string): Promise<void> {
 		await this.database
 			.delete(schema.projectToolOverrides)
 			.where(
 				and(
-					eq(schema.projectToolOverrides.userId, actor.userId),
+					eq(schema.projectToolOverrides.userId, this.actor.userId),
 					eq(schema.projectToolOverrides.projectId, projectId),
 					eq(schema.projectToolOverrides.toolName, toolName)
 				)

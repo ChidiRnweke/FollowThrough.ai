@@ -46,7 +46,7 @@ describe('Reference discovery', () => {
 		const client = new InMemoryWebReferenceClient();
 		client.result = [result];
 		const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {});
-		const references = await finder.suggestFromSelection(testActor(), { selection });
+		const references = await finder.suggestFromSelection({ selection });
 		expect(
 			references.outcome === 'found' ? references.suggestions[0]?.payload : undefined
 		).toMatchObject({
@@ -60,7 +60,7 @@ describe('Reference discovery', () => {
 		const client = new InMemoryWebReferenceClient();
 		client.result = [];
 		const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {});
-		const references = await finder.suggestFromSelection(testActor(), { selection });
+		const references = await finder.suggestFromSelection({ selection });
 		expect(references.outcome).toBe('nothing_relevant');
 	});
 
@@ -68,18 +68,14 @@ describe('Reference discovery', () => {
 		const client = new InMemoryWebReferenceClient();
 		client.result = [];
 		const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {});
-		await finder.suggestFromSelection(
-			testActor(),
-			{ selection },
-			{ model: 'google/gemini-3-flash' }
-		);
+		await finder.suggestFromSelection({ selection }, { model: 'google/gemini-3-flash' });
 		expect(client.model).toBe('google/gemini-3-flash');
 	});
 
 	it('rejects a missing structured web result', async () => {
 		const client = new InMemoryWebReferenceClient();
 		const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {});
-		await expect(finder.suggestFromSelection(testActor(), { selection })).rejects.toMatchObject({
+		await expect(finder.suggestFromSelection({ selection })).rejects.toMatchObject({
 			code: 'INVALID_GENERATED_CONTENT'
 		});
 	});
@@ -88,7 +84,7 @@ describe('Reference discovery', () => {
 		const client = new InMemoryWebReferenceClient();
 		client.failure = new Error('search unavailable');
 		const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {});
-		await expect(finder.suggestFromSelection(testActor(), { selection })).rejects.toMatchObject({
+		await expect(finder.suggestFromSelection({ selection })).rejects.toMatchObject({
 			code: 'EXTERNAL_SERVICE'
 		});
 	});
@@ -105,7 +101,7 @@ describe('Reference discovery', () => {
 			new AgentRunSettingsService(),
 			{}
 		);
-		await expect(finder.suggestFromSelection(testActor(), { selection })).rejects.toMatchObject({
+		await expect(finder.suggestFromSelection({ selection })).rejects.toMatchObject({
 			code: 'EXTERNAL_SERVICE'
 		});
 	});
@@ -118,7 +114,7 @@ it('resolves partial deployment overrides against the reference budget at search
 		engine: 'firecrawl',
 		maxResults: 5
 	});
-	await finder.suggestFromSelection(testActor(), { selection });
+	await finder.suggestFromSelection({ selection });
 	expect(client.research).toEqual({ engine: 'firecrawl', maxResults: 5, maxTotalResults: 16 });
 });
 
@@ -129,7 +125,7 @@ it('preserves cancellation errors instead of reporting a provider failure', asyn
 	abort.abort(cancellation);
 	client.failure = cancellation;
 	const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {});
-	await expect(
-		finder.suggestFromSelection(testActor(), { selection }, { signal: abort.signal })
-	).rejects.toBe(cancellation);
+	await expect(finder.suggestFromSelection({ selection }, { signal: abort.signal })).rejects.toBe(
+		cancellation
+	);
 });

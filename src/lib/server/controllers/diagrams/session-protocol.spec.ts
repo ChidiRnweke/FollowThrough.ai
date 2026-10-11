@@ -16,7 +16,7 @@ const setup = (candidates = [draft]) => {
 	if (!candidates.length) provider.failure = new Error('No diagram candidates remain.');
 	const syntax = new InMemoryMermaidValidator();
 	syntax.rejections.set(fenced.source, 'Submit Mermaid source without code fences.');
-	const controller = new Diagrams({
+	const controller = new Diagrams(testActor(), {
 		...fixture.dependencies,
 		mermaidValidator: syntax,
 		generation: {
@@ -25,7 +25,7 @@ const setup = (candidates = [draft]) => {
 		}
 	});
 	const run = (signal?: AbortSignal) =>
-		controller.generateMermaid(testActor(), { selection: diagramSelection }, signal);
+		controller.generateMermaid({ selection: diagramSelection }, signal);
 	return { ...fixture, provider, syntax, run };
 };
 describe('Diagram provider submission through its owning operation', () => {
@@ -103,19 +103,17 @@ it('preserves the existing unknown submission-tool failure at the SDK boundary',
 		await import('$lib/testing/diagrams/fakes/in-memory-diagram-model');
 	const fixture = durableDiagramFixture();
 	const provider = new InMemoryModelProvider(new InMemoryDiagramModel([draft]));
-	const controller = new Diagrams({
+	const controller = new Diagrams(testActor(), {
 		...fixture.dependencies,
 		generation: {
 			...fixture.generation,
 			generator: new DiagramGenerationService({ available: true, models: () => provider })
 		}
 	});
-	const result = await controller
-		.generateMermaid(testActor(), { selection: diagramSelection })
-		.then(
-			() => ({ kind: 'completed' }),
-			(error: Error) => ({ kind: 'failure', message: error.message })
-		);
+	const result = await controller.generateMermaid({ selection: diagramSelection }).then(
+		() => ({ kind: 'completed' }),
+		(error: Error) => ({ kind: 'failure', message: error.message })
+	);
 	expect({ result, closed: provider.closed, suggestions: fixture.suggestions.suggestions }).toEqual(
 		{
 			result: {

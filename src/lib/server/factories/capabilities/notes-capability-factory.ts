@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import {
 	NoteArchiveImportService,
@@ -95,12 +96,15 @@ export interface NotesCapability {
 	readonly provenanceRepository: ProvenanceRepository;
 }
 
-export const createNotesCapability = (input: NotesCapabilityInput): NotesCapability => {
-	const repository = new NoteRecords(input.db);
-	const anchors = new SourceAnchorRecords(input.db);
-	const provenanceRepository = new ProvenanceRecords(input.db);
+export const createNotesCapability = (
+	actor: ActorContext,
+	input: NotesCapabilityInput
+): NotesCapability => {
+	const repository = new NoteRecords(actor, input.db);
+	const anchors = new SourceAnchorRecords(actor, input.db);
+	const provenanceRepository = new ProvenanceRecords(actor, input.db);
 	const lifecycleRules = new SharedNoteLifecycleService();
-	const services = createNoteServices(repository, anchors, input.projects);
+	const services = createNoteServices(actor, repository, anchors, input.projects);
 	return {
 		archiveImport: new NoteArchiveImportService(),
 		patchPreparation: new NotePatchPreparationService(),
@@ -117,8 +121,8 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 		repository,
 		anchors,
 		services,
-		selectionOrigins: new SelectionOrigins(repository, anchors, provenanceRepository),
-		provenance: new NoteProvenance(provenanceRepository, anchors),
+		selectionOrigins: new SelectionOrigins(actor, repository, anchors, provenanceRepository),
+		provenance: new NoteProvenance(actor, provenanceRepository, anchors),
 		provenanceRepository
 	};
 };
@@ -140,14 +144,15 @@ export interface NoteServices {
 	readonly anchorRepairer: SourceAnchorRepairer;
 }
 export const createNoteServices = (
+	actor: ActorContext,
 	notes: NoteRepository,
 	anchors: SourceAnchorRepository,
 	projects: ProjectRepository
 ): NoteServices => {
 	const reading = new NoteReadingService(notes, projects);
-	const editing = new NoteEditingService(notes);
-	const lifecycle = new NoteLifecycleService(notes, projects);
-	const revisionWriting = new NoteRevisionWritingService(notes);
+	const editing = new NoteEditingService(actor, notes);
+	const lifecycle = new NoteLifecycleService(actor, notes, projects);
+	const revisionWriting = new NoteRevisionWritingService(actor, notes);
 	return {
 		reader: reading,
 		treeReader: reading,
@@ -157,11 +162,11 @@ export const createNoteServices = (
 		sectionNumbering: editing,
 		trash: lifecycle,
 		deletion: lifecycle,
-		creator: new NoteCreationService(notes, projects),
-		publisher: new NotePublicationService(notes),
-		revisionReader: new NoteRevisionReadingService(notes),
+		creator: new NoteCreationService(actor, notes, projects),
+		publisher: new NotePublicationService(actor, notes),
+		revisionReader: new NoteRevisionReadingService(actor, notes),
 		revisionRecorder: revisionWriting,
 		attachmentRestorer: revisionWriting,
-		anchorRepairer: new NoteAnchorRepairService(notes, anchors)
+		anchorRepairer: new NoteAnchorRepairService(actor, notes, anchors)
 	};
 };

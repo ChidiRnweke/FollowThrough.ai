@@ -43,6 +43,7 @@ export class InMemoryAgentRunPersistence
 		AgentRunNotificationRepository,
 		SnapshotParticipant
 {
+	constructor(private readonly actor: ActorContext) {}
 	runs: AgentRun[] = [];
 	/** Allows a cancellation to commit while the execution claim is waiting on storage. */
 	executionClaim: Promise<void> = Promise.resolve();
@@ -60,70 +61,61 @@ export class InMemoryAgentRunPersistence
 		};
 	}
 
-	async findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {
-		return this.runs.find((run) => run.id === id && run.userId === actor.userId);
+	async findById(id: AgentRunId): Promise<AgentRun | undefined> {
+		return this.runs.find((run) => run.id === id && run.userId === this.actor.userId);
 	}
 
 	async findStatus(id: AgentRunId): Promise<AgentRunStatus | undefined> {
 		return this.runs.find((run) => run.id === id)?.status;
 	}
 
-	async findForWrite(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {
-		return this.findById(actor, id);
+	async findForWrite(id: AgentRunId): Promise<AgentRun | undefined> {
+		return this.findById(id);
 	}
 
-	async findAgentById(actor: ActorContext, id: AgentRunId): Promise<ResolvedAgentRun | undefined> {
+	async findAgentById(id: AgentRunId): Promise<ResolvedAgentRun | undefined> {
 		return this.runs.find(
 			(run): run is ResolvedAgentRun =>
-				run.kind === 'agent' && run.id === id && run.userId === actor.userId
+				run.kind === 'agent' && run.id === id && run.userId === this.actor.userId
 		);
 	}
 
-	async findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined> {
-		return this.runs.find((run) => run.userId === actor.userId && run.requestId === requestId);
+	async findByRequestId(requestId: string): Promise<AgentRun | undefined> {
+		return this.runs.find((run) => run.userId === this.actor.userId && run.requestId === requestId);
 	}
 
-	async findAwaitingByConversation(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<AgentRun | undefined> {
+	async findAwaitingByConversation(conversationId: ConversationId): Promise<AgentRun | undefined> {
 		return this.runs.find(
 			(run) =>
-				run.userId === actor.userId &&
+				run.userId === this.actor.userId &&
 				run.conversationId === conversationId &&
 				run.status === 'awaiting_approval'
 		);
 	}
 
-	async findLatestByConversation(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<AgentRun | undefined> {
+	async findLatestByConversation(conversationId: ConversationId): Promise<AgentRun | undefined> {
 		return this.runs
-			.filter((run) => run.userId === actor.userId && run.conversationId === conversationId)
+			.filter((run) => run.userId === this.actor.userId && run.conversationId === conversationId)
 			.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
 	}
 
-	async findActiveByConversation(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<AgentRun | undefined> {
+	async findActiveByConversation(conversationId: ConversationId): Promise<AgentRun | undefined> {
 		return this.runs.find(
 			(run) =>
-				run.userId === actor.userId &&
+				run.userId === this.actor.userId &&
 				run.conversationId === conversationId &&
 				['queued', 'running', 'awaiting_approval', 'cancelling'].includes(run.status)
 		);
 	}
 
-	async insert(actor: ActorContext, run: AgentRun): Promise<AgentRun> {
-		const inserted = await this.insertIdempotent(actor, run);
+	async insert(run: AgentRun): Promise<AgentRun> {
+		const inserted = await this.insertIdempotent(run);
 		if (!inserted) throw new ConflictError('Agent request already exists');
 		return inserted;
 	}
 
-	async insertIdempotent(actor: ActorContext, run: AgentRun): Promise<AgentRun | undefined> {
-		if (await this.findByRequestId(actor, run.requestId)) return undefined;
+	async insertIdempotent(run: AgentRun): Promise<AgentRun | undefined> {
+		if (await this.findByRequestId(run.requestId)) return undefined;
 		if (
 			this.runs.some(
 				(item) =>
@@ -132,7 +124,7 @@ export class InMemoryAgentRunPersistence
 			)
 		)
 			throw new ValidationError('This conversation already has an active agent run');
-		const owned = { ...run, userId: actor.userId };
+		const owned = { ...run, userId: this.actor.userId };
 		this.runs.push(owned);
 		this.changed(owned.id);
 		return owned;
@@ -211,12 +203,8 @@ export class InMemoryAgentRunPersistence
 		return updated;
 	}
 
-	async updateCancellation(
-		actor: ActorContext,
-		runId: AgentRunId,
-		change: RunCancellationWrite
-	): Promise<AgentRun> {
-		const run = await this.findById(actor, runId);
+	async updateCancellation(runId: AgentRunId, change: RunCancellationWrite): Promise<AgentRun> {
+		const run = await this.findById(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		// Postgres holds the row lock from the cancel's read to this write, so a run cannot
 		// settle in between; here it can, and a settled run must stay settled.
@@ -227,11 +215,10 @@ export class InMemoryAgentRunPersistence
 	}
 
 	async updateAgentProvenance(
-		actor: ActorContext,
 		runId: AgentRunId,
 		change: AgentProvenanceWrite
 	): Promise<ResolvedAgentRun> {
-		const run = await this.findAgentById(actor, runId);
+		const run = await this.findAgentById(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		const updated = { ...run, ...change };
 		this.replace(updated);
@@ -239,11 +226,10 @@ export class InMemoryAgentRunPersistence
 	}
 
 	async updateAgentContext(
-		actor: ActorContext,
 		runId: AgentRunId,
 		change: AgentContextWrite
 	): Promise<PreparedAgentRun> {
-		const run = await this.findAgentById(actor, runId);
+		const run = await this.findAgentById(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		const updated = { ...run, ...change };
 		this.replace(updated);
@@ -251,11 +237,10 @@ export class InMemoryAgentRunPersistence
 	}
 
 	async updateWorkflowSettlement(
-		actor: ActorContext,
 		runId: AgentRunId,
 		change: WorkflowSettlementWrite
 	): Promise<WorkflowAgentRun> {
-		const run = await this.findById(actor, runId);
+		const run = await this.findById(runId);
 		if (!run || run.kind !== 'workflow') throw new NotFoundError('Workflow run was not found');
 		const updated: WorkflowAgentRun = {
 			...run,
@@ -272,23 +257,18 @@ export class InMemoryAgentRunPersistence
 	}
 
 	async updateWorkflowContext(
-		actor: ActorContext,
 		runId: AgentRunId,
 		change: WorkflowContextWrite
 	): Promise<WorkflowAgentRun> {
-		const run = await this.findById(actor, runId);
+		const run = await this.findById(runId);
 		if (!run || run.kind !== 'workflow') throw new NotFoundError('Workflow run was not found');
 		const updated = { ...run, ...change };
 		this.replace(updated);
 		return updated;
 	}
 
-	async updateApproval(
-		actor: ActorContext,
-		runId: AgentRunId,
-		change: RunApprovalWrite
-	): Promise<AgentRun> {
-		const run = await this.findById(actor, runId);
+	async updateApproval(runId: AgentRunId, change: RunApprovalWrite): Promise<AgentRun> {
+		const run = await this.findById(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		// Postgres holds the row lock from the cancel's read to this write, so a run cannot
 		// settle in between; here it can, and a settled run must stay settled.
@@ -334,11 +314,7 @@ export class InMemoryAgentRunPersistence
 		return record;
 	}
 
-	async replay(
-		actor: ActorContext,
-		runId: AgentRunId,
-		after: string
-	): Promise<readonly StoredAgentRunEventRecord[]> {
+	async replay(runId: AgentRunId, after: string): Promise<readonly StoredAgentRunEventRecord[]> {
 		// The fake stores what a writer wrote, so every row is readable by
 		// construction. A fake must not be able to represent a state production
 		// cannot produce, and an unreadable row is one only a real database can hold.
@@ -347,8 +323,7 @@ export class InMemoryAgentRunPersistence
 			.map((record) => ({ ...record, kind: 'readable' as const }));
 	}
 
-	async latestCursor(actor: ActorContext, runId: AgentRunId): Promise<string> {
-		void actor;
+	async latestCursor(runId: AgentRunId): Promise<string> {
 		return this.events.filter((event) => event.runId === runId).at(-1)?.cursor ?? '0';
 	}
 
@@ -361,10 +336,12 @@ export class InMemoryAgentRunPersistence
 			.map((record) => ({ ...record, kind: 'readable' as const }));
 	}
 
-	async record(
-		actor: ActorContext,
-		input: { runId: AgentRunId; callId: string; decision: 'approve' | 'reject'; message?: string }
-	): Promise<AgentRunDecisionRecord> {
+	async record(input: {
+		runId: AgentRunId;
+		callId: string;
+		decision: 'approve' | 'reject';
+		message?: string;
+	}): Promise<AgentRunDecisionRecord> {
 		const existing = this.decisions.find(
 			(item) => item.runId === input.runId && item.callId === input.callId
 		);

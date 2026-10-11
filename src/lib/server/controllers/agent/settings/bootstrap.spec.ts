@@ -11,6 +11,7 @@ import { AgentSettings, type AgentSettingsDependencies } from './controller';
 const setup = () => {
 	const models = new InMemoryModelCatalog();
 	const controller = new AgentSettings(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentSettingsDependencies>({
 			...agentToolResultsFixture(),
@@ -28,7 +29,7 @@ const setup = () => {
 
 it('returns the resolved deployment budgets and availability for the authenticated bootstrap', async () => {
 	const { controller } = setup();
-	const result = await controller.bootstrap(testActor());
+	const result = await controller.bootstrap();
 	expect({
 		accountId: result.accountId,
 		defaults: result.numericDefaults,
@@ -43,5 +44,5 @@ it('returns the resolved deployment budgets and availability for the authenticat
 it('does not return a successful bootstrap when the model catalog fails', async () => {
 	const { controller, models } = setup();
 	models.failure = new Error('Catalog unavailable');
-	await expect(controller.bootstrap(testActor())).rejects.toThrow('Catalog unavailable');
+	await expect(controller.bootstrap()).rejects.toThrow('Catalog unavailable');
 });

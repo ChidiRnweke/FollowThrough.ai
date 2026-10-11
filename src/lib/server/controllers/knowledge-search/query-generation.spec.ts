@@ -47,7 +47,7 @@ const generator = (payload: object, status = 200) => {
 	);
 	return {
 		generate: async (text: string) => {
-			await fixture.controller.search(testActor(), {
+			await fixture.controller.search({
 				query: text,
 				conversationId: testConversationId()
 			});

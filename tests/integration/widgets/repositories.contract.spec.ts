@@ -24,30 +24,26 @@ const checklist = (
 describe('widget records', () => {
 	it('read back layout and data exactly as written', async () => {
 		const { owner, project } = await seedNote('7701');
-		const records = new WidgetRecords(context.db);
+		const records = new WidgetRecords(owner, context.db);
 		const widget = checklist(owner, project.id);
-		await records.insert(owner, widget);
-		expect(await records.findById(owner, widget.id)).toEqual(widget);
+		await records.insert(widget);
+		expect(await records.findById(widget.id)).toEqual(widget);
 	});
 	it('are invisible to another account', async () => {
 		const { owner, project } = await seedNote('7702');
-		const records = new WidgetRecords(context.db);
+		const records = new WidgetRecords(owner, context.db);
 		const widget = checklist(owner, project.id);
-		await records.insert(owner, widget);
-		expect(await records.findById(actor('7799'), widget.id)).toBeUndefined();
+		await records.insert(widget);
+		expect(await records.findById(widget.id)).toBeUndefined();
 	});
 	it('refuse a write computed from an older revision', async () => {
 		const { owner, project } = await seedNote('7703');
-		const records = new WidgetRecords(context.db);
+		const records = new WidgetRecords(owner, context.db);
 		const widget = checklist(owner, project.id);
-		await records.insert(owner, widget);
-		await records.update(
-			owner,
-			{ ...widget, dataRevision: 2 },
-			{ layoutRevision: 1, dataRevision: 1 }
-		);
+		await records.insert(widget);
+		await records.update({ ...widget, dataRevision: 2 }, { layoutRevision: 1, dataRevision: 1 });
 		await expect(
-			records.update(owner, { ...widget, dataRevision: 2 }, { layoutRevision: 1, dataRevision: 1 })
+			records.update({ ...widget, dataRevision: 2 }, { layoutRevision: 1, dataRevision: 1 })
 		).rejects.toBeInstanceOf(ConflictError);
 	});
 });

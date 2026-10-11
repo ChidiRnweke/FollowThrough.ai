@@ -9,12 +9,12 @@ import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memor
 import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = async () => {
-	const repository = new InMemorySearchRepository();
+	const repository = new InMemorySearchRepository(testActor());
 	const client = new InMemoryRetrievalProvider();
 	client.rejectedContents.add('Poisoned');
 	for (let id = 1; id <= 4; id++) {
 		const noteId = testNoteId(id);
-		await repository.stage(testActor(), { kind: 'note', noteId }, [
+		await repository.stage({ kind: 'note', noteId }, [
 			searchDocumentBuilder({
 				noteId,
 				content: id <= 2 ? 'Poisoned' : 'Healthy',

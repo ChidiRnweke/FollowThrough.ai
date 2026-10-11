@@ -60,66 +60,70 @@ describe('note view assembly', () => {
 			document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
 		});
 		const target = noteBuilder({ id: testNoteId(2), title: 'Related note' });
-		const notes = new InMemoryNoteRepository();
+		const notes = new InMemoryNoteRepository(actor);
 		notes.notes = [note, target];
-		const content = new InMemoryNoteContent();
+		const content = new InMemoryNoteContent(actor);
 		content.notes = notes.notes;
-		const projects = new InMemoryProjects();
+		const projects = new InMemoryProjects(actor);
 		projects.projects = [projectBuilder()];
-		const anchors = new InMemoryAnchorRepository();
-		const provenance = new InMemoryProvenanceRepository();
+		const anchors = new InMemoryAnchorRepository(actor);
+		const provenance = new InMemoryProvenanceRepository(actor);
 		const graph = createRelationshipServices(
-			new InMemoryRelationshipRepository(),
+			actor,
+			new InMemoryRelationshipRepository(actor),
 			notes,
 			anchors,
 			provenance
 		);
 		const library = createReferenceServices(
-			new InMemoryReferenceRepository(),
+			actor,
+			new InMemoryReferenceRepository(actor),
 			notes,
 			anchors,
 			provenance
 		);
 		const relationship = await graph.creator
-			.createWithChange(actor, {
+			.createWithChange({
 				sourceNoteId: note.id,
 				targetNoteId: target.id,
 				kind: 'mentions'
 			})
 			.then((change) => change.after);
-		const reference = await library.creator.create(actor, {
+		const reference = await library.creator.create({
 			noteId: note.id,
 			title: 'Source',
 			url: 'https://example.com' as Url,
 			tier: 'official',
 			relevanceNote: 'Explains the note'
 		});
-		const todos = new InMemoryTodos();
+		const todos = new InMemoryTodos(actor);
 		const suggestions = createSuggestionServices(
-			new InMemorySuggestionRepository(),
+			actor,
+			new InMemorySuggestionRepository(actor),
 			notes,
 			provenance,
 			anchors
 		);
-		const origins = new SelectionOrigins(notes, anchors, provenance);
-		const source = await origins.resolve(actor, {
+		const origins = new SelectionOrigins(actor, notes, anchors, provenance);
+		const source = await origins.resolve({
 			noteId: note.id,
 			revision: note.currentRevision,
 			from: 0,
 			to: note.plainText.length,
 			text: note.plainText
 		});
-		const origin = await origins.record(actor, source, {
+		const origin = await origins.record(source, {
 			producerKind: 'pipeline',
 			producerName: 'Extract Promises',
 			pipeline: 'extract_promises',
 			metadata: {}
 		});
-		const proposal = await suggestions.creator.createFromSelection(actor, origin, {
+		const proposal = await suggestions.creator.createFromSelection(origin, {
 			kind: 'todo',
 			payload: { title: 'Review the architecture', responsibility: 'mine' }
 		});
 		const controller = new Notes(
+			actor,
 			new BacklinkPresentationService(),
 			new ReferencePresentationService(),
 			new WorkspaceCommandRulesService(),
@@ -141,12 +145,12 @@ describe('note view assembly', () => {
 				suggestionPresentation: new SuggestionPresentationService(),
 				noteReader: content,
 				projectReader: projects,
-				userPreferences: new InMemoryUserPreferencesRepository(),
+				userPreferences: new InMemoryUserPreferencesRepository(actor),
 				relationshipFinder: graph.finder,
 				backlinkContextReader: graph.contexts,
 				referenceLister: library.lister,
 				referenceContextReader: library.contexts,
-				diagramLister: new InMemoryDiagramRepository(),
+				diagramLister: new InMemoryDiagramRepository(actor),
 				todoLister: todos,
 				todoContextReader: todos,
 				suggestionLister: suggestions.lister,
@@ -175,8 +179,6 @@ describe('note view assembly', () => {
 		const downloaded = createWorkspaceViews(
 			new Map(records.map((record) => [JSON.stringify([record.type, record.value.id]), record]))
 		);
-		expect(downloaded.note(note.id)?.view).toEqual(
-			await controller.get(actor, { noteId: note.id })
-		);
+		expect(downloaded.note(note.id)?.view).toEqual(await controller.get({ noteId: note.id }));
 	});
 });

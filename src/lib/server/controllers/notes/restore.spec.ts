@@ -34,12 +34,18 @@ import {
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
-	const projects = new InMemoryProjectRepository();
+	const notes = new InMemoryNoteRepository(testActor());
+	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const service = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
-	const indexer = new InMemoryNoteContent();
+	const service = createNoteServices(
+		testActor(),
+		notes,
+		new InMemoryAnchorRepository(testActor()),
+		projects
+	);
+	const indexer = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -74,7 +80,7 @@ describe('Note restore invariants', () => {
 		const original = noteBuilder({ id: testNoteId(2), parentId: parent.id, archivedAt: testNow });
 		const inventory = [parent, original, noteBuilder({ id: testNoteId(3) })];
 		notes.notes = inventory;
-		const { note } = await controller.restore(testActor(), { noteId: original.id });
+		const { note } = await controller.restore({ noteId: original.id });
 		expect((await noteTrashWrite(original, 'restore', inventory, note.updatedAt)).local).toEqual({
 			type: 'notes',
 			value: note
@@ -85,7 +91,7 @@ describe('Note restore invariants', () => {
 		const original = noteBuilder({ archivedAt: testNow });
 		notes.notes = [original];
 		indexer.failIndex = true;
-		const outcome = await controller.restore(testActor(), { noteId: original.id }).then(
+		const outcome = await controller.restore({ noteId: original.id }).then(
 			() => ({ kind: 'success' }),
 			() => ({ kind: 'failure', notes: notes.notes })
 		);
@@ -95,7 +101,7 @@ describe('Note restore invariants', () => {
 		const { notes, controller } = setup();
 		const original = noteBuilder({ archivedAt: testNow });
 		notes.notes = [original];
-		const { note } = await controller.restore(testActor(), { noteId: original.id });
+		const { note } = await controller.restore({ noteId: original.id });
 		expect((await noteTrashWrite(original, 'restore', [original], note.updatedAt)).local).toEqual({
 			type: 'notes',
 			value: note
@@ -104,15 +110,15 @@ describe('Note restore invariants', () => {
 	it('clears the archived marker', async () => {
 		const { notes, controller, indexer } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		const result = await controller.restore(testActor(), { noteId: testNoteId() });
+		const result = await controller.restore({ noteId: testNoteId() });
 		expect(result.note.archivedAt).toBeUndefined();
-		expect(await notes.listActive(testActor())).toHaveLength(1);
+		expect(await notes.listActive()).toHaveLength(1);
 		expect(indexer.indexedNoteIds).toEqual([testNoteId()]);
 	});
 	it('rejects restoring a note that was never trashed', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder()];
-		await expect(controller.restore(testActor(), { noteId: testNoteId() })).rejects.toMatchObject({
+		await expect(controller.restore({ noteId: testNoteId() })).rejects.toMatchObject({
 			code: 'VALIDATION'
 		});
 	});
@@ -124,7 +130,7 @@ describe('Note restore invariants', () => {
 			noteBuilder({ kind: 'folder', archivedAt: testNow }),
 			noteBuilder({ id: testNoteId(2), parentId: testNoteId(), archivedAt: testNow })
 		];
-		const result = await controller.restore(testActor(), { noteId: testNoteId(2) });
+		const result = await controller.restore({ noteId: testNoteId(2) });
 		expect(result.note.parentId).toBeUndefined();
 	});
 	it('keeps a note under its parent when the folder is still active', async () => {
@@ -133,13 +139,13 @@ describe('Note restore invariants', () => {
 			noteBuilder({ kind: 'folder' }),
 			noteBuilder({ id: testNoteId(2), parentId: testNoteId(), archivedAt: testNow })
 		];
-		const result = await controller.restore(testActor(), { noteId: testNoteId(2) });
+		const result = await controller.restore({ noteId: testNoteId(2) });
 		expect(result.note.parentId).toBe(testNoteId());
 	});
 	it('does not expose another user’s trashed note', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		await expect(controller.restore(testActor(2), { noteId: testNoteId() })).rejects.toMatchObject({
+		await expect(controller.restore({ noteId: testNoteId() })).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});

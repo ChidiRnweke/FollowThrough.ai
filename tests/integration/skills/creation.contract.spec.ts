@@ -9,13 +9,13 @@ import { skillController } from './edit-harness';
 it('persists initial instructions with the generated description and returns the saved note', async () => {
 	const { owner, project } = await seedNote('21101');
 	const tx = createTransactionContext(context.db);
-	const { skill } = await skillController(tx.database, tx.transactionRunner).create(owner, {
+	const { skill } = await skillController(tx.database, tx.transactionRunner).create({
 		name: 'Reviewing changes',
 		projectId: project.id,
 		description: '',
 		instructions: 'Read the diff carefully.'
 	});
-	const stored = await new SkillRecords(context.db).findByNoteId(owner, skill.note.id);
+	const stored = await new SkillRecords(owner, context.db).findByNoteId(skill.note.id);
 	expect({
 		returned: skill.note.plainText,
 		persisted: stored?.note.plainText,
@@ -32,7 +32,7 @@ it('rolls back the candidate note and metadata when the initial description is i
 	const id = crypto.randomUUID() as NoteId;
 	const tx = createTransactionContext(context.db);
 	const result = await skillController(tx.database, tx.transactionRunner)
-		.create(owner, {
+		.create({
 			id,
 			name: 'Reviewing changes',
 			projectId: project.id,
@@ -45,7 +45,7 @@ it('rolls back the candidate note and metadata when the initial description is i
 		);
 	expect({
 		result,
-		note: await new NoteRecords(context.db).findById(owner, id),
-		skill: await new SkillRecords(context.db).findByNoteId(owner, id)
+		note: await new NoteRecords(owner, context.db).findById(id),
+		skill: await new SkillRecords(owner, context.db).findByNoteId(id)
 	}).toEqual({ result: 'failed', note: undefined, skill: undefined });
 });

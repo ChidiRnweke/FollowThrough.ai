@@ -62,11 +62,11 @@ import type { SkillPinWriter } from '$lib/server/services/skills/pins';
  * note subsystem; `get` is a pure read, while the agent-facing load also records usage.
  */
 export interface SkillsController {
-	synchronize(actor: ActorContext, input: SkillMutationRequest): Promise<WorkspaceMutationResult>;
+	synchronize(input: SkillMutationRequest): Promise<WorkspaceMutationResult>;
 	/** List the user's skills, optionally scoped to a project. */
-	list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<ListSkillsOutput>;
+	list(input?: { projectId?: ProjectId }): Promise<ListSkillsOutput>;
 	/** Load a skill and its usage counts for the editor view. Read-only. */
-	get(actor: ActorContext, input: GetSkillViewInput): Promise<SkillView<Note>>;
+	get(input: GetSkillViewInput): Promise<SkillView<Note>>;
 	/**
 	 * Load a skill to apply it, with its instructions as Markdown, and record that it was used.
 	 *
@@ -74,16 +74,13 @@ export interface SkillsController {
 	 * record linking the skill to the note it was applied against, which is what makes
 	 * "which skills actually get used" observable later.
 	 */
-	use(actor: ActorContext, input: LoadSkillInput): Promise<SkillInstructions>;
+	use(input: LoadSkillInput): Promise<SkillInstructions>;
 	/**
 	 * Create a new skill backed by a fresh note, in one transaction.
 	 *
 	 * @throws ProjectChoiceRequiredError if the request names no project.
 	 */
-	create(
-		actor: ActorContext,
-		input: WithProjectChoice<CreateSkillInput>
-	): Promise<CreateSkillOutput<Note>>;
+	create(input: WithProjectChoice<CreateSkillInput>): Promise<CreateSkillOutput<Note>>;
 	/**
 	 * Create a skill distilled from a text selection.
 	 *
@@ -91,17 +88,16 @@ export interface SkillsController {
 	 * traceable lineage back to the content it was extracted from.
 	 */
 	createFromSelection(
-		actor: ActorContext,
 		input: CreateSkillFromSelectionInput
 	): Promise<CreateSkillFromSelectionOutput>;
 	/** List the revision history of a skill's underlying note. */
-	listVersions(actor: ActorContext, input: GetSkillViewInput): Promise<readonly NoteRevision[]>;
+	listVersions(input: GetSkillViewInput): Promise<readonly NoteRevision[]>;
 	/** Restore a skill to an earlier revision, in one transaction. */
-	restoreVersion(actor: ActorContext, input: RestoreSkillVersionInput): Promise<SkillView<Note>>;
+	restoreVersion(input: RestoreSkillVersionInput): Promise<SkillView<Note>>;
 	/** Edit a skill's content, returning the refreshed view with its usage counts. */
-	update(actor: ActorContext, input: SkillEditInput): Promise<SkillView<Note>>;
+	update(input: SkillEditInput): Promise<SkillView<Note>>;
 	/** Pin or unpin a skill within a project so it is offered before unpinned ones. */
-	setPinned(actor: ActorContext, input: SkillPinChange): Promise<void>;
+	setPinned(input: SkillPinChange): Promise<void>;
 }
 /** Everything the {@link SkillsController} needs, injected so it can be built and tested without real stores. */
 export interface SkillsDependencies {
@@ -135,22 +131,19 @@ export interface SkillsDependencies {
 	transactionRunner: TransactionRunner;
 }
 export class Skills implements SkillsController {
-	async synchronize(
-		actor: ActorContext,
-		input: SkillMutationRequest
-	): Promise<WorkspaceMutationResult> {
+	async synchronize(input: SkillMutationRequest): Promise<WorkspaceMutationResult> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					await this.dependencies.skillEditor.lockCatalog(actor);
+					await this.dependencies.skillEditor.lockCatalog();
 					const target = this.workspaceCommandRules.mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, {
+					const prepared = await this.dependencies.syncMutations.prepare(input, {
 						identity: target,
 						key: this.workspaceCommandRules.workspaceResourceKey(target)
 					});
 					if (prepared.kind === 'finished') return prepared.result;
-					await this.applySynchronizedCommand(actor, input);
-					return this.dependencies.syncMutations.complete(actor, input, target);
+					await this.applySynchronizedCommand(input);
+					return this.dependencies.syncMutations.complete(input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);
@@ -160,15 +153,12 @@ export class Skills implements SkillsController {
 		}
 	}
 
-	private async applySynchronizedCommand(
-		actor: ActorContext,
-		input: SkillMutationRequest
-	): Promise<void> {
+	private async applySynchronizedCommand(input: SkillMutationRequest): Promise<void> {
 		const command = input.command;
 
 		switch (command.kind) {
 			case 'updateSkill':
-				await this.update(actor, command);
+				await this.update(command);
 				break;
 		}
 	}
@@ -177,36 +167,34 @@ export class Skills implements SkillsController {
 		private readonly workspaceCommandRules: WorkspaceCommandRules,
 		private readonly dependencies: SkillsDependencies
 	) {}
-	async list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<ListSkillsOutput> {
-		await this.dependencies.transactionRunner.run(() =>
-			this.dependencies.builtInSkills.ensure(actor)
-		);
-		return { skills: await this.dependencies.skillFinder.listAll(actor, input?.projectId) };
+	async list(input?: { projectId?: ProjectId }): Promise<ListSkillsOutput> {
+		await this.dependencies.transactionRunner.run(() => this.dependencies.builtInSkills.ensure());
+		return { skills: await this.dependencies.skillFinder.listAll(input?.projectId) };
 	}
-	async get(actor: ActorContext, input: GetSkillViewInput): Promise<SkillView<Note>> {
+	async get(input: GetSkillViewInput): Promise<SkillView<Note>> {
 		const [skill, usages] = await Promise.all([
-			this.dependencies.skillFinder.load(actor, input.noteId),
-			this.dependencies.skillUsageLister.list(actor, input.noteId)
+			this.dependencies.skillFinder.load(input.noteId),
+			this.dependencies.skillUsageLister.list(input.noteId)
 		]);
 		return { skill, usages };
 	}
-	async use(actor: ActorContext, input: LoadSkillInput): Promise<SkillInstructions> {
+	async use(input: LoadSkillInput): Promise<SkillInstructions> {
 		const view = await this.dependencies.transactionRunner.run(async () => {
-			const skill = await this.dependencies.skillFinder.load(actor, input.noteId);
-			await this.dependencies.skillUsageRecorder.record(actor, {
+			const skill = await this.dependencies.skillFinder.load(input.noteId);
+			await this.dependencies.skillUsageRecorder.record({
 				skillNoteId: input.noteId,
 				contextNoteId: input.contextNoteId,
 				provenanceId: input.provenanceId
 			});
 			return {
 				skill,
-				usages: await this.dependencies.skillUsageLister.list(actor, input.noteId)
+				usages: await this.dependencies.skillUsageLister.list(input.noteId)
 			};
 		});
 		return { view, instructions: this.dependencies.markdown.write(view.skill.note.document) };
 	}
-	private async createSkillNote(actor: ActorContext, input: CreateNoteInput): Promise<Note> {
-		const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
+	private async createSkillNote(input: CreateNoteInput): Promise<Note> {
+		const facts = await this.dependencies.noteCreation.creationFacts(input);
 		const decision = this.dependencies.noteCreationRules.decideCreation(
 			{
 				id: input.id ?? (crypto.randomUUID() as NoteId),
@@ -221,35 +209,32 @@ export class Skills implements SkillsController {
 			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
 			throw new ValidationError(decision.message);
 		}
-		return this.dependencies.noteCreation.insert(actor, decision.note);
+		return this.dependencies.noteCreation.insert(decision.note);
 	}
 
-	async create(
-		actor: ActorContext,
-		input: WithProjectChoice<CreateSkillInput>
-	): Promise<CreateSkillOutput<Note>> {
+	async create(input: WithProjectChoice<CreateSkillInput>): Promise<CreateSkillOutput<Note>> {
 		const projectId =
 			input.projectId ??
 			this.dependencies.projectChoice.requireChoice(
-				await this.dependencies.projectLister.list(actor),
+				await this.dependencies.projectLister.list(),
 				'create a skill'
 			);
 		return this.dependencies.transactionRunner.run(async () => {
-			await this.dependencies.skillCreator.lockCatalog(actor);
-			const note = await this.createSkillNote(actor, {
+			await this.dependencies.skillCreator.lockCatalog();
+			const note = await this.createSkillNote({
 				id: input.id,
 				title: input.name,
 				projectId,
 				parentId: input.parentId
 			});
-			const skill = await this.dependencies.skillCreator.create(actor, note, {
+			const skill = await this.dependencies.skillCreator.create(note, {
 				name: input.name,
 				description: input.description ?? '',
 				triggerHints: input.triggerHints ?? []
 			});
 			if (input.instructions === undefined) return { skill };
 			const text = input.instructions.trimEnd();
-			const saved = await this.saveDocument(actor, {
+			const saved = await this.saveDocument({
 				...note,
 				document: {
 					type: 'doc',
@@ -261,25 +246,24 @@ export class Skills implements SkillsController {
 		});
 	}
 	createFromSelection(
-		actor: ActorContext,
 		input: CreateSkillFromSelectionInput
 	): Promise<CreateSkillFromSelectionOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			await this.dependencies.skillCreator.lockCatalog(actor);
-			const sourceNote = await this.dependencies.selectionOrigins.validate(actor, input.selection);
+			await this.dependencies.skillCreator.lockCatalog();
+			const sourceNote = await this.dependencies.selectionOrigins.validate(input.selection);
 			// Acquire the project lock before inserting an anchor that locks its source note's FK.
-			const created = await this.createSkillNote(actor, {
+			const created = await this.createSkillNote({
 				title: input.name,
 				projectId: sourceNote.projectId,
 				parentId: sourceNote.parentId
 			});
-			const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
-			await this.dependencies.selectionOrigins.record(actor, source, {
+			const source = await this.dependencies.selectionOrigins.resolve(input.selection);
+			await this.dependencies.selectionOrigins.record(source, {
 				producerKind: 'user',
 				producerName: 'Create Skill From Selection',
 				metadata: {}
 			});
-			const note = await this.saveDocument(actor, {
+			const note = await this.saveDocument({
 				...created,
 				document: {
 					type: 'doc',
@@ -287,57 +271,46 @@ export class Skills implements SkillsController {
 				},
 				plainText: input.selection.text
 			});
-			const skill = await this.dependencies.skillCreator.create(actor, note, input);
+			const skill = await this.dependencies.skillCreator.create(note, input);
 
 			return { skillNoteId: skill.note.id };
 		});
 	}
-	async listVersions(
-		actor: ActorContext,
-		input: GetSkillViewInput
-	): Promise<readonly NoteRevision[]> {
-		await this.dependencies.skillFinder.load(actor, input.noteId);
-		return this.dependencies.revisionReader.revisions(actor, input.noteId);
+	async listVersions(input: GetSkillViewInput): Promise<readonly NoteRevision[]> {
+		await this.dependencies.skillFinder.load(input.noteId);
+		return this.dependencies.revisionReader.revisions(input.noteId);
 	}
-	async restoreVersion(
-		actor: ActorContext,
-		input: RestoreSkillVersionInput
-	): Promise<SkillView<Note>> {
+	async restoreVersion(input: RestoreSkillVersionInput): Promise<SkillView<Note>> {
 		const skill = await this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.skillEditor.getForEdit(actor, input.noteId);
-			const snapshot = (await this.dependencies.revisionReader.revisions(actor, input.noteId)).find(
+			const current = await this.dependencies.skillEditor.getForEdit(input.noteId);
+			const snapshot = (await this.dependencies.revisionReader.revisions(input.noteId)).find(
 				(item) => item.revision === input.revision
 			);
 			if (!snapshot) throw new NotFoundError('Skill version was not found');
-			const note = await this.saveDocument(actor, {
+			const note = await this.saveDocument({
 				...current.note,
 				title: snapshot.title,
 				document: snapshot.document,
 				plainText: snapshot.plainText
 			});
-			await this.dependencies.attachmentRestorer.restoreAttachments(
-				actor,
-				input.noteId,
-				snapshot.id
-			);
-			await this.dependencies.revisionRecorder.record(actor, note);
-			return this.dependencies.skillEditor.commitEdit(actor, {
+			await this.dependencies.attachmentRestorer.restoreAttachments(input.noteId, snapshot.id);
+			await this.dependencies.revisionRecorder.record(note);
+			return this.dependencies.skillEditor.commitEdit({
 				...current,
 				note
 			});
 		});
 		return {
 			skill,
-			usages: await this.dependencies.skillUsageLister.list(actor, input.noteId)
+			usages: await this.dependencies.skillUsageLister.list(input.noteId)
 		};
 	}
-	async update(actor: ActorContext, input: SkillEditInput): Promise<SkillView<Note>> {
+	async update(input: SkillEditInput): Promise<SkillView<Note>> {
 		const skill = await this.dependencies.transactionRunner.run(async () => {
-			await this.dependencies.skillEditor.lockCatalog(actor);
-			const current = await this.dependencies.skillEditor.getForEdit(actor, input.noteId);
+			await this.dependencies.skillEditor.lockCatalog();
+			const current = await this.dependencies.skillEditor.getForEdit(input.noteId);
 			const metadata = this.dependencies.skillMetadataEditing.edit(current, input);
 			const prepared = await this.dependencies.skillEditor.prepareEdit(
-				actor,
 				{ ...current, ...metadata },
 				input
 			);
@@ -352,14 +325,14 @@ export class Skills implements SkillsController {
 			}
 			const note =
 				prepared.kind !== 'metadata'
-					? await this.saveDocument(actor, prepared.skill.note)
+					? await this.saveDocument(prepared.skill.note)
 					: prepared.skill.note;
-			return this.dependencies.skillEditor.commitEdit(actor, { ...prepared.skill, note });
+			return this.dependencies.skillEditor.commitEdit({ ...prepared.skill, note });
 		});
-		return { skill, usages: await this.dependencies.skillUsageLister.list(actor, input.noteId) };
+		return { skill, usages: await this.dependencies.skillUsageLister.list(input.noteId) };
 	}
-	private async saveDocument(actor: ActorContext, candidate: Note): Promise<Note> {
-		const current = await this.dependencies.noteEditor.getForEdit(actor, candidate);
+	private async saveDocument(candidate: Note): Promise<Note> {
+		const current = await this.dependencies.noteEditor.getForEdit(candidate);
 		const decision = this.dependencies.noteEditingRules.prepareSave(
 			current,
 			candidate,
@@ -368,21 +341,20 @@ export class Skills implements SkillsController {
 		const note =
 			decision.kind === 'unchanged'
 				? decision.note
-				: await this.dependencies.noteEditor.persistEdit(actor, decision.write);
-		await this.dependencies.anchorRepairer.repairForNote(actor, note);
+				: await this.dependencies.noteEditor.persistEdit(decision.write);
+		await this.dependencies.anchorRepairer.repairForNote(note);
 		await this.dependencies.noteLinkReconciler.reconcile(
-			actor,
 			note,
 			this.dependencies.noteReferences.links(note.document)
 		);
-		await this.dependencies.noteIndexer.indexNote(actor, note);
+		await this.dependencies.noteIndexer.indexNote(note);
 		return note;
 	}
 
-	setPinned(actor: ActorContext, input: SkillPinChange): Promise<void> {
+	setPinned(input: SkillPinChange): Promise<void> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const change = await this.dependencies.skillPinWriter.prepare(actor, input);
-			await this.dependencies.skillPinWriter.persist(actor, change);
+			const change = await this.dependencies.skillPinWriter.prepare(input);
+			await this.dependencies.skillPinWriter.persist(change);
 		});
 	}
 }

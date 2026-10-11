@@ -7,7 +7,7 @@ it('rejects a traversal path before creating an attachment upload', async () => 
 	const note = noteBuilder();
 	notes.notes.push(note);
 	await expect(
-		uploads.initiate(testActor(), {
+		uploads.initiate({
 			noteId: note.id,
 			path: '../secret.txt',
 			mediaType: 'text/plain',

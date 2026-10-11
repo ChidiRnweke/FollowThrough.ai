@@ -14,9 +14,9 @@ it('retains the selected body and version when a writer commits before the body 
 	const workspace = workspacePullFixture(reader.db);
 	let pulling: Promise<SyncPage<WorkspaceRecord>> | undefined;
 	try {
-		const initial = await workspace.pullChangePage(owner, initialSyncCursor);
+		const initial = await workspace.pullChangePage(initialSyncCursor);
 		await context.client`update notes set title = 'Selected body' where id = ${note.id}`;
-		const selected = await workspace.pullChangePage(owner, initial.cursor);
+		const selected = await workspace.pullChangePage(initial.cursor);
 		const [version] = await context.client<{ version: string }[]>`
 			select version::text from workspace_sync_versions where resource_type = 'notes'
 			and resource_id = jsonb_build_array(${note.id}::text)`;
@@ -26,7 +26,7 @@ it('retains the selected body and version when a writer commits before the body 
 		await writer.client`begin`;
 		await writer.client`lock table notes in access exclusive mode`;
 		await writer.client`update notes set title = 'Committed during pull' where id = ${note.id}`;
-		pulling = workspace.pullChangePage(owner, initial.cursor);
+		pulling = workspace.pullChangePage(initial.cursor);
 		// Journal selection does not lock notes. This wait proves the pull has reached its body read.
 		await vi.waitFor(
 			async () => {
@@ -40,7 +40,7 @@ it('retains the selected body and version when a writer commits before the body 
 		);
 		await writer.client`commit`;
 		const during = await pulling;
-		const after = await workspace.pullChangePage(owner, during.cursor);
+		const after = await workspace.pullChangePage(during.cursor);
 		expect({ during, after }).toEqual({
 			during: selected,
 			after: {

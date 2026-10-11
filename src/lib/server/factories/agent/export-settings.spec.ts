@@ -44,6 +44,6 @@ describe('agent export settings', () => {
 		await directTool(tool)
 			.prepare({ projectId: testProjectId(), ...settings })
 			.execute();
-		expect(await service.getExportSettings(testActor(), testProjectId())).toEqual(settings);
+		expect(await service.getExportSettings(testProjectId())).toEqual(settings);
 	});
 });

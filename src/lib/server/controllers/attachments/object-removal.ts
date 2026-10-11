@@ -1,6 +1,6 @@
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
-import type { AttachmentCleanup } from '$lib/server/services/attachments/records';
+import type { AttachmentBacklog } from '$lib/server/services/attachments/records';
 
 /** Only committed queue entries are visible; storage removal is idempotent. */
 export class AttachmentObjectRemoval implements ScheduledTask {
@@ -8,7 +8,7 @@ export class AttachmentObjectRemoval implements ScheduledTask {
 	readonly intervalMs = 60_000;
 	constructor(
 		private readonly repository: Pick<
-			AttachmentCleanup,
+			AttachmentBacklog,
 			'listPendingObjectRemovals' | 'completeObjectRemoval'
 		>,
 		private readonly storage: Pick<IAttachmentStorage, 'remove'>

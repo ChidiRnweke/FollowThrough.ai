@@ -27,10 +27,11 @@ import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const content = new InMemoryNoteContent();
-	const projects = new InMemoryProjects();
-	const preferences = new InMemoryUserPreferencesRepository();
+	const content = new InMemoryNoteContent(testActor());
+	const projects = new InMemoryProjects(testActor());
+	const preferences = new InMemoryUserPreferencesRepository(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -70,7 +71,7 @@ describe('Setting section numbering on a note', () => {
 	it('pins an explicit choice on the note', async () => {
 		const { content, projects, controller } = setup();
 		const note = seed(content, projects);
-		const output = await controller.setSectionNumbering(testActor(), {
+		const output = await controller.setSectionNumbering({
 			noteId: note.id,
 			enabled: true
 		});
@@ -80,7 +81,7 @@ describe('Setting section numbering on a note', () => {
 	it('persists the override on the note itself', async () => {
 		const { content, projects, controller } = setup();
 		const note = seed(content, projects);
-		await controller.setSectionNumbering(testActor(), { noteId: note.id, enabled: false });
+		await controller.setSectionNumbering({ noteId: note.id, enabled: false });
 		expect(content.notes[0]?.sectionNumbering).toBe(false);
 	});
 
@@ -88,16 +89,16 @@ describe('Setting section numbering on a note', () => {
 		const { content, projects, controller } = setup();
 		const note = seed(content, projects);
 		projects.projects = [{ ...projects.projects[0]!, sectionNumberingDefault: true }];
-		await controller.setSectionNumbering(testActor(), { noteId: note.id, enabled: false });
-		const output = await controller.setSectionNumbering(testActor(), { noteId: note.id });
+		await controller.setSectionNumbering({ noteId: note.id, enabled: false });
+		const output = await controller.setSectionNumbering({ noteId: note.id });
 		expect(output.sectionNumbering.effective).toBe(true);
 	});
 
 	it('reports what an inheriting note falls back to', async () => {
 		const { content, projects, preferences, controller } = setup();
 		const note = seed(content, projects);
-		await preferences.update(testActor(), { sectionNumberingDefault: true });
-		const output = await controller.setSectionNumbering(testActor(), { noteId: note.id });
+		await preferences.update({ sectionNumberingDefault: true });
+		const output = await controller.setSectionNumbering({ noteId: note.id });
 		expect(output.sectionNumbering.inherited).toBe(true);
 	});
 });

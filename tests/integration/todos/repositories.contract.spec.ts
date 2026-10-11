@@ -7,7 +7,7 @@ import { actor, context, now, seedNote } from '../database-harness';
 describe('Postgres todo repository invariants', () => {
 	it('does not reveal a todo to another actor', async () => {
 		const { owner, project } = await seedNote('21');
-		const repository = new TodoRecords(context.db);
+		const repository = new TodoRecords(owner, context.db);
 		const todo = {
 			id: '50000000-0000-4000-8000-000000000021' as TodoId,
 			userId: owner.userId,
@@ -18,38 +18,35 @@ describe('Postgres todo repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		};
-		await repository.insert(owner, todo);
-		expect(await repository.findById(actor('22'), todo.id)).toBeUndefined();
+		await repository.insert(todo);
+		expect(await repository.findById(todo.id)).toBeUndefined();
 	});
 	it('does not list another actor’s todos', async () => {
 		const { owner, project } = await seedNote('63');
-		const repository = new TodoRecords(context.db);
+		const repository = new TodoRecords(owner, context.db);
 		await repository.insert(
-			owner,
 			todoBuilder({ id: testTodoId(6301), userId: owner.userId, projectId: project.id })
 		);
-		expect(await repository.list(actor('64'), {})).toEqual([]);
+		expect(await repository.list({})).toEqual([]);
 	});
 	it('lists only todos in the selected project', async () => {
 		const { owner, project } = await seedNote('61');
 		const other = await seedNote('62', owner);
-		const repository = new TodoRecords(context.db);
+		const repository = new TodoRecords(owner, context.db);
 		const selected = await repository.insert(
-			owner,
 			todoBuilder({ id: testTodoId(6101), userId: owner.userId, projectId: project.id })
 		);
 		await repository.insert(
-			owner,
 			todoBuilder({ id: testTodoId(6201), userId: owner.userId, projectId: other.project.id })
 		);
-		expect(
-			(await repository.list(owner, { projectId: project.id })).map((todo) => todo.id)
-		).toEqual([selected.id]);
+		expect((await repository.list({ projectId: project.id })).map((todo) => todo.id)).toEqual([
+			selected.id
+		]);
 	});
 	it('makes a status update visible through filtered listing', async () => {
 		const { owner, project } = await seedNote('45');
-		const repository = new TodoRecords(context.db);
-		const todo = await repository.insert(owner, {
+		const repository = new TodoRecords(owner, context.db);
+		const todo = await repository.insert({
 			id: '50000000-0000-4000-8000-000000000045' as TodoId,
 			userId: owner.userId,
 			projectId: project.id,
@@ -59,15 +56,13 @@ describe('Postgres todo repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		await repository.update(owner, { ...todo, status: 'done', completedAt: now });
-		expect((await repository.list(owner, { status: 'done' })).map((item) => item.id)).toEqual([
-			todo.id
-		]);
+		await repository.update({ ...todo, status: 'done', completedAt: now });
+		expect((await repository.list({ status: 'done' })).map((item) => item.id)).toEqual([todo.id]);
 	});
 	it('hides todos from an archived project', async () => {
 		const { owner, project } = await seedNote('46');
-		const repository = new TodoRecords(context.db);
-		await repository.insert(owner, {
+		const repository = new TodoRecords(owner, context.db);
+		await repository.insert({
 			id: '50000000-0000-4000-8000-000000000046' as TodoId,
 			userId: owner.userId,
 			projectId: project.id,
@@ -77,12 +72,12 @@ describe('Postgres todo repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		await new ProjectRecords(context.db).archive(owner, project.id);
-		expect(await repository.list(owner, {})).toEqual([]);
+		await new ProjectRecords(owner, context.db).archive(project.id);
+		expect(await repository.list({})).toEqual([]);
 	});
 	it('filters todos by category', async () => {
 		const { owner, project } = await seedNote('51');
-		const repository = new TodoRecords(context.db);
+		const repository = new TodoRecords(owner, context.db);
 		const base = {
 			userId: owner.userId,
 			projectId: project.id,
@@ -91,24 +86,24 @@ describe('Postgres todo repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		};
-		const match = await repository.insert(owner, {
+		const match = await repository.insert({
 			...base,
 			id: '50000000-0000-4000-8000-000000000051' as TodoId,
 			title: 'Client task',
 			category: 'Client work'
 		});
-		await repository.insert(owner, {
+		await repository.insert({
 			...base,
 			id: '50000000-0000-4000-8000-000000000052' as TodoId,
 			title: 'Release task',
 			category: 'Release 2.0'
 		});
-		const listed = await repository.list(owner, { category: 'Client work' });
+		const listed = await repository.list({ category: 'Client work' });
 		expect(listed.map((item) => item.id)).toEqual([match.id]);
 	});
 	it('lists distinct sorted categories', async () => {
 		const { owner, project } = await seedNote('53');
-		const repository = new TodoRecords(context.db);
+		const repository = new TodoRecords(owner, context.db);
 		const base = {
 			userId: owner.userId,
 			projectId: project.id,
@@ -117,35 +112,35 @@ describe('Postgres todo repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		};
-		await repository.insert(owner, {
+		await repository.insert({
 			...base,
 			id: '50000000-0000-4000-8000-000000000053' as TodoId,
 			title: 'One',
 			category: 'Release 2.0'
 		});
-		await repository.insert(owner, {
+		await repository.insert({
 			...base,
 			id: '50000000-0000-4000-8000-000000000054' as TodoId,
 			title: 'Two',
 			category: 'Client work'
 		});
-		await repository.insert(owner, {
+		await repository.insert({
 			...base,
 			id: '50000000-0000-4000-8000-000000000055' as TodoId,
 			title: 'Three',
 			category: 'Client work'
 		});
-		await repository.insert(owner, {
+		await repository.insert({
 			...base,
 			id: '50000000-0000-4000-8000-000000000056' as TodoId,
 			title: 'Uncategorised'
 		});
-		expect(await repository.listCategories(owner)).toEqual(['Client work', 'Release 2.0']);
+		expect(await repository.listCategories()).toEqual(['Client work', 'Release 2.0']);
 	});
 	it('does not leak categories to another actor', async () => {
 		const { owner, project } = await seedNote('57');
-		const repository = new TodoRecords(context.db);
-		await repository.insert(owner, {
+		const repository = new TodoRecords(owner, context.db);
+		await repository.insert({
 			id: '50000000-0000-4000-8000-000000000057' as TodoId,
 			userId: owner.userId,
 			projectId: project.id,
@@ -156,12 +151,12 @@ describe('Postgres todo repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		expect(await repository.listCategories(actor('58'))).toEqual([]);
+		expect(await repository.listCategories()).toEqual([]);
 	});
 	it('sets a category then clears it when the next update omits it', async () => {
 		const { owner, project } = await seedNote('59');
-		const repository = new TodoRecords(context.db);
-		const todo = await repository.insert(owner, {
+		const repository = new TodoRecords(owner, context.db);
+		const todo = await repository.insert({
 			id: '50000000-0000-4000-8000-000000000059' as TodoId,
 			userId: owner.userId,
 			projectId: project.id,
@@ -171,11 +166,11 @@ describe('Postgres todo repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		await repository.update(owner, { ...todo, category: 'Client work' });
-		const afterSet = (await repository.findById(owner, todo.id))?.category;
+		await repository.update({ ...todo, category: 'Client work' });
+		const afterSet = (await repository.findById(todo.id))?.category;
 		const { category: _cleared, ...withoutCategory } = todo;
-		await repository.update(owner, withoutCategory);
-		const afterOmission = (await repository.findById(owner, todo.id))?.category;
+		await repository.update(withoutCategory);
+		const afterOmission = (await repository.findById(todo.id))?.category;
 		expect({ afterSet, afterOmission }).toEqual({
 			afterSet: 'Client work',
 			afterOmission: undefined

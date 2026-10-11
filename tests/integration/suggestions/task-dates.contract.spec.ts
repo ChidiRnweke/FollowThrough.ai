@@ -9,8 +9,8 @@ import { context, now, seedNote, seedProvenance } from '../database-harness';
 const setup = async (suffix: string) => {
 	const { owner, note, project } = await seedNote(suffix);
 	const provenance = await seedProvenance(owner, suffix);
-	const repository = new SuggestionRecords(context.db);
-	const proposal = await repository.insert(owner, {
+	const repository = new SuggestionRecords(owner, context.db);
+	const proposal = await repository.insert({
 		id: crypto.randomUUID() as SuggestionId,
 		userId: owner.userId,
 		noteId: note.id,
@@ -32,7 +32,7 @@ const setup = async (suffix: string) => {
 
 it('marks an older malformed task date unreadable without losing a valid neighboring proposal', async () => {
 	const { owner, proposal, repository } = await setup('21801');
-	const valid = await repository.insert(owner, {
+	const valid = await repository.insert({
 		...proposal,
 		id: crypto.randomUUID() as SuggestionId
 	});
@@ -42,7 +42,7 @@ it('marks an older malformed task date unreadable without losing a valid neighbo
 			payload: sql`jsonb_set(${suggestions.payload}, '{dueDate}', to_jsonb(${'2026-02-30'}::text))`
 		})
 		.where(eq(suggestions.id, proposal.id));
-	const listed = await repository.list(owner, { status: 'proposed' });
+	const listed = await repository.list({ status: 'proposed' });
 	expect(
 		listed.map((entry) => ({
 			id: entry.status === 'readable' ? entry.suggestion.id : entry.id,
@@ -64,12 +64,12 @@ it('refuses a malformed stored task date on the read used for acceptance', async
 			payload: sql`jsonb_set(${suggestions.payload}, '{dueDate}', to_jsonb(${'tomorrow'}::text))`
 		})
 		.where(eq(suggestions.id, proposal.id));
-	await expect(repository.findById(owner, proposal.id)).rejects.toThrow();
+	await expect(repository.findById(proposal.id)).rejects.toThrow();
 });
 
 it('round-trips a valid leap-day task proposal', async () => {
 	const { owner, proposal, repository } = await setup('21803');
-	expect((await repository.findById(owner, proposal.id))?.payload).toMatchObject({
+	expect((await repository.findById(proposal.id))?.payload).toMatchObject({
 		dueDate: '2028-02-29'
 	});
 });

@@ -18,7 +18,7 @@ const text =
 
 describe('complete attachment search', () => {
 	it('makes text beyond fifty chunks available to literal search before embedding', async () => {
-		const repository = new InMemorySearchRepository();
+		const repository = new InMemorySearchRepository(testActor());
 		const batchTokens: number[] = [];
 		const transport: typeof globalThis.fetch = async (_url, init) => {
 			const contents: string[] = JSON.parse(String(init?.body)).input;
@@ -35,8 +35,8 @@ describe('complete attachment search', () => {
 		await createContentIndex(repository, client.model, {
 			targetTokens: 700,
 			overlapTokens: 50
-		}).indexAttachment(testActor(), attachment, text);
-		const matches = await repository.search(testActor(), 'amberfalcon', 10);
+		}).indexAttachment(attachment, text);
+		const matches = await repository.search('amberfalcon', 10);
 		const literalMatch = matches.map(({ document }) => ({
 			beyondOldLimit: document.chunkIndex >= 50,
 			path: document.attachmentPath

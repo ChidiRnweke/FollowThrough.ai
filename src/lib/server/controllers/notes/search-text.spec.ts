@@ -29,8 +29,9 @@ import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 
 const setup = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	const controller = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -76,7 +77,7 @@ describe('Searching note text', () => {
 	it('finds content matches with their offsets', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('ship it, then ship it again')];
-		const result = await controller.searchText(testActor(), search);
+		const result = await controller.searchText(search);
 		expect(result.hits[0]?.matches).toMatchObject([
 			{ start: 0, end: 4, text: 'ship' },
 			{ start: 14, end: 18, text: 'ship' }
@@ -94,7 +95,7 @@ describe('Searching note text', () => {
 	it('finds title matches alongside content matches', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('nothing here', { title: 'Ship log' })];
-		const result = await controller.searchText(testActor(), search);
+		const result = await controller.searchText(search);
 		expect(result.hits[0]?.titleMatches).toEqual([{ start: 0, end: 4, text: 'Ship' }]);
 	});
 
@@ -104,7 +105,7 @@ describe('Searching note text', () => {
 			noteWithText('ship alpha'),
 			noteWithText('ship beta', { id: testNoteId(2), projectId: testProjectId(2) })
 		];
-		const result = await controller.searchText(testActor(), {
+		const result = await controller.searchText({
 			...search,
 			projectId: testProjectId(2)
 		});
@@ -114,21 +115,21 @@ describe('Searching note text', () => {
 	it('excludes archived notes', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('ship it', { archivedAt: testNow })];
-		const result = await controller.searchText(testActor(), search);
+		const result = await controller.searchText(search);
 		expect(result.hits).toEqual([]);
 	});
 
 	it('rejects an invalid regex before reading anything', async () => {
 		const { controller } = setup();
 		await expect(
-			controller.searchText(testActor(), { query: '([', regex: true, caseSensitive: false })
+			controller.searchText({ query: '([', regex: true, caseSensitive: false })
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
 	it('rejects an empty query', async () => {
 		const { controller } = setup();
 		await expect(
-			controller.searchText(testActor(), { query: '', regex: false, caseSensitive: false })
+			controller.searchText({ query: '', regex: false, caseSensitive: false })
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 });
@@ -143,9 +144,7 @@ describe('Replacing note text', () => {
 		];
 		content.notes = original;
 		content.failIndexFor.add(testNoteId(2));
-		await controller
-			.replaceText(testActor(), { ...replace, query: 'deploy' })
-			.catch(() => undefined);
+		await controller.replaceText({ ...replace, query: 'deploy' }).catch(() => undefined);
 		expect({ notes: content.notes, indexed: content.indexedNoteIds }).toEqual({
 			notes: original,
 			indexed: []
@@ -158,14 +157,14 @@ describe('Replacing note text', () => {
 			noteWithText('deploy alpha'),
 			noteWithText('deploy beta', { id: testNoteId(2) })
 		];
-		await controller.replaceText(testActor(), { ...replace, query: 'deploy' });
+		await controller.replaceText({ ...replace, query: 'deploy' });
 		expect(content.notes.map((note) => note.plainText)).toEqual(['ship alpha', 'ship beta']);
 	});
 
 	it('reports how many notes and matches it replaced', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('deploy and deploy')];
-		const result = await controller.replaceText(testActor(), { ...replace, query: 'deploy' });
+		const result = await controller.replaceText({ ...replace, query: 'deploy' });
 		expect(result).toEqual({ replacedNotes: 1, replacedMatches: 2 });
 	});
 
@@ -175,7 +174,7 @@ describe('Replacing note text', () => {
 			noteWithText('deploy alpha'),
 			noteWithText('deploy beta', { id: testNoteId(2) })
 		];
-		await controller.replaceText(testActor(), {
+		await controller.replaceText({
 			...replace,
 			query: 'deploy',
 			noteIds: [testNoteId(2)]
@@ -186,14 +185,14 @@ describe('Replacing note text', () => {
 	it('leaves notes whose only match is the title untouched', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('nothing here', { title: 'Ship log' })];
-		const result = await controller.replaceText(testActor(), replace);
+		const result = await controller.replaceText(replace);
 		expect(result).toEqual({ replacedNotes: 0, replacedMatches: 0 });
 	});
 
 	it('saves through the regular path so the note is re-indexed', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('deploy alpha')];
-		await controller.replaceText(testActor(), { ...replace, query: 'deploy' });
+		await controller.replaceText({ ...replace, query: 'deploy' });
 		expect(content.indexedNoteIds).toEqual([testNoteId()]);
 	});
 
@@ -201,7 +200,7 @@ describe('Replacing note text', () => {
 		const { content, controller } = setup();
 		content.notes = [noteWithText('deploy alpha')];
 		await expect(
-			controller.replaceText(testActor(), {
+			controller.replaceText({
 				query: '([',
 				regex: true,
 				caseSensitive: false,

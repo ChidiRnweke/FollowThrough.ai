@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { AgentFileReferenceService } from '$lib/server/services/agent-files/virtual-files';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -39,15 +40,15 @@ import { noteBuilder, testNow } from '$lib/testing/workspace/fixtures/domain-bui
 
 /** Exercises context preparation through an executable run, including durable failures. */
 export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies> = {}) => {
-	const notes = new InMemoryNoteContent();
+	const notes = new InMemoryNoteContent(testActor());
 	notes.notes = [noteBuilder()];
 	const skills = new InMemorySkills();
 	const resources = new InMemoryContextResources();
-	const projects = new InMemoryProjects();
-	const memory = new InMemoryMemoryEntryRepository();
-	const conversations = new InMemoryConversationRepository();
-	const journal = new ConversationArchive(conversations);
-	const runs = new InMemoryAgentRunPersistence();
+	const projects = new InMemoryProjects(testActor());
+	const memory = new InMemoryMemoryEntryRepository(testActor());
+	const conversations = new InMemoryConversationRepository(testActor());
+	const journal = new ConversationArchive(testActor(), conversations);
+	const runs = new InMemoryAgentRunPersistence(testActor());
 	const turns = new InMemoryAgentTurns();
 	const sessions = new InMemoryAgentSessionRepository();
 	const transactions = new InMemoryTransactionRunner([runs, sessions, conversations]);
@@ -74,17 +75,18 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 		contextProjects: projects,
 		contextMemory: memory,
 		conversationSessions: journal,
-		provenance: new InMemoryProvenanceRecorder(),
+		provenance: new InMemoryProvenanceRecorder(testActor()),
 		conversationMessages: journal,
 		toolActivity: new ToolActivityProjection(),
 		traceContext: { activeTraceparent: () => undefined },
 		...harnessTurnDependencies(
 			turns,
-			new ConversationHistoryService(sessions, new InMemoryAgentFiles(), testTokenizer)
+			new ConversationHistoryService(sessions, new InMemoryAgentFiles(testActor()), testTokenizer)
 		),
 		runSignals: new RunSignalService(runs, runs)
 	};
 	const controller = new AgentSdkHarness(
+		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...dependencies,
@@ -100,14 +102,14 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 			parked: AgentRun['pendingDecisions'] = [],
 			signal: AbortSignal = new AbortController().signal
 		) {
-			if (!(await conversations.findById(actor, input.conversationId))) {
-				const conversation = await journal.createWorkflow(actor, { title: 'Context preparation' });
+			if (!(await conversations.findById(input.conversationId))) {
+				const conversation = await journal.createWorkflow({ title: 'Context preparation' });
 				conversations.conversations = conversations.conversations.map((value) =>
 					value.id === conversation.id ? { ...value, id: input.conversationId } : value
 				);
 			}
 			const id = crypto.randomUUID() as AgentRunId;
-			await runs.insert(actor, {
+			await runs.insert({
 				kind: 'agent',
 				id,
 				userId: actor.userId,
@@ -131,7 +133,7 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 				await controller.failRun(id, error instanceof Error ? error : new Error(String(error)));
 				throw error;
 			}
-			const run = await runs.findAgentById(actor, id);
+			const run = await runs.findAgentById(id);
 			if (run?.status === 'failed') throw new Error(run.failure);
 			if (!run?.contextSnapshot) throw new Error('The run has no prepared context.');
 			return run.contextSnapshot;

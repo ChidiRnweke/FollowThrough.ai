@@ -6,30 +6,27 @@ import { ValidationError } from '$lib/errors';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { TrustPolicyRepository } from '$lib/server/repositories/agent';
 export interface TrustPolicyEvaluator {
-	shouldAutoAccept(
-		actor: ActorContext,
-		pipeline: PipelineKind,
-		suggestion: Suggestion
-	): Promise<boolean>;
+	shouldAutoAccept(pipeline: PipelineKind, suggestion: Suggestion): Promise<boolean>;
 }
 export interface TrustPolicyStore {
-	list(actor: ActorContext): Promise<readonly TrustPolicy[]>;
-	upsert(actor: ActorContext, input: UpdateTrustPolicyInput): Promise<TrustPolicy>;
+	list(): Promise<readonly TrustPolicy[]>;
+	upsert(input: UpdateTrustPolicyInput): Promise<TrustPolicy>;
 }
 
 const supported = new Set<PipelineKind>(PROPOSAL_AUTO_ACCEPT_PIPELINES);
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export class ToolTrust implements TrustPolicyStore, TrustPolicyEvaluator {
-	constructor(private readonly policies: TrustPolicyRepository) {}
-	async list(actor: ActorContext): Promise<readonly TrustPolicy[]> {
-		const stored = new Map(
-			(await this.policies.list(actor)).map((policy) => [policy.pipeline, policy])
-		);
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly policies: TrustPolicyRepository
+	) {}
+	async list(): Promise<readonly TrustPolicy[]> {
+		const stored = new Map((await this.policies.list()).map((policy) => [policy.pipeline, policy]));
 		return PROPOSAL_AUTO_ACCEPT_PIPELINES.map(
 			(pipeline) =>
 				stored.get(pipeline) ?? {
-					userId: actor.userId,
+					userId: this.actor.userId,
 					pipeline,
 					autoAcceptEnabled: false,
 					createdAt: now(),
@@ -37,15 +34,15 @@ export class ToolTrust implements TrustPolicyStore, TrustPolicyEvaluator {
 				}
 		);
 	}
-	async upsert(actor: ActorContext, input: UpdateTrustPolicyInput): Promise<TrustPolicy> {
+	async upsert(input: UpdateTrustPolicyInput): Promise<TrustPolicy> {
 		if (!supported.has(input.pipeline))
 			throw new ValidationError(
 				'Auto-accept policies apply only to extracted tasks and memory proposals. Chat tool approvals use the chat execution mode; note links and external references require review.'
 			);
-		const existing = await this.policies.find(actor, input.pipeline);
+		const existing = await this.policies.find(input.pipeline);
 		const timestamp = now();
-		return this.policies.upsert(actor, {
-			userId: actor.userId,
+		return this.policies.upsert({
+			userId: this.actor.userId,
 			pipeline: input.pipeline,
 			autoAcceptEnabled: input.autoAcceptEnabled,
 			...(input.minimumConfidence !== undefined
@@ -55,13 +52,9 @@ export class ToolTrust implements TrustPolicyStore, TrustPolicyEvaluator {
 			updatedAt: timestamp
 		});
 	}
-	async shouldAutoAccept(
-		actor: ActorContext,
-		pipeline: PipelineKind,
-		suggestion: Suggestion
-	): Promise<boolean> {
+	async shouldAutoAccept(pipeline: PipelineKind, suggestion: Suggestion): Promise<boolean> {
 		if (!supported.has(pipeline)) return false;
-		const policy = (await this.list(actor)).find((item) => item.pipeline === pipeline);
+		const policy = (await this.list()).find((item) => item.pipeline === pipeline);
 		return Boolean(
 			policy?.autoAcceptEnabled &&
 			(policy.minimumConfidence === undefined ||

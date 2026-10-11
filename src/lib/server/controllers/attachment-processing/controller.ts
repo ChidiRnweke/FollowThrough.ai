@@ -1,7 +1,6 @@
 import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/retrieval';
 import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
 
-import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentVersion, AttachmentView } from '$lib/models/attachments';
 import type { AgentPreferences } from '$lib/models/agent';
 
@@ -26,30 +25,24 @@ interface AttachmentProcessingDependencies {
 	storage: Pick<IAttachmentStorage, 'read' | 'createDownloadUrl'>;
 	processing: AttachmentProcessingRules;
 	formats: AttachmentFormats;
-	preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
+	preferences: { get(): Promise<AgentPreferences> };
 	indexer: Pick<AttachmentIndexing, 'indexAttachment'>;
 	transactionRunner: AtomicOperation;
 	visionModel: string;
-	logger: Pick<Console, 'error'>;
 }
 const now = () => new Date().toISOString() as DateTime;
 
-/** Queued and interrupted versions are the durable processing backlog. */
-export class AttachmentProcessing {
-	readonly name = 'attachment-processing';
-	constructor(
-		private readonly dependencies: AttachmentProcessingDependencies,
-		readonly intervalMs = 1000
-	) {}
-	async run(): Promise<void> {
-		for (const item of await this.dependencies.records.listPendingVersions()) {
-			const result = await this.process(item, item.versionId);
-			if (result.kind === 'failure')
-				this.dependencies.logger.error('Attachment processing failed', result.message);
-		}
-	}
+/** Extracts and indexes one of the user's attachment versions. */
+export interface AttachmentProcessingController {
+	process(
+		versionId: AttachmentVersion['id']
+	): Promise<
+		{ kind: 'claimed'; value: void } | { kind: 'busy' } | { kind: 'failure'; message: string }
+	>;
+}
+export class AttachmentProcessing implements AttachmentProcessingController {
+	constructor(private readonly dependencies: AttachmentProcessingDependencies) {}
 	async process(
-		actor: ActorContext,
 		versionId: AttachmentVersion['id']
 	): Promise<
 		{ kind: 'claimed'; value: void } | { kind: 'busy' } | { kind: 'failure'; message: string }
@@ -58,10 +51,10 @@ export class AttachmentProcessing {
 			return await this.dependencies.claims.withClaim(versionId, async (claim) => {
 				const view = await this.dependencies.transactionRunner.run(async () => {
 					await claim.assertOwned();
-					const current = await this.dependencies.records.findVersionForUpdate(actor, versionId);
+					const current = await this.dependencies.records.findVersionForUpdate(versionId);
 					if (!current || !this.dependencies.processing.pending(current.version)) return undefined;
 					if (!this.dependencies.processing.saved(current.version))
-						await this.dependencies.records.updateVersion(actor, {
+						await this.dependencies.records.updateVersion({
 							...current.version,
 							processingStatus: 'processing'
 						});
@@ -71,8 +64,8 @@ export class AttachmentProcessing {
 				const saved = this.dependencies.processing.saved(view.version);
 				const result = saved
 					? { kind: 'extracted' as const, extraction: saved }
-					: await this.extract(actor, view);
-				await this.complete(actor, view, claim, result);
+					: await this.extract(view);
+				await this.complete(view, claim, result);
 			});
 		} catch (error) {
 			return {
@@ -82,7 +75,6 @@ export class AttachmentProcessing {
 		}
 	}
 	private async extract(
-		actor: ActorContext,
 		view: AttachmentView
 	): Promise<
 		| { kind: 'extracted'; extraction: ExtractedAttachmentContent | undefined }
@@ -90,7 +82,7 @@ export class AttachmentProcessing {
 	> {
 		try {
 			const model = this.dependencies.modelSelection.resolveAttachmentVisionModel(
-				await this.dependencies.preferences.get(actor),
+				await this.dependencies.preferences.get(),
 				this.dependencies.visionModel
 			);
 			const extraction = await this.extractContent(view, model);
@@ -120,17 +112,16 @@ export class AttachmentProcessing {
 		return this.dependencies.extraction.extract(source, model);
 	}
 	private async complete(
-		actor: ActorContext,
 		view: AttachmentView,
 		claim: AttachmentClaim,
 		result: Awaited<ReturnType<AttachmentProcessing['extract']>>
 	) {
 		await this.dependencies.transactionRunner.run(async () => {
 			await claim.assertOwned();
-			const current = await this.dependencies.records.findVersionForUpdate(actor, view.version.id);
+			const current = await this.dependencies.records.findVersionForUpdate(view.version.id);
 			if (!current || !this.dependencies.processing.pending(current.version)) return;
 			if (result.kind === 'failure') {
-				await this.dependencies.records.updateVersion(actor, {
+				await this.dependencies.records.updateVersion({
 					...current.version,
 					processingStatus: 'failed',
 					processingFailure: result.message,
@@ -140,13 +131,8 @@ export class AttachmentProcessing {
 			}
 			const extraction = result.extraction;
 			if (current.attachment.currentVersionId === current.version.id)
-				await this.dependencies.indexer.indexAttachment(
-					actor,
-					current.attachment,
-					extraction?.text ?? ''
-				);
+				await this.dependencies.indexer.indexAttachment(current.attachment, extraction?.text ?? '');
 			await this.dependencies.records.updateVersion(
-				actor,
 				this.dependencies.processing.complete(current.version, extraction, now())
 			);
 		});

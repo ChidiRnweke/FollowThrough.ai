@@ -31,9 +31,9 @@ const setup = async (suffix: string) => {
 
 it('persists the selected body and its source evidence in the source project', async () => {
 	const { owner, project, note, controller, input } = await setup('21001');
-	const result = await controller.createFromSelection(owner, input);
-	const skill = await new SkillRecords(context.db).findByNoteId(owner, result.skillNoteId);
-	const anchors = await new SourceAnchorRecords(context.db).listForNote(owner, note.id);
+	const result = await controller.createFromSelection(input);
+	const skill = await new SkillRecords(owner, context.db).findByNoteId(result.skillNoteId);
+	const anchors = await new SourceAnchorRecords(owner, context.db).listForNote(note.id);
 	const origins = await context.db
 		.select()
 		.from(provenance)
@@ -57,16 +57,16 @@ it('persists the selected body and its source evidence in the source project', a
 
 it('rolls back source evidence and the candidate note after a duplicate skill name', async () => {
 	const { owner, note, project, controller, input } = await setup('21002');
-	const existing = await controller.create(owner, { name: input.name, projectId: project.id });
-	const outcome = await controller.createFromSelection(owner, input).then(
+	const existing = await controller.create({ name: input.name, projectId: project.id });
+	const outcome = await controller.createFromSelection(input).then(
 		() => 'created',
 		() => 'failed'
 	);
-	const notes = await new NoteRecords(context.db).listActive(owner, project.id);
+	const notes = await new NoteRecords(owner, context.db).listActive(project.id);
 	expect({
 		outcome,
 		notes: notes.map((item) => item.id).sort(),
-		anchors: await new SourceAnchorRecords(context.db).listForNote(owner, note.id),
+		anchors: await new SourceAnchorRecords(owner, context.db).listForNote(note.id),
 		origins: await context.db.select().from(provenance).where(eq(provenance.userId, owner.userId))
 	}).toEqual({
 		outcome: 'failed',
@@ -78,7 +78,7 @@ it('rolls back source evidence and the candidate note after a duplicate skill na
 
 it('refuses a selection from another account', async () => {
 	const { controller, input } = await setup('21003');
-	await expect(controller.createFromSelection(actor('21004'), input)).rejects.toMatchObject({
+	await expect(controller.createFromSelection(input)).rejects.toMatchObject({
 		code: 'NOT_FOUND'
 	});
 });
@@ -86,7 +86,7 @@ it('refuses a selection from another account', async () => {
 it('refuses a selection whose note revision has changed', async () => {
 	const { owner, note, controller, input } = await setup('21005');
 	await replaceNoteFixture({ ...note, currentRevision: 2 });
-	await expect(controller.createFromSelection(owner, input)).rejects.toMatchObject({
+	await expect(controller.createFromSelection(input)).rejects.toMatchObject({
 		code: 'STALE_REVISION'
 	});
 });

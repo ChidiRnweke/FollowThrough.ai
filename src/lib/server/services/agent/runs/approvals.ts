@@ -6,19 +6,19 @@ import type { AgentRunRepository } from '$lib/server/repositories/agent';
 
 /** The caller holds the run lock through decisions, requeue and its event. */
 export interface RunApprovalDecisions {
-	getForWrite(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
+	getForWrite(runId: AgentRunId): Promise<AgentRun>;
 	plan(
 		run: Pick<AgentRun, 'status' | 'pendingDecisions'>,
 		callIds: readonly string[],
 		timestamp: DateTime
 	): RunApprovalWrite | null;
-	persist(actor: ActorContext, runId: AgentRunId, change: RunApprovalWrite): Promise<AgentRun>;
+	persist(runId: AgentRunId, change: RunApprovalWrite): Promise<AgentRun>;
 }
 export class RunApprovals implements RunApprovalDecisions {
 	constructor(private readonly runs: AgentRunRepository) {}
 
-	async getForWrite(actor: ActorContext, runId: AgentRunId): Promise<AgentRun> {
-		const run = await this.runs.findForWrite(actor, runId);
+	async getForWrite(runId: AgentRunId): Promise<AgentRun> {
+		const run = await this.runs.findForWrite(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return run;
 	}
@@ -36,7 +36,7 @@ export class RunApprovals implements RunApprovalDecisions {
 		return run.status === 'queued' ? null : { status: 'queued', updatedAt: timestamp };
 	}
 
-	persist(actor: ActorContext, runId: AgentRunId, change: RunApprovalWrite): Promise<AgentRun> {
-		return this.runs.updateApproval(actor, runId, change);
+	persist(runId: AgentRunId, change: RunApprovalWrite): Promise<AgentRun> {
+		return this.runs.updateApproval(runId, change);
 	}
 }

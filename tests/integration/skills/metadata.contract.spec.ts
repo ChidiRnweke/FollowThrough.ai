@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
@@ -18,14 +19,14 @@ const setup = async (suffix: string) => {
 		allowImplicitInvocation: true,
 		isEnabled: true
 	};
-	return { ...seeded, skill, records: new SkillRecords(context.db) };
+	return { ...seeded, skill, records: new SkillRecords(testActor(), context.db) };
 };
 
 it('clears omitted license and compatibility when importing a complete manifest', async () => {
 	const { owner, skill, records } = await setup('19901');
-	await records.insert(owner, skill);
+	await records.insert(skill);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	await skillController(database, transactionRunner).update(owner, {
+	await skillController(database, transactionRunner).update({
 		noteId: skill.note.id,
 		content: {
 			kind: 'manifest',
@@ -39,7 +40,7 @@ it('clears omitted license and compatibility when importing a complete manifest'
 			}
 		}
 	});
-	const saved = (await records.findByNoteId(owner, skill.note.id))!;
+	const saved = (await records.findByNoteId(skill.note.id))!;
 	expect({
 		license: saved.license,
 		compatibility: saved.compatibility,
@@ -50,21 +51,21 @@ it('clears omitted license and compatibility when importing a complete manifest'
 
 it('refuses to recreate missing metadata during an update', async () => {
 	const { owner, skill, records } = await setup('19902');
-	await expect(records.update(owner, skill)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+	await expect(records.update(skill)).rejects.toMatchObject({ code: 'NOT_FOUND' });
 });
 
 it('refuses to replace existing metadata during insertion', async () => {
 	const { owner, skill, records } = await setup('19903');
-	await records.insert(owner, skill);
+	await records.insert(skill);
 	await expect(
-		records.insert(owner, { ...skill, description: 'Unintended replacement' })
+		records.insert({ ...skill, description: 'Unintended replacement' })
 	).rejects.toMatchObject({ code: 'CONFLICT' });
 });
 
 it('refuses metadata writes to another actor’s note', async () => {
 	const { owner, skill, records } = await setup('19904');
-	await records.insert(owner, skill);
-	await expect(
-		records.update(actor('19905'), { ...skill, isEnabled: false })
-	).rejects.toMatchObject({ code: 'NOT_FOUND' });
+	await records.insert(skill);
+	await expect(records.update({ ...skill, isEnabled: false })).rejects.toMatchObject({
+		code: 'NOT_FOUND'
+	});
 });

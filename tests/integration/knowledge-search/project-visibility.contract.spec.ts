@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import type { SearchDocumentId } from '$lib/models/knowledge-search';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
@@ -13,9 +14,8 @@ const vector = Array.from({ length: 3072 }, (_, index) => (index === 0 ? 1 : 0))
 const setup = async (suffix: string) => {
 	const archived = await seedNote(suffix);
 	const active = await seedNote(String(Number(suffix) + 100), archived.owner);
-	const repository = new KnowledgeIndexRecords(context.db);
-	const memory = await new MemoryRecords(context.db).insert(
-		archived.owner,
+	const repository = new KnowledgeIndexRecords(testActor(), context.db);
+	const memory = await new MemoryRecords(archived.owner, context.db).insert(
 		memoryEntryBuilder({
 			id: testMemoryEntryId(Number(suffix)),
 			userId: archived.owner.userId,
@@ -24,7 +24,7 @@ const setup = async (suffix: string) => {
 		})
 	);
 	for (const item of [archived, active])
-		await repository.replaceForNote(item.owner, item.note.id, [
+		await repository.replaceForNote(item.note.id, [
 			{
 				id: crypto.randomUUID() as SearchDocumentId,
 				projectId: item.project.id,
@@ -37,7 +37,7 @@ const setup = async (suffix: string) => {
 				embeddingModel: 'contract-model'
 			}
 		]);
-	await repository.replaceForMemoryEntry(archived.owner, memory.id, [
+	await repository.replaceForMemoryEntry(memory.id, [
 		{
 			id: crypto.randomUUID() as SearchDocumentId,
 			projectId: archived.project.id,
@@ -50,7 +50,7 @@ const setup = async (suffix: string) => {
 			embeddingModel: 'contract-model'
 		}
 	]);
-	await new ProjectRecords(context.db).archive(archived.owner, archived.project.id);
+	await new ProjectRecords(archived.owner, context.db).archive(archived.project.id);
 	return { archived, active, repository, memory };
 };
 it.each(['text', 'vector'] as const)(
@@ -59,8 +59,8 @@ it.each(['text', 'vector'] as const)(
 		const { archived, active, repository } = await setup(mode === 'text' ? '22501' : '22502');
 		const matches =
 			mode === 'text'
-				? await repository.search(archived.owner, 'visibility', 10)
-				: await repository.searchByEmbedding(archived.owner, vector, 10);
+				? await repository.search('visibility', 10)
+				: await repository.searchByEmbedding(vector, 10);
 		expect(matches.map((match) => match.document.projectId)).toEqual([active.project.id]);
 	}
 );
@@ -70,14 +70,14 @@ it.each(['text', 'vector'] as const)(
 		const { archived, repository } = await setup(mode === 'text' ? '22503' : '22504');
 		const matches =
 			mode === 'text'
-				? await repository.search(archived.owner, 'visibility', 10, archived.project.id)
-				: await repository.searchByEmbedding(archived.owner, vector, 10, archived.project.id);
+				? await repository.search('visibility', 10, archived.project.id)
+				: await repository.searchByEmbedding(vector, 10, archived.project.id);
 		expect(matches).toEqual([]);
 	}
 );
 it('retains archived memory chunks for storage maintenance', async () => {
 	const { archived, repository, memory } = await setup('22505');
-	expect(
-		(await repository.listForMemoryEntry(archived.owner, memory.id)).map((chunk) => chunk.content)
-	).toEqual([memory.content]);
+	expect((await repository.listForMemoryEntry(memory.id)).map((chunk) => chunk.content)).toEqual([
+		memory.content
+	]);
 });

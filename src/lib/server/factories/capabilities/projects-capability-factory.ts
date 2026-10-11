@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import {
 	ProjectTreePresentationService,
 	type ProjectTreePresentation
@@ -36,18 +37,19 @@ export interface ProjectServices {
 	readonly presentation: ProjectTreePresentation;
 }
 export const createProjectServices = (
+	actor: ActorContext,
 	repository: ProjectRepository,
 	tree: ProjectTreeRepository
 ): ProjectServices => {
-	const reader = new ProjectReadingService(repository);
-	const entries = new ProjectTreeService(repository, tree);
+	const reader = new ProjectReadingService(actor, repository);
+	const entries = new ProjectTreeService(actor, repository, tree);
 	return {
 		creator: new ProjectCreationService(repository),
 		reader,
 		lister: reader,
 		choice: new ProjectChoiceService(),
-		editor: new ProjectEditingService(repository),
-		lifecycle: new ProjectLifecycleService(repository),
+		editor: new ProjectEditingService(actor, repository),
+		lifecycle: new ProjectLifecycleService(actor, repository),
 		treeReader: entries,
 		treeWriter: entries,
 		details: new ProjectDetailService(),
@@ -61,7 +63,10 @@ export interface ProjectsCapabilityInput {
 export interface ProjectsCapability extends ProjectServices {
 	readonly repository: ProjectRepository & ProjectTreeRepository;
 }
-export const createProjectsCapability = (input: ProjectsCapabilityInput): ProjectsCapability => {
-	const repository = new ProjectRecords(input.db);
-	return { repository, ...createProjectServices(repository, repository) };
+export const createProjectsCapability = (
+	actor: ActorContext,
+	input: ProjectsCapabilityInput
+): ProjectsCapability => {
+	const repository = new ProjectRecords(actor, input.db);
+	return { repository, ...createProjectServices(actor, repository, repository) };
 };

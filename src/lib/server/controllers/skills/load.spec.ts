@@ -21,7 +21,7 @@ import { expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 
 const setup = () => {
-	const notes = new InMemoryNoteRepository();
+	const notes = new InMemoryNoteRepository(testActor());
 	const note = noteBuilder({ kind: 'skill', title: 'Release guide' });
 	notes.notes = [note];
 	const skills = new InMemorySkillRepository(notes);
@@ -36,7 +36,7 @@ const setup = () => {
 			isEnabled: true
 		}
 	];
-	const provenance = new InMemoryProvenanceRepository();
+	const provenance = new InMemoryProvenanceRepository(testActor());
 	provenance.provenance = [
 		{
 			id: testProvenanceId(),
@@ -48,7 +48,7 @@ const setup = () => {
 			createdAt: testNow
 		}
 	];
-	const library = createSkillServices(skills, notes, provenance);
+	const library = createSkillServices(testActor(), skills, notes, provenance);
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
@@ -71,7 +71,7 @@ it('does not commit usage when the loaded response cannot be assembled', async (
 	const { controller, skills, note } = setup();
 	skills.usageReadFailure = new Error('Usage history unavailable');
 	const result = await controller
-		.use(testActor(), {
+		.use({
 			noteId: note.id,
 			provenanceId: testProvenanceId()
 		})
@@ -89,7 +89,7 @@ it('does not load or record usage for an archived skill', async () => {
 	const { controller, skills, notes, note } = setup();
 	notes.notes = [{ ...note, archivedAt: testNow }];
 	const result = await controller
-		.use(testActor(), {
+		.use({
 			noteId: note.id,
 			provenanceId: testProvenanceId()
 		})
@@ -105,7 +105,7 @@ it('does not load or record usage for an archived skill', async () => {
 
 it('returns the persisted usage for a context-free load', async () => {
 	const { controller, skills, note } = setup();
-	const result = await controller.use(testActor(), {
+	const result = await controller.use({
 		noteId: note.id,
 		provenanceId: testProvenanceId()
 	});
@@ -122,7 +122,7 @@ it('rejects a load with another actor’s provenance without recording usage', a
 	const { controller, skills, provenance, note } = setup();
 	provenance.provenance[0] = { ...provenance.provenance[0], userId: testActor(2).userId };
 	const result = await controller
-		.use(testActor(), {
+		.use({
 			noteId: note.id,
 			provenanceId: testProvenanceId()
 		})

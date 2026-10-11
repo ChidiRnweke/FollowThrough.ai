@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { Database } from '$lib/server/db';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import {
@@ -16,12 +17,12 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 /** Complete pull operation with real persistence and the production capability wiring. */
 export function workspacePullFixture(db: Database): WorkspaceController {
 	const { database, transactionRunner } = createTransactionContext(db);
-	const synchronization = createSyncCapability({ db: database });
-	const skills = createSkillsCapability({
+	const synchronization = createSyncCapability(testActor(), { db: database });
+	const skills = createSkillsCapability(testActor(), {
 		db: database,
-		projects: new ProjectRecords(database),
-		notes: new NoteRecords(database),
-		provenance: new ProvenanceRecords(database)
+		projects: new ProjectRecords(testActor(), database),
+		notes: new NoteRecords(testActor(), database),
+		provenance: new ProvenanceRecords(testActor(), database)
 	});
 	return new Workspace(
 		new TodayPresentationService(),

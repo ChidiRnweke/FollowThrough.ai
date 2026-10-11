@@ -9,9 +9,9 @@ export interface MemoryEntryListFilter {
 }
 
 export interface MemoryEntryRepository {
-	findById(actor: ActorContext, id: MemoryEntryId): Promise<MemoryEntry | undefined>;
-	findByIdForUpdate(actor: ActorContext, id: MemoryEntryId): Promise<MemoryEntry | undefined>;
-	list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]>;
-	insert(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry>;
-	update(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry>;
+	findById(id: MemoryEntryId): Promise<MemoryEntry | undefined>;
+	findByIdForUpdate(id: MemoryEntryId): Promise<MemoryEntry | undefined>;
+	list(filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]>;
+	insert(entry: MemoryEntry): Promise<MemoryEntry>;
+	update(entry: MemoryEntry): Promise<MemoryEntry>;
 }

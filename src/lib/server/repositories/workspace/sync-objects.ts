@@ -21,7 +21,6 @@ import {
 
 export interface SyncObjectRepository {
 	read(
-		actor: ActorContext,
 		identity: WorkspaceResourceIdentity,
 		etag: SyncEtag | null
 	): Promise<SyncObjectRead<WorkspaceRecord>>;
@@ -101,9 +100,11 @@ const publicRecordSql = (type: WorkspaceResourceType): SQL =>
 		: publicFieldsSql(type);
 
 export class WorkspaceSyncObjects implements SyncObjectRepository {
-	constructor(private readonly db: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly db: Database
+	) {}
 	async read(
-		actor: ActorContext,
 		identity: WorkspaceResourceIdentity,
 		etag: SyncEtag | null
 	): Promise<SyncObjectRead<WorkspaceRecord>> {
@@ -120,9 +121,9 @@ export class WorkspaceSyncObjects implements SyncObjectRepository {
 			from ${sql.identifier(identity.type)} r
 			left join workspace_sync_versions v on v.resource_type = ${identity.type}
 				and v.resource_id = ${syncIdentitySql(registration)}
-			where ${syncOwnerSql(registration.type, actor)} and ${syncIdentityPredicate(registration, identity.id)}
+			where ${syncOwnerSql(registration.type, this.actor)} and ${syncIdentityPredicate(registration, identity.id)}
 			union all select jsonb_build_object('kind', 'deleted', 'etag', 'sync-v1-' || c.version::text) as result
-			from workspace_sync_changes c where c.account_id = ${actor.userId}
+			from workspace_sync_changes c where c.account_id = ${this.actor.userId}
 				and c.resource_type = ${identity.type} and c.resource_id = ${JSON.stringify(identity.id)}::jsonb
 				and c.operation = 'delete'`);
 		const resultRows = z.array(z.object({ result: workspaceObjectReadSchema }));

@@ -16,9 +16,9 @@ import { Workspace, type WorkspaceDependencies } from './controller';
 
 it('returns the newly provisioned Inbox together with its skills on the first shell read', async () => {
 	const state = builtInSkillsFixture();
-	const users = new InMemoryUserRepository();
-	await users.ensureLocal(testActor());
-	const suggestions = new InMemorySuggestionReader();
+	const users = new InMemoryUserRepository(testActor());
+	await users.ensureLocal();
+	const suggestions = new InMemorySuggestionReader(testActor());
 	const workspace = new Workspace(
 		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
@@ -27,17 +27,18 @@ it('returns the newly provisioned Inbox together with its skills on the first sh
 			memoryPresentation: new MemoryPresentationService(),
 			...state,
 			userReader: new UserDirectory(users),
-			projectLister: createProjectServices(state.projects, state.projects).lister,
+			projectLister: createProjectServices(testActor(), state.projects, state.projects).lister,
 			noteTreeReader: createNoteServices(
+				testActor(),
 				state.notes,
-				new InMemoryAnchorRepository(),
+				new InMemoryAnchorRepository(testActor()),
 				state.projects
 			).treeReader,
 			suggestionExpirer: suggestions,
 			suggestionLister: suggestions
 		})
 	);
-	const shell = await workspace.getShellContext(testActor());
+	const shell = await workspace.getShellContext();
 	expect({
 		projects: shell.projects.map((project) => project.role),
 		skills: shell.skills.map((skill) => skill.name)

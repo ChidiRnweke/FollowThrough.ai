@@ -1,3 +1,4 @@
+import type { ActorContext } from '$lib/models/identity';
 import { SkillPortabilityService, type SkillPortability } from '$lib/services/skills/manifest';
 import {
 	SkillMetadataEditingService,
@@ -43,10 +44,13 @@ export interface SkillsCapability {
 	readonly pins: SkillPinWriter;
 }
 
-export const createSkillsCapability = (input: SkillsCapabilityInput): SkillsCapability => {
-	const repository = new SkillRecords(input.db);
-	const services = createSkillServices(repository, input.notes, input.provenance);
-	const builtIns = new BuiltInSkills(input.projects, input.notes, repository, {
+export const createSkillsCapability = (
+	actor: ActorContext,
+	input: SkillsCapabilityInput
+): SkillsCapability => {
+	const repository = new SkillRecords(actor, input.db);
+	const services = createSkillServices(actor, repository, input.notes, input.provenance);
+	const builtIns = new BuiltInSkills(actor, input.projects, input.notes, repository, {
 		active: BUILT_INS,
 		retired: RETIRED_BUILT_INS
 	});
@@ -67,15 +71,16 @@ export interface SkillServices {
 	readonly usageLister: SkillUsageLister;
 }
 export function createSkillServices(
+	actor: ActorContext,
 	skills: SkillRepository,
 	notes: NoteRepository,
 	provenance: ProvenanceRepository
 ): SkillServices {
-	const usage = new SkillUsageService(skills, notes, provenance);
+	const usage = new SkillUsageService(actor, skills, notes, provenance);
 	return {
 		creator: new SkillCreationService(skills, notes),
-		finder: new SkillReadingService(skills),
-		editor: new SkillEditingService(skills, notes),
+		finder: new SkillReadingService(actor, skills),
+		editor: new SkillEditingService(actor, skills, notes),
 		usageRecorder: usage,
 		usageLister: usage
 	};

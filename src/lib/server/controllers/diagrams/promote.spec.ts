@@ -16,13 +16,14 @@ import { Diagrams, type DiagramsDependencies } from './controller';
 
 const setup = (drawio = false) => {
 	const generation = diagramGenerationFixture();
-	const diagrams = new InMemoryDiagrams();
-	const suggestions = new InMemorySuggestions();
+	const diagrams = new InMemoryDiagrams(testActor());
+	const suggestions = new InMemorySuggestions(testActor());
 	diagrams.diagrams = [drawio ? drawioBuilder() : mermaidBuilder()];
 	return {
 		diagrams,
 		suggestions,
 		controller: new Diagrams(
+			testActor(),
 			capabilityDependencies<DiagramsDependencies>({
 				...agentToolResultsFixture(),
 				generationRules: new DiagramGenerationRuleService(),
@@ -44,14 +45,14 @@ const setup = (drawio = false) => {
 describe('Promote diagram workflow invariants', () => {
 	it('rejects conversion of an existing draw.io diagram', async () => {
 		const { controller } = setup(true);
-		await expect(
-			controller.promote(testActor(), { diagramId: drawioBuilder().id })
-		).rejects.toMatchObject({ code: 'UNSUPPORTED_DIAGRAM_OPERATION' });
+		await expect(controller.promote({ diagramId: drawioBuilder().id })).rejects.toMatchObject({
+			code: 'UNSUPPORTED_DIAGRAM_OPERATION'
+		});
 	});
 
 	it('creates an ordinary draw.io suggestion for explicit review', async () => {
 		const { controller, diagrams } = setup();
-		const result = await controller.promote(testActor(), { diagramId: mermaidBuilder().id });
+		const result = await controller.promote({ diagramId: mermaidBuilder().id });
 		expect(result.suggestion.kind === 'diagram' ? result.suggestion.payload.kind : undefined).toBe(
 			'drawio'
 		);

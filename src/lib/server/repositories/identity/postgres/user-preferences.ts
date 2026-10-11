@@ -9,21 +9,24 @@ import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/identity';
 
 export class UserPreferencesRecords implements UserPreferencesRepository {
-	constructor(private readonly database: Database) {}
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
 
-	async get(actor: ActorContext): Promise<UserPreferences> {
+	async get(): Promise<UserPreferences> {
 		const [row] = await this.database
 			.select()
 			.from(schema.userPreferences)
-			.where(eq(schema.userPreferences.userId, actor.userId));
+			.where(eq(schema.userPreferences.userId, this.actor.userId));
 		return { sectionNumberingDefault: row?.sectionNumberingDefault ?? undefined };
 	}
 
-	async update(actor: ActorContext, input: UpdateUserPreferencesInput): Promise<UserPreferences> {
+	async update(input: UpdateUserPreferencesInput): Promise<UserPreferences> {
 		const [row] = await this.database
 			.insert(schema.userPreferences)
 			.values({
-				userId: actor.userId,
+				userId: this.actor.userId,
 				sectionNumberingDefault: input.sectionNumberingDefault
 			})
 			.onConflictDoUpdate({

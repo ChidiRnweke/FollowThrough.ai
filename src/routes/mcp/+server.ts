@@ -16,10 +16,13 @@ const unauthorized = (detail: string): Response =>
  * Bearer token when auth is on. With auth disabled (single-user dev) there is
  * no session token. Establish the configured local account before provenance or tool writes.
  */
-const authenticate = (request: Request) =>
-	AppFactory.isAuthEnabled()
-		? AppFactory.access().authenticateMcp(request.headers.get('authorization'))
-		: AppFactory.access().attributeLocalMcp(AppFactory.actor());
+const authenticate = async (request: Request) => {
+	if (!AppFactory.isAuthEnabled()) return AppFactory.access(AppFactory.actor()).attributeLocalMcp();
+	const verified = await AppFactory.authentication().verifyBearer(
+		request.headers.get('authorization')
+	);
+	return verified ? AppFactory.access(verified.actor).attributeMcp(verified.scope) : null;
+};
 
 export const POST: RequestHandler = async ({ request }) => {
 	const authenticated = await authenticate(request);
@@ -30,7 +33,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	// selection is the whole story here; project overrides apply in-app only.
 	const session = await AppFactory.forActor(authenticated.actor)
 		.agentHarness()
-		.openMcpTools(authenticated.actor, authenticated.scope, authenticated.provenanceId);
+		.openMcpTools(authenticated.scope, authenticated.provenanceId);
 	const server = AppFactory.mcpSurface(session).open();
 
 	// Stateless: no session to keep alive between requests, so this survives

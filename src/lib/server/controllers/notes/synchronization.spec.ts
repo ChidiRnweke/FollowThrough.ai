@@ -44,15 +44,16 @@ const input: NoteMutationRequest = {
 	command: { kind: 'renameNote', noteId: testNoteId(), title: 'My rename' }
 };
 const setup = () => {
-	const content = new InMemoryNoteContent();
+	const content = new InMemoryNoteContent(testActor());
 	content.notes = [noteBuilder()];
-	const mutationReceipts = new InMemoryWorkspaceReceipts();
+	const mutationReceipts = new InMemoryWorkspaceReceipts(testActor());
 	const transactionRunner = new InMemoryTransactionRunner([content, mutationReceipts]);
 	const mutations = new WorkspaceMutationReceipts({
 		mutationReceipts,
-		syncObjects: new InMemoryWorkspaceNoteReads(content)
+		syncObjects: new InMemoryWorkspaceNoteReads(testActor(), content)
 	});
 	const notes = new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),
@@ -90,14 +91,14 @@ const setup = () => {
 			transactionRunner
 		})
 	);
-	const apply = (request: NoteMutationRequest) => notes.synchronize(testActor(), request);
+	const apply = (request: NoteMutationRequest) => notes.synchronize(request);
 	return { content, mutationReceipts, apply, workspace };
 };
 
 describe('guarded workspace mutation replay', () => {
 	it('does not execute an operation cancelled before submission', async () => {
 		const { workspace, apply, content } = setup();
-		await workspace.cancelMutation(testActor(), {
+		await workspace.cancelMutation({
 			operationId: input.operationId,
 			request: JSON.stringify(input)
 		});
@@ -107,8 +108,8 @@ describe('guarded workspace mutation replay', () => {
 	it('keeps a cancelled operation cancelled on repeated cancellation', async () => {
 		const { workspace } = setup();
 		const cancellation = { operationId: input.operationId, request: JSON.stringify(input) };
-		await workspace.cancelMutation(testActor(), cancellation);
-		expect(await workspace.cancelMutation(testActor(), cancellation)).toEqual({
+		await workspace.cancelMutation(cancellation);
+		expect(await workspace.cancelMutation(cancellation)).toEqual({
 			kind: 'cancelled'
 		});
 	});
@@ -118,7 +119,7 @@ describe('guarded workspace mutation replay', () => {
 		if (applied.kind !== 'applied' || applied.receipt.resource.kind !== 'found')
 			throw new Error('Expected applied note');
 		expect(
-			await workspace.cancelMutation(testActor(), {
+			await workspace.cancelMutation({
 				operationId: input.operationId,
 				request: JSON.stringify(input)
 			})

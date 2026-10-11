@@ -11,7 +11,9 @@ const userId = testActor().userId;
 const service = (
 	overrides: Parameters<typeof testTokenUser>[1] = {}
 ): { service: AccessTokens; repository: InMemoryApiTokenRepository } => {
-	const repository = new InMemoryApiTokenRepository([testTokenUser(userId, overrides)]);
+	const repository = new InMemoryApiTokenRepository(testActor(), [
+		testTokenUser(userId, overrides)
+	]);
 	return { service: new AccessTokens(repository), repository };
 };
 
@@ -67,10 +69,10 @@ describe('API token verification', () => {
 
 	it('rejects a revoked token', async () => {
 		const { subject, minted } = await mint();
-		await subject.revoke(testActor(), minted.token.id);
+		await subject.revoke(minted.token.id);
 		expect({
 			verified: await subject.verify(`Bearer ${minted.plaintext}`),
-			listed: await subject.list(testActor())
+			listed: await subject.list()
 		}).toEqual({ verified: null, listed: [] });
 	});
 
@@ -90,8 +92,6 @@ describe('API token verification', () => {
 describe('API token listing', () => {
 	it('does not revoke a token belonging to another user', async () => {
 		const { subject, minted } = await mint();
-		await expect(subject.revoke(testActor(2), minted.token.id)).rejects.toThrow(
-			'Access token not found'
-		);
+		await expect(subject.revoke(minted.token.id)).rejects.toThrow('Access token not found');
 	});
 });

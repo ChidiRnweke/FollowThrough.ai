@@ -1,3 +1,4 @@
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
@@ -27,6 +28,7 @@ export const noteCreationControllers = (
 	transactionRunner: TransactionRunner
 ) => ({
 	notes: new Notes(
+		testActor(),
 		new BacklinkPresentationService(),
 		new ReferencePresentationService(),
 		new WorkspaceCommandRulesService(),

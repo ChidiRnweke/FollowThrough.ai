@@ -35,7 +35,7 @@ it('keeps one query-generation child span and the validated output under the sea
 			{ provider, observer: operationObserver }
 		);
 		await operationObserver.run('search.workflow', {}, () =>
-			fixture.controller.search(testActor(), {
+			fixture.controller.search({
 				query: 'follow up',
 				conversationId: testConversationId()
 			})
@@ -91,7 +91,7 @@ it('records rejected output on the generation span before the controller wraps t
 			{ provider, observer: operationObserver }
 		);
 		const outcome = await fixture.controller
-			.search(testActor(), { query: 'follow up', conversationId: testConversationId() })
+			.search({ query: 'follow up', conversationId: testConversationId() })
 			.then(
 				() => 'success',
 				(error: Error) => error.message
