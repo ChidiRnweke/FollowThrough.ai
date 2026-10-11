@@ -49,18 +49,10 @@ import type {
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
 import type {
-	ArtifactDeleter,
-	ArtifactLister,
-	ArtifactReader,
-	ExportSettingsReader,
-	ExportSettingsWriter
+	ArtifactStore,
+	ExportSettingsStore
 } from '$lib/server/services/deliverables/artifacts';
-import type {
-	TemplateLifecycle,
-	TemplateReader,
-	TemplateUploadLifecycle,
-	TemplateWriter
-} from '$lib/server/services/deliverables/templates';
+import type { TemplateStore } from '$lib/server/services/deliverables/templates';
 import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ArtifactFiles } from '$lib/services/deliverables/artifact-files';
 import type { ExportPreparation } from '$lib/services/deliverables/export-preparation';
@@ -161,17 +153,14 @@ export interface DeliverablesDependencies {
 	readonly artifactFiles: ArtifactFiles;
 	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
-	templateUploads: TemplateUploadLifecycle;
-	templateReader: TemplateReader;
-	templateWriter: TemplateWriter;
-	templateLifecycle: TemplateLifecycle;
+	templateStore: TemplateStore;
 	templateStorage: ExportObjectStorage;
 	templateStyles: TemplateStyleReader;
 	noteReader: { get(id: NoteId): Promise<Note> };
 	provenanceRecorder: {
 		record(input: ProvenanceRequest): Promise<Provenance>;
 	};
-	artifactWriter: { store(artifact: Artifact): Promise<Artifact> };
+	artifactStore: ArtifactStore;
 	artifactStorage: ExportObjectStorage;
 	attachmentReader: Pick<AttachmentReader, 'get'>;
 	attachmentStorage: Pick<IAttachmentStorage, 'createDownloadUrl'>;
@@ -192,11 +181,7 @@ export interface DeliverablesDependencies {
 	docxGenerator: DocxRenderer;
 	pdfGenerator: PdfRendering;
 	zipPacker: DocumentBundlePacker;
-	exportSettingsReader: ExportSettingsReader;
-	exportSettingsWriter: ExportSettingsWriter;
-	artifactLister: ArtifactLister;
-	artifactReader: ArtifactReader;
-	artifactDeleter: ArtifactDeleter;
+	exportSettings: ExportSettingsStore;
 	transactionRunner: TransactionRunner;
 }
 
@@ -241,7 +226,7 @@ export class Deliverables implements DeliverablesController {
 		byteSize: number;
 		checksumSha256: string;
 	}) {
-		const upload = await this.dependencies.templateUploads.reserveUpload(input);
+		const upload = await this.dependencies.templateStore.reserveUpload(input);
 		const uploadUrl = await this.dependencies.templateStorage.createUploadUrl({
 			objectKey: upload.objectKey,
 			mediaType: upload.mediaType,
@@ -261,26 +246,24 @@ export class Deliverables implements DeliverablesController {
 
 	async completeTemplateUpload(templateId: TemplateId): Promise<void> {
 		const {
-			templateUploads,
-			templateReader,
-			templateWriter,
+			templateStore,
 			templateStorage: storage,
 			templateStyles,
 			transactionRunner
 		} = this.dependencies;
 		const stagingKey = `staging/${this.actor.userId}/templates/${templateId}`;
-		if (await templateReader.find(templateId)) {
+		if (await templateStore.find(templateId)) {
 			await storage.remove(stagingKey);
 			return;
 		}
 		let upload: TemplateUpload;
 		let bytes: Uint8Array;
 		try {
-			upload = await templateUploads.upload(templateId);
+			upload = await templateStore.upload(templateId);
 			bytes = await storage.read(upload.objectKey, upload.byteSize);
 		} catch (error) {
 			// Another completion may remove the reservation or staging after our initial read.
-			if (await templateReader.find(templateId)) {
+			if (await templateStore.find(templateId)) {
 				await storage.remove(stagingKey);
 				return;
 			}
@@ -291,21 +274,21 @@ export class Deliverables implements DeliverablesController {
 		// Write the exact bytes verified above. A signed staging URL may still accept writes.
 		await storage.put(destination, bytes, upload.mediaType);
 		await transactionRunner.run(async () => {
-			const locked = await templateUploads.lockUpload(templateId);
-			if (await templateReader.find(templateId)) return;
+			const locked = await templateStore.lockUpload(templateId);
+			if (await templateStore.find(templateId)) return;
 			if (!locked) throw new NotFoundError('Template upload no longer exists');
-			await templateWriter.store(locked, destination, styles);
-			await templateUploads.finishUpload(templateId);
+			await templateStore.store(locked, destination, styles);
+			await templateStore.finishUpload(templateId);
 		});
 		await storage.remove(stagingKey);
 	}
 
 	async listTemplates(projectId: ProjectId) {
-		return this.dependencies.templateReader.list(projectId);
+		return this.dependencies.templateStore.list(projectId);
 	}
 
 	async deleteTemplate(templateId: TemplateId): Promise<void> {
-		await this.dependencies.templateLifecycle.delete(templateId);
+		await this.dependencies.templateStore.delete(templateId);
 	}
 
 	async generateDocument(input: GenerateDocumentInput): Promise<GenerateDocumentOutput> {
@@ -331,7 +314,7 @@ export class Deliverables implements DeliverablesController {
 					producerName: 'document-export',
 					metadata: {}
 				});
-				return this.dependencies.artifactWriter.store({
+				return this.dependencies.artifactStore.store({
 					id,
 					userId: this.actor.userId,
 					projectId: input.projectId,
@@ -378,7 +361,7 @@ export class Deliverables implements DeliverablesController {
 			? this.dependencies.exportSettingsRules.validate(input.settings)
 			: await this.getExportSettings(input.projectId);
 		const styles = input.templateId
-			? await this.dependencies.templateReader.styles(input.templateId, input.projectId)
+			? await this.dependencies.templateStore.styles(input.templateId, input.projectId)
 			: undefined;
 		const images = new Map<string, string>();
 		const pendingDiagrams = new Map<string, ExportDiagramSource>();
@@ -529,14 +512,14 @@ export class Deliverables implements DeliverablesController {
 	}
 
 	async getExportSettings(projectId: ProjectId): Promise<ExportSettings> {
-		return this.dependencies.exportSettingsReader.getSettings(projectId);
+		return this.dependencies.exportSettings.getSettings(projectId);
 	}
 
 	async updateExportSettings(
 		projectId: ProjectId,
 		settings: ExportSettings
 	): Promise<ExportSettings> {
-		return this.dependencies.exportSettingsWriter.updateSettings(
+		return this.dependencies.exportSettings.updateSettings(
 			projectId,
 			this.dependencies.exportSettingsRules.validate(settings)
 		);
@@ -546,11 +529,11 @@ export class Deliverables implements DeliverablesController {
 		projectId: ProjectId,
 		params?: ListArtifactsParams
 	): Promise<ListArtifactsOutput> {
-		return this.dependencies.artifactLister.list(projectId, params);
+		return this.dependencies.artifactStore.list(projectId, params);
 	}
 
 	async getArtifact(artifactId: ArtifactId) {
-		return this.dependencies.artifactReader.get(artifactId);
+		return this.dependencies.artifactStore.get(artifactId);
 	}
 
 	async downloadArtifact(artifactId: ArtifactId): Promise<GetArtifactDownloadOutput> {
@@ -566,7 +549,7 @@ export class Deliverables implements DeliverablesController {
 	}
 
 	async deleteArtifact(artifactId: ArtifactId): Promise<Pick<Artifact, 'id' | 'title'>> {
-		return this.dependencies.artifactDeleter.delete(artifactId);
+		return this.dependencies.artifactStore.delete(artifactId);
 	}
 
 	async regenerateArtifact(artifactId: ArtifactId): Promise<GenerateDocumentOutput> {

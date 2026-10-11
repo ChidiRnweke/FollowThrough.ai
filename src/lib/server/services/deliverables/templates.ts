@@ -6,14 +6,15 @@ import type { ProjectId, ProjectTemplate, TemplateUpload } from '$lib/models/pro
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { TemplateRepository } from '$lib/server/repositories/deliverables';
 
+export interface TemplateUploadRequest {
+	projectId: ProjectId;
+	name: string;
+	mediaType: string;
+	byteSize: number;
+	checksumSha256: string;
+}
 export interface TemplateUploadLifecycle {
-	reserveUpload(input: {
-		projectId: ProjectId;
-		name: string;
-		mediaType: string;
-		byteSize: number;
-		checksumSha256: string;
-	}): Promise<TemplateUpload>;
+	reserveUpload(input: TemplateUploadRequest): Promise<TemplateUpload>;
 	upload(id: TemplateId): Promise<TemplateUpload>;
 	lockUpload(id: TemplateId): Promise<TemplateUpload | undefined>;
 	finishUpload(id: TemplateId): Promise<void>;
@@ -34,19 +35,17 @@ export interface TemplateLifecycle {
 	delete(id: TemplateId): Promise<void>;
 }
 
-export class TemplateUploadService implements TemplateUploadLifecycle {
+/** Everything the deliverables controller does with stored templates. */
+export interface TemplateStore
+	extends TemplateUploadLifecycle, TemplateReader, TemplateWriter, TemplateLifecycle {}
+
+export class TemplateLibrary implements TemplateStore {
 	constructor(
 		private readonly actor: ActorContext,
 		private readonly repository: TemplateRepository,
 		private readonly now: () => DateTime = () => new Date().toISOString() as DateTime
 	) {}
-	async reserveUpload(input: {
-		projectId: ProjectId;
-		name: string;
-		mediaType: string;
-		byteSize: number;
-		checksumSha256: string;
-	}): Promise<TemplateUpload> {
+	async reserveUpload(input: TemplateUploadRequest): Promise<TemplateUpload> {
 		if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 1)
 			throw new ValidationError('Template must be at least 1 byte');
 		if (!/^[a-f0-9]{64}$/i.test(input.checksumSha256))
@@ -72,10 +71,6 @@ export class TemplateUploadService implements TemplateUploadLifecycle {
 	finishUpload(id: TemplateId) {
 		return this.repository.deleteUpload(id);
 	}
-}
-
-export class TemplateReadingService implements TemplateReader {
-	constructor(private readonly repository: TemplateRepository) {}
 	find(id: TemplateId) {
 		return this.repository.findById(id);
 	}
@@ -89,14 +84,6 @@ export class TemplateReadingService implements TemplateReader {
 	list(projectId: ProjectId) {
 		return this.repository.listByProject(projectId);
 	}
-}
-
-export class TemplateWritingService implements TemplateWriter {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly repository: TemplateRepository,
-		private readonly now: () => DateTime = () => new Date().toISOString() as DateTime
-	) {}
 	store(upload: TemplateUpload, objectKey: string, extractedStyles: ExtractedTemplateStyles) {
 		return this.repository.insert({
 			id: upload.id,
@@ -112,10 +99,6 @@ export class TemplateWritingService implements TemplateWriter {
 			updatedAt: this.now()
 		});
 	}
-}
-
-export class TemplateLifecycleService implements TemplateLifecycle {
-	constructor(private readonly repository: TemplateRepository) {}
 	async delete(id: TemplateId): Promise<void> {
 		if (!(await this.repository.findById(id))) throw new NotFoundError('Template not found');
 		await this.repository.delete(id);

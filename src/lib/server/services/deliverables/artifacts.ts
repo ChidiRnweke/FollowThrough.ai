@@ -32,25 +32,22 @@ export interface ArtifactWriter {
 	store(artifact: Artifact): Promise<Artifact>;
 }
 
-export class ArtifactWritingService implements ArtifactWriter {
+/** Everything the deliverables controller does with stored artifacts. */
+export interface ArtifactStore
+	extends ArtifactWriter, ArtifactReader, ArtifactLister, ArtifactDeleter {}
+export interface ExportSettingsStore extends ExportSettingsReader, ExportSettingsWriter {}
+
+export class ArtifactLibrary implements ArtifactStore {
 	constructor(private readonly artifactRepo: ArtifactRepository) {}
 	store(artifact: Artifact): Promise<Artifact> {
 		return this.artifactRepo.insert(artifact);
 	}
-}
-
-export class ArtifactReadingService implements ArtifactReader, ArtifactLister {
-	constructor(private readonly artifactRepo: ArtifactRepository) {}
-	async get(artifactId: ArtifactId): Promise<Artifact | undefined> {
+	get(artifactId: ArtifactId): Promise<Artifact | undefined> {
 		return this.artifactRepo.findById(artifactId);
 	}
-	async list(projectId: ProjectId, params?: ListArtifactsParams): Promise<ListArtifactsOutput> {
+	list(projectId: ProjectId, params?: ListArtifactsParams): Promise<ListArtifactsOutput> {
 		return this.artifactRepo.listByProject(projectId, params);
 	}
-}
-
-export class ArtifactLifecycleService implements ArtifactDeleter {
-	constructor(private readonly artifactRepo: ArtifactRepository) {}
 	async delete(artifactId: ArtifactId): Promise<Pick<Artifact, 'id' | 'title'>> {
 		const artifact = await this.artifactRepo.findById(artifactId);
 		if (!artifact) throw new NotFoundError('Artifact not found');
@@ -59,12 +56,12 @@ export class ArtifactLifecycleService implements ArtifactDeleter {
 	}
 }
 
-export class ArtifactSettingsService implements ExportSettingsReader, ExportSettingsWriter {
+export class ArtifactSettingsService implements ExportSettingsStore {
 	constructor(private readonly settingsRepo: ExportSettingsRepository) {}
 	async getSettings(projectId: ProjectId): Promise<ExportSettings> {
 		return (await this.settingsRepo.find(projectId)) ?? defaultExportSettings;
 	}
-	async updateSettings(projectId: ProjectId, settings: ExportSettings): Promise<ExportSettings> {
+	updateSettings(projectId: ProjectId, settings: ExportSettings): Promise<ExportSettings> {
 		return this.settingsRepo.upsert(projectId, settings);
 	}
 }

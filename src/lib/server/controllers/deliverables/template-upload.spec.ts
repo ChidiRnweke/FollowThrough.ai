@@ -22,7 +22,7 @@ const setup = async () => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
 			...agentToolResultsFixture(),
-			...createTemplateServices(testActor(), repository, () => testNow),
+			templateStore: createTemplateServices(testActor(), repository, () => testNow),
 			templateStorage: storage,
 			templateStyles: new DocxTemplateStyleReader(),
 			// Object storage does not participate in the database transaction.
