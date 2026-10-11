@@ -617,78 +617,29 @@ describe('controller operation ownership', () => {
 	});
 });
 
-describe('adapter operation ownership', () => {
-	const notes = 'export interface Notes { save(): Promise<void>; index(): Promise<void> }';
-	const path = 'src/lib/server/controllers/notes/controller.ts';
-	it.each([
-		'async execute() { await this.notes.save(); await this.notes.index(); }',
-		'private save() { return this.notes.save(); } async execute() { await this.save(); await this.notes.index(); }'
-	])('rejects coordination through direct calls or a private helper: %s', (body) => {
+describe('controllers reach persistence through services', () => {
+	const repository =
+		'export interface NoteRecords { find(): string } export class NoteRows implements NoteRecords { find() { return "row"; } }';
+	const repositoryPath = 'src/lib/server/repositories/notes/records.ts';
+	it('rejects a controller that calls a repository', () => {
 		expect(
 			rules({
-				[path]: notes,
-				'src/lib/server/adapters/protocol.ts':
-					`import type { Notes } from './controllers/notes/controller'; export class Protocol { constructor(private notes: Notes) {} ${body} }`.replace(
-						"'./controllers/",
-						"'../controllers/"
-					)
+				[repositoryPath]: repository,
+				'src/lib/server/controllers/notes/controller.ts': `import type { NoteRecords } from '$lib/server/repositories/notes/records'; export class Notes { constructor(private records: NoteRecords) {} read() { return this.records.find(); } }`,
+				'src/lib/server/factories/notes.ts': `import { NoteRows } from '$lib/server/repositories/notes/records'; import { Notes } from '$lib/server/controllers/notes/controller'; export const create = () => new Notes(new NoteRows());`
 			})
-		).toContain('adapter-orchestration');
+		).toContain('controller-repository');
 	});
-	it('traces a sequence across two controllers through an injected callback', () => {
-		const violations = inspect({
-			[path]: notes,
-			'src/lib/server/controllers/search/controller.ts':
-				'export interface Search { index(): void }',
-			'src/lib/server/adapters/protocol.ts': `import type { Notes } from '../controllers/notes/controller'; import type { Search } from '../controllers/search/controller'; export class Protocol { constructor(private save: () => Promise<void>, private search: Search) {} async execute() { await this.save(); this.search.index(); } }`,
-			'src/lib/server/factories/protocol.ts': `import {Protocol} from '../adapters/protocol'; import type {Notes} from '../controllers/notes/controller'; import type {Search} from '../controllers/search/controller'; export const create = (notes: Notes, search: Search) => new Protocol(() => notes.save(), search);`
-		});
-		expect(
-			violations
-				.filter((item) => item.rule === 'adapter-orchestration')
-				.map((item) => item.provenance.join(' '))
-		).toEqual([
-			expect.stringMatching(/controllers\/notes\/controller.*controllers\/search\/controller/)
-		]);
-	});
-	it('allows separate handlers that each delegate one operation', () => {
+	it('allows a controller that calls a service over the same repository', () => {
 		expect(
 			rules({
-				[path]: notes,
-				'src/lib/server/adapters/protocol.ts': `import type {Notes} from '../controllers/notes/controller'; export class Protocol { constructor(private notes: Notes) {} handlers() { return {save: () => this.notes.save(), index: () => this.notes.index()}; } }`
+				[repositoryPath]: repository,
+				'src/lib/server/services/notes/reading.ts': `import type { NoteRecords } from '$lib/server/repositories/notes/records'; export interface NoteReading { read(): string } export class NoteReader implements NoteReading { constructor(private records: NoteRecords) {} read() { return this.records.find(); } }`,
+				'src/lib/server/controllers/notes/controller.ts': `import type { NoteReading } from '$lib/server/services/notes/reading'; export class Notes { constructor(private reading: NoteReading) {} read() { return this.reading.read(); } }`,
+				'src/lib/server/factories/notes.ts': `import { NoteRows } from '$lib/server/repositories/notes/records'; import { NoteReader } from '$lib/server/services/notes/reading'; import { Notes } from '$lib/server/controllers/notes/controller'; export const create = () => new Notes(new NoteReader(new NoteRows()));`
 			})
-		).not.toContain('adapter-orchestration');
+		).not.toContain('controller-repository');
 	});
-	it('allows parse, one operation, and serialization', () => {
-		expect(
-			rules({
-				[path]: notes,
-				'src/lib/server/adapters/protocol.ts': `import type {Notes} from '../controllers/notes/controller'; export class Protocol { constructor(private notes: Notes) {} async handle(text: string) { JSON.parse(text); return JSON.stringify(await this.notes.save()); } }`
-			})
-		).not.toContain('adapter-orchestration');
-	});
-});
-
-it('treats independent callback producers as alternatives, not controller sequencing', () => {
-	expect(
-		rules({
-			'src/lib/server/controllers/notes/controller.ts':
-				'export interface Notes {save(): void; read(): void}',
-			'src/lib/server/adapters/protocol.ts': `import type { Notes } from '../controllers/notes/controller'; const handle = (execute: () => void) => () => execute(); export const handlers = (notes: Notes) => [handle(() => notes.save()), handle(() => notes.read())];`
-		})
-	).not.toContain('adapter-orchestration');
-});
-
-it('rejects an orchestrating callback even when the adapter calls it only once', () => {
-	expect(
-		rules({
-			'src/lib/server/controllers/notes/controller.ts':
-				'export interface Notes {save(): void; index(): void}',
-			'src/lib/server/adapters/protocol.ts':
-				'export class Protocol {constructor(private action: () => void) {} execute() {this.action();}}',
-			'src/lib/server/factories/protocol.ts': `import {Protocol} from '../adapters/protocol'; import type {Notes} from '../controllers/notes/controller'; export const create = (notes: Notes) => new Protocol(() => {notes.save(); notes.index();});`
-		})
-	).toContain('adapter-orchestration');
 });
 
 it('rejects a controller implementation supplied through a model-owned operation port', () => {

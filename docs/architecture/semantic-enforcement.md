@@ -11,9 +11,9 @@ The CLI exits with status 1 for violations. A missing local module or a syntax e
 not an empty result. No baseline, suppression comment or migration allowance hides findings.
 
 ADR 0007 closes the layer list: models, services, repositories, controllers and factories, plus
-browser stores and components, called from entry points. The `adapters` layer and server stores
-still exist while their code moves to repositories, services, infrastructure and agent tool factories. The rules
-below that name adapters are transitional and are removed with the last of that code.
+browser stores and components, called from entry points. There is no adapters layer and no server
+store. Chisel rejects code under `src/lib/server/adapters/` or `src/lib/server/stores/` with
+`structure:unknown-server-folder`.
 
 ## Rules and corrections
 
@@ -24,7 +24,7 @@ below that name adapters are transitional and are removed with the last of that 
 | `service-interface`        | Public service classes without explicit interface contracts, including alias and default exports                                                                                                     | Declare and implement the capability callers need                                                                    |
 | `concrete-dependency`      | Concrete implementations used as dependency types, including aliases, utility types and inferred factory results                                                                                     | Use declared contracts at injection and public composition boundaries                                                |
 | `controller-orchestration` | Controllers invoking other controllers through interfaces, aliases, getters or callbacks                                                                                                             | Coordinate the underlying service capabilities in the owning controller                                              |
-| `adapter-orchestration`    | One adapter operation sequencing multiple controller operations, including through helpers                                                                                                           | Delegate one complete operation and keep protocol work in the adapter                                                |
+| `controller-repository`    | A controller calling a repository, directly or through an injected port typed as one                                                                                                                 | Put a service between the controller and the repository; the service owns the reads and writes                       |
 | `controller-collaborator`  | Controller results exposing services, transports, repositories or writable store APIs                                                                                                                | Return operation results or readonly state views                                                                     |
 | `retained-service-state`   | Mutable service fields, module state and captured state that survive an operation                                                                                                                    | Move state to a store with an explicit lifetime                                                                      |
 | `store-workflow`           | Stores invoking capabilities or transport, directly or through traced callbacks                                                                                                                      | Let a controller coordinate work and write the resulting state                                                       |
@@ -40,11 +40,10 @@ operations may not return those collaborators to components. A controller interf
 permitted controller dependency. Private calls within the same controller implementation remain
 valid. Chisel also rejects type-only controller-to-controller imports.
 
-Adapters may parse, delegate one complete operation, and serialize its result. Separate protocol
-handlers are separate boundaries. The semantic audit follows private helper calls and injected
-callbacks, but treats different producers of a single callback as alternatives rather than a
-sequence. Review must still check policy and lifecycle ownership: moving an application coordinator
-into an adapter is not a correction.
+A controller's dependencies are services. The audit follows a controller's calls through private
+helpers and injected callbacks, and stops at a service: what a service calls is that service's own
+concern. A provider client is not a repository; it lives in the service that owns it (ADR 0007),
+so a controller reaches object storage through its service like any other.
 
 ## Valid ownership
 
@@ -67,7 +66,7 @@ not call services, repositories or stores directly; `indirect-dependency` report
 the correction is a controller operation that owns it.
 
 Factories may construct implementations, call construction factories and connect interfaces.
-Constructing an adapter whose deferred operation performs I/O is valid. Executing that operation
+Constructing a service whose deferred operation performs I/O is valid. Executing that operation
 from the factory, or writing the workflow in a factory callback, is not.
 
 ## Static coverage and review

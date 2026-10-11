@@ -10,7 +10,7 @@ export type ArchitectureRule =
 	| 'concrete-dependency'
 	| 'controller-collaborator'
 	| 'controller-orchestration'
-	| 'adapter-orchestration'
+	| 'controller-repository'
 	| 'retained-service-state'
 	| 'store-workflow'
 	| 'factory-workflow'
@@ -31,7 +31,6 @@ type Layer =
 	| 'tool-factory'
 	| 'repositories'
 	| 'remote'
-	| 'adapters'
 	| 'components'
 	| 'models'
 	| 'entry'
@@ -48,7 +47,7 @@ const layer = (file: string): Layer => {
 	)
 		return 'entry';
 	const match =
-		/^src\/lib\/(?:server\/)?(services|controllers|stores|factories|repositories|remote|adapters|components|models)\//.exec(
+		/^src\/lib\/(?:server\/)?(services|controllers|stores|factories|repositories|remote|components|models)\//.exec(
 			file
 		);
 	if (match) return match[1] as Layer;
@@ -358,18 +357,18 @@ export function analyzeArchitecture(
 		return result;
 	};
 	const forbidden = (owner: Layer, target: Layer): boolean => {
-		if (owner === 'controllers') return target === 'controllers';
+		if (owner === 'controllers') return ['controllers', 'repositories'].includes(target);
 		if (owner === 'components') return ['services', 'repositories', 'remote'].includes(target);
 		if (owner === 'services')
 			return ['services', 'controllers', 'remote', 'factories'].includes(target);
 		if (owner === 'stores')
-			return ['services', 'controllers', 'remote', 'repositories', 'adapters'].includes(target);
+			return ['services', 'controllers', 'remote', 'repositories'].includes(target);
 		if (owner === 'factories')
-			return ['services', 'controllers', 'remote', 'repositories', 'adapters'].includes(target);
+			return ['services', 'controllers', 'remote', 'repositories'].includes(target);
 		if (owner === 'entry' || owner === 'remote')
 			return ['services', 'repositories', 'stores'].includes(target);
 		if (owner === 'tool-factory')
-			return ['services', 'repositories', 'stores', 'remote', 'adapters'].includes(target);
+			return ['services', 'repositories', 'stores', 'remote'].includes(target);
 		return false;
 	};
 	const callRule = (owner: Layer): ArchitectureRule =>
@@ -435,12 +434,16 @@ export function analyzeArchitecture(
 			) {
 				report(
 					site,
-					callRule(owner),
-					owner === 'controllers'
-						? 'Controllers must coordinate services, not invoke another controller operation.'
-						: owner === 'entry' || owner === 'remote' || owner === 'tool-factory'
-							? `${owner} must call controller operations, not ${targetLayer} behavior.`
-							: `${owner} must not invoke or expose ${targetLayer} behavior. Move the operation to a controller.`,
+					owner === 'controllers' && targetLayer === 'repositories'
+						? 'controller-repository'
+						: callRule(owner),
+					owner === 'controllers' && targetLayer === 'repositories'
+						? 'Controllers reach persistence through services, never through a repository.'
+						: owner === 'controllers'
+							? 'Controllers must coordinate services, not invoke another controller operation.'
+							: owner === 'entry' || owner === 'remote' || owner === 'tool-factory'
+								? `${owner} must call controller operations, not ${targetLayer} behavior.`
+								: `${owner} must not invoke or expose ${targetLayer} behavior. Move the operation to a controller.`,
 					trace
 				);
 				continue;
@@ -452,56 +455,14 @@ export function analyzeArchitecture(
 			)
 				continue;
 			if (owner === 'factories' && targetLayer === 'factories' && !sameFile) continue;
+			// A service is the controller's boundary to persistence; what it calls is its own concern.
+			if (owner === 'controllers' && targetLayer === 'services') continue;
 			if (project(target) && executable(target) && target.body && !sameClass)
 				walkExecuted(target.body, (child) => {
 					if (ts.isCallExpression(child))
 						inspectDependency(site, child.expression, owner, seen, trace);
 				});
 		}
-	};
-
-	const adapterOperations = (
-		body: ts.Node,
-		seen = new Set<ts.Node>()
-	): { operations: Map<ts.Node, readonly ts.Node[]>; workflow: boolean } => {
-		const operations = new Map<ts.Node, readonly ts.Node[]>();
-		const groups: Map<ts.Node, readonly ts.Node[]>[] = [];
-		let workflow = false;
-		walkExecuted(body, (child) => {
-			if (!ts.isCallExpression(child)) return;
-			const group = new Map<ts.Node, readonly ts.Node[]>();
-			for (const origin of origins(child.expression)) {
-				const target = origin.declaration;
-				if (seen.has(target)) continue;
-				if (
-					layer(pathOf(target)) === 'controllers' &&
-					(ts.isMethodDeclaration(target) || ts.isMethodSignature(target))
-				) {
-					group.set(target, origin.trail);
-				} else if (project(target) && executable(target) && target.body) {
-					const nested = adapterOperations(target.body, new Set([...seen, target]));
-					workflow ||= nested.workflow;
-					for (const [operation, trail] of nested.operations)
-						group.set(operation, [...origin.trail, ...trail]);
-				}
-			}
-			if (group.size) groups.push(group);
-			for (const [operation, trail] of group) operations.set(operation, trail);
-		});
-		// Different producers of one callback are alternatives, not a sequence. A producer
-		// that itself coordinates operations is checked recursively in its own body.
-		return { operations, workflow: workflow || (groups.length > 1 && operations.size > 1) };
-	};
-	const inspectAdapterWorkflow = (root: ts.Node): void => {
-		if (!executable(root) || !root.body) return;
-		const result = adapterOperations(root.body, new Set([root]));
-		if (result.workflow)
-			report(
-				root,
-				'adapter-orchestration',
-				'An adapter operation must delegate one complete controller operation, not coordinate controller operations.',
-				[...result.operations.values()].flat()
-			);
 	};
 
 	const classOrigins = (type: ts.Type, seen = new Set<ts.Type>()): ts.ClassLikeDeclaration[] => {
@@ -720,7 +681,7 @@ export function analyzeArchitecture(
 				});
 			if (
 				project(declaration) &&
-				['services', 'repositories', 'stores', 'remote', 'adapters'].includes(owner) &&
+				['services', 'repositories', 'stores', 'remote'].includes(owner) &&
 				!stateView &&
 				(owner === 'stores' || hasCallable(type))
 			)
@@ -999,7 +960,6 @@ export function analyzeArchitecture(
 	for (const source of projectFiles) {
 		const owner = layer(pathOf(source));
 		walk(source, (node) => {
-			if (owner === 'adapters') inspectAdapterWorkflow(node);
 			if (ts.isCallExpression(node)) {
 				inspectDependency(node, node.expression, owner);
 			}
@@ -1023,7 +983,7 @@ export function analyzeArchitecture(
 			}
 			if (
 				(ts.isTypeReferenceNode(node) || ts.isTypeQueryNode(node)) &&
-				['services', 'controllers', 'stores', 'adapters', 'components'].includes(owner)
+				['services', 'controllers', 'stores', 'components'].includes(owner)
 			) {
 				const type = checker.getTypeAtLocation(node);
 				if (
@@ -1035,7 +995,7 @@ export function analyzeArchitecture(
 					inspectType(node, type, false);
 			}
 			if (
-				['services', 'controllers', 'stores', 'adapters'].includes(owner) &&
+				['services', 'controllers', 'stores'].includes(owner) &&
 				(ts.isParameter(node) || ts.isPropertyDeclaration(node)) &&
 				!node.type &&
 				node.initializer
