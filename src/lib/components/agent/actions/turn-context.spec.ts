@@ -4,7 +4,7 @@ import type { NoteSummary } from '$lib/models/notes';
 
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
-import { passLabelText, readDoorLabel, runningSteps, turnContext } from './turn-context';
+import { passLabelText, sourcesRowLabel, runningSteps, turnContext } from './turn-context';
 
 const ATLAS = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
 const BRIEF = '2f0f5a2c-1c22-4a7f-9d1f-7cf4a1f2b0d1';
@@ -163,12 +163,12 @@ describe('A search files its matches under the notes they were found in', () => 
 });
 
 describe('A read is context, not a change', () => {
-	it('puts a note the turn only searched behind the read door', () => {
+	it('puts a note the turn only searched in the sources row', () => {
 		const context = turnContext([grep()], shell);
 		expect({
 			reads: context.read.length,
 			changed: context.changed.length,
-			label: readDoorLabel(context)
+			label: sourcesRowLabel(context)
 		}).toEqual({
 			reads: 1,
 			changed: 0,
@@ -267,7 +267,7 @@ describe('A failure the call could not name still gets a row', () => {
 	});
 });
 
-describe('The read door names the files an answer stood on', () => {
+describe('The sources row names the files an answer stood on', () => {
 	const attachmentHit = (id: string, title: string) => ({
 		source: { kind: 'attachment', id, projectId: 'proj-1', title },
 		content: `passage from ${title}`,
@@ -289,7 +289,7 @@ describe('The read door names the files an answer stood on', () => {
 
 	it('names a searched attachment beside the notes it counts', () => {
 		const context = turnContext([search([attachmentHit('att-1', 'MSA-2026.pdf')]), grep()], shell);
-		expect(readDoorLabel(context)).toBe('Read MSA-2026.pdf and 1 note');
+		expect(sourcesRowLabel(context)).toBe('Read MSA-2026.pdf and 1 note');
 	});
 
 	it('names two files and counts the rest as more', () => {
@@ -303,7 +303,7 @@ describe('The read door names the files an answer stood on', () => {
 			],
 			shell
 		);
-		expect(readDoorLabel(context)).toBe('Read MSA-2026.pdf, SOW.docx and 1 more attachment');
+		expect(sourcesRowLabel(context)).toBe('Read MSA-2026.pdf, SOW.docx and 1 more attachment');
 	});
 
 	it('keeps the name a search gave a file the agent then read by path', () => {
@@ -311,11 +311,11 @@ describe('The read door names the files an answer stood on', () => {
 			[search([attachmentHit('att-1', 'MSA-2026.pdf')]), sedAttachment('att-1')],
 			shell
 		);
-		expect(readDoorLabel(context)).toBe('Read MSA-2026.pdf');
+		expect(sourcesRowLabel(context)).toBe('Read MSA-2026.pdf');
 	});
 
 	it('counts a file read only by path, whose name it never learned', () => {
 		const context = turnContext([sedAttachment('att-9')], shell);
-		expect(readDoorLabel(context)).toBe('Read 1 attachment');
+		expect(sourcesRowLabel(context)).toBe('Read 1 attachment');
 	});
 });

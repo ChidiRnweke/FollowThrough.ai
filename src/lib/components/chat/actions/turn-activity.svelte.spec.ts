@@ -82,14 +82,14 @@ describe('A settled turn reports the things it touched, once each', () => {
 	});
 });
 
-describe('What was only read is context, and lives behind one door', () => {
+describe('What was only read is context, and lives in one sources row', () => {
 	// "Called 6 tools" named mechanism: how hard it worked, never what it worked from.
-	it('names the note behind the read door and keeps it out of the thread', async () => {
+	it('names the note in the sources row and keeps it out of the thread', async () => {
 		const screen = await renderTurn([grep()]);
-		const door = screen.getByRole('button', { name: 'Read 1 note' });
-		await expect.element(door).toBeVisible();
+		const sourcesRow = screen.getByRole('button', { name: 'Read 1 note' });
+		await expect.element(sourcesRow).toBeVisible();
 		await expect.element(screen.getByText('Infrastructure')).not.toBeVisible();
-		await door.click();
+		await sourcesRow.click();
 		await expect.element(screen.getByText('Infrastructure')).toBeVisible();
 	});
 });
@@ -198,7 +198,7 @@ describe('A failure is news only when nothing put it right', () => {
 	});
 });
 
-describe('Looks that found nothing are a row like everything else behind the door', () => {
+describe('Looks that found nothing are a row like everything else in the sources row', () => {
 	const fruitless = () =>
 		call({
 			name: 'grep',
@@ -206,7 +206,7 @@ describe('Looks that found nothing are a row like everything else behind the doo
 			output: { kind: 'no_matches' }
 		});
 
-	const openDoor = async (tools: ChatToolActivity[]) => {
+	const openSourcesRow = async (tools: ChatToolActivity[]) => {
 		const screen = await renderTurn(tools);
 		await screen.getByText('What it looked at').click();
 		return screen;
@@ -215,7 +215,7 @@ describe('Looks that found nothing are a row like everything else behind the doo
 	// Named by what it did, because that is the only identity it has. A count named a quantity
 	// where every neighbouring row names a thing.
 	it('gives each look its own row', async () => {
-		const screen = await openDoor([fruitless(), fruitless()]);
+		const screen = await openSourcesRow([fruitless(), fruitless()]);
 		expect(await screen.getByText(/Searched for/).all()).toHaveLength(2);
 	});
 
@@ -223,7 +223,7 @@ describe('Looks that found nothing are a row like everything else behind the doo
 	// above: the collapsible keeps its content mounted, so presence in the document says nothing
 	// about what is on screen.
 	it('titles the search row and reveals its empty result on open', async () => {
-		const screen = await openDoor([fruitless()]);
+		const screen = await openSourcesRow([fruitless()]);
 		const query = screen.getByText(/Searched for/);
 		const empty = screen.getByText('Nothing came back.');
 		await expect.element(query).toBeVisible();

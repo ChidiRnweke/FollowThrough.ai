@@ -104,7 +104,7 @@
 	} = $props();
 
 	/**
-	 * Which activity group carries the turn's log. One door per turn, hung off the last group
+	 * Which activity group carries the turn's log. One sources row per turn, hung off the last group
 	 * so it sits at the end of the work rather than repeating down it.
 	 */
 	const lastActivityIndex = (entry: ChatEntry): number =>

@@ -19,7 +19,7 @@
 	One look that came back with nothing.
 
 	Named by what it did — "Read project memory" — because that is the only identity it has.
-	Every other row behind the door is titled by its subject, and a look that found nothing has
+	Every other row in the sources row is titled by its subject, and a look that found nothing has
 	no subject to be titled by; the request is what the reader recognises, and counting the looks
 	instead ("3 looks came back with nothing") named a quantity where every neighbouring row
 	names a thing.
@@ -30,7 +30,7 @@
 	under the list.
 
 	No `· nothing` suffix on the statement. Membership of this group is the fact — everything
-	rendered here came back empty — and the door's own label already says the reader is looking
+	rendered here came back empty — and the sources row's own label already says the reader is looking
 	at what the turn only looked at.
 
 	Geometry is `subject-row.svelte`'s, including `min-w-0 flex-1 shrink` on the Button rather

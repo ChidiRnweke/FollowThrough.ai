@@ -1,6 +1,6 @@
 /**
  * One geometry for every row inside a turn: the subjects the turn touched, and the calls
- * behind its log door. The two had drifted to two paddings, two gaps and two heights, which
+ * in the sources row. The two had drifted to two paddings, two gaps and two heights, which
  * in a 384px column reads as two kinds of list rather than one.
  *
  * A class string rather than an `@utility`, and the reason is `cn()`. It is clsx plus
@@ -74,7 +74,7 @@ export const CHAT_ROW_INDENT = 'pl-6';
  * each reaching for "about an `xs`" is how the flatness arrived.
  */
 
-/** 13px. A line that titles the block beneath it: a request, the read door, a failure. */
+/** 13px. A line that titles the block beneath it: a request, the sources row, a failure. */
 export const CHAT_TEXT_REQUEST = 'text-label';
 
 /**
@@ -111,7 +111,7 @@ export const CHAT_GAP_BOND = 'gap-1';
 export const CHAT_GAP_PASS = 'gap-3';
 
 /**
- * 20px. Between subjects, failures and the read door.
+ * 20px. Between subjects, failures and the sources row.
  *
  * 20 rather than 24, and not to be tidied: `chat-thread.svelte` spends 24px separating one turn
  * from the next, and a gap inside a turn must stay under the gap between turns or the turn stops

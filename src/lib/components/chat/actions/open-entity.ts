@@ -11,7 +11,7 @@ import * as Icon from '$lib/components/icons';
 
 /**
  * Where each kind of thing lives, and what it looks like in a row. Shared so the turn's
- * touched list and the rows behind its log door open the same things the same way — two
+ * touched list and the rows in the sources row open the same things the same way — two
  * routings would eventually disagree, and the one that drifted would be the one nobody
  * clicked in testing.
  */

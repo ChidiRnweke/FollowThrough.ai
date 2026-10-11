@@ -24,7 +24,7 @@ export {
 export {
 	isWriteVerb,
 	passLabelText,
-	readDoorLabel,
+	sourcesRowLabel,
 	runningSteps,
 	turnContext,
 	type BarrenPass,
