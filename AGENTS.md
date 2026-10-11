@@ -12,6 +12,11 @@ explain the area you are changing. Run `pnpm test:architecture` after structural
 its topology and test-quality audits supplement Chisel — do not silence one checker to satisfy
 another.
 
+Load the `coding-standards` skill before writing or reviewing code. It holds the general
+structure, typing, error and testing standards; this file and the ADRs add the rules specific to
+this repository and win where they are more specific. Audit delegated work with its
+`references/audit.md` before opening a PR.
+
 ## Commit messages
 
 Commits and PR titles follow [Conventional Commits](https://www.conventionalcommits.org/): a type
