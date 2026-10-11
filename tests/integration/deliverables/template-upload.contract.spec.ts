@@ -38,7 +38,7 @@ const setup = async (suffix: string) => {
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DeliverablesDependencies>({
 				...agentToolResultsFixture(),
-				...createTemplateServices(
+				templateStore: createTemplateServices(
 					actor,
 					new TemplateRecords(actor, transaction.database),
 					() => now

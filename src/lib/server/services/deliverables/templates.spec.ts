@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TemplateUploadService } from './templates';
+import { TemplateLibrary } from './templates';
 import { InMemoryTemplateRepository } from '$lib/testing/attachments/fakes/in-memory-deliverables';
 import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
@@ -12,7 +12,7 @@ const input = {
 };
 describe('template upload reservations', () => {
 	it('rejects an empty upload reservation', async () => {
-		const templates = new TemplateUploadService(
+		const templates = new TemplateLibrary(
 			testActor(),
 			new InMemoryTemplateRepository(testActor()),
 			() => testNow
@@ -22,7 +22,7 @@ describe('template upload reservations', () => {
 		});
 	});
 	it('rejects a malformed checksum', async () => {
-		const templates = new TemplateUploadService(
+		const templates = new TemplateLibrary(
 			testActor(),
 			new InMemoryTemplateRepository(testActor()),
 			() => testNow
@@ -32,7 +32,7 @@ describe('template upload reservations', () => {
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 	it('normalizes the checksum and retains the declared size in the reservation', async () => {
-		const templates = new TemplateUploadService(
+		const templates = new TemplateLibrary(
 			testActor(),
 			new InMemoryTemplateRepository(testActor()),
 			() => testNow

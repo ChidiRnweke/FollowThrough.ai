@@ -54,7 +54,7 @@ export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 	const templates = new InMemoryTemplateRepository(testActor());
 	const exportSettings = new InMemoryExportSettingsRepository(testActor());
 	const provenance = new InMemoryProvenanceRecorder(testActor());
-	const library = createArtifactServices(testActor(), artifacts, exportSettings);
+	const library = createArtifactServices(artifacts, exportSettings);
 	const widgets = new InMemoryWidgetRepository(testActor());
 	const todos = new InMemoryTodoRepository(testActor());
 	const service = new Deliverables(
@@ -64,14 +64,10 @@ export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 			...agentToolResultsFixture(),
 			exportSettingsRules: new ExportSettingsRuleService(),
 			artifactFiles: new ArtifactFileService(),
-			...createTemplateServices(testActor(), templates),
+			templateStore: createTemplateServices(testActor(), templates),
 			artifactStorage: storage,
-			artifactWriter: library.artifactWriter,
-			artifactReader: library.artifactReader,
-			artifactLister: library.artifactLister,
-			artifactDeleter: library.artifactDeleter,
-			exportSettingsReader: library.exportSettingsReader,
-			exportSettingsWriter: library.exportSettingsWriter,
+			artifactStore: library.artifactStore,
+			exportSettings: library.exportSettings,
 			noteReader: notes,
 			provenanceRecorder: provenance,
 			prepareExport: new ExportPreparationService(),

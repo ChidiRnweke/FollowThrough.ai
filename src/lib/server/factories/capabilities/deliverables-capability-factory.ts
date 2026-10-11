@@ -43,9 +43,9 @@ import { MermaidThemeService, type MermaidThemeRules } from '$lib/services/diagr
 import {
 	createArtifactServices,
 	createTemplateServices,
-	type ArtifactServices,
-	type TemplateServices
+	type ArtifactServices
 } from './deliverable-storage-factory';
+import type { TemplateStore } from '$lib/server/services/deliverables/templates';
 
 export interface DeliverablesCapabilityInput {
 	readonly db: Database;
@@ -55,7 +55,7 @@ export interface DeliverablesCapabilityInput {
 export interface DeliverablesCapability {
 	readonly exportSettingsRules: ExportSettingsRules;
 	readonly artifactFiles: ArtifactFiles;
-	readonly templates: TemplateServices;
+	readonly templates: TemplateStore;
 	readonly templateStorage: IAttachmentStorage;
 	readonly templateStyles: TemplateStyleReader;
 	readonly artifacts: ArtifactServices;
@@ -82,7 +82,6 @@ export const createDeliverablesCapability = (
 	templateStorage: input.storage,
 	templateStyles: new DocxTemplateStyleReader(),
 	artifacts: createArtifactServices(
-		actor,
 		new ArtifactRecords(actor, input.db),
 		new ExportSettingsRecords(actor, input.db)
 	),

@@ -30,7 +30,7 @@ const setup = async (suffix: string) => {
 			syncRetry: sync.mutationRetry,
 			transactionRunner,
 			exportSettingsRules: new ExportSettingsRuleService(),
-			exportSettingsWriter: artifacts
+			exportSettings: artifacts
 		})
 	);
 	return { ...seeded, controller, sync, settings };
