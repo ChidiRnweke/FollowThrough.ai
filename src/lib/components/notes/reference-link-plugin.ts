@@ -109,7 +109,7 @@ const resolveTextRange = (
 	return { from: first, to: first + anchor.quote.length };
 };
 
-export const resolveReferenceLinkGroups = (
+const resolveReferenceLinkGroups = (
 	doc: ProseMirrorNode,
 	references: readonly AnchoredReferenceLink[],
 	currentRevision: number
@@ -163,7 +163,7 @@ const editorLinkElementFrom = (target: EventTarget | null): HTMLAnchorElement | 
 	return target.closest<HTMLAnchorElement>('a[href]') ?? undefined;
 };
 
-export const resolveAuthoredLinkGroup = (
+const resolveAuthoredLinkGroup = (
 	link: HTMLAnchorElement
 ): ResolvedReferenceLinkGroup | undefined => {
 	const href = link.getAttribute('href')?.trim();

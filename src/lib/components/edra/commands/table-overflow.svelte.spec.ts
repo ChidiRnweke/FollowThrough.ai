@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createEditor } from './editor';
 import type { Editor } from './CoreEditor';
-import { tableOverflowClass } from './table';
 import '../editor.css';
 
 const mounted: { element: HTMLElement; dispose: () => void }[] = [];
@@ -47,8 +46,7 @@ const mount = (hostWidth: number, columns: number, columnWidth: number) => {
 	return { host, wrapper };
 };
 
-const isOverflowing = (wrapper: HTMLElement) => () =>
-	wrapper.classList.contains(tableOverflowClass);
+const scrollsHorizontally = (wrapper: HTMLElement) => () => getComputedStyle(wrapper).overflowX;
 
 afterEach(() => {
 	for (const entry of mounted.splice(0)) {
@@ -60,14 +58,14 @@ afterEach(() => {
 describe('A note table wider than its pane', () => {
 	it('scrolls horizontally instead of being cut off', async () => {
 		const { wrapper } = mount(400, 8, 150);
-		await expect.poll(() => getComputedStyle(wrapper).overflowX).toBe('auto');
+		await expect.poll(scrollsHorizontally(wrapper)).toBe('auto');
 	});
 
 	it('stops scrolling once the pane grows wide enough to fit it', async () => {
 		const { host, wrapper } = mount(400, 8, 150);
-		await expect.poll(isOverflowing(wrapper)).toBe(true);
+		await expect.poll(scrollsHorizontally(wrapper)).toBe('auto');
 		host.style.width = '2000px';
-		await expect.poll(isOverflowing(wrapper)).toBe(false);
+		await expect.poll(scrollsHorizontally(wrapper)).not.toBe('auto');
 	});
 });
 
