@@ -61,8 +61,7 @@ const setup = (actor: ActorContext) => {
 				todoPresentation: new TodoPresentationService(),
 				memoryPresentation: new MemoryPresentationService(),
 				...dependencies,
-				syncChanges: synchronization.changes,
-				resourceVersions: synchronization.resourceVersions,
+				syncReads: synchronization.reads,
 				resourceKeys: synchronization.resourceKeys
 			})
 		)

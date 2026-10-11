@@ -51,7 +51,7 @@ it('returns only relationships whose source and target are readable', async () =
 		sourceNoteId: '00000000-0000-4000-8000-000000000003' as NoteRelationship['sourceNoteId'],
 		targetNoteId: target.id
 	};
-	expect(await graph.contexts.readContexts([missingTarget, missingSource, readable])).toEqual([
+	expect(await graph.reader.readContexts([missingTarget, missingSource, readable])).toEqual([
 		{ relationship: readable, source, target }
 	]);
 });

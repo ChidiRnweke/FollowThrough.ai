@@ -9,6 +9,8 @@ const STANDARD_HOSTS = [
 	'unicode.org'
 ];
 
+const TIER_WEIGHT = { official: 0, standard: 1, vendor: 2, community: 3 } as const;
+
 const hostMatches = (hostname: string, domain: string): boolean =>
 	hostname === domain || hostname.endsWith(`.${domain}`);
 
@@ -55,7 +57,14 @@ export interface ReferenceCandidatePreparation {
 		selectionText: string
 	): readonly ReferenceCandidate[];
 }
-export class ReferenceDiscovery implements ReferenceCandidatePreparation {
+/** Orders the unique sources presented for review. */
+export interface ReferenceRanker {
+	rank(candidates: readonly ReferenceCandidate[]): readonly ReferenceCandidate[];
+}
+/** Turns cited sources into reviewable candidates, then orders them by trust tier. */
+export interface ReferenceCandidates extends ReferenceCandidatePreparation, ReferenceRanker {}
+
+export class ReferenceDiscovery implements ReferenceCandidates {
 	prepare(
 		sources: readonly ReferenceSource[],
 		selectionText: string
@@ -66,5 +75,11 @@ export class ReferenceDiscovery implements ReferenceCandidatePreparation {
 			seen.add(source.url);
 			return [candidateFromCitation(source, selectionText)];
 		});
+	}
+	rank(candidates: readonly ReferenceCandidate[]): readonly ReferenceCandidate[] {
+		return [...new Map(candidates.map((candidate) => [candidate.url, candidate])).values()].sort(
+			(left, right) =>
+				TIER_WEIGHT[left.tier] - TIER_WEIGHT[right.tier] || right.confidence - left.confidence
+		);
 	}
 }

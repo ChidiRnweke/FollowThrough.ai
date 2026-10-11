@@ -16,14 +16,13 @@ import type {
 } from '$lib/models/references';
 import type { ReferenceSuggestion } from '$lib/models/suggestions';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { ReferenceCandidatePreparation } from '$lib/server/services/references/discovery';
+import type { ReferenceCandidates } from '$lib/server/services/references/discovery';
 import type { AgentRunSettings } from '$lib/services/agent/run-settings';
 import { REFERENCE_WEB_SEARCH_DEFAULTS, type WebResearchOptions } from '$lib/models/agent';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
 import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
-import type { ReferenceRanker } from '$lib/server/services/references/ranking';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type { RunSignals } from '$lib/server/services/agent/runs/signals';
 
@@ -51,10 +50,9 @@ export interface ReferencesController {
 export interface ReferencesDependencies {
 	selectionOrigins: SelectionOriginService;
 	referenceClient: WebReferenceClient;
-	referenceCandidates: ReferenceCandidatePreparation;
+	referenceCandidates: ReferenceCandidates;
 	researchSettings: AgentRunSettings;
 	researchOverrides: WebResearchOptions;
-	referenceRanker: ReferenceRanker;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
 	noteActionRequests: NoteActionSubmission;
@@ -186,7 +184,7 @@ export class References implements ReferencesController {
 			...(options?.signal ? { signal: options.signal } : {})
 		});
 		options?.signal?.throwIfAborted();
-		return this.dependencies.referenceRanker.rank(found);
+		return this.dependencies.referenceCandidates.rank(found);
 	}
 
 	private async searchReferences(

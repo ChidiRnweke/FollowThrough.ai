@@ -146,16 +146,13 @@ describe('note view assembly', () => {
 				noteReader: content,
 				projectReader: projects,
 				userPreferences: new InMemoryUserPreferencesRepository(actor),
-				relationshipFinder: graph.finder,
-				backlinkContextReader: graph.contexts,
-				referenceLister: library.lister,
-				referenceContextReader: library.contexts,
+				relationshipReader: graph.reader,
+				referenceReader: library.reader,
 				diagramLister: new InMemoryDiagramRepository(actor),
 				todoLister: todos,
 				todoContextReader: todos,
-				suggestionLister: suggestions.lister,
-				suggestionExpirer: suggestions.expirer,
-				suggestionContextReader: suggestions.context
+				suggestionReader: suggestions.reader,
+				suggestionExpirer: suggestions.expirer
 			})
 		);
 		const records = [

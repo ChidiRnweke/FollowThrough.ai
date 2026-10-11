@@ -123,7 +123,7 @@ describe('Suggestion management invariants', () => {
 		suggestions.suggestions = [
 			suggestionBuilder({ expiresAt: '2026-07-10T09:00:00.000Z' as never })
 		];
-		await service.lister.listByStatus('proposed');
+		await service.reader.listByStatus('proposed');
 		expect(suggestions.suggestions[0]?.status).toBe('proposed');
 	});
 
@@ -141,6 +141,6 @@ describe('Suggestion management invariants', () => {
 				reason: 'Unrecognized key: "shape"'
 			}
 		];
-		expect(await service.lister.listByStatus('proposed')).toEqual([suggestionBuilder()]);
+		expect(await service.reader.listByStatus('proposed')).toEqual([suggestionBuilder()]);
 	});
 });

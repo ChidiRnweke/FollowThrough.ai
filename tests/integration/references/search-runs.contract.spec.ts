@@ -26,7 +26,6 @@ import { ProjectRecords } from '$lib/server/repositories/projects/postgres/proje
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { ReferenceRanking } from '$lib/server/services/references/ranking';
 import { AgentRunStatusService } from '$lib/services/agent/run-status';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
@@ -98,7 +97,6 @@ const setup = async (suffix: string) => {
 		referenceCandidates: new ReferenceDiscovery(),
 		researchSettings: new AgentRunSettingsService(),
 		researchOverrides: {},
-		referenceRanker: new ReferenceRanking(),
 		referenceModel: 'test/model',
 		runSettlements: settlements,
 		runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs),

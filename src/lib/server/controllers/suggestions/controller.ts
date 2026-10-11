@@ -37,10 +37,9 @@ import type { DateTime, AtomicOperation as TransactionRunner } from '$lib/models
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type {
 	SuggestionAccepter,
-	SuggestionContextReader,
 	SuggestionExpirer,
 	SuggestionFinder,
-	SuggestionLister,
+	SuggestionReader,
 	SuggestionRejecter,
 	SuggestionReverter
 } from '$lib/server/services/suggestions/inbox';
@@ -107,9 +106,8 @@ export interface SuggestionsController {
 export interface SuggestionsDependencies {
 	readonly todoCreationRules: TodoCreationRules;
 	readonly suggestionPresentation: ISuggestionPresentationService;
-	suggestionLister: SuggestionLister;
+	suggestionReader: SuggestionReader;
 	suggestionExpirer: SuggestionExpirer;
-	suggestionContextReader: SuggestionContextReader;
 	suggestionFinder: SuggestionFinder;
 	suggestionAccepter: SuggestionAccepter;
 	suggestionRejecter: SuggestionRejecter;
@@ -136,13 +134,13 @@ export class Suggestions implements SuggestionsController {
 	) {}
 	async list(input: ListSuggestionsInput): Promise<ListSuggestionsOutput> {
 		await this.dependencies.suggestionExpirer.expire();
-		const suggestions = await this.dependencies.suggestionLister.listByStatus(input.status);
+		const suggestions = await this.dependencies.suggestionReader.listByStatus(input.status);
 		const views = await this.readViews(suggestions);
 		return { groups: this.dependencies.suggestionPresentation.groupSuggestionViews(views) };
 	}
 	async listPendingMemory(input: ListPendingMemoryInput): Promise<ListPendingMemoryOutput> {
 		await this.dependencies.suggestionExpirer.expire();
-		const pending = await this.dependencies.suggestionLister.listByStatus('proposed');
+		const pending = await this.dependencies.suggestionReader.listByStatus('proposed');
 		const memory = this.dependencies.suggestionPresentation.pendingMemorySuggestions(
 			pending,
 			input.projectId
@@ -153,7 +151,7 @@ export class Suggestions implements SuggestionsController {
 		};
 	}
 	private async readViews(suggestions: readonly Suggestion[]): Promise<readonly SuggestionView[]> {
-		const contexts = await this.dependencies.suggestionContextReader.readContexts(suggestions);
+		const contexts = await this.dependencies.suggestionReader.readContexts(suggestions);
 		return contexts.map(({ suggestion, note, anchor, provenance }) =>
 			this.dependencies.suggestionPresentation.assembleSuggestionView(suggestion, {
 				note,

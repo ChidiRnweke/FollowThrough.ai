@@ -1,16 +1,8 @@
 import type { ActorContext } from '$lib/models/identity';
 import {
-	SyncObjectService,
-	type SyncObjectReader
-} from '$lib/server/services/workspace/sync-objects';
-import {
-	WorkspaceJournal,
-	type WorkspaceJournalReader
-} from '$lib/server/services/workspace/journal';
-import {
-	WorkspaceResourceVersions,
-	type WorkspaceResourceVersionReader
-} from '$lib/server/services/workspace/resource-versions';
+	WorkspaceSyncReads,
+	type WorkspaceSyncReader
+} from '$lib/server/services/workspace/sync-reads';
 import {
 	WorkspaceCommandRulesService,
 	type WorkspaceCommandRules
@@ -29,11 +21,9 @@ import {
 } from '$lib/server/services/workspace/mutation-receipts';
 
 export interface SyncCapability {
-	readonly changes: WorkspaceJournalReader;
-	readonly resourceVersions: WorkspaceResourceVersionReader;
+	readonly reads: WorkspaceSyncReader;
 	readonly resourceKeys: WorkspaceCommandRules;
 	readonly objects: SyncObjectRepository;
-	readonly objectReader: SyncObjectReader;
 	readonly mutationRetry: 'database-only' | 'never';
 	readonly mutations: WorkspaceMutationGuard & WorkspaceWriteRecoveryService;
 }
@@ -49,11 +39,9 @@ export const createSyncCapability = (
 ): SyncCapability => {
 	const objects = new WorkspaceSyncObjects(actor, db);
 	return {
-		changes: new WorkspaceJournal(new WorkspaceSyncChanges(actor, db)),
-		resourceVersions: new WorkspaceResourceVersions(objects),
+		reads: new WorkspaceSyncReads(new WorkspaceSyncChanges(actor, db), objects),
 		resourceKeys: new WorkspaceCommandRulesService(),
 		objects,
-		objectReader: new SyncObjectService(objects),
 		mutationRetry: deferEmbedding ? ('database-only' as const) : ('never' as const),
 		mutations: new WorkspaceMutationReceipts({
 			syncObjects: objects,

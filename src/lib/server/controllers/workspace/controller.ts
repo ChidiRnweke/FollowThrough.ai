@@ -1,7 +1,6 @@
 import { syncEtag } from '$lib/models/sync';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
-import type { WorkspaceJournalReader } from '$lib/server/services/workspace/journal';
-import type { WorkspaceResourceVersionReader } from '$lib/server/services/workspace/resource-versions';
+import type { WorkspaceSyncReader } from '$lib/server/services/workspace/sync-reads';
 import type { User } from '$lib/models/identity';
 import type { NoteSummary } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
@@ -20,7 +19,6 @@ import type {
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SyncWriteRecovery } from '$lib/server/services/workspace/contracts';
-import type { SyncObjectReader } from '$lib/server/services/workspace/sync-objects';
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import type { TodoPresentation } from '$lib/services/todos/presentation';
 import type { TodayPresentation } from '$lib/services/workspace/today';
@@ -62,10 +60,8 @@ export interface WorkspaceDependencies {
 	builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
 	transactionRunner: TransactionRunner;
 	writeRecovery: SyncWriteRecovery;
-	syncChanges: WorkspaceJournalReader;
-	resourceVersions: WorkspaceResourceVersionReader;
+	syncReads: WorkspaceSyncReader;
 	resourceKeys: WorkspaceCommandRules;
-	syncObjects: SyncObjectReader;
 	userReader: UserReader;
 	noteTreeReader: NoteTreeReader;
 	projectLister: ProjectLister;
@@ -87,7 +83,7 @@ export class Workspace implements WorkspaceController {
 			await this.dependencies.transactionRunner.run(() => this.dependencies.builtInSkills.ensure());
 		return this.dependencies.transactionRunner.run(
 			async () => {
-				const page = await this.dependencies.syncChanges.selectPage(since);
+				const page = await this.dependencies.syncReads.selectPage(since);
 				const records: SyncPage<WorkspaceRecord>['records'][number][] = [];
 				for (const change of page.changes) {
 					const key = this.dependencies.resourceKeys.workspaceResourceKey(change.identity);
@@ -95,7 +91,7 @@ export class Workspace implements WorkspaceController {
 					const resource =
 						change.kind === 'delete'
 							? { kind: 'deleted' as const, etag }
-							: await this.dependencies.resourceVersions.readVersion(change.identity, etag);
+							: await this.dependencies.syncReads.readVersion(change.identity, etag);
 					records.push({ key, resource });
 				}
 				return { cursor: page.cursor, hasMore: page.hasMore, records };
@@ -111,7 +107,7 @@ export class Workspace implements WorkspaceController {
 	}
 
 	readResource(identity: WorkspaceResourceIdentity, etag: SyncEtag | null) {
-		return this.dependencies.syncObjects.read(identity, etag);
+		return this.dependencies.syncReads.read(identity, etag);
 	}
 	async getShellContext(): Promise<ShellContext> {
 		await this.dependencies.transactionRunner.run(() => this.dependencies.builtInSkills.ensure());

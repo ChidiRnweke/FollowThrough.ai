@@ -10,18 +10,17 @@ import type {
 } from '$lib/server/repositories/provenance';
 import { ReferenceRecords } from '$lib/server/repositories/references/postgres/references';
 import {
-	ReferenceReadingService,
-	ReferenceWritingService,
+	ReferenceLibrary,
 	type ReferenceCreator,
-	type ReferenceLister,
-	type ReferenceContextReader
+	type ReferenceReader
 } from '$lib/server/services/references/library';
 import type { ReferenceRepository } from '$lib/server/repositories/references/references';
-import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
+import {
+	ReferenceDiscovery,
+	type ReferenceCandidates
+} from '$lib/server/services/references/discovery';
 import { ReferenceResearch } from '$lib/server/services/references/web-research';
-import { ReferenceRanking, type ReferenceRanker } from '$lib/server/services/references/ranking';
 import type { WebReferenceClient } from '$lib/server/services/references/web-research';
-import type { ReferenceCandidatePreparation } from '$lib/server/services/references/discovery';
 import type { AgentRunSettings } from '$lib/services/agent/run-settings';
 import type { WebResearchOptions } from '$lib/models/agent';
 import { operationObserver } from '$lib/server/infrastructure/telemetry/tracing';
@@ -40,10 +39,9 @@ export interface ReferencesCapabilityInput {
 }
 
 export interface ReferencesCapability extends ReferenceServices {
-	readonly ranking: ReferenceRanker;
 	readonly model: string;
 	readonly client: WebReferenceClient;
-	readonly candidates: ReferenceCandidatePreparation;
+	readonly candidates: ReferenceCandidates;
 	readonly settings: AgentRunSettings;
 	readonly overrides: WebResearchOptions;
 }
@@ -52,7 +50,6 @@ export const createReferencesCapability = (
 	actor: ActorContext,
 	input: ReferencesCapabilityInput
 ): ReferencesCapability => ({
-	ranking: new ReferenceRanking(),
 	model: normalizeLanguageModelId(input.defaultModel),
 	...createReferenceServices(
 		actor,
@@ -76,8 +73,7 @@ export const createReferencesCapability = (
 
 export interface ReferenceServices {
 	readonly creator: ReferenceCreator;
-	readonly lister: ReferenceLister;
-	readonly contexts: ReferenceContextReader;
+	readonly reader: ReferenceReader;
 }
 export const createReferenceServices = (
 	actor: ActorContext,
@@ -86,10 +82,6 @@ export const createReferenceServices = (
 	anchors: SourceAnchorRepository,
 	provenance: ProvenanceRepository
 ): ReferenceServices => {
-	const reading = new ReferenceReadingService(references, notes, anchors);
-	return {
-		creator: new ReferenceWritingService(actor, references, notes, anchors, provenance),
-		lister: reading,
-		contexts: reading
-	};
+	const library = new ReferenceLibrary(actor, references, notes, anchors, provenance);
+	return { creator: library, reader: library };
 };

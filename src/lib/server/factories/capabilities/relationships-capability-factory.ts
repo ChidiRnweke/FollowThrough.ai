@@ -7,12 +7,9 @@ import type {
 } from '$lib/server/repositories/provenance';
 import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';
 import {
-	RelationshipWritingService,
-	RelationshipReadingService,
-	NoteLinkReconciliationService,
+	RelationshipGraph,
 	type RelationshipCreator,
-	type RelationshipFinder,
-	type BacklinkContextReader,
+	type RelationshipReader,
 	type NoteLinkReconciler
 } from '$lib/server/services/relationships/graph';
 import type { NoteRelationshipRepository } from '$lib/server/repositories/relationships/relationships';
@@ -71,8 +68,7 @@ export const createRelationshipsCapability = (
 
 export interface RelationshipServices {
 	readonly creator: RelationshipCreator;
-	readonly finder: RelationshipFinder;
-	readonly contexts: BacklinkContextReader;
+	readonly reader: RelationshipReader;
 	readonly reconciler: NoteLinkReconciler;
 }
 export const createRelationshipServices = (
@@ -82,11 +78,6 @@ export const createRelationshipServices = (
 	anchors: SourceAnchorRepository,
 	provenance: ProvenanceRepository
 ): RelationshipServices => {
-	const reading = new RelationshipReadingService(relationships, notes);
-	return {
-		creator: new RelationshipWritingService(actor, relationships, notes, anchors, provenance),
-		finder: reading,
-		contexts: reading,
-		reconciler: new NoteLinkReconciliationService(actor, relationships, notes)
-	};
+	const graph = new RelationshipGraph(actor, relationships, notes, anchors, provenance);
+	return { creator: graph, reader: graph, reconciler: graph };
 };

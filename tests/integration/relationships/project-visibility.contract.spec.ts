@@ -54,7 +54,7 @@ it('hides a retained backlink after built-in recovery moves its source out of an
 	const recovered = await notes.findById(source.id);
 	expect({
 		recoveredElsewhere: recovered !== undefined && recovered.projectId !== source.projectId,
-		contexts: await graph.contexts.readContexts(await graph.finder.findForNote(source.id)),
+		contexts: await graph.reader.readContexts(await graph.reader.findForNote(source.id)),
 		retained: (await relationships.listForNote(source.id)).map((item) => item.id)
 	}).toEqual({ recoveredElsewhere: true, contexts: [], retained: [edge.id] });
 });
