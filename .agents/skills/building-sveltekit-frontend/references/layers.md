@@ -9,12 +9,18 @@ state ownership and controller boundary. ADRs 0037 and 0041 define parsing and s
 | `services/<domain>/` | Shared pure rules in stateless classes with explicit interfaces | I/O, other services, workflows or retained mutable state |
 | `server/services/<domain>/` | Server domain capabilities against narrow repository contracts, including the external providers they own | Other services, application orchestration or retained mutable state |
 | `server/repositories/<domain>/` | Database persistence; domain types in and out, parsing the rows they read | Business rules, provider calls or orchestration |
-| `controllers/<domain>/` | Complete browser operations and coordination | Parsing external data or exposing mutable collaborators |
+| `client/services/<area>/` (browser) | Browser capabilities over IndexedDB repositories and stores, including the remote functions they own | Other services, orchestration or retained mutable state |
+| `client/repositories/<area>/` (browser) | IndexedDB persistence; domain types in and out | Business rules, remote calls or orchestration |
+| `controllers/<domain>/` | Complete browser operations and sequencing over browser services | Parsing external data, repository access, calling other controllers or exposing mutable collaborators |
 | `server/controllers/<domain>/` | Complete server operations, transactions and sequencing over services | Parsing external data, repository access or leaking services through the public API |
 | `stores/<domain>/` (browser only) | Reactive state with an explicit lifetime and controlled updates | Transport, retries, business decisions or workflows |
 | `factories/`, `server/factories/` | Construction and dependency wiring with interface-typed results | Running application operations |
 | Entry points: remote functions, API routes, form actions, hooks, the worker | Parsing incoming data into models and calling controller operations | Service, repository or store access |
 | Components and adjacent TypeScript | Rendering, focus, DOM interaction and local form state | Service/remote/repository access or application workflows |
+
+The browser and server share one architecture. The server is the browser's provider: the browser
+service that owns an interaction calls the remote function and parses its result. The actor is
+bound when the request's factory is built (`AppFactory.forActor`); no method takes an actor.
 
 Browser components may obtain interface-typed capabilities from browser factories. Server factories
 remain server-only. Controllers receive service capabilities through factory injection. They must not import or call

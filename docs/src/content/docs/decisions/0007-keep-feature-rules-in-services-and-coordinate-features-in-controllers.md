@@ -34,7 +34,7 @@ be introduced.
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Models       | Describe data with types, values and schemas. They contain no business rules.                                                                                                   |
 | Services     | Implement a cohesive domain capability as a stateless class with a narrow public interface, including any external provider it uses. They do not call or import other services. |
-| Repositories | Persist and read domain records in the database. They take domain types in and return domain types.                                                                             |
+| Repositories | Persist and read domain records in local storage: the database on the server, IndexedDB in the browser. They take domain types in and return domain types.                      |
 | Controllers  | Expose complete application operations. They own sequencing, coordination and transaction boundaries over services.                                                             |
 | Factories    | Assemble concrete implementations and expose their narrow interfaces. They contain no business rules.                                                                           |
 | Stores       | Browser only. Own reactive application state and controlled state updates, with no business rules, transport calls or orchestration.                                            |
@@ -69,6 +69,21 @@ while a tool runs, so each tool's operation commits on its own. Factories, inclu
 only construct and connect; a tool's call runs in the harness.
 `docs/architecture/agent-harness.md` describes how the harness, its services and the tool
 factories connect.
+
+The browser and the server follow one architecture. A component is the browser's entry point; it
+calls a browser controller. Browser controllers sequence browser services under `src/lib/client/services/`,
+which own local storage through browser repositories under `src/lib/client/repositories/` and own
+their interactions with the server. The server is to the browser what a provider is to a server
+service: the browser service that owns an interaction calls the remote function, the server
+controller's entry point, and parses its result. There is no transport layer. Browser controllers
+read reactive state from stores; they never call a browser repository or another controller.
+
+The actor is part of the request, not of an operation. The entry point builds the controller
+factory for the actor it authenticated, and that factory binds the actor into every controller,
+service and repository it constructs. No interface or method takes an actor. A caller without a
+request builds the factory for the user it acts for, such as a run's owner or a token's user.
+Work across all users, such as recovering interrupted runs, uses a separate system composition
+that enumerates users and builds each one's factory; there is no optional or default actor.
 
 A service may hold readonly references to injected collaborators and immutable configuration.
 Inputs, intermediate calculations and results remain local to each operation. Mutable state that

@@ -119,13 +119,15 @@ the same header to exercise persisted UI preferences (`sidebar_state`,
 | ------------------------------- | ----------------------------------------------------------------------- |
 | `models/<domain>/`              | Values, types, Zod schemas and constructors. No business logic.         |
 | `services/<domain>/`            | Business rules shared by browser and server. No I/O (ADR 0041).         |
-| `controllers/<area>/`           | Browser-side coordination over shared services, such as offline edits.  |
+| `controllers/<area>/`           | Browser operations; sequence browser services. Never repositories.      |
+| `client/services/<area>/`       | Browser services: own IndexedDB repositories and their remote calls.    |
+| `client/repositories/<area>/`   | Browser persistence (IndexedDB) only; domain types in and out.          |
 | `server/services/<domain>/`     | Server-only logic against repositories.                                 |
 | `server/repositories/<domain>/` | Database persistence only; domain types in and out.                     |
 | `server/controllers/<domain>/`  | Orchestration across services; the only cross-service seam.             |
 | `remote/<domain>/`              | Zod-validated `query`/`command` — the sole UI→server entry point.       |
 | `stores/<area>/`                | Client `$state` singletons (`workbench`, `rightPanel`, `palette`, …).   |
-| `client/<area>/`                | Browser-only helpers: IndexedDB repositories, sync, drag payloads.      |
+| `client/<area>/`                | Other browser-only helpers: event readers, drag payloads.               |
 | `hooks/`                        | Reactive environment wrappers (`IsMobile`, `IsDockedPanel`).            |
 | `components/ui/`                | Vendored shadcn-svelte primitives. **Ours to edit** — not a dependency. |
 | `components/<feature>/`         | App components. `components/shell/` is the app chrome.                  |
@@ -209,6 +211,11 @@ dev, info in prod.
   observe readonly application state. They do not assemble service or remote calls.
 - Factories construct and connect dependencies and expose their interfaces. They do not execute
   application workflows or expose mutable internals to components.
+- The browser follows the same architecture: component → browser controller → browser service
+  (`client/services`) → browser repository (`client/repositories`, IndexedDB). The server is the
+  browser's provider: the browser service that owns an interaction calls the remote function.
+- The actor is bound when the request's factory is built, never passed to a method. Entry points
+  build `AppFactory.forActor(actor)`; work across all users uses the system composition.
 
 ## Semantic architecture checks
 
