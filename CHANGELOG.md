@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v4.0.1...v4.1.0) (2026-10-11)
+
+
+### Features
+
+* **chat:** name the attachments an answer read in its sources row ([#405](https://github.com/ChidiRnweke/FollowThrough.ai/issues/405)) ([e641d40](https://github.com/ChidiRnweke/FollowThrough.ai/commit/e641d40f9276cc6e4bbb6989bef639c6cc929289))
+* **projects:** add a per-project agent activity dashboard ([#408](https://github.com/ChidiRnweke/FollowThrough.ai/issues/408)) ([ed4ba7c](https://github.com/ChidiRnweke/FollowThrough.ai/commit/ed4ba7ca9c33b0ad8d8615b7b4984cd46c7eebcc))
+
 ## [4.0.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v4.0.0...v4.0.1) (2026-10-11)
 
 
