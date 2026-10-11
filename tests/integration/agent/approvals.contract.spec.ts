@@ -1,3 +1,5 @@
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
@@ -25,7 +27,7 @@ import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { actor, context, now, seedProvenance } from '../database-harness';
+import { actor, context, now, seedProvenance, notifications } from '../database-harness';
 
 const seed = async (suffix: string) => {
 	const owner = actor(suffix);
@@ -84,7 +86,7 @@ const approvalController = (db: typeof context.db) => {
 			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			settlements: new RunSettlements(runs, events),
 			decisions: new AgentRunDecisionRecords(database),
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
 	return { controller, runner, completion };

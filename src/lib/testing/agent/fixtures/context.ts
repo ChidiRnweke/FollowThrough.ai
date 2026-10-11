@@ -16,7 +16,7 @@ import type { AgentRunId, RunAgentInput } from '$lib/models/agent';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { AgentEventStore } from '$lib/server/stores/agent/events';
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { InMemoryAgentRunner, InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
@@ -73,7 +73,7 @@ export const agentContextFixture = () => {
 		toolActivity: new ToolActivityProjection(),
 		traceContext: { activeTraceparent: () => undefined },
 		runner: new InMemoryAgentRunner(),
-		eventBus: new AgentEventStore()
+		runSignals: new RunSignalService(runs, runs)
 	};
 	const controller = new Agent(
 		new WorkspaceCommandRulesService(),

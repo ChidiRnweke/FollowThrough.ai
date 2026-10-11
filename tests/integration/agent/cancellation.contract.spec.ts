@@ -1,3 +1,5 @@
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
@@ -20,7 +22,7 @@ import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { actor, context, now, seedProvenance } from '../database-harness';
+import { actor, context, now, seedProvenance, notifications } from '../database-harness';
 
 const seed = async (suffix: string) => {
 	const owner = actor(suffix);
@@ -68,13 +70,19 @@ const cancellationController = (db: typeof context.db) => {
 			cancellations: new RunCancellation(runs),
 			settlements: new RunSettlements(runs, events),
 			decisions: new AgentRunDecisionRecords(database),
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
 };
 
-it('cancels the authoritative running state after execution wins the row lock', async () => {
+it('aborts a running execution in another process after it wins the row lock', async () => {
 	const { owner, run } = await seed('17101');
+	const execution = new AbortController();
+	const watching = new RunSignalService(
+		new AgentRunNotificationRecords(notifications),
+		new AgentRunRecords(context.db)
+	);
+	const stopWatching = await watching.abortOnCancel(run.id, execution);
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
 	const controller = cancellationController(writer.db);
@@ -98,15 +106,18 @@ it('cancels the authoritative running state after execution wins the row lock', 
 		release.resolve();
 		await starting;
 		const snapshot = await cancellation;
-		const events = await new AgentRunEventRecords(context.db).replay(owner, run.id, '0');
+		await vi.waitFor(() => {
+			if (!execution.signal.aborted) throw new Error('The execution has not been told to stop');
+		});
 		expect({
 			status: snapshot.run.status,
 			startedAt: snapshot.run.startedAt,
-			events: events.map((record) => (record.kind === 'readable' ? record.event.type : record.kind))
-		}).toEqual({ status: 'cancelled', startedAt: now, events: ['cancelled'] });
+			aborted: execution.signal.aborted
+		}).toEqual({ status: 'cancelling', startedAt: now, aborted: true });
 	} finally {
 		release.resolve();
 		await starting;
+		await stopWatching();
 		await Promise.all([writer.close(), blocker.end()]);
 	}
 });

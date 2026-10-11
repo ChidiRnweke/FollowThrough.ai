@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import type { Database } from '$lib/server/db';
+import type { Database, NotificationChannel } from '$lib/server/db';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 
 const MIGRATIONS_FOLDER = fileURLToPath(new URL('../../../drizzle', import.meta.url));
@@ -38,6 +38,7 @@ export const migrationJournalSchema = z.object({
 export async function createPGliteDatabase(): Promise<{
 	database: Database;
 	transactionRunner: TransactionRunner;
+	notifications: NotificationChannel;
 	close: () => Promise<void>;
 }> {
 	const client = new PGlite({ extensions: { vector } });
@@ -74,6 +75,10 @@ export async function createPGliteDatabase(): Promise<{
 	return {
 		database: transactions.database,
 		transactionRunner: transactions.transactionRunner,
+		// PGlite sends `LISTEN <channel>` verbatim, so the channel is quoted here.
+		notifications: {
+			listen: (channel, onNotify) => client.listen(`"${channel}"`, () => onNotify())
+		},
 		close: () => client.close()
 	};
 }

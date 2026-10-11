@@ -5,6 +5,7 @@ import type {
 	AgentPreferences,
 	AgentRun,
 	AgentRunId,
+	AgentRunStatus,
 	RunSettlementWrite,
 	RunCancellationWrite,
 	RunApprovalWrite,
@@ -194,6 +195,14 @@ export class AgentRunRecords implements AgentRunRepository {
 			.from(schema.agentRuns)
 			.where(and(eq(schema.agentRuns.id, id), eq(schema.agentRuns.userId, actor.userId)));
 		return row ? toRun(row) : undefined;
+	}
+
+	async findStatus(id: AgentRunId): Promise<AgentRunStatus | undefined> {
+		const [row] = await this.database
+			.select({ status: schema.agentRuns.status })
+			.from(schema.agentRuns)
+			.where(eq(schema.agentRuns.id, id));
+		return row?.status;
 	}
 
 	async findForWrite(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {

@@ -1,3 +1,5 @@
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { DiagramGenerationStore } from '$lib/server/stores/diagrams/generation';
 import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
@@ -72,6 +74,8 @@ export const diagramGenerationFixture = () => {
 		provenance,
 		notes,
 		mermaidValidator: new InMemoryMermaidValidator(),
+		runSignals: new RunSignalService(persistence, persistence),
+		runSettlements: new RunSettlements(persistence, persistence),
 		now: () => testNow
 	};
 };

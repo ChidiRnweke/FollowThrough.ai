@@ -1,3 +1,4 @@
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
@@ -68,7 +69,7 @@ export const promiseExtractionFixture = () => {
 		promiseGeneration: { kind: 'model', model: 'test/model' },
 		noteActionRequests: requests,
 		runSettlements: settlements,
-		runEvents: { notify: () => {} },
+		runSignals: new RunSignalService(runs, runs),
 		suggestionCreator: suggestions,
 		trustPolicyEvaluator: trust,
 		todoCreator: todos,
@@ -86,7 +87,7 @@ export const promiseExtractionFixture = () => {
 			decisions: runs,
 			settlements,
 			transactionRunner: transactions,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(runs, runs)
 		})
 	);
 	return {

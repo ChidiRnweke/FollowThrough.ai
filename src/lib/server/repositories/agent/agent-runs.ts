@@ -18,7 +18,7 @@ import type {
 	ConversationId,
 	StoredAgentRunEventRecord
 } from '$lib/models/agent';
-import type { ResolvedAgentRun } from '$lib/models/agent';
+import type { AgentRunStatus, ResolvedAgentRun } from '$lib/models/agent';
 import type { WorkflowAgentRun } from '$lib/models/agent';
 import type { ExtractPromisesOutput } from '$lib/models/todos';
 import type {
@@ -38,6 +38,8 @@ import type { FindReferencesOutput } from '$lib/models/references';
 /** `insertIdempotent` is what makes `submit` safe to retry: a repeated `requestId` returns the existing run instead of double-firing the agent. Conditional writes persist resolved values only while the expected run state still holds. */
 export interface AgentRunRepository {
 	findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
+	/** The run's current status, read without an actor for the process executing it. */
+	findStatus(id: AgentRunId): Promise<AgentRunStatus | undefined>;
 	/** Lock an actor-owned run within the caller transaction. */
 	findForWrite(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
 	findAgentById(actor: ActorContext, id: AgentRunId): Promise<ResolvedAgentRun | undefined>;

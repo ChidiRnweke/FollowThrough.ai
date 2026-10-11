@@ -108,8 +108,6 @@ const setup = <T extends AgentRunner>(
 ) => {
 	const runs = new InMemoryAgentRunPersistence();
 	const sessions = new InMemoryAgentSessionRepository();
-	const notified: AgentRunId[] = [];
-	const approvalVisibility: boolean[] = [];
 	const journalled: { kind: 'text' | 'reasoning'; text: string; cursor?: string }[] = [];
 	const toolRows: ToolActivity[] = [];
 	const run: AgentRun = {
@@ -170,22 +168,10 @@ const setup = <T extends AgentRunner>(
 					journalled.push({ kind: 'reasoning', text, cursor: provenance?.eventCursor });
 				}
 			}),
-			runner,
-			eventBus: {
-				notify: (runId) => {
-					notified.push(runId);
-					if (runs.events.some((record) => record.event.type === 'approval_required')) {
-						const saved = runs.runs.find((row) => row.id === runId);
-						approvalVisibility.push(
-							saved?.status === 'awaiting_approval' &&
-								saved.pendingDecisions.some((pending) => pending.review !== undefined)
-						);
-					}
-				}
-			}
+			runner
 		})
 	);
-	return { lifecycle, runs, notified, runner, journalled, toolRows, approvalVisibility };
+	return { lifecycle, runs, runner, journalled, toolRows };
 };
 
 /** Runs a turn to the point where the provider is streaming, then stops it. */
@@ -211,20 +197,18 @@ const currentRun = (runs: InMemoryAgentRunPersistence) =>
 	runs.runs.find((run) => run.id === testRunId)!;
 
 describe('stopping a running agent run', () => {
-	it('settles and publishes cancellation to the run, stream, and subscribers', async () => {
-		const { runs, outcome, notified } = await stopMidStream();
+	it('settles cancellation into the run and its event stream', async () => {
+		const { runs, outcome } = await stopMidStream();
 		expect({
 			status: currentRun(runs).status,
 			finished: currentRun(runs).finishedAt !== undefined,
 			event: runs.events.some((record) => record.event.type === 'cancelled'),
-			outcome,
-			notifiedMoreThanOnce: notified.filter((runId) => runId === testRunId).length > 1
+			outcome
 		}).toEqual({
 			status: 'cancelled',
 			finished: true,
 			event: true,
-			outcome: 'cancelled',
-			notifiedMoreThanOnce: true
+			outcome: 'cancelled'
 		});
 	});
 });
@@ -590,11 +574,10 @@ describe('Durable note approval publication', () => {
 			}
 		});
 	it('publishes the durable review to the run, event, and replayable tool row', async () => {
-		const { lifecycle, runs, toolRows, approvalVisibility } = checkpoint();
+		const { lifecycle, runs, toolRows } = checkpoint();
 		await lifecycle.execute(testRunId, new AbortController().signal);
 		expect({
 			run: currentRun(runs),
-			visibleAfterCheckpoint: approvalVisibility,
 			event: runs.events.find((record) => record.event.type === 'approval_required')?.event,
 			toolRows
 		}).toMatchObject({
@@ -603,7 +586,6 @@ describe('Durable note approval publication', () => {
 				serializedState: 'provider-checkpoint',
 				pendingDecisions: [pending]
 			},
-			visibleAfterCheckpoint: [true],
 			event: { review: pending.review },
 			toolRows: [{ status: 'approval_required', review: pending.review }]
 		});

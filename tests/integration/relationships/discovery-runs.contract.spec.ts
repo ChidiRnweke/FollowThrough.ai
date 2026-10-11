@@ -1,3 +1,5 @@
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { type AgentRunId } from '$lib/models/agent';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
@@ -36,7 +38,7 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, expect, it, vi } from 'vitest';
-import { context, seedNote } from '../database-harness';
+import { context, seedNote, notifications } from '../database-harness';
 const runStatus = new AgentRunStatusService();
 
 const clients: ReturnType<typeof postgres>[] = [];
@@ -118,7 +120,7 @@ const setup = async (suffix: string) => {
 		relationshipRules: new RelationshipRules(),
 		relationshipGeneration: { kind: 'model', model: 'test/model' },
 		runSettlements: settlements,
-		runEvents: { notify: () => {} },
+		runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs),
 		selectionOrigins: notes.selectionOrigins,
 		suggestionCreator: suggestions.creator
 	};
@@ -132,7 +134,7 @@ const setup = async (suffix: string) => {
 			decisions: new AgentRunDecisionRecords(database),
 			settlements,
 			transactionRunner,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
 	const controller = new Relationships(new RelationshipCandidatesService(), dependencies);

@@ -86,8 +86,7 @@ import type { DiagramFinder, DiagramWriter } from '$lib/server/services/diagrams
 import type { MermaidSourceValidator } from '$lib/server/services/diagrams/submission-validation';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
-import { activeRunStore } from '$lib/server/stores/agent/active-runs';
-import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import type { RunSignals } from '$lib/server/services/agent/runs/signals';
 
 /**
  * Application boundary for diagrams: generating and revising Mermaid diagrams from a
@@ -254,7 +253,7 @@ export interface DiagramsDependencies {
 	diagramIndexer: DiagramIndexer;
 	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
-	runEvents: Pick<AgentEventBus, 'notify'>;
+	runSignals: RunSignals;
 }
 
 export class Diagrams implements DiagramsController {
@@ -328,7 +327,6 @@ export class Diagrams implements DiagramsController {
 			context: { kind: 'diagram_action', input }
 		});
 		if (existing) {
-			this.dependencies.runEvents.notify(existing.runId);
 			if (existing.status === 'queued') this.launchDiagramRun(actor, existing.runId);
 			return existing;
 		}
@@ -361,7 +359,6 @@ export class Diagrams implements DiagramsController {
 			if (!(error instanceof DuplicateNoteActionRequest)) throw error;
 			receipt = await this.dependencies.noteActionRequests.existing(actor, request);
 		}
-		this.dependencies.runEvents.notify(receipt.runId);
 		if (receipt.status === 'queued') this.launchDiagramRun(actor, receipt.runId);
 		return receipt;
 	}
@@ -384,10 +381,10 @@ export class Diagrams implements DiagramsController {
 			this.dependencies.noteActionRequests.claim(actor, runId, 'diagram_action')
 		);
 		if (!run) return;
-		this.dependencies.runEvents.notify(runId);
 		const active = new AbortController();
-		activeRunStore.register(runId, active);
+		let stopWatching = async () => {};
 		try {
+			stopWatching = await this.dependencies.runSignals.abortOnCancel(runId, active);
 			const input = run.contextSnapshot.input;
 			const task: DiagramTask =
 				input.operation === 'generate'
@@ -407,8 +404,7 @@ export class Diagrams implements DiagramsController {
 				await this.dependencies.runSettlements.complete(claim);
 				return true;
 			});
-			if (saved) this.dependencies.runEvents.notify(runId);
-			else
+			if (!saved)
 				await this.settleDiagramRun(runId, {
 					kind: 'cancelled',
 					message: 'Diagram generation stopped'
@@ -441,7 +437,7 @@ export class Diagrams implements DiagramsController {
 				);
 			}
 		} finally {
-			activeRunStore.release(runId, active);
+			await stopWatching();
 		}
 	}
 
@@ -455,7 +451,6 @@ export class Diagrams implements DiagramsController {
 			await this.dependencies.runSettlements.complete(claim);
 			return true;
 		});
-		if (saved) this.dependencies.runEvents.notify(runId);
 		return saved;
 	}
 
@@ -679,9 +674,16 @@ export class Diagrams implements DiagramsController {
 			);
 			return this.dependencies.generation.runs.persistCreated(actor, prepared);
 		});
+		// A cancel from any process aborts the generation; the caller's signal still applies.
+		const cancellation = new AbortController();
+		let stopWatching = async () => {};
 		try {
-			const draft = await this.generateForRun(actor, task, run);
-			task.signal?.throwIfAborted();
+			stopWatching = await this.dependencies.runSignals.abortOnCancel(run.id, cancellation);
+			const signal = task.signal
+				? AbortSignal.any([task.signal, cancellation.signal])
+				: cancellation.signal;
+			const draft = await this.generateForRun(actor, { ...task, signal }, run);
+			signal.throwIfAborted();
 			return await this.dependencies.transactionRunner.run(async () => {
 				const current = await this.dependencies.generation.runs.getForWrite(actor, run.id);
 				const change = this.dependencies.generation.runs.prepareCompletion(
@@ -703,7 +705,14 @@ export class Diagrams implements DiagramsController {
 				if (change)
 					await this.dependencies.generation.runs.persistSettlement(actor, run.id, change);
 			});
+			// A run cancelled mid-generation is settled here, where its generation stopped.
+			await this.settleDiagramRun(run.id, {
+				kind: 'cancelled',
+				message: 'Diagram generation stopped'
+			});
 			throw error;
+		} finally {
+			await stopWatching();
 		}
 	}
 	private async generateForRun(

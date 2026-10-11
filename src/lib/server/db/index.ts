@@ -19,6 +19,19 @@ export const postgresSessionConnections = {
 	}
 };
 
+/** Postgres LISTEN on one channel; resolves once listening, with the function that stops it. */
+export interface NotificationChannel {
+	listen(channel: string, onNotify: () => void): Promise<() => Promise<void>>;
+}
+
+/** Every listener in the process shares the client's single listen connection. */
+export const postgresNotifications: NotificationChannel = {
+	listen: async (channel, onNotify) => {
+		const { unlisten } = await runtimeClient().listen(channel, () => onNotify());
+		return unlisten;
+	}
+};
+
 /** Query-builder surface shared by the postgres-js and PGlite drivers. */
 export type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
 

@@ -94,7 +94,9 @@ import {
 	type ToolPreferenceCapability
 } from '$lib/server/services/agent/tools/preferences';
 import { traceAgentTurn, traceContextReader } from '$lib/server/infrastructure/telemetry/tracing';
-import { AgentEventStore, type AgentEventBus } from '$lib/server/stores/agent/events';
+import { RunSignalService, type RunSignals } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
+import type { NotificationChannel } from '$lib/server/db';
 import { ModelCatalogStore } from '$lib/server/stores/agent/model-catalog';
 import {
 	AgentModelChoiceService,
@@ -119,6 +121,7 @@ import { OpenRouter } from '@openrouter/sdk';
 export interface AgentCapabilityInput {
 	readonly tokens: TokenCounter;
 	readonly db: Database;
+	readonly notifications: NotificationChannel;
 	readonly controllers: () => ControllerFactory;
 	readonly toolRetriever: AgentToolDiscoveryServices;
 	readonly files: AgentFileRepository;
@@ -166,7 +169,7 @@ export interface AgentCapability {
 	readonly runner: AgentRunner;
 	readonly settlements: RunSettlement;
 	readonly noteActionRequests: NoteActionSubmission;
-	readonly eventBus: AgentEventBus;
+	readonly runSignals: RunSignals;
 }
 
 export const createAgentCapability = (input: AgentCapabilityInput): AgentCapability => {
@@ -191,7 +194,10 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	const settlements = new RunSettlements(runs, runEvents);
 	const runDecisions = new AgentRunDecisionRecords(input.db);
 	const sessions = new AgentSessionRecords(input.db);
-	const eventBus = new AgentEventStore();
+	const runSignals = new RunSignalService(
+		new AgentRunNotificationRecords(input.notifications),
+		runs
+	);
 	const context = createAgentContext(tokens);
 	const toolPreferences = new ToolAccess(new ToolPreferenceRecords(input.db));
 	const runner = new AgentExecution(
@@ -260,6 +266,6 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		runner,
 		settlements,
 		noteActionRequests: new NoteActionRequests(runs, runEvents, conversationRepository),
-		eventBus
+		runSignals
 	};
 };

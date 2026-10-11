@@ -10,6 +10,7 @@ it('initializes a fresh evaluation account before opening its provisioned shell'
 	try {
 		const application = createApplication({
 			db: db.database,
+			notifications: db.notifications,
 			transactionRunner: db.transactionRunner,
 			attachmentClaims: new InMemoryAttachmentClaims(),
 			openRouterApiKey: 'unused-local-test',

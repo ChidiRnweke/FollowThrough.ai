@@ -58,7 +58,6 @@ import type { DiagramFinder } from '$lib/server/services/diagrams/library';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 import type { TraceContextReader } from '$lib/models/telemetry';
 import type { WidgetReader } from '$lib/server/services/widgets/library';
-import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 
 import type {
 	AgentRunContext,
@@ -89,7 +88,7 @@ import type {
 	BuiltInSkillSelection
 } from '$lib/server/services/skills/built-ins';
 import type { SkillFinder } from '$lib/server/services/skills/library';
-import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import type { RunSignals } from '$lib/server/services/agent/runs/signals';
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 /** Grace period the executor gets to settle a cancelled run before the backstop does it. */
@@ -142,7 +141,11 @@ export interface AgentController {
 	 *
 	 * @throws NotFoundError if no run exists for `runId`.
 	 */
-	observeRun(actor: ActorContext, runId: AgentRunId, listener: () => void): Promise<() => void>;
+	observeRun(
+		actor: ActorContext,
+		runId: AgentRunId,
+		listener: () => void
+	): Promise<() => Promise<void>>;
 	/** Close event delivery only after a terminal run's durable tail has been delivered. */
 	isRunStreamComplete(
 		actor: ActorContext,
@@ -293,9 +296,8 @@ export interface AgentDependencies {
 
 	readonly runner: AgentRunner;
 
-	readonly eventBus: Pick<AgentEventBus, 'notify'>;
-
-	readonly runObservers: Pick<AgentEventBus, 'subscribe'>;
+	/** Run changes are published by the database on commit; this listens for them. */
+	readonly runSignals: RunSignals;
 }
 
 /** Concrete {@link AgentController} orchestrating the run lifecycle against its injected repositories and the background execution engine. */
@@ -472,9 +474,9 @@ export class Agent implements AgentController {
 		actor: ActorContext,
 		runId: AgentRunId,
 		listener: () => void
-	): Promise<() => void> {
+	): Promise<() => Promise<void>> {
 		await this.requireRun(actor, runId);
-		return this.dependencies.runObservers.subscribe(runId, listener);
+		return this.dependencies.runSignals.observe(runId, listener);
 	}
 
 	async isRunStreamComplete(
@@ -547,10 +549,10 @@ export class Agent implements AgentController {
 	}
 
 	async cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot> {
-		const run = await this.dependencies.transactionRunner.run(async () => {
+		const { run, executing } = await this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.cancellations.getForWrite(actor, runId);
 			const change = this.dependencies.cancellations.plan(current.status, now());
-			if (!change) return current;
+			if (!change) return { run: current, executing: false };
 			const requested = await this.dependencies.cancellations.persist(actor, runId, change);
 			if (requested.status === 'cancelled') {
 				await this.abandonPendingCalls(
@@ -562,20 +564,18 @@ export class Agent implements AgentController {
 					runId: requested.id,
 					message: 'The request was cancelled before it started'
 				});
-				return this.requireRun(actor, runId);
+				return { run: await this.requireRun(actor, runId), executing: false };
 			}
-			return requested;
+			return { run: requested, executing: current.status === 'running' };
 		});
-		// The abort waits for the commit above: the executor settles the run out of
-		// `cancelling`, which has to be durable before it can read it.
-		const activeHandle = activeRunStore.get(runId);
-		if (activeHandle) {
-			activeHandle.abort();
+		// A running execution, in this process or another, is notified when the `cancelling`
+		// status commits; it aborts and settles the run itself.
+		if (executing) {
 			this.settleCancellationAfterGrace(runId);
 			return this.snapshot(actor, run);
 		}
-		// No in-process execution to abort. A run parked on an approval, or one
-		// started by another process, would otherwise sit in `cancelling` forever.
+		// No execution to abort. A run parked on an approval would otherwise sit in
+		// `cancelling` forever.
 		if (run.status !== 'cancelling') return this.snapshot(actor, run);
 		const cancelled = await this.finishCancellation(runId);
 		return this.snapshot(actor, cancelled ?? run);
@@ -654,13 +654,9 @@ export class Agent implements AgentController {
 	}
 
 	private executeInBackground(runId: AgentRunId): void {
-		const controller = new AbortController();
-		activeRunStore.register(runId, controller);
-		const cleanup = () => activeRunStore.release(runId, controller);
 		// audit-allow: silent-catch — detached execution persists a failed run; only failure of that settlement reaches the terminal reporter.
-		void this.execute(runId, controller.signal)
-			.then(cleanup, async (error) => {
-				cleanup();
+		void this.executeCancellably(runId)
+			.catch(async (error) => {
 				// Without this the run stays `running` forever, holding the
 				// conversation's single active-run slot and its open event stream.
 				await this.failRun(runId, error instanceof Error ? error : new Error(String(error)));
@@ -668,6 +664,16 @@ export class Agent implements AgentController {
 			.catch((error) =>
 				console.error(`[agent-run] Background execution could not be settled for ${runId}:`, error)
 			);
+	}
+
+	private async executeCancellably(runId: AgentRunId): Promise<void> {
+		const execution = new AbortController();
+		const stopWatching = await this.dependencies.runSignals.abortOnCancel(runId, execution);
+		try {
+			await this.execute(runId, execution.signal);
+		} finally {
+			await stopWatching();
+		}
 	}
 
 	/**
@@ -948,8 +954,6 @@ export class Agent implements AgentController {
 						await this.finishCancellation(run.id);
 						return 'cancelled';
 					}
-					// Publish only after the checkpoint and its approval events commit together.
-					this.dependencies.eventBus.notify(run.id);
 					return 'awaiting_approval';
 				}
 				const settled = await this.complete(
@@ -996,7 +1000,6 @@ export class Agent implements AgentController {
 			return this.dependencies.settlements.complete(settlement);
 		});
 		if (result.kind === 'lost') return undefined;
-		this.dependencies.eventBus.notify(runId);
 		return result.run;
 	}
 
@@ -1023,10 +1026,7 @@ export class Agent implements AgentController {
 
 				return this.dependencies.settlements.complete(settlement);
 			});
-			if (failed.kind === 'settled') {
-				this.dependencies.eventBus.notify(runId);
-				return;
-			}
+			if (failed.kind === 'settled') return;
 
 			// Not `running`: either the user asked to stop and the run is parked in
 			// `cancelling`, or it already settled. Both are handled by the no-op
@@ -1071,7 +1071,6 @@ export class Agent implements AgentController {
 			await this.dependencies.events.append(runId, 1, { type: 'run_started', runId, attempt: 1 });
 			return saved;
 		});
-		this.dependencies.eventBus.notify(runId);
 		return prepared;
 	}
 
@@ -1255,7 +1254,6 @@ export class Agent implements AgentController {
 				);
 			return record;
 		});
-		this.dependencies.eventBus.notify(run.id);
 		return record;
 	}
 
@@ -1303,7 +1301,6 @@ export class Agent implements AgentController {
 
 			return this.dependencies.settlements.complete(settlement);
 		});
-		if (settled.kind === 'settled') this.dependencies.eventBus.notify(run.id);
 		return settled.kind === 'settled';
 	}
 
@@ -1314,7 +1311,7 @@ export class Agent implements AgentController {
 				if (run.status === 'cancelling') await this.finishCancellation(run.id);
 				else await this.failRun(run.id, new Error('Process restarted'));
 			} else {
-				const result = await this.dependencies.transactionRunner.run(async () => {
+				await this.dependencies.transactionRunner.run(async () => {
 					const settlement = await this.dependencies.settlements.claim(
 						run.id,
 						run.status === 'cancelling'
@@ -1330,7 +1327,6 @@ export class Agent implements AgentController {
 
 					return this.dependencies.settlements.complete(settlement);
 				});
-				if (result.kind === 'settled') this.dependencies.eventBus.notify(run.id);
 			}
 		}
 		const queued = await this.dependencies.runs.listQueuedAgents();

@@ -1,3 +1,4 @@
+import type { NotificationChannel } from '$lib/server/db';
 import { and, eq } from 'drizzle-orm';
 import * as schema from '$lib/server/db/schema/registry';
 import { toNote } from '$lib/server/db/mappers';
@@ -117,4 +118,12 @@ export const seedArtifact = async (
 	};
 	await new ArtifactRecords(context.db).insert(owner, artifact);
 	return artifact;
+};
+
+/** Postgres LISTEN over the contract database, as production wires `postgresNotifications`. */
+export const notifications: NotificationChannel = {
+	listen: async (channel, onNotify) => {
+		const { unlisten } = await context.client.listen(channel, () => onNotify());
+		return unlisten;
+	}
 };

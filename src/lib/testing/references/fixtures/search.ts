@@ -1,3 +1,4 @@
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
 import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
@@ -61,7 +62,7 @@ export const referenceSearchFixture = () => {
 		referenceModel: 'test/model',
 		noteActionRequests: requests,
 		runSettlements: settlements,
-		runEvents: { notify: () => {} },
+		runSignals: new RunSignalService(runs, runs),
 		suggestionCreator: suggestions,
 		transactionRunner: transactions
 	};
@@ -75,7 +76,7 @@ export const referenceSearchFixture = () => {
 			decisions: runs,
 			settlements,
 			transactionRunner: transactions,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(runs, runs)
 		})
 	);
 	return {

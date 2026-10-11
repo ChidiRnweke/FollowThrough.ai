@@ -42,7 +42,7 @@ import type {
 import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { AttachmentClaims } from './services/attachments/contracts';
 import type { ProvenanceRecorder } from './services/notes/provenance';
-import type { AgentEventBus } from './stores/agent/events';
+import type { NotificationChannel } from './db';
 
 /**
  * Collaborators that reach outside the process and are therefore worth
@@ -61,6 +61,8 @@ export interface ApplicationOverrides {
 export interface ApplicationConfig {
 	readonly attachmentClaims: AttachmentClaims;
 	readonly db: Database;
+	/** Postgres LISTEN, through which run changes reach every process. */
+	readonly notifications: NotificationChannel;
 	readonly transactionRunner: TransactionRunner;
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL?: string;
@@ -86,7 +88,6 @@ export interface ApplicationConfig {
 export interface ProductionApplication {
 	readonly mcpSurface: McpSurfaceFactory;
 	readonly controllers: ControllerFactory;
-	readonly eventBus: AgentEventBus;
 	/**
 	 * Periodic work for the worker sidecar to run. The web process builds these
 	 * like everything else and simply never starts them.
@@ -207,6 +208,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const agentCapability = createAgentCapability({
 		tokens: knowledgeSearch.tokenizer,
 		db,
+		notifications: config.notifications,
 		controllers: () => controllerFactory,
 		toolRetriever: knowledgeSearch.toolDiscovery,
 		files: agentFilesCapability.repository,
@@ -233,7 +235,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		context: agentContext,
 		runner: agentRunner,
 		settlements: runSettlements,
-		eventBus
+		runSignals
 	} = agentCapability;
 	const finalizedKnowledgeSearch = knowledgeSearch.finalize({ preferences });
 	const feedback = createFeedbackCapability({ db });
@@ -325,7 +327,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			pdfGenerator: deliverables.pdfGenerator,
 			noteActionRequests: agentCapability.noteActionRequests,
 			runSettlements,
-			runEvents: eventBus,
+			runSignals,
 			promiseGeneration: todoCapability.promiseGeneration,
 			promiseRules: todoCapability.promiseRules
 		},
@@ -338,7 +340,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner,
 			noteActionRequests: agentCapability.noteActionRequests,
 			runSettlements,
-			runEvents: eventBus,
+			runSignals,
 			relationshipGeneration: relationshipCapability.generation,
 			relationshipRules: relationshipCapability.rules
 		},
@@ -354,7 +356,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner,
 			noteActionRequests: agentCapability.noteActionRequests,
 			runSettlements,
-			runEvents: eventBus,
+			runSignals,
 			referenceModel: referenceCapability.model
 		},
 		diagrams: {
@@ -375,7 +377,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			diagramIndexer,
 			noteActionRequests: agentCapability.noteActionRequests,
 			runSettlements,
-			runEvents: eventBus
+			runSignals
 		},
 		diagramStudio: {
 			projectLister: projects.lister,
@@ -460,8 +462,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			defaultVisionModel,
 			runner: agentRunner,
 			settlements: runSettlements,
-			eventBus,
-			runObservers: eventBus,
+			runSignals,
 			contextFormatter: agentContext,
 			contextNotes: notes.reader,
 			contextSkills: skills.finder,
@@ -747,7 +748,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			attachmentCapability.objectRemoval,
 			attachmentCapability.processing
 		],
-		eventBus,
 		provenance,
 		toolRetriever
 	};

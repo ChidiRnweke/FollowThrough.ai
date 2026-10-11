@@ -30,8 +30,7 @@ import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { ReferenceRanker } from '$lib/server/services/references/ranking';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
-import { activeRunStore } from '$lib/server/stores/agent/active-runs';
-import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import type { RunSignals } from '$lib/server/services/agent/runs/signals';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 
 /**
@@ -80,7 +79,7 @@ export interface ReferencesDependencies {
 	transactionRunner: TransactionRunner;
 	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
-	runEvents: Pick<AgentEventBus, 'notify'>;
+	runSignals: RunSignals;
 	referenceModel: string;
 }
 
@@ -108,7 +107,6 @@ export class References implements ReferencesController {
 			if (!(error instanceof DuplicateNoteActionRequest)) throw error;
 			receipt = await this.dependencies.noteActionRequests.existing(actor, request);
 		}
-		this.dependencies.runEvents.notify(receipt.runId);
 		if (receipt.status === 'queued') this.launchReferenceRun(actor, receipt.runId);
 		return receipt;
 	}
@@ -131,10 +129,10 @@ export class References implements ReferencesController {
 			this.dependencies.noteActionRequests.claim(actor, runId, 'reference_search')
 		);
 		if (!run) return;
-		this.dependencies.runEvents.notify(runId);
 		const active = new AbortController();
-		activeRunStore.register(runId, active);
+		let stopWatching = async () => {};
 		try {
+			stopWatching = await this.dependencies.runSignals.abortOnCancel(runId, active);
 			const input = run.contextSnapshot;
 			const ranked = await this.findCandidates(actor, input, {
 				model: input.model,
@@ -156,8 +154,8 @@ export class References implements ReferencesController {
 				await this.dependencies.runSettlements.complete(claim);
 				return true;
 			});
-			if (saved) this.dependencies.runEvents.notify(runId);
-			else await this.settle(runId, { kind: 'cancelled', message: 'Reference search stopped' });
+			if (!saved)
+				await this.settle(runId, { kind: 'cancelled', message: 'Reference search stopped' });
 		} catch (error) {
 			try {
 				if (active.signal.aborted)
@@ -180,7 +178,7 @@ export class References implements ReferencesController {
 				);
 			}
 		} finally {
-			activeRunStore.release(runId, active);
+			await stopWatching();
 		}
 	}
 
@@ -191,7 +189,6 @@ export class References implements ReferencesController {
 			await this.dependencies.runSettlements.complete(claim);
 			return true;
 		});
-		if (saved) this.dependencies.runEvents.notify(runId);
 		return saved;
 	}
 

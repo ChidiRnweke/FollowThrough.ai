@@ -1,3 +1,5 @@
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { DomainError } from '$lib/errors';
 import type { AgentRunId } from '$lib/models/agent';
 import type { DiagramId } from '$lib/models/diagrams';
@@ -38,7 +40,7 @@ import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generat
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import postgres from 'postgres';
 import { expect, it, vi } from 'vitest';
-import { context, seedNote } from '../database-harness';
+import { context, seedNote, notifications } from '../database-harness';
 
 const setup = async (suffix: string, connection: PostgresDatabaseContext = context) => {
 	const seeded = await seedNote(suffix);
@@ -82,7 +84,15 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 			},
 			transactionRunner,
 			drawioXmlValidator: new DrawioXmlValidator(),
-			suggestionCreator: suggestions.creator
+			suggestionCreator: suggestions.creator,
+			runSignals: new RunSignalService(
+				new AgentRunNotificationRecords(notifications),
+				new AgentRunRecords(database)
+			),
+			runSettlements: new RunSettlements(
+				new AgentRunRecords(database),
+				new AgentRunEventRecords(database)
+			)
 		})
 	);
 	return { ...seeded, controller, provider: fixture.provider, records };
@@ -224,8 +234,12 @@ it('does not publish a direct result after cancellation settles its run', async 
 	const execution = state.controller
 		.convertInlineMermaid(state.owner, { noteId: state.note.id, source: 'flowchart LR\nA --> B' })
 		.catch((error) => {
-			if (!(error instanceof Error) || error.message !== 'The workflow run is no longer running')
-				throw error;
+			// The cancel either aborts the generation or, if the provider finished first, refuses
+			// to complete a run that is no longer running. Neither publishes a diagram.
+			const stopped =
+				error instanceof Error &&
+				(error.name === 'AbortError' || error.message === 'The workflow run is no longer running');
+			if (!stopped) throw error;
 			return { kind: 'failure' as const };
 		});
 	try {
@@ -247,7 +261,7 @@ it('does not publish a direct result after cancellation settles its run', async 
 				cancellations: new RunCancellation(runs),
 				settlements: new RunSettlements(runs, events),
 				decisions: new AgentRunDecisionRecords(database),
-				eventBus: { notify: () => {} }
+				runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 			})
 		);
 		await agent.cancel(state.owner, run.id);

@@ -3,7 +3,8 @@ import {
 	db,
 	postgresTransactionRunner,
 	postgresSessionConnections,
-	postgresConnectionScope
+	postgresConnectionScope,
+	postgresNotifications
 } from '$lib/server/db';
 import {
 	DEFAULT_GENERATION_MODEL,
@@ -30,6 +31,7 @@ export function createProductionFactory(): ProductionApplication {
 			postgresConnectionScope
 		),
 		db,
+		notifications: postgresNotifications,
 		transactionRunner: postgresTransactionRunner,
 		openRouterApiKey: requiredEnvironmentValue('OPENROUTER_API_KEY'),
 		// The worker sidecar owns embedding in production, so writes never wait on

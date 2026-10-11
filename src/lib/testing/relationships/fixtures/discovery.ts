@@ -1,3 +1,4 @@
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import {
 	Relationships,
@@ -70,7 +71,7 @@ export const relatedNoteFixture = () => {
 		transactionRunner: transactions,
 		noteActionRequests: requests,
 		runSettlements: settlements,
-		runEvents: { notify: () => {} }
+		runSignals: new RunSignalService(runs, runs)
 	};
 	const agent = new Agent(
 		new WorkspaceCommandRulesService(),
@@ -82,7 +83,7 @@ export const relatedNoteFixture = () => {
 			decisions: runs,
 			settlements,
 			transactionRunner: transactions,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(runs, runs)
 		})
 	);
 	return {

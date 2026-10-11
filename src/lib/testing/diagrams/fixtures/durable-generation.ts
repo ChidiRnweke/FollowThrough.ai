@@ -1,3 +1,4 @@
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
@@ -50,7 +51,7 @@ export const durableDiagramFixture = () => {
 		transactionRunner: transactions,
 		noteActionRequests: requests,
 		runSettlements: settlements,
-		runEvents: { notify: () => {} }
+		runSignals: new RunSignalService(state.persistence, state.persistence)
 	});
 	const agent = new Agent(
 		new WorkspaceCommandRulesService(),
@@ -62,7 +63,7 @@ export const durableDiagramFixture = () => {
 			decisions: state.persistence,
 			settlements,
 			transactionRunner: transactions,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(state.persistence, state.persistence)
 		})
 	);
 	return {

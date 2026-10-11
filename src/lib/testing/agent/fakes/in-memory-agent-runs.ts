@@ -8,6 +8,7 @@ import type {
 	AgentRunDecisionRecord,
 	AgentRunEventRecord,
 	AgentRunId,
+	AgentRunStatus,
 	RunSettlementWrite,
 	RunCancellationWrite,
 	RunApprovalWrite,
@@ -28,6 +29,7 @@ import type {
 	AgentRunEventRepository,
 	AgentRunRepository
 } from '$lib/server/repositories/agent';
+import type { AgentRunNotificationRepository } from '$lib/server/repositories/agent/run-notifications';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant
@@ -38,6 +40,7 @@ export class InMemoryAgentRunPersistence
 		AgentRunRepository,
 		AgentRunEventRepository,
 		AgentRunDecisionRepository,
+		AgentRunNotificationRepository,
 		SnapshotParticipant
 {
 	runs: AgentRun[] = [];
@@ -46,9 +49,23 @@ export class InMemoryAgentRunPersistence
 	events: AgentRunEventRecord[] = [];
 	decisions: AgentRunDecisionRecord[] = [];
 	private cursor = 0n;
+	private readonly listeners = new Map<AgentRunId, Set<() => void>>();
+
+	async listen(runId: AgentRunId, listener: () => void): Promise<() => Promise<void>> {
+		const listeners = this.listeners.get(runId) ?? new Set();
+		listeners.add(listener);
+		this.listeners.set(runId, listeners);
+		return async () => {
+			listeners.delete(listener);
+		};
+	}
 
 	async findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {
 		return this.runs.find((run) => run.id === id && run.userId === actor.userId);
+	}
+
+	async findStatus(id: AgentRunId): Promise<AgentRunStatus | undefined> {
+		return this.runs.find((run) => run.id === id)?.status;
 	}
 
 	async findForWrite(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {
@@ -117,6 +134,7 @@ export class InMemoryAgentRunPersistence
 			throw new ValidationError('This conversation already has an active agent run');
 		const owned = { ...run, userId: actor.userId };
 		this.runs.push(owned);
+		this.changed(owned.id);
 		return owned;
 	}
 
@@ -306,6 +324,7 @@ export class InMemoryAgentRunPersistence
 		this.cursor += 1n;
 		const record = { cursor: this.cursor.toString(), runId, attempt, event, createdAt: new Date() };
 		this.events.push(record);
+		this.changed(runId);
 		return record;
 	}
 
@@ -393,5 +412,11 @@ export class InMemoryAgentRunPersistence
 
 	private replace(run: AgentRun): void {
 		this.runs = this.runs.map((item) => (item.id === run.id ? run : item));
+		this.changed(run.id);
+	}
+
+	/** Like the Postgres triggers, a change wakes listeners after the writer continues. */
+	private changed(runId: AgentRunId): void {
+		for (const listener of this.listeners.get(runId) ?? []) queueMicrotask(listener);
 	}
 }

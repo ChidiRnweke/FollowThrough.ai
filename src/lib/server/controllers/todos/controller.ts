@@ -68,8 +68,7 @@ import type {
 } from '$lib/server/services/todos/catalog';
 import type { PromiseExtractor } from '$lib/server/services/todos/promise-discovery';
 import type { IPromiseRules } from '$lib/server/services/todos/promise-rules';
-import { activeRunStore } from '$lib/server/stores/agent/active-runs';
-import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import type { RunSignals } from '$lib/server/services/agent/runs/signals';
 import type { ExportPreparation } from '$lib/services/deliverables/export-preparation';
 
 /**
@@ -170,7 +169,7 @@ export interface TodosDependencies {
 	pdfGenerator: PdfRendering;
 	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
-	runEvents: Pick<AgentEventBus, 'notify'>;
+	runSignals: RunSignals;
 	promiseGeneration: SelectionGeneration;
 	promiseRules: IPromiseRules;
 }
@@ -357,7 +356,6 @@ export class Todos implements TodosController {
 			if (!(error instanceof DuplicateNoteActionRequest)) throw error;
 			receipt = await this.dependencies.noteActionRequests.existing(actor, request);
 		}
-		this.dependencies.runEvents.notify(receipt.runId);
 		if (receipt.status === 'queued') this.launchPromiseRun(actor, receipt.runId);
 		return receipt;
 	}
@@ -380,10 +378,10 @@ export class Todos implements TodosController {
 			this.dependencies.noteActionRequests.claim(actor, runId, 'promise_extraction')
 		);
 		if (!run) return;
-		this.dependencies.runEvents.notify(runId);
 		const active = new AbortController();
-		activeRunStore.register(runId, active);
+		let stopWatching = async () => {};
 		try {
+			stopWatching = await this.dependencies.runSignals.abortOnCancel(runId, active);
 			const input = run.contextSnapshot;
 			await this.dependencies.selectionOrigins.validate(actor, input.selection);
 			const candidates = await this.extractCandidates(
@@ -409,8 +407,8 @@ export class Todos implements TodosController {
 				await this.dependencies.runSettlements.complete(claim);
 				return true;
 			});
-			if (saved) this.dependencies.runEvents.notify(runId);
-			else await this.settlePromiseRun(runId, { kind: 'cancelled', message: 'Generation stopped' });
+			if (!saved)
+				await this.settlePromiseRun(runId, { kind: 'cancelled', message: 'Generation stopped' });
 		} catch (error) {
 			try {
 				if (active.signal.aborted)
@@ -436,7 +434,7 @@ export class Todos implements TodosController {
 				);
 			}
 		} finally {
-			activeRunStore.release(runId, active);
+			await stopWatching();
 		}
 	}
 
@@ -450,7 +448,6 @@ export class Todos implements TodosController {
 			await this.dependencies.runSettlements.complete(claim);
 			return true;
 		});
-		if (settled) this.dependencies.runEvents.notify(runId);
 		return settled;
 	}
 	async extractPromises(

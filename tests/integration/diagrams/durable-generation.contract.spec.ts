@@ -1,3 +1,5 @@
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { type AgentRunId, type DiagramActionInput } from '$lib/models/agent';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
@@ -30,7 +32,7 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, expect, it, vi } from 'vitest';
-import { context, seedNote } from '../database-harness';
+import { context, seedNote, notifications } from '../database-harness';
 const runStatus = new AgentRunStatusService();
 
 const clients: ReturnType<typeof postgres>[] = [];
@@ -88,7 +90,7 @@ const setup = async (suffix: string) => {
 		suggestionCreator: suggestions.creator,
 		noteActionRequests: requests,
 		runSettlements: settlements,
-		runEvents: { notify: () => {} }
+		runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 	});
 	const agent = new Agent(
 		new WorkspaceCommandRulesService(),
@@ -100,7 +102,7 @@ const setup = async (suffix: string) => {
 			decisions: new AgentRunDecisionRecords(database),
 			settlements,
 			transactionRunner,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
 	const prepare = (input: DiagramActionInput = { operation: 'generate', selection }) =>

@@ -142,7 +142,7 @@ export async function runCase(
 /**
  * Waits for the run to reach a durable terminal status.
  *
- * Driven by the event bus, which fires on every persisted transition, with a
+ * Driven by run notifications, which fire on every committed transition, with a
  * slow poll as a safety net. The poll is not redundant: a missed notification
  * would otherwise hang the case until the test timeout and report as a vague
  * "test timed out" rather than as whatever actually happened to the run, which
@@ -155,10 +155,14 @@ function waitForTerminalStatus(
 ): Promise<AgentRunStatus> {
 	return new Promise<AgentRunStatus>((resolve, reject) => {
 		let settled = false;
+		let unsubscribe = async () => {};
 		const finish = (outcome: () => void) => {
 			if (settled) return;
 			settled = true;
-			unsubscribe();
+			// audit-allow: silent-catch — a failed UNLISTEN cannot change the case outcome; the lab closes its database after the case.
+			unsubscribe().catch((error: unknown) =>
+				console.error('[eval] Could not stop listening:', error)
+			);
 			clearInterval(poll);
 			outcome();
 		};
@@ -174,7 +178,17 @@ function waitForTerminalStatus(
 				.catch((error: unknown) => finish(() => reject(error)));
 		};
 
-		const unsubscribe = lab.eventBus.subscribe(runId, check);
+		// audit-allow: silent-catch — a failed subscription rejects the wait through `finish`.
+		lab.controllers
+			.agent()
+			.observeRun(actor, runId, check)
+			.then(
+				(stop) => {
+					if (settled) void stop();
+					else unsubscribe = stop;
+				},
+				(error: unknown) => finish(() => reject(error))
+			);
 		const poll = setInterval(check, 1000);
 		// The run may already have finished between submit and subscribe.
 		check();

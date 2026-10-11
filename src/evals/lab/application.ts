@@ -68,7 +68,12 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	const baseURL = process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL;
 	const appURL = 'http://localhost:5173';
 
-	const { database, transactionRunner, close: closeDatabase } = await createPGliteDatabase();
+	const {
+		database,
+		transactionRunner,
+		notifications,
+		close: closeDatabase
+	} = await createPGliteDatabase();
 
 	const cache = new DiskCache(CACHE_PATH);
 	// The tool catalog's discovery texts are fixed by the catalog, so their embeddings must
@@ -110,6 +115,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	const application = createApplication({
 		attachmentClaims: new InMemoryAttachmentClaims(),
 		db: database,
+		notifications,
 		transactionRunner,
 		openRouterApiKey,
 		// Evals never upload attachments, so OCR is wired but never called.

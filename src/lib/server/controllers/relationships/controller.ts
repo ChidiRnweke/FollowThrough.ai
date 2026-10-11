@@ -30,8 +30,7 @@ import type { SelectionOriginService } from '$lib/server/services/notes/selectio
 import type { RelationshipClassifier } from '$lib/server/services/relationships/discovery';
 import type { RelationshipRuleClassifier } from '$lib/server/services/relationships/rules';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
-import { activeRunStore } from '$lib/server/stores/agent/active-runs';
-import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import type { RunSignals } from '$lib/server/services/agent/runs/signals';
 
 /**
  * Application boundary for relationship (backlink) suggestions between notes: find notes
@@ -75,7 +74,7 @@ export interface RelationshipsDependencies {
 	transactionRunner: TransactionRunner;
 	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
-	runEvents: Pick<AgentEventBus, 'notify'>;
+	runSignals: RunSignals;
 	relationshipRules: RelationshipRuleClassifier;
 	relationshipGeneration: SelectionGeneration;
 }
@@ -107,7 +106,6 @@ export class Relationships implements RelationshipsController {
 			if (!(error instanceof DuplicateNoteActionRequest)) throw error;
 			receipt = await this.dependencies.noteActionRequests.existing(actor, request);
 		}
-		this.dependencies.runEvents.notify(receipt.runId);
 		if (receipt.status === 'queued') this.launchRelatedNoteRun(actor, receipt.runId);
 		return receipt;
 	}
@@ -130,10 +128,10 @@ export class Relationships implements RelationshipsController {
 			this.dependencies.noteActionRequests.claim(actor, runId, 'related_notes')
 		);
 		if (!run) return;
-		this.dependencies.runEvents.notify(runId);
 		const active = new AbortController();
-		activeRunStore.register(runId, active);
+		let stopWatching = async () => {};
 		try {
+			stopWatching = await this.dependencies.runSignals.abortOnCancel(runId, active);
 			const input = run.contextSnapshot;
 			const note = await this.dependencies.selectionOrigins.validate(actor, input.selection);
 			const candidates = await this.findCandidates(
@@ -159,8 +157,8 @@ export class Relationships implements RelationshipsController {
 				await this.dependencies.runSettlements.complete(claim);
 				return true;
 			});
-			if (saved) this.dependencies.runEvents.notify(runId);
-			else await this.settle(runId, { kind: 'cancelled', message: 'Related note search stopped' });
+			if (!saved)
+				await this.settle(runId, { kind: 'cancelled', message: 'Related note search stopped' });
 		} catch (error) {
 			try {
 				if (active.signal.aborted)
@@ -183,7 +181,7 @@ export class Relationships implements RelationshipsController {
 				);
 			}
 		} finally {
-			activeRunStore.release(runId, active);
+			await stopWatching();
 		}
 	}
 
@@ -194,7 +192,6 @@ export class Relationships implements RelationshipsController {
 			await this.dependencies.runSettlements.complete(claim);
 			return true;
 		});
-		if (saved) this.dependencies.runEvents.notify(runId);
 		return saved;
 	}
 

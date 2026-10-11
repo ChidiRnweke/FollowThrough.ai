@@ -45,8 +45,13 @@ describe('Diagram generation run settlement', () => {
 		const execution = state.controller
 			.convertInlineMermaid(testActor(), { noteId: testNoteId(), source: revision.source })
 			.catch((error) => {
-				if (!(error instanceof Error) || error.message !== 'The workflow run is no longer running')
-					throw error;
+				// The cancel either aborts the generation or, if the provider finished first, refuses
+				// to complete a run that is no longer running. Neither publishes a diagram.
+				const stopped =
+					error instanceof Error &&
+					(error.name === 'AbortError' ||
+						error.message === 'The workflow run is no longer running');
+				if (!stopped) throw error;
 				return { kind: 'failure' as const };
 			});
 		try {

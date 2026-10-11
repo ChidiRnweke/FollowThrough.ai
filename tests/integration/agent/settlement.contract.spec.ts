@@ -1,3 +1,5 @@
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
@@ -24,7 +26,7 @@ import { ToolActivityProjection } from '$lib/server/services/agent/conversations
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { InMemoryAgentRunner } from '$lib/testing/agent/fakes/in-memory-agent';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { actor, context, now, seedProvenance } from '../database-harness';
+import { actor, context, now, seedProvenance, notifications } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const owner = actor(suffix);
@@ -79,7 +81,7 @@ const setup = async (suffix: string) => {
 			conversationSessions: new ConversationArchive(conversations),
 			toolActivity: new ToolActivityProjection(),
 			runner,
-			eventBus: { notify: () => {} }
+			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
 	return {

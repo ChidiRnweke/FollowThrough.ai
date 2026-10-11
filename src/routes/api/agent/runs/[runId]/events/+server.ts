@@ -21,9 +21,15 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 	// first replay still triggers a flush.
 	let changed = () => {};
 	const unsubscribe = await agent.observeRun(actor, runId, () => changed());
+	const stopObserving = () => {
+		// audit-allow: silent-catch — the stream is already closing; a failed UNLISTEN only leaves an idle listener on the shared connection.
+		unsubscribe().catch((error: unknown) =>
+			console.error(`[agent-run] Could not stop observing ${runId}:`, error)
+		);
+	};
 	let cursor = cursorAfter(request, url);
 
-	let teardown = unsubscribe;
+	let teardown = stopObserving;
 
 	const body = new ReadableStream<Uint8Array>({
 		start(controller) {
@@ -35,7 +41,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 				closed = true;
 				clearInterval(fallbackTimer);
 				clearInterval(keepaliveTimer);
-				unsubscribe();
+				stopObserving();
 			};
 			teardown = cleanup;
 

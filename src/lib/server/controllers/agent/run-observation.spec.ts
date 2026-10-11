@@ -2,7 +2,7 @@ import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { describe, expect, it } from 'vitest';
 import type { AgentRunId, ConversationId, WorkflowAgentRun } from '$lib/models/agent';
-import { AgentEventStore } from '$lib/server/stores/agent/events';
+import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -27,26 +27,27 @@ const setup = () => {
 		updatedAt: testNow
 	};
 	runs.runs.push(run);
-	const events = new AgentEventStore();
 	const agent = new Agent(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			runs,
-			runObservers: events
+			runSignals: new RunSignalService(runs, runs)
 		})
 	);
-	return { agent, events };
+	return { agent, runs };
 };
 
 describe('run observation', () => {
-	it('signals the owner until the subscription ends', async () => {
-		const { agent, events } = setup();
+	it('signals the owner on each committed change until the subscription ends', async () => {
+		const { agent, runs } = setup();
 		const signals: string[] = [];
 		const unsubscribe = await agent.observeRun(testActor(), runId, () => signals.push('changed'));
-		events.notify(runId);
-		unsubscribe();
-		events.notify(runId);
+		await runs.append(runId, 1, { type: 'run_started', runId, attempt: 1 });
+		await Promise.resolve();
+		await unsubscribe();
+		await runs.append(runId, 1, { type: 'run_started', runId, attempt: 1 });
+		await Promise.resolve();
 		expect(signals).toEqual(['changed']);
 	});
 
