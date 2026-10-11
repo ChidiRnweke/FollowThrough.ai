@@ -55,9 +55,7 @@ export interface KnowledgeSearchCapabilityInput {
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
-	/** Replaces knowledge retrieval as a whole, e.g. with a recording one in evaluations. */
 	readonly knowledge?: KnowledgeRetrievalCapabilities;
-	/** Replaces tool search as a whole. */
 	readonly toolSearch?: ToolSeeding & ToolRanking;
 	readonly deferEmbedding: boolean;
 }
