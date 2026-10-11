@@ -186,7 +186,7 @@ export class DrawioEmbedAdapter {
 		let value: unknown;
 		try {
 			value = JSON.parse(event.data);
-			// audit-allow: silent-catch — the embed failure callback renders this protocol error in the owning diagram UI.
+			// chisel-ignore fail-loudly:silent-catch -- the embed failure callback renders this protocol error in the owning diagram UI.
 		} catch (error) {
 			this.callbacks.onFailure?.(
 				error instanceof Error ? error.message : 'draw.io sent an unreadable response'
@@ -259,7 +259,7 @@ export class DrawioEmbedAdapter {
 			if (generation !== this.generation) return;
 			this.xml = xml;
 			await this.callbacks.onAutosave?.(xml);
-			// audit-allow: silent-catch — autosave failures are surfaced through the embed failure callback and the editor stays open for retry.
+			// chisel-ignore fail-loudly:silent-catch -- autosave failures are surfaced through the embed failure callback and the editor stays open for retry.
 		} catch (error) {
 			if (generation !== this.generation) return;
 			this.callbacks.onFailure?.(
@@ -285,7 +285,7 @@ export class DrawioEmbedAdapter {
 				reason: pending.reason,
 				exit: pending.exit
 			});
-			// audit-allow: silent-catch — export failures are surfaced through the embed failure callback without closing the editor.
+			// chisel-ignore fail-loudly:silent-catch -- export failures are surfaced through the embed failure callback without closing the editor.
 		} catch (error) {
 			if (generation !== this.generation) return;
 			this.callbacks.onFailure?.(error instanceof Error ? error.message : 'draw.io export failed.');

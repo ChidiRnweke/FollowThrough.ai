@@ -22,7 +22,7 @@ export interface VideoOptions {
 	 * @default {}
 	 * @example { class: 'foo' }
 	 */
-	// audit-allow: no-record-unknown — Tiptap's HTMLAttributes are open DOM attributes typed any by the library.
+	// chisel-ignore narrowing:no-record-unknown -- Tiptap's HTMLAttributes are open DOM attributes typed any by the library.
 	HTMLAttributes: Record<string, unknown>;
 
 	/**

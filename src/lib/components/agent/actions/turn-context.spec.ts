@@ -1,6 +1,11 @@
-import type { ShellContext } from '$lib/models/workspace-views';
+import {
+	noteBuilder,
+	projectBuilder,
+	shellContextBuilder
+} from '$lib/testing/workspace/fixtures/domain-builders';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import { describe, expect, it } from 'vitest';
-import type { NoteSummary } from '$lib/models/notes';
 
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
@@ -9,13 +14,13 @@ import { passLabelText, sourcesRowLabel, runningSteps, turnContext } from './tur
 const ATLAS = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
 const BRIEF = '2f0f5a2c-1c22-4a7f-9d1f-7cf4a1f2b0d1';
 
-const shell = {
-	projects: [{ id: 'proj-1', name: 'Atlas' }],
+const shell = shellContextBuilder({
+	projects: [projectBuilder({ id: 'proj-1' as ProjectId, name: 'Atlas' })],
 	noteTree: [
-		{ id: ATLAS, title: 'atlas', projectId: 'proj-1' },
-		{ id: BRIEF, title: 'northwind brief', projectId: 'proj-1' }
-	] as unknown as NoteSummary[]
-} as unknown as ShellContext;
+		noteBuilder({ id: ATLAS as NoteId, title: 'atlas', projectId: 'proj-1' as ProjectId }),
+		noteBuilder({ id: BRIEF as NoteId, title: 'northwind brief', projectId: 'proj-1' as ProjectId })
+	]
+});
 
 const call = (over: ToolActivityOverrides): ChatToolActivity => ({
 	callId: '00000000-0000-4000-8000-0000000000aa',

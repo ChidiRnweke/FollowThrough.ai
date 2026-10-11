@@ -26,7 +26,7 @@
 	</div>
 	<WorkspaceRecoveryDownload />
 	{#if error.code}
-		<!-- audit-allow: no-raw-font-family — The error code is a diagnostic identifier. -->
+		<!-- chisel-ignore design-system:no-raw-font-family -- The error code is a diagnostic identifier. -->
 		<p class="font-mono text-xs text-muted-foreground">{error.code}</p>
 	{/if}
 </PageShell>

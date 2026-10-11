@@ -77,7 +77,7 @@ export class UploadRetention implements ScheduledTask {
 			try {
 				await this.reclaim(entry);
 				swept += 1;
-				// audit-allow: silent-catch — the scheduled batch reports this item as failed and leaves its reservation for the next tick.
+				// chisel-ignore fail-loudly:silent-catch -- the scheduled batch reports this item as failed and leaves its reservation for the next tick.
 			} catch (error) {
 				this.logger.error(`[expired-upload-sweep] ${entry.upload.id} failed:`, error);
 			}

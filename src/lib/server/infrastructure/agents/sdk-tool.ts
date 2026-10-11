@@ -25,7 +25,7 @@ export const withToolFeedback = async <Result>(
 	signal.throwIfAborted();
 	try {
 		return await work();
-		// audit-allow: silent-catch — the failure is the tool's result: the model reads it as feedback and the chat records the call as failed.
+		// chisel-ignore fail-loudly:silent-catch -- the failure is the tool's result: the model reads it as feedback and the chat records the call as failed.
 	} catch (error) {
 		signal.throwIfAborted();
 		return feedback(error);
@@ -69,7 +69,7 @@ export const jsonObjectSchema = (schema: z.ZodObject) => {
 		converted.properties === null
 	)
 		throw new Error('Tool parameters must convert to a strict object schema');
-	// audit-allow: no-record-unknown — JSON Schema property nodes are an open dialect by specification and are passed verbatim to the SDK protocol.
+	// chisel-ignore narrowing:no-record-unknown -- JSON Schema property nodes are an open dialect by specification and are passed verbatim to the SDK protocol.
 	const properties: Record<string, Record<string, unknown>> = {};
 	for (const [name, property] of Object.entries(converted.properties)) {
 		if (typeof property !== 'object' || property === null)
@@ -128,7 +128,7 @@ export const sdkTool = (definition: SdkToolDefinition): Tool<unknown> => {
 			definition.signal.throwIfAborted();
 			try {
 				return await definition.execute(input, details?.toolCall?.callId);
-				// audit-allow: silent-catch — the failure is the tool's result: the model reads it as feedback and the chat records the call as failed.
+				// chisel-ignore fail-loudly:silent-catch -- the failure is the tool's result: the model reads it as feedback and the chat records the call as failed.
 			} catch (error) {
 				definition.signal.throwIfAborted();
 				return feedback(error);

@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { clipboardImage } from './paste';
+import { clipboardImage, type PastedFiles } from './paste';
 
 describe('Detecting a pasted image file', () => {
 	type ClipboardItem = Pick<DataTransferItem, 'kind' | 'type' | 'getAsFile'>;
 	const pasteWith = (
 		clipboard: { files?: File[]; items?: ClipboardItem[] } | null
-	): ClipboardEvent =>
-		({
-			clipboardData: clipboard
-				? { files: clipboard.files ?? [], items: clipboard.items ?? [] }
-				: null
-		}) as unknown as ClipboardEvent;
+	): PastedFiles => ({
+		clipboardData: clipboard ? { files: clipboard.files ?? [], items: clipboard.items ?? [] } : null
+	});
 	const item = (file: File | null, type = file?.type ?? 'image/png'): ClipboardItem => ({
 		kind: 'file',
 		type,

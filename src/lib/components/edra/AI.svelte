@@ -100,7 +100,7 @@
 			}
 			aiState = AIState.Confirmation;
 			await generateAIContent(prompt);
-			// audit-allow: silent-catch — the AI menu resets to idle and reports the failed action in a toast.
+			// chisel-ignore fail-loudly:silent-catch -- the AI menu resets to idle and reports the failed action in a toast.
 		} catch (error) {
 			aiState = AIState.Idle;
 			console.error(error);
@@ -118,7 +118,7 @@
 			if (inputTag) inputTag.style.height = 'auto';
 			aiState = AIState.Confirmation;
 			await generateAIContent(prompt);
-			// audit-allow: silent-catch — the AI menu resets to idle and reports the failed prompt in a toast.
+			// chisel-ignore fail-loudly:silent-catch -- the AI menu resets to idle and reports the failed prompt in a toast.
 		} catch (error) {
 			aiState = AIState.Idle;
 			console.error(error);
@@ -236,7 +236,7 @@
 			if (aiContentTo > 1) {
 				editor.commands.setTextSelection(aiContentTo - 1);
 			}
-			// audit-allow: silent-catch — insertion failure is reported while the generated response remains available to copy.
+			// chisel-ignore fail-loudly:silent-catch -- insertion failure is reported while the generated response remains available to copy.
 		} catch (error) {
 			console.error('Error updating editor with AI content:', error);
 			toast.error('AI content could not be inserted. Copy the response before closing.');
@@ -257,7 +257,7 @@
 					.deleteRange({ from: aiContentFrom, to: aiContentTo })
 					.run();
 				aiContentTo = aiContentFrom;
-				// audit-allow: silent-catch — cleanup failure is reported and the editor undo history remains the recovery path.
+				// chisel-ignore fail-loudly:silent-catch -- cleanup failure is reported and the editor undo history remains the recovery path.
 			} catch (error) {
 				console.error('Error cleaning up AI content:', error);
 				toast.error('AI content could not be removed. Use Undo to restore the document.');
@@ -285,7 +285,7 @@
 			removeAIHighlight(editor);
 			aiState = AIState.Idle;
 			aiResponse = '';
-			// audit-allow: silent-catch — replacement failure is reported with manual copy-and-paste as recovery.
+			// chisel-ignore fail-loudly:silent-catch -- replacement failure is reported with manual copy-and-paste as recovery.
 		} catch (error) {
 			console.error(error);
 			toast.error('Unable to replace. Copy content and paste manually.');
@@ -493,7 +493,7 @@
 	}}
 >
 	{#if aiState === AIState.Idle}
-		<!-- audit-allow: no-ad-hoc-shadow — The AI panel floats over the document; shadow-md matches the sanctioned overlay elevation of the ui popovers. -->
+		<!-- chisel-ignore design-system:no-ad-hoc-shadow -- The AI panel floats over the document; shadow-md matches the sanctioned overlay elevation of the ui popovers. -->
 		<div class="shadow-md w-xl border backdrop-blur-2xl rounded-xl flex flex-col overflow-hidden">
 			<!-- Input Area -->
 			<form class="px-3 py-3 flex items-start">
@@ -544,7 +544,7 @@
 			</div>
 		{:else}
 			<!-- Action bar — AI has finished streaming into editor -->
-			<!-- audit-allow: no-ad-hoc-shadow — The AI action bar floats over the document; overlay elevation matching the ui popovers. -->
+			<!-- chisel-ignore design-system:no-ad-hoc-shadow -- The AI action bar floats over the document; overlay elevation matching the ui popovers. -->
 			<div
 				transition:fade
 				class="flex items-center gap-2 border shadow-md justify-between p-2 rounded-lg"
@@ -586,7 +586,7 @@
 		}
 	}
 	.animated-gradient-border {
-		/* audit-allow: no-hex-rgb-color — Vendored edra AI-affordance gradient; the rainbow conic gradient is this component's identity, not a theme color. */
+		/* chisel-ignore design-system:no-hex-rgb-color -- Vendored edra AI-affordance gradient; the rainbow conic gradient is this component's identity, not a theme color. */
 		background: conic-gradient(from var(--angle), #e50909, #c8b207, #e608e6, #6eec07);
 		animation: rotate 3s linear infinite;
 		border-radius: 12px !important;

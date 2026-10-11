@@ -6,7 +6,7 @@ import { mount, unmount, type Component } from 'svelte';
  * shape. Vendored editor code — the domain payload types model this app's
  * wire data, not DOM-attributable props.
  */
-// audit-allow: no-record-unknown — Svelte mounts arbitrary components as open prop records by design.
+// chisel-ignore narrowing:no-record-unknown -- Svelte mounts arbitrary components as open prop records by design.
 export type RendererProps = Record<string, unknown>;
 
 export interface SvelteRendererOptions {

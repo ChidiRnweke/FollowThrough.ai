@@ -10,7 +10,7 @@ export type EditorStateSnapshot = {
  * Attr bags compared by this hook are open ProseMirror attributes; the values
  * are only ever diffed, never indexed by name.
  */
-// audit-allow: no-record-unknown — attrs are compared with Object.keys, never read by shape.
+// chisel-ignore narrowing:no-record-unknown -- attrs are compared with Object.keys, never read by shape.
 type AttrBag = Record<string, unknown>;
 
 const shallowEqual = (a: AttrBag, b: AttrBag) => {

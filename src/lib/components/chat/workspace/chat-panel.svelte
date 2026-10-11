@@ -702,7 +702,7 @@
 	async function requestRetry(entry: ChatEntry): Promise<void> {
 		try {
 			await chat.retry(entry);
-			// audit-allow: silent-catch — retry failure is shown while the failed run remains available for another attempt.
+			// chisel-ignore fail-loudly:silent-catch -- retry failure is shown while the failed run remains available for another attempt.
 		} catch {
 			toast.error('That run could not be retried.');
 		}

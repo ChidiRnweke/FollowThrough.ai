@@ -136,7 +136,7 @@ const toSuggestion = (
 const free = (handle: { free(): void }): void => {
 	try {
 		handle.free();
-		// audit-allow: silent-catch — a reclaimed native handle has no recoverable operation or user-visible state
+		// chisel-ignore fail-loudly:silent-catch -- a reclaimed native handle has no recoverable operation or user-visible state
 	} catch {
 		// Already reclaimed.
 	}

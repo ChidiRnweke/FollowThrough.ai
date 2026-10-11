@@ -305,7 +305,7 @@ export class Diagrams implements DiagramsController {
 	}
 
 	private launchDiagramRun(runId: AgentRunId): void {
-		// audit-allow: silent-catch — detached execution persists its terminal state; settlement failures are emitted for operational repair.
+		// chisel-ignore fail-loudly:silent-catch -- detached execution persists its terminal state; settlement failures are emitted for operational repair.
 		void this.executeDiagramRun(runId).catch((error) =>
 			console.error(`[diagram-run] Could not settle ${runId}:`, error)
 		);

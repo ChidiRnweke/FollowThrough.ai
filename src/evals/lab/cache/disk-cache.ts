@@ -155,7 +155,7 @@ export class DiskCache {
 		const entry = await this.lookup(key, options);
 		if (entry.kind === 'hit') {
 			// The entry survived a JSON round trip in this cache's own file.
-			// audit-allow: shape-cast — `T` is the caller's declared payload type, and no static check can re-verify a JSON round trip here.
+			// chisel-ignore narrowing:shape-cast -- `T` is the caller's declared payload type, and no static check can re-verify a JSON round trip here.
 			return entry.value as unknown as T;
 		}
 		const value = await produce();

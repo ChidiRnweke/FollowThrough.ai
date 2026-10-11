@@ -93,7 +93,7 @@ export interface AgentToolPolicy {
 
 /** The SDK tools of one agent run, and the reviews its calls prepared for a checkpoint. */
 export interface AgentToolset {
-	// audit-allow: no-unknown-type — Tool's context parameter belongs to the agent SDK, which owns execution of this protocol value.
+	// chisel-ignore narrowing:no-unknown-type -- Tool's context parameter belongs to the agent SDK, which owns execution of this protocol value.
 	readonly tools: Tool<unknown>[];
 	/** Attaches the prepared review the user approves to a parked call. */
 	checkpoint(pending: PendingAgentDecision): PendingAgentDecision;

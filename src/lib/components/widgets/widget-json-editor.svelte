@@ -53,7 +53,7 @@
 	<div class="grid gap-4 @[48rem]:grid-cols-2">
 		<div class="flex flex-col gap-1.5">
 			<Label for="widget-layout">Layout</Label>
-			<!-- audit-allow: no-raw-font-family — the field holds JSON source, which is code. -->
+			<!-- chisel-ignore design-system:no-raw-font-family -- the field holds JSON source, which is code. -->
 			<Textarea
 				id="widget-layout"
 				bind:value={layoutText}
@@ -63,7 +63,7 @@
 		</div>
 		<div class="flex flex-col gap-1.5">
 			<Label for="widget-data">Data</Label>
-			<!-- audit-allow: no-raw-font-family — the field holds JSON source, which is code. -->
+			<!-- chisel-ignore design-system:no-raw-font-family -- the field holds JSON source, which is code. -->
 			<Textarea
 				id="widget-data"
 				bind:value={dataText}

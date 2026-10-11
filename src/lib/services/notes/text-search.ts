@@ -59,7 +59,7 @@ const buildNoteSearchPattern = (query: string, options: NoteSearchOptions): RegE
 	const source = options.regex ? query : escapeRegExp(query);
 	try {
 		return new RegExp(source, options.caseSensitive ? 'g' : 'gi');
-		// audit-allow: silent-catch — an invalid user-authored regex is the modeled undefined validation result
+		// chisel-ignore fail-loudly:silent-catch -- an invalid user-authored regex is the modeled undefined validation result
 	} catch {
 		return undefined;
 	}

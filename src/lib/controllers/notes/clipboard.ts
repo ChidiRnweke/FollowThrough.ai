@@ -67,7 +67,7 @@ export class ClipboardTransfer implements NoteClipboardController {
 				const { issues } = await prepared;
 				const [first, ...rest] = issues;
 				return first ? { kind: 'degraded', issues: [first, ...rest] } : { kind: 'complete' };
-				// audit-allow: silent-catch — copyTextAfterFailure returns a degraded/failure report; the note clipboard adapter displays the text-only warning or write failure.
+				// chisel-ignore fail-loudly:silent-catch -- copyTextAfterFailure returns a degraded/failure report; the note clipboard adapter displays the text-only warning or write failure.
 			} catch (error) {
 				return this.copyTextAfterFailure(source.text, {
 					kind: 'formatting',
@@ -82,7 +82,7 @@ export class ClipboardTransfer implements NoteClipboardController {
 					: this.renderDiagram(source.source);
 			await this.dependencies.writer.writeImage(image, source.text);
 			return { kind: 'complete' };
-			// audit-allow: silent-catch — the copied text marks the unavailable image/diagram and the returned degraded/failure report is displayed by the note clipboard adapter.
+			// chisel-ignore fail-loudly:silent-catch -- the copied text marks the unavailable image/diagram and the returned degraded/failure report is displayed by the note clipboard adapter.
 		} catch (error) {
 			const label = source.kind === 'image' ? 'Image' : 'Diagram';
 			return this.copyTextAfterFailure(
@@ -107,7 +107,7 @@ export class ClipboardTransfer implements NoteClipboardController {
 						? await this.dependencies.readImage(asset.source)
 						: await this.renderDiagram(asset.source);
 				await document.embed(asset.id, image);
-				// audit-allow: silent-catch — markUnavailable inserts a visible placeholder into the copied document; the returned issues produce the note clipboard warning.
+				// chisel-ignore fail-loudly:silent-catch -- markUnavailable inserts a visible placeholder into the copied document; the returned issues produce the note clipboard warning.
 			} catch (error) {
 				document.markUnavailable(asset.id);
 				issues.push({

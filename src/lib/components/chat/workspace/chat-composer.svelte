@@ -232,7 +232,7 @@
 
 	<div class="relative flex flex-col gap-1">
 		{#if mentionCandidates.length > 0}
-			<!-- audit-allow: no-ad-hoc-shadow — The mention listbox floats above the composer; shadow-md matches the sanctioned overlay elevation of the ui popovers it cannot reuse here. -->
+			<!-- chisel-ignore design-system:no-ad-hoc-shadow -- The mention listbox floats above the composer; shadow-md matches the sanctioned overlay elevation of the ui popovers it cannot reuse here. -->
 			<div
 				bind:this={mentionList}
 				class="absolute bottom-full left-0 z-50 mb-1 max-h-72 w-72 scroll-py-1 overflow-x-hidden overflow-y-auto rounded-md border border-border bg-popover shadow-md"

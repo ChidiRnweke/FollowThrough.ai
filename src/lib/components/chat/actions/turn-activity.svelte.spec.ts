@@ -1,7 +1,8 @@
-import type { ShellContext } from '$lib/models/workspace-views';
+import { noteBuilder, shellContextBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import type { NoteSummary } from '$lib/models/notes';
 
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
@@ -9,12 +10,15 @@ import TurnActivity from './turn-activity.svelte';
 
 const NOTE_ID = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
 
-const shell = {
-	projects: [],
+const shell = shellContextBuilder({
 	noteTree: [
-		{ id: NOTE_ID, title: 'Infrastructure', projectId: 'proj-1' } as unknown as NoteSummary
+		noteBuilder({
+			id: NOTE_ID as NoteId,
+			title: 'Infrastructure',
+			projectId: 'proj-1' as ProjectId
+		})
 	]
-} as unknown as ShellContext;
+});
 
 let nextCall = 0;
 const call = (over: ToolActivityOverrides): ChatToolActivity => ({

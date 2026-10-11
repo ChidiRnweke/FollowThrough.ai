@@ -98,7 +98,7 @@ describe('Postgres conversation repository invariants', () => {
 			id: '30000000-0000-4000-8000-000000000085',
 			conversationId: conversation.id,
 			role: 'user',
-			// audit-allow: shape-cast — the point of the test is a column the mapper's own writer cannot produce, so the row is inserted past the typed write path
+			// the point of the test is a column the mapper's own writer cannot produce, so the row is inserted past the typed write path
 			content: 'not a payload' as unknown as AgentPayloadObject,
 			createdAt: new Date(now)
 		});
@@ -122,7 +122,7 @@ describe('Postgres conversation repository invariants', () => {
 			id: '30000000-0000-4000-8000-000000000086',
 			conversationId: conversation.id,
 			role: 'assistant',
-			// audit-allow: shape-cast — the point of the test is a column the mapper's own writer cannot produce, so the row is inserted past the typed write path
+			// the point of the test is a column the mapper's own writer cannot produce, so the row is inserted past the typed write path
 			content: 42 as unknown as AgentPayloadObject,
 			createdAt: new Date(now)
 		});
@@ -684,7 +684,7 @@ describe('Postgres agent session repository invariants', () => {
 			id: crypto.randomUUID(),
 			conversationId,
 			position: 0,
-			// audit-allow: shape-cast — the point of the test is a column the mapper's own writer cannot produce, so the row is inserted past the typed write path
+			// the point of the test is a column the mapper's own writer cannot produce, so the row is inserted past the typed write path
 			item: 'not an item' as unknown as StoredSessionItem
 		});
 		await expect(new AgentSessionRecords(owner, context.db).list(conversationId)).rejects.toThrow(

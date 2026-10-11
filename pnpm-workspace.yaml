@@ -4,6 +4,3 @@ packages:
 onlyBuiltDependencies:
   - '@tailwindcss/oxide'
   - esbuild
-
-patchedDependencies:
-  '@chidirnweke/chisel-js@0.2.1': patches/@chidirnweke__chisel-js@0.2.1.patch

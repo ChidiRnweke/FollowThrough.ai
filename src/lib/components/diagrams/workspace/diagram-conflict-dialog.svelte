@@ -27,7 +27,7 @@
 		try {
 			if (choice === 'remote') await onUseRemote();
 			else await onKeepLocal();
-			// audit-allow: silent-catch — the dialog renders the failure as an alert and keeps both documents available for retry.
+			// chisel-ignore fail-loudly:silent-catch -- the dialog renders the failure as an alert and keeps both documents available for retry.
 		} catch (error) {
 			failure = userFacingMessage(error, 'The diagram conflict could not be resolved.');
 		} finally {

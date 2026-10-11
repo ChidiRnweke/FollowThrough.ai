@@ -3,8 +3,16 @@ import type {
 	SuggestionLifecycle,
 	MemorySuggestion
 } from '$lib/models/suggestions';
-import type { ActorContext, UserId } from '$lib/models/identity';
-import type { ConversationId, RunAgentInput } from '$lib/models/agent';
+import type { ActorContext, User, UserId } from '$lib/models/identity';
+import type { ShellContext } from '$lib/models/workspace-views';
+import type {
+	AgentPreferences,
+	AgentRunId,
+	AgentRunSnapshot,
+	ConversationId,
+	RunAgentInput,
+	UnpreparedAgentRun
+} from '$lib/models/agent';
 import type { AppContextSnapshotV1, DateTime } from '$lib/models/workspace';
 import type { MemoryEntry, MemoryEntryId } from '$lib/models/memory';
 import type { Note, NoteId, NoteRevision, NoteRevisionId } from '$lib/models/notes';
@@ -30,6 +38,7 @@ export const testMemoryEntryId = (value = 1): MemoryEntryId => id(8, value) as M
 export const testNoteRevisionId = (value = 1): NoteRevisionId => id(9, value) as NoteRevisionId;
 export const testDiagramId = (value = 1): DiagramId => id(10, value) as DiagramId;
 export const testConversationId = (value = 1): ConversationId => id(11, value) as ConversationId;
+export const testAgentRunId = (value = 1): AgentRunId => id(12, value) as AgentRunId;
 
 export const runAgentInputBuilder = (
 	overrides: Omit<Partial<RunAgentInput>, 'conversationId'> & {
@@ -47,6 +56,61 @@ export const projectBuilder = (overrides: Partial<Project> = {}): Project => ({
 	role: 'workspace',
 	createdAt: testNow,
 	updatedAt: testNow,
+	...overrides
+});
+
+/** A queued chat run that has not yet resolved its context. */
+export const agentRunBuilder = (
+	overrides: Partial<UnpreparedAgentRun> = {}
+): UnpreparedAgentRun => ({
+	kind: 'agent',
+	id: testAgentRunId(),
+	userId: testActor().userId,
+	conversationId: testConversationId(),
+	model: 'openai/test-model',
+	executionMode: 'approval_required',
+	status: 'queued',
+	requestId: 'request-1',
+	pendingDecisions: [],
+	inputSnapshot: runAgentInputBuilder(),
+	createdAt: testNow,
+	updatedAt: testNow,
+	...overrides
+});
+
+export const agentRunSnapshotBuilder = (
+	run: Partial<UnpreparedAgentRun> = {}
+): AgentRunSnapshot => ({ run: agentRunBuilder(run), latestCursor: '0', pendingDecisions: [] });
+
+export const agentPreferencesBuilder = (
+	overrides: Partial<AgentPreferences> = {}
+): AgentPreferences => ({
+	userId: testActor().userId,
+	executionMode: 'approval_required',
+	inlineSuggestionsEnabled: true,
+	createdAt: testNow,
+	updatedAt: testNow,
+	...overrides
+});
+
+export const userBuilder = (overrides: Partial<User> = {}): User => ({
+	id: testActor().userId,
+	email: 'ada@example.test',
+	displayName: 'Ada',
+	role: 'USER',
+	createdAt: testNow,
+	updatedAt: testNow,
+	...overrides
+});
+
+/** The app shell a signed-in user sees, empty unless a test gives it projects or notes. */
+export const shellContextBuilder = (overrides: Partial<ShellContext> = {}): ShellContext => ({
+	user: userBuilder(),
+	projects: [],
+	noteTree: [],
+	skills: [],
+	pendingSuggestionCount: 0,
+	pendingMemoryNotifications: [],
 	...overrides
 });
 

@@ -7,15 +7,16 @@ description: Judgement checks for building, reviewing, and polishing UI in this 
 
 Distilled from *Refactoring UI* (Wathan & Schoger) and localized to this codebase.
 DESIGN_SYSTEM.md is the law; this skill is how you apply it. It is the judgement half of the
-design system — `pnpm test:ui` (part of `pnpm test:architecture`) is the deterministic half.
+design system — Chisel's `design-system:*` rules (part of `pnpm test:architecture`) are the
+deterministic half.
 
 When the audit covers a check, quote the rule id instead of re-deriving the mechanics:
 `no-raw-font-family`, `font-weight-bounds`, `no-em-font-size`, `uppercase-needs-tracking`,
 `no-wide-tracking-on-display`, `no-hex-rgb-color`, `no-runtime-color-derivation`,
 `no-pure-black`, `token-contrast-aa`, `heading-needs-utility`, `justify-needs-hyphens`,
 `text-shadow-glow-only`, `no-accent-bars`, `no-ad-hoc-shadow`, `alpha-fixed-steps`.
-Suppress with `audit-allow: <rule-id> — <reason>` (`//` or `<!-- -->`) on the line above; the
-reason is the point.
+Suppress with `chisel-ignore design-system:<rule-id> -- <reason>` (`//`, `<!-- -->` or `/* */`) on
+the line above; the reason is the point.
 
 ## Starting new work
 
@@ -223,4 +224,4 @@ them.
 - [ ] Every user-content region has its empty state, and content-operating chrome hides while
       it is empty.
 - [ ] Icons near drawn size (tile for presence); images captured/cropped to fit, never shrunk.
-- [ ] `pnpm test:ui` is green; every `audit-allow` names a real reason.
+- [ ] `pnpm test:chisel` is green; every `chisel-ignore` names a real reason.

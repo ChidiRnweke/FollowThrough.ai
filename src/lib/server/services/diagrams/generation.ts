@@ -51,7 +51,7 @@ export interface DiagramGeneration {
 
 /** A submission the model sent, or a `ValidationError` naming what to correct. */
 const readSubmission = (
-	// audit-allow: no-unknown-type — the model's submission, parsed here by the service that owns the provider.
+	// chisel-ignore narrowing:no-unknown-type -- the model's submission, parsed here by the service that owns the provider.
 	value: unknown,
 	kind: 'drawio' | 'mermaid'
 ): DiagramSubmission => {

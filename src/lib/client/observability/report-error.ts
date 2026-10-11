@@ -49,7 +49,7 @@ export function reportClientError(report: ClientErrorReport): void {
 	sent += 1;
 
 	try {
-		// audit-allow: silent-catch — this terminal error reporter cannot recursively report its own transport failure
+		// chisel-ignore fail-loudly:silent-catch -- this terminal error reporter cannot recursively report its own transport failure
 		void fetch('/api/client-errors', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
@@ -57,7 +57,7 @@ export function reportClientError(report: ClientErrorReport): void {
 			// The page may be navigating away from the very error being reported.
 			keepalive: true
 		}).catch(() => {});
-		// audit-allow: silent-catch — this terminal error reporter cannot recursively report serialization failure
+		// chisel-ignore fail-loudly:silent-catch -- this terminal error reporter cannot recursively report serialization failure
 	} catch {
 		// Reporting a failure must never become a second failure.
 	}

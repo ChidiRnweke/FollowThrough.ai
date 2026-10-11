@@ -216,7 +216,7 @@
 			if (!value) rightPanel.close();
 		}}
 	>
-		<!-- audit-allow: no-pure-black — Overlay scrim: dimming the workspace behind the sheet is mode-independent black; the token set has no scrim token. -->
+		<!-- chisel-ignore design-system:no-pure-black -- Overlay scrim: dimming the workspace behind the sheet is mode-independent black; the token set has no scrim token. -->
 		<Sheet.Content
 			side="right"
 			class="flex w-full max-w-full flex-col p-0 sm:max-w-sm"

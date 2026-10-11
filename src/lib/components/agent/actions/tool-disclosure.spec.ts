@@ -1,18 +1,17 @@
-import type { ShellContext } from '$lib/models/workspace-views';
+import { noteBuilder, shellContextBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { NoteId } from '$lib/models/notes';
 import { describe, expect, it } from 'vitest';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
-import type { NoteSummary } from '$lib/models/notes';
 
 import { opensInPlace, toolDisclosure } from './tool-disclosure';
 
 const NOTE_ID = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
 const TODO_ID = '2b1f0c44-1d3e-4a90-9f21-77c6b0a1e5d3';
 
-const shell = {
-	projects: [],
-	noteTree: [{ id: NOTE_ID, title: 'Infrastructure' } as unknown as NoteSummary]
-} as unknown as ShellContext;
+const shell = shellContextBuilder({
+	noteTree: [noteBuilder({ id: NOTE_ID as NoteId, title: 'Infrastructure' })]
+});
 
 const call = (over: ToolActivityOverrides): ChatToolActivity => ({
 	callId: '00000000-0000-4000-8000-0000000000aa',

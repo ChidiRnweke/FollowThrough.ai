@@ -87,7 +87,7 @@ export class References implements ReferencesController {
 	}
 
 	private launchReferenceRun(runId: AgentRunId): void {
-		// audit-allow: silent-catch — detached execution persists its terminal state; settlement failures are emitted for operational repair.
+		// chisel-ignore fail-loudly:silent-catch -- detached execution persists its terminal state; settlement failures are emitted for operational repair.
 		void this.executeReferenceRun(runId).catch((error) =>
 			console.error(`[reference-run] Could not settle ${runId}:`, error)
 		);

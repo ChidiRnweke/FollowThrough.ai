@@ -2,7 +2,7 @@
 
 The catalog behind ADR 0037. Each entry is a pattern LLMs (and tired humans) emit, why it is
 banned, and the remedy with an in-repo exemplar. Entries marked **[audit]** are enforced at zero
-by `scripts/audit-source-rules.ts`; entries marked **[judgment]** are review rules — they cannot
+by Chisel's `narrowing:*` and `fail-loudly:*` rules; entries marked **[judgment]** are review rules — they cannot
 be checked mechanically without false positives.
 
 The one-line rule: **parse once at the boundary; inward of the parse zones, resolved types are
@@ -714,7 +714,7 @@ other rules already bless them: a **cast target**, since `x as unknown` is the h
 §6 hold up and `shape-cast` owns the double cast; and a **local variable annotation**, since
 `const parsed: unknown = JSON.parse(text)` is the form `no-json-parse-cast` blesses by name. A
 local `unknown` has no consumers to mislead — the next line narrows it. A parser input inside a
-parse zone is legal but not invisible: it takes an `audit-allow` naming the boundary, which is how
+parse zone is legal but not invisible: it takes a `chisel-ignore` naming the boundary, which is how
 the parse zones stay a list a reader can check rather than a claim.
 
 ## 2. `Record<string, unknown>` as a struct substitute — [audit] `no-record-unknown`
@@ -769,8 +769,8 @@ this is its mirror.)
 
 **Remedy:** fix the producer's type so the field is known. When the data is genuinely foreign
 (third-party error shapes, HTTP responses), parse it with a small zod schema at that boundary.
-Framework-forced casts (e.g. Tiptap `extension.options`) take `// audit-allow: no-cast-probe —
-<reason naming the framework constraint>`.
+Framework-forced casts (e.g. Tiptap `extension.options`) take
+`// chisel-ignore narrowing:no-cast-probe -- <reason naming the framework constraint>`.
 
 ## 5. `JSON.parse(x) as T` / `response.json() as T` — [audit] `no-json-parse-cast`, `no-response-json-cast`
 
@@ -798,7 +798,7 @@ const item = value as unknown as AgentInputItem;
 
 **Remedy:** parse foreign data into a locally owned persisted union, then map that union to the
 SDK type inside the provider repository. A third-party generic that cannot be expressed locally needs
-a precise `audit-allow`, not a second assertion. Exemplar: `PersistedSessionItem`
+a precise `chisel-ignore`, not a second assertion. Exemplar: `PersistedSessionItem`
 (`src/lib/models/agent/session-item.ts`) — parsed at the repository mapper, mapped to
 `AgentInputItem` only in `services/agent/conversations/buffer.ts`, with an `unrecognised` arm so a
 newer SDK item stays readable and lossless instead of failing the conversation.

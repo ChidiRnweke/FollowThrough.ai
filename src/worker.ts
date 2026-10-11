@@ -82,7 +82,7 @@ const main = async (): Promise<void> => {
 	process.on('SIGINT', () => void shutdown('SIGINT'));
 };
 
-// audit-allow: silent-catch — this process boundary reports startup failure and exits non-zero.
+// chisel-ignore fail-loudly:silent-catch -- this process boundary reports startup failure and exits non-zero.
 main().catch((error) => {
 	console.error('[worker] failed to start:', error);
 	process.exit(1);

@@ -4,5 +4,5 @@ SvelteKit application for connected notes, projects, todos, references, and AI-a
 
 @AGENTS.md
 
-For structural or test changes, run `pnpm test:architecture`; it combines the repository topology
-and test-quality audits with Chisel, and all three contracts must remain satisfied.
+For structural or test changes, run `pnpm test:architecture`; it combines Chisel with the
+repository's own topology audit, and both must remain satisfied.

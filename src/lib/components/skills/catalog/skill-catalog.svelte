@@ -52,7 +52,7 @@
 			createOpen = false;
 			resetWizard();
 			await goto(`/skills/${skill.note.id}`);
-			// audit-allow: silent-catch — creation failure is reported and navigation does not occur.
+			// chisel-ignore fail-loudly:silent-catch -- creation failure is reported and navigation does not occur.
 		} catch {
 			toast.error('Could not create the skill. Try again.');
 		} finally {
@@ -75,7 +75,7 @@
 				...{ isEnabled: enabled }
 			});
 			if (result.kind === 'failure') throw new Error(result.message);
-			// audit-allow: silent-catch — update failure is reported and the catalog refresh remains authoritative.
+			// chisel-ignore fail-loudly:silent-catch -- update failure is reported and the catalog refresh remains authoritative.
 		} catch {
 			toast.error('Could not update the skill. Try again.');
 		} finally {
@@ -124,7 +124,7 @@
 						</div>
 						<div class="hidden shrink-0 items-center gap-1 lg:flex">
 							{#each skill.triggerHints.slice(0, 3) as hint (hint)}
-								<!-- audit-allow: no-raw-font-family — Trigger hints are invocation commands the user types. -->
+								<!-- chisel-ignore design-system:no-raw-font-family -- Trigger hints are invocation commands the user types. -->
 								<Badge variant="ghost" class="font-mono text-xs text-muted-foreground">{hint}</Badge
 								>
 							{/each}
@@ -190,7 +190,7 @@
 					void submitCreate();
 				}}
 			>
-				<!-- audit-allow: no-raw-font-family — Skill instructions are markdown source, edited as code. -->
+				<!-- chisel-ignore design-system:no-raw-font-family -- Skill instructions are markdown source, edited as code. -->
 				<Textarea
 					bind:value={draftInstructions}
 					class="min-h-40 rounded-md border bg-background p-3 font-mono text-xs"

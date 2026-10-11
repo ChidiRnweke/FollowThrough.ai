@@ -1580,7 +1580,7 @@ const ianaTimeZoneSchema = z.string().refine(
 		try {
 			new Intl.DateTimeFormat('en', { timeZone: value });
 			return true;
-			// audit-allow: silent-catch — Zod refine converts Intl's RangeError into an explicit validation failure.
+			// chisel-ignore fail-loudly:silent-catch -- Zod refine converts Intl's RangeError into an explicit validation failure.
 		} catch {
 			return false;
 		}

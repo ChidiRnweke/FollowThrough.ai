@@ -36,7 +36,7 @@ interface OrderedListInfo {
  * Op attrs are cell attributes copied verbatim during renumbering — open
  * ProseMirror attributes, not this app's domain payload shapes.
  */
-// audit-allow: no-record-unknown — ProseMirror node attrs are an open record typed any by the library.
+// chisel-ignore narrowing:no-record-unknown -- ProseMirror node attrs are an open record typed any by the library.
 type RenumberOpAttrs = Record<string, unknown>;
 
 interface RenumberOp {
