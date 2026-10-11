@@ -495,7 +495,7 @@
 								aria-label="Copy code"
 							>
 								{#if copied}
-									<Icon.Check class="text-brand" />
+									<Icon.Check class="ft-draw text-brand" />
 								{:else}
 									<Icon.Copy />
 								{/if}

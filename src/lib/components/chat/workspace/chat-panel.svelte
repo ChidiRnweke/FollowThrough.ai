@@ -782,7 +782,7 @@
 			onapprove={(entry, tools) => void chat.decideAll(entry, tools, 'approve')}
 			onrejectapproval={(entry, tools) => void chat.decideAll(entry, tools, 'reject')}
 			onretry={(entry) => void requestRetry(entry)}
-			oncopy={(entry) => void copyMessage(entry)}
+			oncopy={copyMessage}
 			onstartediting={startEditing}
 			onaskagain={askAgain}
 			onsuggestion={(id, decision) => void decide(id, decision)}

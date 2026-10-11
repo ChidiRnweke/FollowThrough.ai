@@ -48,7 +48,7 @@
 		<div class="flex items-center gap-1">
 			<Button variant="ghost" size="icon-xs" aria-label="Copy diff" onclick={copyToClipboard}>
 				{#if copied}
-					<Icon.Check class="size-3.5" />
+					<Icon.Check class="ft-draw size-3.5" />
 				{:else}
 					<Icon.Copy class="size-3.5" />
 				{/if}

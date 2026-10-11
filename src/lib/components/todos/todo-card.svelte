@@ -52,14 +52,16 @@
 	/* The footer carries provenance and who the todo waits on — the card's
 	   glanceable metadata row. Rendered only when one of them is set. */
 	const hasFooter = $derived(view.provenance !== undefined || waiting);
-	/* Completing plays a short settle (the card shrinks and fades a touch) before
-	   the status change flies it to Done, so the press reads as an action rather
-	   than the card teleporting. Reopening is immediate. */
+	/* Completing plays a short settle before the status change flies the card to
+	   Done, so the press reads as an action rather than the card teleporting: the
+	   check draws, a line sweeps through the title, and the card shrinks and fades
+	   a touch. The wait covers the sweep (--duration-icon-trace). Reopening is
+	   immediate. */
 	let completing = $state(false);
 	function complete(checked: boolean): void {
 		if (checked) {
 			completing = true;
-			setTimeout(() => onstatus?.(view.todo.id, 'done'), 220);
+			setTimeout(() => onstatus?.(view.todo.id, 'done'), 400);
 		} else {
 			onstatus?.(view.todo.id, 'open');
 		}
@@ -126,7 +128,10 @@
 					]}
 					onclick={() => onopen(view.todo.id)}
 				>
-					{view.todo.title}
+					<!-- The Button lays its children out as flex items, which are blocks; the sweep
+					     needs an inline box so each wrapped line gets its own stroke. -->
+					{#if completing}<span><span class="strike-sweep">{view.todo.title}</span></span
+						>{:else}{view.todo.title}{/if}
 				</Button>
 			{:else}
 				<span
@@ -136,7 +141,9 @@
 							lifted ? 'text-brand-muted-foreground' : 'text-muted-foreground',
 							'line-through'
 						]
-					]}>{view.todo.title}</span
+					]}
+					>{#if completing}<span class="strike-sweep">{view.todo.title}</span>{:else}{view.todo
+							.title}{/if}</span
 				>
 			{/if}
 		</Card.Title>

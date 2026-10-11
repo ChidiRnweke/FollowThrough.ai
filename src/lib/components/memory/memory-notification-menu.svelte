@@ -7,6 +7,7 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { cn, mergeProps } from '$lib/utils';
 	import * as Icon from '$lib/components/icons';
+	import { Increases } from '$lib/hooks/increases.svelte';
 
 	let {
 		notifications,
@@ -20,6 +21,8 @@
 	} = $props();
 
 	const total = $derived(notifications.reduce((sum, notification) => sum + notification.count, 0));
+	// A suggestion arriving swings the bell once. The count a page loads with is not an arrival.
+	const arrivals = new Increases(() => total);
 </script>
 
 <DropdownMenu.Root>
@@ -36,7 +39,9 @@
 							? 'Memory notifications'
 							: `${total} pending memory suggestions`}
 					>
-						<Icon.Notifications />
+						{#key arrivals.count}<Icon.Notifications
+								class={arrivals.count > 0 ? 'ft-ring' : undefined}
+							/>{/key}
 						{#if total > 0}
 							<Badge
 								variant="secondary"

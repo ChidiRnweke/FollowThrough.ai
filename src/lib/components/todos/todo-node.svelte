@@ -7,6 +7,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { Increases } from '$lib/hooks/increases.svelte';
 	import { openTodoSurface } from '$lib/client/shell/responsive-surfaces';
 	import { page } from '$app/state';
 	import { todoUpdates } from './todo-updates';
@@ -25,6 +26,8 @@
 	const todo = $derived(todoId && perNote ? views?.get('todos', todoId) : undefined);
 	const view = $derived(todo ? views?.todo(todo) : undefined);
 	const done = $derived(view?.todo.status === 'done');
+	// Completing here sweeps a line through the title; a todo that loads done is just struck.
+	const completions = new Increases(() => (view ? (done ? 1 : 0) : undefined));
 	const overdue = $derived(
 		view != null && !done && view.todo.dueDate !== undefined && view.todo.dueDate < todayLocalDate()
 	);
@@ -46,12 +49,16 @@
 			<Button
 				variant="link"
 				disabled={!editable}
-				class="h-auto p-0 font-normal text-foreground {done
-					? 'text-muted-foreground line-through'
-					: ''}"
+				class="h-auto p-0 font-normal text-foreground {done ? 'text-muted-foreground' : ''}"
 				onclick={() => openTodoSurface(view, `${page.url.pathname}${page.url.search}`)}
 			>
-				{view.todo.title}
+				<!-- An inline box inside the Button's flex item, so a wrapped title is struck per line. -->
+				{#key completions.count}<span
+						><span
+							class={done ? (completions.count > 0 ? 'strike-sweep' : 'line-through') : undefined}
+							>{view.todo.title}</span
+						></span
+					>{/key}
 			</Button>
 			{#if view.todo.dueDate}
 				<Badge
