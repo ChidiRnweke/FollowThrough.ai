@@ -114,7 +114,7 @@
 
 <!-- Pinned takes a column only when it has notes; empty, it is one quiet line
      above a full-width Recent rather than half the page holding an invitation. -->
-<div class={['grid gap-group', view.pinnedNotes.length > 0 && 'lg:grid-cols-2']}>
+<div class={['grid gap-x-group gap-y-section', view.pinnedNotes.length > 0 && 'lg:grid-cols-2']}>
 	<section class="flex flex-col gap-item" aria-label="Pinned notes">
 		<h2 class="eyebrow">Pinned</h2>
 		{#each view.pinnedNotes as note (note.id)}

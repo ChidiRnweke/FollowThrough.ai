@@ -218,9 +218,11 @@
      and both open at the top (see the tab's own comment). Teal still marks the live
      thing — by depth of wash now, rather than by a bar across the top.
 
-     The wash is the project-identity `bg-brand/10` (`dark:bg-brand/15`), the same
+     The wash is the project-identity `bg-brand/10` (`/15` in dark), the same
      recipe as every other identity moment in the app. It used to be `bg-secondary`
      with the tint on the tabs instead, which is this exact relationship inverted.
+     `strip-wash` lays that tint over an opaque background: the strip is
+     sticky, and a translucent wash let the page scroll visibly under it.
 
      The bottom hairline is an inset shadow rather than a border because a painted tile
      sits over it and has to repaint it; `overflow-hidden` here and on the scroller
@@ -228,7 +230,7 @@
      and an inset shadow needs no geometry outside the 40px. -->
 <!-- chisel-ignore design-system:no-ad-hoc-shadow -- A bottom-only hairline under the strip; ring-inset rings all four sides and a border would cost the strip geometry it doesn't have. -->
 <div
-	class="sticky top-0 z-30 shrink-0 overflow-hidden bg-brand/10 shadow-[inset_0_-1px_0_var(--color-border)] transition-[height] duration-(--duration-panel) ease-(--ease-standard) dark:bg-brand/15 {hidden
+	class="sticky top-0 z-30 shrink-0 overflow-hidden strip-wash shadow-[inset_0_-1px_0_var(--color-border)] transition-[height] duration-(--duration-panel) ease-(--ease-standard) {hidden
 		? 'h-6'
 		: 'h-10'}"
 	role="tablist"
