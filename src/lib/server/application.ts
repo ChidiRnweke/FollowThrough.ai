@@ -22,6 +22,7 @@ import { createAttachmentsCapability } from './factories/capabilities/attachment
 import { createDeliverablesCapability } from './factories/capabilities/deliverables-capability-factory';
 import { createDiagramsCapability } from './factories/capabilities/diagrams-capability-factory';
 import { createFeedbackCapability } from './factories/capabilities/feedback-capability-factory';
+import { createContextUsageCapability } from './factories/capabilities/context-usage-capability-factory';
 import { createIdentityCapability } from './factories/capabilities/identity-capability-factory';
 import { createKnowledgeSearchCapability } from './factories/capabilities/knowledge-search-capability-factory';
 import { createMemoryCapability } from './factories/capabilities/memory-capability-factory';
@@ -235,6 +236,7 @@ export function createApplication(
 	} = agentCapability;
 	const finalizedKnowledgeSearch = knowledgeSearch.finalize({ preferences });
 	const feedback = createFeedbackCapability(actor, { db });
+	const contextUsage = createContextUsageCapability(actor, { db });
 	const attachmentCapability = createAttachmentsCapability(actor, {
 		claims: config.attachmentClaims,
 		transactionRunner,
@@ -668,6 +670,12 @@ export function createApplication(
 			now: Date.now
 		},
 		feedback,
+		contextUsage: {
+			usage: contextUsage.usage,
+			projectTree: projects.treeReader,
+			attachments: attachmentCapability.reader,
+			memory: memory.lister
+		},
 		attachmentProcessing: attachmentCapability.processing,
 		knowledgeIndexing: knowledgeSearch.indexing
 	};

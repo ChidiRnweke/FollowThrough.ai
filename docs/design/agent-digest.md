@@ -26,7 +26,7 @@
 - border/input/ring: hairlines. dark=white-alpha 10–15% — never hardcode gray borders
 - success: light oklch(0.55 0.09 155), dark oklch(0.68 0.11 155). completed/confirmed
 - warning: light oklch(0.62 0.1 75), dark oklch(0.74 0.12 75), fg dark-stone both modes. due-soon/degraded/contradicts
-- chart-1..5: mono stone ramp. color only for semantic series (overdue→destructive etc.)
+- chart-1..5: TEAL ordinal ramp (hue~186, lightest→darkest, validated both modes). series order = brand, chart-2, chart-5, chart-3, chart-1 (never cycled; widgets cap 5). part-of-whole remainder = chart-1. no status colours in charts; prefer one series
 - sidebar-*: nav rail only. sidebar-primary=brighter teal=active nav item
 
 ## tokens.type
@@ -37,6 +37,7 @@
 - REJECTED (do not relitigate): mono metadata — reads as developer tool, breaks mono=code
 - NAMED SCALE (layout.css utilities — no raw heading size classes in app code):
   - `page-title` 3xl/500/serif/tight — one per page (page-shell h1 + custom-header pages)
+  - `stat-value` 2xl/600/tight/tabular — a dashboard figure, ALWAYS with a caption line beneath, left-aligned
   - `section-title` base/600/tight — real content sections (settings groups, skill editor sections)
   - `eyebrow` xs/500/uppercase/wide/muted-fg — labels a GROUP of items below it (list-group labels, table heads, kanban column headers)
   - `provenance-caption` xs/muted-fg — annotates ONE item (timestamps, provenance)
@@ -65,6 +66,8 @@
 - stated in exactly 3 places: buttonVariants.base (ui/button/button.svelte), @utility row-interactive, @utility tactile (bare <button>/<label>). cursor comes from the @layer base tag+role rule in layout.css — NEVER hand-roll cursor-pointer. a cursor-* utility still wins (cursor-grab handles, cursor-col-resize, cursor-text)
 - focus ring visible on everything interactive. keyboard-first
 - dark mode: class .dark, first-class. test every component both themes
+- charts: shadcn Chart over LayerChart; helpers in ui/chart (chartConfigOf, layerSeriesOf, seriesColor, remainderColor, valueTick, countTick for count axes)
+- dashboards: plain-language, NO cards/boxes, NO new colours. hierarchy = named scale (stat-value figure over caption, section-title headings w/ inline count) + teal vs gray. teal=agent activity + live dot; warning/destructive never a state. fixes in "Needs attention" tab (teal dot+count, muted check when empty); each item = visual + fixing action. whole everyday words, no coined nouns ("lookups")
 
 ## ai-provenance (signature — no per-feature variants)
 

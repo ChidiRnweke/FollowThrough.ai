@@ -35,6 +35,10 @@ import {
 } from '../controllers/diagram-studio/controller';
 import { Feedback, type FeedbackDependencies } from '../controllers/feedback/controller';
 import {
+	ContextUsage,
+	type ContextUsageDependencies
+} from '../controllers/context-usage/controller';
+import {
 	InlineSuggestions,
 	type InlineSuggestionsDependencies
 } from '../controllers/inline-suggestions/controller';
@@ -84,6 +88,7 @@ export interface ProductionControllerDependencies {
 	retrieval: RetrievalDependencies;
 	inlineSuggestions: InlineSuggestionsDependencies;
 	feedback: FeedbackDependencies;
+	contextUsage: ContextUsageDependencies;
 	attachmentProcessing: AttachmentProcessingController;
 	knowledgeIndexing: KnowledgeIndexingController;
 }
@@ -300,6 +305,13 @@ export class ProductionControllerFactory implements ControllerFactory {
 			'feedback',
 			new Feedback(this.dependencies.feedback),
 			controllerSurfaces.feedback
+		);
+	}
+	contextUsage(): ReturnType<ControllerFactory['contextUsage']> {
+		return instrumentedController(
+			'contextUsage',
+			new ContextUsage(this.dependencies.contextUsage),
+			controllerSurfaces.contextUsage
 		);
 	}
 	attachmentProcessing(): ReturnType<ControllerFactory['attachmentProcessing']> {

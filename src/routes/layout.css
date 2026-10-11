@@ -55,11 +55,11 @@
 	--border: oklch(0.888 0.007 106.5);
 	--input: oklch(0.888 0.007 106.5);
 	--ring: oklch(0.737 0.021 106.9);
-	--chart-1: oklch(0.88 0.011 106.6);
-	--chart-2: oklch(0.58 0.031 107.3);
-	--chart-3: oklch(0.466 0.025 107.3);
-	--chart-4: oklch(0.394 0.023 107.4);
-	--chart-5: oklch(0.286 0.016 107.4);
+	--chart-1: oklch(0.76 0.055 186);
+	--chart-2: oklch(0.67 0.08 186);
+	--chart-3: oklch(0.59 0.09 186);
+	--chart-4: oklch(0.511 0.096 186.4);
+	--chart-5: oklch(0.4 0.07 186);
 	--radius: 0.625rem;
 	/* Kept a step below --background so the rail still reads as a distinct
 	   surface now that the document surface is no longer pure white. */
@@ -442,11 +442,11 @@
 	--border: oklch(1 0 0 / 14%);
 	--input: oklch(1 0 0 / 15%);
 	--ring: oklch(0.58 0.031 107.3);
-	--chart-1: oklch(0.88 0.011 106.6);
-	--chart-2: oklch(0.58 0.031 107.3);
-	--chart-3: oklch(0.466 0.025 107.3);
-	--chart-4: oklch(0.394 0.023 107.4);
-	--chart-5: oklch(0.286 0.016 107.4);
+	--chart-1: oklch(0.42 0.05 184);
+	--chart-2: oklch(0.52 0.08 184);
+	--chart-3: oklch(0.62 0.11 183);
+	--chart-4: oklch(0.704 0.14 182.5);
+	--chart-5: oklch(0.82 0.1 182);
 	--sidebar: oklch(0.228 0.013 107.4);
 	--sidebar-foreground: oklch(0.988 0.003 106.5);
 	--sidebar-primary: oklch(0.704 0.14 182.503);
@@ -920,6 +920,11 @@
 
 @utility section-title {
 	@apply text-base font-semibold tracking-tight;
+}
+
+/* A figure on a dashboard, always with a caption beneath it saying what it counts. */
+@utility stat-value {
+	@apply text-2xl font-semibold tracking-tight tabular-nums;
 }
 
 @utility eyebrow {

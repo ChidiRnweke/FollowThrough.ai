@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import * as Chart from '$lib/components/ui/chart';
-	import { chartConfigOf, chartHeightClass, type WidgetChartProps } from './chart-series';
+	import { chartHeightClass, type WidgetChartProps } from './chart-series';
 
 	let { props, children }: { props: WidgetChartProps; children: Snippet } = $props();
 </script>
@@ -15,7 +15,7 @@
 		<p class="text-sm text-muted-foreground">Nothing to plot yet.</p>
 	{:else}
 		<Chart.Container
-			config={chartConfigOf(props.series)}
+			config={Chart.chartConfigOf(props.series)}
 			class={['aspect-auto w-full', chartHeightClass(props.height)]}
 		>
 			{@render children()}
