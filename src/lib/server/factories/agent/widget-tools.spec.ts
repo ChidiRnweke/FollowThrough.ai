@@ -3,7 +3,7 @@ import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/i
 import { createWidgetRules } from '$lib/factories/widgets/rules';
 import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
 import { widgetTemplates } from '$lib/models/widgets';
-import { jsonObjectSchema } from '$lib/server/factories/agent/tools/arguments';
+import { jsonObjectSchema } from '$lib/server/infrastructure/agents/sdk-tool';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';

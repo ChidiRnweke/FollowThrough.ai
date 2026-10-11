@@ -11,7 +11,8 @@ import { toolFailure } from '$lib/models/agent/tool-failure';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { bindToolArguments, jsonObjectSchema, toolOutput, withToolFeedback } from './arguments';
+import { jsonObjectSchema, withToolFeedback } from '$lib/server/infrastructure/agents/sdk-tool';
+import { bindToolArguments, toolOutput } from './arguments';
 import { describeTools } from './catalog';
 
 export interface McpToolConnection {

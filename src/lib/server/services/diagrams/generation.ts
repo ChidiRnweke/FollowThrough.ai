@@ -1,6 +1,6 @@
-import { Agent, Runner, tool, type AgentInputItem, type ModelProvider } from '@openai/agents';
-import { DomainError, ValidationError, failureReport } from '$lib/errors';
-import { toolFailure } from '$lib/models/agent/tool-failure';
+import { Agent, Runner, type AgentInputItem, type ModelProvider } from '@openai/agents';
+import { sdkTool } from '$lib/server/infrastructure/agents/sdk-tool';
+import { ValidationError } from '$lib/errors';
 import {
 	drawioSubmissionSchema,
 	mermaidSubmissionSchema,
@@ -63,27 +63,6 @@ const readSubmission = (
 	const parsed = mermaidSubmissionSchema.safeParse(value);
 	if (parsed.success) return { kind, ...parsed.data };
 	throw new ValidationError(z.prettifyError(parsed.error));
-};
-
-const diagramSubmissionParameters = (kind: 'drawio' | 'mermaid') => {
-	const schema = kind === 'drawio' ? drawioSubmissionSchema : mermaidSubmissionSchema;
-	const converted = z.toJSONSchema(schema, { io: 'input' });
-	if (
-		converted.type !== 'object' ||
-		converted.additionalProperties !== false ||
-		typeof converted.properties !== 'object' ||
-		converted.properties === null
-	)
-		throw new Error('Diagram submission parameters must convert to a strict object schema');
-	return {
-		type: 'object' as const,
-		properties: converted.properties,
-		required: Array.isArray(converted.required)
-			? converted.required.filter((name): name is string => typeof name === 'string')
-			: [],
-		additionalProperties: false as const,
-		...(converted.description ? { description: converted.description } : {})
-	};
 };
 
 /** Diagram generation through the agents SDK, against the model provider the factory injects. */
@@ -180,30 +159,17 @@ export class DiagramGenerationService implements DiagramGeneration {
 		signal.throwIfAborted();
 		let accepted: DiagramSubmission | undefined;
 		const kind = request.operation === 'convert' ? 'drawio' : 'mermaid';
-		const submit = tool({
+		const submit = sdkTool({
 			name: kind === 'drawio' ? 'submit_drawio_diagram' : 'submit_mermaid_diagram',
 			description:
 				kind === 'drawio'
 					? 'Submit a title and final uncompressed draw.io mxfile XML. This is the only tool that completes conversion.'
 					: 'Submit the final Mermaid source. This is the only tool that completes the diagram task. Labels: for multi-line text use escaped \\n inside quoted labels; never use HTML tags such as <br/>.',
-			parameters: diagramSubmissionParameters(kind),
-			strict: true,
-			// Invalid JSON, a schema-invalid draft and a rejected draft all reach the model as the
-			// same failure envelope every agent tool returns, and the session continues to a valid
-			// draft. Only cancellation escapes.
-			errorFunction: (_context, error) => {
-				signal.throwIfAborted();
-				const report = failureReport(error);
-				return JSON.stringify(
-					toolFailure(
-						error instanceof DomainError ? error.code : 'INTERNAL_ERROR',
-						report.message,
-						report.advice
-					)
-				);
-			},
+			parameters: kind === 'drawio' ? drawioSubmissionSchema : mermaidSubmissionSchema,
+			signal,
+			// Invalid JSON, a schema-invalid draft and a rejected draft all reach the model as
+			// feedback through the shared boundary, and the session continues to a valid draft.
 			execute: async (value) => {
-				signal.throwIfAborted();
 				if (accepted) throw new ValidationError('A diagram has already been submitted.');
 				const draft = readSubmission(value, kind);
 				const decision = await events.submit(draft);
@@ -211,7 +177,10 @@ export class DiagramGenerationService implements DiagramGeneration {
 				if (decision.kind === 'rejected') throw new ValidationError(decision.message);
 				if (accepted) throw new ValidationError('A diagram has already been submitted.');
 				accepted = decision.draft;
-				return { title: accepted.title, source: accepted.source };
+				return {
+					...(accepted.title === undefined ? {} : { title: accepted.title }),
+					source: accepted.source
+				};
 			}
 		});
 		const agent = new Agent({

@@ -2,6 +2,7 @@ import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/gene
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { DiagramGenerationService } from '$lib/server/services/diagrams/generation';
+import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
 import {
 	InMemoryDiagramModel,
@@ -22,6 +23,7 @@ import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
 
 const setup = (generator?: DiagramGenerationService) => {
+	// With a real generator, the production validator judges each draft too.
 	const fixture = diagramGenerationFixture();
 	const generation = generator
 		? { ...fixture, generation: { ...fixture.generation, generator } }
@@ -36,6 +38,7 @@ const setup = (generator?: DiagramGenerationService) => {
 			generationRules: new DiagramGenerationRuleService(),
 			selectionOrigins: new InMemorySelectionOrigins(notes, provenance),
 			...generation,
+			...(generator ? { mermaidValidator: new MermaidSubmissionValidator() } : {}),
 			suggestionCreator: suggestions,
 			transactionRunner: new InMemoryTransactionRunner([
 				notes,

@@ -362,7 +362,7 @@ describe('tool lifecycle ownership', () => {
 	it('allows SDK construction in its designated adapter', () => {
 		expect(
 			analyzeSource(
-				'src/lib/server/factories/agent/tools/toolset.ts',
+				'src/lib/server/infrastructure/agents/sdk-tool.ts',
 				"import { tool } from '@openai/agents';"
 			)
 		).toEqual([]);

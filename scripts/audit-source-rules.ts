@@ -534,11 +534,10 @@ export const analyzeSource = (
 		if (violations.some((v) => v.rule === rule && v.line === localLine + lineOffset)) return;
 		violations.push({ rule, line: localLine + lineOffset, message });
 	};
-	// The agent tool set and the MCP server are built by the agent tool factories; diagram
-	// generation registers its own submission tool with the provider it owns.
-	const sdkAdapter = 'src/lib/server/factories/agent/tools/toolset.ts';
+	// Every Agents SDK tool is built through the one constructor that applies the feedback
+	// policy; the MCP server is built by the agent tool factory.
+	const sdkAdapter = 'src/lib/server/infrastructure/agents/sdk-tool.ts';
 	const mcpAdapter = 'src/lib/server/factories/agent/tools/mcp.ts';
-	const diagramProtocol = 'src/lib/server/services/diagrams/generation.ts';
 	const toolBoundaryImport = (node: ts.Node): boolean => {
 		if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
 			const clause = node.importClause;
@@ -558,7 +557,7 @@ export const analyzeSource = (
 				);
 			}
 			if (module !== '@openai/agents' && module !== '@openai/agents-core') return false;
-			if (fileName === sdkAdapter || fileName === diagramProtocol) return false;
+			if (fileName === sdkAdapter) return false;
 			return (
 				!!bindings &&
 				(ts.isNamespaceImport(bindings) ||

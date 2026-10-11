@@ -1,4 +1,4 @@
-import { DOMAIN_ERROR_ADVICE, ValidationError } from '$lib/errors';
+import { ValidationError } from '$lib/errors';
 import type {
 	AgentTool,
 	AgentToolPolicy,
@@ -7,10 +7,10 @@ import type {
 	ToolPreparation
 } from '$lib/models/agent-tool-protocol';
 import { agentPayloadResultSchema, type AgentPayload } from '$lib/models/agent/payload';
-import { toolFailure } from '$lib/models/agent/tool-failure';
-import { ModelBehaviorError, tool, type Tool } from '@openai/agents';
+import type { Tool } from '@openai/agents';
 import { z } from 'zod';
-import { bindToolArguments, jsonObjectSchema, toolOutput, withToolFeedback } from './arguments';
+import { sdkTool, withToolFeedback } from '$lib/server/infrastructure/agents/sdk-tool';
+import { bindToolArguments, toolOutput } from './arguments';
 import { describeTools } from './catalog';
 
 const SEARCH_DESCRIPTION =
@@ -100,7 +100,7 @@ export const createAgentToolset = (
 	};
 
 	const build = (entry: AgentTool, gated: boolean): Tool<unknown> =>
-		sdkTool({
+		agentSdkTool({
 			name: entry.name,
 			description: entry.description,
 			parameters: entry.parameters,
@@ -127,7 +127,7 @@ export const createAgentToolset = (
 		const entry = byName.get(name);
 		return entry ? [entry] : [];
 	});
-	const searchTools = sdkTool({
+	const searchTools = agentSdkTool({
 		name: 'search_tools',
 		description: SEARCH_DESCRIPTION,
 		parameters: searchToolsParameters,
@@ -218,7 +218,7 @@ const normalizeInput = (
 	);
 };
 
-const sdkTool = (options: SdkToolOptions): Tool<unknown> => {
+const agentSdkTool = (options: SdkToolOptions): Tool<unknown> => {
 	const schema = z.toJSONSchema(options.parameters, { io: 'input' });
 	const prepare = (input: unknown, callId: string | undefined): Promise<ToolPreparation> =>
 		withToolFeedback(options.signal, async () => {
@@ -226,25 +226,15 @@ const sdkTool = (options: SdkToolOptions): Tool<unknown> => {
 			if (payload.kind === 'corrupt') throw new ValidationError(payload.message);
 			return options.prepare(normalizeInput(payload.value, schema), callId);
 		});
-	const built = tool({
+	const built = sdkTool({
 		name: options.name,
 		description: options.description,
-		parameters: jsonObjectSchema(options.parameters),
-		strict: true,
+		parameters: options.parameters,
+		signal: options.signal,
 		...(options.isEnabled ? { isEnabled: options.isEnabled } : {}),
-		needsApproval: async (_context, input, callId) =>
+		needsApproval: async (input, callId) =>
 			(await prepare(input, callId)).kind === 'approval_required',
-		errorFunction: (_context, error) => {
-			options.signal.throwIfAborted();
-			if (error instanceof ModelBehaviorError && error.name === 'InvalidToolInputError')
-				return JSON.stringify(
-					toolFailure('VALIDATION', error.message, DOMAIN_ERROR_ADVICE.VALIDATION)
-				);
-			// Tool-local errors have already become values. Anything escaping is terminal.
-			throw error;
-		},
-		execute: async (input, _context, details) => {
-			const callId = details?.toolCall?.callId;
+		execute: async (input, callId) => {
 			const prepared = await prepare(input, callId);
 			if (prepared.kind === 'failure') return prepared;
 			return options.execute(prepared.action, callId);

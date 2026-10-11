@@ -95,7 +95,11 @@ describe('Diagram provider submission through its owning operation', () => {
 	});
 });
 
-it('preserves the existing unknown submission-tool failure at the SDK boundary', async () => {
+/**
+ * The submission tools are agent tool names, so the shared mapper records the Diagram Agent's
+ * calls instead of rejecting them and the generation completes.
+ */
+it('records the Diagram Agent submission tool and completes the generation', async () => {
 	const { DiagramGenerationService } = await import('$lib/server/services/diagrams/generation');
 	const { InMemoryModelProvider } =
 		await import('$lib/testing/agent/fakes/in-memory-model-provider');
@@ -116,15 +120,11 @@ it('preserves the existing unknown submission-tool failure at the SDK boundary',
 			() => ({ kind: 'completed' }),
 			(error: Error) => ({ kind: 'failure', message: error.message })
 		);
-	expect({ result, closed: provider.closed, suggestions: fixture.suggestions.suggestions }).toEqual(
-		{
-			result: {
-				kind: 'failure',
-				message:
-					'The provider called "submit_mermaid_diagram", which is not a tool this agent offers'
-			},
-			closed: true,
-			suggestions: []
-		}
-	);
+	expect({
+		result,
+		closed: provider.closed,
+		sources: fixture.suggestions.suggestions.map((suggestion) =>
+			suggestion.kind === 'diagram' ? suggestion.payload.source : undefined
+		)
+	}).toEqual({ result: { kind: 'completed' }, closed: true, sources: [draft.source] });
 });
