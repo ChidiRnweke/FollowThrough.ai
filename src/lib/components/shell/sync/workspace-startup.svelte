@@ -23,11 +23,11 @@
 </script>
 
 <div
-	class="flex flex-1 flex-col items-center justify-center gap-4 p-6 md:p-8 text-center"
+	class="flex flex-1 flex-col items-center justify-center gap-row p-6 md:p-8 text-center"
 	data-workspace-startup
 >
 	<Icon.Sync state="downloading" class="size-6 text-muted-foreground" />
-	<div class="space-y-2" role="status">
+	<div class="space-y-item" role="status">
 		<p class="text-sm font-medium">
 			{failure
 				? 'Workspace download paused'

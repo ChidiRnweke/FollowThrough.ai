@@ -37,7 +37,7 @@
 		data-route={route}
 		data-viewport={viewport}
 		data-theme={theme}
-		class="flex flex-col gap-1 rounded-2xl border border-dashed border-border px-4 py-3"
+		class="flex flex-col gap-bind rounded-2xl border border-dashed border-border px-4 py-3"
 	>
 		<p class="text-sm text-foreground">I want to see this there.</p>
 		<p class="provenance-caption">

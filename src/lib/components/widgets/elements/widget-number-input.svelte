@@ -27,7 +27,7 @@
 	};
 </script>
 
-<div data-slot="widget-number-input" class="flex w-32 flex-col gap-1.5">
+<div data-slot="widget-number-input" class="flex w-32 flex-col gap-bind">
 	<Label for={id}>{props.label}</Label>
 	<Input
 		{id}

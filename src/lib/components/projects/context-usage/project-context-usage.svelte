@@ -45,11 +45,11 @@
 		{userFacingMessage(usage.error, 'Agent activity could not be loaded.')}
 	</p>
 {:else if !usage.current}
-	<div class="flex flex-col gap-6" aria-busy="true">
+	<div class="flex flex-col gap-group" aria-busy="true">
 		<Skeleton class="h-9 w-64" />
 		<div class="flex items-center gap-12">
 			<Skeleton class="size-52 rounded-full" />
-			<div class="flex flex-col gap-4">
+			<div class="flex flex-col gap-row">
 				<Skeleton class="h-10 w-40" /><Skeleton class="h-8 w-48" />
 			</div>
 		</div>
@@ -81,13 +81,13 @@
 		</Tabs.List>
 
 		<Tabs.Content value="overview">
-			<div class="flex flex-col gap-12">
+			<div class="flex flex-col gap-section">
 				<OverviewHero {summary} {attention} onattention={() => show('attention')} />
 
 				<UsageOverTimeChart activity={summary.activity} />
 
-				<div class="grid gap-12 lg:grid-cols-2">
-					<div class="flex flex-col gap-3">
+				<div class="grid gap-section lg:grid-cols-2">
+					<div class="flex flex-col gap-row">
 						<TopItemsChart mostUsed={summary.mostUsed} />
 						{#if summary.mostUsed.length > 0}
 							<Collapsible.Root bind:open={rankingOpen}>
@@ -125,11 +125,11 @@
 				</div>
 
 				{#if summary.chats.length > 0}
-					<section class="flex flex-col gap-2" aria-labelledby="chats-heading">
+					<section class="flex flex-col gap-item" aria-labelledby="chats-heading">
 						<h2 id="chats-heading" class="section-title">Recent chats</h2>
 						<ul class="divide-y divide-border">
 							{#each summary.chats as chat (chat.conversationId)}
-								<li class="row-interactive flex flex-col gap-1 px-3 py-2.5 text-sm">
+								<li class="row-interactive flex flex-col gap-bind px-3 py-2.5 text-sm">
 									<div class="flex items-center gap-3">
 										<a
 											href="/chats/{chat.conversationId}"

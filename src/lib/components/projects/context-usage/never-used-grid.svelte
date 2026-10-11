@@ -23,7 +23,7 @@
 	let listOpen = $state(false);
 </script>
 
-<section class="flex flex-col gap-4" aria-labelledby="unused-heading">
+<section class="flex flex-col gap-row" aria-labelledby="unused-heading">
 	<SectionHeading
 		id="unused-heading"
 		title="Never read by the agent"

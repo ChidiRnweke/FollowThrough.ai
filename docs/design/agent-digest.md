@@ -44,6 +44,7 @@
   - body sm (base) · `note-title` clamp/600/serif (note editor only)
 - form labels: shadcn `Label` (and `Field.FieldLabel`) = xs/500/muted-fg — label recedes, value leads. `Field.Title` stays sm/500 fg over `Field.Description` xs/muted (settings rows). override per-site if a dialog label needs prominence
 - ladder: eyebrow/caption (xs) → body (sm) → section-title (base) → page-title (3xl) → note-title (clamp)
+- spacing ladder (layout.css `--spacing-*`): bind 4 / item 8 / row 12 / group 24 / section 40. vertical stacks (space-y, gap on flex-col/grid) use only these — not machine-checked; a numeric stack gap is a review finding. icon↔label gaps stay numeric
 - project-overview resource rows sit at base/500 — one step above the sm documents list, because a space outranks a document
 - exceptions: right-panel + drawio chrome-bar titles, sidebar brand = chrome, not content scale
 - chrome legibility floor: primary nav never below sm — workspace tab strip (h-10, sm labels), sidebar wordmark (base/semibold), empty-strip placeholder. xs=eyebrow/provenance only

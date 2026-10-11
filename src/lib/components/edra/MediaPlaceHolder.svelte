@@ -84,7 +84,7 @@
 						{/if}
 					</Tabs.List>
 					<Tabs.Content value="link">
-						<form class="flex flex-col gap-2">
+						<form class="flex flex-col gap-item">
 							<Input type="url" bind:value={url} />
 							<Button type="submit" class="capitalize" onclick={() => setMediaFn(url)}
 								>Insert {mediaType}</Button
@@ -93,7 +93,7 @@
 					</Tabs.Content>
 					{#if mediaType !== 'iframe'}
 						<Tabs.Content value="file">
-							<form class="flex flex-col gap-2" onsubmit={handleFileSubmit}>
+							<form class="flex flex-col gap-item" onsubmit={handleFileSubmit}>
 								<Input type="file" bind:files />
 								<Button type="submit" class="capitalize">Insert {mediaType}</Button>
 							</form>

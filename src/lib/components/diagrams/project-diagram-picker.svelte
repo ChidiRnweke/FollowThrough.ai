@@ -66,12 +66,12 @@
 				hint="A diagram starts in conversation, and appears here once you keep it."
 			/>
 		{:else}
-			<ul class="grid max-h-96 grid-cols-1 gap-4 overflow-y-auto pr-3 sm:grid-cols-2">
+			<ul class="grid max-h-96 grid-cols-1 gap-row overflow-y-auto pr-3 sm:grid-cols-2">
 				{#each diagrams as diagram (diagram.id)}
 					<li>
 						<Button
 							variant="ghost"
-							class="flex h-auto w-full flex-col items-stretch justify-start gap-2 p-2 text-left font-normal whitespace-normal"
+							class="flex h-auto w-full flex-col items-stretch justify-start gap-item p-2 text-left font-normal whitespace-normal"
 							onclick={() => pick(diagram.id)}
 						>
 							<span

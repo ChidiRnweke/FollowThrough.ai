@@ -34,7 +34,7 @@
 {:else if items.length === 0}
 	<p class="text-sm text-muted-foreground">No pending suggestions for this note.</p>
 {:else}
-	<div class="flex flex-col gap-3">
+	<div class="flex flex-col gap-row">
 		{#each items as view (view.suggestion.id)}
 			<SuggestionCard
 				{view}

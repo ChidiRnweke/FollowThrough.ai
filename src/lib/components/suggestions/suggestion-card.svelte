@@ -52,7 +52,7 @@
 			</Card.Action>
 		{/if}
 	</Card.Header>
-	<Card.Content class="space-y-1.5 px-4">
+	<Card.Content class="space-y-bind px-4">
 		{#if suggestion.kind === 'todo'}
 			<p class="text-sm">{suggestion.payload.title}</p>
 			<p class="text-sm text-muted-foreground">

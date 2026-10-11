@@ -49,7 +49,7 @@
 			: ''}"
 	>
 		<!-- chisel-ignore design-system:no-raw-font-family -- File lines are code output; mono is the code face. -->
-		<ul class="flex flex-col gap-0.5 font-mono {panel ? CHAT_TEXT_EVIDENCE : 'text-sm'}">
+		<ul class="flex flex-col gap-bind font-mono {panel ? CHAT_TEXT_EVIDENCE : 'text-sm'}">
 			{#each lines as line, index (index)}
 				<li class="flex gap-2">
 					{#if line.lineNumber !== undefined}

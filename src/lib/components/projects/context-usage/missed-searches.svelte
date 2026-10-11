@@ -45,7 +45,7 @@
 	}
 </script>
 
-<section class="flex flex-col gap-4" aria-labelledby="missed-heading">
+<section class="flex flex-col gap-row" aria-labelledby="missed-heading">
 	<SectionHeading
 		id="missed-heading"
 		title="Searches that found nothing"

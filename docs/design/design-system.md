@@ -151,14 +151,30 @@
   column.
 - **Links in chrome emphasize by weight and foreground,** not color; the tinted-underline link
   treatment is reserved for prose. Breadcrumb and project links keep their sanctioned `--brand`.
-- **Spacing is the hierarchy.** Gaps step rather than repeat: 4px binds a label to its value (one
-  unit); 8px separates items inside a group; 24px separates groups; a further step, or a change
-  of row density, introduces a different kind of content. `PageShell` encodes the header end of
-  the ladder — overriding its `header` snippet with a flat `gap-1` stack is a regression, not a
-  shortcut — and `project-overview.svelte` is the reference for the content end. A screen whose
-  every gap is equal has no hierarchy no matter how well its content is grouped, and the fix is
-  never a divider. Spacing follows the Tailwind scale; corners use the shadcn radii family;
-  elevation stays flat.
+- **Spacing is the hierarchy.** Gaps step rather than repeat, and each step is a named rung
+  in `layout.css`, so a stack says what it separates instead of how many pixels:
+
+  | Token     | Size | Separates                                        |
+  | --------- | ---- | ------------------------------------------------ |
+  | `bind`    | 4px  | a label from its value, a title from its caption |
+  | `item`    | 8px  | items inside one group                           |
+  | `row`     | 12px | one field or row from the next                   |
+  | `group`   | 24px | one group from another                           |
+  | `section` | 40px | a different kind of content                      |
+
+  Every vertical stack — `space-y-*`, or a gap on a `flex-col` or `grid` — takes a rung
+  (`gap-group`, `space-y-item`). No checker enforces this; review holds it, and a numeric stack
+  gap is a review finding.
+  Horizontal gaps inside a control (icon to label) stay on the Tailwind scale; they are
+  component internals, not grouping. A value between rungs carries no level of its own, so it
+  is never the fix for a crowded or loose stack — pick the rung that names the relationship.
+  `PageShell` encodes the header end of the ladder — overriding its `header` snippet with a flat
+  `gap-bind` stack is a regression, not a shortcut — and `project-overview.svelte` is the
+  reference for the content end. A screen whose every gap is equal has no hierarchy no matter
+  how well its content is grouped, and the fix is never a divider. Corners use the shadcn radii
+  family; elevation stays flat. The chat turn log's 20px subject gap (`CHAT_GAP_SUBJECT`) is the
+  one documented off-ladder step; see its rule below.
+
 - **Ambiguous spacing is a violation.** Wherever spacing is the only thing grouping elements,
   within-group gaps are strictly smaller than between-group gaps; equal gaps at nested levels
   flatten the grouping, and the fix is a spacing step, never a divider.
@@ -331,9 +347,9 @@ while the region is empty; the empty state and its one action are the whole surf
   tips are chosen in the loader, never at render time.
 - **Grouping is spacing and similarity, not more rules:** different kinds of thing get different
   density — spaces cluster at base size with no dividers while the documents list uses `sm` rows
-  and hairlines; gaps step 8px → 24px → a further step. The page header (`PageShell`) follows it:
+  and hairlines; gaps step `item` → `group` → `section`. The page header (`PageShell`) follows it:
   the breadcrumb sits 4px above the title as its parent, the description 6px under the title, and
-  the page body a 32px step below the header. Equal gaps and repeated dividers flatten
+  the page body a `section` step (40px) below the header. Equal gaps and repeated dividers flatten
   a page into peer sections however well its content is grouped.
 - **Notes:** one continuous rich-text surface at `note-measure`, preceded by a quiet utility row
   (breadcrumb, save status, actions). The title lives only in the breadcrumb's current-page

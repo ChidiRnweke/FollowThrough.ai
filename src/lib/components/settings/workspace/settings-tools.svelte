@@ -208,7 +208,7 @@
      inside a group → 24px between groups → a further step below the preamble, so
      the grouping is legible without drawing a card. Density comes from the 62
      rows, never from the four controls, which keep their default height. -->
-<section class="flex max-w-3xl flex-col gap-6">
+<section class="flex max-w-3xl flex-col gap-group">
 	{#if session.resources.collectionReadiness() !== 'ready'}
 		<p role="status" class="text-sm text-muted-foreground">
 			Some settings are unavailable on this device. Connect to finish downloading them before making
@@ -223,7 +223,7 @@
 		chat, from tool search, and from any connected MCP client.
 	</p>
 
-	<div class="flex flex-col gap-2">
+	<div class="flex flex-col gap-item">
 		<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
 			<div class="flex items-center gap-2">
 				<span class="text-sm text-muted-foreground">Applies to</span>
@@ -259,7 +259,7 @@
 	     preamble to the controls above. The gaps double at each level — 6px heading
 	     to its rows, 12px between kinds, 32px to the bar above — so no two levels
 	     read as peers. -->
-	<div class="flex flex-col gap-8">
+	<div class="flex flex-col gap-section">
 		<div class="flex flex-wrap items-center gap-2">
 			<Input
 				class="min-w-56 flex-1"
@@ -297,9 +297,9 @@
 		{#if filtered.length === 0}
 			<p class="text-sm text-muted-foreground">No tool matches these filters.</p>
 		{:else}
-			<div class="flex flex-col gap-3">
+			<div class="flex flex-col gap-row">
 				{#each chunksOf(visible) as chunk (chunk.title)}
-					<div class="flex flex-col gap-1.5">
+					<div class="flex flex-col gap-bind">
 						<h3 class="eyebrow">{chunk.title}</h3>
 						<!-- Bled 12px past the measure so names align with the controls above
 							     while the hairlines still read as one continuous list. -->

@@ -103,12 +103,12 @@
 		</div>
 	{:else if archivedProject}
 		<div
-			class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-sm text-muted-foreground"
+			class="flex flex-1 flex-col items-center justify-center gap-row p-8 text-sm text-muted-foreground"
 		>
 			<p role="status">This note belongs to an archived project.</p>
 		</div>
 	{:else if note.state.kind === 'wait' || note.state.kind === 'ready'}
-		<div class="flex min-h-96 flex-1 flex-col gap-3 p-8" aria-label="Loading note">
+		<div class="flex min-h-96 flex-1 flex-col gap-row p-8" aria-label="Loading note">
 			<div class="bg-muted h-5 w-full animate-pulse rounded"></div>
 			<div class="bg-muted h-5 w-11/12 animate-pulse rounded"></div>
 			<div class="bg-muted h-5 w-4/5 animate-pulse rounded"></div>
@@ -117,7 +117,7 @@
 		</div>
 	{:else}
 		<div
-			class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-sm text-muted-foreground"
+			class="flex flex-1 flex-col items-center justify-center gap-row p-8 text-sm text-muted-foreground"
 		>
 			<p>{accessMessage(note.state, 'note')}</p>
 			<Button variant="outline" onclick={() => note.retry()}>Retry</Button>

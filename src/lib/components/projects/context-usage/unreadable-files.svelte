@@ -16,7 +16,7 @@
 	} as const;
 </script>
 
-<section class="flex flex-col gap-4" aria-labelledby="files-heading">
+<section class="flex flex-col gap-row" aria-labelledby="files-heading">
 	<SectionHeading
 		id="files-heading"
 		title="Files the agent can't read"

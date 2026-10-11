@@ -30,7 +30,7 @@
 		strategy: 'absolute',
 		scrollTarget: editor.view.dom.parentElement ?? window
 	}}
-	class="bg-popover! z-50 flex h-fit w-fit flex-col p-2 gap-1 rounded-lg border"
+	class="bg-popover! z-50 flex h-fit w-fit flex-col p-2 gap-bind rounded-lg border"
 	onmousedown={(event: MouseEvent) => event.preventDefault()}
 >
 	<button

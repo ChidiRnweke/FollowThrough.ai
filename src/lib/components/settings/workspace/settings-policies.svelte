@@ -58,7 +58,7 @@
 	}
 </script>
 
-<section class="flex max-w-3xl flex-col gap-6">
+<section class="flex max-w-3xl flex-col gap-group">
 	{#if session.resources.collectionReadiness() !== 'ready'}
 		<p role="status" class="text-sm text-muted-foreground">
 			Some settings are unavailable on this device. Connect to finish downloading them before making

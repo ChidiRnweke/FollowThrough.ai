@@ -35,7 +35,7 @@
 			</Dialog.Description>
 		</Dialog.Header>
 		{#if projects.length}
-			<div class="flex flex-col gap-2">
+			<div class="flex flex-col gap-item">
 				<Label for="diagram-project">Project</Label>
 				<Select.Root type="single" value={selected} onValueChange={(value) => (selected = value)}>
 					<Select.Trigger id="diagram-project" class="w-full" aria-label="Diagram project">

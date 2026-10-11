@@ -42,7 +42,7 @@
 		the nested-rectangle failure the surface rule exists to prevent. 24px between the
 		changes, because each is a different thing to weigh, and one action row answering all.
 	-->
-	<div class="my-2 flex flex-col gap-6 border-y border-brand/40 py-4">
+	<div class="my-2 flex flex-col gap-group border-y border-brand/40 py-4">
 		<p class="text-xs font-medium text-muted-foreground">
 			{tools.length} changes need your approval
 		</p>

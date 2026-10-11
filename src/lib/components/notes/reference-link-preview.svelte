@@ -62,7 +62,7 @@
 	<HoverCard.Content
 		customAnchor={anchor}
 		sideOffset={6}
-		class="flex w-80 flex-col gap-3 rounded-md p-3 shadow-none"
+		class="flex w-80 flex-col gap-row rounded-md p-3 shadow-none"
 		data-reference-preview
 		onpointerenter={(event) => {
 			onretain();
@@ -76,7 +76,7 @@
 	>
 		{#each group.sources as source, index (source.id)}
 			{#if index > 0}<Separator />{/if}
-			<div class="flex flex-col gap-2">
+			<div class="flex flex-col gap-item">
 				<div class="flex items-start justify-between gap-2">
 					<p class="min-w-0 text-sm font-medium">{source.title}</p>
 					{#if source.state !== 'authored'}

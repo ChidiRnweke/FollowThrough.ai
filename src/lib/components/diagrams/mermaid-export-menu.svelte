@@ -56,8 +56,8 @@
 		{/snippet}
 	</Popover.Trigger>
 	<Popover.Content class="w-72" align="end">
-		<div class="flex flex-col gap-6">
-			<div class="flex flex-col gap-2">
+		<div class="flex flex-col gap-group">
+			<div class="flex flex-col gap-item">
 				<Label>Palette</Label>
 				<ToggleGroup.Root
 					type="single"
@@ -79,9 +79,9 @@
 				{/if}
 			</div>
 
-			<div class="flex flex-col gap-2">
+			<div class="flex flex-col gap-item">
 				<Label>Colours</Label>
-				<div class="grid grid-cols-2 gap-x-2 gap-y-1.5">
+				<div class="grid grid-cols-2 gap-x-2 gap-y-bind">
 					{#each MERMAID_PALETTE_KEYS as key (key)}
 						<Label class="flex items-center gap-2 text-xs font-normal text-muted-foreground">
 							<Input
@@ -104,7 +104,7 @@
 				{/if}
 			</div>
 
-			<div class="flex flex-col gap-2">
+			<div class="flex flex-col gap-item">
 				<Label>Output</Label>
 				<ToggleGroup.Root
 					type="single"

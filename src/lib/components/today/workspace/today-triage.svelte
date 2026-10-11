@@ -36,7 +36,7 @@
 
 {#snippet statTile(label: string, count: number, tone: string, zero: string, some: string)}
 	<Card.Root class="gap-0 py-4">
-		<Card.Content class="flex flex-col gap-1 px-4">
+		<Card.Content class="flex flex-col gap-bind px-4">
 			<span class="text-sm text-muted-foreground">{label}</span>
 			<span
 				class={['text-2xl font-semibold tabular-nums', count > 0 ? tone : 'text-muted-foreground']}
@@ -66,7 +66,7 @@
 	</a>
 {/snippet}
 
-<section class="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Today at a glance">
+<section class="grid grid-cols-1 gap-row sm:grid-cols-3" aria-label="Today at a glance">
 	{@render statTile(
 		'Overdue',
 		view.overdue.length,
@@ -91,8 +91,8 @@
 </section>
 
 {#if hasActionable}
-	<div class="grid gap-6 lg:grid-cols-2">
-		<section class="space-y-3" aria-label="Due and overdue todos">
+	<div class="grid gap-group lg:grid-cols-2">
+		<section class="space-y-row" aria-label="Due and overdue todos">
 			{#if view.overdue.length > 0}
 				<h2 class="eyebrow">Overdue</h2>
 				{#each view.overdue as item (item.todo.id)}
@@ -117,7 +117,7 @@
 			{/if}
 		</section>
 		{#if view.waitingOn.length > 0}
-			<section class="space-y-3" aria-label="Waiting on others">
+			<section class="space-y-row" aria-label="Waiting on others">
 				<h2 class="eyebrow">Waiting on</h2>
 				{#each view.waitingOn as item (item.todo.id)}
 					<TodoCard view={item} projectName={projectName(item.todo.projectId)} onopen={open} />
@@ -127,8 +127,8 @@
 	</div>
 {/if}
 
-<div class="grid gap-6 border-t border-border pt-6 lg:grid-cols-2">
-	<section class="space-y-2" aria-label="Pinned notes">
+<div class="grid gap-group border-t border-border pt-6 lg:grid-cols-2">
+	<section class="space-y-item" aria-label="Pinned notes">
 		<h2 class="eyebrow">Pinned</h2>
 		{#each view.pinnedNotes as note (note.id)}
 			{@render noteRow(note, true)}
@@ -136,7 +136,7 @@
 			<EmptyState icon={Icon.Pin} title="Pin a note to keep it at hand." />
 		{/each}
 	</section>
-	<section class="space-y-2" aria-label="Recently edited notes">
+	<section class="space-y-item" aria-label="Recently edited notes">
 		<h2 class="eyebrow">Recent</h2>
 		{#each view.recentNotes as note (note.id)}
 			{@render noteRow(note, false)}

@@ -48,9 +48,9 @@
 	look like arriving somewhere familiar, and sharing the markup is what keeps
 	that true.
 -->
-<div class="flex flex-col gap-2">
+<div class="flex flex-col gap-item">
 	<p class="px-2 text-sm font-semibold">Ask it to do something</p>
-	<ul class="flex flex-col gap-0.5">
+	<ul class="flex flex-col gap-bind">
 		{#each prompts as starter (starter.prompt)}
 			<li>
 				<AgentAction

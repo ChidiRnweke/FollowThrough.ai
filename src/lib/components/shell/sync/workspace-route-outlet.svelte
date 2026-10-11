@@ -25,7 +25,7 @@
 {#if result?.kind === 'ready'}
 	{@render children()}
 {:else if result?.kind === 'failure'}
-	<div class="space-y-4 p-6 md:p-8" role="alert">
+	<div class="space-y-row p-6 md:p-8" role="alert">
 		<p class="text-sm font-medium">
 			{result.status === 404
 				? 'Item not found'

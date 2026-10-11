@@ -22,7 +22,7 @@
 	it moved — so the arguments are what identify the change, and the field list is honest about
 	the difference: `from → to` when there is a before, the value alone when there is not.
 -->
-<div class="flex flex-col gap-1">
+<div class="flex flex-col gap-bind">
 	{#if entity?.named}
 		<p class="break-words text-foreground">{entity.title}</p>
 	{/if}
@@ -37,7 +37,7 @@
 		</p>
 	{/each}
 	{#each prose as change (change.label)}
-		<div class="flex flex-col gap-1">
+		<div class="flex flex-col gap-bind">
 			<p class="text-muted-foreground">{change.label}</p>
 			<!-- Bounded, because a note body pasted whole pushes the rest of the transcript off
 			     the screen for a row that is only evidence. The teal wash is the same surface every

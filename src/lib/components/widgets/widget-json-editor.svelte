@@ -45,13 +45,13 @@
 	}
 </script>
 
-<div data-slot="widget-json-editor" class="flex flex-col gap-4">
-	<div class="flex flex-col gap-1.5">
+<div data-slot="widget-json-editor" class="flex flex-col gap-row">
+	<div class="flex flex-col gap-bind">
 		<Label for="widget-title">Title</Label>
 		<Input id="widget-title" bind:value={title} />
 	</div>
-	<div class="grid gap-4 @[48rem]:grid-cols-2">
-		<div class="flex flex-col gap-1.5">
+	<div class="grid gap-row @[48rem]:grid-cols-2">
+		<div class="flex flex-col gap-bind">
 			<Label for="widget-layout">Layout</Label>
 			<!-- chisel-ignore design-system:no-raw-font-family -- the field holds JSON source, which is code. -->
 			<Textarea
@@ -61,7 +61,7 @@
 				class="h-72 resize-y font-mono text-xs field-sizing-fixed"
 			/>
 		</div>
-		<div class="flex flex-col gap-1.5">
+		<div class="flex flex-col gap-bind">
 			<Label for="widget-data">Data</Label>
 			<!-- chisel-ignore design-system:no-raw-font-family -- the field holds JSON source, which is code. -->
 			<Textarea
@@ -73,7 +73,11 @@
 		</div>
 	</div>
 	{#if outcome.kind === 'invalid'}
-		<ul role="alert" aria-label="Problems" class="flex flex-col gap-1 text-label text-destructive">
+		<ul
+			role="alert"
+			aria-label="Problems"
+			class="flex flex-col gap-bind text-label text-destructive"
+		>
 			{#each outcome.issues as issue, index (index)}
 				<li><code>{issue.path}</code> {issue.message}</li>
 			{/each}
@@ -88,7 +92,7 @@
 		>
 	</div>
 	{#if outcome.kind === 'ready'}
-		<div class="flex flex-col gap-1.5">
+		<div class="flex flex-col gap-bind">
 			<p class="eyebrow">Preview</p>
 			<WidgetView widget={outcome.preview} sources={widgetSources(outcome.preview)} />
 		</div>

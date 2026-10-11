@@ -94,9 +94,9 @@
      so they read as belonging to the board rather than floating between the two.
      Filters lead on the left; the view switcher and the page's one agent action
      close the row on the right. -->
-<div class="flex min-h-0 flex-1 flex-col gap-4">
+<div class="flex min-h-0 flex-1 flex-col gap-group">
 	<div
-		class="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+		class="flex flex-col items-stretch justify-between gap-row sm:flex-row sm:flex-wrap sm:items-center"
 	>
 		<div class="flex flex-wrap items-center gap-2">
 			<div class="relative">
@@ -194,7 +194,7 @@
 				class="py-16"
 			>
 				{#snippet action()}
-					<div class="flex w-full max-w-xs flex-col items-stretch gap-2">
+					<div class="flex w-full max-w-xs flex-col items-stretch gap-item">
 						<Button variant="outline" size="sm" onclick={() => setParam('view', 'board')}>
 							Add a todo on the board
 						</Button>

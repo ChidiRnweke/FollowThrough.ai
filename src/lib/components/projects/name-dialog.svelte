@@ -43,7 +43,7 @@
 		<Dialog.Header>
 			<Dialog.Title>{title}</Dialog.Title>
 		</Dialog.Header>
-		<Form class="flex flex-col gap-4" onsubmit={submit}>
+		<Form class="flex flex-col gap-row" onsubmit={submit}>
 			<Input bind:value placeholder={label} aria-label={label} disabled={busy} autofocus />
 			<Dialog.Footer>
 				<Button type="button" variant="ghost" onclick={() => (open = false)}>Cancel</Button>

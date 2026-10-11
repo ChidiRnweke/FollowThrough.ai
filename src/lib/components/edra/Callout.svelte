@@ -30,8 +30,8 @@
 				>
 					{emoji}
 				</Popover.Trigger>
-				<Popover.Content class="w-48 flex flex-col gap-2" side="bottom" align="start">
-					<div class="flex flex-col gap-1.5">
+				<Popover.Content class="w-48 flex flex-col gap-item" side="bottom" align="start">
+					<div class="flex flex-col gap-bind">
 						<label
 							for="emoji"
 							class="text-[10px] font-bold tracking-wide uppercase text-muted-foreground"

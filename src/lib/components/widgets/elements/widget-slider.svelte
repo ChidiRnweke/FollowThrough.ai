@@ -21,7 +21,7 @@
 	const current = $derived(typeof value.current === 'number' ? value.current : props.min);
 </script>
 
-<div data-slot="widget-slider" class="flex min-w-48 flex-1 flex-col gap-2.5">
+<div data-slot="widget-slider" class="flex min-w-48 flex-1 flex-col gap-row">
 	<div class="flex items-baseline justify-between gap-3 text-label">
 		<span class="text-muted-foreground">{props.label}</span>
 		<span class="font-medium text-foreground tabular-nums">{current}{props.suffix ?? ''}</span>

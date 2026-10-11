@@ -187,7 +187,7 @@
 		<!-- The gutter is the scrollbar's: it overlays the viewport's right edge
 		     rather than reserving space, so a full-width approval or suggestion card
 		     underneath it loses its hairline to the track. -->
-		<div class="flex min-h-full flex-col gap-6 pr-3">
+		<div class="flex min-h-full flex-col gap-group pr-3">
 			{#if entries.length === 0}
 				{#if loading}
 					<ChatThreadSkeleton />
@@ -197,7 +197,7 @@
 					     only plays on a fresh session — a loaded conversation goes through
 					     the skeleton above instead, so it never flashes under a thread. -->
 					<div
-						class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200 ease-(--ease-standard) flex flex-col gap-6"
+						class="animate-in fade-in-0 slide-in-from-bottom-1 duration-200 ease-(--ease-standard) flex flex-col gap-group"
 					>
 						<AgentContextBar {shell} {activeProjectId} {activeNoteId} />
 						<ChatStarters
@@ -229,7 +229,7 @@
 				lets the newest question climb to the top of the port. The empty state keeps the
 				top and gets no filler: it teaches, and belongs where reading starts.
 			-->
-			<div bind:this={stack} class="flex flex-col gap-6">
+			<div bind:this={stack} class="flex flex-col gap-group">
 				{#each entries as entry (entry.id)}
 					{@const isUser = entry.role === 'user'}
 					<ErrorBoundary label="this turn" class="my-0">
@@ -257,12 +257,12 @@
 							     to the answer the tightest gap on screen. Same step as one pass to the
 							     next inside that block. -->
 							<div
-								class="flex flex-col gap-3 {isUser
+								class="flex flex-col gap-row {isUser
 									? 'max-w-(--chat-turn-measure) self-end rounded-xl bg-brand/10 px-3 py-2 dark:bg-brand/15'
 									: ''}"
 							>
 								{#if editingId === entry.id}
-									<div class="flex flex-col gap-1.5">
+									<div class="flex flex-col gap-bind">
 										<Textarea
 											bind:value={editDraft}
 											rows={2}
@@ -415,7 +415,7 @@
 								</div>
 							{/if}
 							{#if entry.suggestions.length > 0}
-								<div class="mt-2 flex flex-col gap-2">
+								<div class="mt-2 flex flex-col gap-item">
 									{#each entry.suggestions as view (view.suggestion.id)}
 										<SuggestionCard
 											{view}

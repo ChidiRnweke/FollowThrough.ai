@@ -105,10 +105,10 @@ export const CHAT_TEXT_EVIDENCE = 'text-2xs';
  */
 
 /** 4px. A request and the evidence it introduces, plus that evidence's own footer link. */
-export const CHAT_GAP_BOND = 'gap-1';
+export const CHAT_GAP_BOND = 'gap-bind';
 
 /** 12px. Between passes over one subject. Three times the bond, which is what makes it visible. */
-export const CHAT_GAP_PASS = 'gap-3';
+export const CHAT_GAP_PASS = 'gap-row';
 
 /**
  * 20px. Between subjects, failures and the sources row.

@@ -39,7 +39,7 @@
 </script>
 
 <NodeViewWrapper class="my-2" data-widget-node={widgetId}>
-	<div contenteditable="false" class="flex flex-col gap-1.5">
+	<div contenteditable="false" class="flex flex-col gap-bind">
 		{#if widget?.archivedAt && widgetId}
 			<!-- Shown, not dropped: the note still holds the reference and the widget can come back. -->
 			<div

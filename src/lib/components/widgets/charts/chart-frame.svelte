@@ -7,7 +7,7 @@
 </script>
 
 <!-- The title and the empty state are the widget's; the plot is shadcn's chart over LayerChart. -->
-<figure data-slot="widget-chart" class="flex min-w-0 flex-col gap-1.5">
+<figure data-slot="widget-chart" class="flex min-w-0 flex-col gap-bind">
 	{#if props.title}
 		<figcaption class="text-label text-muted-foreground">{props.title}</figcaption>
 	{/if}

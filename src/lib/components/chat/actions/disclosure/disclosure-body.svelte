@@ -12,7 +12,7 @@
 	}: { disclosure: ToolDisclosure; tool: ChatToolActivity; shell?: ShellContext } = $props();
 </script>
 
-<div class="flex flex-col gap-2 text-xs text-muted-foreground">
+<div class="flex flex-col gap-item text-xs text-muted-foreground">
 	<ErrorBoundary label="this step" class="my-0">
 		{#if disclosure.kind === 'failure'}<p class="break-words px-2">
 				{toolFailure(tool) ?? disclosure.explanation}

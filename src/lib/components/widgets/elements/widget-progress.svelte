@@ -9,7 +9,7 @@
 	const value = $derived(Math.min(Math.max(props.value, 0), props.max));
 </script>
 
-<div data-slot="widget-progress" class="flex flex-col gap-1.5">
+<div data-slot="widget-progress" class="flex flex-col gap-bind">
 	{#if props.label}
 		<div class="flex items-baseline justify-between text-label text-muted-foreground">
 			<span>{props.label}</span>

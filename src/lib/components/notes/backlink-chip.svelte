@@ -37,7 +37,7 @@
 			</Badge>
 		{/snippet}
 	</HoverCard.Trigger>
-	<HoverCard.Content class="w-72 space-y-1">
+	<HoverCard.Content class="w-72 space-y-bind">
 		<p class="text-xs font-medium {contradicts ? 'text-warning' : 'text-muted-foreground'}">
 			{relationshipLabels[backlink.relationship.kind]}
 		</p>

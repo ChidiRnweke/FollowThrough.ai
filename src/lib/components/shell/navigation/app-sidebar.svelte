@@ -88,7 +88,7 @@
 <Sidebar.Root collapsible="icon" variant="inset">
 	<div class="flex size-full min-h-0">
 		<Sidebar.IconRail aria-label="App">
-			<div class="flex flex-col items-center gap-1">
+			<div class="flex flex-col items-center gap-bind">
 				<a
 					href="/today"
 					class="flex size-9 items-center justify-center rounded-md"

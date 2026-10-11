@@ -45,7 +45,7 @@
 	const columnCount = $derived(props.columns.length + (props.removable ? 1 : 0));
 </script>
 
-<div data-slot="widget-data-table" class="flex flex-col gap-2">
+<div data-slot="widget-data-table" class="flex flex-col gap-item">
 	<Table.Root>
 		<Table.Header>
 			<Table.Row>

@@ -158,7 +158,7 @@
 
 <svelte:window {onbeforeunload} />
 
-<div data-slot="widget-view" data-widget-id={widget.id} class="@container flex flex-col gap-2">
+<div data-slot="widget-view" data-widget-id={widget.id} class="@container flex flex-col gap-item">
 	<Field.Set disabled={!onChange} class="min-w-0 gap-0">
 		<JsonUIProvider {store}>
 			<Renderer {spec} registry={widgetRegistry} fallback={UnsupportedElement} />
@@ -175,7 +175,7 @@
 	{#if formulaIssues.length > 0}
 		<ul
 			data-slot="widget-formula-issues"
-			class="flex flex-col gap-0.5 text-label text-muted-foreground"
+			class="flex flex-col gap-bind text-label text-muted-foreground"
 		>
 			{#each formulaIssues as issue (issue.path)}
 				<li>{issue.path.split('/').at(-1)}: {issue.message}</li>

@@ -234,7 +234,7 @@
 	<!-- Adding is an occasional act, so it sits behind a CTA and a dialog instead of an
      always-on composer competing with what is already remembered. The spacing ladder:
      a 24px step between the action row and the sections, 8px inside each section. -->
-	<div class="flex h-full min-h-0 flex-col gap-6">
+	<div class="flex h-full min-h-0 flex-col gap-group">
 		{#if loadError}<p role="alert">{loadError}</p>{:else if loading && isEmpty}
 			<p class="text-sm text-muted-foreground">Still downloading memory.</p>
 			{@render addButton()}
@@ -271,9 +271,9 @@
 		     24px step between the sections is what says so. Both lists are homogeneous
 		     rows, so divided borderless lists rather than bordered boxes — nesting
 		     same-weight rectangles is the failure the surface rule exists to prevent. -->
-			<div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
+			<div class="flex min-h-0 flex-1 flex-col gap-group overflow-y-auto">
 				{#if pendingItems.length > 0}
-					<section class="flex flex-col gap-2">
+					<section class="flex flex-col gap-item">
 						<h2 class="eyebrow">Suggested by the agent</h2>
 						<ul class="divide-y divide-border">
 							{#each pendingItems as view (view.suggestion.id)}
@@ -283,7 +283,7 @@
 					</section>
 				{/if}
 				{#if savedItems.length > 0}
-					<section class="flex flex-col gap-2">
+					<section class="flex flex-col gap-item">
 						<h2 class="eyebrow">Remembered · {savedItems.length}</h2>
 						<ul class="divide-y divide-border">
 							{#each savedItems as entry (entry.id)}
@@ -343,7 +343,7 @@
 	{#snippet savedRow(entry: MemoryEntry)}
 		<li class="row-interactive px-3 py-2.5">
 			{#if editing && editing.resource.identity.id[0] === entry.id}
-				<div class="flex flex-col gap-2">
+				<div class="flex flex-col gap-item">
 					<Textarea bind:value={editing.content} rows={3} aria-label="Edit memory entry" />
 					<div class="flex justify-end gap-2">
 						<Button size="sm" variant="ghost" onclick={() => (editing = null)}>Cancel</Button>
@@ -437,7 +437,7 @@
 					<Dialog.Description>{scopeLabel}</Dialog.Description>
 				{/if}
 			</Dialog.Header>
-			<Form class="flex flex-col gap-4" onsubmit={submitAdd}>
+			<Form class="flex flex-col gap-row" onsubmit={submitAdd}>
 				<Textarea
 					bind:value={draft}
 					disabled={adding}

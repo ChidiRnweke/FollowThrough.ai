@@ -11,7 +11,7 @@
 	}> = $props();
 </script>
 
-<div data-slot="widget-metric" class="flex flex-col gap-0.5">
+<div data-slot="widget-metric" class="flex flex-col gap-bind">
 	<span class="text-label text-muted-foreground">{props.label}</span>
 	<span
 		class={props.tone === 'muted'

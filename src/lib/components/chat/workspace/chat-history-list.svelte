@@ -163,7 +163,7 @@
 		screen. The uppercase eyebrow stays here where the starters lost theirs: down
 		at the foot of the panel this group is meant to recede, not compete.
 	-->
-	<div class="flex flex-col gap-1">
+	<div class="flex flex-col gap-bind">
 		<div class="flex items-center justify-between gap-2 px-2">
 			<h3 class="eyebrow">Recent</h3>
 			{#if showAllLink}<Button variant="link" size="sm" href="/chats">All chats</Button>{/if}
@@ -200,7 +200,7 @@
 		{/if}
 	</div>
 {:else}
-	<div class="flex flex-col gap-1">
+	<div class="flex flex-col gap-bind">
 		<div class="flex items-center justify-between px-1">
 			<h3 class="provenance-caption">Recent chats</h3>
 			{#if showAllLink}<Button variant="link" size="sm" href="/chats">All chats</Button>{/if}
@@ -216,7 +216,7 @@
 						onclick={() => onselect(session.id)}
 					>
 						<Icon.Chat data-icon="inline-start" />
-						<span class="flex min-w-0 flex-col items-start gap-0.5">
+						<span class="flex min-w-0 flex-col items-start gap-bind">
 							<span class="w-full truncate text-left text-sm"
 								>{session.title ?? 'New conversation'}</span
 							>

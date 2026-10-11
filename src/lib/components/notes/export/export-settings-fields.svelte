@@ -57,8 +57,8 @@
 	};
 </script>
 
-<div class="flex flex-col gap-4">
-	<Label class="flex max-w-48 flex-col items-start gap-1 text-xs text-muted-foreground">
+<div class="flex flex-col gap-row">
+	<Label class="flex max-w-48 flex-col items-start gap-bind text-xs text-muted-foreground">
 		Font
 		<Select.Root
 			type="single"
@@ -136,7 +136,7 @@
 	     read somewhere we do not control, and dark strokes on a dark fill are unreadable
 	     on paper. Only rendered when the export actually contains a diagram. -->
 	{#if hasDiagrams}
-		<div class="flex flex-col gap-2">
+		<div class="flex flex-col gap-item">
 			<Label class="text-xs text-muted-foreground">Diagram colours</Label>
 			<ToggleGroup.Root
 				type="single"
@@ -154,7 +154,7 @@
 				<ToggleGroup.Item value="light" class="flex-1">Light</ToggleGroup.Item>
 				<ToggleGroup.Item value="dark" class="flex-1">Dark</ToggleGroup.Item>
 			</ToggleGroup.Root>
-			<div class="grid max-w-md grid-cols-2 gap-x-2 gap-y-1.5">
+			<div class="grid max-w-md grid-cols-2 gap-x-2 gap-y-bind">
 				{#each MERMAID_PALETTE_KEYS as key (key)}
 					<Label class="flex items-center gap-2 text-xs font-normal text-muted-foreground">
 						<Input

@@ -56,9 +56,9 @@
 	     `--duration-disclosure` is the budget for. Pure CSS, so the reduced-motion guard
 	     in `@layer base` already neutralises it. -->
 	<Collapsible.Content class="chat-disclosure">
-		<div class="flex flex-col gap-2 pl-6 text-muted-foreground">
+		<div class="flex flex-col gap-item pl-6 text-muted-foreground">
 			{#each sections as section, index (index)}
-				<div class="flex flex-col gap-0.5">
+				<div class="flex flex-col gap-bind">
 					{#if section.title}
 						<p class="text-xs font-medium text-foreground/80">{section.title}</p>
 					{/if}

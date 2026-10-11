@@ -168,7 +168,7 @@
 </script>
 
 <div
-	class="flex min-h-0 flex-1 snap-x snap-mandatory gap-4 overflow-x-auto pb-3 2xl:grid 2xl:grid-cols-4 2xl:grid-rows-1 2xl:overflow-visible 2xl:pb-0"
+	class="flex min-h-0 flex-1 snap-x snap-mandatory gap-row overflow-x-auto pb-3 2xl:grid 2xl:grid-cols-4 2xl:grid-rows-1 2xl:overflow-visible 2xl:pb-0"
 >
 	{#each columns as status (status)}
 		{@const items = board[status]}
@@ -177,7 +177,7 @@
 		<!-- Tinted tray holding default cards — the same layering recipe as the
 		     docked right panel (bg-sidebar + ring hairline). -->
 		<section
-			class="flex min-h-40 w-80 shrink-0 snap-start flex-col gap-1 overflow-hidden rounded-xl bg-sidebar p-2 ring-inset ring-1 ring-foreground/10 2xl:w-auto 2xl:min-w-0"
+			class="flex min-h-40 w-80 shrink-0 snap-start flex-col gap-bind overflow-hidden rounded-xl bg-sidebar p-2 ring-inset ring-1 ring-foreground/10 2xl:w-auto 2xl:min-w-0"
 		>
 			<h3 class="eyebrow flex items-center gap-1.5 px-1.5 pt-1 pb-2">
 				{#if status === 'done'}
@@ -221,7 +221,7 @@
 				     clipped by the overflow scrollport. -->
 				<div
 					data-todo-status={status}
-					class="flex min-h-20 flex-1 flex-col gap-2 overflow-y-auto p-0.5"
+					class="flex min-h-20 flex-1 flex-col gap-item overflow-y-auto p-0.5"
 					use:dragHandleZone={{
 						items: visible,
 						flipDurationMs: 150,

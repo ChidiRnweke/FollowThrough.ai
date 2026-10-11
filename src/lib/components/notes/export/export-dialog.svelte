@@ -111,7 +111,7 @@
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<Form class="flex flex-col gap-4" onsubmit={submit}>
+		<Form class="flex flex-col gap-row" onsubmit={submit}>
 			<Input bind:value={title} placeholder="Document title" aria-label="Title" disabled={busy} />
 
 			<Label class="flex items-center gap-2 text-xs font-normal text-muted-foreground">
@@ -167,7 +167,7 @@
 			</Collapsible.Root>
 
 			{#if result}
-				<div class="flex flex-col items-center gap-2 rounded-md border p-3">
+				<div class="flex flex-col items-center gap-item rounded-md border p-3">
 					<p class="text-sm font-medium">Document ready</p>
 					<a href={result.url} download class="text-sm text-primary underline hover:no-underline">
 						Download

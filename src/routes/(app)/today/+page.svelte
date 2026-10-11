@@ -27,7 +27,7 @@
 
 <PageShell>
 	{#snippet header()}
-		<div class="flex flex-col gap-1">
+		<div class="flex flex-col gap-bind">
 			<p class="eyebrow">{dateLine}</p>
 			<h1 class="page-title">Today</h1>
 			<p class="text-sm text-muted-foreground">{voiceLine}</p>

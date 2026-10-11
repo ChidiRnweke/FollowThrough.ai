@@ -25,7 +25,7 @@
 		hint="Every file can be read, every search found something, and the agent has used everything here."
 	/>
 {:else}
-	<div class="flex flex-col gap-12">
+	<div class="flex flex-col gap-section">
 		{#if summary.missedSearches.length > 0}
 			<MissedSearches searches={summary.missedSearches} {projectId} />
 		{/if}

@@ -168,8 +168,8 @@
 		     sentence used to state in its own label. -->
 		<div
 			class={compact
-				? 'flex flex-wrap items-center gap-x-4 gap-y-1'
-				: 'grid grid-cols-2 gap-x-2 gap-y-3 @[15rem]:grid-cols-4'}
+				? 'flex flex-wrap items-center gap-x-4 gap-y-bind'
+				: 'grid grid-cols-2 gap-x-2 gap-y-row @[15rem]:grid-cols-4'}
 			role="group"
 			aria-label="Agent context: {project?.name ?? 'workspace'}"
 		>
@@ -184,7 +184,7 @@
 									{...props}
 									href={capability.href}
 									aria-label="{copy.label}: {capability.count ?? 'Count unavailable'}"
-									class="group/stat flex min-w-0 gap-0.5 rounded-md text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring {compact
+									class="group/stat flex min-w-0 gap-bind rounded-md text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring {compact
 										? 'flex-row items-center'
 										: 'flex-col'}"
 								>

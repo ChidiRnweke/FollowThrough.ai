@@ -80,7 +80,7 @@
      32px step to the first block, and the token area — data under controls, a
      different kind of thing — takes a further step. Empty tokens get the shared
      centered empty state. -->
-<section class="flex max-w-3xl flex-col gap-8">
+<section class="flex max-w-3xl flex-col gap-section">
 	<p class="text-sm text-muted-foreground">
 		Run this workspace headless from Claude Desktop or any MCP client. Tokens authenticate as you; a
 		read-only token cannot change anything.
@@ -103,7 +103,7 @@
 	<!-- New token reads as its own block: the title row carries the scope and the
 	     action, and the name input sits underneath at full width — the responsive
 	     field cramming all three controls beside the text was unreadable. -->
-	<div class="flex flex-col gap-6">
+	<div class="flex flex-col gap-group">
 		<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
 			<Field.Content>
 				<Field.Title>New token</Field.Title>
@@ -132,7 +132,7 @@
 	</div>
 
 	{#if plaintext}
-		<div class="space-y-2 rounded-md border border-brand/40 bg-brand/10 p-4 dark:bg-brand/15">
+		<div class="space-y-item rounded-md border border-brand/40 bg-brand/10 p-4 dark:bg-brand/15">
 			<p class="text-sm font-medium">Copy this token now</p>
 			<p class="text-sm text-brand-muted-foreground">
 				It is stored hashed and cannot be shown again. If you lose it, revoke it and create another.
@@ -160,7 +160,7 @@
 					size="large"
 				/>
 			{:else}
-				<div class="flex flex-col gap-1.5">
+				<div class="flex flex-col gap-bind">
 					<h3 class="eyebrow">Tokens</h3>
 					<ul class="divide-y divide-border border-t border-border">
 						{#each tokens as token (token.id)}
@@ -188,7 +188,7 @@
 			{#snippet failed(_error, reset)}
 				<div
 					role="alert"
-					class="flex flex-col items-start gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4"
+					class="flex flex-col items-start gap-row rounded-md border border-destructive/30 bg-destructive/5 p-4"
 				>
 					<p class="text-sm text-destructive">Could not load tokens.</p>
 					<!-- Refresh the query before resetting. A repeated failure returns to this notice. -->

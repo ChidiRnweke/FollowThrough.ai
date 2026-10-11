@@ -214,7 +214,7 @@
 	8px between the parts that stand on their own (chips, thumbnails, the field) and 4px
 	binding the toolbar to the field it acts on.
 -->
-<div class="flex flex-col gap-2">
+<div class="flex flex-col gap-item">
 	{#if autoChip || liveSelection || chips.length > 0}
 		<div class="flex flex-wrap items-center gap-1" aria-label="Chat context">
 			{#if autoChip}
@@ -235,7 +235,7 @@
 		</div>
 	{/if}
 
-	<div class="relative flex flex-col gap-1">
+	<div class="relative flex flex-col gap-bind">
 		{#if mentionCandidates.length > 0}
 			<!-- chisel-ignore design-system:no-ad-hoc-shadow -- The mention listbox floats above the composer; shadow-md matches the sanctioned overlay elevation of the ui popovers it cannot reuse here. -->
 			<div
