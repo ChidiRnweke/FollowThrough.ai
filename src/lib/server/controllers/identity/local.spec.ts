@@ -41,3 +41,11 @@ it('keeps an existing admitted account unchanged during local initialization', a
 	repository.users = [existing];
 	expect(await service.initializeLocal(testActor())).toEqual(existing);
 });
+
+it('propagates profile persistence failures', async () => {
+	const repository = new InMemoryUserRepository();
+	repository.ensureFailure = new Error('Profile storage unavailable');
+	await expect(controller(repository).initializeLocal(testActor())).rejects.toBe(
+		repository.ensureFailure
+	);
+});
