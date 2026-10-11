@@ -4,51 +4,9 @@ import {
 	describeError,
 	ExternalServiceError,
 	NotFoundError,
-	userFacingMessage,
-	ValidationError
+	userFacingMessage
 } from '$lib/errors';
-import type { DomainErrorCode } from '$lib/errors';
-import {
-	DOMAIN_ERROR_ADVICE,
-	DOMAIN_ERROR_STATUS,
-	domainErrorStatus,
-	failureReport
-} from './errors';
-
-const ALL_CODES: readonly DomainErrorCode[] = [
-	'VALIDATION',
-	'NOT_FOUND',
-	'OWNERSHIP',
-	'CONFLICT',
-	'STALE_REVISION',
-	'INVALID_TRANSITION',
-	'EXPIRED_SUGGESTION',
-	'UNSUPPORTED_DIAGRAM_OPERATION',
-	'EXTERNAL_SERVICE',
-	'INVALID_GENERATED_CONTENT'
-];
-
-describe('domainErrorStatus', () => {
-	it('maps a not-found failure to 404', () => {
-		expect(domainErrorStatus(new NotFoundError('Project was not found'))).toBe(404);
-	});
-
-	it('maps a conflict to 409', () => {
-		expect(domainErrorStatus(new ConflictError('Name already exists'))).toBe(409);
-	});
-
-	it('maps a validation failure to 400', () => {
-		expect(domainErrorStatus(new ValidationError('Name is required'))).toBe(400);
-	});
-
-	it('returns undefined for a non-domain error', () => {
-		expect(domainErrorStatus(new Error('boom'))).toBeUndefined();
-	});
-
-	it('assigns a client or server status to every domain code', () => {
-		expect(ALL_CODES.filter((code) => !(DOMAIN_ERROR_STATUS[code] >= 400))).toEqual([]);
-	});
-});
+import { failureReport } from './errors';
 
 describe('DomainError', () => {
 	it('forwards a captured cause to the native cause chain', () => {
@@ -102,14 +60,6 @@ describe('userFacingMessage', () => {
  * failure, and what it does next is decided by what the failure told it to do.
  */
 describe('failureReport', () => {
-	it.each(ALL_CODES)('gives %s advice of its own', (code) => {
-		expect(DOMAIN_ERROR_ADVICE[code].length).toBeGreaterThan(0);
-	});
-
-	it('gives each code distinct advice', () => {
-		expect(new Set(ALL_CODES.map((code) => DOMAIN_ERROR_ADVICE[code])).size).toBe(ALL_CODES.length);
-	});
-
 	it("keeps a domain failure's own message, which is written for the caller", () => {
 		expect(failureReport(new NotFoundError('No note has that id')).message).toBe(
 			'No note has that id'

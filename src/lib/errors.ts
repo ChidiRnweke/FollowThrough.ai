@@ -135,9 +135,6 @@ export const DOMAIN_ERROR_STATUS: Record<DomainErrorCode, number> = {
 	EXTERNAL_SERVICE: 502
 };
 
-export const domainErrorStatus = (error: unknown): number | undefined =>
-	error instanceof DomainError ? DOMAIN_ERROR_STATUS[error.code] : undefined;
-
 /**
  * What a caller that can act on a failure should do next (ADR 0035).
  *

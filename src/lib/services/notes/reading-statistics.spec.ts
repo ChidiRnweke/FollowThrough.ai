@@ -12,7 +12,7 @@ describe('Estimating how long a note takes to read', () => {
 	});
 
 	it('rounds a part-finished minute up', () => {
-		expect(reading.readingMinutes(450 + 1)).toBe(3);
+		expect(reading.readingMinutes(451)).toBe(3);
 	});
 
 	it('counts whole minutes for a long note', () => {
