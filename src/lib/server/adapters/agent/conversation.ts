@@ -1,5 +1,4 @@
-import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
-import { sessionJsonSchema, type SessionJson } from '$lib/models/agent';
+import { sessionJsonSchema, storedSessionItemSchema, type SessionJson } from '$lib/models/agent';
 import type { AgentInputItem, Session } from '@openai/agents';
 import {
 	persistedSessionItemSchema,
@@ -22,7 +21,7 @@ export class ConversationSessionAdapter implements BufferedConversationSession {
 	}
 	async getItems(limit?: number): Promise<AgentInputItem[]> {
 		return (await this.session.getItems(limit)).map(
-			(item) => toStoredSessionItem(item) as AgentInputItem
+			(item) => storedSessionItemSchema.parse(item) as AgentInputItem
 		);
 	}
 	addItems(items: AgentInputItem[]): Promise<void> {
@@ -30,7 +29,7 @@ export class ConversationSessionAdapter implements BufferedConversationSession {
 	}
 	async popItem(): Promise<AgentInputItem | undefined> {
 		const item = await this.session.popItem();
-		return item && (toStoredSessionItem(item) as AgentInputItem);
+		return item && (storedSessionItemSchema.parse(item) as AgentInputItem);
 	}
 	async clearSession(): Promise<void> {
 		this.session.clear();

@@ -21,8 +21,11 @@ import type {
 	ResolvedAgentRun,
 	WorkflowAgentRun
 } from '$lib/models/agent';
-import { persistedSessionItemSchema, workflowRunContextSchema } from '$lib/models/agent';
-import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
+import {
+	persistedSessionItemSchema,
+	storedSessionItemSchema,
+	workflowRunContextSchema
+} from '$lib/models/agent';
 import {
 	parseAgentRunContextSnapshot,
 	parseRunAgentInput,
@@ -625,7 +628,7 @@ export class AgentSessionRecords implements AgentSessionRepository {
 				id: crypto.randomUUID(),
 				conversationId,
 				position: start + index,
-				item: toStoredSessionItem(item)
+				item: storedSessionItemSchema.parse(item)
 			}))
 		);
 	}
@@ -671,7 +674,7 @@ export class AgentSessionRecords implements AgentSessionRepository {
 						id: crypto.randomUUID(),
 						conversationId,
 						position,
-						item: toStoredSessionItem(item)
+						item: storedSessionItemSchema.parse(item)
 					}))
 				);
 		});

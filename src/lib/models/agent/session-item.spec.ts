@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { persistedSessionItemSchema } from './session-item';
-import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
+import { persistedSessionItemSchema, storedSessionItemSchema } from './session-item';
 
 const storedUser = { type: 'message', role: 'user', content: 'Summarise this' };
 const storedAssistant = {
@@ -110,7 +109,7 @@ describe('an item no arm recognises', () => {
 describe('writing a session item back', () => {
 	it('leaves an absent optional absent rather than writing an undefined', () => {
 		expect(
-			Object.keys(toStoredSessionItem(persistedSessionItemSchema.parse(storedUser)))
+			Object.keys(storedSessionItemSchema.parse(persistedSessionItemSchema.parse(storedUser)))
 		).not.toContain('id');
 	});
 
@@ -123,11 +122,22 @@ describe('writing a session item back', () => {
 			call_id: 'call-legacy',
 			arguments: '{}'
 		});
-		expect(toStoredSessionItem(item)).toEqual({
+		expect(storedSessionItemSchema.parse(item)).toEqual({
 			type: 'function_call',
 			name: 'search',
 			callId: 'call-legacy',
 			arguments: '{}'
 		});
+	});
+
+	it.each([
+		['a user message', storedUser],
+		['an assistant message', storedAssistant],
+		['a function call', storedCall],
+		['a function call result', storedResult],
+		['a reasoning item', storedReasoning],
+		['an unrecognised compaction item', { type: 'compaction', summary: 'kept whole' }]
+	])('writes %s back exactly as it was stored', (_name, stored) => {
+		expect(storedSessionItemSchema.parse(persistedSessionItemSchema.parse(stored))).toEqual(stored);
 	});
 });

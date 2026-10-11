@@ -7,8 +7,11 @@ import type {
 	ConversationId,
 	PersistedSessionItem
 } from '$lib/models/agent';
-import { persistedSessionItemSchema, sessionJsonObjectSchema } from '$lib/models/agent';
-import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
+import {
+	persistedSessionItemSchema,
+	sessionJsonObjectSchema,
+	storedSessionItemSchema
+} from '$lib/models/agent';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type {
 	RestoreSnapshot,
@@ -105,7 +108,7 @@ export class InMemoryAgentSessionRepository implements AgentSessionRepository, S
 	 */
 	snapshot(): RestoreSnapshot {
 		const stored = structuredClone(
-			this.items.map((row) => ({ ...row, item: toStoredSessionItem(row.item) }))
+			this.items.map((row) => ({ ...row, item: storedSessionItemSchema.parse(row.item) }))
 		);
 		return () => {
 			this.items = restoredItemsSchema

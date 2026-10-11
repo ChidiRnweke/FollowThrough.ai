@@ -411,6 +411,110 @@ type StoredReasoning = {
 
 export type StoredSessionItem = StoredMessage | StoredTool | StoredReasoning | SessionJsonObject;
 
+/**
+ * Encode the resolved session union back to the stored spelling: the shape the provider sent,
+ * restored exactly. The inverse of {@link persistedSessionItemSchema}; an unrecognised row
+ * round-trips as its raw object.
+ */
+export const storedSessionItemSchema: z.ZodType<StoredSessionItem> = z.union([
+	z
+		.object({
+			type: z.literal('user_message'),
+			id: z.string().optional(),
+			content: z.union([z.string(), z.array(z.union([inputTextPartSchema, inputImagePartSchema]))]),
+			...providerData
+		})
+		.strict()
+		.transform((value): StoredSessionItem => ({
+			type: 'message',
+			role: 'user',
+			content: value.content,
+			...(value.id === undefined ? {} : { id: value.id }),
+			...(value.providerData === undefined ? {} : { providerData: value.providerData })
+		})),
+	z
+		.object({
+			type: z.literal('assistant_message'),
+			id: z.string().optional(),
+			status: messageStatusSchema,
+			content: z.array(z.union([outputTextPartSchema, refusalPartSchema])),
+			...providerData
+		})
+		.strict()
+		.transform((value): StoredSessionItem => ({
+			type: 'message',
+			role: 'assistant',
+			status: value.status,
+			content: value.content,
+			...(value.id === undefined ? {} : { id: value.id }),
+			...(value.providerData === undefined ? {} : { providerData: value.providerData })
+		})),
+	z
+		.object({
+			type: z.literal('function_call'),
+			id: z.string().optional(),
+			callId: z.string(),
+			name: z.string(),
+			arguments: z.string(),
+			status: messageStatusSchema.optional(),
+			...providerData
+		})
+		.strict()
+		.transform((value): StoredSessionItem => ({
+			type: 'function_call',
+			callId: value.callId,
+			name: value.name,
+			arguments: value.arguments,
+			...(value.id === undefined ? {} : { id: value.id }),
+			...(value.status === undefined ? {} : { status: value.status }),
+			...(value.providerData === undefined ? {} : { providerData: value.providerData })
+		})),
+	z
+		.object({
+			type: z.literal('function_call_result'),
+			id: z.string().optional(),
+			callId: z.string(),
+			name: z.string(),
+			status: messageStatusSchema,
+			output: z.union([z.string(), textOutputPartSchema, z.array(textOutputPartSchema)]),
+			...providerData
+		})
+		.strict()
+		.transform((value): StoredSessionItem => ({
+			type: 'function_call_result',
+			callId: value.callId,
+			name: value.name,
+			status: value.status,
+			output: value.output,
+			...(value.id === undefined ? {} : { id: value.id }),
+			...(value.providerData === undefined ? {} : { providerData: value.providerData })
+		})),
+	z
+		.object({
+			type: z.literal('reasoning'),
+			id: z.string().optional(),
+			content: z.array(inputTextPartSchema),
+			rawContent: z.array(reasoningTextPartSchema).optional(),
+			...providerData
+		})
+		.strict()
+		.transform((value): StoredSessionItem => ({
+			type: 'reasoning',
+			content: value.content,
+			...(value.rawContent === undefined ? {} : { rawContent: value.rawContent }),
+			...(value.id === undefined ? {} : { id: value.id }),
+			...(value.providerData === undefined ? {} : { providerData: value.providerData })
+		})),
+	z
+		.object({
+			type: z.literal('unrecognised'),
+			raw: sessionJsonObjectSchema,
+			reason: z.string()
+		})
+		.strict()
+		.transform((value): StoredSessionItem => value.raw)
+]);
+
 type ReplayRecord = Extract<
 	PersistedSessionItem,
 	{ type: 'function_call_result' | 'user_message' | 'assistant_message' }
