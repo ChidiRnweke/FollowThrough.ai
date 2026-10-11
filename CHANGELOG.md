@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.0.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.0.0...v5.0.1) (2026-10-11)
+
+
+### Code Refactoring
+
+* **dedupe:** share small duplicated rules ([#435](https://github.com/ChidiRnweke/FollowThrough.ai/issues/435)) ([efb359d](https://github.com/ChidiRnweke/FollowThrough.ai/commit/efb359df1b86f6f3e7090885e92e0a602713e9a8))
+* **server:** inject one clock into every time-stamping service ([#443](https://github.com/ChidiRnweke/FollowThrough.ai/issues/443)) ([dca2e89](https://github.com/ChidiRnweke/FollowThrough.ai/commit/dca2e89edb43821842390c74b32777588025abd8))
+
 ## [5.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v4.1.1...v5.0.0) (2026-10-11)
 
 
