@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.4.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.3.0...v5.4.0) (2026-10-11)
+
+
+### Features
+
+* **icons:** give agent activity a monitor mark and draw widgets as small apps ([#452](https://github.com/ChidiRnweke/FollowThrough.ai/issues/452)) ([fb73c2a](https://github.com/ChidiRnweke/FollowThrough.ai/commit/fb73c2acd2b9b555839b4fa00f2a4a3077195c7c))
+
+
+### Bug Fixes
+
+* **notes:** match reading stats strip to the dark pane surface ([#451](https://github.com/ChidiRnweke/FollowThrough.ai/issues/451)) ([fc77e9c](https://github.com/ChidiRnweke/FollowThrough.ai/commit/fc77e9c9a2f7fc880b2b2efdd43b6b6be964a4df))
+
 ## [5.3.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.2.1...v5.3.0) (2026-10-11)
 
 
