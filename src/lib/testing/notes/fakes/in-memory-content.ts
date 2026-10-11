@@ -16,18 +16,7 @@ import {
 	OwnershipError,
 	StaleRevisionError
 } from '$lib/errors';
-import type {
-	NoteAttachmentRestorer,
-	NoteEditor,
-	NotePublisher,
-	NoteReader,
-	NoteSectionNumberingEditor,
-	NoteTextSearcher,
-	NoteTreeReader,
-	NoteRevisionReader,
-	NoteRevisionRecorder,
-	SourceAnchorRepairer
-} from '$lib/server/services/notes/catalog';
+import type { NoteAuthoring, NoteLibrary } from '$lib/server/services/notes/catalog';
 import type { NoteIndexing as NoteIndexer } from '$lib/server/services/knowledge-search/retrieval';
 
 import type { NoteLinkReconciler } from '$lib/server/services/relationships/graph';
@@ -46,20 +35,7 @@ interface ContentSnapshot {
 }
 
 export class InMemoryNoteContent
-	implements
-		NoteReader,
-		NoteTreeReader,
-		NoteTextSearcher,
-		NoteEditor,
-		NotePublisher,
-		NoteRevisionRecorder,
-		NoteRevisionReader,
-		NoteAttachmentRestorer,
-		NoteSectionNumberingEditor,
-		SourceAnchorRepairer,
-		NoteIndexer,
-		NoteLinkReconciler,
-		SnapshotParticipant
+	implements NoteLibrary, NoteAuthoring, NoteIndexer, NoteLinkReconciler, SnapshotParticipant
 {
 	constructor(private readonly actor: ActorContext) {}
 	/** Targets recorded per note, so a spec can assert what a save reconciled to. */

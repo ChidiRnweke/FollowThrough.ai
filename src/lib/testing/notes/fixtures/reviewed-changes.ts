@@ -57,10 +57,8 @@ export const reviewedNoteFixture = (
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			markdown,
-			noteReader: content,
-			revisionReader: content,
-			noteEditor: content,
-			anchorRepairer: content,
+			noteLibrary: content,
+			noteAuthoring: content,
 			noteLinkReconciler: content,
 			noteIndexer: content,
 			transactionRunner: new InMemoryTransactionRunner([content])

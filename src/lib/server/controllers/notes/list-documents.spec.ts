@@ -47,7 +47,7 @@ const setup = () => {
 			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteReader: content
+			noteLibrary: content
 		})
 	);
 	return { content, controller };

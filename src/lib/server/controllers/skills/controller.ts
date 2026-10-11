@@ -28,13 +28,7 @@ import type {
 	SkillMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type {
-	NoteAttachmentRestorer,
-	NoteEditor,
-	NoteRevisionReader,
-	NoteRevisionRecorder,
-	SourceAnchorRepairer
-} from '$lib/server/services/notes/catalog';
+import type { NoteAuthoring, NoteRevisionReader } from '$lib/server/services/notes/catalog';
 import type { NoteIndexing as NoteIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { NoteLinkReconciler } from '$lib/server/services/relationships/graph';
@@ -115,11 +109,8 @@ export interface SkillsDependencies {
 	skillFinder: SkillFinder;
 	skillUsageLister: SkillUsageLister;
 	skillUsageRecorder: SkillUsageRecorder;
-	noteEditor: NoteEditor;
+	noteAuthoring: NoteAuthoring;
 	revisionReader: NoteRevisionReader;
-	revisionRecorder: NoteRevisionRecorder;
-	attachmentRestorer: NoteAttachmentRestorer;
-	anchorRepairer: SourceAnchorRepairer;
 	noteIndexer: NoteIndexer;
 	noteLinkReconciler: NoteLinkReconciler;
 	skillEditor: SkillEditor;
@@ -292,8 +283,8 @@ export class Skills implements SkillsController {
 				document: snapshot.document,
 				plainText: snapshot.plainText
 			});
-			await this.dependencies.attachmentRestorer.restoreAttachments(input.noteId, snapshot.id);
-			await this.dependencies.revisionRecorder.record(note);
+			await this.dependencies.noteAuthoring.restoreAttachments(input.noteId, snapshot.id);
+			await this.dependencies.noteAuthoring.record(note);
 			return this.dependencies.skillEditor.commitEdit({
 				...current,
 				note
@@ -331,7 +322,7 @@ export class Skills implements SkillsController {
 		return { skill, usages: await this.dependencies.skillUsageLister.list(input.noteId) };
 	}
 	private async saveDocument(candidate: Note): Promise<Note> {
-		const current = await this.dependencies.noteEditor.getForEdit(candidate);
+		const current = await this.dependencies.noteAuthoring.getForEdit(candidate);
 		const decision = this.dependencies.noteEditingRules.prepareSave(
 			current,
 			candidate,
@@ -340,8 +331,8 @@ export class Skills implements SkillsController {
 		const note =
 			decision.kind === 'unchanged'
 				? decision.note
-				: await this.dependencies.noteEditor.persistEdit(decision.write);
-		await this.dependencies.anchorRepairer.repairForNote(note);
+				: await this.dependencies.noteAuthoring.persistEdit(decision.write);
+		await this.dependencies.noteAuthoring.repairForNote(note);
 		await this.dependencies.noteLinkReconciler.reconcile(
 			note,
 			this.dependencies.noteReferences.links(note.document)

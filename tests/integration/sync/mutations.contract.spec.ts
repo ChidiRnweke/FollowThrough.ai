@@ -67,15 +67,11 @@ const setup = async (suffix: string) => {
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner,
-			noteReader: catalog.reader,
-			noteTrash: catalog.trash,
-			noteEditor: catalog.editor,
-			noteSectionNumbering: catalog.sectionNumbering,
+			noteLibrary: catalog.library,
+			noteLifecycle: catalog.lifecycle,
+			noteAuthoring: catalog.authoring,
 			noteCreation: catalog.creator,
-			notePublisher: catalog.publisher,
-			revisionRecorder: catalog.revisionRecorder,
 			noteIndexer: content,
-			anchorRepairer: content,
 			noteLinkReconciler: content
 		})
 	);
@@ -224,7 +220,7 @@ describe('guarded note trash actions', () => {
 			baseEtag: current.snapshot.etag,
 			command: { kind: 'restoreNote', noteId: note.id }
 		});
-		const restored = await catalog.reader.get(note.id);
+		const restored = await catalog.library.get(note.id);
 		expect({ result: result.kind, archivedAt: restored.archivedAt }).toEqual({
 			result: 'applied',
 			archivedAt: undefined

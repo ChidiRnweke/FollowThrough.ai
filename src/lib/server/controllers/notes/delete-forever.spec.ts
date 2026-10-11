@@ -63,7 +63,7 @@ const setup = () => {
 			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteDeletion: service.deletion,
+			noteLifecycle: service.lifecycle,
 			transactionRunner: new InMemoryTransactionRunner([notes, projects])
 		})
 	);

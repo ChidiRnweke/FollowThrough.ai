@@ -2,7 +2,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type { Note } from '$lib/models/notes';
 import type { AtomicOperation } from '$lib/models/workspace';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
-import type { NoteEditor } from '$lib/server/services/notes/catalog';
+import type { NoteAuthoring } from '$lib/server/services/notes/catalog';
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
@@ -25,7 +25,7 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 
 /** Seed through the real edit workflow; unrelated indexing/link effects remain in memory. */
 export async function saveNoteDraft(
-	editor: NoteEditor,
+	authoring: NoteAuthoring,
 	transactionRunner: AtomicOperation,
 	actor: ActorContext,
 	note: Note
@@ -53,8 +53,7 @@ export async function saveNoteDraft(
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
-			noteEditor: editor,
-			anchorRepairer: effects,
+			noteAuthoring: authoring,
 			noteLinkReconciler: effects,
 			noteIndexer: effects
 		})

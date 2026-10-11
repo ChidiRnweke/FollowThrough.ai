@@ -89,7 +89,7 @@ export const noteViewFixture = (note = noteBuilder()) => {
 			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteReader: content,
+			noteLibrary: content,
 			projectReader: projects,
 			userPreferences: new InMemoryUserPreferencesRepository(testActor()),
 			relationshipReader: graph.reader,

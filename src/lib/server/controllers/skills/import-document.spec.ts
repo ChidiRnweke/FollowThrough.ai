@@ -72,11 +72,8 @@ const setup = () => {
 			skillFinder: service.finder,
 			skillEditor: service.editor,
 			skillUsageLister: service.usageLister,
-			noteEditor: catalog.editor,
-			revisionReader: catalog.revisionReader,
-			revisionRecorder: catalog.revisionRecorder,
-			attachmentRestorer: catalog.attachmentRestorer,
-			anchorRepairer: catalog.anchorRepairer,
+			noteAuthoring: catalog.authoring,
+			revisionReader: catalog.library,
 			noteIndexer: content,
 			noteLinkReconciler: content,
 			transactionRunner
@@ -176,7 +173,7 @@ describe('Skill document imports', () => {
 	});
 	it('reads the current note title in the skill list after a document rename', async () => {
 		const { catalog, service, note, transactionRunner } = importSkill();
-		await saveNoteDraft(catalog.editor, transactionRunner, testActor(), {
+		await saveNoteDraft(catalog.authoring, transactionRunner, testActor(), {
 			...note,
 			title: 'Release decisions'
 		});
@@ -319,8 +316,7 @@ describe('Skill document imports', () => {
 				notePresentation: new NotePresentationService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				transactionRunner,
-				notePublisher: catalog.publisher,
-				revisionRecorder: catalog.revisionRecorder
+				noteAuthoring: catalog.authoring
 			})
 		);
 		await publisher.publish({
@@ -333,7 +329,7 @@ describe('Skill document imports', () => {
 	});
 	it('refuses imported content based on an older editor revision', async () => {
 		const { controller, catalog, note, transactionRunner } = importSkill();
-		await saveNoteDraft(catalog.editor, transactionRunner, testActor(), {
+		await saveNoteDraft(catalog.authoring, transactionRunner, testActor(), {
 			...note,
 			plainText: 'A newer edit'
 		});

@@ -32,7 +32,7 @@ describe('Note management invariants', () => {
 			noteBuilder({ id: testNoteId(2), kind: 'folder' }),
 			noteBuilder({ id: testNoteId(3), kind: 'skill' })
 		];
-		const listed = await service.treeReader.list();
+		const listed = await service.library.list();
 		expect(listed.map((note) => note.id)).toEqual([testNoteId(), testNoteId(2)]);
 	});
 
@@ -41,7 +41,7 @@ describe('Note management invariants', () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
 		for (let revision = 1; revision <= NOTE_REVISION_HISTORY_LIMIT + 3; revision += 1)
-			await service.revisionRecorder.record(noteBuilder({ currentRevision: revision }));
+			await service.authoring.record(noteBuilder({ currentRevision: revision }));
 		const kept = await notes.listRevisions(testNoteId());
 		expect(kept.map((entry) => entry.revision).sort((left, right) => left - right)).toEqual(
 			Array.from({ length: NOTE_REVISION_HISTORY_LIMIT }, (_, index) => index + 4)
@@ -65,7 +65,7 @@ describe('Note management invariants', () => {
 		const note = noteBuilder({ plainText: 'same and same', currentRevision: 2 });
 		notes.notes = [note];
 		anchors.anchors = [anchorBuilder({ quote: 'same', from: 0, to: 4 })];
-		await service.anchorRepairer.repairForNote(note);
+		await service.authoring.repairForNote(note);
 		expect(anchors.anchors[0]?.revision).toBe(1);
 	});
 
@@ -74,7 +74,7 @@ describe('Note management invariants', () => {
 		const note = noteBuilder({ plainText: 'prefix unique suffix', currentRevision: 2 });
 		notes.notes = [note];
 		anchors.anchors = [anchorBuilder({ quote: 'unique' })];
-		const repaired = await service.anchorRepairer.repairForNote(note);
+		const repaired = await service.authoring.repairForNote(note);
 		expect(repaired[0]?.revision).toBe(2);
 	});
 });

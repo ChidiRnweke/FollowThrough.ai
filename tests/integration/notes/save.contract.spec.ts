@@ -35,7 +35,7 @@ it.each([
 		try {
 			await locked.promise;
 			const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-			const saving = saveNoteDraft(catalog.editor, transactionRunner, owner, note).then(
+			const saving = saveNoteDraft(catalog.authoring, transactionRunner, owner, note).then(
 				() => ({ kind: 'saved' }),
 				(error) => {
 					if (!(error instanceof DomainError)) throw error;

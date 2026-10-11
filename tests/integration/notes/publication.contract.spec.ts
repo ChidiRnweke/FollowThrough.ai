@@ -62,8 +62,7 @@ it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
-			notePublisher: catalog.publisher,
-			revisionRecorder: catalog.revisionRecorder
+			noteAuthoring: catalog.authoring
 		})
 	);
 	await context.client`create function reject_contract_note_publication() returns trigger language plpgsql as $$
@@ -124,8 +123,7 @@ it.each([
 				notePresentation: new NotePresentationService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				transactionRunner,
-				notePublisher: catalog.publisher,
-				revisionRecorder: catalog.revisionRecorder
+				noteAuthoring: catalog.authoring
 			})
 		);
 		const locked = Promise.withResolvers<void>();

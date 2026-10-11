@@ -55,11 +55,8 @@ const setup = () => {
 			skillFinder: service.finder,
 			skillEditor: service.editor,
 			skillUsageLister: service.usageLister,
-			noteEditor: catalog.editor,
-			revisionReader: catalog.revisionReader,
-			revisionRecorder: catalog.revisionRecorder,
-			attachmentRestorer: catalog.attachmentRestorer,
-			anchorRepairer: catalog.anchorRepairer,
+			noteAuthoring: catalog.authoring,
+			revisionReader: catalog.library,
 			noteIndexer: content,
 			noteLinkReconciler: content,
 			transactionRunner: new InMemoryTransactionRunner([notes, skills])

@@ -58,7 +58,7 @@ const setup = async (suffix: string) => {
 		provenance: notes.provenanceRepository
 	});
 	const text = 'Use OAuth';
-	const note = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
+	const note = await saveNoteDraft(notes.services.authoring, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }

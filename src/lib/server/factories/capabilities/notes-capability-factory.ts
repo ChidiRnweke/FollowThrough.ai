@@ -41,28 +41,14 @@ import type {
 } from '$lib/server/repositories/provenance';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import {
-	NoteAnchorRepairService,
-	NoteCreationService,
-	NoteEditingService,
+	NoteCatalog,
 	NoteLifecycleService,
-	NotePublicationService,
-	NoteReadingService,
-	NoteRevisionReadingService,
-	NoteRevisionWritingService,
-	type NoteAttachmentRestorer,
+	NoteWriting,
+	type NoteAuthoring,
 	type NoteCreator,
-	type NoteDeletion,
-	type NoteEditor,
-	type NotePublisher,
-	type NoteReader,
-	type NoteRevisionReader,
-	type NoteRevisionRecorder,
-	type NoteSectionNumberingEditor,
-	type NoteTextSearcher,
-	type NoteTrashOperations,
-	type NoteTrashReader,
-	type NoteTreeReader,
-	type SourceAnchorRepairer
+	type NoteLibrary,
+	type NoteTrashLifecycle,
+	type NoteTrashReader
 } from '$lib/server/services/notes/catalog';
 import { NoteProvenance, type ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import {
@@ -128,20 +114,11 @@ export const createNotesCapability = (
 };
 
 export interface NoteServices {
-	readonly creator: NoteCreator;
-	readonly reader: NoteReader;
-	readonly treeReader: NoteTreeReader;
-	readonly textSearcher: NoteTextSearcher;
-	readonly editor: NoteEditor;
-	readonly sectionNumbering: NoteSectionNumberingEditor;
-	readonly trash: NoteTrashOperations;
+	readonly library: NoteLibrary;
 	readonly trashReader: NoteTrashReader;
-	readonly deletion: NoteDeletion;
-	readonly publisher: NotePublisher;
-	readonly revisionRecorder: NoteRevisionRecorder;
-	readonly revisionReader: NoteRevisionReader;
-	readonly attachmentRestorer: NoteAttachmentRestorer;
-	readonly anchorRepairer: SourceAnchorRepairer;
+	readonly authoring: NoteAuthoring;
+	readonly creator: NoteCreator;
+	readonly lifecycle: NoteTrashLifecycle;
 }
 export const createNoteServices = (
 	actor: ActorContext,
@@ -149,24 +126,13 @@ export const createNoteServices = (
 	anchors: SourceAnchorRepository,
 	projects: ProjectRepository
 ): NoteServices => {
-	const reading = new NoteReadingService(notes, projects);
-	const editing = new NoteEditingService(actor, notes);
-	const lifecycle = new NoteLifecycleService(notes, projects);
-	const revisionWriting = new NoteRevisionWritingService(notes);
+	const catalog = new NoteCatalog(notes, projects);
+	const writing = new NoteWriting(actor, notes, projects, anchors);
 	return {
-		reader: reading,
-		treeReader: reading,
-		textSearcher: reading,
-		trashReader: reading,
-		editor: editing,
-		sectionNumbering: editing,
-		trash: lifecycle,
-		deletion: lifecycle,
-		creator: new NoteCreationService(actor, notes, projects),
-		publisher: new NotePublicationService(notes),
-		revisionReader: new NoteRevisionReadingService(notes),
-		revisionRecorder: revisionWriting,
-		attachmentRestorer: revisionWriting,
-		anchorRepairer: new NoteAnchorRepairService(notes, anchors)
+		library: catalog,
+		trashReader: catalog,
+		authoring: writing,
+		creator: writing,
+		lifecycle: new NoteLifecycleService(notes, projects)
 	};
 };

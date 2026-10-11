@@ -4,11 +4,6 @@ import type { WithProjectChoice } from '$lib/models/projects';
 import { noteEtag } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentFileReferences } from '$lib/server/services/agent-files/virtual-files';
-import type {
-	NoteCreator,
-	NoteDeletion,
-	NoteTrashOperations
-} from '$lib/server/services/notes/catalog';
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
 import type { NoteEditingRules } from '$lib/services/notes/editing';
 import type {
@@ -115,20 +110,11 @@ import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering
 import type { NoteTextSearch } from '$lib/services/notes/text-search';
 
 import type {
-	NoteReader,
-	NoteTextSearcher,
-	NoteTreeReader
-} from '$lib/server/services/notes/catalog';
-
-import type {
-	NoteAttachmentRestorer,
-	NoteEditor,
-	NotePublisher,
-	NoteRevisionReader,
-	NoteRevisionRecorder,
-	NoteSectionNumberingEditor,
-	NoteTrashReader,
-	SourceAnchorRepairer
+	NoteAuthoring,
+	NoteCreator,
+	NoteLibrary,
+	NoteTrashLifecycle,
+	NoteTrashReader
 } from '$lib/server/services/notes/catalog';
 import type { NoteIndexing as NoteIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import type { ReferenceReader } from '$lib/server/services/references/library';
@@ -320,11 +306,8 @@ export interface NotesDependencies {
 	markdown: NoteMarkdown;
 	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
-	noteReader: NoteReader;
-	noteTreeReader: NoteTreeReader;
-	noteTextSearcher: NoteTextSearcher;
+	noteLibrary: NoteLibrary;
 	noteCreation: NoteCreator;
-	noteSectionNumbering: NoteSectionNumberingEditor;
 	projectReader: ProjectReader;
 	userPreferences: UserPreferencesReader;
 	relationshipReader: RelationshipReader;
@@ -334,16 +317,10 @@ export interface NotesDependencies {
 	todoContextReader: TodoContextReader;
 	suggestionReader: SuggestionReader;
 	suggestionExpirer: SuggestionExpirer;
-	noteEditor: NoteEditor;
+	noteAuthoring: NoteAuthoring;
 	noteLinkReconciler: NoteLinkReconciler;
-	noteTrash: NoteTrashOperations;
+	noteLifecycle: NoteTrashLifecycle;
 	noteTrashReader: NoteTrashReader;
-	noteDeletion: NoteDeletion;
-	notePublisher: NotePublisher;
-	revisionRecorder: NoteRevisionRecorder;
-	revisionReader: NoteRevisionReader;
-	attachmentRestorer: NoteAttachmentRestorer;
-	anchorRepairer: SourceAnchorRepairer;
 	noteIndexer: NoteIndexer;
 	transactionRunner: TransactionRunner;
 }
@@ -539,7 +516,7 @@ export class Notes implements NotesController {
 					)
 				});
 				if (command.sectionNumbering !== undefined)
-					await this.dependencies.noteSectionNumbering.setSectionNumbering({
+					await this.dependencies.noteAuthoring.setSectionNumbering({
 						noteId: command.noteId,
 						enabled: command.sectionNumbering ?? undefined
 					});
@@ -559,7 +536,7 @@ export class Notes implements NotesController {
 	async get(input: GetNoteViewInput): Promise<ResolvedNoteView> {
 		await this.dependencies.suggestionExpirer.expire();
 		const [note, relationships, references, diagrams, todos, pending] = await Promise.all([
-			this.dependencies.noteReader.get(input.noteId),
+			this.dependencies.noteLibrary.get(input.noteId),
 			this.dependencies.relationshipReader.findForNote(input.noteId),
 			this.dependencies.referenceReader.listForNote(input.noteId),
 			this.dependencies.diagramLister.listForNote(input.noteId),
@@ -600,7 +577,7 @@ export class Notes implements NotesController {
 	async setSectionNumbering(
 		input: SetNoteSectionNumberingInput
 	): Promise<SetNoteSectionNumberingOutput> {
-		const note = await this.dependencies.noteSectionNumbering.setSectionNumbering(input);
+		const note = await this.dependencies.noteAuthoring.setSectionNumbering(input);
 		// The resolved view is returned so the caller sees the effect of its own
 		// write without a second round trip.
 		return { sectionNumbering: await this.resolveSectionNumbering(note) };
@@ -622,7 +599,7 @@ export class Notes implements NotesController {
 	async listDocuments(input: ListNoteDocumentsInput): Promise<readonly NoteDocument[]> {
 		return Promise.all(
 			input.noteIds.map(async (noteId) => {
-				const note = await this.dependencies.noteReader.get(noteId);
+				const note = await this.dependencies.noteLibrary.get(noteId);
 				return { id: note.id, title: note.title, document: note.document };
 			})
 		);
@@ -667,7 +644,7 @@ export class Notes implements NotesController {
 		input: NoteChangeRequest,
 		target: NoteChangeTarget
 	): Promise<NoteChangeReview> {
-		const note = await this.dependencies.noteReader.get(input.noteId);
+		const note = await this.dependencies.noteLibrary.get(input.noteId);
 		if (target === 'skill' && note.kind !== 'skill')
 			return {
 				kind: 'failure',
@@ -716,7 +693,7 @@ export class Notes implements NotesController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async (): Promise<ApplyReviewedNoteChangeOutput> => {
-					const current = await this.dependencies.noteReader.get(change.noteId);
+					const current = await this.dependencies.noteLibrary.get(change.noteId);
 					if (target === 'skill' && current.kind !== 'skill')
 						throw new ValidationError(
 							'This tool only edits skill notes; this note is not a skill.'
@@ -755,7 +732,7 @@ export class Notes implements NotesController {
 	}
 
 	private async persistEditedNote(candidate: Note): Promise<Note> {
-		const current = await this.dependencies.noteEditor.getForEdit(candidate);
+		const current = await this.dependencies.noteAuthoring.getForEdit(candidate);
 		const decision = this.dependencies.noteEditingRules.prepareSave(
 			current,
 			candidate,
@@ -763,13 +740,13 @@ export class Notes implements NotesController {
 		);
 		return decision.kind === 'unchanged'
 			? decision.note
-			: this.dependencies.noteEditor.persistEdit(decision.write);
+			: this.dependencies.noteAuthoring.persistEdit(decision.write);
 	}
 
 	save(input: SaveNoteInput): Promise<SaveNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.persistEditedNote(input.note);
-			const anchors = await this.dependencies.anchorRepairer.repairForNote(note);
+			const anchors = await this.dependencies.noteAuthoring.repairForNote(note);
 			// In the same transaction as the save, beside anchor repair: the note's links are
 			// derived from the document that just landed, so a committed body with stale
 			// `mentions` rows would show backlinks the note no longer has.
@@ -787,25 +764,25 @@ export class Notes implements NotesController {
 	}
 	publish(input: PublishNoteInput): Promise<PublishNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const note = await this.dependencies.notePublisher.getForPublication(input.noteId);
+			const note = await this.dependencies.noteAuthoring.getForPublication(input.noteId);
 			if (noteEtag(note.id, note.currentRevision) !== input.baseEtag)
 				throw new StaleRevisionError('The note has changed since it was loaded');
 			const write = this.dependencies.notePublicationRules.preparePublication(
 				note,
 				new Date().toISOString() as DateTime
 			);
-			await this.dependencies.revisionRecorder.record(note);
-			const published = await this.dependencies.notePublisher.persistPublication(write);
+			await this.dependencies.noteAuthoring.record(note);
+			const published = await this.dependencies.noteAuthoring.persistPublication(write);
 			return { note: published, etag: noteEtag(published.id, published.currentRevision) };
 		});
 	}
 	async discardDraft(input: DiscardNoteDraftInput): Promise<DiscardNoteDraftOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const note = await this.dependencies.noteEditor.getForEdit({
+			const note = await this.dependencies.noteAuthoring.getForEdit({
 				id: input.noteId,
 				userId: this.actor.userId
 			});
-			const revision = (await this.dependencies.revisionReader.revisions(input.noteId)).find(
+			const revision = (await this.dependencies.noteLibrary.revisions(input.noteId)).find(
 				(candidate) => candidate.revision === note.publishedRevision
 			);
 			if (!revision)
@@ -818,8 +795,8 @@ export class Notes implements NotesController {
 				document: revision.document,
 				plainText: revision.plainText
 			});
-			await this.dependencies.attachmentRestorer.restoreAttachments(input.noteId, revision.id);
-			await this.dependencies.anchorRepairer.repairForNote(restored);
+			await this.dependencies.noteAuthoring.restoreAttachments(input.noteId, revision.id);
+			await this.dependencies.noteAuthoring.repairForNote(restored);
 			await this.dependencies.noteLinkReconciler.reconcile(
 				restored,
 				this.dependencies.noteReferences.links(restored.document)
@@ -831,7 +808,7 @@ export class Notes implements NotesController {
 	async searchText(input: SearchNoteTextInput): Promise<SearchNoteTextOutput> {
 		const options = { regex: input.regex, caseSensitive: input.caseSensitive };
 		assertValidSearch(this.dependencies.textSearch, input.query, options);
-		const targets = await this.dependencies.noteTextSearcher.listSearchable(input.projectId);
+		const targets = await this.dependencies.noteLibrary.listSearchable(input.projectId);
 		return { hits: this.dependencies.textSearch.search(targets, input.query, options) };
 	}
 	async replaceText(input: ReplaceNoteTextInput): Promise<ReplaceNoteTextOutput> {
@@ -839,7 +816,7 @@ export class Notes implements NotesController {
 		assertValidSearch(this.dependencies.textSearch, input.query, options);
 		const scope = input.noteIds === undefined ? undefined : new Set(input.noteIds);
 		return this.dependencies.transactionRunner.run(async () => {
-			const targets = await this.dependencies.noteTextSearcher.listSearchable(input.projectId);
+			const targets = await this.dependencies.noteLibrary.listSearchable(input.projectId);
 			const hits = this.dependencies.textSearch.search(
 				scope === undefined ? targets : targets.filter((target) => scope.has(target.id)),
 				input.query,
@@ -850,7 +827,7 @@ export class Notes implements NotesController {
 			for (const hit of hits) {
 				// Title matches are display-only: replace rewrites document bodies, never titles.
 				if (hit.matches.length === 0) continue;
-				const note = await this.dependencies.noteReader.get(hit.noteId);
+				const note = await this.dependencies.noteLibrary.get(hit.noteId);
 				const result = this.dependencies.textSearch.replace(
 					note.document,
 					input.query,
@@ -869,7 +846,7 @@ export class Notes implements NotesController {
 	}
 	rename(input: RenameNoteInput): Promise<RenameNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.noteReader.get(input.noteId);
+			const current = await this.dependencies.noteLibrary.get(input.noteId);
 			const note = await this.persistEditedNote({
 				...current,
 				title: input.title
@@ -882,28 +859,28 @@ export class Notes implements NotesController {
 	}
 	async archive(input: ArchiveNoteInput): Promise<ArchiveNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const facts = await this.dependencies.noteTrash.archiveFacts(input.noteId);
+			const facts = await this.dependencies.noteLifecycle.archiveFacts(input.noteId);
 			const decision = this.dependencies.noteTrashRules.changeTrash(
 				facts.note,
 				{ kind: 'archive', ...facts },
 				new Date().toISOString() as DateTime
 			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-			const note = await this.dependencies.noteTrash.persistTrash(decision.note);
+			const note = await this.dependencies.noteLifecycle.persistTrash(decision.note);
 			await this.dependencies.noteIndexer.indexNote(note);
 			return { note };
 		});
 	}
 	async restore(input: RestoreNoteInput): Promise<RestoreNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const facts = await this.dependencies.noteTrash.restoreFacts(input.noteId);
+			const facts = await this.dependencies.noteLifecycle.restoreFacts(input.noteId);
 			const decision = this.dependencies.noteTrashRules.changeTrash(
 				facts.note,
 				{ kind: 'restore', ...facts },
 				new Date().toISOString() as DateTime
 			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-			const note = await this.dependencies.noteTrash.persistTrash(decision.note);
+			const note = await this.dependencies.noteLifecycle.persistTrash(decision.note);
 			await this.dependencies.noteIndexer.indexNote(note);
 			return { note };
 		});
@@ -915,29 +892,29 @@ export class Notes implements NotesController {
 		// Transactional because a folder is several deletes: a half-purged folder would
 		// leave its contents at the project root with no way back to where they were.
 		return this.dependencies.transactionRunner.run(async () => {
-			const facts = await this.dependencies.noteDeletion.deletionFacts(input.noteId);
+			const facts = await this.dependencies.noteLifecycle.deletionFacts(input.noteId);
 			const decision = this.dependencies.noteTrashRules.prepareDeletion(facts.trashed, {
 				kind: 'one',
 				note: facts.note
 			});
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-			const deletedNotes = await this.dependencies.noteDeletion.persistDeletion(decision.notes);
+			const deletedNotes = await this.dependencies.noteLifecycle.persistDeletion(decision.notes);
 			return { deletedNoteIds: deletedNotes.map((note) => note.id), deletedNotes };
 		});
 	}
 	async emptyTrash(input: EmptyNoteTrashInput): Promise<EmptyNoteTrashOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const trashed = await this.dependencies.noteDeletion.trashForDeletion(input.projectId);
+			const trashed = await this.dependencies.noteLifecycle.trashForDeletion(input.projectId);
 			const decision = this.dependencies.noteTrashRules.prepareDeletion(trashed, { kind: 'all' });
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-			const deletedNotes = await this.dependencies.noteDeletion.persistDeletion(decision.notes);
+			const deletedNotes = await this.dependencies.noteLifecycle.persistDeletion(decision.notes);
 			return { deletedNoteIds: deletedNotes.map((note) => note.id), deletedNotes };
 		});
 	}
 	async listRevisions(input: ListNoteRevisionsInput): Promise<ListNoteRevisionsOutput> {
 		const [note, revisions] = await Promise.all([
-			this.dependencies.noteReader.get(input.noteId),
-			this.dependencies.revisionReader.revisions(input.noteId)
+			this.dependencies.noteLibrary.get(input.noteId),
+			this.dependencies.noteLibrary.revisions(input.noteId)
 		]);
 		return {
 			revisions: revisions.map((revision) => ({
@@ -950,7 +927,7 @@ export class Notes implements NotesController {
 		};
 	}
 	async getRevision(input: GetNoteRevisionInput): Promise<GetNoteRevisionOutput> {
-		const revision = await this.dependencies.revisionReader.revisionById(
+		const revision = await this.dependencies.noteLibrary.revisionById(
 			input.noteId,
 			input.revisionId
 		);
@@ -963,8 +940,8 @@ export class Notes implements NotesController {
 	}
 	async readRevision(input: ReadNoteRevisionInput): Promise<ReadNoteRevisionOutput> {
 		const [note, revision] = await Promise.all([
-			this.dependencies.noteReader.get(input.noteId),
-			this.dependencies.revisionReader.revisionById(input.noteId, input.revisionId)
+			this.dependencies.noteLibrary.get(input.noteId),
+			this.dependencies.noteLibrary.revisionById(input.noteId, input.revisionId)
 		]);
 		if (!revision)
 			throw new NotFoundError('That version of the note is no longer available', {
@@ -980,7 +957,7 @@ export class Notes implements NotesController {
 		};
 	}
 	async compareRevisions(input: CompareNoteRevisionsInput): Promise<CompareNoteRevisionsOutput> {
-		const revision = await this.dependencies.revisionReader.revisionById(
+		const revision = await this.dependencies.noteLibrary.revisionById(
 			input.noteId,
 			input.revisionId
 		);
@@ -991,7 +968,7 @@ export class Notes implements NotesController {
 			});
 		let baseline: NoteRevision | undefined;
 		if (input.againstRevisionId) {
-			baseline = await this.dependencies.revisionReader.revisionById(
+			baseline = await this.dependencies.noteLibrary.revisionById(
 				input.noteId,
 				input.againstRevisionId
 			);
@@ -1001,8 +978,8 @@ export class Notes implements NotesController {
 					revisionId: input.againstRevisionId
 				});
 		} else {
-			const note = await this.dependencies.noteReader.get(input.noteId);
-			baseline = (await this.dependencies.revisionReader.revisions(input.noteId)).find(
+			const note = await this.dependencies.noteLibrary.get(input.noteId);
+			baseline = (await this.dependencies.noteLibrary.revisions(input.noteId)).find(
 				(candidate) => candidate.revision === note.publishedRevision
 			);
 			if (!baseline)
@@ -1018,8 +995,8 @@ export class Notes implements NotesController {
 	async restoreRevision(input: RestoreNoteRevisionInput): Promise<RestoreNoteRevisionOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const [note, revision] = await Promise.all([
-				this.dependencies.noteReader.get(input.noteId),
-				this.dependencies.revisionReader.revisionById(input.noteId, input.revisionId)
+				this.dependencies.noteLibrary.get(input.noteId),
+				this.dependencies.noteLibrary.revisionById(input.noteId, input.revisionId)
 			]);
 			if (!revision)
 				throw new NotFoundError('That version of the note is no longer available', {
@@ -1032,8 +1009,8 @@ export class Notes implements NotesController {
 				document: revision.document,
 				plainText: revision.plainText
 			});
-			await this.dependencies.attachmentRestorer.restoreAttachments(input.noteId, input.revisionId);
-			await this.dependencies.anchorRepairer.repairForNote(restored);
+			await this.dependencies.noteAuthoring.restoreAttachments(input.noteId, input.revisionId);
+			await this.dependencies.noteAuthoring.repairForNote(restored);
 			await this.dependencies.noteLinkReconciler.reconcile(
 				restored,
 				this.dependencies.noteReferences.links(restored.document)

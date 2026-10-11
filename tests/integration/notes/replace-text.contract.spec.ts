@@ -44,7 +44,7 @@ const setup = async (suffix: string) => {
 	);
 	const original = await Promise.all(
 		[first.note, second.note].map((note) =>
-			saveNoteDraft(catalog.editor, transactionRunner, first.owner, {
+			saveNoteDraft(catalog.authoring, transactionRunner, first.owner, {
 				...note,
 				...markdown.read('ship release')
 			})
@@ -75,10 +75,8 @@ const setup = async (suffix: string) => {
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
-			noteReader: catalog.reader,
-			noteEditor: catalog.editor,
-			noteTextSearcher: catalog.textSearcher,
-			anchorRepairer: effects,
+			noteLibrary: catalog.library,
+			noteAuthoring: catalog.authoring,
 			noteLinkReconciler: effects,
 			noteIndexer: {
 				indexNote: async (note) => {
@@ -100,7 +98,7 @@ const setup = async (suffix: string) => {
 	const read = async () =>
 		Promise.all(
 			original.map(async (note) => ({
-				note: await catalog.reader.get(note.id),
+				note: await catalog.library.get(note.id),
 				index: await search.listForNote(note.id)
 			}))
 		);

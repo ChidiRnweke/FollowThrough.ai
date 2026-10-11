@@ -70,7 +70,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 			syncRetry: sync.mutationRetry,
 			transactionRunner,
 			diagrams: library,
-			diagramSourceNotes: notes.services.reader,
+			diagramSourceNotes: notes.services.library,
 			now: () => new Date().toISOString() as typeof diagram.updatedAt,
 			diagramIndexer: {
 				diagramContextRequirement: (diagram) => index.diagramContextRequirement(diagram),
