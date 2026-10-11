@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteId, NoteSummary } from '$lib/models/notes';
 import {
-	hasInternalNoteDrag,
 	NOTE_DRAG_MIME,
 	type NoteDragTransfer,
 	readActiveNoteDrag,
@@ -39,10 +38,10 @@ describe('note drag contract', () => {
 		expect(data.effectAllowed).toBe('copy');
 	});
 
-	it('recognises only the internal MIME type', () => {
+	it('ignores a drag that carries only plain text', () => {
 		const data = transfer();
 		data.setData('text/plain', noteId);
-		expect(hasInternalNoteDrag(data)).toBe(false);
+		expect(readActiveNoteDrag(data, [entry('note')])).toBeUndefined();
 	});
 
 	it('accepts an active ordinary note', () => {

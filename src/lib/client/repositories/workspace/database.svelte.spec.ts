@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { WorkspaceDatabase, requestValue } from './database';
+import { WorkspaceDatabase } from './database';
+
+const requestValue = <T>(request: IDBRequest<T>): Promise<T> =>
+	new Promise((resolve, reject) => {
+		request.onsuccess = () => resolve(request.result);
+		request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'));
+	});
 
 const connections: { close(): void }[] = [];
 const names = new Set<string>();

@@ -52,8 +52,6 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 
 const isUuid = (value: string): boolean => uuidRegex.test(value);
 
-export const noteTab = (noteId: NoteId): TabId => noteId;
-
 export const chatTab = (sessionKey: ChatSessionKey): TabId => `${CHAT_PREFIX}${sessionKey}`;
 
 export const diagramTab = (diagramId: DiagramId): TabId => `${DIAGRAM_PREFIX}${diagramId}`;
@@ -88,8 +86,6 @@ export function parseTabId(raw: string): TabRef | undefined {
 export const isChatTab = (id: TabId): boolean => parseTabId(id)?.kind === 'chat';
 
 export const isSearchTab = (id: TabId): boolean => parseTabId(id)?.kind === 'search';
-
-export const isNoteTab = (id: TabId): boolean => parseTabId(id)?.kind === 'note';
 
 export const isDiagramTab = (id: TabId): boolean => parseTabId(id)?.kind === 'diagram';
 

@@ -3,13 +3,10 @@ import type { Widget } from '$lib/models/widgets';
 import type { AppContextSnapshotV1, PaneContext, SemanticInteraction } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import { workbench } from '../workbench/workbench.svelte';
+import { workbench as appWorkbench, type WorkbenchStore } from '../workbench/workbench.svelte';
 import { chatKeyOf, noteIdOf, widgetIdOf } from '../workbench/tab-ref';
 
-export function surfaceFor(
-	pathname: string,
-	params: URLSearchParams
-): AppContextSnapshotV1['surface'] {
+function surfaceFor(pathname: string, params: URLSearchParams): AppContextSnapshotV1['surface'] {
 	const filters: Record<string, string | number | boolean> = {};
 	for (const key of ['status', 'responsibility', 'projectId', 'query', 'page']) {
 		const value = params.get(key);
@@ -57,7 +54,9 @@ type PaneGetter = () => PaneContext | undefined;
 /** What a mounted chat pane reports about itself. */
 type ChatPaneGetter = () => { conversationId?: string; title: string };
 
-class AppContextStore {
+export class AppContextStore {
+	constructor(private readonly workbench: WorkbenchStore = appWorkbench) {}
+
 	private shell?: ShellContext;
 	/** The account's widgets, so a widget tab can name the project the agent is asked about. */
 	private widgets: readonly Widget[] = [];
@@ -109,21 +108,21 @@ class AppContextStore {
 		const inWorkbench =
 			surface.kind === 'note_workbench' ||
 			surface.kind === 'diagram_editor' ||
-			workbench.isWorkbenchPath;
+			this.workbench.isWorkbenchPath;
 		const focusedNoteId = inWorkbench
-			? (workbench.interactionFocusedNoteId ?? workbench.focusedNoteId)
+			? (this.workbench.interactionFocusedNoteId ?? this.workbench.focusedNoteId)
 			: undefined;
-		const visibleIds = [workbench.focusedNoteId, workbench.splitNoteId]
+		const visibleIds = [this.workbench.focusedNoteId, this.workbench.splitNoteId]
 			.filter((id): id is NoteId => Boolean(id))
 			.slice(0, 2);
 		const visiblePanes = visibleIds
 			.map((id) => this.panes.get(id)?.())
 			.filter((pane): pane is PaneContext => Boolean(pane));
-		const openTabs = workbench.openTabs.flatMap((tabId) => {
+		const openTabs = this.workbench.openTabs.flatMap((tabId) => {
 			const note = this.shell?.noteTree.find((entry) => entry.id === noteIdOf(tabId));
 			return note ? [{ id: note.id, title: note.title, projectId: note.projectId }] : [];
 		});
-		const openChatTabs = workbench.openTabs.flatMap((tabId) => {
+		const openChatTabs = this.workbench.openTabs.flatMap((tabId) => {
 			const sessionKey = chatKeyOf(tabId);
 			if (sessionKey === undefined) return [];
 			const reported = this.chatPanes.get(sessionKey)?.();

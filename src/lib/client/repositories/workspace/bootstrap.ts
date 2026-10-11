@@ -11,7 +11,7 @@ export interface WorkspaceBootstrapRepository {
 	save(bootstrap: WorkspaceBootstrap): void;
 }
 
-export const readStoredBootstrap = (
+const readStoredBootstrap = (
 	stored: string | null,
 	accountHint: string | null
 ): StoredBootstrap => {

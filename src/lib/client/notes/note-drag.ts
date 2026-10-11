@@ -17,10 +17,6 @@ export function writeNoteDrag(dataTransfer: NoteDragTransfer, noteId: NoteId): v
 	dataTransfer.setData(NOTE_DRAG_MIME, noteId);
 }
 
-export function hasInternalNoteDrag(dataTransfer: NoteDragTransfer | null): boolean {
-	return dataTransfer !== null && hasNoteType(dataTransfer);
-}
-
 export function readActiveNoteDrag(
 	dataTransfer: NoteDragTransfer | null,
 	noteTree: readonly NoteSummary[]
