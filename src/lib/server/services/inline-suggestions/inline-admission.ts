@@ -1,33 +1,34 @@
 import type { InlineSuggestionAdmission } from '$lib/models/agent';
+import type { UserId } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
+import type { InlineAttemptRepository } from '$lib/server/repositories/inline-suggestions/attempts';
 
-export interface IInlineAdmissionRules {
-	admit(inFlight: boolean): InlineSuggestionAdmission;
-	consume(
-		recent: readonly number[],
-		now: number
-	): { readonly admission: InlineSuggestionAdmission; readonly recent: readonly number[] };
+const WINDOW_MS = 60_000;
+
+export interface InlineAdmission {
+	/** Spends one completion from the user's per-minute budget, or says when one frees up. */
+	consume(userId: UserId, now: number): Promise<InlineSuggestionAdmission>;
 }
 
-/** Existing proactive-completion policy; the controller owns per-user state. */
-export class InlineAdmissionRules implements IInlineAdmissionRules {
-	constructor(private readonly requestsPerMinute = 40) {}
-	admit(inFlight: boolean): InlineSuggestionAdmission {
-		return inFlight ? { allowed: false, reason: 'busy', retryAfterMs: 250 } : { allowed: true };
-	}
-	consume(
-		recent: readonly number[],
-		now: number
-	): { readonly admission: InlineSuggestionAdmission; readonly recent: readonly number[] } {
-		const window = recent.filter((timestamp) => now - timestamp < 60_000);
-		if (window.length >= this.requestsPerMinute)
-			return {
-				admission: {
-					allowed: false,
-					reason: 'rate_limited',
-					retryAfterMs: Math.max(1, 60_000 - (now - (window[0] ?? now)))
-				},
-				recent: window
-			};
-		return { admission: { allowed: true }, recent: [...window, now] };
+/** Proactive completions are capped per user per rolling minute, across every server process. */
+export class InlineAdmissionService implements InlineAdmission {
+	constructor(
+		private readonly attempts: InlineAttemptRepository,
+		private readonly requestsPerMinute = 40
+	) {}
+
+	async consume(userId: UserId, now: number): Promise<InlineSuggestionAdmission> {
+		const reservation = await this.attempts.reserve(
+			userId,
+			new Date(now).toISOString() as DateTime,
+			new Date(now - WINDOW_MS).toISOString() as DateTime,
+			this.requestsPerMinute
+		);
+		if (reservation.kind === 'reserved') return { allowed: true };
+		return {
+			allowed: false,
+			reason: 'rate_limited',
+			retryAfterMs: Math.max(1, WINDOW_MS - (now - Date.parse(reservation.oldest)))
+		};
 	}
 }

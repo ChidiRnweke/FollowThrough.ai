@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { InlineSuggestionRequest } from '$lib/models/agent';
-import { InlineAdmissionRules } from '$lib/server/services/inline-suggestions/inline-admission';
+import { InlineAdmissionService } from '$lib/server/services/inline-suggestions/inline-admission';
+import { InMemoryInlineAttempts } from '$lib/testing/inline-suggestions/fakes/inline-attempts';
 import { inlineSuggestionFixture } from '$lib/testing/inline-suggestions/fixtures/context';
 import {
 	noteBuilder,
@@ -24,9 +25,9 @@ const signal = () => new AbortController().signal;
 
 /** One completion per minute, on a clock the test moves. */
 const setup = () => {
-	const clock = { now: 0 };
+	const clock = { now: Date.parse('2026-07-12T08:00:00.000Z') };
 	const fixture = inlineSuggestionFixture({
-		admissionRules: new InlineAdmissionRules(1),
+		admission: new InlineAdmissionService(new InMemoryInlineAttempts(), 1),
 		now: () => clock.now
 	});
 	fixture.notes.notes = [noteBuilder({ title: 'Migration', plainText: 'Saved note text' })];
@@ -34,14 +35,6 @@ const setup = () => {
 };
 
 describe('inline suggestion admission', () => {
-	it('admits another user while one request is in flight', async () => {
-		const fixture = setup();
-		fixture.admissions.register(testActor(2).userId);
-		expect((await fixture.controller.suggest(testActor(), request, signal())).outcome).toBe(
-			'suggested'
-		);
-	});
-
 	it('refuses a completion past the per-minute budget', async () => {
 		const fixture = setup();
 		await fixture.controller.suggest(testActor(), request, signal());
@@ -54,18 +47,19 @@ describe('inline suggestion admission', () => {
 	it('admits again after the budget window rolls over', async () => {
 		const fixture = setup();
 		await fixture.controller.suggest(testActor(), request, signal());
-		fixture.clock.now = 60_001;
+		fixture.clock.now += 60_001;
 		expect((await fixture.controller.suggest(testActor(), request, signal())).outcome).toBe(
 			'suggested'
 		);
 	});
 
-	it('does not spend budget on a request refused before generation', async () => {
+	it('keeps each user on their own budget', async () => {
 		const fixture = setup();
-		fixture.admissions.register(testActor().userId);
 		await fixture.controller.suggest(testActor(), request, signal());
-		fixture.admissions.release(testActor().userId);
-		expect((await fixture.controller.suggest(testActor(), request, signal())).outcome).toBe(
+		fixture.notes.notes = [
+			noteBuilder({ title: 'Migration', plainText: 'Saved note text', userId: testActor(2).userId })
+		];
+		expect((await fixture.controller.suggest(testActor(2), request, signal())).outcome).toBe(
 			'suggested'
 		);
 	});

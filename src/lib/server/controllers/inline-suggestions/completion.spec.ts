@@ -61,7 +61,7 @@ describe('inline completion ownership', () => {
 			reason: 'empty_model'
 		});
 	});
-	it('propagates a completion failure and releases admission', async () => {
+	it('propagates a completion failure', async () => {
 		const fixture = setup();
 		fixture.generator.failure = new Error('Inline completion provider failed');
 		const outcome = await fixture.controller
@@ -70,12 +70,9 @@ describe('inline completion ownership', () => {
 				(result) => result.outcome,
 				(error) => error.message
 			);
-		expect({ outcome, inFlight: fixture.admissions.hasRequest(actor.userId) }).toEqual({
-			outcome: 'Inline completion provider failed',
-			inFlight: false
-		});
+		expect(outcome).toBe('Inline completion provider failed');
 	});
-	it('preserves cancellation errors and releases admission after a provider abort', async () => {
+	it('preserves cancellation errors after a provider abort', async () => {
 		const fixture = setup();
 		const abort = new AbortController();
 		const failure = new DOMException('stale caret', 'AbortError');
@@ -95,9 +92,6 @@ describe('inline completion ownership', () => {
 			(result) => result,
 			(error) => error
 		);
-		expect({ outcome, inFlight: cancelling.admissions.hasRequest(actor.userId) }).toEqual({
-			outcome: failure,
-			inFlight: false
-		});
+		expect(outcome).toBe(failure);
 	});
 });

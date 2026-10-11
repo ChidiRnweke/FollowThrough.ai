@@ -4,8 +4,8 @@ import {
 	InlineSuggestions,
 	type InlineSuggestionsDependencies
 } from '$lib/server/controllers/inline-suggestions/controller';
-import { InlineAdmissionRules } from '$lib/server/services/inline-suggestions/inline-admission';
-import { InlineAdmissionStore } from '$lib/server/stores/inline-suggestions/admission';
+import { InlineAdmissionService } from '$lib/server/services/inline-suggestions/inline-admission';
+import { InMemoryInlineAttempts } from '$lib/testing/inline-suggestions/fakes/inline-attempts';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
@@ -25,7 +25,7 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 	const provider = new InMemoryRetrievalProvider();
 	const generator = new InMemoryInlineCompletion();
 	const preferences = new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository());
-	const admissions = new InlineAdmissionStore();
+	const attempts = new InMemoryInlineAttempts();
 	const controller = new InlineSuggestions(
 		capabilityDependencies<InlineSuggestionsDependencies>({
 			context: new InlineContextService(testTokenizer),
@@ -34,8 +34,7 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 			knowledge: createTestContentIndex(search, undefined, undefined, false, provider),
 			completion: generator,
 			defaultCompletionModel: 'default-inline-model',
-			admissionRules: new InlineAdmissionRules(),
-			admissions,
+			admission: new InlineAdmissionService(attempts),
 			now: () => 0,
 			preferences,
 			observer: { run: (_name, _context, body) => body() },
@@ -51,6 +50,6 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 		provider,
 		generator,
 		preferences,
-		admissions
+		attempts
 	};
 };

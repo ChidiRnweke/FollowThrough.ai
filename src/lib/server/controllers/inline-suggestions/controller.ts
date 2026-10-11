@@ -1,4 +1,3 @@
-import type { InlineSuggestionAdmission } from '$lib/models/agent';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import { type ActorContext } from '$lib/models/identity';
 import {
@@ -15,8 +14,7 @@ import type { OperationObserver, WorkflowObserver } from '$lib/models/telemetry'
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { KnowledgeSearch } from '$lib/server/services/knowledge-search/retrieval';
 import type { IInlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
-import type { IInlineAdmissionRules } from '$lib/server/services/inline-suggestions/inline-admission';
-import type { InlineAdmissionState } from '$lib/server/stores/inline-suggestions/admission';
+import type { InlineAdmission } from '$lib/server/services/inline-suggestions/inline-admission';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 
 const INELIGIBLE: InlineSuggestion = { outcome: 'no_suggestion', reason: 'ineligible' };
@@ -44,9 +42,7 @@ export interface InlineSuggestionsDependencies {
 	memory: MemoryEntryLister;
 	observer: OperationObserver;
 	workflow: WorkflowObserver;
-	admissionRules: IInlineAdmissionRules;
-	/** Process-wide: controllers are constructed per request, the spend guard is not. */
-	admissions: InlineAdmissionState;
+	admission: InlineAdmission;
 	now: () => number;
 	noteReader: NoteReader;
 	preferences: AgentPreferencesStore;
@@ -66,9 +62,6 @@ export class InlineSuggestions implements InlineSuggestionsController {
 		const preferences = await this.dependencies.preferences.get(actor);
 		const note = await this.authorize(actor, request, preferences.inlineSuggestionsEnabled);
 		if (!note) return INELIGIBLE;
-		const admission = this.admit(actor.userId);
-		if (!admission.allowed)
-			return { outcome: admission.reason, retryAfterMs: admission.retryAfterMs };
 		const authoritativeRequest = { ...request, projectId: note.projectId };
 		return this.dependencies.workflow.run(
 			'inline.suggestion',
@@ -91,52 +84,33 @@ export class InlineSuggestions implements InlineSuggestionsController {
 				tags: ['inline', 'suggestion']
 			},
 			async () => {
-				try {
-					const context = await this.buildContext(actor, authoritativeRequest, note, signal);
-					const budget = this.consume(actor.userId);
-					if (!budget.allowed) return { outcome: budget.reason, retryAfterMs: budget.retryAfterMs };
-					const text = await this.dependencies.completion.complete(
-						authoritativeRequest,
-						context,
-						preferences.inlineModel === undefined
-							? this.dependencies.defaultCompletionModel
-							: normalizeLanguageModelId(preferences.inlineModel),
-						signal
-					);
-					if (!text) return { outcome: 'no_suggestion', reason: 'empty_model' };
-					return {
-						outcome: 'suggested',
-						text,
-						grounding: {
-							currentNote: true,
-							userMemoryCount: context.userMemory.length,
-							projectPassageCount: context.projectPassages.length
-						}
-					};
-				} finally {
-					this.dependencies.admissions.release(actor.userId);
-				}
+				const context = await this.buildContext(actor, authoritativeRequest, note, signal);
+				const budget = await this.dependencies.admission.consume(
+					actor.userId,
+					this.dependencies.now()
+				);
+				if (!budget.allowed) return { outcome: budget.reason, retryAfterMs: budget.retryAfterMs };
+				const text = await this.dependencies.completion.complete(
+					authoritativeRequest,
+					context,
+					preferences.inlineModel === undefined
+						? this.dependencies.defaultCompletionModel
+						: normalizeLanguageModelId(preferences.inlineModel),
+					signal
+				);
+				if (!text) return { outcome: 'no_suggestion', reason: 'empty_model' };
+				return {
+					outcome: 'suggested',
+					text,
+					grounding: {
+						currentNote: true,
+						userMemoryCount: context.userMemory.length,
+						projectPassageCount: context.projectPassages.length
+					}
+				};
 			},
 			(result) => JSON.stringify(result)
 		);
-	}
-
-	/** Admission and reservation happen synchronously, before any provider work is awaited. */
-	private admit(userId: string): InlineSuggestionAdmission {
-		const result = this.dependencies.admissionRules.admit(
-			this.dependencies.admissions.hasRequest(userId)
-		);
-		if (result.allowed) this.dependencies.admissions.register(userId);
-		return result;
-	}
-
-	private consume(userId: string): InlineSuggestionAdmission {
-		const result = this.dependencies.admissionRules.consume(
-			this.dependencies.admissions.recent(userId),
-			this.dependencies.now()
-		);
-		this.dependencies.admissions.replaceRecent(userId, result.recent);
-		return result.admission;
 	}
 
 	private async buildContext(

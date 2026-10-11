@@ -97,14 +97,6 @@ describe('direct inline completion', () => {
 			reason: 'ineligible'
 		});
 	});
-	it('refuses a second completion while one is admitted', async () => {
-		const fixture = setup();
-		fixture.admissions.register(actor.userId);
-		expect(await fixture.controller.suggest(actor, request(), signal())).toEqual({
-			outcome: 'busy',
-			retryAfterMs: 250
-		});
-	});
 	it('allows retry after completion fails', async () => {
 		const fixture = setup();
 		fixture.generator.failure = new Error('provider down');

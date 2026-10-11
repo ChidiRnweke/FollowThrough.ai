@@ -831,7 +831,7 @@ export type InlineSuggestion =
 			readonly grounding: InlineSuggestionGrounding;
 	  }
 	| { readonly outcome: 'no_suggestion'; readonly reason: 'ineligible' | 'empty_model' }
-	| { readonly outcome: 'busy' | 'rate_limited'; readonly retryAfterMs: number };
+	| { readonly outcome: 'rate_limited'; readonly retryAfterMs: number };
 
 export const inlineSuggestionSchema = z.discriminatedUnion('outcome', [
 	z
@@ -855,7 +855,7 @@ export const inlineSuggestionSchema = z.discriminatedUnion('outcome', [
 		.strict(),
 	z
 		.object({
-			outcome: z.enum(['busy', 'rate_limited']),
+			outcome: z.literal('rate_limited'),
 			retryAfterMs: z.number().int().nonnegative()
 		})
 		.strict()
@@ -2046,9 +2046,13 @@ export type InlineSuggestionAdmission =
 	| { readonly allowed: true }
 	| {
 			readonly allowed: false;
-			readonly reason: 'busy' | 'rate_limited';
+			readonly reason: 'rate_limited';
 			readonly retryAfterMs: number;
 	  };
+
+/** Whether a user's completion budget had room, and when its oldest counted attempt was made. */
+export type InlineBudgetReservation =
+	{ readonly kind: 'reserved' } | { readonly kind: 'exhausted'; readonly oldest: DateTime };
 
 export type LanguageModelId = string & { readonly __brand: 'LanguageModelId' };
 

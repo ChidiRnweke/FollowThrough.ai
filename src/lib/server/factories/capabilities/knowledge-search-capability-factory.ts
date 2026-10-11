@@ -33,13 +33,10 @@ import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 
 import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
 import {
-	InlineAdmissionRules,
-	type IInlineAdmissionRules
+	InlineAdmissionService,
+	type InlineAdmission
 } from '$lib/server/services/inline-suggestions/inline-admission';
-import {
-	InlineAdmissionStore,
-	type InlineAdmissionState
-} from '$lib/server/stores/inline-suggestions/admission';
+import { InlineAttemptRecords } from '$lib/server/repositories/inline-suggestions/postgres/attempts';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
@@ -78,8 +75,7 @@ export interface KnowledgeSearchFinalized {
 	readonly inlineContext: IInlineContextService;
 	readonly observer: OperationObserver;
 	readonly workflow: WorkflowObserver;
-	readonly admissionRules: IInlineAdmissionRules;
-	readonly admissions: InlineAdmissionState;
+	readonly admission: InlineAdmission;
 }
 
 export const createKnowledgeSearchCapability = (
@@ -143,8 +139,7 @@ export const createKnowledgeSearchCapability = (
 			),
 			observer: operationObserver,
 			workflow: workflowObserver,
-			admissionRules: new InlineAdmissionRules(),
-			admissions: new InlineAdmissionStore()
+			admission: new InlineAdmissionService(new InlineAttemptRecords(input.db))
 		}),
 		maintenance: new EmbeddingMaintenance(
 			knowledge,

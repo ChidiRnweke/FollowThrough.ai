@@ -44,7 +44,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	};
 	try {
 		const suggestion = await controller.suggest(actor, inlineRequest, request.signal);
-		if (suggestion.outcome === 'busy' || suggestion.outcome === 'rate_limited') {
+		if (suggestion.outcome === 'rate_limited') {
 			const retryAfterSeconds = Math.max(1, Math.ceil(suggestion.retryAfterMs / 1_000));
 			return json(suggestion, {
 				status: 429,

@@ -110,14 +110,12 @@ it('records an in-flight SDK cancellation as cancelled and releases the admissio
 		const message = await outcome;
 		expect({
 			message,
-			inFlight: fixture.admissions.hasRequest(actor.userId),
 			spans: exporter
 				.getFinishedSpans()
 				.filter((span) => span.name === 'inline.generate')
 				.map((span) => ({ status: span.status.code, output: span.attributes['output.value'] }))
 		}).toEqual({
 			message: 'Request was aborted.',
-			inFlight: false,
 			spans: [{ status: SpanStatusCode.OK, output: 'cancelled' }]
 		});
 	} finally {
