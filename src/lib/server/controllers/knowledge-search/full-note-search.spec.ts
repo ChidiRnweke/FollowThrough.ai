@@ -11,7 +11,7 @@ const longNote =
 	Array.from(
 		{ length: 60 },
 		(_, index) => `Section ${index}. ${'Detailed evidence for the report. '.repeat(100)}`
-	).join('\n\n') + '\n\nThe relevant final approval code is amberfalcon.';
+	).join('\n\n') + '\n\nThe final approval code is amberfalcon.';
 
 describe('searching a long note', () => {
 	it('returns text from the end of a note far longer than fifty chunks', async () => {
@@ -24,11 +24,11 @@ describe('searching a long note', () => {
 			provider
 		);
 		await knowledge.indexNote(noteBuilder({ plainText: longNote }));
-		provider.rerankOrder = 'relevant-first';
 		const controller = new Retrieval(
 			capabilityDependencies<RetrievalDependencies>({ ...agentToolResultsFixture(), knowledge })
 		);
-		const results = await controller.search({ query: 'final approval code', limit: 20 });
-		expect(results[0]?.content).toContain('amberfalcon');
+		// Enough results for every chunk of the note: the test is about what was indexed, not ranking.
+		const results = await controller.search({ query: 'final approval code', limit: 200 });
+		expect(results.some((result) => result.content.includes('amberfalcon'))).toBe(true);
 	});
 });
