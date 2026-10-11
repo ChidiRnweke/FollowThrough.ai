@@ -26,7 +26,7 @@ export const initiateAttachmentUpload = command(
 		})
 		.refine(exactlyOneOwner, 'Provide exactly one owner'),
 	async (input) =>
-		AppFactory.controllers()
+		AppFactory.forActor(requestActor())
 			.attachments()
 			.initiate(requestActor(), {
 				path: input.path,
@@ -39,7 +39,7 @@ export const initiateAttachmentUpload = command(
 );
 
 export const completeAttachmentUpload = command(z.object({ uploadId: id }), async (input) => {
-	const view = await AppFactory.controllers()
+	const view = await AppFactory.forActor(requestActor())
 		.attachments()
 		.complete(requestActor(), input.uploadId as AttachmentUploadId);
 	return view;
@@ -54,7 +54,7 @@ export const completeAttachmentUpload = command(z.object({ uploadId: id }), asyn
 export const completeTodoScreenshotUpload = command(
 	z.object({ uploadId: id, todoId: id }),
 	async (input) => {
-		const view = await AppFactory.controllers()
+		const view = await AppFactory.forActor(requestActor())
 			.attachments()
 			.completeForTodo(
 				requestActor(),
@@ -66,7 +66,7 @@ export const completeTodoScreenshotUpload = command(
 );
 
 export const retryAttachment = command(z.object({ attachmentId: id }), async (input) => {
-	const view = await AppFactory.controllers()
+	const view = await AppFactory.forActor(requestActor())
 		.attachments()
 		.retry(requestActor(), input.attachmentId as AttachmentId);
 	return view;
@@ -75,19 +75,19 @@ export const retryAttachment = command(z.object({ attachmentId: id }), async (in
 // Downloads are commands rather than queries: each call mints a presigned URL,
 // which expires, so it must never be served from a query cache.
 export const downloadAttachment = command(z.object({ attachmentId: id }), async (input) =>
-	AppFactory.controllers()
+	AppFactory.forActor(requestActor())
 		.attachments()
 		.downloadById(requestActor(), input.attachmentId as AttachmentId)
 );
 
 export const downloadAttachmentByPath = command(z.object({ noteId: id, path }), async (input) =>
-	AppFactory.controllers()
+	AppFactory.forActor(requestActor())
 		.attachments()
 		.download(requestActor(), input.noteId as NoteId, input.path)
 );
 
 export const removeAttachment = command(z.object({ attachmentId: id }), async (input) => {
-	const result = await AppFactory.controllers()
+	const result = await AppFactory.forActor(requestActor())
 		.attachments()
 		.removeById(requestActor(), input.attachmentId as AttachmentId);
 	return result;
@@ -95,7 +95,7 @@ export const removeAttachment = command(z.object({ attachmentId: id }), async (i
 
 /** A form rather than a command: it is one submit button per resource row. */
 export const removeAttachmentByPath = form(z.object({ noteId: id, path }), async (input) => {
-	await AppFactory.controllers()
+	await AppFactory.forActor(requestActor())
 		.attachments()
 		.remove(requestActor(), input.noteId as NoteId, input.path);
 	return { removed: input.path };

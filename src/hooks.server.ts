@@ -20,7 +20,7 @@ const configurationDisabled = (): boolean => building || process.env.NODE_ENV ==
 export const init: ServerInit = async () => {
 	if (configurationDisabled()) return;
 	await hydrateEnvironment();
-	const controllers = AppFactory.controllers();
+	const controllers = AppFactory.system();
 	// Agent recovery first: it fails every interrupted run, and the workflow
 	// recoveries below move queued runs to running.
 	const interrupted = await controllers.agentHarness().recoverInterruptedRuns();

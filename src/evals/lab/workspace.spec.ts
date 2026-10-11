@@ -3,6 +3,7 @@ import { seedActor } from './workspace';
 import { createApplication } from '$lib/server/application';
 import { InMemoryAttachmentClaims } from '$lib/testing/attachments/fakes/claims';
 import { createPGliteDatabase } from './pglite-database';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 
 it('initializes a fresh evaluation account before opening its provisioned shell', async () => {
@@ -12,6 +13,7 @@ it('initializes a fresh evaluation account before opening its provisioned shell'
 			db: db.database,
 			notifications: db.notifications,
 			transactionRunner: db.transactionRunner,
+			tokenizer: testTokenizer,
 			attachmentClaims: new InMemoryAttachmentClaims(),
 			openRouterApiKey: 'unused-local-test',
 			mistralApiKey: 'unused-local-test',

@@ -28,7 +28,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	// An MCP client has no ambient project, so the user's workspace-wide tool
 	// selection is the whole story here; project overrides apply in-app only.
-	const session = await AppFactory.controllers()
+	const session = await AppFactory.forActor(authenticated.actor)
 		.agentHarness()
 		.openMcpTools(authenticated.actor, authenticated.scope, authenticated.provenanceId);
 	const server = AppFactory.mcpSurface(session).open();

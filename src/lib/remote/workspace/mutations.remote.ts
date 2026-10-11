@@ -13,7 +13,7 @@ export const cancelWorkspaceMutation = command(
 	async ({ accountId, ...input }) => {
 		const actor = requestActor();
 		if (actor.userId !== accountId) error(403, 'The synchronization account changed');
-		return AppFactory.controllers().workspace().cancelMutation(actor, input);
+		return AppFactory.forActor(requestActor()).workspace().cancelMutation(actor, input);
 	}
 );
 
@@ -23,7 +23,7 @@ export const pushWorkspaceMutation = command(
 		const { accountId, ...mutation } = input;
 		const actor = requestActor();
 		if (actor.userId !== accountId) error(403, 'The synchronization account changed');
-		const controllers = AppFactory.controllers();
+		const controllers = AppFactory.forActor(requestActor());
 		const command = mutation.command;
 		switch (command.kind) {
 			case 'renameConversation':

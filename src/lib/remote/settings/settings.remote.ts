@@ -5,7 +5,7 @@ import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { ApiTokenId } from '$lib/models/identity';
 
 export const listApiTokens = query(async () =>
-	AppFactory.controllers().apiTokens().list(requestActor())
+	AppFactory.forActor(requestActor()).apiTokens().list(requestActor())
 );
 
 /**
@@ -22,7 +22,7 @@ export const createApiToken = command(
 );
 
 export const revokeApiToken = command(z.string().uuid(), async (id) => {
-	await AppFactory.controllers()
+	await AppFactory.forActor(requestActor())
 		.apiTokens()
 		.revoke(requestActor(), id as ApiTokenId);
 	await listApiTokens().refresh();

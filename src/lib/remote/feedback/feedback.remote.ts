@@ -5,7 +5,7 @@ import { feedbackReportSchema } from '$lib/models/feedback';
 
 export const submitFeedback = command(feedbackReportSchema, async (input) => {
 	const actor = requestActor();
-	await AppFactory.controllers().feedback().submit(actor, {
+	await AppFactory.forActor(requestActor()).feedback().submit(actor, {
 		body: input.body,
 		url: input.url,
 		appContext: input.appContext

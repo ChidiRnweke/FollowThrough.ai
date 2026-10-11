@@ -6,7 +6,7 @@
  * periodic tasks the request path deliberately hands off. Deployed as a second
  * container on the same image; see `docker-compose.prod.yml`.
  */
-import { createProductionFactory } from '$lib/server/factories/production-factory';
+import { createProductionComposition } from '$lib/server/factories/production-factory';
 import { hydrateEnvironment } from '$lib/server/config';
 import { createScheduler } from '$lib/server/factories/scheduler';
 import {
@@ -18,7 +18,7 @@ const shutdownTimeoutMs = Number(process.env.WORKER_SHUTDOWN_TIMEOUT_MS ?? 30_00
 
 const main = async (): Promise<void> => {
 	await hydrateEnvironment();
-	const application = createProductionFactory();
+	const application = createProductionComposition().system();
 	const tasks = application.backgroundTasks;
 
 	const scheduler = createScheduler(tasks, { runOnStart: true });

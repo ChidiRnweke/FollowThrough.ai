@@ -1,3 +1,4 @@
+import type { TokenCodec } from '$lib/models/tokenization';
 import type { KnowledgeRetrievalCapabilities } from './services/knowledge-search/retrieval';
 import type { ToolRanking, ToolSeeding } from './services/agent/tools/tool-search';
 import type { ScheduledTask } from '$lib/models/maintenance';
@@ -63,6 +64,8 @@ export interface ApplicationConfig {
 	/** Postgres LISTEN, through which run changes reach every process. */
 	readonly notifications: NotificationChannel;
 	readonly transactionRunner: TransactionRunner;
+	/** The cl100k token codec. Loading its tables is the costly part of composition, so the process builds it once. */
+	readonly tokenizer: TokenCodec;
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL?: string;
 	readonly appURL?: string;
@@ -97,7 +100,7 @@ export interface ProductionApplication {
 	 * mint a provenance row per session so tool writes are attributable.
 	 */
 	readonly provenance: ProvenanceRecorder;
-	/** Shared so MCP's `search_tools` reuses the process-wide vector cache. */
+	/** Tool discovery, which seeding and the eval lab drive directly. */
 	readonly toolRetriever: ToolDiscoveryController;
 }
 
@@ -176,6 +179,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const knowledgeSearch = createKnowledgeSearchCapability({
 		db,
 		transactionRunner,
+		tokenizer: config.tokenizer,
 		openRouterApiKey,
 		openRouterBaseURL,
 		appURL,

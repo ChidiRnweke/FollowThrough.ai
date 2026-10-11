@@ -26,10 +26,10 @@ export const acceptSuggestion = command(
 			.optional()
 	}),
 	async (input) => {
-		return AppFactory.controllers().suggestions().acceptReviewed(requestActor(), input);
+		return AppFactory.forActor(requestActor()).suggestions().acceptReviewed(requestActor(), input);
 	}
 );
 
 export const rejectSuggestion = command(z.object({ suggestionId }), async (input) => {
-	return AppFactory.controllers().suggestions().reject(requestActor(), input);
+	return AppFactory.forActor(requestActor()).suggestions().reject(requestActor(), input);
 });

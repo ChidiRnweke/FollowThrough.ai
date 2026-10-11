@@ -3,7 +3,6 @@ import type { InlineCompletionService } from '$lib/server/services/inline-sugges
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { TokenCodec } from '$lib/models/tokenization';
-import { Cl100kTokenizer } from '$lib/server/infrastructure/tokenization/cl100k';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import {
 	ToolDiscovery,
@@ -46,6 +45,7 @@ import { operationObserver, workflowObserver } from '$lib/server/infrastructure/
 export interface KnowledgeSearchCapabilityInput {
 	readonly db: Database;
 	readonly transactionRunner: TransactionRunner;
+	readonly tokenizer: TokenCodec;
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
@@ -81,7 +81,7 @@ export interface KnowledgeSearchFinalized {
 export const createKnowledgeSearchCapability = (
 	input: KnowledgeSearchCapabilityInput
 ): KnowledgeSearchCapability => {
-	const tokenizer = new Cl100kTokenizer();
+	const { tokenizer } = input;
 	const provider = createRetrievalProvider({
 		apiKey: input.openRouterApiKey,
 		baseURL: input.openRouterBaseURL,

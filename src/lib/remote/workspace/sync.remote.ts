@@ -11,7 +11,7 @@ export const pullWorkspaceChangePage = command(
 	async ({ accountId, since }) => {
 		const actor = requestActor();
 		if (actor.userId !== accountId) error(403, 'The synchronization account changed');
-		return AppFactory.controllers().workspace().pullChangePage(actor, since);
+		return AppFactory.forActor(requestActor()).workspace().pullChangePage(actor, since);
 	}
 );
 export const readWorkspaceResource = command(
@@ -23,6 +23,6 @@ export const readWorkspaceResource = command(
 	async ({ accountId, identity, etag }) => {
 		const actor = requestActor();
 		if (actor.userId !== accountId) error(403, 'The synchronization account changed');
-		return AppFactory.controllers().workspace().readResource(actor, identity, etag);
+		return AppFactory.forActor(requestActor()).workspace().readResource(actor, identity, etag);
 	}
 );

@@ -6,7 +6,7 @@ import type { McpSurfaceFactory } from './agent/mcp-tool-factory';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import type { ActorContext } from '$lib/models/identity';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import { createProductionFactory, type ProductionApplication } from './production-factory';
+import { createProductionComposition } from './production-factory';
 import { SessionRegistry } from '$lib/server/services/identity/sessions';
 import { AccessTokens } from '$lib/server/services/identity/api-tokens';
 import { ApiTokenRecords } from '../repositories/identity/postgres/api-tokens';
@@ -29,7 +29,7 @@ class DeferredValue<T> {
 	}
 }
 
-const application = new DeferredValue(createProductionFactory);
+const composition = new DeferredValue(createProductionComposition);
 const localIdentity = new DeferredValue(() => {
 	const users = new UserDirectory(new UserRecords(db));
 	return instrumentedController(
@@ -48,7 +48,7 @@ const access = new DeferredValue(() => {
 			tokens: new AccessTokens(new ApiTokenRecords(db)),
 			provisioner: users,
 			users,
-			provenance: application.get().provenance
+			provenance: composition.get().system().provenance
 		}),
 		accessSurface
 	);
@@ -63,16 +63,21 @@ const signIn = new DeferredValue(() => {
 });
 
 export class AppFactory {
-	private static application(): ProductionApplication {
-		return application.get();
+	/** The controllers for one authenticated user's request. */
+	static forActor(actor: ActorContext): ControllerFactory {
+		return composition.get().forActor(actor).controllers;
 	}
 
-	static controllers(): ControllerFactory {
-		return this.application().controllers;
+	/** The controllers for work that acts for no request: startup recovery. */
+	static system(): ControllerFactory {
+		return composition.get().system().controllers;
 	}
 
 	static mcpSurface(...args: Parameters<McpSurfaceFactory>): ReturnType<McpSurfaceFactory> {
-		return this.application().mcpSurface(...args);
+		return composition
+			.get()
+			.system()
+			.mcpSurface(...args);
 	}
 
 	static actor(locals?: App.Locals): ActorContext {

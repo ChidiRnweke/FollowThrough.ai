@@ -1,3 +1,4 @@
+import { Cl100kTokenizer } from '$lib/server/infrastructure/tokenization/cl100k';
 import { PostgresAttachmentClaims } from '$lib/server/repositories/attachments/postgres/claims';
 import {
 	db,
@@ -13,7 +14,12 @@ import {
 	DEFAULT_OCR_MODEL,
 	requiredEnvironmentValue
 } from '../config';
-import { createApplication, type ProductionApplication } from '../application';
+import type { ActorContext } from '$lib/models/identity';
+import {
+	createApplication,
+	type ApplicationConfig,
+	type ProductionApplication
+} from '../application';
 
 export type { ProductionApplication } from '../application';
 
@@ -24,8 +30,27 @@ export type { ProductionApplication } from '../application';
  * The production database resolves `DATABASE_URL` lazily on first use, after
  * the process launcher has loaded runtime configuration.
  */
-export function createProductionFactory(): ProductionApplication {
-	return createApplication({
+/**
+ * The process composition: configuration and process-wide resources (the database pool, the
+ * notification channel, the token codec) are built once; each request builds its own graph.
+ */
+export interface ProductionComposition {
+	/** The graph for one authenticated user's request. */
+	forActor(actor: ActorContext): ProductionApplication;
+	/** The graph for work that acts for no request: startup recovery and the worker's tasks. */
+	system(): ProductionApplication;
+}
+
+export function createProductionComposition(): ProductionComposition {
+	const config = productionConfig();
+	return {
+		forActor: () => createApplication(config),
+		system: () => createApplication(config)
+	};
+}
+
+function productionConfig(): ApplicationConfig {
+	return {
 		attachmentClaims: new PostgresAttachmentClaims(
 			postgresSessionConnections,
 			postgresConnectionScope
@@ -33,6 +58,7 @@ export function createProductionFactory(): ProductionApplication {
 		db,
 		notifications: postgresNotifications,
 		transactionRunner: postgresTransactionRunner,
+		tokenizer: new Cl100kTokenizer(),
 		openRouterApiKey: requiredEnvironmentValue('OPENROUTER_API_KEY'),
 		// The worker sidecar owns embedding in production, so writes never wait on
 		// OpenRouter. Set DEFER_EMBEDDING=false to fall back to inline embedding if
@@ -56,5 +82,5 @@ export function createProductionFactory(): ProductionApplication {
 			bucket: process.env.S3_BUCKET ?? 'followthrough-attachments',
 			forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false'
 		}
-	});
+	};
 }
