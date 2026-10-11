@@ -4,11 +4,8 @@ import {
 	DEFAULT_AGENT_MAX_TURNS,
 	type WebResearchOptions
 } from '$lib/models/agent';
-import type { RunApprovalDecisions } from '$lib/server/services/agent/runs/approvals';
-import type { RunCancellationDecisions } from '$lib/server/services/agent/runs/cancellation';
-import type { RunCheckpointWriter } from '$lib/server/services/agent/runs/checkpoints';
 import type { AgentImagePreparation } from '$lib/server/services/agent/runs/images';
-import type { ChatRunPreparation } from '$lib/server/services/agent/runs/preparation';
+import type { RunTransitionStore } from '$lib/server/services/agent/runs/transitions';
 import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
 import type {
 	IAgentModelChoiceService,
@@ -101,12 +98,7 @@ import type { ToolPreferenceCapability } from '$lib/server/services/agent/tools/
 import type { ToolRanking } from '$lib/server/services/agent/tools/tool-search';
 import type { AgentToolApprovalPolicy } from '$lib/services/agent/tool-approval';
 import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
-import type {
-	AgentRunDecisions,
-	AgentRunEvents,
-	AgentRuns,
-	AgentSessions
-} from '$lib/server/services/agent/runs/records';
+import type { AgentHarnessRecords } from '$lib/server/services/agent/runs/records';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { ProjectReader } from '$lib/server/services/projects/catalog';
@@ -284,18 +276,11 @@ export interface AgentHarnessDependencies {
 	preferences: AgentPreferencesStore;
 	/** The catalogue of selectable models, used to validate and resolve run models. */
 	models: AgentModelCatalog;
-	/** Run records: idempotent inserts, lookups and persistence of resolved values. */
-	runs: AgentRuns;
-	cancellations: Pick<RunCancellationDecisions, 'getForWrite' | 'plan' | 'persist'>;
-	approvals: Pick<RunApprovalDecisions, 'getForWrite' | 'plan' | 'persist'>;
-	checkpoints: Pick<RunCheckpointWriter, 'prepare' | 'persist'>;
-	preparation: ChatRunPreparation;
-	/** The append-only event log per run that clients poll via cursors. */
-	events: AgentRunEvents;
-	/** Recorded approvals and rejections for pending tool calls. */
-	decisions: AgentRunDecisions;
-	/** Provider session items, replaced wholesale when a conversation is rewound. */
-	sessions: AgentSessions;
+	/** Run records: idempotent inserts, lookups, the per-run event log, recorded approval decisions
+	 * and the provider session items replaced wholesale when a conversation is rewound. */
+	records: AgentHarnessRecords;
+	/** Every run state transition: approval, cancellation, checkpoint and chat-run preparation. */
+	transitions: RunTransitionStore;
 	/** Executes run mutations atomically so a run is all-or-nothing. */
 	transactionRunner: TransactionRunner;
 	/** Deployment fallback chat model when the user has not chosen one. */
@@ -401,7 +386,7 @@ export class AgentSdkHarness implements AgentHarness {
 	async deleteSession(conversationId: ConversationId): Promise<void> {
 		await this.dependencies.transactionRunner.run(async () => {
 			await this.dependencies.conversationSessions.getForWrite(conversationId);
-			const active = await this.dependencies.runs.findActiveByConversation(conversationId);
+			const active = await this.dependencies.records.findActiveByConversation(conversationId);
 			if (active)
 				throw new ValidationError('Stop or resolve the active agent run before deleting this chat');
 			await this.dependencies.conversationSessions.remove(conversationId);
@@ -409,7 +394,7 @@ export class AgentSdkHarness implements AgentHarness {
 	}
 
 	async submit(input: SubmitAgentRunInput): Promise<AgentRunReceipt> {
-		const existing = await this.dependencies.runs.findByRequestId(input.requestId);
+		const existing = await this.dependencies.records.findByRequestId(input.requestId);
 		if (existing) return this.receipt(existing);
 		if (input.model) {
 			const models = this.dependencies.modelChoices.configuredAgentModels(
@@ -475,7 +460,7 @@ export class AgentSdkHarness implements AgentHarness {
 					createdAt: submittedAt,
 					updatedAt: submittedAt
 				};
-				const inserted = await this.dependencies.runs.insertIdempotent(run);
+				const inserted = await this.dependencies.records.insertIdempotent(run);
 				if (!inserted) throw new DuplicateSubmission();
 				await this.dependencies.conversationMessages.recordUserPrompt(
 					conversation.id,
@@ -483,7 +468,7 @@ export class AgentSdkHarness implements AgentHarness {
 					run.id,
 					runInput.images
 				);
-				const event = await this.dependencies.events.append(run.id, 0, {
+				const event = await this.dependencies.records.append(run.id, 0, {
 					type: 'run_queued',
 					runId: run.id,
 					attempt: 1,
@@ -500,14 +485,14 @@ export class AgentSdkHarness implements AgentHarness {
 			return receipt;
 		} catch (error) {
 			if (!(error instanceof DuplicateSubmission)) this.raiseActiveRunConflict(error);
-			const duplicate = await this.dependencies.runs.findByRequestId(input.requestId);
+			const duplicate = await this.dependencies.records.findByRequestId(input.requestId);
 			if (!duplicate) throw error;
 			return this.receipt(duplicate);
 		}
 	}
 
 	async getRun(runId: AgentRunId): Promise<AgentRunSnapshot> {
-		const run = await this.dependencies.runs.findById(runId);
+		const run = await this.dependencies.records.findById(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return this.snapshot(run);
 	}
@@ -519,7 +504,7 @@ export class AgentSdkHarness implements AgentHarness {
 
 	async isRunStreamComplete(runId: AgentRunId, deliveredCursor: string): Promise<boolean> {
 		const run = await this.requireRun(runId);
-		const latestCursor = await this.dependencies.events.latestCursor(runId);
+		const latestCursor = await this.dependencies.records.latestCursor(runId);
 		return this.dependencies.runStatus.eventStreamComplete(
 			run.status,
 			deliveredCursor,
@@ -535,7 +520,7 @@ export class AgentSdkHarness implements AgentHarness {
 		runId: AgentRunId,
 		after: string
 	): Promise<readonly StoredAgentRunEventRecord[]> {
-		const stored = await this.dependencies.events.replay(runId, after);
+		const stored = await this.dependencies.records.replay(runId, after);
 		const unreadable = stored.filter((record) => record.kind === 'unreadable');
 		if (unreadable.length > 0)
 			console.warn(
@@ -553,18 +538,20 @@ export class AgentSdkHarness implements AgentHarness {
 
 	async decideMany(input: DecideAgentRunBatchInput): Promise<AgentRunSnapshot> {
 		const result = await this.dependencies.transactionRunner.run(async () => {
-			const run = await this.dependencies.approvals.getForWrite(input.runId);
-			const change = this.dependencies.approvals.plan(run, input.callIds, now());
+			const run = await this.dependencies.transitions.getForWrite(input.runId);
+			const change = this.dependencies.transitions.planApproval(run, input.callIds, now());
 			for (const callId of input.callIds)
-				await this.dependencies.decisions.record({
+				await this.dependencies.records.record({
 					runId: input.runId,
 					callId,
 					decision: input.decision,
 					...(input.message === undefined ? {} : { message: input.message })
 				});
-			const queued = change ? await this.dependencies.approvals.persist(run.id, change) : run;
+			const queued = change
+				? await this.dependencies.transitions.persistApproval(run.id, change)
+				: run;
 			if (change)
-				await this.dependencies.events.append(run.id, 0, {
+				await this.dependencies.records.append(run.id, 0, {
 					type: 'run_queued',
 					runId: run.id,
 					attempt: 1,
@@ -578,16 +565,16 @@ export class AgentSdkHarness implements AgentHarness {
 
 	async cancel(runId: AgentRunId): Promise<AgentRunSnapshot> {
 		const { run, executing } = await this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.cancellations.getForWrite(runId);
-			const change = this.dependencies.cancellations.plan(current.status, now());
+			const current = await this.dependencies.transitions.getForWrite(runId);
+			const change = this.dependencies.transitions.planCancellation(current.status, now());
 			if (!change) return { run: current, executing: false };
-			const requested = await this.dependencies.cancellations.persist(runId, change);
+			const requested = await this.dependencies.transitions.persistCancellation(runId, change);
 			if (requested.status === 'cancelled') {
 				await this.abandonPendingCalls(
 					requested,
 					'The request was cancelled before the tool call ran.'
 				);
-				await this.dependencies.events.append(requested.id, 0, {
+				await this.dependencies.records.append(requested.id, 0, {
 					type: 'cancelled',
 					runId: requested.id,
 					message: 'The request was cancelled before it started'
@@ -626,7 +613,7 @@ export class AgentSdkHarness implements AgentHarness {
 	}
 
 	async retry(runId: AgentRunId, requestId: string): Promise<AgentRunReceipt> {
-		const duplicate = await this.dependencies.runs.findByRequestId(requestId);
+		const duplicate = await this.dependencies.records.findByRequestId(requestId);
 		if (duplicate) return this.receipt(duplicate);
 		try {
 			const receipt = await this.dependencies.transactionRunner.run(async () => {
@@ -656,9 +643,9 @@ export class AgentSdkHarness implements AgentHarness {
 					createdAt: submittedAt,
 					updatedAt: submittedAt
 				};
-				const inserted = await this.dependencies.runs.insertIdempotent(retry);
+				const inserted = await this.dependencies.records.insertIdempotent(retry);
 				if (!inserted) throw new DuplicateSubmission();
-				const event = await this.dependencies.events.append(retry.id, 0, {
+				const event = await this.dependencies.records.append(retry.id, 0, {
 					type: 'run_queued',
 					runId: retry.id,
 					attempt: 1,
@@ -675,7 +662,7 @@ export class AgentSdkHarness implements AgentHarness {
 			return receipt;
 		} catch (error) {
 			if (!(error instanceof DuplicateSubmission)) this.raiseActiveRunConflict(error);
-			const existing = await this.dependencies.runs.findByRequestId(requestId);
+			const existing = await this.dependencies.records.findByRequestId(requestId);
 			if (!existing) throw error;
 			return this.receipt(existing);
 		}
@@ -714,15 +701,15 @@ export class AgentSdkHarness implements AgentHarness {
 	 * session the run replays.
 	 */
 	private async rewind(conversationId: ConversationId, ordinal: number): Promise<void> {
-		const active = await this.dependencies.runs.findActiveByConversation(conversationId);
+		const active = await this.dependencies.records.findActiveByConversation(conversationId);
 		if (active) throw new ValidationError('Wait for the current agent run to finish first');
 		await this.dependencies.conversationMessages.truncateFromUserMessage(conversationId, ordinal);
-		const items = await this.dependencies.sessions.list(conversationId);
+		const items = await this.dependencies.records.list(conversationId);
 		const rewound = this.dependencies.conversationHistory.rewind(
 			items.map((item) => item.item),
 			ordinal
 		);
-		if (rewound) await this.dependencies.sessions.replace(conversationId, rewound);
+		if (rewound) await this.dependencies.records.replace(conversationId, rewound);
 	}
 
 	private freezeInput(
@@ -854,13 +841,13 @@ export class AgentSdkHarness implements AgentHarness {
 	}
 
 	private async requireRun(runId: AgentRunId): Promise<AgentRun> {
-		const run = await this.dependencies.runs.findById(runId);
+		const run = await this.dependencies.records.findById(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return run;
 	}
 
 	private async requireAgentRun(runId: AgentRunId): Promise<ResolvedAgentRun> {
-		const run = await this.dependencies.runs.findAgentById(runId);
+		const run = await this.dependencies.records.findAgentById(runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return run;
 	}
@@ -870,14 +857,14 @@ export class AgentSdkHarness implements AgentHarness {
 			runId: run.id,
 			conversationId: run.conversationId,
 			status: run.status,
-			latestCursor: await this.dependencies.events.latestCursor(run.id)
+			latestCursor: await this.dependencies.records.latestCursor(run.id)
 		};
 	}
 
 	private async snapshot(run: AgentRun): Promise<AgentRunSnapshot> {
 		return {
 			run,
-			latestCursor: await this.dependencies.events.latestCursor(run.id),
+			latestCursor: await this.dependencies.records.latestCursor(run.id),
 			pendingDecisions: run.pendingDecisions
 		};
 	}
@@ -904,7 +891,7 @@ export class AgentSdkHarness implements AgentHarness {
 			const run = await this.prepare(runId);
 			if (!run) return 'cancelled';
 			const request = run.inputSnapshot;
-			const decisions = await this.dependencies.decisions.loadUnconsumed(run.id);
+			const decisions = await this.dependencies.records.loadUnconsumed(run.id);
 			const completed = async (call: AgentToolCompletion, _output: AgentPayload) => {
 				if (call.classification !== 'mutation') return;
 				await this.persistEvent(run, { type: 'resources_stale', resources: ['workspace'] });
@@ -938,12 +925,12 @@ export class AgentSdkHarness implements AgentHarness {
 				if (update.type === 'approval_checkpoint') {
 					let parked: AgentRun | undefined;
 					await this.dependencies.transactionRunner.run(async () => {
-						const change = this.dependencies.checkpoints.prepare(run, update, now());
-						parked = await this.dependencies.checkpoints.persist(run.id, change);
+						const change = this.dependencies.transitions.prepareCheckpoint(run, update, now());
+						parked = await this.dependencies.transitions.persistCheckpoint(run.id, change);
 						if (!parked) return;
-						await this.dependencies.sessions.replace(run.conversationId, update.sessionItems);
+						await this.dependencies.records.replace(run.conversationId, update.sessionItems);
 						for (const decision of decisions)
-							await this.dependencies.decisions.consume(run.id, decision.callId, new Date());
+							await this.dependencies.records.consume(run.id, decision.callId, new Date());
 						for (const pending of update.pendingDecisions) {
 							const event: AgentEvent = {
 								type: 'approval_required',
@@ -953,7 +940,7 @@ export class AgentSdkHarness implements AgentHarness {
 								arguments: pending.arguments,
 								...(pending.review ? { review: pending.review } : {})
 							};
-							const record = await this.dependencies.events.append(run.id, 1, event);
+							const record = await this.dependencies.records.append(run.id, 1, event);
 							const activity = this.dependencies.toolActivity.activity(event);
 							if (activity)
 								await this.dependencies.conversationMessages.recordToolActivity(
@@ -1324,7 +1311,7 @@ export class AgentSdkHarness implements AgentHarness {
 	}
 
 	private async prepare(runId: AgentRunId): Promise<PreparedAgentRun | undefined> {
-		const transitioned = await this.dependencies.preparation.claim(runId, now());
+		const transitioned = await this.dependencies.transitions.claim(runId, now());
 		if (!transitioned) return undefined;
 		let run = transitioned;
 
@@ -1338,18 +1325,18 @@ export class AgentSdkHarness implements AgentHarness {
 				metadata: {}
 			});
 			run = await this.dependencies.transactionRunner.run(async () => {
-				const current = await this.dependencies.preparation.getForWrite(runId);
-				const change = this.dependencies.preparation.provenance(current, provenance.id, now());
-				return this.dependencies.preparation.persistProvenance(runId, change);
+				const current = await this.dependencies.transitions.getForPreparation(runId);
+				const change = this.dependencies.transitions.provenance(current, provenance.id, now());
+				return this.dependencies.transitions.persistProvenance(runId, change);
 			});
 		}
 
 		const context = run.contextSnapshot ?? (await this.buildContext(run.inputSnapshot));
 		const prepared = await this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.preparation.getForWrite(runId);
-			const change = this.dependencies.preparation.context(current, context, now());
-			const saved = await this.dependencies.preparation.persistContext(runId, change);
-			await this.dependencies.events.append(runId, 1, { type: 'run_started', runId, attempt: 1 });
+			const current = await this.dependencies.transitions.getForPreparation(runId);
+			const change = this.dependencies.transitions.context(current, context, now());
+			const saved = await this.dependencies.transitions.persistContext(runId, change);
+			await this.dependencies.records.append(runId, 1, { type: 'run_started', runId, attempt: 1 });
 			return saved;
 		});
 		return prepared;
@@ -1496,12 +1483,12 @@ export class AgentSdkHarness implements AgentHarness {
 				},
 				{ runId: run.id }
 			);
-		await this.dependencies.decisions.clearPending(run.id);
+		await this.dependencies.records.clearPending(run.id);
 	}
 
 	private async persistEvent(run: AgentRun, event: AgentEvent): Promise<AgentRunEventRecord> {
 		const record = await this.dependencies.transactionRunner.run(async () => {
-			const record = await this.dependencies.events.append(run.id, 1, event);
+			const record = await this.dependencies.records.append(run.id, 1, event);
 			const activity = this.dependencies.toolActivity.activity(event);
 			if (activity)
 				await this.dependencies.conversationMessages.recordToolActivity(
@@ -1530,13 +1517,13 @@ export class AgentSdkHarness implements AgentHarness {
 			});
 			if (settlement.kind === 'lost') return settlement;
 
-			await this.dependencies.sessions.replace(run.conversationId, sessionItems);
+			await this.dependencies.records.replace(run.conversationId, sessionItems);
 			for (const callId of decisionCallIds)
-				await this.dependencies.decisions.consume(run.id, callId, new Date());
+				await this.dependencies.records.consume(run.id, callId, new Date());
 			// One message per contiguous run of output, each carrying the cursor it began at.
 			// Written as a single blob it could only be replayed after every tool call, which
 			// is why a reopened conversation read as "all the work, then all the words".
-			const records = await this.dependencies.events.listAttempt(run.id, 1);
+			const records = await this.dependencies.records.listAttempt(run.id, 1);
 			const segments = this.dependencies.streamPresentation.segments(records);
 			for (const segment of segments) {
 				const provenance = { runId: run.id, eventCursor: segment.cursor };
@@ -1562,7 +1549,7 @@ export class AgentSdkHarness implements AgentHarness {
 	}
 
 	async recoverInterrupted(runId: AgentRunId): Promise<void> {
-		const run = await this.dependencies.runs.findById(runId);
+		const run = await this.dependencies.records.findById(runId);
 		if (!run || (run.status !== 'running' && run.status !== 'cancelling')) return;
 		if (run.kind === 'agent') {
 			if (run.status === 'cancelling') await this.finishCancellation(run.id);

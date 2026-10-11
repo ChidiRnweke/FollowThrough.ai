@@ -1,13 +1,7 @@
 import type { ActorContext } from '$lib/models/identity';
 import {
-	AgentRunDecisionService,
-	AgentRunEventService,
-	AgentRunService,
-	AgentSessionService,
-	type AgentRunDecisions,
-	type AgentRunEvents,
-	type AgentRuns,
-	type AgentSessions
+	AgentRunHarnessRecords,
+	type AgentHarnessRecords
 } from '$lib/server/services/agent/runs/records';
 
 import type { WebResearchOptions } from '$lib/models/agent';
@@ -59,15 +53,6 @@ import {
 	ConversationHistoryService,
 	type ConversationHistory
 } from '$lib/server/services/agent/conversations/history';
-import { RunApprovals, type RunApprovalDecisions } from '$lib/server/services/agent/runs/approvals';
-import {
-	RunCancellation,
-	type RunCancellationDecisions
-} from '$lib/server/services/agent/runs/cancellation';
-import {
-	RunCheckpoints,
-	type RunCheckpointWriter
-} from '$lib/server/services/agent/runs/checkpoints';
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
 import {
 	AgentImagePreparationService,
@@ -86,9 +71,9 @@ import {
 	type AgentPreferenceEditor
 } from '$lib/server/services/agent/runs/preferences';
 import {
-	RunPreparation,
-	type ChatRunPreparation
-} from '$lib/server/services/agent/runs/preparation';
+	RunTransitions,
+	type RunTransitionStore
+} from '$lib/server/services/agent/runs/transitions';
 import { RunSettlements, type RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import {
 	AgentStreamPresentationService,
@@ -166,19 +151,11 @@ export interface AgentCapability {
 	readonly toolPreferences: ToolPreferenceCapability;
 	readonly toolCatalog: AgentToolCatalog;
 	readonly trust: TrustPolicyStore & TrustPolicyEvaluator;
-	readonly cancellations: RunCancellationDecisions;
-	readonly approvals: RunApprovalDecisions;
-	readonly preparation: ChatRunPreparation;
-	readonly checkpoints: RunCheckpointWriter;
+	readonly transitions: RunTransitionStore;
 	readonly runLedger: WorkflowRunLedger;
 	readonly sessions: AgentSessionRepository;
 	/** The run records the agent harness reads and writes, through their services. */
-	readonly harnessRecords: {
-		readonly runs: AgentRuns;
-		readonly events: AgentRunEvents;
-		readonly decisions: AgentRunDecisions;
-		readonly sessions: AgentSessions;
-	};
+	readonly harnessRecords: AgentHarnessRecords;
 	readonly context: IAgentContext;
 	readonly turns: AgentTurns;
 	readonly prompts: AgentPromptPreparation;
@@ -246,18 +223,10 @@ export const createAgentCapability = (
 		toolPreferences,
 		toolCatalog: new AgentToolCatalogService(),
 		trust: new ToolTrust(actor, new TrustPolicyRecords(actor, input.db)),
-		cancellations: new RunCancellation(runs),
-		approvals: new RunApprovals(runs),
-		preparation: new RunPreparation(runs),
-		checkpoints: new RunCheckpoints(runs),
+		transitions: new RunTransitions(runs),
 		runLedger,
 		sessions,
-		harnessRecords: {
-			runs: new AgentRunService(runs),
-			events: new AgentRunEventService(runEvents),
-			decisions: new AgentRunDecisionService(runDecisions),
-			sessions: new AgentSessionService(sessions)
-		},
+		harnessRecords: new AgentRunHarnessRecords(runs, runEvents, runDecisions, sessions),
 		context,
 		turns: new AgentTurnService(
 			createAgentProviders({

@@ -1,3 +1,6 @@
+import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import {
@@ -5,7 +8,6 @@ import {
 	type AgentHarnessDependencies
 } from '$lib/server/controllers/agent/controller';
 import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
@@ -63,10 +65,13 @@ export const durableDiagramFixture = () => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
-			runs: state.persistence,
-			cancellations: new RunCancellation(state.persistence),
-			events: state.persistence,
-			decisions: state.persistence,
+			records: new AgentRunHarnessRecords(
+				state.persistence,
+				state.persistence,
+				state.persistence,
+				new InMemoryAgentSessionRepository()
+			),
+			transitions: new RunTransitions(state.persistence),
 			settlements,
 			transactionRunner: transactions,
 			runSignals: new RunSignalService(state.persistence, state.persistence)

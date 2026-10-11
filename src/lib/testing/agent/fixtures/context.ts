@@ -1,3 +1,5 @@
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { AgentFileReferenceService } from '$lib/server/services/agent-files/virtual-files';
@@ -7,10 +9,6 @@ import { ConversationHistoryService } from '$lib/server/services/agent/conversat
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
-import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
-import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import type { ActorContext } from '$lib/models/identity';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import type { AgentRun, AgentRunId, RunAgentInput } from '$lib/models/agent';
@@ -53,15 +51,9 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 	const sessions = new InMemoryAgentSessionRepository();
 	const transactions = new InMemoryTransactionRunner([runs, sessions, conversations]);
 	const dependencies = {
-		runs,
-		cancellations: new RunCancellation(runs),
-		preparation: new RunPreparation(runs),
-		checkpoints: new RunCheckpoints(runs),
+		records: new AgentRunHarnessRecords(runs, runs, runs, sessions),
+		transitions: new RunTransitions(runs),
 		webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
-		approvals: new RunApprovals(runs),
-		events: runs,
-		decisions: runs,
-		sessions,
 		transactionRunner: transactions,
 		settlements: new RunSettlements(runs, runs),
 		contextFormatter: createAgentContext(),
@@ -145,6 +137,7 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 		dependencies,
 		turns,
 		runs,
+		sessions,
 		notes,
 		skills,
 		resources,

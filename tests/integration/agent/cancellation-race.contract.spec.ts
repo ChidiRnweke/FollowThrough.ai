@@ -1,3 +1,4 @@
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
@@ -5,7 +6,6 @@ import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-s
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { actor, context, now } from '../database-harness';
 
 it('preserves cancellation committed while prepared context waits for the run row', async () => {
@@ -20,7 +20,7 @@ it('preserves cancellation committed while prepared context waits for the run ro
 	});
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const runs = new AgentRunRecords(owner, database);
-	const preparation = new RunPreparation(runs);
+	const preparation = new RunTransitions(runs);
 	const run = await runs.insert({
 		kind: 'agent',
 		id: crypto.randomUUID() as AgentRunId,
@@ -51,7 +51,7 @@ it('preserves cancellation committed while prepared context waits for the run ro
 		await locked.promise;
 		const saved = transactionRunner
 			.run(async () => {
-				const current = await preparation.getForWrite(run.id);
+				const current = await preparation.getForPreparation(run.id);
 				const change = preparation.context(
 					current,
 					{ contextNotes: [], contextResources: [], skills: { items: [] } },

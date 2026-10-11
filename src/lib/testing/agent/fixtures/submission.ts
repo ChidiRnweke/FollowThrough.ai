@@ -24,8 +24,7 @@ export const agentSubmissionFixture = (
 		readonly webSearchOverrides?: WebResearchSettings;
 	} = {}
 ) => {
-	const { dependencies, runs, turns } = agentContextFixture();
-	const { sessions } = dependencies;
+	const { dependencies, runs, sessions, turns } = agentContextFixture();
 	let claim = Promise.withResolvers<void>();
 	const completion = Promise.withResolvers<void>();
 	runs.executionClaim = claim.promise;

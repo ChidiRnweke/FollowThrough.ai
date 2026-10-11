@@ -1,3 +1,6 @@
+import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import {
@@ -8,7 +11,6 @@ import {
 	Relationships,
 	type RelationshipsDependencies
 } from '$lib/server/controllers/relationships/controller';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
@@ -82,10 +84,8 @@ export const relatedNoteFixture = () => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
-			runs,
-			cancellations: new RunCancellation(runs),
-			events: runs,
-			decisions: runs,
+			records: new AgentRunHarnessRecords(runs, runs, runs, new InMemoryAgentSessionRepository()),
+			transitions: new RunTransitions(runs),
 			settlements,
 			transactionRunner: transactions,
 			runSignals: new RunSignalService(runs, runs)

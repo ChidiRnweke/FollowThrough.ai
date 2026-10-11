@@ -1,11 +1,11 @@
+import { AgentSessionRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import type { ActorContext } from '$lib/models/identity';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
-import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
-import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
@@ -18,7 +18,6 @@ import {
 } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import {
@@ -67,7 +66,13 @@ const cancellationController = (actor: ActorContext, db: typeof context.db) => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
-			runs,
+			records: new AgentRunHarnessRecords(
+				runs,
+				events,
+				new AgentRunDecisionRecords(actor, database),
+				new AgentSessionRecords(actor, database)
+			),
+			transitions: new RunTransitions(runs),
 			conversationMessages: new ConversationArchive(
 				actor,
 				new ConversationRecords(actor, database)
@@ -76,11 +81,8 @@ const cancellationController = (actor: ActorContext, db: typeof context.db) => {
 				actor,
 				new ConversationRecords(actor, database)
 			),
-			events,
 			transactionRunner,
-			cancellations: new RunCancellation(runs),
 			settlements: new RunSettlements(runs, events),
-			decisions: new AgentRunDecisionRecords(actor, database),
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)
 		})
 	);
@@ -155,11 +157,11 @@ it.each(['awaiting_approval', 'queued'] as const)(
 	async (status) => {
 		const { owner, run } = await seed(status === 'queued' ? '17602' : '17601');
 		const records = new AgentRunRecords(owner, context.db);
-		await new RunPreparation(records).claim(run.id, now);
-		const checkpoints = new RunCheckpoints(records);
-		await checkpoints.persist(
+		await new RunTransitions(records).claim(run.id, now);
+		const checkpoints = new RunTransitions(records);
+		await checkpoints.persistCheckpoint(
 			run.id,
-			checkpoints.prepare(
+			checkpoints.prepareCheckpoint(
 				run,
 				{
 					serializedState: 'provider-checkpoint',
@@ -180,11 +182,11 @@ it.each(['awaiting_approval', 'queued'] as const)(
 				callId: 'call-cleared',
 				decision: 'approve'
 			});
-			const approvals = new RunApprovals(records);
+			const approvals = new RunTransitions(records);
 			const current = await approvals.getForWrite(run.id);
-			const change = approvals.plan(current, ['call-cleared'], now);
+			const change = approvals.planApproval(current, ['call-cleared'], now);
 			if (!change) throw new Error('Expected approval to queue the checkpoint');
-			await approvals.persist(run.id, change);
+			await approvals.persistApproval(run.id, change);
 		}
 		const snapshot = await cancellationController(owner, context.db).cancel(run.id);
 		const stored = await records.findById(run.id);

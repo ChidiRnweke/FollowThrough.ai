@@ -1,3 +1,6 @@
+import { AgentSessionRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
@@ -22,7 +25,6 @@ import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-s
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
@@ -142,10 +144,13 @@ const setup = async (suffix: string) => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
-			runs,
-			cancellations: new RunCancellation(runs),
-			events,
-			decisions: new AgentRunDecisionRecords(seeded.owner, database),
+			records: new AgentRunHarnessRecords(
+				runs,
+				events,
+				new AgentRunDecisionRecords(seeded.owner, database),
+				new AgentSessionRecords(seeded.owner, database)
+			),
+			transitions: new RunTransitions(runs),
 			settlements,
 			transactionRunner,
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)

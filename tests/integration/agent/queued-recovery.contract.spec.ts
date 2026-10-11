@@ -1,4 +1,4 @@
-import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
+import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { expect, it } from 'vitest';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
 import {
@@ -54,7 +54,7 @@ it('selects queued chat runs without selecting running chats or queued note acti
 	try {
 		const queued = await queuedChat();
 		const running = await queuedChat();
-		await new RunPreparation(runs).claim(running.id, now);
+		await new RunTransitions(runs).claim(running.id, now);
 		await transactionRunner.run(() =>
 			new NoteActionRequests(owner, runs, events, conversations).prepare({
 				requestId: crypto.randomUUID(),
