@@ -282,6 +282,14 @@
 				state={attachmentState}
 				tip={attachmentState ? undefined : pickTip('attachments', tipSeed)}
 			/>
+			<!-- Always a tip: what the agent drew on is a server-side read, and a count
+			     here would cost a query on every overview just to restate the page. -->
+			<ResourceRow
+				href="/projects/{project.id}/agent-context"
+				label="Agent context"
+				icon={Icon.Reading}
+				tip="What the agent read here, and what it never has"
+			/>
 		</ul>
 	</section>
 </div>

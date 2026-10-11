@@ -245,6 +245,9 @@ export const controllerSurfaces = {
 	feedback: {
 		submit: true
 	},
+	contextUsage: {
+		forProject: true
+	},
 	attachmentProcessing: {
 		process: true
 	},
