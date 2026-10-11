@@ -1764,17 +1764,21 @@
 	#dnd-action-dragged-el {
 		outline: none;
 	}
-	/* Row controls are quiet at rest on pointer layouts and reveal on hover, focus,
-	   or while their menu is open. Touch layouts keep them visible: there is no
-	   hover to reveal them. Opacity, not display, so the row never reflows. */
+	/* Row controls (drag handle, move menu) are quiet at rest on pointer layouts:
+	   they overlay the row's top-right corner on hover, focus, or while the menu is
+	   open, so a resting row gives its whole width to the title — reserved but
+	   invisible controls cost a narrow column a line of wrapping per todo. The
+	   cluster takes the row's own background so it sits cleanly over the text it
+	   covers. Touch layouts keep the cluster in flow and visible: there is no hover. */
 	@media (hover: hover) and (min-width: 48rem) {
-		[data-slot='todo-row'] [data-row-reveal] {
-			@apply opacity-0 transition-opacity;
+		[data-slot='todo-row'] [data-row-controls] {
+			@apply absolute top-3 right-2 rounded-md pl-1 opacity-0 transition-opacity;
+			background: inherit;
 		}
-		[data-slot='todo-row']:hover [data-row-reveal],
-		[data-slot='todo-row']:focus-within [data-row-reveal],
-		[data-slot='todo-row'][data-lifted] [data-row-reveal],
-		[data-slot='todo-row'] [data-row-reveal][data-state='open'] {
+		[data-slot='todo-row']:hover [data-row-controls],
+		[data-slot='todo-row']:focus-within [data-row-controls],
+		[data-slot='todo-row'][data-lifted] [data-row-controls],
+		[data-slot='todo-row'] [data-row-controls]:has([data-state='open']) {
 			@apply opacity-100;
 		}
 	}

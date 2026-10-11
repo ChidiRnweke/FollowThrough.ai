@@ -168,35 +168,38 @@
 </script>
 
 <!-- Columns are zones separated by hairlines, not filled trays: structure appears
-     during a drag (the lifted row, the drop line, the zone outline), not at rest. -->
-<div
-	class="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto pb-3 2xl:grid 2xl:grid-cols-4 2xl:grid-rows-1 2xl:overflow-visible 2xl:pb-0"
->
+     during a drag (the lifted row, the drop line, the zone outline), not at rest.
+     Columns share the width equally and scroll sideways only once they would drop
+     below 16rem, so a laptop-width board shows all four instead of clipping Done. -->
+<div class="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto pb-3">
 	{#each columns as status (status)}
 		{@const items = board[status]}
 		{@const isExpanded = expanded.has(status)}
 		{@const visible = visibleItems(items, isExpanded)}
 		<section
-			class="group/col flex min-h-40 w-80 shrink-0 snap-start flex-col gap-item overflow-hidden 2xl:w-auto 2xl:min-w-0"
+			class="group/col flex min-h-40 min-w-64 flex-1 basis-0 snap-start flex-col gap-item overflow-hidden"
 		>
 			<!-- The title sits above its column's rule: the rule separates content,
 			     not labels, so the titles read as one row heading every column. -->
-			<h3
-				class="eyebrow flex items-center gap-1.5 px-row pt-1 group-first/col:pl-0 group-last/col:pr-0"
-			>
-				{#if status === 'done'}
-					<Icon.Check class="size-3 text-success" />
-				{:else}
-					<span class={['size-1.5 shrink-0 rounded-full', todoStatusStyle[status].dotClass]}></span>
-				{/if}
-				{todoStatusLabels[status]}
-				<span
-					class={[
-						'font-semibold tabular-nums',
-						status === 'done' ? 'text-success' : 'text-foreground'
-					]}>{items.length}</span
-				>
-			</h3>
+			<!-- The heading mirrors the body's structure — the column inset outside, the
+			     row's own px-2 inside — so the status dot lines up over the checkboxes. -->
+			<div class="px-row group-first/col:pl-0 group-last/col:pr-0">
+				<h3 class="eyebrow flex items-center gap-1.5 px-2 pt-1">
+					{#if status === 'done'}
+						<Icon.Check class="size-3 text-success" />
+					{:else}
+						<span class={['size-1.5 shrink-0 rounded-full', todoStatusStyle[status].dotClass]}
+						></span>
+					{/if}
+					{todoStatusLabels[status]}
+					<span
+						class={[
+							'font-semibold tabular-nums',
+							status === 'done' ? 'text-success' : 'text-foreground'
+						]}>{items.length}</span
+					>
+				</h3>
+			</div>
 			<div
 				class="flex min-h-0 flex-1 flex-col border-l border-border px-row group-first/col:border-l-0 group-first/col:pl-0 group-last/col:pr-0"
 			>
@@ -235,6 +238,11 @@
 							/* The placeholder is a 2px drop line, so morphing the clone to its
 						   size would crush the held row. The clone keeps the row's size. */
 							morphDisabled: true,
+							/* The handle trails the row, so the clone would otherwise hang a
+						   row's width left of the pointer and the library — which targets
+						   by the clone's centre — would drop into the column the pointer
+						   just left. Centred, the target is the column under the pointer. */
+							centreDraggedOnCursor: true,
 							type: 'todo',
 							/* The default drop-target outline is library yellow. */
 							dropTargetStyle: { outline: '2px solid var(--color-brand)' },

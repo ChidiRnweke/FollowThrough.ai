@@ -82,30 +82,11 @@
 	data-slot="todo-row"
 	data-lifted={lifted || undefined}
 	class={[
-		'flex items-start gap-item px-2 py-4 transition-[background-color,opacity,scale] duration-200',
+		'relative flex items-start gap-item px-2 py-4 transition-[background-color,opacity,scale] duration-200',
 		completing && 'scale-95 opacity-50'
 	]}
 	onclick={openBody}
 >
-	{#if draggable}
-		<!-- svelte-dnd-action intentionally uses a non-passive listener here: touch dragging
-		     calls preventDefault(), so making it passive would break the drag handle. -->
-		<Tip text="Drag todo">
-			{#snippet children({ props })}
-				<!-- Reveals on hover/focus. Opacity rather than display so the row
-				     never reflows and the handle stays keyboard-reachable. -->
-				<span
-					{...props}
-					use:dragHandle
-					data-row-reveal
-					class="-ml-2 inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					aria-label="Drag {view.todo.title}"
-				>
-					<Icon.Grip />
-				</span>
-			{/snippet}
-		</Tip>
-	{/if}
 	<Checkbox
 		class="mt-0.5"
 		checked={done}
@@ -179,35 +160,59 @@
 			</p>
 		{/if}
 	</div>
-	{#if onstatus}
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger>
-				{#snippet child({ props })}
-					<Button
-						{...props}
-						data-row-reveal
-						variant="ghost"
-						size="icon"
-						class="-my-1 size-11 shrink-0 text-muted-foreground sm:size-8"
-						aria-label="Move todo"
-					>
-						<Icon.Ellipsis />
-					</Button>
-				{/snippet}
-			</DropdownMenu.Trigger>
-			<DropdownMenu.Content align="end">
-				<DropdownMenu.Group>
-					<DropdownMenu.Label>Move to…</DropdownMenu.Label>
-					{#each statuses as status (status)}
-						<DropdownMenu.Item
-							disabled={status === view.todo.status}
-							onSelect={() => onstatus?.(view.todo.id, status)}
+	{#if draggable || onstatus}
+		<!-- One trailing cluster. On pointer layouts it overlays the row's top-right
+		     corner on hover instead of reserving width at rest (layout.css,
+		     [data-row-controls]); on touch it stays in flow and visible. -->
+		<div data-row-controls class="-my-1 flex shrink-0 items-center">
+			{#if draggable}
+				<!-- Trailing, beside the move menu: a leading handle pushed the checkbox a
+				     handle's width in from the column title it should line up under.
+				     svelte-dnd-action uses a non-passive listener here on purpose: touch
+				     dragging calls preventDefault(), so a passive one breaks the handle. -->
+				<Tip text="Drag todo">
+					{#snippet children({ props })}
+						<span
+							{...props}
+							use:dragHandle
+							class="inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							aria-label="Drag {view.todo.title}"
 						>
-							{todoStatusLabels[status]}
-						</DropdownMenu.Item>
-					{/each}
-				</DropdownMenu.Group>
-			</DropdownMenu.Content>
-		</DropdownMenu.Root>
+							<Icon.Grip />
+						</span>
+					{/snippet}
+				</Tip>
+			{/if}
+			{#if onstatus}
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="icon"
+								class="size-11 shrink-0 text-muted-foreground sm:size-8"
+								aria-label="Move todo"
+							>
+								<Icon.Ellipsis />
+							</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end">
+						<DropdownMenu.Group>
+							<DropdownMenu.Label>Move to…</DropdownMenu.Label>
+							{#each statuses as status (status)}
+								<DropdownMenu.Item
+									disabled={status === view.todo.status}
+									onSelect={() => onstatus?.(view.todo.id, status)}
+								>
+									{todoStatusLabels[status]}
+								</DropdownMenu.Item>
+							{/each}
+						</DropdownMenu.Group>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			{/if}
+		</div>
 	{/if}
 </div>

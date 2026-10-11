@@ -349,8 +349,12 @@ while the region is empty; the empty state and its one action are the whole surf
   provenance), 8px under the title, with 16px of padding to each hairline. A row is a square band
   between hairlines: rounding a divided row bends its dividers into card edges, so only the
   lifted row rounds. Board columns are zones separated by hairlines, not filled trays, and each
-  column's title sits above its rule — the rule separates content, not labels. Row controls
-  (drag handle, move menu) reveal on hover or focus on pointer layouts and stay visible on touch.
+  column's title sits above its rule — the rule separates content, not labels — and shares the
+  row's inset, so the status dot stands over the checkboxes. Columns share the width equally down
+  to `min-w-64`, then scroll sideways. Row controls (drag handle, move menu) form one trailing
+  cluster: on pointer layouts it reserves no width at rest and overlays the row's top-right corner
+  on hover, focus, or while its menu is open; on touch it stays in flow and visible. A leading
+  handle is not used — it pushed the checkbox a handle's width in from the title above it.
   No second board-density toggle. Editable popovers never resize rows;
   provenance stays separate from the user-selected source. Controls use the flat shadcn Select,
   Popover, Calendar, Command, Input, and Textarea; selection commits immediately, text on
