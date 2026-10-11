@@ -1,5 +1,24 @@
 # Changelog
 
+## [4.0.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v4.0.0...v4.0.1) (2026-10-11)
+
+
+### Code Refactoring
+
+* **agent:** group run records and run transitions into two services ([#416](https://github.com/ChidiRnweke/FollowThrough.ai/issues/416)) ([118a9f8](https://github.com/ChidiRnweke/FollowThrough.ai/commit/118a9f855734fe5bdbba9b0a44a6c23f77d729a7))
+* **deliverables:** group artifact and template storage services ([#412](https://github.com/ChidiRnweke/FollowThrough.ai/issues/412)) ([d467b1c](https://github.com/ChidiRnweke/FollowThrough.ai/commit/d467b1cefdf21de85c8a3d7f5cf795ae406624f9))
+* **diagrams:** group diagram services by the data they own ([#409](https://github.com/ChidiRnweke/FollowThrough.ai/issues/409)) ([a8a3591](https://github.com/ChidiRnweke/FollowThrough.ai/commit/a8a359179dc5bc8166b6b45754e75fbae6cc7b46))
+* **memory:** merge entry read, write and delete services into one library ([#411](https://github.com/ChidiRnweke/FollowThrough.ai/issues/411)) ([8c7bd54](https://github.com/ChidiRnweke/FollowThrough.ai/commit/8c7bd54cd5a6a3e0a216c9a9f4a56a9bc10fe237))
+* **notes:** group the server note services by capability ([#415](https://github.com/ChidiRnweke/FollowThrough.ai/issues/415)) ([21441d7](https://github.com/ChidiRnweke/FollowThrough.ai/commit/21441d7a1d103d4d520f368113f285663a75b6be))
+* **projects:** group project services into catalog and rules ([#410](https://github.com/ChidiRnweke/FollowThrough.ai/issues/410)) ([ca38572](https://github.com/ChidiRnweke/FollowThrough.ai/commit/ca38572bd81b0ccbe739356fb97ef17064fb4460))
+* **services:** group reference, relationship, sync and suggestion readers ([#413](https://github.com/ChidiRnweke/FollowThrough.ai/issues/413)) ([12e6d8c](https://github.com/ChidiRnweke/FollowThrough.ai/commit/12e6d8caf7f294e8ababb00da4fb242185a7c1c8))
+* **todos:** group the server todo services into one catalog ([#417](https://github.com/ChidiRnweke/FollowThrough.ai/issues/417)) ([776ea52](https://github.com/ChidiRnweke/FollowThrough.ai/commit/776ea5214b23038d633bfd31f9f654a0af0d999d))
+
+
+### Miscellaneous
+
+* **test:** add a local coverage report for the application layers ([#407](https://github.com/ChidiRnweke/FollowThrough.ai/issues/407)) ([491583f](https://github.com/ChidiRnweke/FollowThrough.ai/commit/491583f5014f67d37eaf5a783c53619b7dee314d))
+
 ## [4.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.2.1...v4.0.0) (2026-10-11)
 
 
