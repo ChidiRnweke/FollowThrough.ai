@@ -1,7 +1,3 @@
-import { ExternalServiceError } from '$lib/errors';
-import type { SearchQueryCache } from '$lib/models/knowledge-search/query-generation';
-import type { OperationObserver } from '$lib/models/telemetry';
-import type { ISearchQueryRules } from '$lib/server/services/knowledge-search/query-rules';
 import type { ConversationId } from '$lib/models/agent';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
@@ -13,11 +9,8 @@ import type { ProjectId } from '$lib/models/projects';
 import type { DateTime } from '$lib/models/workspace';
 import type { ConversationMessages } from '$lib/server/services/agent/conversations/archive';
 import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
-import type { Reranker } from '$lib/models/knowledge-search';
-import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
-import type { SearchQueryGenerator } from '$lib/models/knowledge-search/query-generation';
-import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
+import type { KnowledgeSearch } from '$lib/server/services/knowledge-search/retrieval';
 
 export interface SearchKnowledgeInput {
 	readonly query: string;
@@ -58,13 +51,7 @@ export interface RetrievalDependencies {
 	readonly toolPayloads: AgentPayloadInspection;
 	readonly toolResults: ToolResultReader;
 
-	knowledgeLookup: IKnowledgeLookup;
-	embeddings: EmbeddingClient;
-	reranker: Reranker;
-	queryGenerator: SearchQueryGenerator;
-	queryRules: ISearchQueryRules;
-	queryCache?: SearchQueryCache;
-	observer: OperationObserver;
+	knowledge: KnowledgeSearch;
 	conversations: Pick<ConversationMessages, 'listMessages'>;
 }
 
@@ -77,74 +64,29 @@ export class Retrieval implements RetrievalController {
 		actor: ActorContext,
 		input: SearchKnowledgeInput
 	): Promise<readonly KnowledgeSearchResult[]> {
-		const limit = input.limit ?? DEFAULT_SEARCH_LIMIT;
-		const query = await this.resolveQuery(actor, input);
+		const query = input.conversationId
+			? await this.dependencies.knowledge.searchQuery(
+					input.query,
+					await this.dependencies.conversations.listMessages(actor, input.conversationId)
+				)
+			: input.query;
 		if (!query.trim()) return [];
-		const batch = await this.dependencies.embeddings.embed([query]);
-		const candidates = await this.dependencies.knowledgeLookup.search(
-			actor,
-			batch,
-			this.dependencies.knowledgeLookup.candidateLimit(limit),
-			input.projectId,
-			{
+		const matches = await this.dependencies.knowledge.retrieve(actor, query, {
+			limit: input.limit ?? DEFAULT_SEARCH_LIMIT,
+			projectId: input.projectId,
+			filter: {
 				createdAfter: input.createdAfter,
 				createdBefore: input.createdBefore,
 				noteId: input.noteId
 			}
-		);
-		// ADR 0036 retains retrieved knowledge when only reranking is unavailable.
-		let matches = candidates;
-		if (candidates.length > 1) {
-			const ranking = await this.dependencies.reranker
-				.rerank(query, candidates, limit)
-				.then((matches) => ({ kind: 'ranked' as const, matches }))
-				.catch((error): { kind: 'failure'; error: Error } => {
-					return {
-						kind: 'failure',
-						error: error instanceof Error ? error : new Error(String(error))
-					};
-				});
-			matches = ranking.kind === 'ranked' ? ranking.matches : candidates.slice(0, limit);
-		}
+		});
 		return matches.map((match) => ({
-			source: this.dependencies.knowledgeLookup.source(match.document),
+			source: this.dependencies.knowledge.source(match.document),
 			noteId: match.document.noteId,
 			content: match.document.content,
 			score: match.score,
 			sourceCreatedAt: match.document.sourceCreatedAt
 		}));
-	}
-
-	/**
-	 * Multi-turn: generate the whole conversation (+ the model's query) into one
-	 * statement to embed. Single-turn / no history: use the query directly.
-	 */
-	private async resolveQuery(actor: ActorContext, input: SearchKnowledgeInput): Promise<string> {
-		if (!input.conversationId) return input.query;
-		const history = await this.dependencies.conversations.listMessages(actor, input.conversationId);
-		const query = this.dependencies.knowledgeLookup.queryInput(input.query, history);
-		if (query.kind === 'direct') return query.query;
-		const cached = await this.dependencies.queryCache?.read(query.transcript);
-		if (cached?.kind === 'hit') return cached.query;
-		const generated = await this.generateQuery(query.transcript);
-		await this.dependencies.queryCache?.write(query.transcript, generated);
-		return generated;
-	}
-
-	private async generateQuery(text: string): Promise<string> {
-		const { queryGenerator, queryRules, observer } = this.dependencies;
-		try {
-			return await observer.run(
-				'knowledge_search.generate_query',
-				{ input: text, metadata: { model: queryGenerator.model } },
-				async () => queryRules.complete(await queryGenerator.generate(queryRules.prepare(text))),
-				(result) => result
-			);
-		} catch (error) {
-			throw new ExternalServiceError('Search query generation failed', {
-				cause: error instanceof Error ? error.message : String(error)
-			});
-		}
 	}
 
 	async agentSearch(actor: ActorContext, input: AgentToolInput<'search'>): Promise<AgentPayload> {

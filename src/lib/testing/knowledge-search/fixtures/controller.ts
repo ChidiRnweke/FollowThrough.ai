@@ -1,32 +1,42 @@
-import { SearchQueryRules } from '$lib/server/services/knowledge-search/query-rules';
+import type { OperationObserver } from '$lib/models/telemetry';
 import {
 	Retrieval,
 	type RetrievalDependencies
 } from '$lib/server/controllers/knowledge-search/controller';
-import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import {
-	InMemoryEmbeddingClient,
-	InMemoryReranker,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+	InMemoryRetrievalProvider,
+	type RetrievalProviderDouble
+} from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
+import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
-export const searchControllerFixture = (overrides: Partial<RetrievalDependencies> = {}) => {
+export const searchControllerFixture = <
+	Provider extends RetrievalProviderDouble = InMemoryRetrievalProvider
+>(
+	overrides: Partial<RetrievalDependencies> = {},
+	options: {
+		readonly provider?: Provider;
+		readonly observer?: OperationObserver;
+	} = {}
+) => {
 	const repository = new InMemorySearchRepository();
-	const embeddings = new InMemoryEmbeddingClient();
-	const reranker = new InMemoryReranker();
+	const provider = options.provider ?? new InMemoryRetrievalProvider();
+	const knowledge = createTestContentIndex(
+		repository,
+		undefined,
+		undefined,
+		false,
+		provider,
+		options.observer
+	);
 	const controller = new Retrieval(
 		capabilityDependencies<RetrievalDependencies>({
 			...agentToolResultsFixture(),
-			queryRules: new SearchQueryRules(),
-			queryCache: undefined,
-			observer: { run: (_name, _context, body) => body() },
-			knowledgeLookup: new KnowledgeLookup(repository),
-			embeddings,
-			reranker,
+			knowledge,
 			...overrides
 		})
 	);
-	return { controller, repository, embeddings, reranker };
+	return { controller, repository, provider, knowledge };
 };

@@ -1,31 +1,15 @@
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 const toolCatalogRules = new AgentToolCatalogService();
-import { Cl100kTokenizer } from '$lib/server/adapters/tokenization/cl100k';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
-import {
-	createEmbeddings,
-	createSearchQueryGeneration
-} from '$lib/server/factories/retrieval-providers';
 import { InMemoryAttachmentClaims } from '$lib/testing/attachments/fakes/claims';
 import { fileURLToPath } from 'node:url';
 import { createApplication, type ProductionApplication } from '$lib/server/application';
-import { DEFAULT_EMBEDDING_MODEL } from '$lib/models/knowledge-search/embeddings';
-import { SearchRanking } from '$lib/server/adapters/knowledge-search/ranking';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
-import {
-	DiskSearchQueryCache,
-	CachedEmbeddingClient,
-	CachedReranker
-} from './cache/cached-clients';
+import { cachedRetrievalFetch } from './cache/cached-clients';
 import type { Database } from '$lib/server/db';
-import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 import { createPGliteDatabase } from './pglite-database';
-import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
-import { ToolDiscovery } from '$lib/server/controllers/tool-discovery/controller';
-import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 
 const CACHE_PATH = fileURLToPath(new URL('../fixtures/auxiliary-cache.json', import.meta.url));
 
@@ -37,7 +21,6 @@ export interface Lab extends ProductionApplication {
 	 * a property of the retriever, and testing it directly covers dozens of tools
 	 * in the time one agent case takes.
 	 */
-	readonly embeddingClient: EmbeddingClient;
 	/**
 	 * Raw database handle, used by seeding helpers for explicit account initialization and to backdate
 	 * `createdAt` on fixtures. Content writes go through the real
@@ -79,19 +62,15 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	const { database, transactionRunner, close: closeDatabase } = await createPGliteDatabase();
 
 	const cache = new DiskCache(CACHE_PATH);
-	const toolIndex = new ToolCatalogIndex(new ToolEmbeddingRecords(database));
-	const toolPlan = await toolIndex.prepare(
-		toolCatalogRules.discoverable(),
-		DEFAULT_EMBEDDING_MODEL
+	// The tool catalog's discovery texts are fixed by the catalog, so their embeddings must
+	// replay; the agent's own search wording varies run to run and may call the provider.
+	const deterministicToolTexts = new Set(
+		toolCatalogRules
+			.discoverable()
+			.map((entry) => `${entry.name}: ${entry.retrievalText ?? entry.description}`)
 	);
-	const deterministicToolTexts = new Set(toolPlan.pending.map((entry) => entry.input));
-	const clientOptions = { baseURL, appURL };
-	const providerConfiguration = { apiKey: openRouterApiKey, ...clientOptions };
-	const embeddingBatching = new EmbeddingBatching(new Cl100kTokenizer());
-	const embeddingClient = new CachedEmbeddingClient(
-		createEmbeddings(providerConfiguration, { run: (_name, _context, body) => body() }),
-		cache,
-		(content) => deterministicToolTexts.has(content)
+	const retrievalFetch = cachedRetrievalFetch(cache, globalThis.fetch, (content) =>
+		deterministicToolTexts.has(content)
 	);
 
 	const application = createApplication({
@@ -105,11 +84,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		appURL,
 		defaultAgentModel: model,
 		overrides: {
-			embeddingClient,
-			reranker: new CachedReranker(new SearchRanking(openRouterApiKey, clientOptions), cache),
-			queryGenerator: createSearchQueryGeneration(providerConfiguration),
-			queryCache: new DiskSearchQueryCache(cache),
-			queryObserver: { run: (_name, _context, body) => body() },
+			retrievalFetch,
 			attachmentStorage: new InMemoryAttachmentStorage(),
 			modelCatalog: new StubModelCatalog()
 		}
@@ -119,18 +94,11 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	// explicitly rather than making every long-tail tool appear unavailable.
 	// Deploys run this seed next to migrations; the lab has to do the same or it
 	// evaluates a configuration that never ships.
-	await new ToolDiscovery(
-		toolIndex,
-		embeddingClient,
-		embeddingBatching,
-		transactionRunner,
-		toolCatalogRules
-	).seed();
+	await application.toolRetriever.seed();
 
 	return {
 		...application,
 		model,
-		embeddingClient,
 		db: database,
 		async close() {
 			const stats = cache.stats();

@@ -1,6 +1,5 @@
 import type { AgentToolApprovalPolicy } from '$lib/services/agent/tool-approval';
 import type { AgentExecutionMode } from '$lib/models/agent';
-import { InvalidGeneratedContentError } from '$lib/errors';
 import type { ToolClassification } from '$lib/models/agent';
 import type { ClassifiedTool, ToolDiscoveryPlan } from '$lib/models/agent-tool-authority';
 import type { ToolAccessPolicy } from '$lib/models/agent-tool-context';
@@ -8,8 +7,7 @@ import { FIRST_CLASS_TOOL_NAMES, type ToolName } from '$lib/models/agent/tool-ca
 import { toolFailure, type ToolFailure } from '$lib/models/agent/tool-failure';
 import type { ToolDescriptor } from '$lib/models/agent/tool-index';
 import type { ApiTokenScope } from '$lib/models/identity';
-import type { IToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
-import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
+import type { ToolRanking } from '$lib/server/services/agent/tools/tool-search';
 import type { AgentToolDiscoveryState } from '$lib/server/stores/agent/tool-discovery';
 import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
 export interface AgentToolAuthority {
@@ -35,8 +33,7 @@ export class AgentToolAuthorities implements AgentToolAuthority {
 	constructor(
 		private readonly rules: AgentToolCatalog,
 		private readonly access: ToolAccessPolicy,
-		private readonly index: Pick<IToolCatalogIndex, 'rank'>,
-		private readonly embeddings: Pick<EmbeddingClient, 'embed'>,
+		private readonly search: ToolRanking,
 		private readonly state: AgentToolDiscoveryState,
 		private readonly approval: AgentToolApprovalPolicy
 	) {}
@@ -122,14 +119,9 @@ export class AgentToolAuthorities implements AgentToolAuthority {
 	): Promise<readonly string[]> {
 		const candidates = plan.catalog.filter((entry) => !this.rules.isFirstClass(entry.name));
 		if (!candidates.length) return [];
-		const batch = await this.embeddings.embed([query]);
-		const vector = batch.vectors[0];
-		if (batch.vectors.length !== 1 || !vector)
-			throw new InvalidGeneratedContentError('Tool search requires one query embedding');
-		const ranked = await this.index.rank(
+		const ranked = await this.search.rank(
 			candidates.map((entry) => entry.name),
-			vector,
-			batch.model,
+			query,
 			limit
 		);
 		const allowed = new Set<string>(plan.permitted);

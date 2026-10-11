@@ -27,6 +27,12 @@ export interface ToolIndexPlan {
 	readonly removed: number;
 }
 
+/** A seed prepared outside a transaction: the catalog drift and the new vectors. */
+export interface ToolSeed {
+	readonly plan: ToolIndexPlan;
+	readonly vectors: readonly (readonly number[])[];
+}
+
 export interface ToolEmbeddingSeedSummary {
 	readonly embedded: number;
 	readonly unchanged: number;

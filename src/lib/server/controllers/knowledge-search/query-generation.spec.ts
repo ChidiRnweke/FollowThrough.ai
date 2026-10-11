@@ -1,7 +1,7 @@
 import type { StoredMessage } from '$lib/models/agent';
 import type { OperationObserver } from '$lib/models/telemetry';
 import { describe, expect, it } from 'vitest';
-import { createSearchQueryGeneration } from '$lib/server/factories/retrieval-providers';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { searchControllerFixture } from '$lib/testing/knowledge-search/fixtures/controller';
 import {
 	testActor,
@@ -25,17 +25,12 @@ const completion = (content: string | null) => ({
 });
 
 const generator = (payload: object, status = 200) => {
-	const transport: typeof globalThis.fetch = async () => Response.json(payload, { status });
-	const provider = createSearchQueryGeneration({
-		apiKey: 'test-key',
-		baseURL: 'https://provider.test/v1',
-		appURL: 'http://localhost:5173',
-		fetch: transport
-	});
+	const provider = new InMemoryRetrievalProvider();
+	provider.completionResponse = { body: payload, status };
 	let output: string | undefined;
-	const run: OperationObserver['run'] = async (_name, _context, body, resultText) => {
+	const run: OperationObserver['run'] = async (name, _context, body, resultText) => {
 		const result = await body();
-		output = resultText?.(result);
+		if (name === 'knowledge_search.generate_query') output = resultText?.(result);
 		return result;
 	};
 	const history: StoredMessage[] = ['first question', 'more context'].map((text) => ({
@@ -46,11 +41,10 @@ const generator = (payload: object, status = 200) => {
 		content: { text },
 		createdAt: testNow
 	}));
-	const fixture = searchControllerFixture({
-		queryGenerator: provider,
-		conversations: { listMessages: async () => history },
-		observer: { run }
-	});
+	const fixture = searchControllerFixture(
+		{ conversations: { listMessages: async () => history } },
+		{ provider, observer: { run } }
+	);
 	return {
 		generate: async (text: string) => {
 			await fixture.controller.search(testActor(), {

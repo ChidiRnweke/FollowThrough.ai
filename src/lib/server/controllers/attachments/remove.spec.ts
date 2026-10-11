@@ -1,7 +1,7 @@
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { view } from '$lib/testing/attachments/fakes/processing';
 import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
-import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
@@ -21,7 +21,7 @@ describe('attachment search removal', () => {
 				reader,
 				downloads,
 				lifecycle,
-				attachmentIndexer: createContentIndex(search, new InMemoryEmbeddingClient().model),
+				attachmentIndexer: createContentIndex(search, new InMemoryRetrievalProvider().model),
 				transactionRunner: new InMemoryTransactionRunner([repository, search])
 			})
 		);
@@ -82,7 +82,7 @@ it('commits physical cleanup intent without deleting bytes inside the transactio
 			reader,
 			downloads,
 			lifecycle,
-			attachmentIndexer: createContentIndex(search, new InMemoryEmbeddingClient().model),
+			attachmentIndexer: createContentIndex(search, new InMemoryRetrievalProvider().model),
 			transactionRunner: new InMemoryTransactionRunner([repository, search])
 		})
 	);

@@ -1,11 +1,8 @@
-import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import type { ActorContext } from '$lib/models/identity';
-import type { EmbeddedChunk, IndexSource, PendingIndexSource } from '$lib/models/knowledge-search';
-import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
-import type { IIndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
-import { InvalidGeneratedContentError } from '$lib/errors';
+import type { IndexSource, PendingIndexSource } from '$lib/models/knowledge-search';
+import type { IndexBackfill } from '$lib/server/services/knowledge-search/retrieval';
 
 interface TransactionRunner {
 	run<T>(work: () => Promise<T>): Promise<T>;
@@ -34,9 +31,7 @@ export class EmbeddingMaintenance implements ScheduledTask {
 	private readonly logger: Pick<Console, 'error' | 'log'>;
 
 	constructor(
-		private readonly backlog: IIndexBacklog,
-		private readonly embeddingClient: EmbeddingClient,
-		private readonly batching: IEmbeddingBatching,
+		private readonly backlog: IndexBackfill,
 		private readonly transactions: TransactionRunner,
 		private readonly progress: EmbeddingProgressStore,
 		options: EmbeddingBackfillOptions = {}
@@ -47,10 +42,10 @@ export class EmbeddingMaintenance implements ScheduledTask {
 	}
 
 	async run(): Promise<void> {
-		let pending = await this.backlog.listSources(this.maxSourcesPerTick, this.progress.read());
+		let pending = await this.backlog.pendingSources(this.maxSourcesPerTick, this.progress.read());
 		if (!pending.length && this.progress.read() !== undefined) {
 			this.progress.update(undefined);
-			pending = await this.backlog.listSources(this.maxSourcesPerTick);
+			pending = await this.backlog.pendingSources(this.maxSourcesPerTick);
 		}
 		if (!pending.length) return;
 
@@ -79,28 +74,13 @@ export class EmbeddingMaintenance implements ScheduledTask {
 
 	private async backfill(entry: PendingIndexSource): Promise<number> {
 		const actor: ActorContext = { userId: entry.userId };
-		const documents = await this.backlog.read(actor, entry.source);
-		if (!documents.length) return 0;
-
 		// Embedding happens outside the transaction: it is a network call to a third
 		// party, and holding row locks across it is the very thing this worker exists
 		// to stop the request path from doing.
-		const batches: EmbeddingBatch[] = [];
-		for (const contents of this.batching.batches(documents.map((document) => document.input))) {
-			batches.push(await this.embeddingClient.embed(contents));
-		}
-		const batch = this.batching.combine(this.embeddingClient.model, batches);
-		if (batch.vectors.length !== documents.length)
-			throw new InvalidGeneratedContentError('Embedding result count did not match chunk count');
-		const embedded: EmbeddedChunk[] = documents.map((document, index) => ({
-			id: document.id,
-			embedding: batch.vectors[index]!
-		}));
-
-		await this.transactions.run(() =>
-			this.backlog.complete(actor, entry.source, embedded, batch.model)
-		);
-		return embedded.length;
+		const embedded = await this.backlog.embedPending(actor, entry.source);
+		if (!embedded.chunks.length) return 0;
+		await this.transactions.run(() => this.backlog.completePending(actor, embedded));
+		return embedded.chunks.length;
 	}
 }
 

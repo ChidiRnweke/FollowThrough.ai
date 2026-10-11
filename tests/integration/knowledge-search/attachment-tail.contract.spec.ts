@@ -1,13 +1,11 @@
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
-import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { Attachment, AttachmentId, AttachmentVersionId } from '$lib/models/attachments';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
-import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
+import { retrievalTransport } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
+import { z } from 'zod';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import * as schema from '$lib/server/db/schema';
@@ -20,13 +18,19 @@ const text =
 	).join('\n\n') + '\n\nThe final approval code is amberfalcon.';
 const vector = (tail: boolean) =>
 	Array.from({ length: 3072 }, (_, index) => (index === (tail ? 0 : 1) ? 1 : 0));
-const client: EmbeddingClient = {
-	model: 'contract-embedding',
-	embed: async (contents) => ({
-		model: 'contract-embedding',
-		vectors: contents.map((content) => vector(content.includes('amberfalcon')))
-	})
-};
+const client = retrievalTransport(async (_url, init) => {
+	const contents = z
+		.object({ input: z.array(z.string()) })
+		.parse(JSON.parse(String(init?.body))).input;
+	return Response.json({
+		data: contents.map((content, index) => ({
+			index,
+			embedding: Buffer.from(
+				new Float32Array(vector(content.includes('amberfalcon'))).buffer
+			).toString('base64')
+		}))
+	});
+}, 'contract-embedding');
 const setup = async (suffix: string) => {
 	const { owner, project } = await seedNote(suffix);
 	const attachment: Attachment = {
@@ -84,9 +88,7 @@ describe('attachment search tail in PostgreSQL', () => {
 	it('returns the tail as the nearest semantic result after backfill', async () => {
 		const { owner, project, attachment, repository, transaction } = await setup('9742');
 		await new EmbeddingMaintenance(
-			new IndexBacklog(repository),
-			client,
-			new EmbeddingBatching(testTokenizer),
+			createContentIndex(repository, client.model, undefined, false, client),
 			transaction.transactionRunner,
 			new EmbeddingProgressStore()
 		).run();

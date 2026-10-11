@@ -1,4 +1,3 @@
-import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { StaleRevisionError, ValidationError } from '$lib/errors';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type {
@@ -10,10 +9,7 @@ import type {
 import type { AgentPayload } from '$lib/models/agent/payload';
 import type { WidgetCatalogReader } from '$lib/models/widgets';
 import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
-import type {
-	IndexCompletion,
-	WidgetIndexing
-} from '$lib/server/services/knowledge-search/indexing';
+import type { WidgetIndexing } from '$lib/server/services/knowledge-search/retrieval';
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { AgentProjectChoiceRules } from '$lib/services/projects/agent-choice';
@@ -35,7 +31,6 @@ import type { IWidgetSearchService } from '$lib/services/widgets/search-text';
 import type { IWidgetLifecycleService } from '$lib/services/widgets/trash';
 
 import type { ActorContext } from '$lib/models/identity';
-import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ProjectId } from '$lib/models/projects';
 import {
 	widgetCatalog,
@@ -50,7 +45,6 @@ import type {
 	WidgetMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type {
 	WidgetLister,
 	WidgetReader,
@@ -125,9 +119,6 @@ export interface WidgetsDependencies {
 	widgetWriter: WidgetWriter;
 	/** Keeps the knowledge index in step with what each widget shows (ADR 0019). */
 	widgetIndexer: WidgetIndexing;
-	indexEmbeddings: EmbeddingClient;
-	embeddingBatching: IEmbeddingBatching;
-	indexWriter: IndexCompletion;
 	transactionRunner: TransactionRunner;
 }
 
@@ -304,25 +295,13 @@ export class Widgets implements WidgetsController {
 		});
 	}
 
-	/** Index what the widget now shows; embed inline unless the index defers to the worker. */
-	private async index(actor: ActorContext, widget: Widget): Promise<void> {
-		const result: IndexingResult = await this.dependencies.widgetIndexer.indexWidget(
+	/** Index what the widget now shows. */
+	private index(actor: ActorContext, widget: Widget): Promise<void> {
+		return this.dependencies.widgetIndexer.indexWidget(
 			actor,
 			widget,
 			this.dependencies.search.text(widget)
 		);
-		if (result.kind === 'stored') return;
-		const batches: EmbeddingBatch[] = [];
-		for (const contents of this.dependencies.embeddingBatching.batches(
-			result.missing.map((chunk) => chunk.input)
-		)) {
-			batches.push(await this.dependencies.indexEmbeddings.embed(contents));
-		}
-		const batch = this.dependencies.embeddingBatching.combine(
-			this.dependencies.indexEmbeddings.model,
-			batches
-		);
-		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
 
 	async agentReadWidgetCatalog(

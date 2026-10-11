@@ -8,16 +8,13 @@ import {
 import { InlineAdmissionRules } from '$lib/server/services/inline-suggestions/inline-admission';
 import { InlineAdmissionStore } from '$lib/server/stores/inline-suggestions/admission';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
-import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import {
 	InMemoryAgentPreferencesRepository,
 	InMemoryInlineCompletion
 } from '$lib/testing/agent/fakes/in-memory-inline-completion';
-import {
-	InMemoryEmbeddingClient,
-	InMemoryReranker,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -26,8 +23,7 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 	const notes = new InMemoryNoteContent();
 	const memory = new InMemoryMemoryEntryRepository();
 	const search = new InMemorySearchRepository();
-	const embeddings = new InMemoryEmbeddingClient();
-	const reranker = new InMemoryReranker();
+	const provider = new InMemoryRetrievalProvider();
 	const generator = new InMemoryInlineCompletion();
 	const preferences = new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository());
 	const admissions = new InlineAdmissionStore();
@@ -36,9 +32,7 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 			context: new InlineContextService(testTokenizer),
 			noteReader: notes,
 			memory,
-			embeddings,
-			reranker,
-			knowledgeLookup: new KnowledgeLookup(search),
+			knowledge: createTestContentIndex(search, undefined, undefined, false, provider),
 			inlineCompletionGenerator: generator,
 			completionRules: new InlineCompletionRules(),
 			defaultCompletionModel: 'default-inline-model',
@@ -56,8 +50,7 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 		notes,
 		memory,
 		search,
-		embeddings,
-		reranker,
+		provider,
 		generator,
 		preferences,
 		admissions

@@ -1,5 +1,5 @@
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
-import { Cl100kTokenizer } from '$lib/server/adapters/tokenization/cl100k';
+import { Cl100kTokenizer } from '$lib/server/infrastructure/tokenization/cl100k';
 /**
  * Deploy-time seeder for the `tool_embeddings` table.
  *
@@ -16,27 +16,27 @@ import {
 import { db } from '$lib/server/db';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import { ToolDiscovery } from '$lib/server/controllers/tool-discovery/controller';
-import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
+import { ToolSearch } from '$lib/server/services/agent/tools/tool-search';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createEmbeddings } from '$lib/server/factories/retrieval-providers';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
+import { createRetrievalProvider } from '$lib/server/factories/retrieval-providers';
+import { DEFAULT_EMBEDDING_MODEL } from '$lib/models/knowledge-search/embeddings';
 
 const main = async (): Promise<void> => {
 	await hydrateEnvironment();
-	const embeddings = createEmbeddings(
-		{
-			apiKey: requiredEnvironmentValue('OPENROUTER_API_KEY'),
-			baseURL: process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL,
-			appURL: process.env.ORIGIN ?? 'http://localhost:5173'
-		},
-		{ run: (_name, _context, body) => body() }
-	);
-	const embeddingBatching = new EmbeddingBatching(new Cl100kTokenizer());
+	const provider = createRetrievalProvider({
+		apiKey: requiredEnvironmentValue('OPENROUTER_API_KEY'),
+		baseURL: process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL,
+		appURL: process.env.ORIGIN ?? 'http://localhost:5173'
+	});
 	const transaction = createTransactionContext(db);
 	const summary = await new ToolDiscovery(
-		new ToolCatalogIndex(new ToolEmbeddingRecords(transaction.database)),
-		embeddings,
-		embeddingBatching,
+		new ToolSearch({
+			repository: new ToolEmbeddingRecords(transaction.database),
+			provider: provider.client,
+			model: DEFAULT_EMBEDDING_MODEL,
+			tokens: new Cl100kTokenizer(),
+			observer: { run: (_name, _context, body) => body() }
+		}),
 		transaction.transactionRunner,
 		new AgentToolCatalogService()
 	).seed();

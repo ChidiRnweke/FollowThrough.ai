@@ -1,5 +1,3 @@
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { widgetTemplates, type WidgetId } from '$lib/models/widgets';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -10,7 +8,6 @@ import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { describe, expect, it } from 'vitest';
@@ -44,9 +41,6 @@ const setup = async (suffix: string) => {
 			catalog: widgets.catalog,
 			search: widgets.search,
 			widgetIndexer: index,
-			indexEmbeddings: new InMemoryEmbeddingClient(),
-			embeddingBatching: new EmbeddingBatching(testTokenizer),
-			indexWriter: index,
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			widgetReader: widgets.reader,

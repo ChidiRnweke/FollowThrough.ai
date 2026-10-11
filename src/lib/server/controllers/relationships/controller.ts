@@ -25,9 +25,7 @@ import type {
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { Reranker } from '$lib/models/knowledge-search';
-import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
-import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import type { KnowledgeSearch } from '$lib/server/services/knowledge-search/retrieval';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { RelationshipClassifier } from '$lib/server/services/relationships/discovery';
 import type { RelationshipRuleClassifier } from '$lib/server/services/relationships/rules';
@@ -71,9 +69,7 @@ export interface RelationshipsDependencies {
 	readonly toolResults: ToolResultReader;
 
 	selectionOrigins: SelectionOriginService;
-	knowledgeLookup: IKnowledgeLookup;
-	embeddings: EmbeddingClient;
-	reranker: Reranker;
+	knowledge: KnowledgeSearch;
 	relationshipClassifier: RelationshipClassifier;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
@@ -258,24 +254,11 @@ export class Relationships implements RelationshipsController {
 	): Promise<readonly LinkCandidate[]> {
 		signal?.throwIfAborted();
 		if (!selection.text.trim()) return [];
-		const batch = await this.dependencies.embeddings.embed([selection.text], signal);
-		signal?.throwIfAborted();
-		const candidates = await this.dependencies.knowledgeLookup.search(
-			actor,
-			batch,
-			this.dependencies.knowledgeLookup.candidateLimit(12),
-			note.projectId
-		);
-		// ADR 0036 permits vector order on provider failure, but never on cancellation.
-		const matches =
-			candidates.length > 1
-				? await this.dependencies.reranker
-						.rerank(selection.text, candidates, 12, signal)
-						.catch((error) => {
-							if (signal?.aborted) throw error;
-							return candidates.slice(0, 12);
-						})
-				: candidates;
+		const matches = await this.dependencies.knowledge.retrieve(actor, selection.text, {
+			limit: 12,
+			projectId: note.projectId,
+			signal
+		});
 		signal?.throwIfAborted();
 		return Promise.all(
 			this.relationshipCandidates.relatedNoteMatches(note.id, matches).map(async (match) => {

@@ -3,8 +3,7 @@ import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { operationObserver } from '$lib/server/infrastructure/telemetry/tracing';
-import { createSearchQueryGeneration } from '$lib/server/factories/retrieval-providers';
-import { inlineCompletionProvider } from '$lib/testing/inline-suggestions/fixtures/provider';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { searchControllerFixture } from '$lib/testing/knowledge-search/fixtures/controller';
 import { searchHistory } from '$lib/testing/knowledge-search/fixtures/query-generation';
 import { testActor, testConversationId } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -25,19 +24,16 @@ afterAll(async () => {
 });
 
 it('keeps one query-generation child span and the validated output under the search workflow', async () => {
-	const provider = await inlineCompletionProvider(
-		JSON.stringify({ choices: [{ message: { content: '  deployment  ' } }] })
-	);
-	try {
-		const fixture = searchControllerFixture({
-			queryGenerator: createSearchQueryGeneration({
-				apiKey: 'local-key',
-				baseURL: provider.baseURL,
-				appURL: 'https://app.example.test'
-			}),
-			observer: operationObserver,
-			conversations: { listMessages: async () => searchHistory }
-		});
+	const provider = new InMemoryRetrievalProvider();
+	provider.completionResponse = {
+		body: { choices: [{ message: { content: '  deployment  ' } }] },
+		status: 200
+	};
+	{
+		const fixture = searchControllerFixture(
+			{ conversations: { listMessages: async () => searchHistory } },
+			{ provider, observer: operationObserver }
+		);
 		await operationObserver.run('search.workflow', {}, () =>
 			fixture.controller.search(testActor(), {
 				query: 'follow up',
@@ -48,7 +44,7 @@ it('keeps one query-generation child span and the validated output under the sea
 		const root = spans.find((span) => span.name === 'search.workflow');
 		if (!root) throw new Error('Missing search workflow span');
 		expect({
-			requests: provider.requests.map((request) => JSON.parse(request.body)),
+			requests: provider.completionRequests,
 			generations: spans
 				.filter((span) => span.name === 'knowledge_search.generate_query')
 				.map((span) => ({
@@ -80,25 +76,20 @@ it('keeps one query-generation child span and the validated output under the sea
 				}
 			]
 		});
-	} finally {
-		await provider.close();
 	}
 });
 
 it('records rejected output on the generation span before the controller wraps the failure', async () => {
-	const provider = await inlineCompletionProvider(
-		JSON.stringify({ choices: [{ message: { content: ' ' } }] })
-	);
-	try {
-		const fixture = searchControllerFixture({
-			queryGenerator: createSearchQueryGeneration({
-				apiKey: 'local-key',
-				baseURL: provider.baseURL,
-				appURL: 'https://app.example.test'
-			}),
-			observer: operationObserver,
-			conversations: { listMessages: async () => searchHistory }
-		});
+	const provider = new InMemoryRetrievalProvider();
+	provider.completionResponse = {
+		body: { choices: [{ message: { content: ' ' } }] },
+		status: 200
+	};
+	{
+		const fixture = searchControllerFixture(
+			{ conversations: { listMessages: async () => searchHistory } },
+			{ provider, observer: operationObserver }
+		);
 		const outcome = await fixture.controller
 			.search(testActor(), { query: 'follow up', conversationId: testConversationId() })
 			.then(
@@ -117,7 +108,5 @@ it('records rejected output on the generation span before the controller wraps t
 				{ code: SpanStatusCode.ERROR, message: 'Search query generation returned no usable text' }
 			]
 		});
-	} finally {
-		await provider.close();
 	}
 });

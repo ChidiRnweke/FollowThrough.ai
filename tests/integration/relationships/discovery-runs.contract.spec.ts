@@ -1,3 +1,4 @@
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { type AgentRunId } from '$lib/models/agent';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import {
@@ -19,7 +20,7 @@ import { ProjectRecords } from '$lib/server/repositories/projects/postgres/proje
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
 import { RelationshipRules } from '$lib/server/services/relationships/rules';
 import { AgentRunStatusService } from '$lib/services/agent/run-status';
@@ -27,10 +28,6 @@ import { RelationshipCandidatesService } from '$lib/services/relationships/candi
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import {
-	InMemoryEmbeddingClient,
-	InMemoryReranker
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
@@ -109,16 +106,14 @@ const setup = async (suffix: string) => {
 			embeddingModel: 'contract-model'
 		})
 	]);
-	const embeddings = new InMemoryEmbeddingClient();
+	const embeddings = new InMemoryRetrievalProvider();
 	embeddings.model = 'contract-model';
 	embeddings.vectorsByContent.set(text, vector);
 	const dependencies: RelationshipsDependencies = {
 		...agentToolResultsFixture(),
 		transactionRunner,
 		noteActionRequests: requests,
-		knowledgeLookup: new KnowledgeLookup(index),
-		embeddings,
-		reranker: new InMemoryReranker(),
+		knowledge: createTestContentIndex(index, 'contract-model', undefined, false, embeddings),
 		relationshipClassifier: new RelationshipDiscovery(classifier),
 		relationshipRules: new RelationshipRules(),
 		relationshipGeneration: { kind: 'model', model: 'test/model' },

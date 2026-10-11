@@ -21,6 +21,43 @@ export interface PendingIndexSource {
 	readonly cursor: string;
 }
 
+/** A created-at window on retrieval. */
+export interface CreatedRange {
+	readonly createdAfter?: string;
+	readonly createdBefore?: string;
+}
+
+/**
+ * Retrieval scoping beyond the project: a created-at window and, for note-scoped search (the
+ * agent's search_note tool), a single note. Diagram chunks carry their note's id, so a note
+ * filter includes them.
+ */
+export interface SearchFilter extends CreatedRange {
+	readonly noteId?: NoteId;
+}
+
+/** Where a knowledge search looks and how many results it returns. */
+export interface RetrievalScope {
+	readonly limit: number;
+	readonly projectId?: ProjectId;
+	readonly filter?: SearchFilter;
+	readonly signal?: AbortSignal;
+}
+
+/** Vectors computed for a source's pending chunks, ready to be stored. */
+export interface EmbeddedSource {
+	readonly source: IndexSource;
+	readonly chunks: readonly EmbeddedChunk[];
+	readonly model: string;
+}
+
+/** The provider's rerank endpoint. */
+export interface RerankEndpoint {
+	readonly url: string;
+	readonly headers: Readonly<Record<string, string>>;
+	readonly fetch: typeof globalThis.fetch;
+}
+
 export interface EmbeddedChunk {
 	readonly id: SearchDocumentId;
 	readonly embedding: readonly number[];
@@ -140,14 +177,15 @@ export type DiagramIndexContext =
 export type DiagramIndexContextRequirement =
 	{ readonly kind: 'source_note'; readonly noteId: NoteId } | { readonly kind: 'standalone' };
 
-export interface Reranker {
-	rerank(
-		query: string,
-		matches: readonly SearchMatch[],
-		topN: number,
-		signal?: AbortSignal
-	): Promise<readonly SearchMatch[]>;
-}
+/** The reranker that orders knowledge search candidates (ADR 0036). */
+export const DEFAULT_RERANK_MODEL = 'cohere/rerank-4-fast';
+/** Candidate presentation: title and section as YAML fields, content as a block. */
+export const RERANKING_STRATEGY = 'structured-yaml-v1';
+
+/** The part of a chat completion a search-query rewrite reads. */
+export const searchQueryCompletionSchema = z.object({
+	choices: z.array(z.object({ message: z.object({ content: z.string().nullable() }) }))
+});
 
 export const rerankResponseSchema = z.object({
 	results: z.array(

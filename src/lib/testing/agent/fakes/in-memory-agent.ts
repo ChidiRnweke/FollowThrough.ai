@@ -44,11 +44,11 @@ export class InMemoryAgentRunner implements AgentRunner {
 }
 
 export class InMemoryToolRetriever implements ToolRetriever, AgentToolDiscoveryServices {
-	readonly index: AgentToolDiscoveryServices['index'] = { rank: async () => this.names };
-	readonly embeddings: AgentToolDiscoveryServices['embeddings'] = {
-		embed: async (texts) => ({ model: 'test-model', vectors: texts.map(() => [1]) })
-	};
 	names: string[] = [];
+
+	async rank(_names: readonly string[], _query: string, _limit: number): Promise<string[]> {
+		return this.names;
+	}
 
 	async retrieve(
 		_catalog: readonly ToolDescriptor[],

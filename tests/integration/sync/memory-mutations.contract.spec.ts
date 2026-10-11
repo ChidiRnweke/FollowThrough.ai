@@ -1,5 +1,4 @@
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { MemoryEntryId } from '$lib/models/memory';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -11,10 +10,7 @@ import { MemoryEditingService } from '$lib/services/memory/edits';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { describe, expect, it } from 'vitest';
@@ -29,7 +25,7 @@ const setup = async (suffix: string) => {
 		projects: new ProjectRecords(database),
 		provenance: new ProvenanceRecords(database)
 	});
-	const indexEmbeddings = new InMemoryEmbeddingClient();
+	const indexEmbeddings = new InMemoryRetrievalProvider();
 	const indexWriter = createContentIndex(new InMemorySearchRepository(), indexEmbeddings.model);
 	const controller = new Memory(
 		new WorkspaceCommandRulesService(),
@@ -43,10 +39,7 @@ const setup = async (suffix: string) => {
 			memoryEditor: memory.editor,
 			memoryDeleter: memory.deleter,
 			transactionRunner,
-			memoryIndexer: indexWriter,
-			indexEmbeddings,
-			embeddingBatching: new EmbeddingBatching(testTokenizer),
-			indexWriter
+			memoryIndexer: indexWriter
 		})
 	);
 	return { ...seeded, controller, sync };

@@ -17,8 +17,6 @@ import type {
 	RetrievalIndexRepository,
 	SearchFilter
 } from '$lib/server/repositories/knowledge-search';
-import type { Reranker } from '$lib/models/knowledge-search';
-import type { EmbeddingBatch, EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 
 interface OwnedSearchDocument {
 	userId: UserId;
@@ -322,50 +320,5 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 		const stillPending = this.documents.some((item) => scoped(item) && !item.document.embedding);
 		if (stillPending) return;
 		this.documents = this.documents.filter((item) => !(scoped(item) && item.document.supersededAt));
-	}
-}
-
-export class InMemoryEmbeddingClient implements EmbeddingClient {
-	failure?: Error;
-	readonly vectorsByContent = new Map<string, readonly number[]>();
-	model = 'fake-embedding-v1';
-	generation = 1;
-	returnWrongCount = false;
-	rejectedContents = new Set<string>();
-
-	async embed(contents: readonly string[]): Promise<EmbeddingBatch> {
-		if (this.failure) throw this.failure;
-		if (contents.some((content) => this.rejectedContents.has(content)))
-			throw new Error('Embedding rejected this content');
-		const vectors = contents.map(
-			(content, index) =>
-				this.vectorsByContent.get(content) ?? [this.generation, index, content.length]
-		);
-		this.generation += 1;
-		return {
-			model: this.model,
-			vectors: this.returnWrongCount ? vectors.slice(1) : vectors
-		};
-	}
-}
-
-export class InMemoryReranker implements Reranker {
-	order: 'input' | 'reverse' | 'relevant-first' = 'input';
-	failure?: Error;
-	async rerank(
-		_query: string,
-		matches: readonly SearchMatch[],
-		topN: number
-	): Promise<readonly SearchMatch[]> {
-		if (this.failure) throw this.failure;
-		const ordered = [...matches];
-		if (this.order === 'reverse') ordered.reverse();
-		if (this.order === 'relevant-first')
-			ordered.sort(
-				(left, right) =>
-					Number(right.document.content.includes('relevant')) -
-					Number(left.document.content.includes('relevant'))
-			);
-		return ordered.slice(0, topN);
 	}
 }

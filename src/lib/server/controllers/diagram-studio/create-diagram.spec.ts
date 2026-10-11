@@ -32,9 +32,7 @@ import { describe, expect, it } from 'vitest';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 
 const setup = (
-	index: DiagramStudioDependencies['diagramIndexer']['indexDiagram'] = async () => ({
-		kind: 'stored'
-	})
+	index: DiagramStudioDependencies['diagramIndexer']['indexDiagram'] = async () => {}
 ) => {
 	const sourceNotes = new InMemoryNoteContent();
 	sourceNotes.notes = [noteBuilder()];

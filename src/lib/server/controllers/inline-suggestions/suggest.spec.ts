@@ -124,22 +124,22 @@ describe('direct inline completion', () => {
 	});
 	it('allows retry after retrieval aborts', async () => {
 		const fixture = setup();
-		fixture.embeddings.failure = new DOMException('stale caret', 'AbortError');
+		fixture.provider.embeddingFailure = new DOMException('stale caret', 'AbortError');
 		try {
 			await fixture.controller.suggest(actor, request(), signal());
 		} catch {
 			/* The next request must be admitted. */
 		}
-		fixture.embeddings.failure = undefined;
+		fixture.provider.embeddingFailure = undefined;
 		expect((await fixture.controller.suggest(actor, request(), signal())).outcome).toBe(
 			'suggested'
 		);
 	});
 	it('reports retrieval failure instead of inventing empty grounding', async () => {
 		const fixture = setup();
-		fixture.embeddings.failure = new Error('embedding unavailable');
+		fixture.provider.embeddingFailure = new Error('embedding unavailable');
 		await expect(fixture.controller.suggest(actor, request(), signal())).rejects.toThrow(
-			'embedding unavailable'
+			'Embedding generation failed'
 		);
 	});
 });

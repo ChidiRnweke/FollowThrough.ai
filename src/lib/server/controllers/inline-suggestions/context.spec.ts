@@ -1,9 +1,8 @@
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { describe, expect, it } from 'vitest';
 import type { InlineSuggestionRequest } from '$lib/models/agent';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { SearchDocumentId, SearchMatch } from '$lib/models/knowledge-search';
-import type { Reranker } from '$lib/models/knowledge-search';
-import { InMemoryReranker } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { inlineSuggestionFixture } from '$lib/testing/inline-suggestions/fixtures/context';
 import {
 	memoryEntryBuilder,
@@ -51,22 +50,20 @@ const match = (content: string, overrides: Partial<SearchMatch['document']> = {}
 	score: 0.9
 });
 
-const relevantReranker = () => {
-	const reranker = new InMemoryReranker();
-	reranker.order = 'relevant-first';
-	return reranker;
+type RerankBehaviour = (provider: InMemoryRetrievalProvider) => void;
+const relevantReranker = (): RerankBehaviour => (provider) => {
+	provider.rerankOrder = 'relevant-first';
 };
-const failingReranker = () => {
-	const reranker = new InMemoryReranker();
-	reranker.failure = new Error('reranker unavailable');
-	return reranker;
+const failingReranker = (): RerankBehaviour => (provider) => {
+	provider.rerankFailure = new Error('reranker unavailable');
 };
 const build = async (
 	projectMatches: readonly SearchMatch[] = [],
 	memories: readonly MemoryEntry[] = [],
-	reranker: Reranker = relevantReranker()
+	reranker: RerankBehaviour = relevantReranker()
 ) => {
-	const fixture = inlineSuggestionFixture({ reranker });
+	const fixture = inlineSuggestionFixture();
+	reranker(fixture.provider);
 	fixture.notes.notes = [note];
 	fixture.memory.entries = [...memories];
 	fixture.search.documents = projectMatches.map((match) => ({

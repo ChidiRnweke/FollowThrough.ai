@@ -1,3 +1,4 @@
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
 import {
 	DrawioLabelReader,
@@ -11,10 +12,7 @@ import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
@@ -99,7 +97,7 @@ describe('Proposal effect coordination', () => {
 		const search = new InMemorySearchRepository();
 		const indexWriter = createContentIndex(
 			search,
-			new InMemoryEmbeddingClient().model,
+			new InMemoryRetrievalProvider().model,
 			undefined,
 			true
 		);

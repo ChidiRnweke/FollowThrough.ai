@@ -77,8 +77,7 @@ export const createAgentToolSurface = (
 			new AgentToolAuthorities(
 				new AgentToolCatalogService(),
 				access,
-				retriever.index,
-				retriever.embeddings,
+				retriever,
 				new AgentToolDiscoveryStore(),
 				new AgentToolApprovalRules()
 			),
@@ -103,8 +102,7 @@ export const createMcpToolDefinitions = (
 			new AgentToolAuthorities(
 				new AgentToolCatalogService(),
 				access,
-				retriever.index,
-				retriever.embeddings,
+				retriever,
 				new AgentToolDiscoveryStore(),
 				new AgentToolApprovalRules()
 			),

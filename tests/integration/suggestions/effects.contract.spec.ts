@@ -1,6 +1,5 @@
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { MemoryEntryId } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';
 import type { RelationshipId } from '$lib/models/relationships';
@@ -26,7 +25,6 @@ import { ProvenancePresentationService } from '$lib/services/provenance/presenta
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { sql } from 'drizzle-orm';
@@ -46,14 +44,14 @@ const application = (
 	const entries = new MemoryRecords(database);
 	const relationships = new RelationshipRecords(database);
 	const search = new KnowledgeIndexRecords(database);
-	const embeddings = new InMemoryEmbeddingClient();
+	const embeddings = new InMemoryRetrievalProvider();
 	for (const content of ['Original', 'Replacement', 'Accepted']) {
 		embeddings.vectorsByContent.set(
 			`Project memory\n${content}`,
 			Array.from({ length: 3072 }, (_, i) => (i === 0 ? 1 : 0))
 		);
 	}
-	const index = createContentIndex(search, embeddings.model);
+	const index = createContentIndex(search, undefined, undefined, false, embeddings);
 	const controller = new Suggestions(
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
@@ -69,9 +67,6 @@ const application = (
 			relationshipCreator: createRelationshipServices(relationships, notes, anchors, provenance)
 				.creator,
 			memoryIndexer: index,
-			indexWriter: index,
-			indexEmbeddings: embeddings,
-			embeddingBatching: new EmbeddingBatching(testTokenizer),
 			transactionRunner,
 			now: () => now
 		})
@@ -299,7 +294,7 @@ describe('Durable proposal application effects', () => {
 	});
 	it('keeps acceptance and replacement intact when restored memory cannot be indexed', async () => {
 		const state = await memoryReplacement('23101');
-		state.embeddings.failure = new Error('Embedding unavailable');
+		state.embeddings.embeddingFailure = new Error('Embedding unavailable');
 		const outcome = await state.controller
 			.revert(state.owner, { suggestionId: state.suggestion.id })
 			.then(
@@ -311,7 +306,7 @@ describe('Durable proposal application effects', () => {
 			active: await activeMemory(state),
 			status: (await state.suggestions.findById(state.owner, state.suggestion.id))?.status
 		}).toEqual({
-			outcome: 'Embedding unavailable',
+			outcome: 'Embedding generation failed',
 			active: [{ id: state.replacement.id, content: 'Replacement' }],
 			status: 'accepted'
 		});

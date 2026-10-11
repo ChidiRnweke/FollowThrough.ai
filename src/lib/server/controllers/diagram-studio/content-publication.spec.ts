@@ -1,5 +1,4 @@
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { diagramEtag, type DiagramWriteOutcome } from '$lib/models/diagrams';
 import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import {
@@ -17,10 +16,7 @@ import {
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { RICH_DRAWIO_LABELS_XML, VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
@@ -54,8 +50,8 @@ const setup = () => {
 		new InMemoryProjectRepository()
 	);
 	const search = new InMemorySearchRepository();
-	const embeddings = new InMemoryEmbeddingClient();
-	const index = createContentIndex(search, embeddings.model);
+	const embeddings = new InMemoryRetrievalProvider();
+	const index = createContentIndex(search, undefined, undefined, false, embeddings);
 	const controller = new DiagramStudio(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
@@ -67,9 +63,6 @@ const setup = () => {
 			diagramTrash: library.lifecycle,
 			diagramDraftWriter: library.draftWriter,
 			diagramIndexer: index,
-			indexEmbeddings: embeddings,
-			embeddingBatching: new EmbeddingBatching(testTokenizer),
-			indexWriter: index,
 			drawioXmlValidator: new DrawioXmlValidator(),
 			drawioSvgSanitizer: new DrawioSvgSanitizer(),
 			diagramLabelPresentation: new DiagramLabelPresentationService(),
@@ -101,9 +94,9 @@ it('rejects publication without a preview', async () => {
 
 it('rolls back the diagram and its history when embedding fails', async () => {
 	const { controller, input, diagrams, original, embeddings } = setup();
-	embeddings.failure = new Error('Embedding failed');
+	embeddings.embeddingFailure = new Error('Embedding failed');
 	await controller.publishProjectDiagram(testActor(), input).catch((error) => {
-		if (!(error instanceof Error) || error.message !== 'Embedding failed') throw error;
+		if (!(error instanceof Error) || error.message !== 'Embedding generation failed') throw error;
 		return { kind: 'failure' as const };
 	});
 	expect({ diagrams: diagrams.diagrams, history: diagrams.diagramRevisions }).toEqual({

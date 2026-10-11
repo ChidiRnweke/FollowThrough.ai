@@ -1,5 +1,4 @@
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { ValidationError } from '$lib/errors';
 import type { ProposeMemoryChangeInput } from '$lib/models/memory';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
@@ -7,10 +6,7 @@ import { MemoryEditingService } from '$lib/services/memory/edits';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
@@ -64,8 +60,8 @@ const setup = () => {
 	const trust = new InMemoryTrustPolicyEvaluator();
 	projects.projects = [projectBuilder()];
 	const search = new InMemorySearchRepository();
-	const indexEmbeddings = new InMemoryEmbeddingClient();
-	const indexWriter = createContentIndex(search, indexEmbeddings.model);
+	const indexEmbeddings = new InMemoryRetrievalProvider();
+	const indexWriter = createContentIndex(search, undefined, undefined, false, indexEmbeddings);
 	const memory = createMemoryServices(entries, projects, provenanceRepository);
 	const controller = new Memory(
 		new WorkspaceCommandRulesService(),
@@ -75,9 +71,6 @@ const setup = () => {
 			presentation: new MemoryPresentationService(),
 			memoryLister: memory.lister,
 			memoryIndexer: indexWriter,
-			indexEmbeddings,
-			embeddingBatching: new EmbeddingBatching(testTokenizer),
-			indexWriter,
 			memoryCreator: memory.creator,
 			memoryEditor: memory.editor,
 			memoryDeleter: memory.deleter,

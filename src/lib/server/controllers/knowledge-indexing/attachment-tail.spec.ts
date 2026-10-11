@@ -1,12 +1,10 @@
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
-import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { describe, expect, it } from 'vitest';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 const tokenizer = testTokenizer;
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
-import { createEmbeddings } from '$lib/server/factories/retrieval-providers';
+import { retrievalTransport } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { view } from '$lib/testing/attachments/fakes/processing';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -32,16 +30,7 @@ describe('complete attachment search', () => {
 				}))
 			});
 		};
-		const client = createEmbeddings(
-			{
-				apiKey: 'test-key',
-				baseURL: 'https://provider.test/v1',
-				appURL: 'http://localhost:5173',
-				fetch: transport,
-				model: 'test-embedding'
-			},
-			{ run: (_name, _context, body) => body() }
-		);
+		const client = retrievalTransport(transport, 'test-embedding');
 		const attachment = view('text/plain', 'report.txt').attachment;
 		await createContentIndex(repository, client.model, {
 			targetTokens: 700,
@@ -53,9 +42,7 @@ describe('complete attachment search', () => {
 			path: document.attachmentPath
 		}));
 		await new EmbeddingMaintenance(
-			new IndexBacklog(repository),
-			client,
-			new EmbeddingBatching(testTokenizer),
+			createContentIndex(repository, client.model, undefined, false, client),
 			new InMemoryTransactionRunner([repository]),
 			new EmbeddingProgressStore(),
 			{

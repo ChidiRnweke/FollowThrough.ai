@@ -1,5 +1,4 @@
-import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
-import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/indexing';
+import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import { ValidationError } from '$lib/errors';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentMemoryProposalInput, AgentToolInput } from '$lib/models/agent-tool-inputs';
@@ -8,14 +7,12 @@ import type { ProjectId } from '$lib/models/projects';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
-import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { IMemoryEditingService } from '$lib/services/memory/edits';
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
 import type { ActorContext } from '$lib/models/identity';
-import type { IndexingResult } from '$lib/models/knowledge-search';
 import type {
 	CreateMemoryEntryInput,
 	DeleteMemoryEntryInput,
@@ -34,7 +31,6 @@ import type {
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
-import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type {
 	MemoryChanges,
 	MemoryEntryCreator,
@@ -104,9 +100,6 @@ export interface MemoryDependencies {
 
 	readonly editing: IMemoryEditingService;
 	readonly presentation: IMemoryPresentationService;
-	indexEmbeddings: EmbeddingClient;
-	embeddingBatching: IEmbeddingBatching;
-	indexWriter: IndexCompletion;
 	memoryIndexer: MemoryIndexer;
 	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
@@ -190,10 +183,7 @@ export class Memory implements MemoryController {
 			});
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const entry = await this.dependencies.memoryCreator.create(actor, decision.entry);
-			await this.finishIndex(
-				actor,
-				await this.dependencies.memoryIndexer.indexMemory(actor, entry)
-			);
+			await this.dependencies.memoryIndexer.indexMemory(actor, entry);
 			return { entry };
 		});
 	}
@@ -211,10 +201,7 @@ export class Memory implements MemoryController {
 			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const entry = await this.dependencies.memoryEditor.update(actor, decision.entry);
-			await this.finishIndex(
-				actor,
-				await this.dependencies.memoryIndexer.indexMemory(actor, entry)
-			);
+			await this.dependencies.memoryIndexer.indexMemory(actor, entry);
 			return { entry };
 		});
 	}
@@ -222,10 +209,7 @@ export class Memory implements MemoryController {
 	async remove(actor: ActorContext, input: DeleteMemoryEntryInput): Promise<void> {
 		await this.dependencies.transactionRunner.run(async () => {
 			const entry = await this.dependencies.memoryDeleter.remove(actor, input.memoryEntryId);
-			await this.finishIndex(
-				actor,
-				await this.dependencies.memoryIndexer.indexMemory(actor, entry)
-			);
+			await this.dependencies.memoryIndexer.indexMemory(actor, entry);
 		});
 	}
 
@@ -253,10 +237,7 @@ export class Memory implements MemoryController {
 					suggestion.provenanceId
 				);
 				for (const change of applied.changes)
-					await this.finishIndex(
-						actor,
-						await this.dependencies.memoryIndexer.indexMemory(actor, change.after)
-					);
+					await this.dependencies.memoryIndexer.indexMemory(actor, change.after);
 				const entry = applied.entry;
 				await this.dependencies.suggestionEffects.record(
 					actor,
@@ -275,20 +256,6 @@ export class Memory implements MemoryController {
 			}
 			return { suggestion };
 		});
-	}
-	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
-		if (result.kind === 'stored') return;
-		const batches: EmbeddingBatch[] = [];
-		for (const contents of this.dependencies.embeddingBatching.batches(
-			result.missing.map((chunk) => chunk.input)
-		)) {
-			batches.push(await this.dependencies.indexEmbeddings.embed(contents));
-		}
-		const batch = this.dependencies.embeddingBatching.combine(
-			this.dependencies.indexEmbeddings.model,
-			batches
-		);
-		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
 
 	async agentListProjectMemory(

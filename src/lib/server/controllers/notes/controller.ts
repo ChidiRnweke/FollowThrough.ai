@@ -1,4 +1,3 @@
-import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { ToolLifecycleError } from '$lib/errors';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
@@ -13,7 +12,6 @@ import { noteEtag } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentFileReferences } from '$lib/server/services/agent-files/virtual-files';
 import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
-import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type {
 	NoteCreator,
 	NoteDeletion,
@@ -40,7 +38,6 @@ import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
 import type { Diagram } from '$lib/models/diagrams';
 import type { ActorContext } from '$lib/models/identity';
-import type { IndexingResult } from '$lib/models/knowledge-search';
 import type {
 	ArchiveNoteInput,
 	ArchiveNoteOutput,
@@ -114,7 +111,6 @@ import type {
 } from '$lib/models/workspace-mutations';
 import type { DiagramLister } from '$lib/server/services/diagrams/library';
 import type { UserPreferencesReader } from '$lib/server/services/identity/user-preferences';
-import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type { NoteArchiveImportPreparation } from '$lib/server/services/notes/import';
 import type { NotePatchPreparation } from '$lib/server/services/notes/patches';
 import type { NoteRevisionComparison } from '$lib/server/services/notes/revision-diff';
@@ -145,7 +141,7 @@ import type {
 	NoteTrashReader,
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/catalog';
-import type { NoteIndexing as NoteIndexer } from '$lib/server/services/knowledge-search/indexing';
+import type { NoteIndexing as NoteIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import type {
 	ReferenceContextReader,
 	ReferenceLister
@@ -450,9 +446,6 @@ export interface NotesDependencies {
 	revisionReader: NoteRevisionReader;
 	attachmentRestorer: NoteAttachmentRestorer;
 	anchorRepairer: SourceAnchorRepairer;
-	indexEmbeddings: EmbeddingClient;
-	embeddingBatching: IEmbeddingBatching;
-	indexWriter: IndexCompletion;
 	noteIndexer: NoteIndexer;
 	transactionRunner: TransactionRunner;
 }
@@ -894,7 +887,7 @@ export class Notes implements NotesController {
 				note,
 				this.dependencies.noteReferences.links(note.document)
 			);
-			await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, note));
+			await this.dependencies.noteIndexer.indexNote(actor, note);
 			return {
 				note,
 				etag: noteEtag(note.id, note.currentRevision),
@@ -949,7 +942,7 @@ export class Notes implements NotesController {
 				restored,
 				this.dependencies.noteReferences.links(restored.document)
 			);
-			await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, restored));
+			await this.dependencies.noteIndexer.indexNote(actor, restored);
 			return { note: restored, etag: noteEtag(restored.id, restored.currentRevision) };
 		});
 	}
@@ -1007,7 +1000,7 @@ export class Notes implements NotesController {
 			});
 			// Deliberately no revision: history is bounded, and a title correction should not
 			// evict a snapshot of the body somebody may still want back.
-			await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, note));
+			await this.dependencies.noteIndexer.indexNote(actor, note);
 			return { note };
 		});
 	}
@@ -1021,7 +1014,7 @@ export class Notes implements NotesController {
 			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const note = await this.dependencies.noteTrash.persistTrash(actor, decision.note);
-			await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, note));
+			await this.dependencies.noteIndexer.indexNote(actor, note);
 			return { note };
 		});
 	}
@@ -1035,7 +1028,7 @@ export class Notes implements NotesController {
 			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const note = await this.dependencies.noteTrash.persistTrash(actor, decision.note);
-			await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, note));
+			await this.dependencies.noteIndexer.indexNote(actor, note);
 			return { note };
 		});
 	}
@@ -1201,23 +1194,9 @@ export class Notes implements NotesController {
 				restored,
 				this.dependencies.noteReferences.links(restored.document)
 			);
-			await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, restored));
+			await this.dependencies.noteIndexer.indexNote(actor, restored);
 			return { note: restored, etag: noteEtag(restored.id, restored.currentRevision) };
 		});
-	}
-	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
-		if (result.kind === 'stored') return;
-		const batches: EmbeddingBatch[] = [];
-		for (const contents of this.dependencies.embeddingBatching.batches(
-			result.missing.map((chunk) => chunk.input)
-		)) {
-			batches.push(await this.dependencies.indexEmbeddings.embed(contents));
-		}
-		const batch = this.dependencies.embeddingBatching.combine(
-			this.dependencies.indexEmbeddings.model,
-			batches
-		);
-		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
 
 	async agentGetNote(

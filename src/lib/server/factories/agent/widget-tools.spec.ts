@@ -1,4 +1,4 @@
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { createWidgetRules } from '$lib/factories/widgets/rules';
 import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
 import { widgetTemplates } from '$lib/models/widgets';
@@ -10,10 +10,7 @@ import { WidgetLibrary } from '$lib/server/services/widgets/library';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
@@ -42,7 +39,7 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
 	const library = new WidgetLibrary(repository, projects, new InMemoryNoteRepository());
-	const embeddings = new InMemoryEmbeddingClient();
+	const embeddings = new InMemoryRetrievalProvider();
 	const index = createContentIndex(new InMemorySearchRepository(), embeddings.model);
 	const controller = new Widgets(
 		new WorkspaceCommandRulesService(),
@@ -53,9 +50,6 @@ const setup = () => {
 			widgetLister: library,
 			widgetWriter: library,
 			widgetIndexer: index,
-			indexEmbeddings: embeddings,
-			embeddingBatching: new EmbeddingBatching(testTokenizer),
-			indexWriter: index,
 			transactionRunner: new InMemoryTransactionRunner([repository])
 		})
 	);

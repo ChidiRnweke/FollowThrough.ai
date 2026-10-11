@@ -15,7 +15,7 @@ const setup = (count: number) => {
 describe('controller-owned search ranking', () => {
 	it('ranks the wider pool before choosing the requested ten results', async () => {
 		const fixture = setup(60);
-		fixture.reranker.order = 'reverse';
+		fixture.provider.rerankOrder = 'reverse';
 		const results = await fixture.controller.search(actor, { query: 'query', limit: 10 });
 		expect(results.map((match) => match.content)).toEqual(
 			Array.from({ length: 10 }, (_, index) => 'candidate ' + (49 - index))
@@ -30,14 +30,14 @@ describe('controller-owned search ranking', () => {
 	});
 	it('honors ranking when the candidate set is already within the limit', async () => {
 		const fixture = setup(2);
-		fixture.reranker.order = 'reverse';
+		fixture.provider.rerankOrder = 'reverse';
 		expect(
 			(await fixture.controller.search(actor, { query: 'query', limit: 10 }))[0]?.content
 		).toBe('candidate 1');
 	});
 	it('retains vector order when reranking is unavailable', async () => {
 		const fixture = setup(3);
-		fixture.reranker.failure = new Error('reranker unavailable');
+		fixture.provider.rerankFailure = new Error('reranker unavailable');
 		expect(
 			(await fixture.controller.search(actor, { query: 'query', limit: 2 })).map(
 				(match) => match.content
@@ -46,9 +46,9 @@ describe('controller-owned search ranking', () => {
 	});
 	it('rejects malformed embedding output instead of running an empty search', async () => {
 		const fixture = setup(1);
-		fixture.embeddings.returnWrongCount = true;
-		await expect(fixture.controller.search(actor, { query: 'query' })).rejects.toThrow(
-			'invalid result'
-		);
+		fixture.provider.returnWrongCount = true;
+		await expect(fixture.controller.search(actor, { query: 'query' })).rejects.toMatchObject({
+			code: 'INVALID_GENERATED_CONTENT'
+		});
 	});
 });

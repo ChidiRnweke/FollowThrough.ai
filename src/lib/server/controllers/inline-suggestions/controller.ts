@@ -6,7 +6,6 @@ import {
 	type InlineSuggestionRequest,
 	type InlineCompletionContext
 } from '$lib/models/agent';
-import type { SearchMatch } from '$lib/models/knowledge-search';
 import { type Note } from '$lib/models/notes';
 import { ExternalServiceError } from '$lib/errors';
 import type { AgentPreferencesStore } from '$lib/server/services/agent/runs/preferences';
@@ -16,9 +15,7 @@ import type { NoteReader } from '$lib/server/services/notes/catalog';
 
 import type { OperationObserver, WorkflowObserver } from '$lib/models/telemetry';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
-import type { Reranker } from '$lib/models/knowledge-search';
-import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
-import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import type { KnowledgeSearch } from '$lib/server/services/knowledge-search/retrieval';
 import type { IInlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
 import type { IInlineAdmissionRules } from '$lib/server/services/inline-suggestions/inline-admission';
 import type { InlineAdmissionState } from '$lib/server/stores/inline-suggestions/admission';
@@ -46,9 +43,7 @@ export interface InlineSuggestionsDependencies {
 	inlineCompletionGenerator: InlineCompletionGenerator;
 	completionRules: IInlineCompletionRules;
 	defaultCompletionModel: string;
-	embeddings: EmbeddingClient;
-	knowledgeLookup: IKnowledgeLookup;
-	reranker: Reranker;
+	knowledge: KnowledgeSearch;
 	memory: MemoryEntryLister;
 	observer: OperationObserver;
 	workflow: WorkflowObserver;
@@ -191,7 +186,7 @@ export class InlineSuggestions implements InlineSuggestionsController {
 		signal: AbortSignal
 	): Promise<InlineCompletionContext> {
 		const query = this.dependencies.context.retrievalQuery(request);
-		const { observer, memory, embeddings, knowledgeLookup } = this.dependencies;
+		const { observer, memory, knowledge } = this.dependencies;
 		return observer.run(
 			'inline.context',
 			{ input: query, outputMimeType: MimeType.JSON },
@@ -201,16 +196,12 @@ export class InlineSuggestions implements InlineSuggestionsController {
 					observer.run(
 						'retrieval.vector-search',
 						{ input: query, outputMimeType: MimeType.JSON, kind: OpenInferenceSpanKind.RETRIEVER },
-						async () => {
-							const batch = await embeddings.embed([query], signal);
-							signal.throwIfAborted();
-							return knowledgeLookup.search(
-								actor,
-								batch,
-								this.dependencies.context.limits.projectCandidates,
-								note.projectId
-							);
-						},
+						() =>
+							knowledge.candidates(actor, query, {
+								limit: this.dependencies.context.limits.projectCandidates,
+								projectId: note.projectId,
+								signal
+							}),
 						(matches) => this.dependencies.context.vectorSearchTraceOutput(matches)
 					),
 					memory.list(actor, {})
@@ -220,16 +211,23 @@ export class InlineSuggestions implements InlineSuggestionsController {
 				const memoryPlan = this.dependencies.context.inlineMemoryPlan(entries, note);
 				const [projectMatches, userMemory] = await Promise.all([
 					candidates.length > 1
-						? this.rank(query, candidates, this.dependencies.context.limits.projectPassages, signal)
+						? knowledge.rank(
+								query,
+								candidates,
+								this.dependencies.context.limits.projectPassages,
+								signal
+							)
 						: candidates,
 					memoryPlan.kind === 'complete'
 						? memoryPlan.contents
-						: this.rank(
-								query,
-								memoryPlan.candidates,
-								this.dependencies.context.limits.userMemory,
-								signal
-							).then((matches) => this.dependencies.context.inlineRankedMemory(matches))
+						: knowledge
+								.rank(
+									query,
+									memoryPlan.candidates,
+									this.dependencies.context.limits.userMemory,
+									signal
+								)
+								.then((matches) => this.dependencies.context.inlineRankedMemory(matches))
 				]);
 				signal.throwIfAborted();
 				return {
@@ -241,21 +239,6 @@ export class InlineSuggestions implements InlineSuggestionsController {
 			},
 			(context) => this.dependencies.context.inlineContextTraceOutput(context)
 		);
-	}
-
-	private async rank(
-		query: string,
-		candidates: readonly SearchMatch[],
-		limit: number,
-		signal: AbortSignal
-	): Promise<readonly SearchMatch[]> {
-		try {
-			return await this.dependencies.reranker.rerank(query, candidates, limit, signal);
-		} catch (error) {
-			if (signal.aborted) throw error;
-			// ADR 0036: the provider trace retains the failure; already retrieved knowledge remains usable.
-			return candidates.slice(0, limit);
-		}
 	}
 
 	private async authorize(

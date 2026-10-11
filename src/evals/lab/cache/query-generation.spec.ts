@@ -2,11 +2,11 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createSearchQueryGeneration } from '$lib/server/factories/retrieval-providers';
+import { retrievalTransport } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { searchControllerFixture } from '$lib/testing/knowledge-search/fixtures/controller';
 import { searchHistory } from '$lib/testing/knowledge-search/fixtures/query-generation';
 import { testActor, testConversationId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { DiskSearchQueryCache } from './cached-clients';
+import { cachedRetrievalFetch } from './cached-clients';
 import { DiskCache } from './disk-cache';
 
 const transcript = 'first question\nmore context\nuser: follow up';
@@ -23,26 +23,28 @@ const setup = (path: string, content = '  deployment  ', status = 200) => {
 	const cache = new DiskCache(path);
 	const requests: string[] = [];
 	const spans: string[] = [];
-	const transport: typeof globalThis.fetch = async (_url, init) => {
+	const transport: typeof globalThis.fetch = async (url, init) => {
+		if (String(url).endsWith('/embeddings'))
+			return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] });
 		requests.push(String(init?.body));
 		return Response.json({ choices: [{ message: { content } }] }, { status });
 	};
-	const { controller } = searchControllerFixture({
-		queryGenerator: createSearchQueryGeneration({
-			apiKey: 'test-key',
-			baseURL: 'https://provider.test/v1',
-			appURL: 'http://localhost:5173',
-			fetch: transport
-		}),
-		queryCache: new DiskSearchQueryCache(cache),
-		conversations: { listMessages: async () => searchHistory },
-		observer: {
-			run: async (name, _context, body) => {
-				spans.push(name);
-				return body();
+	const cached = cachedRetrievalFetch(cache, transport);
+	const { controller } = searchControllerFixture(
+		{ conversations: { listMessages: async () => searchHistory } },
+		{
+			// Only the query rewrite goes through the cache, so its statistics stay readable.
+			provider: retrievalTransport((url, init) =>
+				String(url).endsWith('/embeddings') ? transport(url, init) : cached(url, init)
+			),
+			observer: {
+				run: async (name, _context, body) => {
+					if (name === 'knowledge_search.generate_query') spans.push(name);
+					return body();
+				}
 			}
 		}
-	});
+	);
 	return {
 		cache,
 		requests,
@@ -52,8 +54,8 @@ const setup = (path: string, content = '  deployment  ', status = 200) => {
 	};
 };
 
-describe('controller-owned generated query caching', () => {
-	it('replays existing successful strings without a provider call or generation span', async () => {
+describe('generated query caching', () => {
+	it('replays existing successful strings without a provider call', async () => {
 		await withCache(async (path) => {
 			await writeFile(path, JSON.stringify({ [key]: 'deployment' }));
 			const fixture = setup(path);
@@ -62,7 +64,11 @@ describe('controller-owned generated query caching', () => {
 				requests: fixture.requests,
 				spans: fixture.spans,
 				stats: fixture.cache.stats()
-			}).toEqual({ requests: [], spans: [], stats: { hits: 1, misses: 0, live: 0 } });
+			}).toEqual({
+				requests: [],
+				spans: ['knowledge_search.generate_query'],
+				stats: { hits: 1, misses: 0, live: 0 }
+			});
 		});
 	});
 	it('stores trimmed output under the existing key and replays it on the next search', async () => {
@@ -79,7 +85,7 @@ describe('controller-owned generated query caching', () => {
 			}).toEqual({
 				saved: { [key]: 'deployment' },
 				requests: 1,
-				spans: ['knowledge_search.generate_query'],
+				spans: ['knowledge_search.generate_query', 'knowledge_search.generate_query'],
 				stats: { hits: 1, misses: 1, live: 1 }
 			});
 		});

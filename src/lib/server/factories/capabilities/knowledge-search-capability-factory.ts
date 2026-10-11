@@ -7,47 +7,30 @@ import {
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { TokenCodec } from '$lib/models/tokenization';
-import { Cl100kTokenizer } from '$lib/server/adapters/tokenization/cl100k';
+import { Cl100kTokenizer } from '$lib/server/infrastructure/tokenization/cl100k';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import {
 	ToolDiscovery,
-	type ToolRetriever
+	type ToolDiscoveryController
 } from '$lib/server/controllers/tool-discovery/controller';
 import type { Database } from '$lib/server/db';
-import { createContentIndex } from '$lib/server/factories/content-index';
-import type { RetrievalIndexRepository } from '$lib/server/repositories/knowledge-search';
+import { createRetrievalProvider } from '$lib/server/factories/retrieval-providers';
+import {
+	KnowledgeRetrieval,
+	type KnowledgeRetrievalCapabilities
+} from '$lib/server/services/knowledge-search/retrieval';
+import { ToolSearch, type ToolRanking } from '$lib/server/services/agent/tools/tool-search';
+import { DEFAULT_EMBEDDING_MODEL } from '$lib/models/knowledge-search/embeddings';
+import { DEFAULT_SEARCH_QUERY_MODEL } from '$lib/models/knowledge-search/query-generation';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 import {
 	InlineContextService,
 	type IInlineContextService
 } from '$lib/server/services/inline-suggestions/inline-context';
-import {
-	createEmbeddings,
-	createSearchQueryGeneration
-} from '$lib/server/factories/retrieval-providers';
-import {
-	EmbeddingBatching,
-	type IEmbeddingBatching
-} from '$lib/server/services/knowledge-search/embedding-batching';
-import {
-	SearchQueryRules,
-	type ISearchQueryRules
-} from '$lib/server/services/knowledge-search/query-rules';
-import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
-import type {
-	AttachmentIndexing,
-	DiagramIndexing,
-	IndexCompletion,
-	MemoryIndexing,
-	NoteIndexing,
-	WidgetIndexing
-} from '$lib/server/services/knowledge-search/indexing';
 import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 
 import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
-import type { AgentToolDiscoveryServices } from '$lib/server/factories/agent/tool-discovery-factory';
 import {
 	InlineAdmissionRules,
 	type IInlineAdmissionRules
@@ -60,14 +43,6 @@ import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/to
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
 import { createInlineCompletion } from '$lib/server/factories/inline-completion';
-import type { Reranker } from '$lib/models/knowledge-search';
-import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
-import type { SearchQueryGenerator } from '$lib/models/knowledge-search/query-generation';
-import { SearchRanking } from '$lib/server/adapters/knowledge-search/ranking';
-import {
-	KnowledgeLookup,
-	type IKnowledgeLookup
-} from '$lib/server/services/knowledge-search/semantic';
 import { operationObserver, workflowObserver } from '$lib/server/infrastructure/telemetry/tracing';
 
 export interface KnowledgeSearchCapabilityInput {
@@ -76,32 +51,18 @@ export interface KnowledgeSearchCapabilityInput {
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
-	readonly embeddingClient?: EmbeddingClient;
-	readonly reranker?: Reranker;
-	readonly queryGenerator?: SearchQueryGenerator;
-	readonly queryObserver?: OperationObserver;
+	/** Replaces the provider transport, e.g. with a recording cache in evaluations. */
+	readonly providerFetch?: typeof globalThis.fetch;
 	readonly deferEmbedding: boolean;
 }
 
 export interface KnowledgeSearchCapability {
 	readonly tokenizer: TokenCodec;
-	readonly repository: RetrievalIndexRepository;
-	readonly indexWriter: IndexCompletion;
-	readonly embeddingClient: EmbeddingClient;
-	readonly reranker: Reranker;
-	readonly queryGenerator: SearchQueryGenerator;
-	readonly queryRules: ISearchQueryRules;
-	readonly queryObserver: OperationObserver;
-	readonly embeddingBatching: IEmbeddingBatching;
-	readonly attachmentIndexer: AttachmentIndexing;
-	readonly noteIndexer: NoteIndexing;
-	readonly diagramIndexer: DiagramIndexing;
-	readonly memoryIndexer: MemoryIndexing;
-	readonly widgetIndexer: WidgetIndexing;
-	readonly lookup: IKnowledgeLookup;
+	/** Indexing, backfill and search over knowledge: one capability behind its interfaces. */
+	readonly knowledge: KnowledgeRetrievalCapabilities;
 	readonly maintenance: ScheduledTask;
-	readonly toolRetriever: ToolRetriever;
-	readonly toolDiscovery: AgentToolDiscoveryServices;
+	readonly toolRetriever: ToolDiscoveryController;
+	readonly toolDiscovery: ToolRanking;
 	readonly finalize: (input: KnowledgeSearchFinalizeInput) => KnowledgeSearchFinalized;
 }
 
@@ -125,56 +86,42 @@ export const createKnowledgeSearchCapability = (
 	input: KnowledgeSearchCapabilityInput
 ): KnowledgeSearchCapability => {
 	const tokenizer = new Cl100kTokenizer();
-	const repository = new KnowledgeIndexRecords(input.db);
-	const embeddingBatching = new EmbeddingBatching(tokenizer);
-	const embeddingClient =
-		input.embeddingClient ??
-		createEmbeddings(
-			{ apiKey: input.openRouterApiKey, baseURL: input.openRouterBaseURL, appURL: input.appURL },
-			operationObserver
-		);
-	const reranker =
-		input.reranker ??
-		new SearchRanking(input.openRouterApiKey, {
-			baseURL: input.openRouterBaseURL,
-			appURL: input.appURL,
-			observer: operationObserver
-		});
-	const chunker = {
-		targetTokens: Number(process.env.RETRIEVAL_CHUNK_TOKENS ?? 2400),
-		overlapTokens: Number(process.env.RETRIEVAL_CHUNK_OVERLAP_TOKENS ?? 480)
-	};
-	const queryGenerator =
-		input.queryGenerator ??
-		createSearchQueryGeneration({
-			apiKey: input.openRouterApiKey,
-			baseURL: input.openRouterBaseURL,
-			appURL: input.appURL
-		});
-	const index = createContentIndex(
-		repository,
-		embeddingClient.model,
-		tokenizer,
-		chunker,
-		input.deferEmbedding
-	);
+	const provider = createRetrievalProvider({
+		apiKey: input.openRouterApiKey,
+		baseURL: input.openRouterBaseURL,
+		appURL: input.appURL,
+		...optionalProperty('fetch', input.providerFetch)
+	});
+	const knowledge = new KnowledgeRetrieval({
+		repository: new KnowledgeIndexRecords(input.db),
+		provider: provider.client,
+		rerank: provider.rerank,
+		models: { embedding: DEFAULT_EMBEDDING_MODEL, query: DEFAULT_SEARCH_QUERY_MODEL },
+		encoding: tokenizer,
+		chunking: {
+			targetTokens: Number(process.env.RETRIEVAL_CHUNK_TOKENS ?? 2400),
+			overlapTokens: Number(process.env.RETRIEVAL_CHUNK_OVERLAP_TOKENS ?? 480)
+		},
+		defer: input.deferEmbedding,
+		observer: operationObserver
+	});
+	const toolSearch = new ToolSearch({
+		repository: new ToolEmbeddingRecords(input.db),
+		provider: provider.client,
+		model: DEFAULT_EMBEDDING_MODEL,
+		tokens: tokenizer,
+		observer: operationObserver
+	});
 
 	return {
 		tokenizer,
-		repository,
-		indexWriter: index,
-		embeddingClient,
+		knowledge,
 		toolRetriever: new ToolDiscovery(
-			new ToolCatalogIndex(new ToolEmbeddingRecords(input.db)),
-			embeddingClient,
-			embeddingBatching,
+			toolSearch,
 			input.transactionRunner,
 			new AgentToolCatalogService()
 		),
-		toolDiscovery: {
-			index: new ToolCatalogIndex(new ToolEmbeddingRecords(input.db)),
-			embeddings: embeddingClient
-		},
+		toolDiscovery: toolSearch,
 		finalize: ({ preferences }) => ({
 			inlineContext: new InlineContextService(tokenizer),
 			preferences,
@@ -194,21 +141,8 @@ export const createKnowledgeSearchCapability = (
 			admissionRules: new InlineAdmissionRules(),
 			admissions: new InlineAdmissionStore()
 		}),
-		reranker,
-		queryGenerator,
-		queryRules: new SearchQueryRules(),
-		queryObserver: input.queryObserver ?? operationObserver,
-		embeddingBatching,
-		attachmentIndexer: index,
-		noteIndexer: index,
-		diagramIndexer: index,
-		memoryIndexer: index,
-		widgetIndexer: index,
-		lookup: new KnowledgeLookup(repository),
 		maintenance: new EmbeddingMaintenance(
-			new IndexBacklog(repository),
-			embeddingClient,
-			embeddingBatching,
+			knowledge,
 			input.transactionRunner,
 			new EmbeddingProgressStore(),
 			{

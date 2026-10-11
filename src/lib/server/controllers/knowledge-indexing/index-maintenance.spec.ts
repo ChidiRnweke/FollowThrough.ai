@@ -1,27 +1,26 @@
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
-import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { describe, expect, it } from 'vitest';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 
 const immediateTransactions: TransactionRunner = { run: (work) => work() };
 
-const deferredIndexer = (repository: InMemorySearchRepository, client: InMemoryEmbeddingClient) =>
-	createContentIndex(repository, client.model, { targetTokens: 200, overlapTokens: 0 }, true);
+const deferredIndexer = (repository: InMemorySearchRepository, client: InMemoryRetrievalProvider) =>
+	createContentIndex(
+		repository,
+		client.model,
+		{ targetTokens: 200, overlapTokens: 0 },
+		true,
+		client
+	);
 
-const backfill = (repository: InMemorySearchRepository, client: InMemoryEmbeddingClient) =>
+const backfill = (repository: InMemorySearchRepository, client: InMemoryRetrievalProvider) =>
 	new EmbeddingMaintenance(
-		new IndexBacklog(repository),
-		client,
-		new EmbeddingBatching(testTokenizer),
+		createContentIndex(repository, client.model, undefined, false, client),
 		immediateTransactions,
 		new EmbeddingProgressStore(),
 		{
@@ -37,7 +36,7 @@ const backfill = (repository: InMemorySearchRepository, client: InMemoryEmbeddin
 describe('Deferred embedding write path', () => {
 	it('stages deferred text for lexical but not semantic search', async () => {
 		const repository = new InMemorySearchRepository();
-		const client = new InMemoryEmbeddingClient();
+		const client = new InMemoryRetrievalProvider();
 		const actor = testActor();
 		const note = noteBuilder({ plainText: 'Kubernetes ingress notes' });
 		await deferredIndexer(repository, client).indexNote(actor, note);
@@ -58,7 +57,7 @@ describe('Deferred embedding write path', () => {
 describe('Embedding backfill', () => {
 	it('embeds the chunks the write path skipped', async () => {
 		const repository = new InMemorySearchRepository();
-		const client = new InMemoryEmbeddingClient();
+		const client = new InMemoryRetrievalProvider();
 		await deferredIndexer(repository, client).indexNote(
 			testActor(),
 			noteBuilder({ plainText: 'Kubernetes ingress notes' })
@@ -74,8 +73,8 @@ describe('Embedding backfill', () => {
 
 	it('does nothing when there is no backlog', async () => {
 		const repository = new InMemorySearchRepository();
-		const client = new InMemoryEmbeddingClient();
-		client.failure = new Error('provider unavailable');
+		const client = new InMemoryRetrievalProvider();
+		client.embeddingFailure = new Error('provider unavailable');
 		await expect(backfill(repository, client).run()).resolves.toBeUndefined();
 	});
 });
@@ -88,7 +87,7 @@ describe('Embedding backfill', () => {
 describe('Semantic continuity across an edit', () => {
 	const indexAndBackfill = async () => {
 		const repository = new InMemorySearchRepository();
-		const client = new InMemoryEmbeddingClient();
+		const client = new InMemoryRetrievalProvider();
 		const indexer = deferredIndexer(repository, client);
 		await indexer.indexNote(testActor(), noteBuilder({ plainText: 'Original ingress notes' }));
 		await backfill(repository, client).run();

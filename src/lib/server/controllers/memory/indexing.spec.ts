@@ -1,14 +1,10 @@
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { MemoryEditingService } from '$lib/services/memory/edits';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
@@ -27,8 +23,8 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
 	const search = new InMemorySearchRepository();
-	const indexEmbeddings = new InMemoryEmbeddingClient();
-	const indexWriter = createContentIndex(search, indexEmbeddings.model);
+	const indexEmbeddings = new InMemoryRetrievalProvider();
+	const indexWriter = createContentIndex(search, undefined, undefined, false, indexEmbeddings);
 	const memory = createMemoryServices(entries, projects, new InMemoryProvenanceRepository());
 	const controller = new Memory(
 		new WorkspaceCommandRulesService(),
@@ -40,9 +36,6 @@ const setup = () => {
 			memoryEditor: memory.editor,
 			memoryDeleter: memory.deleter,
 			memoryIndexer: indexWriter,
-			indexEmbeddings,
-			embeddingBatching: new EmbeddingBatching(testTokenizer),
-			indexWriter,
 			transactionRunner: new InMemoryTransactionRunner([entries, search])
 		})
 	);
@@ -51,16 +44,17 @@ const setup = () => {
 describe('Memory persistence and search', () => {
 	it('rolls back the memory when immediate embedding fails', async () => {
 		const { controller, entries, indexEmbeddings } = setup();
-		indexEmbeddings.failure = new Error('Provider unavailable');
-		await controller.create(testActor(), { projectId: testProjectId(), content: 'Fact' }).then(
-			() => {
-				throw new Error('Expected embedding failure');
-			},
-			(error) => {
-				if (error !== indexEmbeddings.failure) throw error;
-			}
-		);
-		expect(entries.entries).toEqual([]);
+		indexEmbeddings.embeddingFailure = new Error('Provider unavailable');
+		const outcome = await controller
+			.create(testActor(), { projectId: testProjectId(), content: 'Fact' })
+			.then(
+				() => 'created',
+				(error: Error) => error.message
+			);
+		expect({ outcome, entries: entries.entries }).toEqual({
+			outcome: 'Embedding generation failed',
+			entries: []
+		});
 	});
 
 	it('makes a shared memory searchable by vector before an immediate write returns', async () => {

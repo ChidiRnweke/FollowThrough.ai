@@ -1,3 +1,4 @@
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { ImageDescriptionService } from '$lib/server/services/attachments/image-description';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
@@ -23,7 +24,6 @@ import {
 	AttachmentContent,
 	AttachmentProcessingService
 } from '$lib/server/services/attachments/content';
-import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import type {
 	AttachmentId,
 	AttachmentUploadId,
@@ -102,7 +102,7 @@ const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapToke
 				updatedAt: now
 			})
 		},
-		indexer: createContentIndex(search, new InMemoryEmbeddingClient().model, chunker),
+		indexer: createContentIndex(search, new InMemoryRetrievalProvider().model, chunker),
 		transactionRunner: transaction.transactionRunner,
 		visionModel: 'test/model',
 		logger: { error: () => {} }

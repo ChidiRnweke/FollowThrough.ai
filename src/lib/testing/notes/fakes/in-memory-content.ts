@@ -1,4 +1,3 @@
-import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Note,
@@ -29,7 +28,7 @@ import type {
 	NoteRevisionRecorder,
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/catalog';
-import type { NoteIndexing as NoteIndexer } from '$lib/server/services/knowledge-search/indexing';
+import type { NoteIndexing as NoteIndexer } from '$lib/server/services/knowledge-search/retrieval';
 
 import type { NoteLinkReconciler } from '$lib/server/services/relationships/graph';
 import type {
@@ -233,12 +232,11 @@ export class InMemoryNoteContent
 		return this.anchors.filter((anchor) => anchor.noteId === note.id);
 	}
 
-	async indexNote(actor: ActorContext, note: Note): Promise<IndexingResult> {
+	async indexNote(actor: ActorContext, note: Note): Promise<void> {
 		if (this.failIndex || this.failIndexFor.has(note.id))
 			throw new ExternalServiceError('Indexing failed');
 		if (note.userId !== actor.userId) throw new OwnershipError('Cannot index another user’s note');
 		this.indexedNoteIds = [...this.indexedNoteIds.filter((noteId) => noteId !== note.id), note.id];
-		return { kind: 'stored' };
 	}
 
 	snapshot(): RestoreSnapshot {

@@ -98,13 +98,12 @@ it('leaves stored tools intact when embedding fails', async () => {
 	const original = [await storedTool({ ...catalog[0]!, description: 'Old wording' })];
 	const { controller, repository, embeddings } = await toolDiscoveryFixture(original);
 	embeddings.failure = new Error('Provider unavailable');
-	await controller.seed(catalog).then(
-		() => {
-			throw new Error('Expected provider failure');
-		},
-		(error) => {
-			if (error !== embeddings.failure) throw error;
-		}
+	const outcome = await controller.seed(catalog).then(
+		() => 'seeded',
+		(error: Error) => error.message
 	);
-	expect([...repository.rows.values()]).toEqual(original);
+	expect({ outcome, rows: [...repository.rows.values()] }).toEqual({
+		outcome: 'Embedding generation failed',
+		rows: original
+	});
 });

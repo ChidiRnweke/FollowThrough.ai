@@ -1,3 +1,4 @@
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { DiagramId } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/models/diagrams';
 import {
@@ -22,7 +23,6 @@ import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { describe, expect, it } from 'vitest';
@@ -55,7 +55,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 	const search = new KnowledgeIndexRecords(database);
 	const index = createContentIndex(
 		search,
-		new InMemoryEmbeddingClient().model,
+		new InMemoryRetrievalProvider().model,
 		{ targetTokens: 2400, overlapTokens: 480 },
 		true
 	);

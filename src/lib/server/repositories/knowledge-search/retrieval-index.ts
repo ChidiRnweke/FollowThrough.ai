@@ -14,19 +14,8 @@ import type { AttachmentId } from '$lib/models/attachments';
  * Diagram chunks also carry their note, so `note` deliberately excludes them.
  */
 export type { IndexSource, PendingIndexSource, EmbeddedChunk } from '$lib/models/knowledge-search';
-export interface CreatedRange {
-	readonly createdAfter?: string;
-	readonly createdBefore?: string;
-}
-
-/**
- * Retrieval scoping beyond the project: a created-at window and, for
- * note-scoped search (the agent's search_note tool), a single note. Diagram
- * chunks carry their note's id, so a note filter includes them.
- */
-export interface SearchFilter extends CreatedRange {
-	readonly noteId?: NoteId;
-}
+import type { CreatedRange, SearchFilter } from '$lib/models/knowledge-search';
+export type { CreatedRange, SearchFilter } from '$lib/models/knowledge-search';
 
 export interface RetrievalIndexRepository {
 	listForAttachment(

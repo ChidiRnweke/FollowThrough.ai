@@ -1,19 +1,37 @@
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
+import { retrievalTransport } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
+import { z } from 'zod';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { context, replaceNoteFixture, seedNote } from '../database-harness';
 
 const vector = Array.from({ length: 3072 }, (_, index) => (index === 0 ? 1 : 0));
 const model = 'contract-model';
+
+type Embed = (
+	inputs: readonly string[]
+) => Promise<{ readonly model: string; readonly vectors: readonly (readonly number[])[] }>;
+
+/** A provider whose embedding endpoint answers through `embed`. */
+const provider = (embed: Embed) =>
+	retrievalTransport(async (_url, init) => {
+		const inputs = z
+			.object({ input: z.array(z.string()) })
+			.parse(JSON.parse(String(init?.body))).input;
+		const batch = await embed(inputs);
+		return Response.json({
+			data: batch.vectors.map((embedding, index) => ({
+				index,
+				embedding: Buffer.from(new Float32Array(embedding).buffer).toString('base64')
+			}))
+		});
+	}, model);
+const embedAll: Embed = async (inputs) => ({ model, vectors: inputs.map(() => vector) });
 
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
@@ -22,16 +40,9 @@ const setup = async (suffix: string) => {
 	const committed = new KnowledgeIndexRecords(context.db);
 	onTestFinished(() => committed.deleteForNote(seeded.owner, seeded.note.id));
 	const index = createTestContentIndex(repository, model, undefined, true);
-	const inline = createTestContentIndex(repository, model);
+	const inline = createTestContentIndex(repository, model, undefined, false, provider(embedAll));
 	const note = await replaceNoteFixture({ ...seeded.note, plainText: 'original searchable text' });
-	await transactionRunner.run(async () => {
-		const prepared = await inline.indexNote(seeded.owner, note);
-		if (prepared.kind !== 'needs_embeddings') throw new Error('Expected a fresh index');
-		await inline.complete(seeded.owner, prepared, {
-			model,
-			vectors: prepared.missing.map(() => vector)
-		});
-	});
+	await transactionRunner.run(() => inline.indexNote(seeded.owner, note));
 	const save = async (text: string, revision: number) => {
 		const updated = await replaceNoteFixture({
 			...note,
@@ -52,11 +63,9 @@ const setup = async (suffix: string) => {
 		(await committed.searchByEmbedding(seeded.owner, vector, 10, seeded.project.id)).map(
 			(match) => match.document.content
 		);
-	const maintenance = (embed: EmbeddingClient['embed']) =>
+	const maintenance = (embed: Embed) =>
 		new EmbeddingMaintenance(
-			new IndexBacklog(repository),
-			{ model, embed },
-			new EmbeddingBatching(testTokenizer),
+			createTestContentIndex(repository, model, undefined, false, provider(embed)),
 			transactionRunner,
 			new EmbeddingProgressStore(),
 			{
@@ -199,12 +208,7 @@ describe('PostgreSQL index replacement', () => {
 		const staged = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
 		const writing = fixture.transactionRunner.run(async () => {
-			const result = await fixture.inline.indexNote(fixture.owner, updated);
-			if (result.kind !== 'needs_embeddings') throw new Error('Expected changed chunks');
-			await fixture.inline.complete(fixture.owner, result, {
-				model,
-				vectors: result.missing.map(() => vector)
-			});
+			await fixture.inline.indexNote(fixture.owner, updated);
 			staged.resolve();
 			await release.promise;
 		});

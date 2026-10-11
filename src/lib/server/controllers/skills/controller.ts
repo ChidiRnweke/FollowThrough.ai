@@ -1,4 +1,3 @@
-import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { AgentSkillContext, ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
 import type { AgentPayload } from '$lib/models/agent/payload';
@@ -6,7 +5,6 @@ import type { NoteMarkdown } from '$lib/models/note-markdown';
 import type { TextSelection } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
-import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { NoteCreator } from '$lib/server/services/notes/catalog';
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
@@ -17,7 +15,6 @@ import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
-import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { CreateNoteInput, Note, NoteId, NoteRevision } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type {
@@ -38,7 +35,6 @@ import type {
 	SkillMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type {
 	NoteAttachmentRestorer,
 	NoteEditor,
@@ -46,7 +42,7 @@ import type {
 	NoteRevisionRecorder,
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/catalog';
-import type { NoteIndexing as NoteIndexer } from '$lib/server/services/knowledge-search/indexing';
+import type { NoteIndexing as NoteIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { NoteLinkReconciler } from '$lib/server/services/relationships/graph';
 import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
@@ -163,9 +159,6 @@ export interface SkillsDependencies {
 	revisionRecorder: NoteRevisionRecorder;
 	attachmentRestorer: NoteAttachmentRestorer;
 	anchorRepairer: SourceAnchorRepairer;
-	indexEmbeddings: EmbeddingClient;
-	embeddingBatching: IEmbeddingBatching;
-	indexWriter: IndexCompletion;
 	noteIndexer: NoteIndexer;
 	noteLinkReconciler: NoteLinkReconciler;
 	skillEditor: SkillEditor;
@@ -406,7 +399,7 @@ export class Skills implements SkillsController {
 			note,
 			this.dependencies.noteReferences.links(note.document)
 		);
-		await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, note));
+		await this.dependencies.noteIndexer.indexNote(actor, note);
 		return note;
 	}
 
@@ -415,20 +408,6 @@ export class Skills implements SkillsController {
 			const change = await this.dependencies.skillPinWriter.prepare(actor, input);
 			await this.dependencies.skillPinWriter.persist(actor, change);
 		});
-	}
-	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
-		if (result.kind === 'stored') return;
-		const batches: EmbeddingBatch[] = [];
-		for (const contents of this.dependencies.embeddingBatching.batches(
-			result.missing.map((chunk) => chunk.input)
-		)) {
-			batches.push(await this.dependencies.indexEmbeddings.embed(contents));
-		}
-		const batch = this.dependencies.embeddingBatching.combine(
-			this.dependencies.indexEmbeddings.model,
-			batches
-		);
-		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
 
 	async agentLoadSkill(

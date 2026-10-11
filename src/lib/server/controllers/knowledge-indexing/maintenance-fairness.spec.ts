@@ -1,20 +1,16 @@
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
+import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
-import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { expect, it } from 'vitest';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = async () => {
 	const repository = new InMemorySearchRepository();
-	const client = new InMemoryEmbeddingClient();
+	const client = new InMemoryRetrievalProvider();
 	client.rejectedContents.add('Poisoned');
 	for (let id = 1; id <= 4; id++) {
 		const noteId = testNoteId(id);
@@ -28,9 +24,7 @@ const setup = async () => {
 		]);
 	}
 	const worker = new EmbeddingMaintenance(
-		new IndexBacklog(repository),
-		client,
-		new EmbeddingBatching(testTokenizer),
+		createTestContentIndex(repository, client.model, undefined, false, client),
 		new InMemoryTransactionRunner([repository]),
 		new EmbeddingProgressStore(),
 		{ maxSourcesPerTick: 2, logger: { error: () => {}, log: () => {} } }

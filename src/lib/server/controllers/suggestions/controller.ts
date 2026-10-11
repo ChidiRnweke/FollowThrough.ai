@@ -1,18 +1,15 @@
-import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
-import type { DiagramIndexing } from '$lib/server/services/knowledge-search/indexing';
-import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/indexing';
+import type { DiagramIndexing } from '$lib/server/services/knowledge-search/retrieval';
+import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
 import type { AgentPayload } from '$lib/models/agent/payload';
-import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
+import type { DiagramIndexContext } from '$lib/models/knowledge-search';
 import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type {
 	DrawioSvgPreviewSanitizer,
 	DrawioXmlContentValidator
 } from '$lib/server/services/diagrams/drawio';
 import type { DiagramWriter } from '$lib/server/services/diagrams/library';
-import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
-import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { AppliedRecord } from '$lib/server/services/suggestions/inbox';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
@@ -160,9 +157,6 @@ export interface SuggestionsDependencies {
 	memoryChanges: MemoryChanges;
 	sourceNotes: NoteReader;
 	suggestionEffects: SuggestionEffectService;
-	indexEmbeddings: EmbeddingClient;
-	embeddingBatching: IEmbeddingBatching;
-	indexWriter: IndexCompletion;
 	memoryIndexer: MemoryIndexer;
 	diagramIndexer: DiagramIndexing;
 	diagramWriter: DiagramWriter;
@@ -410,10 +404,7 @@ export class Suggestions implements SuggestionsController {
 	): Promise<void> {
 		for (const record of records) {
 			if (record.type === 'memory_entries')
-				await this.finishIndex(
-					actor,
-					await this.dependencies.memoryIndexer.indexMemory(actor, record.value)
-				);
+				await this.dependencies.memoryIndexer.indexMemory(actor, record.value);
 			if (record.type === 'diagrams') await this.indexDiagram(actor, record.value);
 		}
 	}
@@ -426,25 +417,7 @@ export class Suggestions implements SuggestionsController {
 						kind: 'note',
 						title: (await this.dependencies.sourceNotes.get(actor, requirement.noteId)).title
 					};
-		await this.finishIndex(
-			actor,
-			await this.dependencies.diagramIndexer.indexDiagram(actor, diagram, context)
-		);
-	}
-
-	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
-		if (result.kind === 'stored') return;
-		const batches: EmbeddingBatch[] = [];
-		for (const contents of this.dependencies.embeddingBatching.batches(
-			result.missing.map((chunk) => chunk.input)
-		)) {
-			batches.push(await this.dependencies.indexEmbeddings.embed(contents));
-		}
-		const batch = this.dependencies.embeddingBatching.combine(
-			this.dependencies.indexEmbeddings.model,
-			batches
-		);
-		await this.dependencies.indexWriter.complete(actor, result, batch);
+		await this.dependencies.diagramIndexer.indexDiagram(actor, diagram, context);
 	}
 
 	async agentListSuggestions(

@@ -1,6 +1,6 @@
 import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import type { DiagramIndexContextRequirement, IndexingResult } from '$lib/models/knowledge-search';
+import type { DiagramIndexContextRequirement } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
@@ -14,7 +14,7 @@ import type { ProvenanceId } from '$lib/models/provenance';
 import type { Skill } from '$lib/models/skills';
 import { ExternalServiceError, NotFoundError, StaleRevisionError } from '$lib/errors';
 import type { DiagramFinder, DiagramWriter } from '$lib/server/services/diagrams/library';
-import type { DiagramIndexing as DiagramIndexer } from '$lib/server/services/knowledge-search/indexing';
+import type { DiagramIndexing as DiagramIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import type {
 	DiagramTextExtractor,
 	MermaidDiagramRenderer
@@ -147,11 +147,10 @@ export class InMemoryDiagrams
 	diagramContextRequirement(diagram: Diagram): DiagramIndexContextRequirement {
 		return this.indexing.diagramContextRequirement(diagram);
 	}
-	async indexDiagram(_actor: ActorContext, diagram: Diagram): Promise<IndexingResult> {
+	async indexDiagram(_actor: ActorContext, diagram: Diagram): Promise<void> {
 		if (this.failIndex) throw new ExternalServiceError('Indexing failed');
 		void _actor;
 		this.indexedIds.push(diagram.id);
-		return { kind: 'stored' };
 	}
 }
 

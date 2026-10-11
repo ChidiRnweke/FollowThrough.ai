@@ -1,4 +1,3 @@
-import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { AgentToolContext, ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
 import type { AgentPayload } from '$lib/models/agent/payload';
@@ -7,7 +6,6 @@ import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool
 import type { DrawioLabels } from '$lib/server/services/diagrams/drawio';
 import type { IconSearch } from '$lib/server/services/diagrams/icons';
 import type { DiagramLifecycle } from '$lib/server/services/diagrams/library';
-import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { DiagramEditingRules } from '$lib/services/diagrams/editing';
@@ -56,14 +54,14 @@ import type {
 } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/models/diagrams';
 import type { ActorContext } from '$lib/models/identity';
-import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
+import type { DiagramIndexContext } from '$lib/models/knowledge-search';
 import type { DateTime, AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type {
 	DiagramMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
 import type { CanvasSourceReader } from '$lib/server/services/diagrams/canvas-source';
-import type { DiagramIndexing as DiagramIndexer } from '$lib/server/services/knowledge-search/indexing';
+import type { DiagramIndexing as DiagramIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import type {
 	DrawioSvgPreviewSanitizer,
 	DrawioXmlContentValidator
@@ -77,7 +75,6 @@ import type {
 	DiagramRevisionReader,
 	DiagramWriter
 } from '$lib/server/services/diagrams/library';
-import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /**
@@ -247,9 +244,6 @@ export interface DiagramStudioDependencies {
 	diagramTrash: DiagramLifecycle;
 	diagramWriter: Pick<DiagramWriter, 'create'>;
 	diagramSourceNotes: NoteReader;
-	indexEmbeddings: EmbeddingClient;
-	embeddingBatching: IEmbeddingBatching;
-	indexWriter: IndexCompletion;
 	diagramIndexer: DiagramIndexer;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
@@ -703,25 +697,7 @@ export class DiagramStudio implements DiagramStudioController {
 						kind: 'note',
 						title: (await this.dependencies.diagramSourceNotes.get(actor, requirement.noteId)).title
 					};
-		await this.finishIndex(
-			actor,
-			await this.dependencies.diagramIndexer.indexDiagram(actor, diagram, context)
-		);
-	}
-
-	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
-		if (result.kind === 'stored') return;
-		const batches: EmbeddingBatch[] = [];
-		for (const contents of this.dependencies.embeddingBatching.batches(
-			result.missing.map((chunk) => chunk.input)
-		)) {
-			batches.push(await this.dependencies.indexEmbeddings.embed(contents));
-		}
-		const batch = this.dependencies.embeddingBatching.combine(
-			this.dependencies.indexEmbeddings.model,
-			batches
-		);
-		await this.dependencies.indexWriter.complete(actor, result, batch);
+		await this.dependencies.diagramIndexer.indexDiagram(actor, diagram, context);
 	}
 
 	async agentCreateDiagram(

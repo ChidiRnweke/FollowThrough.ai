@@ -1,10 +1,9 @@
 import { expect, it } from 'vitest';
 import { ToolDiscovery } from './controller';
-import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
+import { ToolSearch } from '$lib/server/services/agent/tools/tool-search';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 import { InMemoryToolEmbeddingRepository } from '$lib/testing/agent/fakes/in-memory-tool-embeddings';
-import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 
@@ -15,13 +14,22 @@ const catalog = ['alpha', 'beta', 'gamma'].map((name) => ({
 }));
 const setup = async () => {
 	const repository = new InMemoryToolEmbeddingRepository();
-	const index = new ToolCatalogIndex(repository);
-	const embeddings = new InMemoryEmbeddingClient();
-	const plan = await index.prepare(catalog, embeddings.model);
+	const embeddings = new InMemoryRetrievalProvider();
+	const search = new ToolSearch({
+		repository,
+		provider: embeddings.client,
+		model: 'fake-embedding-v1',
+		tokens: testTokenizer,
+		observer: { run: (_name, _context, body) => body() }
+	});
+	const plan = {
+		pending: catalog.map((tool) => ({
+			name: tool.name,
+			input: `${tool.name}: ${tool.retrievalText}`
+		}))
+	};
 	const controller = new ToolDiscovery(
-		index,
-		embeddings,
-		new EmbeddingBatching(testTokenizer),
+		search,
 		new InMemoryTransactionRunner([repository]),
 		new AgentToolCatalogService()
 	);
@@ -52,5 +60,5 @@ it('does not publish earlier batches when a later provider request fails', async
 		outcome,
 		rows: [...fixture.repository.rows.values()],
 		completedProviderBatches: fixture.embeddings.generation - 1
-	}).toEqual({ outcome: 'Embedding rejected this content', rows: [], completedProviderBatches: 1 });
+	}).toEqual({ outcome: 'Embedding generation failed', rows: [], completedProviderBatches: 1 });
 });

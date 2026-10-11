@@ -1,50 +1,42 @@
 import OpenAI from 'openai';
-import {
-	DEFAULT_EMBEDDING_MODEL,
-	type EmbeddingClient
-} from '$lib/models/knowledge-search/embeddings';
-import {
-	DEFAULT_SEARCH_QUERY_MODEL,
-	type SearchQueryGenerator
-} from '$lib/models/knowledge-search/query-generation';
-import type { OperationObserver } from '$lib/models/telemetry';
-import { Embeddings } from '$lib/server/adapters/knowledge-search/embeddings';
-import { SearchQueryGeneration } from '$lib/server/adapters/knowledge-search/query-generation';
+import type { RerankEndpoint } from '$lib/models/knowledge-search';
 
 export interface RetrievalProviderConfiguration {
 	readonly apiKey: string;
 	readonly baseURL: string;
 	readonly appURL: string;
-	readonly model?: string;
 	readonly fetch?: typeof globalThis.fetch;
 }
 
-const createClient = (configuration: RetrievalProviderConfiguration): OpenAI =>
-	new OpenAI({
-		apiKey: configuration.apiKey,
-		baseURL: configuration.baseURL,
-		fetch: configuration.fetch,
-		timeout: Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000),
-		defaultHeaders: {
-			'HTTP-Referer': configuration.appURL,
-			'X-OpenRouter-Title': 'FollowThrough'
-		}
-	});
+/** The OpenAI-compatible client and rerank endpoint behind knowledge retrieval and tool search. */
+export interface RetrievalProvider {
+	readonly client: OpenAI;
+	readonly rerank: RerankEndpoint;
+}
 
-export const createEmbeddings = (
-	configuration: RetrievalProviderConfiguration,
-	observer: OperationObserver
-): EmbeddingClient =>
-	new Embeddings(
-		createClient(configuration),
-		configuration.model ?? DEFAULT_EMBEDDING_MODEL,
-		observer
-	);
-
-export const createSearchQueryGeneration = (
+export const createRetrievalProvider = (
 	configuration: RetrievalProviderConfiguration
-): SearchQueryGenerator =>
-	new SearchQueryGeneration(
-		createClient(configuration),
-		configuration.model ?? DEFAULT_SEARCH_QUERY_MODEL
-	);
+): RetrievalProvider => {
+	const fetch = configuration.fetch ?? globalThis.fetch;
+	return {
+		client: new OpenAI({
+			apiKey: configuration.apiKey,
+			baseURL: configuration.baseURL,
+			fetch,
+			timeout: Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000),
+			defaultHeaders: {
+				'HTTP-Referer': configuration.appURL,
+				'X-OpenRouter-Title': 'FollowThrough'
+			}
+		}),
+		rerank: {
+			url: `${configuration.baseURL}/rerank`,
+			fetch,
+			headers: {
+				authorization: `Bearer ${configuration.apiKey}`,
+				'HTTP-Referer': configuration.appURL,
+				'X-Title': 'FollowThrough'
+			}
+		}
+	};
+};

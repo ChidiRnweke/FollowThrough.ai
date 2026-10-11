@@ -42,7 +42,10 @@ it('fails when a query embedding is missing instead of claiming there are no too
 it('propagates an embedding provider failure', async () => {
 	const { controller, embeddings } = await seeded();
 	embeddings.failure = new Error('Provider unavailable');
-	await expect(controller.retrieve(catalog, 'notes', 5)).rejects.toBe(embeddings.failure);
+	await expect(controller.retrieve(catalog, 'notes', 5)).rejects.toMatchObject({
+		code: 'EXTERNAL_SERVICE',
+		message: 'Embedding generation failed'
+	});
 });
 
 it('reports an incomplete seed instead of silently omitting an available tool', async () => {

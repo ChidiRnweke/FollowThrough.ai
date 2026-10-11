@@ -1,4 +1,3 @@
-import type { OperationObserver } from '$lib/models/telemetry';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
 import { createAgentToolResults } from '$lib/server/factories/agent/tool-result-factory';
@@ -8,12 +7,16 @@ import {
 	type ProductionControllerDependencies
 } from '$lib/server/factories/production-controller-factory';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
-import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from './config';
+import {
+	DEFAULT_GENERATION_MODEL,
+	DEFAULT_LANGUAGE_MODEL_BASE_URL,
+	optionalProperty
+} from './config';
 import type {
 	IImageDescription,
 	ITextRecognition
 } from './controllers/attachment-processing/controller';
-import type { ToolRetriever } from './controllers/tool-discovery/controller';
+import type { ToolDiscoveryController } from './controllers/tool-discovery/controller';
 import type { Database } from './db';
 import type { McpSurfaceFactory } from './factories/agent/mcp-tool-factory';
 import { createAgentCapability } from './factories/capabilities/agent-capability-factory';
@@ -40,12 +43,6 @@ import type {
 } from './repositories/attachments/object-storage';
 import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { AttachmentClaims } from './services/attachments/contracts';
-import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
-import type { Reranker } from '$lib/models/knowledge-search';
-import type {
-	SearchQueryGenerator,
-	SearchQueryCache
-} from '$lib/models/knowledge-search/query-generation';
 import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { AgentEventBus } from './stores/agent/events';
 
@@ -56,11 +53,8 @@ import type { AgentEventBus } from './stores/agent/events';
  * production so that an isolated run exercises the real code paths.
  */
 export interface ApplicationOverrides {
-	readonly embeddingClient?: EmbeddingClient;
-	readonly reranker?: Reranker;
-	readonly queryGenerator?: SearchQueryGenerator;
-	readonly queryCache?: SearchQueryCache;
-	readonly queryObserver?: OperationObserver;
+	/** Transport for the embedding, rerank and search-query providers. */
+	readonly retrievalFetch?: typeof globalThis.fetch;
 	readonly attachmentStorage?: IAttachmentStorage;
 	readonly referenceClient?: WebReferenceClient;
 	readonly modelCatalog?: AgentModelCatalog;
@@ -108,7 +102,7 @@ export interface ProductionApplication {
 	 */
 	readonly provenance: ProvenanceRecorder;
 	/** Shared so MCP's `search_tools` reuses the process-wide vector cache. */
-	readonly toolRetriever: ToolRetriever;
+	readonly toolRetriever: ToolDiscoveryController;
 }
 
 /**
@@ -189,21 +183,13 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		openRouterApiKey,
 		openRouterBaseURL,
 		appURL,
-		embeddingClient: overrides.embeddingClient,
-		reranker: overrides.reranker,
-		queryGenerator: overrides.queryGenerator,
-		queryObserver: overrides.queryObserver,
+		...optionalProperty('providerFetch', overrides.retrievalFetch),
 		deferEmbedding
 	});
-	const {
-		queryGenerator,
-		noteIndexer,
-		diagramIndexer,
-		memoryIndexer,
-		lookup: knowledgeLookup,
-		embeddingClient: searchEmbeddings,
-		reranker: searchReranker
-	} = knowledgeSearch;
+	const knowledge = knowledgeSearch.knowledge;
+	const noteIndexer = knowledge;
+	const diagramIndexer = knowledge;
+	const memoryIndexer = knowledge;
 	const toolRetriever = knowledgeSearch.toolRetriever;
 	const agentFilesCapability = createAgentFilesCapability({
 		tokens: knowledgeSearch.tokenizer,
@@ -261,7 +247,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		db,
 		notes: noteRepository,
 		preferences,
-		indexer: knowledgeSearch.attachmentIndexer,
+		indexer: knowledge,
 		openRouterApiKey,
 		openRouterBaseURL,
 		appURL,
@@ -351,9 +337,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		relationships: {
 			...toolResults,
 			selectionOrigins: noteCapability.selectionOrigins,
-			knowledgeLookup,
-			embeddings: searchEmbeddings,
-			reranker: searchReranker,
+			knowledge,
 			relationshipClassifier: relationshipCapability.classifier,
 			suggestionCreator: suggestions.creator,
 			transactionRunner,
@@ -382,9 +366,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			...toolResults,
 			generationRules: diagramCapability.generationRules,
 			diagramSourceNotes: notes.reader,
-			indexEmbeddings: knowledgeSearch.embeddingClient,
-			embeddingBatching: knowledgeSearch.embeddingBatching,
-			indexWriter: knowledgeSearch.indexWriter,
 			selectionOrigins: noteCapability.selectionOrigins,
 			generation: diagramCapability.generation,
 			suggestionCreator: suggestions.creator,
@@ -407,9 +388,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			diagramEditing: diagramCapability.editingRules,
 			diagramLifecycle: diagramCapability.lifecycleRules,
 			diagramSourceNotes: notes.reader,
-			indexEmbeddings: knowledgeSearch.embeddingClient,
-			embeddingBatching: knowledgeSearch.embeddingBatching,
-			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner,
@@ -434,9 +412,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			...toolResults,
 			todoCreationRules: todoCapability.creationRules,
 			suggestionPresentation: suggestionCapability.presentation,
-			indexEmbeddings: knowledgeSearch.embeddingClient,
-			embeddingBatching: knowledgeSearch.embeddingBatching,
-			indexWriter: knowledgeSearch.indexWriter,
 			suggestionLister: suggestions.lister,
 			suggestionExpirer: suggestions.expirer,
 			suggestionContextReader: suggestions.context,
@@ -547,7 +522,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			lifecycle: attachmentCapability.lifecycle,
 			todoReader: todos.reader,
 			transactionRunner,
-			attachmentIndexer: knowledgeSearch.attachmentIndexer
+			attachmentIndexer: knowledge
 		},
 		deliverables: {
 			...toolResults,
@@ -593,9 +568,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteReferences: noteCapability.references,
 			noteCreationRules: noteCapability.creationRules,
 			noteEditingRules: noteCapability.editingRules,
-			indexEmbeddings: knowledgeSearch.embeddingClient,
-			embeddingBatching: knowledgeSearch.embeddingBatching,
-			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			skillFinder: skills.finder,
@@ -651,9 +623,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteEditingRules: noteCapability.editingRules,
 			notePresentation: noteCapability.presentation,
 			suggestionPresentation: suggestionCapability.presentation,
-			indexEmbeddings: knowledgeSearch.embeddingClient,
-			embeddingBatching: knowledgeSearch.embeddingBatching,
-			indexWriter: knowledgeSearch.indexWriter,
 			markdown: noteCapability.markdown,
 			archiveImport: noteCapability.archiveImport,
 			patchPreparation: noteCapability.patchPreparation,
@@ -701,9 +670,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			...toolResults,
 			editing: memory.editing,
 			presentation: memory.presentation,
-			indexEmbeddings: knowledgeSearch.embeddingClient,
-			embeddingBatching: knowledgeSearch.embeddingBatching,
-			indexWriter: knowledgeSearch.indexWriter,
 			memoryIndexer,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
@@ -733,10 +699,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			widgetReader: widgets.reader,
 			widgetLister: widgets.lister,
 			widgetWriter: widgets.writer,
-			widgetIndexer: knowledgeSearch.widgetIndexer,
-			indexEmbeddings: knowledgeSearch.embeddingClient,
-			embeddingBatching: knowledgeSearch.embeddingBatching,
-			indexWriter: knowledgeSearch.indexWriter,
+			widgetIndexer: knowledge,
 			transactionRunner
 		},
 		projects: {
@@ -759,13 +722,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		retrieval: {
 			...toolResults,
-			knowledgeLookup,
-			embeddings: searchEmbeddings,
-			reranker: searchReranker,
-			queryGenerator,
-			queryRules: knowledgeSearch.queryRules,
-			queryCache: overrides.queryCache,
-			observer: knowledgeSearch.queryObserver,
+			knowledge,
 			conversations: conversationMessages
 		},
 		inlineSuggestions: {
@@ -775,9 +732,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			inlineCompletionGenerator: finalizedKnowledgeSearch.inlineCompletion,
 			completionRules: finalizedKnowledgeSearch.completionRules,
 			defaultCompletionModel: finalizedKnowledgeSearch.defaultCompletionModel,
-			knowledgeLookup,
-			embeddings: searchEmbeddings,
-			reranker: searchReranker,
+			knowledge,
 			memory: memory.lister,
 			observer: finalizedKnowledgeSearch.observer,
 			workflow: finalizedKnowledgeSearch.workflow,

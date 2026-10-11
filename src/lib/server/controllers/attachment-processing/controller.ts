@@ -1,4 +1,4 @@
-import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/indexing';
+import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/retrieval';
 import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
 
 import type { ActorContext } from '$lib/models/identity';

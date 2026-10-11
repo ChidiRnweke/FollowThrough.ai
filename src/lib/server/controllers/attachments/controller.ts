@@ -1,4 +1,4 @@
-import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/indexing';
+import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/retrieval';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
 import type { AgentPayload } from '$lib/models/agent/payload';

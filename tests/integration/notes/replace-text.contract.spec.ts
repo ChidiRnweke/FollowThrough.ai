@@ -1,3 +1,4 @@
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -19,7 +20,6 @@ import { SuggestionPresentationService } from '$lib/services/suggestions/present
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
@@ -38,7 +38,7 @@ const setup = async (suffix: string) => {
 	const search = new KnowledgeIndexRecords(database);
 	const index = createContentIndex(
 		search,
-		new InMemoryEmbeddingClient().model,
+		new InMemoryRetrievalProvider().model,
 		{ targetTokens: 2400, overlapTokens: 480 },
 		true
 	);

@@ -1,3 +1,4 @@
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { ImageDescriptionService } from '$lib/server/services/attachments/image-description';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
@@ -13,10 +14,7 @@ import {
 	AttachmentProcessingService
 } from '$lib/server/services/attachments/content';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
-import {
-	InMemorySearchRepository,
-	InMemoryEmbeddingClient
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -63,7 +61,7 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 				updatedAt: testNow
 			})
 		},
-		indexer: createContentIndex(search, new InMemoryEmbeddingClient().model, chunker),
+		indexer: createContentIndex(search, new InMemoryRetrievalProvider().model, chunker),
 		transactionRunner: new InMemoryTransactionRunner([repository, search]),
 		visionModel: process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ?? 'google/gemini-2.5-flash-lite',
 		logger: { error: () => {} }

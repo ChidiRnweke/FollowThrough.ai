@@ -1,4 +1,4 @@
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { AgentRunId } from '$lib/models/agent';
 import type { Provenance } from '$lib/models/provenance';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
@@ -9,10 +9,7 @@ import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
@@ -60,8 +57,8 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 	const suggestions = new InMemorySuggestions();
 	const effects = new InMemorySuggestionEffects();
 	const search = new InMemorySearchRepository();
-	const embeddings = new InMemoryEmbeddingClient();
-	const index = createContentIndex(search, embeddings.model);
+	const embeddings = new InMemoryRetrievalProvider();
+	const index = createContentIndex(search, undefined, undefined, false, embeddings);
 	const trust = new InMemoryTrustPolicyEvaluator();
 	trust.autoAccept = trusted;
 	const controller = new Memory(
@@ -75,9 +72,6 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 			suggestionAccepter: suggestions,
 			suggestionEffects: effects,
 			memoryIndexer: index,
-			indexWriter: index,
-			indexEmbeddings: embeddings,
-			embeddingBatching: new EmbeddingBatching(testTokenizer),
 			trustPolicyEvaluator: trust,
 			transactionRunner: new InMemoryTransactionRunner([entries, suggestions, effects, search])
 		})

@@ -1,5 +1,4 @@
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { UpdateTrustPolicyInput } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
@@ -10,10 +9,7 @@ import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryTrustPolicyRepository } from '$lib/testing/agent/fakes/in-memory-trust-policy-repository';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import {
@@ -100,8 +96,8 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 	if (scenario.policy) await trust.upsert(scenario.policy.actor, scenario.policy.input);
 	const effects = new InMemorySuggestionEffects();
 	const search = new InMemorySearchRepository();
-	const embeddings = new InMemoryEmbeddingClient();
-	const index = createContentIndex(search, embeddings.model);
+	const embeddings = new InMemoryRetrievalProvider();
+	const index = createContentIndex(search, undefined, undefined, false, embeddings);
 	const controller = new Memory(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
@@ -114,9 +110,6 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 			trustPolicyEvaluator: trust,
 			suggestionEffects: effects,
 			memoryIndexer: index,
-			indexWriter: index,
-			indexEmbeddings: embeddings,
-			embeddingBatching: new EmbeddingBatching(testTokenizer),
 			transactionRunner: new InMemoryTransactionRunner([entries, effects, search])
 		})
 	);

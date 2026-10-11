@@ -1,4 +1,3 @@
-import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { AgentStreamState } from '$lib/server/stores/agent/stream';
 import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
 import { DuplicateNoteActionRequest } from '$lib/errors';
@@ -10,7 +9,6 @@ import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool
 import type { DiagramGenerationRules } from '$lib/server/services/diagrams/generation-rules';
 import type { DiagramDraftWriter } from '$lib/server/services/diagrams/library';
 import type { DiagramRunContexts } from '$lib/server/services/diagrams/run-context';
-import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 
@@ -70,7 +68,7 @@ import type {
 	StartReviseInlineMermaidInput
 } from '$lib/models/diagrams';
 import type { ActorContext } from '$lib/models/identity';
-import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
+import type { DiagramIndexContext } from '$lib/models/knowledge-search';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
 import type { DateTime, AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import {
@@ -82,11 +80,10 @@ import type {
 	DiagramTextExtractor,
 	MermaidDiagramRenderer
 } from '$lib/server/services/diagrams/content';
-import type { DiagramIndexing as DiagramIndexer } from '$lib/server/services/knowledge-search/indexing';
+import type { DiagramIndexing as DiagramIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import type { DrawioXmlContentValidator } from '$lib/server/services/diagrams/drawio';
 import type { DiagramFinder, DiagramWriter } from '$lib/server/services/diagrams/library';
 import type { MermaidSourceValidator } from '$lib/server/services/diagrams/submission-validation';
-import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
@@ -254,9 +251,6 @@ export interface DiagramsDependencies {
 	textExtractor: DiagramTextExtractor;
 	diagramWriter: DiagramWriter;
 	diagramSourceNotes: NoteReader;
-	indexEmbeddings: EmbeddingClient;
-	embeddingBatching: IEmbeddingBatching;
-	indexWriter: IndexCompletion;
 	diagramIndexer: DiagramIndexer;
 	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
@@ -632,26 +626,9 @@ export class Diagrams implements DiagramsController {
 						kind: 'note',
 						title: (await this.dependencies.diagramSourceNotes.get(actor, requirement.noteId)).title
 					};
-		await this.finishIndex(
-			actor,
-			await this.dependencies.diagramIndexer.indexDiagram(actor, diagram, context)
-		);
+		await this.dependencies.diagramIndexer.indexDiagram(actor, diagram, context);
 	}
 
-	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
-		if (result.kind === 'stored') return;
-		const batches: EmbeddingBatch[] = [];
-		for (const contents of this.dependencies.embeddingBatching.batches(
-			result.missing.map((chunk) => chunk.input)
-		)) {
-			batches.push(await this.dependencies.indexEmbeddings.embed(contents));
-		}
-		const batch = this.dependencies.embeddingBatching.combine(
-			this.dependencies.indexEmbeddings.model,
-			batches
-		);
-		await this.dependencies.indexWriter.complete(actor, result, batch);
-	}
 	private async publishGeneration<Result>(
 		actor: ActorContext,
 		task: DiagramTask,

@@ -1,20 +1,52 @@
 import type { StoredToolEmbedding, ToolEmbeddingWrite } from '$lib/models/agent/tool-index';
 import type { ToolEmbeddingRepository } from '$lib/server/repositories/agent/tool-embeddings';
-import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
+import OpenAI from 'openai';
+import { z } from 'zod';
 import type {
 	SnapshotParticipant,
 	RestoreSnapshot
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
-export class InMemoryToolEmbeddings implements EmbeddingClient {
+/** The embedding endpoint behind tool search, served in memory over `fetch`. */
+export class InMemoryToolEmbeddings {
+	/** Vectors returned for every request; each input gets `[0, 1]` when unset. */
 	vectors: readonly (readonly number[])[] | undefined;
 	failure?: Error;
-	constructor(readonly model = 'test-model') {}
-	async embed(contents: readonly string[]) {
+	readonly requests: (readonly string[])[] = [];
+
+	readonly fetch: typeof globalThis.fetch = async (_input, init) => {
+		const request = embeddingRequestSchema.parse(JSON.parse(String(init?.body ?? '{}')));
+		const input = request.input;
+		const base64 = request.encoding_format === 'base64';
+		this.requests.push(input);
 		if (this.failure) throw this.failure;
-		return { model: this.model, vectors: this.vectors ?? contents.map(() => [0, 1]) };
-	}
+		const vectors = this.vectors ?? input.map(() => [0, 1]);
+		return Response.json({
+			object: 'list',
+			model: this.model,
+			usage: { prompt_tokens: 0, total_tokens: 0 },
+			data: vectors.map((embedding, index) => ({
+				object: 'embedding',
+				index,
+				embedding: base64 ? encodeVector(embedding) : embedding
+			}))
+		});
+	};
+
+	readonly client = new OpenAI({
+		apiKey: 'test-key',
+		baseURL: 'https://provider.test/v1',
+		fetch: this.fetch,
+		maxRetries: 0
+	});
+
+	constructor(readonly model = 'test-model') {}
 }
+
+const embeddingRequestSchema = z.object({
+	input: z.array(z.string()),
+	encoding_format: z.string().optional()
+});
 
 export class InMemoryToolEmbeddingRepository
 	implements ToolEmbeddingRepository, SnapshotParticipant
@@ -66,3 +98,7 @@ const cosine = (left: readonly number[], right: readonly number[]) => {
 		Math.sqrt(right.reduce((sum, value) => sum + value * value, 0));
 	return norm === 0 ? 0 : dot / norm;
 };
+
+/** The SDK requests base64 float32 vectors unless told otherwise, and decodes them itself. */
+const encodeVector = (vector: readonly number[]): string =>
+	Buffer.from(new Float32Array(vector).buffer).toString('base64');

@@ -6,7 +6,8 @@ import {
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
 import { RelationshipRules } from '$lib/server/services/relationships/rules';
 import { RelationshipCandidatesService } from '$lib/services/relationships/candidates';
@@ -15,11 +16,7 @@ import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-
 import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-import {
-	InMemoryEmbeddingClient,
-	InMemoryReranker,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import {
@@ -50,8 +47,7 @@ export const relatedNoteFixture = () => {
 	const repository = new InMemorySearchRepository();
 	const client = new InMemoryStructuredRelationshipClient();
 	client.result = { kind: 'prior_decision', justification: 'Earlier decision', confidence: 88 };
-	const embeddings = new InMemoryEmbeddingClient();
-	const reranker = new InMemoryReranker();
+	const provider = new InMemoryRetrievalProvider();
 	const runs = new InMemoryAgentRunPersistence();
 	const conversations = new InMemoryConversationRepository();
 	const transactions = new InMemoryTransactionRunner([
@@ -66,9 +62,7 @@ export const relatedNoteFixture = () => {
 	const dependencies: RelationshipsDependencies = {
 		...agentToolResultsFixture(),
 		selectionOrigins: new InMemorySelectionOrigins(content, provenance),
-		knowledgeLookup: new KnowledgeLookup(repository),
-		embeddings,
-		reranker,
+		knowledge: createTestContentIndex(repository, undefined, undefined, false, provider),
 		relationshipClassifier: new RelationshipDiscovery(client),
 		relationshipRules: new RelationshipRules(),
 		relationshipGeneration: { kind: 'model', model: 'test/model' },
@@ -103,7 +97,6 @@ export const relatedNoteFixture = () => {
 		requests,
 		transactions,
 		agent,
-		embeddings,
-		reranker
+		provider
 	};
 };
