@@ -1,23 +1,10 @@
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { DateTime } from '$lib/models/workspace';
 import type { MaintenanceProgress } from '$lib/server/services/maintenance/progress';
+import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
+import type { AttachmentCleanup } from '$lib/server/services/attachments/records';
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	AttachmentUpload,
-	OwnedAttachmentUpload,
-	UploadRetentionCursor
-} from '$lib/models/attachments';
-export interface AttachmentStorage {
-	remove(objectKey: string): Promise<void>;
-}
-export interface UploadRetentionRepository {
-	listExpiredUploads(
-		cutoff: Date,
-		limit: number,
-		after?: UploadRetentionCursor
-	): Promise<readonly OwnedAttachmentUpload[]>;
-	deleteUpload(actor: ActorContext, id: AttachmentUpload['id']): Promise<void>;
-}
+import type { OwnedAttachmentUpload } from '$lib/models/attachments';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 const DEFAULT_MAX_PER_TICK = 500;
@@ -52,8 +39,8 @@ export class UploadRetention implements ScheduledTask {
 	private readonly logger: Pick<Console, 'error' | 'log'>;
 
 	constructor(
-		private readonly repository: UploadRetentionRepository,
-		private readonly storage: AttachmentStorage,
+		private readonly repository: Pick<AttachmentCleanup, 'listExpiredUploads' | 'deleteUpload'>,
+		private readonly storage: Pick<IAttachmentStorage, 'remove'>,
 		private readonly progress: MaintenanceProgress,
 		options: UploadRetentionOptions = {}
 	) {

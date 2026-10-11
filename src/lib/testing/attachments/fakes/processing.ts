@@ -13,10 +13,8 @@ import type {
 	AttachmentRepository,
 	OwnedAttachmentUpload
 } from '$lib/server/repositories/attachments/attachments';
-import {
-	type IAttachmentStorage,
-	type StoredObjectInfo
-} from '$lib/server/repositories/attachments/object-storage';
+import { type IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
+import type { StoredObjectInfo } from '$lib/models/attachments';
 import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { RecognizedContent as OcrContentPart } from '$lib/models/attachments/ocr';
 import { z } from 'zod';

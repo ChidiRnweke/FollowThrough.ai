@@ -1,4 +1,4 @@
-import { CatalogWidgetCandidateReader } from '$lib/adapters/widgets/candidate-reader';
+import { CatalogWidgetCandidateReader } from '$lib/infrastructure/widgets/candidate-reader';
 import type { WidgetEditingController } from '$lib/controllers/widgets/editing';
 import type { WidgetCandidateReader, WidgetCatalogReader } from '$lib/models/widgets';
 import {

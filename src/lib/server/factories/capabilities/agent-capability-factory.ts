@@ -1,3 +1,14 @@
+import {
+	AgentRunDecisionService,
+	AgentRunEventService,
+	AgentRunService,
+	AgentSessionService,
+	type AgentRunDecisions,
+	type AgentRunEvents,
+	type AgentRuns,
+	type AgentSessions
+} from '$lib/server/services/agent/runs/records';
+
 import type { WebResearchOptions } from '$lib/models/agent';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import type { TokenCounter } from '$lib/models/tokenization';
@@ -24,12 +35,7 @@ import {
 import type { AgentToolDiscoveryServices } from '$lib/server/factories/agent/tool-discovery-factory';
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import type {
-	AgentRunDecisionRepository,
-	AgentRunEventRepository,
-	AgentRunRepository,
-	AgentSessionRepository
-} from '$lib/server/repositories/agent';
+import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 import {
 	AgentRunDecisionRecords,
@@ -159,15 +165,19 @@ export interface AgentCapability {
 	readonly toolPreferences: ToolPreferenceCapability;
 	readonly toolCatalog: AgentToolCatalog;
 	readonly trust: TrustPolicyStore & TrustPolicyEvaluator;
-	readonly runs: AgentRunRepository;
 	readonly cancellations: RunCancellationDecisions;
 	readonly approvals: RunApprovalDecisions;
 	readonly preparation: ChatRunPreparation;
 	readonly checkpoints: RunCheckpointWriter;
 	readonly runLedger: WorkflowRunLedger;
-	readonly runEvents: AgentRunEventRepository;
-	readonly runDecisions: AgentRunDecisionRepository;
 	readonly sessions: AgentSessionRepository;
+	/** The run records the agent harness reads and writes, through their services. */
+	readonly harnessRecords: {
+		readonly runs: AgentRuns;
+		readonly events: AgentRunEvents;
+		readonly decisions: AgentRunDecisions;
+		readonly sessions: AgentSessions;
+	};
 	readonly context: IAgentContext;
 	readonly turns: AgentTurns;
 	readonly prompts: AgentPromptPreparation;
@@ -229,15 +239,18 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		toolPreferences,
 		toolCatalog: new AgentToolCatalogService(),
 		trust: new ToolTrust(new TrustPolicyRecords(input.db)),
-		runs,
 		cancellations: new RunCancellation(runs),
 		approvals: new RunApprovals(runs),
 		preparation: new RunPreparation(runs),
 		checkpoints: new RunCheckpoints(runs),
 		runLedger,
-		runEvents,
-		runDecisions,
 		sessions,
+		harnessRecords: {
+			runs: new AgentRunService(runs),
+			events: new AgentRunEventService(runEvents),
+			decisions: new AgentRunDecisionService(runDecisions),
+			sessions: new AgentSessionService(sessions)
+		},
 		context,
 		turns: new AgentTurnService(
 			createAgentProviders({

@@ -1,6 +1,8 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AttachmentId,
+	AttachmentVersion,
+	StoredObjectInfo,
 	AttachmentUpload,
 	AttachmentUploadId,
 	AttachmentVersionId,
@@ -14,8 +16,6 @@ import type { TodoId } from '$lib/models/todos';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments/attachments';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
-
-import type { IAttachmentStorage } from '$lib/server/repositories/attachments/storage';
 
 /** Only an embedded image claims this endpoint; prose mentioning it does not. */
 const documentReferencesAttachment = (
@@ -42,6 +42,10 @@ const validateAttachmentPath = (value: string): string => {
 
 const MAX_READ_CHARS = 20_000;
 const now = (): DateTime => new Date().toISOString() as DateTime;
+/**
+ * The attachment records around an upload. Object storage is a separate provider: the caller
+ * signs the upload, inspects and promotes the stored object between these steps.
+ */
 export interface AttachmentUploads {
 	initiate(
 		actor: ActorContext,
@@ -53,18 +57,29 @@ export interface AttachmentUploads {
 			byteSize: number;
 			checksumSha256: string;
 		}
-	): Promise<{
-		upload: AttachmentUpload;
-		uploadUrl: string;
-		requiredHeaders: Record<string, string>;
-	}>;
-	complete(actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentView>;
+	): Promise<{ upload: AttachmentUpload; requiredHeaders: Record<string, string> }>;
+	/** @throws NotFoundError if the upload is unknown or has expired. */
+	pending(actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentUpload>;
+	/**
+	 * The version a verified upload becomes, stored under its own key.
+	 *
+	 * @throws ValidationError if the stored object does not match the declared size and checksum.
+	 */
+	planVersion(
+		actor: ActorContext,
+		upload: AttachmentUpload,
+		stored: StoredObjectInfo
+	): AttachmentVersion;
+	finalize(
+		actor: ActorContext,
+		upload: AttachmentUpload,
+		version: AttachmentVersion
+	): Promise<AttachmentView>;
 }
 export class AttachmentUploadService implements AttachmentUploads {
 	constructor(
 		private readonly attachments: AttachmentRepository,
-		private readonly notes: NoteRepository,
-		private readonly storage: IAttachmentStorage
+		private readonly notes: NoteRepository
 	) {}
 
 	async initiate(
@@ -104,20 +119,44 @@ export class AttachmentUploadService implements AttachmentUploads {
 			expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() as DateTime,
 			createdAt: timestamp
 		});
-		const uploadUrl = await this.storage.createUploadUrl({
-			objectKey,
-			mediaType: upload.mediaType,
-			byteSize: upload.byteSize,
-			checksumSha256: upload.checksumSha256,
-			expiresInSeconds: 600
-		});
 		return {
 			upload,
-			uploadUrl,
 			requiredHeaders: {
 				'content-type': upload.mediaType,
 				'x-amz-meta-sha256': upload.checksumSha256
 			}
+		};
+	}
+
+	async pending(actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentUpload> {
+		const upload = await this.attachments.findUpload(actor, uploadId);
+		if (!upload || new Date(upload.expiresAt).getTime() <= Date.now())
+			throw new NotFoundError('Attachment upload was not found or has expired');
+		return upload;
+	}
+
+	planVersion(
+		actor: ActorContext,
+		upload: AttachmentUpload,
+		stored: StoredObjectInfo
+	): AttachmentVersion {
+		if (
+			stored.byteSize !== upload.byteSize ||
+			stored.checksumSha256?.toLowerCase() !== upload.checksumSha256
+		)
+			throw new ValidationError(
+				'Uploaded attachment does not match its declared size and checksum'
+			);
+		const versionId = crypto.randomUUID() as AttachmentVersionId;
+		return {
+			id: versionId,
+			attachmentId: crypto.randomUUID() as AttachmentId,
+			objectKey: `objects/${actor.userId}/${upload.projectId}/${versionId}`,
+			mediaType: upload.mediaType,
+			byteSize: upload.byteSize,
+			checksumSha256: upload.checksumSha256,
+			processingStatus: 'queued',
+			createdAt: now()
 		};
 	}
 
@@ -128,33 +167,12 @@ export class AttachmentUploadService implements AttachmentUploads {
 	 * editor's next autosave look stale and raised a spurious conflict for every
 	 * pasted or dropped image. Attachments live beside the document, not in it.
 	 */
-	async complete(actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentView> {
-		const upload = await this.attachments.findUpload(actor, uploadId);
-		if (!upload || new Date(upload.expiresAt).getTime() <= Date.now())
-			throw new NotFoundError('Attachment upload was not found or has expired');
-		const stored = await this.storage.stat(upload.objectKey);
-		if (
-			stored.byteSize !== upload.byteSize ||
-			stored.checksumSha256?.toLowerCase() !== upload.checksumSha256
-		)
-			throw new ValidationError(
-				'Uploaded attachment does not match its declared size and checksum'
-			);
-		const timestamp = now();
-		const versionId = crypto.randomUUID() as AttachmentVersionId;
-		const destinationKey = `objects/${actor.userId}/${upload.projectId}/${versionId}`;
-		await this.storage.promote(upload.objectKey, destinationKey);
-		const view = await this.attachments.finalize(actor, upload, {
-			id: versionId,
-			attachmentId: crypto.randomUUID() as AttachmentId,
-			objectKey: destinationKey,
-			mediaType: upload.mediaType,
-			byteSize: upload.byteSize,
-			checksumSha256: upload.checksumSha256,
-			processingStatus: 'queued',
-			createdAt: timestamp
-		});
-		return view;
+	finalize(
+		actor: ActorContext,
+		upload: AttachmentUpload,
+		version: AttachmentVersion
+	): Promise<AttachmentView> {
+		return this.attachments.finalize(actor, upload, version);
 	}
 }
 
@@ -166,6 +184,8 @@ export interface AttachmentReader extends AttachmentLookup {
 	listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly AttachmentView[]>;
 	listForTodo(actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]>;
 	get(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView>;
+	/** @throws NotFoundError if no attachment of the note has this path. */
+	locate(actor: ActorContext, noteId: NoteId, path: string): Promise<AttachmentView>;
 	read(
 		actor: ActorContext,
 		noteId: NoteId,
@@ -195,6 +215,12 @@ export class AttachmentReadingService implements AttachmentReader, AttachmentLoo
 		return found;
 	}
 
+	async locate(actor: ActorContext, noteId: NoteId, path: string): Promise<AttachmentView> {
+		const found = await this.attachments.findByPath(actor, noteId, validateAttachmentPath(path));
+		if (!found) throw new NotFoundError('Attachment was not found');
+		return found;
+	}
+
 	async read(
 		actor: ActorContext,
 		noteId: NoteId,
@@ -215,29 +241,6 @@ export class AttachmentReadingService implements AttachmentReader, AttachmentLoo
 			...(end < text.length ? { nextOffset: end } : {}),
 			parserKind: found.version.parserKind
 		};
-	}
-}
-
-export interface AttachmentDownloads {
-	downloadById(actor: ActorContext, attachmentId: AttachmentId): Promise<{ url: string }>;
-	download(actor: ActorContext, noteId: NoteId, path: string): Promise<{ url: string }>;
-}
-export class AttachmentDownloadService implements AttachmentDownloads {
-	constructor(
-		private readonly attachments: AttachmentRepository,
-		private readonly storage: IAttachmentStorage
-	) {}
-
-	async downloadById(actor: ActorContext, attachmentId: AttachmentId): Promise<{ url: string }> {
-		const found = await this.attachments.findById(actor, attachmentId);
-		if (!found) throw new NotFoundError('Attachment was not found');
-		return { url: await this.storage.createDownloadUrl(found.version.objectKey, 300) };
-	}
-
-	async download(actor: ActorContext, noteId: NoteId, path: string): Promise<{ url: string }> {
-		const found = await this.attachments.findByPath(actor, noteId, validateAttachmentPath(path));
-		if (!found) throw new NotFoundError('Attachment was not found');
-		return { url: await this.storage.createDownloadUrl(found.version.objectKey, 300) };
 	}
 }
 

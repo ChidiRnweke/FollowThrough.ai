@@ -19,7 +19,7 @@ import {
 	type DiagramRasterization
 } from '$lib/server/services/deliverables/diagram-rendering';
 import type { Database } from '$lib/server/db';
-import type { IAttachmentStorage } from '$lib/server/repositories/attachments/object-storage';
+import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
 import { fetchRemoteDataUrl } from '$lib/server/repositories/deliverables/export-images';
 import { ArtifactRecords } from '$lib/server/repositories/deliverables/postgres/artifacts';
 import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';

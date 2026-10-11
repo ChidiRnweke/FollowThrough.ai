@@ -1,16 +1,17 @@
 import type { ScheduledTask } from '$lib/models/maintenance';
-interface PendingObjectRemovals {
-	listPendingObjectRemovals(): Promise<readonly string[]>;
-	completeObjectRemoval(objectKey: string): Promise<void>;
-}
+import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
+import type { AttachmentCleanup } from '$lib/server/services/attachments/records';
 
 /** Only committed queue entries are visible; storage removal is idempotent. */
 export class AttachmentObjectRemoval implements ScheduledTask {
 	readonly name = 'attachment-object-removal';
 	readonly intervalMs = 60_000;
 	constructor(
-		private readonly repository: PendingObjectRemovals,
-		private readonly storage: { remove(objectKey: string): Promise<void> }
+		private readonly repository: Pick<
+			AttachmentCleanup,
+			'listPendingObjectRemovals' | 'completeObjectRemoval'
+		>,
+		private readonly storage: Pick<IAttachmentStorage, 'remove'>
 	) {}
 	async run(): Promise<void> {
 		const failures: Error[] = [];

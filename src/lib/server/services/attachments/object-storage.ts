@@ -12,14 +12,29 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ExternalServiceError, ValidationError } from '$lib/errors';
 
-import type {
-	StoredObjectInfo,
-	IAttachmentStorage
-} from '$lib/server/repositories/attachments/storage';
-export type {
-	StoredObjectInfo,
-	IAttachmentStorage
-} from '$lib/server/repositories/attachments/storage';
+import type { StoredObjectInfo } from '$lib/models/attachments';
+
+/** The object storage provider: uploads, downloads and stored bytes, addressed by object key. */
+export interface IAttachmentStorage {
+	createUploadUrl(input: {
+		objectKey: string;
+		mediaType: string;
+		byteSize: number;
+		checksumSha256: string;
+		expiresInSeconds: number;
+	}): Promise<string>;
+	createDownloadUrl(
+		objectKey: string,
+		expiresInSeconds: number,
+		downloadFilename?: string
+	): Promise<string>;
+	put(objectKey: string, data: Uint8Array, mediaType: string): Promise<void>;
+	stat(objectKey: string): Promise<StoredObjectInfo>;
+	read(objectKey: string, maximumBytes: number): Promise<Uint8Array>;
+	promote(sourceKey: string, destinationKey: string): Promise<void>;
+	remove(objectKey: string): Promise<void>;
+}
+
 export interface ObjectStorageConfig {
 	readonly endpoint: string;
 	readonly region: string;
@@ -31,7 +46,6 @@ export interface ObjectStorageConfig {
 
 export class AttachmentStorage implements IAttachmentStorage {
 	private readonly client: S3Client;
-	private bucketReady: Promise<void> | undefined;
 
 	constructor(private readonly config: ObjectStorageConfig) {
 		this.client = new S3Client({
@@ -52,6 +66,8 @@ export class AttachmentStorage implements IAttachmentStorage {
 		checksumSha256: string;
 		expiresInSeconds: number;
 	}): Promise<string> {
+		// Checked per upload, not remembered: the server keeps no state between operations, and an
+		// upload is a user action, so one HEAD request is negligible.
 		await this.ensureBucket();
 		return getSignedUrl(
 			this.client,
@@ -71,11 +87,7 @@ export class AttachmentStorage implements IAttachmentStorage {
 		);
 	}
 
-	private ensureBucket(): Promise<void> {
-		return (this.bucketReady ??= this.checkOrCreateBucket());
-	}
-
-	private async checkOrCreateBucket(): Promise<void> {
+	private async ensureBucket(): Promise<void> {
 		try {
 			await this.client.send(new HeadBucketCommand({ Bucket: this.config.bucket }));
 		} catch (error) {

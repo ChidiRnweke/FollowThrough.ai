@@ -1,3 +1,4 @@
+import { InMemoryAttachmentStorage } from '$lib/testing/attachments/fakes/in-memory-deliverables';
 import { NotFoundError } from '$lib/errors';
 import type { AttachmentId, AttachmentUploadId } from '$lib/models/attachments';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
@@ -32,6 +33,7 @@ const setup = () => {
 				uploads: attachments,
 				reader: attachments,
 				lifecycle: attachments,
+				storage: new InMemoryAttachmentStorage(),
 				todoReader: todos,
 				transactionRunner: new InMemoryTransactionRunner([attachments])
 			})

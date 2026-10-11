@@ -9,10 +9,8 @@ import type {
 } from '$lib/models/deliverables';
 import type { ProjectId, ProjectTemplate, TemplateUpload } from '$lib/models/projects';
 import type { ArtifactRepository, TemplateRepository } from '$lib/server/repositories/deliverables';
-import type {
-	IAttachmentStorage,
-	StoredObjectInfo
-} from '$lib/server/repositories/attachments/object-storage';
+import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
+import type { StoredObjectInfo } from '$lib/models/attachments';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant

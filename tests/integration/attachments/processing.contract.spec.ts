@@ -1,3 +1,8 @@
+import { InMemoryStorage } from '$lib/testing/attachments/fakes/processing';
+import {
+	AttachmentClaimService,
+	AttachmentVersionService
+} from '$lib/server/services/attachments/records';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { InMemoryAttachmentExtraction } from '$lib/testing/attachments/fakes/extraction';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
@@ -71,12 +76,15 @@ const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapToke
 	extraction.results.text = { text: 'Extracted document', parserKind: 'text' };
 	const worker = new AttachmentProcessing({
 		modelSelection: new AgentModelSelectionService(),
-		records,
-		claims: new PostgresAttachmentClaims(
-			{ open: () => postgres(context.url, { max: 1, idle_timeout: 0, max_lifetime: 0 }) },
-			transaction.connectionScope
+		records: new AttachmentVersionService(records),
+		claims: new AttachmentClaimService(
+			new PostgresAttachmentClaims(
+				{ open: () => postgres(context.url, { max: 1, idle_timeout: 0, max_lifetime: 0 }) },
+				transaction.connectionScope
+			)
 		),
 		extraction,
+		storage: new InMemoryStorage(),
 		processing: new AttachmentProcessingService(),
 		formats: new AttachmentFormatService(),
 		preferences: {

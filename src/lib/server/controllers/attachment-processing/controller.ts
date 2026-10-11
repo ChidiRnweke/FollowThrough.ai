@@ -10,20 +10,20 @@ import type { ExtractedAttachmentContent } from '$lib/models/attachments/ocr';
 import type { AttachmentFormats } from '$lib/server/services/attachments/formats';
 import type { AttachmentProcessingRules } from '$lib/server/services/attachments/content';
 import type { AttachmentContentExtraction } from '$lib/server/services/attachments/extraction';
+import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
+import type { AttachmentExtractionSource } from '$lib/models/attachments/ocr';
 import type {
-	AttachmentClaims,
 	AttachmentClaim,
-	AttachmentRepository
-} from '$lib/server/services/attachments/contracts';
+	AttachmentProcessingClaims,
+	AttachmentVersions
+} from '$lib/server/services/attachments/records';
 
 interface AttachmentProcessingDependencies {
 	readonly modelSelection: IAgentModelSelectionService;
-	records: Pick<
-		AttachmentRepository,
-		'listPendingVersions' | 'findVersionForUpdate' | 'updateVersion'
-	>;
-	claims: AttachmentClaims;
+	records: AttachmentVersions;
+	claims: AttachmentProcessingClaims;
 	extraction: AttachmentContentExtraction;
+	storage: Pick<IAttachmentStorage, 'read' | 'createDownloadUrl'>;
 	processing: AttachmentProcessingRules;
 	formats: AttachmentFormats;
 	preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
@@ -112,7 +112,12 @@ export class AttachmentProcessing {
 			? 'text'
 			: this.dependencies.formats.ocrKind(mediaType, path);
 		if (!kind) return undefined;
-		return this.dependencies.extraction.extract({ objectKey, byteSize, path, kind }, model);
+		const source: AttachmentExtractionSource =
+			kind === 'text'
+				? { kind, bytes: await this.dependencies.storage.read(objectKey, byteSize) }
+				: // The OCR and vision providers read the object through this link while they work.
+					{ kind, path, url: await this.dependencies.storage.createDownloadUrl(objectKey, 900) };
+		return this.dependencies.extraction.extract(source, model);
 	}
 	private async complete(
 		actor: ActorContext,

@@ -1,3 +1,5 @@
+import type { AttachmentReader } from '$lib/server/services/attachments/library';
+import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
 import type { TemplateStyleReader } from '$lib/server/services/deliverables/template-styles';
 import type { PdfRendering } from '$lib/server/services/deliverables/pdf';
 import type { DiagramRasterization } from '$lib/server/services/deliverables/diagram-rendering';
@@ -191,9 +193,8 @@ export interface DeliverablesDependencies {
 	};
 	artifactWriter: { store(actor: ActorContext, artifact: Artifact): Promise<Artifact> };
 	artifactStorage: ExportObjectStorage;
-	attachmentDownloader: {
-		downloadById(actor: ActorContext, id: AttachmentId): Promise<{ url: string }>;
-	};
+	attachmentReader: Pick<AttachmentReader, 'get'>;
+	attachmentStorage: Pick<IAttachmentStorage, 'createDownloadUrl'>;
 	fetchImage: (url: string) => Promise<string | undefined>;
 	prepareExport: ExportPreparation;
 	widgetReader: { get(actor: ActorContext, id: WidgetId): Promise<Widget> };
@@ -471,9 +472,13 @@ export class Deliverables implements DeliverablesController {
 		);
 		for (const imageReference of imageReferences.values()) {
 			if (imageReference.kind !== 'attachment') continue;
-			const { url } = await this.dependencies.attachmentDownloader.downloadById(
+			const attachment = await this.dependencies.attachmentReader.get(
 				actor,
 				imageReference.id as AttachmentId
+			);
+			const url = await this.dependencies.attachmentStorage.createDownloadUrl(
+				attachment.version.objectKey,
+				300
 			);
 			const image = await this.dependencies.fetchImage(url);
 			if (image) images.set(imageReference.source, image);

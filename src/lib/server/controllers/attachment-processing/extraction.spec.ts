@@ -9,7 +9,7 @@ describe('attachment processing routing', () => {
 		await process(view('application/pdf'));
 		expect({ result: finalUpdate(repository), source: extraction.calls[0]?.source }).toMatchObject({
 			result: { parserKind: 'ocr', extractedText: 'ocr text', processingStatus: 'ready' },
-			source: { kind: 'document', path: 'doc.pdf', objectKey: 'objects/doc' }
+			source: { kind: 'document', path: 'doc.pdf', url: 'https://storage.test/presigned' }
 		});
 	});
 

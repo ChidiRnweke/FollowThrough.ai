@@ -5,11 +5,14 @@ import { createTestContentIndex as createContentIndex } from '$lib/testing/knowl
 import {
 	AttachmentUploadService,
 	AttachmentReadingService,
-	AttachmentDownloadService,
 	AttachmentLifecycleService
 } from '$lib/server/services/attachments/library';
 import { AttachmentFormatService } from '$lib/server/services/attachments/formats';
 import { AttachmentProcessingService } from '$lib/server/services/attachments/content';
+import {
+	AttachmentClaimService,
+	AttachmentVersionService
+} from '$lib/server/services/attachments/records';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
@@ -25,15 +28,15 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 	const claims = new InMemoryAttachmentClaims();
 	const extraction = new InMemoryAttachmentExtraction();
 	const storage = new InMemoryStorage();
-	const uploads = new AttachmentUploadService(repository, notes, storage);
+	const uploads = new AttachmentUploadService(repository, notes);
 	const reader = new AttachmentReadingService(repository);
-	const downloads = new AttachmentDownloadService(repository, storage);
 	const lifecycle = new AttachmentLifecycleService(repository, notes);
 	const worker = new AttachmentProcessing({
 		modelSelection: new AgentModelSelectionService(),
-		records: repository,
-		claims,
+		records: new AttachmentVersionService(repository),
+		claims: new AttachmentClaimService(claims),
 		extraction,
+		storage,
 		processing: new AttachmentProcessingService(),
 		formats: new AttachmentFormatService(),
 		preferences: {
@@ -53,7 +56,6 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 	return {
 		uploads,
 		reader,
-		downloads,
 		lifecycle,
 		repository,
 		notes,

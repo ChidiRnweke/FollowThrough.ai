@@ -17,14 +17,7 @@ import type {
 import type { OperationObserver } from '$lib/models/telemetry';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 
-/** The stored bytes and links an extraction needs. */
-export interface AttachmentObjectReader {
-	read(objectKey: string, maximumBytes: number): Promise<Uint8Array>;
-	createDownloadUrl(objectKey: string, expiresInSeconds: number): Promise<string>;
-}
-
 export interface AttachmentExtractionDependencies {
-	readonly storage: AttachmentObjectReader;
 	/** Mistral Document AI `POST /v1/ocr`. */
 	readonly ocr: AttachmentProviderEndpoint & { readonly model: string };
 	/** OpenRouter chat completions, for describing images. */
@@ -62,16 +55,15 @@ export class AttachmentExtraction implements AttachmentContentExtraction {
 		source: AttachmentExtractionSource,
 		visionModel: string
 	): Promise<ExtractedAttachmentContent> {
-		const { storage } = this.dependencies;
-		if (source.kind === 'text') {
-			const bytes = await storage.read(source.objectKey, source.byteSize);
-			return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes), parserKind: 'text' };
-		}
-		const documentUrl = await storage.createDownloadUrl(source.objectKey, 900);
-		const parts = await this.recognize(documentUrl, source.kind, source.path);
+		if (source.kind === 'text')
+			return {
+				text: new TextDecoder('utf-8', { fatal: true }).decode(source.bytes),
+				parserKind: 'text'
+			};
+		const parts = await this.recognize(source.url, source.kind, source.path);
 		const text = await this.describeDocument(parts, visionModel);
 		if (source.kind === 'document') return { text, parserKind: 'ocr' };
-		const description = await this.describeStoredImage(source.objectKey, visionModel);
+		const description = await this.describe(source.url, visionModel);
 		return description.kind === 'failure'
 			? { text: text.trim(), parserKind: 'ocr', processingFailure: description.message }
 			: {
@@ -154,21 +146,6 @@ export class AttachmentExtraction implements AttachmentContentExtraction {
 			Array.from({ length: Math.min(DESCRIPTION_CONCURRENCY, images.length) }, worker)
 		);
 		return render(slots, descriptions);
-	}
-
-	private async describeStoredImage(
-		objectKey: string,
-		model: string
-	): Promise<DocumentImageDescription> {
-		try {
-			const imageDataUrl = await this.dependencies.storage.createDownloadUrl(objectKey, 300);
-			return await this.describe(imageDataUrl, model);
-		} catch (error) {
-			return {
-				kind: 'failure',
-				message: error instanceof Error ? error.message : 'Image description failed'
-			};
-		}
 	}
 
 	/** One image description; a failure is a value, so the document still renders. */

@@ -3,7 +3,8 @@ import { syncEtag } from '$lib/models/sync';
 import type { ActorContext } from '$lib/models/identity';
 import type { WorkspaceWriteReceipt } from '$lib/models/workspace-records';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import type { SyncObjectReader, SyncReceiptWriter } from '$lib/server/services/workspace/contracts';
+import type { SyncReceiptWriter } from '$lib/server/services/workspace/contracts';
+import type { SyncObjectReader } from '$lib/server/services/workspace/sync-objects';
 import type { ReceiptLookup } from '$lib/models/workspace-mutations';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 

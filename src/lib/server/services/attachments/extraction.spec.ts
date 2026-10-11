@@ -2,38 +2,36 @@ import { describe, expect, it } from 'vitest';
 import type { AttachmentExtractionSource, RecognizedContent } from '$lib/models/attachments/ocr';
 import {
 	InMemoryImageDescriber,
-	InMemoryOcrEngine,
-	InMemoryStorage
+	InMemoryOcrEngine
 } from '$lib/testing/attachments/fakes/processing';
 import { AttachmentExtraction } from './extraction';
 
 const document: AttachmentExtractionSource = {
-	objectKey: 'objects/doc',
-	byteSize: 3,
+	kind: 'document',
 	path: 'doc.pdf',
-	kind: 'document'
+	url: 'https://storage.test/presigned'
 };
 
 const setup = (parts?: readonly RecognizedContent[]) => {
-	const storage = new InMemoryStorage();
 	const ocr = new InMemoryOcrEngine();
 	if (parts) ocr.parts = parts;
 	const describer = new InMemoryImageDescriber();
 	const extraction = new AttachmentExtraction({
-		storage,
 		ocr: { url: 'https://ocr.test/v1/ocr', model: 'test-ocr', headers: {}, fetch: ocr.fetch },
 		vision: { url: 'https://vision.test/v1/chat/completions', headers: {}, fetch: describer.fetch },
 		observer: { run: (_name, _context, body) => body() },
 		logger: { error: () => {} }
 	});
-	return { storage, ocr, describer, extraction };
+	return { ocr, describer, extraction };
 };
 
 describe('text extraction', () => {
 	it('decodes stored UTF-8 text without calling OCR', async () => {
-		const { extraction, storage, ocr } = setup();
-		storage.text = 'Café notes';
-		const result = await extraction.extract({ ...document, kind: 'text' }, 'test/vision');
+		const { extraction, ocr } = setup();
+		const result = await extraction.extract(
+			{ kind: 'text', bytes: new TextEncoder().encode('Café notes') },
+			'test/vision'
+		);
 		expect({ result, ocrCalls: ocr.calls }).toEqual({
 			result: { text: 'Café notes', parserKind: 'text' },
 			ocrCalls: []
@@ -101,7 +99,11 @@ describe('document extraction', () => {
 });
 
 describe('image extraction', () => {
-	const image: AttachmentExtractionSource = { ...document, path: 'chart.png', kind: 'image' };
+	const image: AttachmentExtractionSource = {
+		kind: 'image',
+		path: 'chart.png',
+		url: 'https://storage.test/presigned'
+	};
 
 	it('sends the image to OCR as an image and appends its own description', async () => {
 		const { extraction, ocr, describer } = setup();

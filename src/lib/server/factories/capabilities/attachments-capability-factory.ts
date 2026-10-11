@@ -7,7 +7,12 @@ import { MaintenanceCursorRecords } from '$lib/server/repositories/maintenance/p
 import { AttachmentObjectRemoval } from '$lib/server/controllers/attachments/object-removal';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments';
-import type { AttachmentClaims } from '$lib/server/services/attachments/contracts';
+import type { AttachmentClaims } from '$lib/server/repositories/attachments/claims';
+import {
+	AttachmentCleanupService,
+	AttachmentClaimService,
+	AttachmentVersionService
+} from '$lib/server/services/attachments/records';
 import type { AtomicOperation } from '$lib/models/workspace';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
@@ -20,8 +25,6 @@ import {
 	type AttachmentUploads,
 	AttachmentReadingService,
 	type AttachmentReader,
-	AttachmentDownloadService,
-	type AttachmentDownloads,
 	AttachmentLifecycleService,
 	type AttachmentLifecycle
 } from '$lib/server/services/attachments/library';
@@ -30,7 +33,7 @@ import {
 	AttachmentStorage,
 	type IAttachmentStorage,
 	type ObjectStorageConfig
-} from '$lib/server/repositories/attachments/object-storage';
+} from '$lib/server/services/attachments/object-storage';
 import { operationObserver } from '$lib/server/infrastructure/telemetry/tracing';
 import {
 	DEFAULT_MISTRAL_BASE_URL,
@@ -62,7 +65,6 @@ export interface AttachmentsCapability {
 	readonly storage: IAttachmentStorage;
 	readonly uploads: AttachmentUploads;
 	readonly reader: AttachmentReader;
-	readonly downloads: AttachmentDownloads;
 	readonly lifecycle: AttachmentLifecycle;
 	readonly retention: ScheduledTask;
 	readonly objectRemoval: ScheduledTask;
@@ -85,8 +87,8 @@ export const createAttachmentsCapability = (
 				forcePathStyle: true
 			}
 		);
+	const cleanup = new AttachmentCleanupService(repository);
 	const extraction = new AttachmentExtraction({
-		storage,
 		ocr: {
 			url: `${input.mistralBaseURL ?? DEFAULT_MISTRAL_BASE_URL}/ocr`,
 			model: input.ocrModel ?? DEFAULT_OCR_MODEL,
@@ -104,15 +106,15 @@ export const createAttachmentsCapability = (
 	return {
 		repository,
 		storage,
-		uploads: new AttachmentUploadService(repository, input.notes, storage),
+		uploads: new AttachmentUploadService(repository, input.notes),
 		reader: new AttachmentReadingService(repository),
-		downloads: new AttachmentDownloadService(repository, storage),
 		lifecycle: new AttachmentLifecycleService(repository, input.notes),
 		processing: new AttachmentProcessing({
 			modelSelection: new AgentModelSelectionService(),
-			records: repository,
-			claims: input.claims,
+			records: new AttachmentVersionService(repository),
+			claims: new AttachmentClaimService(input.claims),
 			extraction,
+			storage,
 			processing: new AttachmentProcessingService(),
 			formats: new AttachmentFormatService(),
 			preferences: input.preferences,
@@ -121,9 +123,9 @@ export const createAttachmentsCapability = (
 			visionModel: input.visionModel,
 			logger: console
 		}),
-		objectRemoval: new AttachmentObjectRemoval(repository, storage),
+		objectRemoval: new AttachmentObjectRemoval(cleanup, storage),
 		retention: new UploadRetention(
-			repository,
+			cleanup,
 			storage,
 			new MaintenanceProgressService(new MaintenanceCursorRecords(input.db)),
 			{

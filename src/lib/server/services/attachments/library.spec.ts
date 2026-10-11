@@ -20,7 +20,15 @@ describe('attachments and the note document revision', () => {
 		notes.notes.push(note);
 		repository.upload = uploadFor(note.id);
 
-		await uploads.complete(testActor(), UPLOAD_ID);
+		const upload = await uploads.pending(testActor(), UPLOAD_ID);
+		await uploads.finalize(
+			testActor(),
+			upload,
+			uploads.planVersion(testActor(), upload, {
+				byteSize: upload.byteSize,
+				checksumSha256: upload.checksumSha256
+			})
+		);
 
 		expect((await notes.findById(testActor(), note.id))?.currentRevision).toBe(7);
 		expect(notes.revisions).toEqual([]);
@@ -88,8 +96,8 @@ describe('removing an attachment without breaking its containing note', () => {
 		expect(await lifecycle.removeById(testActor(), ATTACHMENT_ID)).toEqual({ kind: 'removed' });
 	});
 
-	it('keeps a referenced attachment downloadable', async () => {
-		const { downloads, lifecycle, repository, notes } = setup();
+	it('keeps a referenced attachment readable', async () => {
+		const { reader, lifecycle, repository, notes } = setup();
 		const note = noteBuilder({
 			document: {
 				type: 'doc',
@@ -105,9 +113,7 @@ describe('removing an attachment without breaking its containing note', () => {
 		repository.found = noteAttachment(note.id);
 		await lifecycle.removeById(testActor(), ATTACHMENT_ID);
 
-		expect(await downloads.downloadById(testActor(), ATTACHMENT_ID)).toEqual({
-			url: 'https://storage.test/presigned'
-		});
+		expect((await reader.get(testActor(), ATTACHMENT_ID)).version.objectKey).toBe('objects/doc');
 	});
 
 	it('preserves note attachment bytes after the image leaves the current document', async () => {

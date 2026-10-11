@@ -4,12 +4,13 @@ import type {
 	OwnedAttachmentUpload,
 	UploadRetentionCursor
 } from '$lib/server/repositories/attachments/attachments';
-import type {
-	AttachmentStorage,
-	UploadRetentionRepository
-} from '$lib/server/controllers/attachments/retention';
+import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
+import type { AttachmentCleanup } from '$lib/server/services/attachments/records';
 
-export class InMemoryUploadReservations implements UploadRetentionRepository {
+export class InMemoryUploadReservations implements Pick<
+	AttachmentCleanup,
+	'listExpiredUploads' | 'deleteUpload'
+> {
 	deleted: string[] = [];
 	cutoffs: Date[] = [];
 	deleteFailures = new Set<AttachmentUpload['id']>();
@@ -46,7 +47,7 @@ export class InMemoryUploadReservations implements UploadRetentionRepository {
 	}
 }
 
-export class InMemoryUploadObjects implements AttachmentStorage {
+export class InMemoryUploadObjects implements Pick<IAttachmentStorage, 'remove'> {
 	removed: string[] = [];
 	failOn?: string;
 	absent = new Set<string>();

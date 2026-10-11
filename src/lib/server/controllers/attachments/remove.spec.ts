@@ -10,8 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { Attachments, type AttachmentsDependencies } from './controller';
 describe('attachment search removal', () => {
 	it('removes the attachment and its indexed content together', async () => {
-		const { uploads, reader, downloads, lifecycle, repository, search, process } =
-			setupAttachments();
+		const { uploads, reader, lifecycle, repository, search, storage, process } = setupAttachments();
 		const attachment = view('application/pdf');
 		await process(attachment);
 		const controller = new Attachments(
@@ -19,7 +18,7 @@ describe('attachment search removal', () => {
 				...agentToolResultsFixture(),
 				uploads,
 				reader,
-				downloads,
+				storage,
 				lifecycle,
 				attachmentIndexer: createContentIndex(search, new InMemoryRetrievalProvider().model),
 				transactionRunner: new InMemoryTransactionRunner([repository, search])
@@ -34,15 +33,14 @@ describe('attachment search removal', () => {
 });
 
 it('keeps attachment bytes when index removal rolls back', async () => {
-	const { uploads, reader, downloads, lifecycle, repository, search, storage, process } =
-		setupAttachments();
+	const { uploads, reader, lifecycle, repository, search, storage, process } = setupAttachments();
 	await process(view('application/pdf'));
 	const controller = new Attachments(
 		capabilityDependencies<AttachmentsDependencies>({
 			...agentToolResultsFixture(),
 			uploads,
 			reader,
-			downloads,
+			storage,
 			lifecycle,
 			attachmentIndexer: capabilityDependencies<AttachmentsDependencies['attachmentIndexer']>({
 				removeAttachment: async () => {
@@ -72,15 +70,14 @@ it('keeps attachment bytes when index removal rolls back', async () => {
 });
 
 it('commits physical cleanup intent without deleting bytes inside the transaction', async () => {
-	const { uploads, reader, downloads, lifecycle, repository, search, storage, process } =
-		setupAttachments();
+	const { uploads, reader, lifecycle, repository, search, storage, process } = setupAttachments();
 	await process(view('application/pdf'));
 	const controller = new Attachments(
 		capabilityDependencies<AttachmentsDependencies>({
 			...agentToolResultsFixture(),
 			uploads,
 			reader,
-			downloads,
+			storage,
 			lifecycle,
 			attachmentIndexer: createContentIndex(search, new InMemoryRetrievalProvider().model),
 			transactionRunner: new InMemoryTransactionRunner([repository, search])

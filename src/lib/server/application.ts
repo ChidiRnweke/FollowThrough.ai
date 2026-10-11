@@ -37,9 +37,9 @@ import { createWidgetsCapability } from './factories/capabilities/widgets-capabi
 import type {
 	IAttachmentStorage,
 	ObjectStorageConfig
-} from './repositories/attachments/object-storage';
+} from './services/attachments/object-storage';
 import type { AgentModelCatalog } from './services/agent/runs/preferences';
-import type { AttachmentClaims } from './services/attachments/contracts';
+import type { AttachmentClaims } from './repositories/attachments/claims';
 import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { NotificationChannel } from './db';
 
@@ -226,10 +226,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		models: modelCatalog,
 		toolPreferences,
 		trust,
-		runs: runRepository,
 		runLedger: runStore,
-		runEvents,
-		runDecisions,
 		sessions: agentSessions,
 		context: agentContext,
 		settlements: runSettlements,
@@ -440,14 +437,14 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			traceContext: agentCapability.traceContext,
 			preferences,
 			models: modelCatalog,
-			runs: runRepository,
+			runs: agentCapability.harnessRecords.runs,
 			cancellations: agentCapability.cancellations,
 			approvals: agentCapability.approvals,
 			preparation: agentCapability.preparation,
 			checkpoints: agentCapability.checkpoints,
-			events: runEvents,
-			decisions: runDecisions,
-			sessions: agentSessions,
+			events: agentCapability.harnessRecords.events,
+			decisions: agentCapability.harnessRecords.decisions,
+			sessions: agentCapability.harnessRecords.sessions,
 			transactionRunner,
 			defaultModel: defaultAgentModel,
 			defaultVisionModel,
@@ -510,7 +507,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		attachments: {
 			uploads: attachmentCapability.uploads,
 			reader: attachmentCapability.reader,
-			downloads: attachmentCapability.downloads,
+			storage: attachmentCapability.storage,
 			lifecycle: attachmentCapability.lifecycle,
 			todoReader: todos.reader,
 			transactionRunner,
@@ -528,7 +525,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			provenanceRecorder: provenance,
 			artifactWriter: artifacts.artifactWriter,
 			artifactStorage: deliverables.artifactStorage,
-			attachmentDownloader: attachmentCapability.downloads,
+			attachmentReader: attachmentCapability.reader,
+			attachmentStorage: attachmentCapability.storage,
 			fetchImage: deliverables.fetchImage,
 			prepareExport: deliverables.prepareExport,
 			widgetReader: widgets.reader,
@@ -586,7 +584,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			resourceVersions: synchronization.resourceVersions,
 			resourceKeys: synchronization.resourceKeys,
 			writeRecovery: synchronization.mutations,
-			syncObjects: synchronization.objects,
+			syncObjects: synchronization.objectReader,
 			userReader: identity.userReader,
 			projectLister: projects.lister,
 			noteTreeReader: notes.treeReader,

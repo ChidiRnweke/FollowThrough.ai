@@ -102,11 +102,11 @@ import type { ToolRanking } from '$lib/server/services/agent/tools/tool-search';
 import type { AgentToolApprovalPolicy } from '$lib/services/agent/tool-approval';
 import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
 import type {
-	AgentRunDecisionRepository,
-	AgentRunEventRepository,
-	AgentRunRepository,
-	AgentSessionRepository
-} from '$lib/server/services/agent/runs/execution-contracts';
+	AgentRunDecisions,
+	AgentRunEvents,
+	AgentRuns,
+	AgentSessions
+} from '$lib/server/services/agent/runs/records';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { ProjectReader } from '$lib/server/services/projects/catalog';
@@ -304,17 +304,17 @@ export interface AgentHarnessDependencies {
 	/** The catalogue of selectable models, used to validate and resolve run models. */
 	models: AgentModelCatalog;
 	/** Run records: idempotent inserts, lookups and persistence of resolved values. */
-	runs: AgentRunRepository;
+	runs: AgentRuns;
 	cancellations: Pick<RunCancellationDecisions, 'getForWrite' | 'plan' | 'persist'>;
 	approvals: Pick<RunApprovalDecisions, 'getForWrite' | 'plan' | 'persist'>;
 	checkpoints: Pick<RunCheckpointWriter, 'prepare' | 'persist'>;
 	preparation: ChatRunPreparation;
 	/** The append-only event log per run that clients poll via cursors. */
-	events: AgentRunEventRepository;
+	events: AgentRunEvents;
 	/** Recorded approvals and rejections for pending tool calls. */
-	decisions: AgentRunDecisionRepository;
+	decisions: AgentRunDecisions;
 	/** Provider session items, replaced wholesale when a conversation is rewound. */
-	sessions: AgentSessionRepository;
+	sessions: AgentSessions;
 	/** Executes run mutations atomically so a run is all-or-nothing. */
 	transactionRunner: TransactionRunner;
 	/** Deployment fallback chat model when the user has not chosen one. */

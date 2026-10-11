@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { PreparedExport } from '$lib/models/deliverables';
-import { InMemoryAttachments } from '$lib/testing/attachments/fakes/in-memory-attachments';
+import type { AttachmentId } from '$lib/models/attachments';
+import {
+	InMemoryAttachments,
+	attachmentViewBuilder
+} from '$lib/testing/attachments/fakes/in-memory-attachments';
 import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/export-controller';
 import {
 	noteBuilder,
@@ -27,17 +31,16 @@ describe('export image authorization', () => {
 		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 		try {
 			const attachments = new InMemoryAttachments();
-			attachments.downloadUrls.set(
-				`${testActor().userId}/${id}`,
-				`http://127.0.0.1:${(server.address() as AddressInfo).port}/image`
-			);
+			attachments.finalized = [attachmentViewBuilder(id as AttachmentId)];
+			const imageUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/image`;
 			const rendered: PreparedExport[] = [];
 			const pdfGenerator = async (value: PreparedExport) => {
 				rendered.push(value);
 				return Buffer.from('pdf');
 			};
 			const { service, notes } = exportControllerFixture({
-				attachmentDownloader: attachments,
+				attachmentReader: attachments,
+				attachmentStorage: { createDownloadUrl: async () => imageUrl },
 				pdfGenerator
 			});
 			notes.notes = [
@@ -57,7 +60,7 @@ describe('export image authorization', () => {
 	});
 	it('rejects an attachment the actor cannot download', async () => {
 		const { service, notes } = exportControllerFixture({
-			attachmentDownloader: new InMemoryAttachments()
+			attachmentReader: new InMemoryAttachments()
 		});
 		notes.notes = [
 			noteBuilder({

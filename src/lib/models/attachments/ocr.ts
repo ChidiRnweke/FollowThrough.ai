@@ -37,10 +37,14 @@ export interface AttachmentProviderEndpoint {
 /** How a stored attachment yields searchable text. */
 export type AttachmentExtractionKind = 'text' | 'document' | 'image';
 
-/** The stored object an extraction reads. */
-export interface AttachmentExtractionSource {
-	readonly objectKey: string;
-	readonly byteSize: number;
-	readonly path: string;
-	readonly kind: AttachmentExtractionKind;
-}
+/**
+ * The stored attachment an extraction reads, already fetched from object storage: a text file's
+ * bytes, or a signed link through which the OCR and vision providers read a document or image.
+ */
+export type AttachmentExtractionSource =
+	| { readonly kind: 'text'; readonly bytes: Uint8Array }
+	| {
+			readonly kind: Exclude<AttachmentExtractionKind, 'text'>;
+			readonly path: string;
+			readonly url: string;
+	  };

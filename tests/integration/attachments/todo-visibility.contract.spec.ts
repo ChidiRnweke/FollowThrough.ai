@@ -1,3 +1,4 @@
+import { InMemoryAttachmentStorage } from '$lib/testing/attachments/fakes/in-memory-deliverables';
 import { NotFoundError } from '$lib/errors';
 import {
 	Attachments,
@@ -54,6 +55,7 @@ const setup = async (identity: number) => {
 			uploads: attachments,
 			reader: attachments,
 			lifecycle: attachments,
+			storage: new InMemoryAttachmentStorage(),
 			todoReader: catalog.reader,
 			transactionRunner
 		})

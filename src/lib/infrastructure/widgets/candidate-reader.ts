@@ -16,7 +16,15 @@ const zodIssues = (base: string, error: z.ZodError): readonly WidgetIssue[] =>
 		message: issue.message
 	}));
 
-/** Shared browser/server write-input adapter. Never imports domain services. */
+/**
+ * Reads a widget candidate against the catalog, and describes the catalog for prompts.
+ *
+ * Accepted workaround, like the note Markdown codec: this wraps the vendored widget renderer
+ * (`@json-render/core`), whose spec validation the browser editor and the server write paths
+ * must apply identically. Several services receive it, which the service rules (no
+ * service-to-service calls) cannot express, so it lives in infrastructure deliberately. Keep it
+ * a pure format library with no application decisions.
+ */
 export class CatalogWidgetCandidateReader implements WidgetCandidateReader, WidgetCatalogReader {
 	readCatalog(catalog: WidgetCatalog): WidgetCatalogDescription {
 		return {

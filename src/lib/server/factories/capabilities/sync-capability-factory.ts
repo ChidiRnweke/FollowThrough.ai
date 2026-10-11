@@ -1,4 +1,8 @@
 import {
+	SyncObjectService,
+	type SyncObjectReader
+} from '$lib/server/services/workspace/sync-objects';
+import {
 	WorkspaceJournal,
 	type WorkspaceJournalReader
 } from '$lib/server/services/workspace/journal';
@@ -28,6 +32,7 @@ export interface SyncCapability {
 	readonly resourceVersions: WorkspaceResourceVersionReader;
 	readonly resourceKeys: WorkspaceCommandRules;
 	readonly objects: SyncObjectRepository;
+	readonly objectReader: SyncObjectReader;
 	readonly mutationRetry: 'database-only' | 'never';
 	readonly mutations: WorkspaceMutationGuard & WorkspaceWriteRecoveryService;
 }
@@ -44,6 +49,7 @@ export const createSyncCapability = ({
 		resourceVersions: new WorkspaceResourceVersions(objects),
 		resourceKeys: new WorkspaceCommandRulesService(),
 		objects,
+		objectReader: new SyncObjectService(objects),
 		mutationRetry: deferEmbedding ? ('database-only' as const) : ('never' as const),
 		mutations: new WorkspaceMutationReceipts({
 			syncObjects: objects,

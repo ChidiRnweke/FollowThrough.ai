@@ -19,7 +19,8 @@ import type {
 } from '$lib/models/workspace-mutations';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import type { SyncObjectReader, SyncWriteRecovery } from '$lib/server/services/workspace/contracts';
+import type { SyncWriteRecovery } from '$lib/server/services/workspace/contracts';
+import type { SyncObjectReader } from '$lib/server/services/workspace/sync-objects';
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import type { TodoPresentation } from '$lib/services/todos/presentation';
 import type { TodayPresentation } from '$lib/services/workspace/today';

@@ -4,14 +4,15 @@ import type {
 	AttachmentUpload,
 	AttachmentVersion,
 	AttachmentView,
-	RemoveAttachmentResult
+	RemoveAttachmentResult,
+	StoredObjectInfo
 } from '$lib/models/attachments';
 import type { NoteId } from '$lib/models/notes';
 import type { TodoId } from '$lib/models/todos';
 import type {
-	AttachmentUploads,
-	AttachmentDownloads,
-	AttachmentLifecycle
+	AttachmentLifecycle,
+	AttachmentReader,
+	AttachmentUploads
 } from '$lib/server/services/attachments/library';
 import type {
 	RestoreSnapshot,
@@ -57,10 +58,9 @@ export const attachmentViewBuilder = (
  * loud failure rather than a silent success.
  */
 export class InMemoryAttachments
-	implements AttachmentUploads, AttachmentDownloads, AttachmentLifecycle, SnapshotParticipant
+	implements AttachmentUploads, AttachmentReader, AttachmentLifecycle, SnapshotParticipant
 {
-	downloadUrls = new Map<string, string>();
-	/** Upload reservations `complete` can finalize, keyed by upload id. */
+	/** Upload reservations that can be finalized, keyed by upload id. */
 	uploads = new Map<string, AttachmentView>();
 	finalized: AttachmentView[] = [];
 	todoLinks: TodoAttachmentLink[] = [];
@@ -77,15 +77,39 @@ export class InMemoryAttachments
 		};
 	}
 
-	initiate(): Promise<{
-		upload: AttachmentUpload;
-		uploadUrl: string;
-		requiredHeaders: Record<string, string>;
-	}> {
+	initiate(): Promise<{ upload: AttachmentUpload; requiredHeaders: Record<string, string> }> {
 		throw new Error('not used');
 	}
-	async complete(_actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentView> {
+	async pending(_actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentUpload> {
 		const reserved = this.uploads.get(uploadId);
+		if (!reserved) throw new NotFoundError('Attachment upload was not found');
+		return {
+			id: uploadId,
+			projectId: reserved.attachment.projectId,
+			path: reserved.attachment.path,
+			objectKey: `staging/${uploadId}`,
+			mediaType: reserved.version.mediaType,
+			byteSize: reserved.version.byteSize,
+			checksumSha256: reserved.version.checksumSha256,
+			expiresAt: testNow,
+			createdAt: testNow
+		};
+	}
+	planVersion(
+		_actor: ActorContext,
+		upload: AttachmentUpload,
+		_stored: StoredObjectInfo
+	): AttachmentVersion {
+		const reserved = this.uploads.get(upload.id);
+		if (!reserved) throw new NotFoundError('Attachment upload was not found');
+		return reserved.version;
+	}
+	async finalize(
+		_actor: ActorContext,
+		upload: AttachmentUpload,
+		_version: AttachmentVersion
+	): Promise<AttachmentView> {
+		const reserved = this.uploads.get(upload.id);
 		if (!reserved) throw new NotFoundError('Attachment upload was not found');
 		this.finalized = [...this.finalized, reserved];
 		return reserved;
@@ -114,18 +138,13 @@ export class InMemoryAttachments
 			.filter((link) => link.todoId === todoId)
 			.flatMap((link) => this.finalized.filter((view) => view.attachment.id === link.attachmentId));
 	}
-	async downloadById(actor: ActorContext, id: AttachmentId): Promise<{ url: string }> {
-		const url = this.downloadUrls.get(`${actor.userId}/${id}`);
-		if (!url) throw new NotFoundError('Attachment was not found');
-		return { url };
-	}
 	retry(): Promise<AttachmentView> {
 		throw new Error('not used');
 	}
 	removeById(): Promise<RemoveAttachmentResult> {
 		throw new Error('not used');
 	}
-	download(): Promise<{ url: string }> {
+	locate(): Promise<AttachmentView> {
 		throw new Error('not used');
 	}
 	read(): Promise<{ text: string; offset: number; nextOffset?: number; parserKind: string }> {
@@ -136,7 +155,7 @@ export class InMemoryAttachments
 	}
 }
 
-/** An upload reservation keyed the way {@link InMemoryAttachments.complete} expects. */
+/** An upload reservation keyed the way {@link InMemoryAttachments.pending} expects. */
 export const reserveUpload = (
 	attachments: InMemoryAttachments,
 	uploadId: string,
