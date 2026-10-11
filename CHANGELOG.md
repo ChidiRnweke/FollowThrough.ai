@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.2.0...v3.2.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **sidebar:** give the live rail destination the brand wash ([#366](https://github.com/ChidiRnweke/FollowThrough.ai/issues/366)) ([a9d229a](https://github.com/ChidiRnweke/FollowThrough.ai/commit/a9d229a59b1f7d128b5d6c316f93ceed46136051))
+
 ## [3.2.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.1.0...v3.2.0) (2026-10-10)
 
 
