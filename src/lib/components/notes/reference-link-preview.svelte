@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { decideSuggestion } from '$lib/components/suggestions/decide';
+	import { decideSuggestion } from '$lib/components/suggestions';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import * as HoverCard from '$lib/components/ui/hover-card';
 	import { Badge } from '$lib/components/ui/badge';

@@ -22,8 +22,7 @@
 	import type { Widget } from '$lib/models/widgets';
 	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
 	import { todayLocalDate } from '$lib/client/todos/local-date';
-	const widgetSources = (widget: import('$lib/models/widgets').Widget) =>
-		sourceViews.widgetSources(widget, todayLocalDate());
+	const widgetSources = (widget: Widget) => sourceViews.widgetSources(widget, todayLocalDate());
 
 	let {
 		tool,

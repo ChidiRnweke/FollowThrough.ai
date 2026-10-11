@@ -3,9 +3,7 @@
 	import { ArtifactLibrary } from '$lib/components/artifacts';
 	let { data } = $props();
 	const entries = $derived(
-		data.selectedProjectId
-			? workspaceViews.artifacts(data.selectedProjectId, data.query)
-			: []
+		data.selectedProjectId ? workspaceViews.artifacts(data.selectedProjectId, data.query) : []
 	);
 	const page = $derived(
 		Math.min(data.page, Math.max(1, Math.ceil(entries.length / data.pageSize)))

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { decideSuggestion } from '$lib/components/suggestions/decide';
+	import { decideSuggestion } from './decide';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import type { NodeViewProps } from '@tiptap/core';

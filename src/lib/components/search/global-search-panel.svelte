@@ -19,7 +19,7 @@
 	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { globalSearch as defaultSearch } from '$lib/factories/search/global-search';
-	import { workspaceSession, workspaceViews } from '$lib/factories/workspace/session';
+	import { workspaceApplication, type WorkspaceGraph } from '$lib/factories/workspace/session';
 	import type { GlobalSearchController } from '$lib/controllers/search/global-search';
 	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
@@ -27,11 +27,14 @@
 
 	let {
 		globalSearch = defaultSearch,
+		graph = workspaceApplication,
 		projects = [],
 		onMoveToCanvas,
 		onOpenMatch
 	}: {
 		globalSearch?: GlobalSearchController;
+		/** The workspace and its views; a test supplies its own. */
+		graph?: WorkspaceGraph;
 		projects?: readonly Project[];
 		/** Offered by the right panel only; in the workbench the search is already on the canvas. */
 		onMoveToCanvas?: () => void;
@@ -64,7 +67,7 @@
 	// contract, so newlines flatten to a space, matching how VS Code renders its hits.
 	const inline = (text: string): string => text.replace(/\n+/g, ' ');
 
-	const notes = $derived(workspaceViews.notes);
+	const notes = $derived(graph.views.notes);
 	const hits = $derived(globalSearch.hits(notes));
 	const totalMatches = $derived(
 		hits.reduce((count, hit) => count + hit.titleMatches.length + hit.matches.length, 0)
@@ -72,7 +75,7 @@
 	/** Rewrite the planned notes on this device, then report how far the replacement got. */
 	async function replace(noteId?: NoteId): Promise<void> {
 		const plan = globalSearch.plan(notes, noteId);
-		const outcome = await workspaceSession.editAll(
+		const outcome = await graph.workspace.editAll(
 			plan.map(({ noteId, command }) => ({ identity: { type: 'notes', id: [noteId] }, command }))
 		);
 		globalSearch.replaced(plan, outcome);
@@ -226,7 +229,7 @@
 				{/snippet}
 			</ConfirmDelete>
 		</div>
-		{#if workspaceSession.current?.resources.availability !== 'complete'}
+		{#if graph.workspace.current?.resources.availability !== 'complete'}
 			<p class="text-xs text-muted-foreground" role="status">
 				Search includes only notes saved on this device. Some workspace content is unavailable.
 			</p>

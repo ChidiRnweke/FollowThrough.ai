@@ -26,7 +26,7 @@
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { widgetTab } from '$lib/stores/workbench/tab-ref';
-	import { widgetEdits } from '$lib/components/widgets/widget-edits';
+	import { widgetEdits } from '../widget-edits';
 	import WidgetView from '../widget-view.svelte';
 	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
 	import { todayLocalDate } from '$lib/client/todos/local-date';

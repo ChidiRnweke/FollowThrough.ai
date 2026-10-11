@@ -1,8 +1,9 @@
 import type {
 	DocumentExportRemote,
-	DocumentPreviewUrls
+	DocumentPreviewUrls,
+	ExportDiagramImageAdapter
 } from '$lib/controllers/deliverables/export';
-import type { ExportDiagramImageAdapter } from '$lib/controllers/deliverables/diagrams';
+
 import type {
 	GenerateDocumentInput,
 	GenerateBundleInput,

@@ -1,6 +1,7 @@
 import { SvelteDate, createSubscriber } from 'svelte/reactivity';
 import type { WorkspaceEnvironment, WorkspaceEvents } from '$lib/controllers/workspace/workspace';
 import type { DateTime } from '$lib/models/workspace';
+import type { WorkspaceChange } from '$lib/models/workspace-editing';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 
 /** A tab: its account cookie, connectivity, a controllable clock and the account writer lock. */
@@ -12,11 +13,19 @@ export class InMemoryWorkspaceEnvironment implements WorkspaceEnvironment {
 	fixedNow: DateTime | null = null;
 	constructor(
 		public accountId: string | null,
-		/** Tabs that share this map share the account writer lock. */
+		/** Tabs that share this map share the account writer lock; it holds no reactive state. */
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- lock bookkeeping, never rendered
 		private readonly waiting = new Map<string, Promise<void>>()
 	) {}
-	explain(error: unknown, fallback: string): string {
-		return error instanceof Error ? error.message : fallback;
+	async settle<T>(request: Promise<T>): Promise<WorkspaceChange<T>> {
+		try {
+			return { kind: 'saved', value: await request };
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message: error instanceof Error ? error.message : 'The action could not be saved'
+			};
+		}
 	}
 	reload(): void {
 		this.reloads++;

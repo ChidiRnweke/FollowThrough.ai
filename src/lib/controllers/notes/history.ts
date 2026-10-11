@@ -11,6 +11,10 @@ export interface NoteHistoryReader {
 	list(noteId: NoteId): Promise<readonly NoteRevisionSummary[]>;
 	read(noteId: NoteId, revisionId: NoteRevisionId): Promise<NoteRevision>;
 }
+/** The tab's signed-in account, from its session cookie. */
+export interface NoteHistoryAccount {
+	readonly accountId: string | null;
+}
 export interface NoteHistoryController {
 	readonly revisions: readonly NoteRevisionSummary[];
 	readonly selectedId: NoteRevisionId | undefined;
@@ -24,17 +28,22 @@ export class NoteHistory implements NoteHistoryController {
 	constructor(
 		private readonly noteId: NoteId,
 		private readonly state: NoteHistoryStore,
+		private readonly account: NoteHistoryAccount,
 		private readonly reader: NoteHistoryReader,
 		private readonly presentation: NotePresentation
 	) {}
+	/** A version read for one account is never shown once another has signed in. */
+	private get active(): boolean {
+		return this.state.accountId === this.account.accountId;
+	}
 	get revisions(): readonly NoteRevisionSummary[] {
-		return this.state.revisions;
+		return this.active ? this.state.revisions : [];
 	}
 	get selectedId(): NoteRevisionId | undefined {
-		return this.state.selectedId;
+		return this.active ? this.state.selectedId : undefined;
 	}
 	get selected(): NoteRevision | undefined {
-		return this.state.selected;
+		return this.active ? this.state.selected : undefined;
 	}
 	get readState(): NoteHistoryReadState {
 		return this.state.readState;
@@ -43,7 +52,7 @@ export class NoteHistory implements NoteHistoryController {
 		this.state.invalidate();
 	}
 	async open(): Promise<void> {
-		const request = this.state.begin();
+		const request = this.state.begin(this.account.accountId);
 		this.state.setRevisions([]);
 		const result = await this.reader.list(this.noteId).then(
 			(revisions) => ({ kind: 'ready' as const, revisions }),
@@ -54,7 +63,7 @@ export class NoteHistory implements NoteHistoryController {
 				};
 			}
 		);
-		if (request !== this.state.generation) return;
+		if (!this.active || request !== this.state.generation) return;
 		if (result.kind === 'failure') {
 			this.state.setReadState(result);
 			return;
@@ -65,7 +74,7 @@ export class NoteHistory implements NoteHistoryController {
 		else this.state.setReadState({ kind: 'ready' });
 	}
 	async select(revisionId: NoteRevisionId): Promise<void> {
-		const request = this.state.begin(revisionId);
+		const request = this.state.begin(this.account.accountId, revisionId);
 		const result = await this.reader.read(this.noteId, revisionId).then(
 			(revision) => ({ kind: 'ready' as const, revision }),
 			(): { kind: 'failure'; message: string } => {
@@ -75,7 +84,7 @@ export class NoteHistory implements NoteHistoryController {
 				};
 			}
 		);
-		if (request !== this.state.generation) return;
+		if (!this.active || request !== this.state.generation) return;
 		if (result.kind === 'failure') {
 			this.state.setReadState(result);
 			return;

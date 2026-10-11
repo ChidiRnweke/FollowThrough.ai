@@ -1,6 +1,5 @@
 import type {
 	AgentExecutionMode,
-	AgentRunId,
 	Conversation,
 	ConversationId,
 	RunAgentInput,
@@ -9,7 +8,6 @@ import type {
 import type { WorkspaceValues } from '$lib/models/workspace-records';
 import type { ContextChip, MentionHistory } from '$lib/models/chat';
 import type { ChatHandoff } from './chat-handoff';
-import type { SuggestionView } from '$lib/models/suggestions';
 import type { ChatToolActivity } from './chat-tools';
 import { z } from 'zod';
 

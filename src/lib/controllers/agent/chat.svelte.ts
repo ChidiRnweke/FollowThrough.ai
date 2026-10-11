@@ -5,7 +5,6 @@ import type {
 	AgentRunId,
 	AgentRunSnapshot,
 	AgentRunStatus,
-	Conversation,
 	ConversationId,
 	Message,
 	RunAgentInput,
@@ -15,13 +14,13 @@ import type {
 	SubmitAgentRunInput
 } from '$lib/models/agent';
 
-import type { SuggestionView, SuggestionId } from '$lib/models/suggestions';
 import type { WorkspaceValues } from '$lib/models/workspace-records';
 
 import {
 	matchToolActivity,
 	mergeToolActivity,
 	readJournalledTool,
+	readRestoredImages,
 	toolArguments,
 	type ChatToolActivity
 } from '$lib/stores/agent/chat-tools';
@@ -37,7 +36,6 @@ import {
 	type ChatSession,
 	type ChatSessionKey
 } from '$lib/stores/agent/chat.svelte';
-import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { ContextChips } from '$lib/services/chat/chips';
 import { SvelteSet } from 'svelte/reactivity';
 import type { ContextChip, MentionHistory, SelectionChip } from '$lib/models/chat';
@@ -45,12 +43,17 @@ import { createMentionHistory } from '$lib/models/chat';
 
 // ----- Ports: the server's run functions and this tab's run bookkeeping -----
 
+export type AgentRunSubmission =
+	| { readonly kind: 'accepted'; readonly receipt: AgentRunReceipt }
+	| { readonly kind: 'refused'; readonly message: string };
+
 export interface AgentRunEventConnection {
 	close(): void;
 }
 
 export interface AgentRunTransport {
-	submit(input: SubmitAgentRunInput): Promise<AgentRunReceipt>;
+	/** A refusal the server decided (a 4xx) is a value; a request that may have landed throws. */
+	submit(input: SubmitAgentRunInput): Promise<AgentRunSubmission>;
 	get(runId: AgentRunId): Promise<AgentRunSnapshot>;
 	/** Decides every parked call in one round trip; the run resumes once, not once per card. */
 	decideMany(input: {
@@ -68,11 +71,6 @@ export interface AgentRunTransport {
 		onEvent: (record: StoredAgentRunEventRecord) => void | Promise<void>;
 		onError: () => void;
 	}): AgentRunEventConnection;
-	/**
-	 * Why the server refused a request, when it answered with a decision (a 4xx). Undefined
-	 * when the request may still have landed, so the caller reconnects instead.
-	 */
-	rejection(error: unknown): string | undefined;
 }
 
 export interface StoredAgentRunClientState {
@@ -100,24 +98,6 @@ const activeStatuses: readonly AgentRunStatus[] = [
 	'awaiting_approval',
 	'cancelling'
 ];
-
-const restoredImages = (value: unknown, payload: AgentPayloadInspection): ChatPart[] => {
-	if (!Array.isArray(value)) return [];
-	return value
-		.filter(
-			(item): item is { id: string; dataUrl: string; name: string } =>
-				payload.isAgentPayloadObject(item) &&
-				typeof item.id === 'string' &&
-				typeof item.dataUrl === 'string' &&
-				typeof item.name === 'string'
-		)
-		.map((item) => ({
-			kind: 'image' as const,
-			id: item.id,
-			dataUrl: item.dataUrl,
-			name: item.name
-		}));
-};
 
 /**
  * The cause, and only the cause. It used to read "This change was never carried
@@ -212,7 +192,6 @@ const partsOfTurn = (messages: readonly StoredMessage[], awaitingRunId?: string)
  */
 const restoreEntries = (
 	messages: readonly StoredMessage[],
-	payload: AgentPayloadInspection,
 	awaitingRunId?: string
 ): ChatEntry[] => {
 	const entries: ChatEntry[] = [];
@@ -245,7 +224,7 @@ const restoreEntries = (
 							...(typeof message.content.text === 'string' && message.content.text
 								? [{ kind: 'text' as const, text: message.content.text }]
 								: []),
-							...restoredImages(message.content.images, payload)
+							...readRestoredImages(message.content.images)
 						];
 			entries.push({
 				id: message.id,
@@ -377,7 +356,6 @@ export class Chat implements ChatSession {
 		readonly sessionKey: ChatSessionKey,
 		private readonly transport: AgentRunTransport,
 		private readonly storage: AgentRunClientStorage,
-		private readonly payload: AgentPayloadInspection,
 		private readonly chipRules: ContextChips
 	) {
 		this.storageKey = `${STORAGE_KEY_PREFIX}.${sessionKey}`;
@@ -459,7 +437,7 @@ export class Chat implements ChatSession {
 			// conversation runs one at a time, so nothing older holds a live question.
 			const awaiting =
 				data.latestRun?.run.status === 'awaiting_approval' ? data.latestRun.run.id : undefined;
-			this.entries = restoreEntries(data.messages, this.payload, awaiting);
+			this.entries = restoreEntries(data.messages, awaiting);
 			if (data.latestRun) {
 				const snapshot = data.latestRun;
 				this.runId = snapshot.run.id;
@@ -640,7 +618,7 @@ export class Chat implements ChatSession {
 		this.runStatus = 'queued';
 		try {
 			const contextSnapshot = appContext.capture();
-			const receipt = await this.transport.submit({
+			const submitted = await this.transport.submit({
 				requestId,
 				input: input.prompt,
 				...(input.images?.length ? { images: input.images } : {}),
@@ -666,16 +644,22 @@ export class Chat implements ChatSession {
 					: {})
 			});
 			if (generation !== this.generation) return;
+			if (submitted.kind === 'refused') {
+				// A decided answer: retrying reproduces it, so report what the server said.
+				reply.error = submitted.message;
+				this.runStatus = undefined;
+				return;
+			}
+			const receipt = submitted.receipt;
 			this.conversationId = receipt.conversationId;
 			reply.runId = receipt.runId;
 			this.runStatus = receipt.status;
 			this.persistConversationChoices();
 			this.attach(reply, receipt.runId, receipt.latestCursor, 0);
 			// audit-allow: silent-catch — submission failure is attached to the pending reply and connection state exposes uncertainty.
-		} catch (error) {
-			const rejected = this.transport.rejection(error);
-			reply.error = rejected ?? 'Submission could not be confirmed. Reconnect to check its status.';
-			if (!rejected) this.connection = navigator.onLine ? 'reconnecting' : 'offline';
+		} catch {
+			reply.error = 'Submission could not be confirmed. Reconnect to check its status.';
+			this.connection = navigator.onLine ? 'reconnecting' : 'offline';
 			this.runStatus = undefined;
 		}
 	}

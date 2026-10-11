@@ -122,7 +122,7 @@ export const createWorkspaceGraph = (
 };
 
 /** The browser application graph. Construction does not start the account. */
-const application = createWorkspaceGraph(
+export const workspaceApplication: WorkspaceGraph = createWorkspaceGraph(
 	new WorkspaceStorageService(
 		new IndexedDbWorkspaceReplica(workspaceCommandSchema, workspaceRecordSchema),
 		new LocalStorageBootstrap()
@@ -137,7 +137,7 @@ const application = createWorkspaceGraph(
 	new BrowserWorkspaceEnvironment()
 );
 
-export const workspaceSession: WorkspaceController = application.workspace;
+export const workspaceSession: WorkspaceController = workspaceApplication.workspace;
 
 /** The signed-in account's read models, over the same projection the workspace replicates into. */
-export const workspaceViews: WorkspaceViewsController = application.views;
+export const workspaceViews: WorkspaceViewsController = workspaceApplication.views;

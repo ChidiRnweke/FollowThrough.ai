@@ -9,13 +9,12 @@
 	import { Button } from '$lib/components/ui/button';
 	import { FtExternal as OpenIcon } from '$lib/components/icons';
 	import { workspaceSession } from '$lib/factories/workspace/session';
-	import { widgetEdits } from '$lib/components/widgets/widget-edits';
+	import { widgetEdits } from './widget-edits';
 	import WidgetView from './widget-view.svelte';
 	import type { Widget } from '$lib/models/widgets';
 	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
 	import { todayLocalDate } from '$lib/client/todos/local-date';
-	const widgetSources = (widget: import('$lib/models/widgets').Widget) =>
-		sourceViews.widgetSources(widget, todayLocalDate());
+	const widgetSources = (widget: Widget) => sourceViews.widgetSources(widget, todayLocalDate());
 
 	let { node, editor }: NodeViewProps = $props();
 

@@ -67,7 +67,10 @@ it('reports corrupt saved identity instead of silently starting duplicate work',
 	const fixture = noteSubmissionFixture(sessionStorage);
 	await fixture.uncertainSelection('promise-test-a', 'promises', selection);
 	sessionStorage.setItem('followthrough.notes.promise-submissions.promise-test-a', 'corrupt');
-	await expect(
-		fixture.controller.selection('promise-test-a', 'promises', selection)
-	).rejects.toThrow();
+	const sentBefore = fixture.remote.selections.length;
+	const outcome = await fixture.controller.selection('promise-test-a', 'promises', selection);
+	expect({ outcome: outcome.kind, sent: fixture.remote.selections.length }).toEqual({
+		outcome: 'failure',
+		sent: sentBefore
+	});
 });

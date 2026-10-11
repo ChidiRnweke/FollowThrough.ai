@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { decideSuggestion } from '$lib/components/suggestions/decide';
+	import { decideSuggestion } from '$lib/components/suggestions';
 	import { workspaceChatHistory } from './chat-history';
 	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { ShellContext } from '$lib/models/workspace-views';
@@ -111,7 +111,7 @@
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before opening a chat');
 	const resources = session.resources;
-	const history = workspaceChatHistory(session);
+	const history = workspaceChatHistory(workspaceSession, workspaceViews, session);
 	$effect(() => {
 		const online = resources.online;
 		untrack(() => {

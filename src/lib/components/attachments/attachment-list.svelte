@@ -48,13 +48,15 @@
 		else toast.success('Attachment queued for processing');
 	}
 
-	async function download(attachmentId: string): Promise<void> {
-		const prepared = await downloadAttachment({ attachmentId }).then(
-			(result) => ({ kind: 'ready' as const, url: result.url }),
-			() => ({ kind: 'failure' as const })
-		);
-		if (prepared.kind === 'failure') toast.error('The attachment action failed');
-		else window.open(prepared.url, '_blank', 'noopener,noreferrer');
+	async function download(attachmentId: string): Promise<void | { kind: 'failure' }> {
+		let url: string;
+		try {
+			url = (await downloadAttachment({ attachmentId })).url;
+		} catch {
+			toast.error('The attachment action failed');
+			return { kind: 'failure' };
+		}
+		window.open(url, '_blank', 'noopener,noreferrer');
 	}
 
 	async function retry(attachmentId: string): Promise<void> {

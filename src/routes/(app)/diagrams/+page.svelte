@@ -3,9 +3,7 @@
 	import { DiagramGallery } from '$lib/components/diagrams';
 	let { data } = $props();
 	const entries = $derived(
-		data.selectedProjectId
-			? workspaceViews.diagrams(data.selectedProjectId, data.query)
-			: []
+		data.selectedProjectId ? workspaceViews.diagrams(data.selectedProjectId, data.query) : []
 	);
 	const page = $derived(
 		Math.min(data.page, Math.max(1, Math.ceil(entries.length / data.pageSize)))

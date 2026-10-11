@@ -5,6 +5,19 @@ import type { TodoId, TodoStatus, UpdateTodoInput } from '$lib/models/todos';
 import { todoUpdateState as state } from '$lib/stores/todos/todo-updates.svelte';
 import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 
+/** The workspace opened, or why it could not. */
+const opened = async (): Promise<{ kind: 'open' } | { kind: 'failure'; message: string }> => {
+	try {
+		await workspaceSession.start();
+		return { kind: 'open' };
+	} catch (error) {
+		return {
+			kind: 'failure',
+			message: error instanceof Error ? error.message : 'The workspace could not open'
+		};
+	}
+};
+
 /** Todo edits from lists, boards and fields; every edit is stored on this device first. */
 export const todoUpdates = {
 	get creating(): boolean {
@@ -67,12 +80,9 @@ export const todoUpdates = {
 	): Promise<boolean> {
 		state.setCreating(true);
 		state.report(null);
-		const unopened = await workspaceSession.start().then(
-			() => null,
-			(error: unknown) => (error instanceof Error ? error.message : 'The workspace could not open')
-		);
+		const workspace = await opened();
 		const target =
-			unopened === null
+			workspace.kind === 'open'
 				? (projectId ??
 					workspaceViews.currentShell.projects.find((project) => project.role === 'inbox')?.id)
 				: undefined;
@@ -87,7 +97,10 @@ export const todoUpdates = {
 				})
 			: ({
 					kind: 'failure',
-					message: unopened ?? 'The inbox is not available on this device'
+					message:
+						workspace.kind === 'failure'
+							? workspace.message
+							: 'The inbox is not available on this device'
 				} as const);
 		state.setCreating(false);
 		state.report(result.kind === 'failure' ? result.message : null);

@@ -2,23 +2,20 @@ import { expect, it } from 'vitest';
 import { NoteHistory, type NoteHistoryReader } from './history';
 import { NoteHistoryStore } from '$lib/stores/notes/history.svelte';
 import { NotePresentationService } from '$lib/services/notes/presentation';
-import type { NoteActionWorkspace } from './actions';
 import type { NoteRevision, NoteRevisionId, NoteRevisionSummary } from '$lib/models/notes';
 import { testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
-const workspace: NoteActionWorkspace = {
-	current: { bootstrap: { accountId: 'note-history-test' } }
-};
+const signedIn = { accountId: 'note-history-test' as string | null };
 const createHistory = (
 	noteId: ReturnType<typeof testNoteId>,
 	list: NoteHistoryReader['list'],
 	read: NoteHistoryReader['read'],
-	session = workspace
+	account = signedIn
 ) =>
 	new NoteHistory(
 		noteId,
 		new NoteHistoryStore(),
-		session,
+		account,
 		{ list, read },
 		new NotePresentationService()
 	);
@@ -158,17 +155,15 @@ it('clears a previously selected snapshot when reopening starts', async () => {
 
 it('does not expose a revision after its account is replaced', async () => {
 	const delayed = Promise.withResolvers<NoteRevision>();
-	const session: { current: NoteActionWorkspace['current'] } = {
-		current: { bootstrap: { accountId: 'previous' } }
-	};
+	const account = { accountId: 'previous' as string | null };
 	const history = createHistory(
 		testNoteId(),
 		async () => [],
 		async () => delayed.promise,
-		session
+		account
 	);
 	const reading = history.select(revision(1).id);
-	session.current = { bootstrap: { accountId: 'replacement' } };
+	account.accountId = 'replacement';
 	delayed.resolve(revision(1));
 	await reading;
 	expect({

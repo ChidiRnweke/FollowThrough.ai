@@ -22,7 +22,6 @@
 	} from '$lib/client/workbench/tab-drag';
 	import { isChatTab, noteIdOf, parseTabId, type TabId } from '$lib/stores/workbench/tab-ref';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { Conversation } from '$lib/models/agent';
 	import { cubicOut } from 'svelte/easing';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
@@ -56,10 +55,7 @@
 			case 'search':
 				return 'Search notes';
 			case 'diagram':
-				return (
-					workspaceViews.diagram(ref.diagramId)?.title ??
-					'Untitled diagram'
-				);
+				return workspaceViews.diagram(ref.diagramId)?.title ?? 'Untitled diagram';
 			case 'widget':
 				return workspaceViews.widget(ref.widgetId)?.title ?? 'Widget';
 			case 'chat': {

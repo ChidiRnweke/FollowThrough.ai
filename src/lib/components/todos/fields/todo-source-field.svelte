@@ -7,7 +7,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { FtChevronsUd as ChevronsUpDown } from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
-	import { todoUpdates } from '$lib/components/todos/todo-updates';
+	import { todoUpdates } from '../todo-updates';
 
 	let {
 		todoId,

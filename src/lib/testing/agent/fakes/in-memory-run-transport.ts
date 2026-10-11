@@ -1,4 +1,4 @@
-import type { AgentRunTransport } from '$lib/controllers/agent/chat.svelte';
+import type { AgentRunSubmission, AgentRunTransport } from '$lib/controllers/agent/chat.svelte';
 import type {
 	AgentRunReceipt,
 	AgentRunSnapshot,
@@ -11,9 +11,9 @@ export class InMemoryRunTransport implements AgentRunTransport {
 	snapshot?: AgentRunSnapshot;
 	private connection?: Parameters<AgentRunTransport['openEvents']>[0];
 	constructor(readonly receipt: AgentRunReceipt) {}
-	async submit(input: Parameters<AgentRunTransport['submit']>[0]): Promise<AgentRunReceipt> {
+	async submit(input: Parameters<AgentRunTransport['submit']>[0]): Promise<AgentRunSubmission> {
 		this.requests.set(input.requestId, structuredClone(input));
-		return this.receipt;
+		return { kind: 'accepted', receipt: this.receipt };
 	}
 	async get(): Promise<AgentRunSnapshot> {
 		if (!this.snapshot) throw new Error('No run snapshot supplied');

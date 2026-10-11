@@ -1,6 +1,6 @@
 import { submitAgentRunInputSchema, type AgentRunId } from '$lib/models/agent';
 import { RunEventSubscription } from './subscription';
-import type { AgentRunTransport } from '$lib/controllers/agent/chat.svelte';
+import type { AgentRunSubmission, AgentRunTransport } from '$lib/controllers/agent/chat.svelte';
 import { isHttpError } from '@sveltejs/kit';
 import {
 	cancelAgentRun,
@@ -11,11 +11,20 @@ import {
 } from '$lib/remote/agent/chat.remote';
 
 export class RemoteAgentRunTransport implements AgentRunTransport {
-	async submit(input: Parameters<AgentRunTransport['submit']>[0]) {
-		return submitAgentRun(submitAgentRunInputSchema.parse(input));
+	async submit(input: Parameters<AgentRunTransport['submit']>[0]): Promise<AgentRunSubmission> {
+		try {
+			return {
+				kind: 'accepted',
+				receipt: await submitAgentRun(submitAgentRunInputSchema.parse(input))
+			};
+		} catch (error) {
+			const message = this.rejection(error);
+			if (message === undefined) throw error;
+			return { kind: 'refused', message };
+		}
 	}
 
-	rejection(error: unknown): string | undefined {
+	private rejection(error: unknown): string | undefined {
 		if (!isHttpError(error)) return undefined;
 		const { status } = error;
 		if (status < 400 || status >= 500) return undefined;

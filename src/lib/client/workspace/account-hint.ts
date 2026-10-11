@@ -14,3 +14,10 @@ export const workspaceAccountHint = (cookies: string): string | null => {
 	const account = workspaceBootstrapSchema.shape.accountId.safeParse(found.slice(prefix.length));
 	return account.success ? account.data : null;
 };
+
+/** The signed-in account as this tab's session cookie names it. */
+export class BrowserAccount {
+	get accountId(): string | null {
+		return workspaceAccountHint(document.cookie);
+	}
+}

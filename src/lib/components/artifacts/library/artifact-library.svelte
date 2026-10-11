@@ -64,16 +64,15 @@
 	const artifacts = $derived<readonly ArtifactView[]>(data.artifacts);
 	let searchValue = $derived(data.query);
 
-	async function download(id: ArtifactId): Promise<void> {
-		const prepared = await perform(id, () =>
-			downloadArtifact({ artifactId: id }).then(
-				(result) => ({ kind: 'ready' as const, url: result.url }),
-				() => ({ kind: 'failure' as const })
-			)
-		);
-		if (closed) return;
-		if (prepared.kind === 'failure') toast.error('Could not prepare the download.');
-		else window.location.assign(prepared.url);
+	async function download(id: ArtifactId): Promise<void | { kind: 'failure' }> {
+		let url: string;
+		try {
+			url = (await perform(id, () => downloadArtifact({ artifactId: id }))).url;
+		} catch {
+			if (!closed) toast.error('Could not prepare the download.');
+			return { kind: 'failure' };
+		}
+		if (!closed) window.location.assign(url);
 	}
 
 	async function regenerate(id: ArtifactId): Promise<void> {

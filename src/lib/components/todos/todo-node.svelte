@@ -2,7 +2,6 @@
 	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { NodeViewProps } from '@tiptap/core';
 	import { untrack } from 'svelte';
-	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { TodoId } from '$lib/models/todos';
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
 	import { Badge } from '$lib/components/ui/badge';
@@ -10,7 +9,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { openTodoSurface } from '$lib/client/shell/responsive-surfaces';
 	import { page } from '$app/state';
-	import { todoUpdates } from '$lib/components/todos/todo-updates';
+	import { todoUpdates } from './todo-updates';
 	import { formatDate, todayLocalDate } from '../shared/labels';
 
 	let { node, editor }: NodeViewProps = $props();

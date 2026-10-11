@@ -37,7 +37,7 @@
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
 	import { WidgetInserter, WidgetNode } from '$lib/components/edra/commands/BuiltinExtensions.js';
 	import { WidgetNodeView, WidgetPicker, type WidgetPick } from '$lib/components/widgets';
-	import { widgetEdits } from '$lib/components/widgets/widget-edits';
+	import { widgetEdits } from '$lib/components/widgets';
 	import type { Editor } from '$lib/components/edra/commands/CoreEditor.js';
 	import type { Editor as TiptapEditor } from '@tiptap/core';
 	import type { PerNoteEditorSlot } from './editor-context';

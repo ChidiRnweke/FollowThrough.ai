@@ -1,57 +1,61 @@
-import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
 import { afterEach, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { z } from 'zod';
 import { Dexie } from 'dexie';
-import { DexieWorkspaceRepository } from '$lib/client/sync/workspace-local-repository';
-import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
+import { IndexedDbWorkspaceReplica } from '$lib/client/repositories/workspace/replica';
+import { accountDatabaseName } from '$lib/client/repositories/workspace/database';
 import { syncEtag } from '$lib/models/sync';
-import { SyncResourceRulesService } from '$lib/services/sync/state';
-const { receiveResource } = new SyncResourceRulesService();
 import WorkspaceRecoveryDownload from './workspace-recovery-download.svelte';
+
 const cleanups: (() => Promise<void>)[] = [];
+/** Alice's device holds one downloaded body; the page offers recovery over that storage. */
 const setup = async () => {
 	const prefix = `reset-review-${crypto.randomUUID()}`;
-	const store = new DexieWorkspaceRepository('alice', z.string(), z.string(), prefix);
-	const recovery = new IndexedDbStorageRecovery(prefix);
-	await createCachePersistence(store.cache).commit('alice', {
+	const replica = new IndexedDbWorkspaceReplica(z.string(), z.string(), prefix);
+	replica.open('alice');
+	await replica.commitCache('alice', {
 		put: [
 			{
 				key: 'note',
-				entry: receiveResource(undefined, { etag: syncEtag(1n), value: 'Keep my draft' })
+				entry: { kind: 'present', snapshot: { etag: syncEtag(1n), value: 'Keep my draft' } }
 			}
-		],
-		remove: []
+		]
 	});
 	cleanups.push(async () => {
-		store.database.close();
-		await Dexie.delete(store.database.name);
+		replica.close('alice');
+		await Dexie.delete(accountDatabaseName('alice', prefix));
 	});
 	const reset = Promise.withResolvers<void>();
 	const screen = render(WorkspaceRecoveryDownload, {
 		recovery: {
-			downloadLocalWrites: () => recovery.downloadAccount('alice'),
-			resetLocalWorkspace: () => recovery.resetAccount('alice')
+			downloadLocalWrites: () => replica.exportAccount('alice'),
+			resetLocalWorkspace: () => replica.resetAccount('alice')
 		},
 		reloaded: reset.resolve
 	});
-	return { store, screen, reset: reset.promise };
+	/** What a tab opened now would find on this device. */
+	const stored = async () => {
+		const reader = new IndexedDbWorkspaceReplica(z.string(), z.string(), prefix);
+		reader.open('alice');
+		const records = (await reader.read('alice')).cache.records.length;
+		reader.close('alice');
+		return records;
+	};
+	return { screen, stored, prefix, reset: reset.promise };
 };
 afterEach(async () => {
 	for (const cleanup of cleanups.splice(0)) await cleanup();
 });
 it('keeps local data when the reset confirmation is cancelled', async () => {
-	const { store, screen } = await setup();
+	const { screen, stored } = await setup();
 	await screen.getByRole('button', { name: 'Reset this device…', exact: true }).click();
-	const beforeCancel = (await store.read('alice')).cache.records.length;
 	await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
-	const afterCancel = (await store.read('alice')).cache.records.length;
-	expect({ beforeCancel, afterCancel }).toEqual({ beforeCancel: 1, afterCancel: 1 });
+	expect(await stored()).toBe(1);
 });
 it('resets this account after explicit confirmation', async () => {
-	const { store, screen, reset } = await setup();
+	const { screen, reset, prefix } = await setup();
 	await screen.getByRole('button', { name: 'Reset this device…', exact: true }).click();
 	await screen.getByRole('button', { name: 'Reset local workspace', exact: true }).click();
 	await reset;
-	expect(await Dexie.exists(store.database.name)).toBe(false);
+	expect(await Dexie.exists(accountDatabaseName('alice', prefix))).toBe(false);
 });

@@ -20,7 +20,8 @@ afterEach(() => {
 const tabs = (accountId: string) => {
 	const transport = new InMemoryWorkspaceTransport();
 	const locks = new Map<string, Promise<void>>();
-	const replica = () => new IndexedDbWorkspaceReplica(workspaceCommandSchema, workspaceRecordSchema);
+	const replica = () =>
+		new IndexedDbWorkspaceReplica(workspaceCommandSchema, workspaceRecordSchema);
 	const first = workspaceTab(accountId, replica(), transport, locks);
 	const second = workspaceTab(accountId, replica(), transport, locks);
 	started.push(first.workspace, second.workspace);
@@ -57,8 +58,10 @@ it('stops both open clients when this account is reset', async () => {
 	const { first, second } = tabs(accountId);
 	const [one, two] = [await first.start(false), await second.start(false)];
 	await first.workspace.resetLocalWorkspace();
-	await expect.poll(() => ({ first: one.active, second: two.active })).toEqual({
-		first: false,
-		second: false
-	});
+	await expect
+		.poll(() => ({ first: one.active, second: two.active }))
+		.toEqual({
+			first: false,
+			second: false
+		});
 });

@@ -7,7 +7,7 @@
 	import { FtCalendar as CalendarIcon, FtClose as X } from '$lib/components/icons';
 	import { parseDate, type DateValue } from '@internationalized/date';
 	import { toast } from 'svelte-sonner';
-	import { todoUpdates } from '$lib/components/todos/todo-updates';
+	import { todoUpdates } from '../todo-updates';
 	import { formatDate } from '../../shared/labels';
 
 	let {

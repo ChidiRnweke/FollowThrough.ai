@@ -19,7 +19,7 @@ import {
 import { agentReviewSchema, type AgentReview, agentToolNameSchema } from '$lib/models/agent';
 
 export type { ChatToolStatus, ChatToolActivityBase, ChatToolActivity } from '$lib/models/chat';
-import type { ChatToolActivity, ChatToolActivityBase } from '$lib/models/chat';
+import type { ChatPart, ChatToolActivity, ChatToolActivityBase } from '$lib/models/chat';
 
 /**
  * Arguments, or none recorded.
@@ -223,3 +223,16 @@ export const toolFailure = (tool: ChatToolActivity): string | undefined =>
 
 /** Whether the call failed. */
 export const toolFailed = (tool: ChatToolActivity): boolean => toolFailure(tool) !== undefined;
+
+const restoredImageSchema = z.object({ id: z.string(), dataUrl: z.string(), name: z.string() });
+/**
+ * The images a saved user turn carried. A malformed image is dropped and the turn's text kept:
+ * the reader still sees what they asked.
+ */
+export const readRestoredImages = (value: unknown): ChatPart[] =>
+	Array.isArray(value)
+		? value.flatMap((item) => {
+				const image = restoredImageSchema.safeParse(item);
+				return image.success ? [{ kind: 'image' as const, ...image.data }] : [];
+			})
+		: [];

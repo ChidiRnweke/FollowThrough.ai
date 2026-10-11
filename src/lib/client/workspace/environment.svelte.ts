@@ -1,6 +1,7 @@
 import { SvelteDate, createSubscriber } from 'svelte/reactivity';
 import type { WorkspaceEnvironment, WorkspaceEvents } from '$lib/controllers/workspace/workspace';
 import type { DateTime } from '$lib/models/workspace';
+import type { WorkspaceChange } from '$lib/models/workspace-editing';
 import { workspaceBootstrapKey } from '$lib/models/workspace-bootstrap';
 import { workspaceAccountHint } from './account-hint';
 import { isHttpError } from '@sveltejs/kit';
@@ -13,9 +14,19 @@ export class BrowserWorkspaceEnvironment implements WorkspaceEnvironment {
 	get online(): boolean {
 		return navigator.onLine;
 	}
-	explain(error: unknown, fallback: string): string {
-		if (isHttpError(error)) return error.body.message;
-		return error instanceof Error ? error.message : fallback;
+	async settle<T>(request: Promise<T>): Promise<WorkspaceChange<T>> {
+		try {
+			return { kind: 'saved', value: await request };
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message: isHttpError(error)
+					? error.body.message
+					: error instanceof Error
+						? error.message
+						: 'The action could not be saved'
+			};
+		}
 	}
 	reload(): void {
 		window.location.reload();

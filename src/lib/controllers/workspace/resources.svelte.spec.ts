@@ -49,7 +49,6 @@ const setup = async (
 				basedOn: null,
 				local: project,
 				coalesce: null,
-				references: [],
 				dependencies: []
 			},
 			delivery: { kind: 'queued' }

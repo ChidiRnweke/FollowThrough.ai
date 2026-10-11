@@ -3,7 +3,7 @@ import type { AgentRunId } from '$lib/models/agent';
 import {
 	InMemoryNoteActionRunStorage,
 	InMemoryNoteActionRunTransport,
-	InMemoryNoteActionRunWorkspace
+	InMemoryRecordRefresh
 } from '$lib/testing/notes/fakes/in-memory-note-action-runs';
 import { NoteActionRuns } from './action-runs';
 import { NoteActionRunStore } from '$lib/stores/notes/note-action-runs.svelte';
@@ -17,23 +17,19 @@ const create = (
 	noteId: ReturnType<typeof testNoteId>,
 	transport: InMemoryNoteActionRunTransport,
 	storage: InMemoryNoteActionRunStorage,
-	workspace = new InMemoryNoteActionRunWorkspace()
-) =>
-	new NoteActionRuns(
-		noteId,
-		workspace.session,
-		workspace,
-		new NoteActionRunStore(),
-		transport,
-		storage
-	);
+	records = new InMemoryRecordRefresh()
+) => {
+	const runs = new NoteActionRuns(noteId, new NoteActionRunStore(), transport, storage);
+	runs.refreshWith(records.refresh);
+	return runs;
+};
 const setup = () => {
 	const transport = new InMemoryNoteActionRunTransport();
 	const storage = new InMemoryNoteActionRunStorage();
-	const workspace = new InMemoryNoteActionRunWorkspace();
-	const store = create(noteId, transport, storage, workspace);
+	const records = new InMemoryRecordRefresh();
+	const store = create(noteId, transport, storage, records);
 	store.on('revise', () => {});
-	return { transport, storage, store, workspace };
+	return { transport, storage, store, records };
 };
 
 /** Starts a tracked run and returns the promise callers await on the live path. */
@@ -197,8 +193,7 @@ describe('NoteActionRuns', () => {
 			{ runId: '00000000-0000-4000-8000-000000000002' as AgentRunId, latestCursor: '000000' },
 			{ action: 'promises' }
 		);
-		const workspace = new InMemoryNoteActionRunWorkspace();
-		const store = create(noteId, transport, storage, workspace);
+		const store = create(noteId, transport, storage);
 		store.hydrate();
 		void start(store);
 
@@ -215,8 +210,7 @@ describe('NoteActionRuns', () => {
 			{ runId: '00000000-0000-4000-8000-000000000002' as AgentRunId, latestCursor: '000000' },
 			{ action: 'promises' }
 		);
-		const workspace = new InMemoryNoteActionRunWorkspace();
-		const store = create(noteId, transport, storage, workspace);
+		const store = create(noteId, transport, storage);
 		store.hydrate();
 
 		expect(store.running).toEqual([]);
@@ -231,17 +225,17 @@ describe('NoteActionRuns', () => {
 	});
 });
 
-it('retains the recovery cursor when a result arrives after the account stopped', async () => {
-	const { store, transport, storage, workspace } = setup();
+it('retains the recovery cursor when the editor closes while its records refresh', async () => {
+	const { store, transport, storage, records } = setup();
 	const delivered: unknown[] = [];
 	store.on('revise', (result) => {
 		delivered.push(result);
 	});
 	void start(store);
-	const gate = workspace.pause();
+	const gate = records.pause();
 	transport.emit(runId, { type: 'workflow_result', action: 'revise', result: { source: 'late' } });
 	await gate.started;
-	workspace.current = null;
+	store.detach();
 	gate.release();
 	await transport.flush();
 	expect({ delivered, running: store.running, cursor: storage.load()[0].cursor }).toEqual({
@@ -313,4 +307,15 @@ it('closes a stream that replays cancellation while it opens', async () => {
 		saved: storage.load(),
 		running: reopened.running
 	}).toEqual({ streams: [], saved: [], running: [] });
+});
+it('refreshes this device’s records before it applies a run’s result', async () => {
+	const { store, transport, records } = setup();
+	const refreshedBefore: number[] = [];
+	store.on('revise', () => {
+		refreshedBefore.push(records.refreshes);
+	});
+	void start(store);
+	transport.emit(runId, { type: 'workflow_result', action: 'revise', result: { source: 'new' } });
+	await transport.flush();
+	expect(refreshedBefore).toEqual([1]);
 });

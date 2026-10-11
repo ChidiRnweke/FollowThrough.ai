@@ -36,6 +36,7 @@ export class InMemoryWorkspaceReplica<C, T> implements WorkspaceReplicaRepositor
 	private writes: Promise<unknown> = Promise.resolve();
 	private serialized<R>(work: () => Promise<R>): Promise<R> {
 		const result = this.writes.then(work);
+		// audit-allow: silent-catch — the chain only orders later writes; the caller awaits `result` and receives its rejection.
 		this.writes = result.catch(() => undefined);
 		return result;
 	}

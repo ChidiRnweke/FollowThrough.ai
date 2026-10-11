@@ -161,9 +161,9 @@ describe('durable outbox transactions', () => {
 		const { replica, prefix } = tab();
 		await queue(replica);
 		replica.close('alice');
-		expect(
-			(await tab(prefix).replica.list('alice')).map((entry) => entry.intent.local)
-		).toEqual(['create']);
+		expect((await tab(prefix).replica.list('alice')).map((entry) => entry.intent.local)).toEqual([
+			'create'
+		]);
 	});
 	it('isolates queued writes between accounts', async () => {
 		const { replica, prefix } = tab();
@@ -174,9 +174,10 @@ describe('durable outbox transactions', () => {
 		const { replica, prefix } = tab();
 		const other = tab(prefix).replica;
 		await Promise.all([queue(replica, draft('First')), queue(other, draft('Second'))]);
-		expect(
-			(await replica.list('alice')).map((entry) => entry.intent.command).sort()
-		).toEqual(['First', 'Second']);
+		expect((await replica.list('alice')).map((entry) => entry.intent.command).sort()).toEqual([
+			'First',
+			'Second'
+		]);
 	});
 	it('rolls back the allocation and every write of a failed transition', async () => {
 		const { replica } = tab();
@@ -322,7 +323,9 @@ describe('live observation', () => {
 describe('storage recovery', () => {
 	const damage = async (prefix: string) => {
 		const database = new Dexie(accountDatabaseName('alice', prefix));
-		database.version(1).stores({ records: 'key', outbox: '++sequence', receipts: 'key', meta: 'key' });
+		database
+			.version(1)
+			.stores({ records: 'key', outbox: '++sequence', receipts: 'key', meta: 'key' });
 		await database.table('records').put({
 			key: 'note:1',
 			entry: { kind: 'present', snapshot: 'Damaged original text' }

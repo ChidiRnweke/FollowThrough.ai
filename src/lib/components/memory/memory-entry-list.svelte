@@ -1,10 +1,9 @@
 <script lang="ts">
-	import { workspaceViews } from '$lib/factories/workspace/session';
+	import { workspaceApplication, type WorkspaceGraph } from '$lib/factories/workspace/session';
 	import { workspacePresentation } from '$lib/factories/workspace/presentation';
 	const { accessMessage } = workspacePresentation;
 
 	import { Form } from '$lib/components/ui/form';
-	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { MemoryEntry, MemoryEntryId, MemoryEntryType } from '$lib/models/memory';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { SuggestionId, MemorySuggestionView } from '$lib/models/suggestions';
@@ -25,17 +24,14 @@
 	} from '$lib/components/icons';
 	import EmptyState from '../shared/empty-state.svelte';
 
-	import type {
-		WorkspaceDraftController,
-		WorkspaceResourcesController
-	} from '$lib/controllers/workspace/workspace';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
 
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 	import { formatRelativeTime, memoryEntryTypeLabels } from '../shared/labels';
 
 	let {
 		projectId,
-		workspace,
+		graph = workspaceApplication,
 		placeholder,
 		emptyText,
 		emptyHint,
@@ -45,7 +41,8 @@
 	}: {
 		/** Omit for the user's profile memory. */
 		projectId?: ProjectId;
-		workspace?: WorkspaceResourcesController;
+		/** The workspace and its views; a test supplies its own. */
+		graph?: WorkspaceGraph;
 		placeholder: string;
 		emptyText: string;
 		/** Second line of the empty state — the invitation, kept out of the voice line. */
@@ -59,7 +56,9 @@
 		heroEmpty?: boolean;
 	} = $props();
 
-	const resources = $derived(workspace ?? workspaceSession.current?.resources);
+	const workspaceSession = $derived(graph.workspace);
+	const workspaceViews = $derived(graph.views);
+	const resources = $derived(graph.workspace.current?.resources);
 	const project = $derived(
 		projectId ? resources?.view({ type: 'projects', id: [projectId] }) : undefined
 	);

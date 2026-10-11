@@ -11,6 +11,11 @@ export class NoteHistoryStore {
 	private selectedIdValue = $state<NoteRevisionId | undefined>();
 	private selectedValue = $state<NoteRevision | undefined>();
 	private readStateValue = $state<NoteHistoryReadState>({ kind: 'ready' });
+	private account = $state<string | null>(null);
+	/** The account the revisions were read for. */
+	get accountId(): string | null {
+		return this.account;
+	}
 	get generation(): number {
 		return this.request;
 	}
@@ -29,7 +34,8 @@ export class NoteHistoryStore {
 	invalidate(): void {
 		this.request++;
 	}
-	begin(selectedId?: NoteRevisionId): number {
+	begin(accountId: string | null, selectedId?: NoteRevisionId): number {
+		this.account = accountId;
 		this.selectedIdValue = selectedId;
 		this.selectedValue = undefined;
 		this.readStateValue = { kind: 'loading' };

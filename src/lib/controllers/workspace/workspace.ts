@@ -27,13 +27,11 @@ import type {
 } from '$lib/client/services/workspace/storage';
 import type { WorkspaceTransport } from '$lib/client/services/workspace/transport';
 import type { WorkspaceStores } from '$lib/stores/workspace/stores';
-import type { WorkspaceSessionStore } from '$lib/stores/workspace/session.svelte';
 import type { WorkspaceResourceStore } from '$lib/stores/workspace/resources.svelte';
 import type {
 	WorkspaceDraftStore,
 	ResourceObservationStore
 } from '$lib/stores/workspace/draft.svelte';
-import type { WorkspaceProjectionStore } from '$lib/stores/workspace/projection.svelte';
 import type { ResourceCacheStore } from '$lib/stores/sync/cache';
 import type { MutationQueueStore } from '$lib/stores/sync/submission';
 import type { SyncExecutionStore } from '$lib/stores/sync/execution';
@@ -116,7 +114,6 @@ import type {
 
 type Entry = OutboxEntry<WorkspaceCommand, WorkspaceRecord>;
 type Draft = WriteDraft<WorkspaceCommand, WorkspaceRecord>;
-type Projection = WorkspaceLocalProjection<WorkspaceCommand, WorkspaceRecord>;
 
 // ===== Public contracts =====
 
@@ -128,8 +125,8 @@ export interface WorkspaceEvents {
 
 /** Browser mechanics: clocks, timers, locks, events and the Svelte input boundary. */
 export interface WorkspaceEnvironment {
-	/** What a failed server request says to the person who made it. */
-	explain(error: unknown, fallback: string): string;
+	/** A server request's answer, or what its refusal says to the person who made it. */
+	settle<T>(request: Promise<T>): Promise<WorkspaceChange<T>>;
 	/** The account the server's readable cookie names; never authentication. */
 	readonly accountId: string | null;
 	readonly online: boolean;
@@ -578,7 +575,11 @@ export class Workspace implements WorkspaceController {
 		identity: WorkspaceResourceIdentity & { type: K },
 		name: string
 	): Promise<WorkspaceRead<K>> {
-		return this.reading<K>(identity, name, (resources, target) => resources.lookup(target));
+		return this.reading<K>(identity, name, async (resources, target) => {
+			const found = await resources.lookup(target);
+			// A deleted setting reads as one never saved; a deleted note or chat is an error.
+			return found.kind === 'deleted' ? { kind: 'absent' } : found;
+		});
 	}
 	private async reading<K extends WorkspaceResourceType>(
 		identity: WorkspaceResourceIdentity & { type: K },
@@ -594,7 +595,7 @@ export class Workspace implements WorkspaceController {
 			const found = await access(session.resources, identity as WorkspaceResourceIdentity);
 			if (this.state.current !== session)
 				return { kind: 'failure', message: 'The workspace account changed while reading.' };
-			if (found.kind === 'absent' || found.kind === 'deleted') return { kind: 'absent' };
+			if (found.kind === 'absent') return { kind: 'absent' };
 			if (found.kind !== 'ready')
 				return { kind: 'failure', message: this.rules.sync.accessMessage(found, name) };
 			if (!this.rules.commands.isWorkspaceRecord(found.value, identity.type))
@@ -627,15 +628,23 @@ export class Workspace implements WorkspaceController {
 					saved,
 					message: 'The workspace account changed during the edits'
 				};
-			const staged = await draft
-				.stage(command)
-				.catch((error): WorkspaceSave<WorkspaceResourceType> => ({
-					kind: 'failure',
-					message: error instanceof Error ? error.message : 'Device storage is unavailable'
-				}));
+			const staged = await this.stageOne(draft, command);
 			if (staged.kind === 'failure') return { kind: 'failure', saved, message: staged.message };
 		}
 		return { kind: 'complete', saved: drafts.length };
+	}
+	private async stageOne(
+		draft: WorkspaceDraftController<WorkspaceResourceType>,
+		command: PreparedWorkspaceCommand
+	): Promise<WorkspaceSave<WorkspaceResourceType>> {
+		try {
+			return await draft.stage(command);
+		} catch (error) {
+			return {
+				kind: 'failure',
+				message: error instanceof Error ? error.message : 'Device storage is unavailable'
+			};
+		}
 	}
 	async openOrCreate<K extends WorkspaceResourceType>(
 		identity: WorkspaceResourceIdentity & { type: K },
@@ -696,18 +705,12 @@ export class Workspace implements WorkspaceController {
 	}
 	async serverChange<T>(request: Promise<T>): Promise<WorkspaceChange<T>> {
 		const accountId = this.environment.accountId;
-		try {
-			const value = await request;
-			if (this.environment.accountId !== accountId)
-				return { kind: 'failure', message: 'The workspace account changed during the action.' };
-			await this.synchronize();
-			return { kind: 'saved', value };
-		} catch (error) {
-			return {
-				kind: 'failure',
-				message: this.environment.explain(error, 'The action could not be saved')
-			};
-		}
+		const answer = await this.environment.settle(request);
+		if (answer.kind === 'failure') return answer;
+		if (this.environment.accountId !== accountId)
+			return { kind: 'failure', message: 'The workspace account changed during the action.' };
+		await this.synchronize();
+		return answer;
 	}
 	capture<K extends WorkspaceResourceType>(
 		identity: WorkspaceResourceIdentity & { type: K }

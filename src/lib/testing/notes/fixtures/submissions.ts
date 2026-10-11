@@ -18,28 +18,20 @@ export const noteSubmissionFixture = (storage: Storage) => {
 		remote,
 		controller,
 		uncertainSelection: (accountId: string, action: SelectionAction, input: TextSelection) =>
-			controller.selection(accountId, action, input).then(
-				() => {
+			controller.selection(accountId, action, input).then((outcome) => {
+				if (outcome.kind === 'started' || outcome.message !== remote.failure?.message)
 					throw new Error('Expected an uncertain receipt');
-				},
-				(error) => {
-					if (error !== remote.failure) throw error;
-					const sent = remote.selections.at(-1);
-					if (!sent) throw new Error('No selection was submitted');
-					return sent.request;
-				}
-			),
+				const sent = remote.selections.at(-1);
+				if (!sent) throw new Error('No selection was submitted');
+				return sent.request;
+			}),
 		uncertainDiagram: (accountId: string, input: DiagramActionInput) =>
-			controller.diagram(accountId, input).then(
-				() => {
+			controller.diagram(accountId, input).then((outcome) => {
+				if (outcome.kind === 'started' || outcome.message !== remote.failure?.message)
 					throw new Error('Expected an uncertain receipt');
-				},
-				(error) => {
-					if (error !== remote.failure) throw error;
-					const sent = remote.diagrams.at(-1);
-					if (!sent) throw new Error('No diagram was submitted');
-					return sent;
-				}
-			)
+				const sent = remote.diagrams.at(-1);
+				if (!sent) throw new Error('No diagram was submitted');
+				return sent;
+			})
 	};
 };

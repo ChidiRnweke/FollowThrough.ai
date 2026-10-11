@@ -1,10 +1,9 @@
 <script lang="ts">
-	import { decideSuggestion } from '$lib/components/suggestions/decide';
+	import { decideSuggestion } from '../decide';
 	import { workspaceViews } from '$lib/factories/workspace/session';
 	import type { SuggestionId, SuggestionView } from '$lib/models/suggestions';
 	import { toast } from 'svelte-sonner';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
-	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import SuggestionCard from '../suggestion-card.svelte';
 

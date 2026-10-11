@@ -1,15 +1,12 @@
 import type {
 	AttachmentRemotePort,
-	AttachmentBrowserPort,
-	AttachmentWorkspace,
-	AttachmentWorkspaceSession
+	AttachmentBrowserPort
 } from '$lib/controllers/attachments/controller';
 import type {
 	AttachmentUploadIntent,
 	AttachmentUploadRequest,
 	AttachmentObjectWrite,
-	AttachmentView,
-	RemoveAttachmentResult
+	AttachmentView
 } from '$lib/models/attachments';
 import type { TodoId } from '$lib/models/todos';
 import { attachmentViewBuilder } from '$lib/testing/attachments/fixtures/views';
@@ -24,7 +21,6 @@ export class InMemoryAttachmentRemote implements AttachmentRemotePort {
 	readonly uploadId: AttachmentUploadIntent['upload']['id'] =
 		'00000000-0000-4000-8000-000000000101' as AttachmentUploadIntent['upload']['id'];
 	completionFailure: Error | undefined;
-	removal: RemoveAttachmentResult = { kind: 'removed' };
 	async initiate(input: AttachmentUploadRequest): Promise<AttachmentUploadIntent> {
 		this.initiated.push(input);
 		return {
@@ -58,20 +54,12 @@ export class InMemoryAttachmentRemote implements AttachmentRemotePort {
 		this.completed.push({ uploadId, todoId });
 		return this.result;
 	}
-	async download(): Promise<{ url: string }> {
-		return { url: 'https://storage.test/download' };
-	}
-	async retry(): Promise<AttachmentView> {
-		return this.result;
-	}
-	async remove(): Promise<RemoveAttachmentResult> {
-		return this.removal;
-	}
 }
 export class InMemoryAttachmentBrowser implements AttachmentBrowserPort {
 	readonly writes: { readonly url: string; readonly bytes: readonly number[] }[] = [];
-	readonly opened: string[] = [];
 	writeResult: AttachmentObjectWrite = { kind: 'stored' };
+	/** The tab's signed-in account; a test signs out or switches by changing it. */
+	accountId: string | null = 'a0000000-0000-4000-8000-000000000002';
 	writeGate: Promise<void> | undefined;
 	readonly writeStarted = Promise.withResolvers<void>();
 	private sequence = 0;
@@ -87,29 +75,11 @@ export class InMemoryAttachmentBrowser implements AttachmentBrowserPort {
 		await this.writeGate;
 		return this.writeResult;
 	}
-	open(url: string): void {
-		this.opened.push(url);
-	}
 	identity(): string {
 		this.sequence += 1;
 		return `00000000-0000-4000-8000-${String(this.sequence).padStart(12, '0')}`;
 	}
 	now(): number {
 		return 1783857600000;
-	}
-}
-export class InMemoryAttachmentSession implements AttachmentWorkspaceSession {
-	readonly resources = {
-		prepare: async (): Promise<void> => {},
-		collectionReadiness: (): 'unknown' | 'ready' => 'ready',
-		views: { attachments: (): readonly AttachmentView[] => [] }
-	};
-}
-export class InMemoryAttachmentWorkspace implements AttachmentWorkspace {
-	current: AttachmentWorkspaceSession | null = new InMemoryAttachmentSession();
-	readonly synchronized: (AttachmentWorkspaceSession | null)[] = [];
-	async synchronize(): Promise<{ readonly kind: 'complete' }> {
-		this.synchronized.push(this.current);
-		return { kind: 'complete' };
 	}
 }

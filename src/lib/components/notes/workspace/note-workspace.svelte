@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { decideSuggestion } from '$lib/components/suggestions/decide';
+	import { decideSuggestion } from '$lib/components/suggestions';
 	import { createNoteHistory } from '$lib/factories/notes/history';
 	import type { DiagramSuggestion } from '$lib/models/suggestions';
 

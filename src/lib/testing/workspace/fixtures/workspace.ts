@@ -1,6 +1,9 @@
 import { WorkspaceStorageService } from '$lib/client/services/workspace/storage';
 import { LocalStorageBootstrap } from '$lib/client/repositories/workspace/bootstrap';
-import { createWorkspaceGraph } from '$lib/factories/workspace/session';
+import { createWorkspaceGraph, type WorkspaceGraph } from '$lib/factories/workspace/session';
+import { syncCursorSchema, syncEtag } from '$lib/models/sync';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceRecordIdentity, workspaceResourceKey } = new WorkspaceCommandRulesService();
 import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
@@ -79,4 +82,28 @@ export const workspaceFixture = (
 		...workspaceTab(accountId, replica, transport, locks),
 		tab
 	};
+};
+
+/**
+ * An offline tab of an account whose download found nothing on the server yet. `store` puts a
+ * record on this device as another tab or an earlier download would, and the tab sees it at once.
+ */
+export const offlineWorkspace = async (accountId: string) => {
+	const fixture = workspaceFixture({ accountId });
+	fixture.replica.seed(accountId, [], {
+		cursor: syncCursorSchema.parse('0'),
+		inventoryComplete: true
+	});
+	const resources = await fixture.start(false);
+	const store = async (value: WorkspaceRecord, version = 1n) => {
+		fixture.replica.seed(accountId, [
+			{
+				key: workspaceResourceKey(workspaceRecordIdentity(value)),
+				entry: { kind: 'present', snapshot: { etag: syncEtag(version), value } }
+			}
+		]);
+		await fixture.replica.read(accountId);
+	};
+	const graph: WorkspaceGraph = { workspace: fixture.workspace, views: fixture.views };
+	return { ...fixture, resources, store, graph };
 };

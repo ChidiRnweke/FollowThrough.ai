@@ -1,10 +1,14 @@
-import { workspaceSession, workspaceViews } from '$lib/factories/workspace/session';
-import type { WorkspaceSession } from '$lib/controllers/workspace/workspace';
+import type { WorkspaceController, WorkspaceSession } from '$lib/controllers/workspace/workspace';
+import type { WorkspaceViewsController } from '$lib/controllers/workspace/views';
 import type { ChatHistory, ChatHistorySource } from '$lib/stores/agent/chat.svelte';
 import type { ConversationId } from '$lib/models/agent';
 
 /** A chat's history as the open account's workspace holds it; it ends with that account. */
-export const workspaceChatHistory = (session: WorkspaceSession): ChatHistorySource => {
+export const workspaceChatHistory = (
+	workspaceSession: WorkspaceController,
+	workspaceViews: WorkspaceViewsController,
+	session: WorkspaceSession
+): ChatHistorySource => {
 	const bound = () => workspaceSession.current === session && session.resources.active;
 	return {
 		get writable() {

@@ -2,7 +2,6 @@ import { Chat } from '$lib/controllers/agent/chat.svelte';
 import type { ChatSession, ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 import { RemoteAgentRunTransport } from '$lib/client/agent/runs/remote-transport';
 import { SessionAgentRunStorage } from '$lib/client/agent/runs/session-storage';
-import { AgentPayloadInspectionService } from '$lib/services/agent/payload';
 import { ContextChipsService } from '$lib/services/chat/chips';
 
 /** One chat session over the server's run functions and this tab's session storage. */
@@ -11,6 +10,5 @@ export const createChat = (sessionKey: ChatSessionKey): ChatSession =>
 		sessionKey,
 		new RemoteAgentRunTransport(),
 		new SessionAgentRunStorage(sessionKey),
-		new AgentPayloadInspectionService(),
 		new ContextChipsService()
 	);

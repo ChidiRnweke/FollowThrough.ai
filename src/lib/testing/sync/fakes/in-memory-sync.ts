@@ -1,4 +1,10 @@
-import type { ResourceChange, SyncCursor, SyncObjectRead, SyncPage, SyncSnapshot } from '$lib/models/sync';
+import type {
+	ResourceChange,
+	SyncCursor,
+	SyncObjectRead,
+	SyncPage,
+	SyncSnapshot
+} from '$lib/models/sync';
 
 /** A controllable network connection, with bodies delivered over that connection as evidence. */
 export class InMemorySyncTransport<T> {

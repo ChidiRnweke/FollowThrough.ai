@@ -10,7 +10,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { FtPlus as Plus, FtCheck as Check } from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
-	import { todoUpdates } from '$lib/components/todos/todo-updates';
+	import { todoUpdates } from './todo-updates';
 	import TodoCard from './todo-card.svelte';
 	import { todoStatusEmptyCopy, todoStatusLabels, todoStatusStyle } from '../shared/labels';
 	import { untrack } from 'svelte';

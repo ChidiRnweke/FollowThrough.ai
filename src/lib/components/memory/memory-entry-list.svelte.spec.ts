@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { memoryEntryBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
+import { workspaceFixture } from '$lib/testing/workspace/fixtures/workspace';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { syncEtag } from '$lib/models/sync';
@@ -9,7 +9,9 @@ import MemoryEntryList from './memory-entry-list.svelte';
 
 it('keeps the first memory action available while the initial inventory downloads', async () => {
 	const memory = memoryEntryBuilder();
-	const { resources, transport } = workspaceResourcesFixture(memory.userId);
+	const fixture = workspaceFixture({ accountId: memory.userId });
+	await fixture.start();
+	const transport = fixture.transport.reads;
 	const key = workspaceResourceKey({ type: 'memory_entries', id: [memory.id] });
 	transport.records.set(key, {
 		etag: syncEtag(1n),
@@ -17,7 +19,7 @@ it('keeps the first memory action available while the initial inventory download
 	});
 	const paused = transport.pause('changes');
 	const screen = render(MemoryEntryList, {
-		workspace: resources,
+		graph: { workspace: fixture.workspace, views: fixture.views },
 		placeholder: 'Remember…',
 		emptyText: 'No memory yet'
 	});
@@ -28,6 +30,6 @@ it('keeps the first memory action available while the initial inventory download
 			.toBeVisible();
 	} finally {
 		paused.release();
-		resources.stop();
+		fixture.workspace.stop();
 	}
 });

@@ -16,14 +16,14 @@ import type {
 	StoredAgentRunClientStateResult
 } from '$lib/controllers/agent/chat.svelte';
 import type { NoteId } from '$lib/models/notes';
+import { testChat } from '$lib/testing/agent/fixtures/chat';
 import {
-	ChatStore,
 	entryText,
 	entryTools,
 	type ChatEntry,
 	type ContextChip,
 	type SelectionChip
-} from './chat.svelte';
+} from '$lib/stores/agent/chat.svelte';
 
 const runId = '10000000-0000-4000-8000-000000000001' as AgentRunId;
 
@@ -48,7 +48,10 @@ class FakeAgentRunTransport implements AgentRunTransport {
 	constructor(private readonly events: readonly AgentEvent[]) {}
 	async submit(input: SubmitAgentRunInput) {
 		void input;
-		return { runId, conversationId, status: 'queued' as const, latestCursor: '0' };
+		return {
+			kind: 'accepted' as const,
+			receipt: { runId, conversationId, status: 'queued' as const, latestCursor: '0' }
+		};
 	}
 	async get(): Promise<AgentRunSnapshot> {
 		throw new Error('Unexpected reconciliation');
@@ -120,7 +123,10 @@ class StoppableTransport implements AgentRunTransport {
 	cancelled: AgentRunId[] = [];
 	private emit?: (event: AgentEvent, cursor: number) => void | Promise<void>;
 	async submit() {
-		return { runId, conversationId, status: 'queued' as const, latestCursor: '0' };
+		return {
+			kind: 'accepted' as const,
+			receipt: { runId, conversationId, status: 'queued' as const, latestCursor: '0' }
+		};
 	}
 	async get(): Promise<AgentRunSnapshot> {
 		throw new Error('Unexpected reconciliation');
@@ -191,11 +197,7 @@ const streamedEvents: AgentEvent[] = [
 ];
 
 const sendWith = async (events: AgentEvent[]) => {
-	const store = new ChatStore(
-		'test-session',
-		new FakeAgentRunTransport(events),
-		new MemoryStorage()
-	);
+	const store = testChat('test-session', new FakeAgentRunTransport(events), new MemoryStorage());
 	await store.send({ prompt: 'look this up' });
 	await Promise.resolve();
 	return { store, reply: store.entries.at(-1)! };
@@ -219,7 +221,7 @@ describe('chat event projection', () => {
 	});
 
 	it('notifies reactive observers when the streamed reply completes', async () => {
-		const store = new ChatStore(
+		const store = testChat(
 			'test-session',
 			new FakeAgentRunTransport(streamedEvents),
 			new MemoryStorage()
@@ -342,7 +344,7 @@ describe('chat event projection', () => {
 
 	it('answers every parked call in one decision', async () => {
 		const decided: { callIds: readonly string[]; decision: string }[] = [];
-		const store = new ChatStore(
+		const store = testChat(
 			'test-session',
 			new DecidingTransport(
 				[
@@ -379,7 +381,7 @@ describe('chat event projection', () => {
 	});
 
 	it('leaves a failed decision visible on every card it covered', async () => {
-		const store = new ChatStore(
+		const store = testChat(
 			'test-session',
 			new FailingTransport([
 				{ type: 'approval_required', runId, callId: 'call-a', name: 'create_todo', arguments: {} },
@@ -406,7 +408,7 @@ describe('chat event projection', () => {
 describe('stopping a streaming turn', () => {
 	const streaming = async () => {
 		const transport = new StoppableTransport();
-		const store = new ChatStore('test-session', transport, new MemoryStorage());
+		const store = testChat('test-session', transport, new MemoryStorage());
 		await store.send({ prompt: 'take your time' });
 		await Promise.resolve();
 		return { transport, store, reply: store.entries.at(-1)! };
@@ -442,7 +444,7 @@ describe('stopping a streaming turn', () => {
 describe('a stop the server never confirms', () => {
 	const unconfirmed = async (snapshot?: AgentRunSnapshot) => {
 		const transport = new UnconfirmedCancelTransport(snapshot);
-		const store = new ChatStore('test-session', transport, new MemoryStorage());
+		const store = testChat('test-session', transport, new MemoryStorage());
 		await store.send({ prompt: 'take your time' });
 		await Promise.resolve();
 		return { store, reply: store.entries.at(-1)! };
@@ -478,7 +480,10 @@ class RecordingTransport extends FakeAgentRunTransport {
 	}
 	override async submit(input: SubmitAgentRunInput) {
 		this.submitted = input;
-		return { runId, conversationId, status: 'queued' as const, latestCursor: '0' };
+		return {
+			kind: 'accepted' as const,
+			receipt: { runId, conversationId, status: 'queued' as const, latestCursor: '0' }
+		};
 	}
 }
 
@@ -496,7 +501,7 @@ describe('the context a send carries', () => {
 
 	const sentWith = async (chips: ContextChip[], live?: SelectionChip) => {
 		const transport = new RecordingTransport();
-		const store = new ChatStore('test-session', transport, new MemoryStorage());
+		const store = testChat('test-session', transport, new MemoryStorage());
 		store.chips = chips;
 		// The passage still following the caret is not a chip the store holds: the panel
 		// derives it and hands it over on the request, exactly as it does here.

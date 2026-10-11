@@ -122,7 +122,6 @@ export default defineConfig({
 						// Drives real svelte-dnd-action drags against the zone geometry of the tree;
 						// dropping into folders broke silently when that geometry drifted.
 						'src/lib/components/projects/project-tree-drop.svelte.spec.ts',
-						'src/lib/controllers/notes/actions.svelte.spec.ts',
 						'src/lib/controllers/notes/selection-submissions.svelte.spec.ts',
 						'src/lib/controllers/notes/diagram-submissions.svelte.spec.ts',
 						'src/lib/client/notes/action-run-storage.svelte.spec.ts',
@@ -154,8 +153,8 @@ export default defineConfig({
 						'src/lib/controllers/search/global-search.svelte.spec.ts',
 						'src/lib/components/search/global-search-panel.svelte.spec.ts',
 						'src/lib/components/settings/trust-policy-control.svelte.spec.ts',
-						'src/lib/stores/agent/replay.svelte.spec.ts',
-						'src/lib/stores/agent/mention-context.svelte.spec.ts',
+						'src/lib/controllers/agent/chat-replay.svelte.spec.ts',
+						'src/lib/controllers/agent/chat-mention-context.svelte.spec.ts',
 						'src/lib/components/chat/workspace/mention-input.svelte.spec.ts',
 						'src/lib/components/chat/actions/tool-approval-card.svelte.spec.ts',
 						'src/lib/client/workbench/indexeddb-layout.svelte.spec.ts',

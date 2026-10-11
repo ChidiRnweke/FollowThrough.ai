@@ -124,7 +124,7 @@ describe('durable local writes', () => {
 		]);
 	});
 	it('keeps typing after submission as a separate edit that waits for the first', async () => {
-		const { tab, accountId, transport, stored } = browser();
+		const { tab, accountId, transport } = browser();
 		const first = tab();
 		const todo = todoBuilder({ userId: accountId, title: 'Draft' });
 		const identity = await savedTodo(first, todo);
@@ -376,7 +376,7 @@ describe('durable conflict decisions', () => {
 });
 
 it('bases later typing on its own acknowledged version despite a newer copy from elsewhere', async () => {
-	const { tab, accountId, transport, stored } = browser();
+	const { tab, accountId, transport } = browser();
 	const first = tab();
 	const todo = todoBuilder({ userId: accountId, title: 'Draft' });
 	const identity = await savedTodo(first, todo);

@@ -78,7 +78,10 @@ it('preserves the uncertain draw.io conversion request', async () => {
 });
 it('reports corrupt saved requests instead of treating them as a new submission', async () => {
 	sessionStorage.setItem('followthrough.notes.diagram-submissions.diagram-test-a', 'broken');
-	await expect(
-		noteSubmissionFixture(sessionStorage).controller.diagram('diagram-test-a', revision)
-	).rejects.toThrow();
+	const fixture = noteSubmissionFixture(sessionStorage);
+	const outcome = await fixture.controller.diagram('diagram-test-a', revision);
+	expect({ outcome: outcome.kind, sent: fixture.remote.diagrams.length }).toEqual({
+		outcome: 'failure',
+		sent: 0
+	});
 });

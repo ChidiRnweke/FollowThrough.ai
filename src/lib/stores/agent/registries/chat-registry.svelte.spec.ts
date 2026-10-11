@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ConversationId } from '$lib/models/agent';
 import { ChatRegistry } from './chat-registry.svelte';
+import type { Chat } from '$lib/controllers/agent/chat.svelte';
+import { testChat } from '$lib/testing/agent/fixtures/chat';
+import { InMemoryRunTransport } from '$lib/testing/agent/fakes/in-memory-run-transport';
 
 const conversationId = '20000000-0000-4000-8000-000000000001' as ConversationId;
 const otherConversationId = '20000000-0000-4000-8000-000000000002' as ConversationId;
@@ -10,6 +13,28 @@ const otherConversationId = '20000000-0000-4000-8000-000000000002' as Conversati
  * releases them; `ChatRegistry` is a thin facade over that one map.
  */
 const registry = new ChatRegistry();
+/** Every chat the registry built, so a test can set what a live chat would hold. */
+const built = new Map<string, Chat>();
+registry.provide((key) => {
+	const chat = testChat(
+		key,
+		new InMemoryRunTransport({
+			runId: '40000000-0000-4000-8000-000000000001' as never,
+			conversationId,
+			status: 'queued',
+			latestCursor: '0'
+		})
+	);
+	built.set(key, chat);
+	return chat;
+});
+/** Acquire a key's chat and return the chat itself. */
+const acquire = (key: string): Chat => {
+	registry.for(key);
+	const chat = built.get(key);
+	if (!chat) throw new Error('The registry did not build this chat');
+	return chat;
+};
 
 describe('chat session registry', () => {
 	it('gives two keys two different stores', () => {
@@ -44,7 +69,7 @@ describe('chat session registry', () => {
 
 	it('finds the open session showing a conversation', () => {
 		const key = registry.mint();
-		registry.for(key).conversationId = conversationId;
+		acquire(key).conversationId = conversationId;
 		try {
 			expect(registry.keyForConversation(conversationId)).toBe(key);
 		} finally {
@@ -54,7 +79,7 @@ describe('chat session registry', () => {
 
 	it('reports no session for a conversation nothing has open', () => {
 		const key = registry.mint();
-		registry.for(key).conversationId = conversationId;
+		acquire(key).conversationId = conversationId;
 		try {
 			expect(registry.keyForConversation(otherConversationId)).toBeUndefined();
 		} finally {
@@ -64,14 +89,14 @@ describe('chat session registry', () => {
 
 	it('forgets a conversation once its session is released', () => {
 		const key = registry.mint();
-		registry.for(key).conversationId = conversationId;
+		acquire(key).conversationId = conversationId;
 		registry.release(key);
 		expect(registry.keyForConversation(conversationId)).toBeUndefined();
 	});
 
 	it('drops the store when its last holder releases it', () => {
 		const key = registry.mint();
-		registry.for(key).conversationId = conversationId;
+		acquire(key).conversationId = conversationId;
 		registry.release(key);
 		expect({
 			store: registry.peek(key),
@@ -120,7 +145,7 @@ describe('chat session registry', () => {
 
 	it('counts a session whose run is in flight', () => {
 		const key = registry.mint();
-		registry.for(key).runStatus = 'running';
+		acquire(key).runStatus = 'running';
 		try {
 			expect({ streaming: registry.streamingCount(), atLimit: registry.atStreamLimit() }).toEqual({
 				streaming: 1,
@@ -133,7 +158,7 @@ describe('chat session registry', () => {
 
 	it('reports the limit once four sessions stream at once', () => {
 		const keys = [registry.mint(), registry.mint(), registry.mint(), registry.mint()];
-		for (const key of keys) registry.for(key).runStatus = 'running';
+		for (const key of keys) acquire(key).runStatus = 'running';
 		try {
 			expect(registry.atStreamLimit()).toBe(true);
 		} finally {

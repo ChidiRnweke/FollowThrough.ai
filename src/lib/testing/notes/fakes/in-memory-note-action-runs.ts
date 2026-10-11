@@ -1,8 +1,6 @@
 import { NoteActionEventReader } from '$lib/client/notes/action-event-reader';
 import type { NoteActionEventRecord } from '$lib/models/note-actions';
-import type { SessionSynchronization } from '$lib/controllers/workspace/workspace';
 import type {
-	NoteActionRunWorkspace,
 	NoteActionRunTransport,
 	NoteActionRunStorage
 } from '$lib/controllers/notes/action-runs';
@@ -103,9 +101,9 @@ export class InMemoryNoteActionRunStorage implements NoteActionRunStorage {
 	}
 }
 
-export class InMemoryNoteActionRunWorkspace implements NoteActionRunWorkspace {
-	readonly session = { bootstrap: { accountId: 'note-action-runs-account' } };
-	current: NoteActionRunWorkspace['current'] = this.session;
+/** The editor's refresh of this device's records, which a test can hold open. */
+export class InMemoryRecordRefresh {
+	refreshes = 0;
 	private gate: { started(): void; ready: Promise<void> } | null = null;
 	pause() {
 		const started = Promise.withResolvers<void>();
@@ -113,13 +111,13 @@ export class InMemoryNoteActionRunWorkspace implements NoteActionRunWorkspace {
 		this.gate = { started: started.resolve, ready: ready.promise };
 		return { started: started.promise, release: ready.resolve };
 	}
-	async synchronize(): Promise<SessionSynchronization> {
+	readonly refresh = async (): Promise<void> => {
+		this.refreshes += 1;
 		const gate = this.gate;
 		this.gate = null;
 		if (gate) {
 			gate.started();
 			await gate.ready;
 		}
-		return { kind: 'complete' };
-	}
+	};
 }

@@ -8,7 +8,7 @@
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import ImageZoom from '$lib/components/shared/image-zoom.svelte';
 	import { toast } from 'svelte-sonner';
-	import { todoUpdates } from '$lib/components/todos/todo-updates';
+	import { todoUpdates } from '../todo-updates';
 	import { attachmentsController } from '$lib/factories/attachments/capability';
 	import { insertAtCaret, screenshotMarkdown, screenshotsFrom } from '../screenshot-markdown';
 

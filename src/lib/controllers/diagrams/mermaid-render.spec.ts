@@ -1,15 +1,14 @@
 import { expect, it } from 'vitest';
 import { MermaidRenderSession } from './mermaid-render';
-import { MermaidDiagrams } from './mermaid';
 import { MermaidRenderStore } from '$lib/stores/diagrams/mermaid-render.svelte';
 import { MermaidThemeService } from '$lib/services/diagrams/mermaid-theme';
 import { InMemoryMermaidRenderer } from '$lib/testing/diagrams/fakes/mermaid-render';
-import { InMemoryMermaidOutput } from '$lib/testing/diagrams/fakes/mermaid-output';
 const setup = () => {
 	const renderer = new InMemoryMermaidRenderer();
 	const controller = new MermaidRenderSession(
 		new MermaidRenderStore(),
-		new MermaidDiagrams(new MermaidThemeService(), renderer, new InMemoryMermaidOutput())
+		new MermaidThemeService(),
+		renderer
 	);
 	return { renderer, controller };
 };

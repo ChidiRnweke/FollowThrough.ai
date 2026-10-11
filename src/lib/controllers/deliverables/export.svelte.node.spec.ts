@@ -1,19 +1,26 @@
 import { expect, it } from 'vitest';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import { browserExportFixture as setup } from '$lib/testing/deliverables/fixtures/browser-export';
-it('loads absent defaults without staging a workspace write', async () => {
-	const fixture = await setup();
+import { offlineWorkspace } from '$lib/testing/workspace/fixtures/workspace';
+import { testActor, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
+it('reads export defaults the account never saved as absent, without a write', async () => {
+	const accountId = testActor().userId;
+	const fixture = await offlineWorkspace(accountId);
 	try {
-		expect({ loaded: fixture.loaded, pending: fixture.resources.pending }).toEqual({
-			loaded: { kind: 'ready', settings: defaultExportSettings },
+		const found = await fixture.workspace.find(
+			{ type: 'export_settings', id: [accountId, testProjectId()] },
+			'export setting'
+		);
+		expect({ found, pending: fixture.resources.pending }).toEqual({
+			found: { kind: 'absent' },
 			pending: []
 		});
 	} finally {
-		fixture.close();
+		fixture.workspace.stop();
 	}
 });
 it('generates the selected document with its resolved diagrams and layout', async () => {
-	const f = await setup();
+	const f = setup();
 	try {
 		await f.controller.generate({ ...f.input, format: 'docx' });
 		expect({
@@ -41,7 +48,7 @@ it('generates the selected document with its resolved diagrams and layout', asyn
 	}
 });
 it('previews only referenced draw.io diagrams at their saved dimensions', async () => {
-	const f = await setup();
+	const f = setup();
 	try {
 		await f.controller.preview({
 			...f.input,
@@ -72,7 +79,7 @@ it('previews only referenced draw.io diagrams at their saved dimensions', async 
 	}
 });
 it('releases a replaced preview and the final preview when closed', async () => {
-	const f = await setup();
+	const f = setup();
 	try {
 		await f.controller.preview(f.input);
 		const first = f.controller.previewUrl;
@@ -95,7 +102,7 @@ it('releases a replaced preview and the final preview when closed', async () => 
 	}
 });
 it('does not create a preview URL when its response arrives after closing', async () => {
-	const f = await setup();
+	const f = setup();
 	try {
 		const gate = f.remote.pause();
 		const pending = f.controller.preview(f.input);
@@ -112,13 +119,13 @@ it('does not create a preview URL when its response arrives after closing', asyn
 		f.close();
 	}
 });
-it('does not publish a generated document after account teardown', async () => {
-	const f = await setup();
+it('does not publish a generated document after its dialog closes', async () => {
+	const f = setup();
 	try {
 		const gate = f.remote.pause();
 		const pending = f.controller.generate({ ...f.input, format: 'pdf' });
 		await gate.started;
-		f.workspace.stop();
+		f.controller.close();
 		gate.release();
 		await pending;
 		expect({ result: f.controller.result, busy: f.controller.busy }).toEqual({
@@ -130,25 +137,24 @@ it('does not publish a generated document after account teardown', async () => {
 	}
 });
 it('does not publish an older export into a reopened dialog', async () => {
-	const f = await setup();
+	const f = setup();
 	try {
 		const gate = f.remote.pause();
 		const pending = f.controller.generate({ ...f.input, format: 'pdf' });
 		await gate.started;
-		await f.controller.open(f.note.projectId);
+		f.controller.open();
 		gate.release();
 		await pending;
-		expect({
-			result: f.controller.result,
-			ready: f.controller.ready,
-			busy: f.controller.busy
-		}).toEqual({ result: null, ready: true, busy: false });
+		expect({ result: f.controller.result, busy: f.controller.busy }).toEqual({
+			result: null,
+			busy: false
+		});
 	} finally {
 		f.close();
 	}
 });
 it('reports a generation failure and releases busy state for retry', async () => {
-	const f = await setup();
+	const f = setup();
 	try {
 		f.remote.failure = new Error('Storage unavailable');
 		await f.controller.generate({ ...f.input, format: 'pdf' });
@@ -162,7 +168,7 @@ it('reports a generation failure and releases busy state for retry', async () =>
 	}
 });
 it('loads selected notes and preserves relative paths when generating a bundle', async () => {
-	const f = await setup();
+	const f = setup();
 	try {
 		await f.controller.bundle({
 			projectId: f.note.projectId,
@@ -170,7 +176,8 @@ it('loads selected notes and preserves relative paths when generating a bundle',
 			title: ' Review ',
 			settings: defaultExportSettings,
 			format: 'pdf',
-			bundle: 'zip'
+			bundle: 'zip',
+			documents: [f.note]
 		});
 		expect({ requests: f.remote.bundles, result: f.controller.result }).toEqual({
 			requests: [
@@ -192,7 +199,7 @@ it('loads selected notes and preserves relative paths when generating a bundle',
 	}
 });
 it('does not submit an export after closing during diagram rendering', async () => {
-	const f = await setup();
+	const f = setup();
 	try {
 		const source = 'flowchart LR\nA-->B';
 		const pending = f.controller.generate({
@@ -219,7 +226,7 @@ it('does not submit an export after closing during diagram rendering', async () 
 	}
 });
 it('reports failed diagram rendering without submitting an incomplete export', async () => {
-	const f = await setup();
+	const f = setup();
 	try {
 		const source = 'invalid';
 		const pending = f.controller.generate({
