@@ -1,3 +1,4 @@
+import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import {
 	SuggestionPresentationService,
 	type ISuggestionPresentationService
@@ -82,5 +83,7 @@ export const createSuggestionsCapability = (
 		input.anchors
 	),
 	presentation: new SuggestionPresentationService(),
-	effects: new SuggestionEffects(new SuggestionEffectRecords(input.db))
+	effects: new SuggestionEffects(
+		new SuggestionEffectRecords(input.db, new WorkspaceSyncObjects(input.db))
+	)
 });

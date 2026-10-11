@@ -1,3 +1,12 @@
+import {
+	WidgetExportService,
+	type IWidgetExportService
+} from '$lib/services/widgets/export-blocks';
+import { WidgetSourceService, type IWidgetSourceService } from '$lib/services/widgets/sources';
+import {
+	WidgetEvaluationService,
+	type IWidgetEvaluationService
+} from '$lib/services/widgets/edits';
 import type { NoteMarkdownReader } from '$lib/models/note-markdown';
 import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
@@ -66,6 +75,9 @@ export interface DeliverablesCapability {
 		renderer: DiagramRasterRendering;
 	};
 	readonly mermaidThemes: MermaidThemeRules;
+	readonly widgetExports: IWidgetExportService;
+	readonly widgetSources: IWidgetSourceService;
+	readonly widgetEvaluation: IWidgetEvaluationService;
 	readonly docxGenerator: DocxRenderer;
 	readonly pdfGenerator: {
 		state: PdfFontCache;
@@ -93,6 +105,9 @@ export const createDeliverablesCapability = (
 	prepareExport: new ExportPreparationService(),
 	diagramRenderer: createDiagramExportRenderer(),
 	mermaidThemes: new MermaidThemeService(),
+	widgetExports: new WidgetExportService(),
+	widgetSources: new WidgetSourceService(),
+	widgetEvaluation: new WidgetEvaluationService(),
 	docxGenerator: new DocxDocumentService(),
 	pdfGenerator: createPdfRendering(),
 	zipPacker: new DocumentBundleService(),

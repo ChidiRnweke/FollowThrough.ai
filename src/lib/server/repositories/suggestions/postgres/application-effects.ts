@@ -11,7 +11,7 @@ import {
 } from '$lib/models/proposal-effects';
 import { resourceDataSchemas, todoRecordFields } from '$lib/models/workspace-records';
 import type { ApplicationEffectRepository, AppliedRecord } from '../application-effects';
-import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
+import type { SyncObjectRepository } from '$lib/server/repositories/workspace/sync-objects';
 import { InvalidTransitionError } from '$lib/errors';
 
 const recordSchema = z.discriminatedUnion('type', [
@@ -54,10 +54,10 @@ const effectSchema = applicationEffectSchema(recordSchema).superRefine((effect, 
 const column = (key: string) => key.replace(/[A-Z]/g, (letter) => '_' + letter.toLowerCase());
 
 export class SuggestionEffectRecords implements ApplicationEffectRepository {
-	private readonly objects: WorkspaceSyncObjects;
-	constructor(private readonly db: Database) {
-		this.objects = new WorkspaceSyncObjects(db);
-	}
+	constructor(
+		private readonly db: Database,
+		private readonly objects: SyncObjectRepository
+	) {}
 	async lock(actor: ActorContext, id: SuggestionId): Promise<void> {
 		await this.db.execute(
 			sql`select id from suggestions where id=${id} and user_id=${actor.userId} for update`
