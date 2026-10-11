@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 /**
  * Capability smoke: one representative journey per application surface. This is
  * the retained e2e layer — every detail below these landmarks belongs in a
- * component or unit test (see docs/TEST_MANIFEST.md). Boundary: client-server
+ * component or unit test. Boundary: client-server
  * wiring across capabilities; asserts each primary landmark renders without
  * browser errors.
  */
