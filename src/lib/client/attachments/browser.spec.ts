@@ -16,7 +16,26 @@ it.each([
 	const browser = new BrowserAttachmentFiles(async () => new Response(body, { status: 403 }));
 	expect(await browser.put(intent, new File(['hello'], 'brief.txt'))).toEqual({
 		kind: 'failure',
+		reason: 'refused',
 		status: 403,
 		...(detail ? { detail } : {})
+	});
+});
+
+it('names file storage when the request never reaches it', async () => {
+	const remote = new InMemoryAttachmentRemote();
+	const intent = await remote.initiate({
+		projectId: '00000000-0000-4000-8000-000000000001',
+		path: 'brief.txt',
+		mediaType: 'text/plain',
+		byteSize: 5,
+		checksumSha256: 'a'.repeat(64)
+	});
+	const browser = new BrowserAttachmentFiles(() =>
+		Promise.reject(new TypeError('Failed to fetch'))
+	);
+	expect(await browser.put(intent, new File(['hello'], 'brief.txt'))).toEqual({
+		kind: 'failure',
+		reason: 'unreachable'
 	});
 });

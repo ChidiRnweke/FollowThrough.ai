@@ -1,4 +1,4 @@
-import { ToolLifecycleError } from '$lib/errors';
+import { ValidationError } from '$lib/errors';
 import type {
 	AgentTool,
 	McpToolSession,
@@ -11,7 +11,7 @@ import { toolFailure } from '$lib/models/agent/tool-failure';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { bindToolArguments, jsonObjectSchema, toolCallFailure, toolOutput } from './arguments';
+import { bindToolArguments, jsonObjectSchema, toolOutput, withToolFeedback } from './arguments';
 import { describeTools } from './catalog';
 
 export interface McpToolConnection {
@@ -34,7 +34,7 @@ const ready = (action: PreparedAction): ToolPreparation => ({ kind: 'ready', act
 const prepareCall = async (entry: AgentTool, input: AgentPayload): Promise<ToolPreparation> => {
 	if (entry.kind === 'direct') return ready(entry.prepare(input));
 	const prepared = await entry.review.prepare(input, undefined);
-	if (prepared.kind === 'failure') return { kind: 'failure', failure: prepared.failure };
+	if (prepared.kind === 'failure') return prepared.failure;
 	return ready({ arguments: prepared.arguments, execute: prepared.apply });
 };
 
@@ -78,61 +78,44 @@ export const createMcpServer = (session: McpToolSession): McpToolConnection => (
 		}));
 		server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
 			const { name, arguments: input = {} } = request.params;
-			const payload = agentPayloadResultSchema.parse(input);
-			if (payload.kind === 'corrupt') throw new ToolLifecycleError(payload.message);
-			const value = await invoke(
-				name,
-				async () => {
-					if (name === 'search_tools')
-						return ready(
-							bindToolArguments(searchParameters, payload.value, async ({ query, limit }) => {
-								const found = await session.discover(query, limit ?? 5);
-								for (const discoveredName of found) discovered.add(discoveredName);
-								return describeTools(permitted, found);
-							})
-						);
-					const entry = offered().find((candidate) => candidate.name === name);
-					if (!entry)
-						throw new ToolLifecycleError(
-							'Registered MCP tool is absent from its permitted catalog'
-						);
-					return prepareCall(entry, payload.value);
-				},
-				extra.signal
+			// Every offered name has a permitted entry; `search_tools` has none.
+			const entry = offered().find((candidate) => candidate.name === name);
+			if (name !== 'search_tools' && entry === undefined)
+				return result(
+					toolFailure(
+						'TOOL_NOT_AVAILABLE',
+						`Tool "${name}" is not available.`,
+						'Use search_tools to discover an available capability.'
+					)
+				);
+			const prepared = await withToolFeedback(extra.signal, async (): Promise<ToolPreparation> => {
+				const payload = agentPayloadResultSchema.parse(input);
+				if (payload.kind === 'corrupt') throw new ValidationError(payload.message);
+				if (entry === undefined)
+					return ready(
+						bindToolArguments(searchParameters, payload.value, async ({ query, limit }) => {
+							const found = await session.discover(query, limit ?? 5);
+							for (const discoveredName of found) discovered.add(discoveredName);
+							return describeTools(permitted, found);
+						})
+					);
+				return prepareCall(entry, payload.value);
+			});
+			if (prepared.kind === 'failure') return result(prepared);
+			const { action } = prepared;
+			const value = await withToolFeedback(extra.signal, async () =>
+				toolOutput(await action.execute())
 			);
 			if (name === 'search_tools' && !session.failed(value)) await server.sendToolListChanged();
+			return result(value);
+		});
+		return server;
+
+		function result(value: AgentPayload) {
 			return {
 				...(session.failed(value) ? { isError: true } : {}),
 				content: [{ type: 'text' as const, text: JSON.stringify(value) }]
 			};
-		});
-		return server;
-
-		async function invoke(
-			toolName: string,
-			bind: () => Promise<ToolPreparation>,
-			signal: AbortSignal
-		): Promise<AgentPayload> {
-			if (toolName !== 'search_tools' && !offered().some((entry) => entry.name === toolName))
-				return toolFailure(
-					'TOOL_NOT_AVAILABLE',
-					`Tool "${toolName}" is not available.`,
-					'Use search_tools to discover an available capability.'
-				);
-			signal.throwIfAborted();
-			const prepared = await bind().catch((error: unknown): ToolPreparation => {
-				signal.throwIfAborted();
-				if (error instanceof ToolLifecycleError) throw error;
-				return { kind: 'failure', failure: toolCallFailure(error) };
-			});
-			if (prepared.kind === 'failure') return prepared.failure;
-			try {
-				return toolOutput(await prepared.action.execute());
-			} catch (error) {
-				signal.throwIfAborted();
-				if (error instanceof ToolLifecycleError) throw error;
-				return { ...toolCallFailure(error), kind: 'failure' };
-			}
 		}
 	}
 });

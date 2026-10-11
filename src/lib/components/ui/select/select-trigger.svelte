@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Select as SelectPrimitive } from 'bits-ui';
 	import { cn, type WithoutChild } from '$lib/utils.js';
-	import { FtChevronDown as ChevronDownIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		ref = $bindable(null),
@@ -25,5 +25,5 @@
 	{...restProps}
 >
 	{@render children?.()}
-	<ChevronDownIcon class="text-muted-foreground size-4 pointer-events-none" />
+	<Icon.ChevronDown class="text-muted-foreground size-4 pointer-events-none" />
 </SelectPrimitive.Trigger>

@@ -63,6 +63,9 @@ const noteMarkdown = new NoteMarkdownCodec();
 import type { AgentToolContractBinding } from '$lib/models/agent';
 import { LOCKED_TOOL_NAMES, TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
 import { toolFailureSchema } from '$lib/models/agent/tool-failure';
+import type { MemoryController } from '$lib/server/controllers/memory/controller';
+import type { ProposeMemoryChangeInput } from '$lib/models/memory';
+import { readToolOutput } from '$lib/server/repositories/agent/tool-failure';
 import {
 	appContextBuilder,
 	noteBuilder,
@@ -70,7 +73,8 @@ import {
 	testConversationId,
 	testDiagramId,
 	testProjectId,
-	testProvenanceId
+	testProvenanceId,
+	suggestionBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { agentToolCoverage } from './agent-tool-factory';
 import {
@@ -288,6 +292,59 @@ const boundToolNames = (): string[] =>
 	Object.values(agentToolCoverage)
 		.flatMap((controller) => Object.values(controller) as AgentToolContractBinding[])
 		.flatMap((binding) => (binding.kind === 'excluded' ? [] : binding.tools));
+
+/**
+ * Strict function calling answers a schema keyword it does not permit with an HTTP 400 for the
+ * whole request, before the model runs (RCA finding E1: "'oneOf' is not permitted"). These are
+ * the keywords `openai/gpt-5.6-luna` accepted on 2026-10-10 across every agent tool. A keyword
+ * outside this list must be checked against the provider before it is added.
+ */
+describe('The tool schemas sent to the model', () => {
+	const accepted = new Set([
+		'additionalProperties',
+		'anyOf',
+		'const',
+		'description',
+		'enum',
+		'exclusiveMinimum',
+		'format',
+		'items',
+		'maximum',
+		'minItems',
+		'minLength',
+		'minimum',
+		'pattern',
+		'properties',
+		'required',
+		'type'
+	]);
+	/** Every keyword in a JSON Schema, at any depth. Property names are not keywords. */
+	const keywords = (schema: unknown): string[] => {
+		if (Array.isArray(schema)) return schema.flatMap(keywords);
+		if (schema === null || typeof schema !== 'object') return [];
+		return Object.entries(schema).flatMap(([key, value]) => [
+			key,
+			...(key === 'properties' || key === '$defs'
+				? Object.values(value ?? {}).flatMap(keywords)
+				: keywords(value))
+		]);
+	};
+
+	it('use only keywords strict function calling accepts', () => {
+		const offending = agentToolsFor('auto_accept', {
+			promoted: agentToolsRegistry('auto_accept', {})
+				.definitions()
+				.map(({ name }) => name)
+		})
+			.filter((tool): tool is FunctionTool => tool.type === 'function')
+			.flatMap((tool) =>
+				keywords(tool.parameters)
+					.filter((keyword) => !accepted.has(keyword))
+					.map((keyword) => `${tool.name}: ${keyword}`)
+			);
+		expect([...new Set(offending)]).toEqual([]);
+	});
+});
 
 describe('Agent tool coverage invariants', () => {
 	it('binds each catalog tool to exactly one controller method', () => {
@@ -773,6 +830,90 @@ describe('Agent tool coverage invariants', () => {
 				createdBefore: ''
 			}).arguments
 		).toEqual({ query: 'deployment procedures' });
+	});
+
+	/** Strict model schemas make every field required, so a model fills an id it has none for. */
+	it('treats blank memory proposal identifiers as omitted', async () => {
+		const received: ProposeMemoryChangeInput[] = [];
+		const memory = capabilityDependencies<MemoryController>({
+			propose: async (_actor, input) => {
+				received.push(input);
+				return { suggestion: suggestionBuilder() };
+			}
+		});
+		await directToolFor('auto_accept', 'propose_memory_change', {
+			factory: capabilityDependencies<ControllerFactory>({ memory: () => memory })
+		}).invoke(
+			{} as never,
+			JSON.stringify({
+				scope: 'user',
+				projectId: '',
+				operation: 'add',
+				memoryEntryId: '',
+				content: 'Prefers async updates'
+			})
+		);
+		expect(received).toMatchObject([
+			{ scope: 'user', operation: 'add', content: 'Prefers async updates' }
+		]);
+	});
+
+	it('returns a broken memory proposal rule to the model as a correction', async () => {
+		const result = await directToolFor('auto_accept', 'propose_memory_change').invoke(
+			{} as never,
+			JSON.stringify({
+				scope: 'user',
+				operation: 'add',
+				memoryEntryId: '0b0b0b0b-0b0b-4b0b-8b0b-0b0b0b0b0b0b',
+				content: 'Prefers async updates'
+			})
+		);
+		expect(readToolOutput(result)).toMatchObject({
+			kind: 'failure',
+			failure: { code: 'VALIDATION' }
+		});
+	});
+
+	/** Strict model schemas make every field required, so a model fills an id it has none for. */
+	it('treats blank memory proposal identifiers as omitted', async () => {
+		const received: ProposeMemoryChangeInput[] = [];
+		const memory = capabilityDependencies<MemoryController>({
+			propose: async (_actor, input) => {
+				received.push(input);
+				return { suggestion: suggestionBuilder() };
+			}
+		});
+		await directToolFor('auto_accept', 'propose_memory_change', {
+			factory: capabilityDependencies<ControllerFactory>({ memory: () => memory })
+		}).invoke(
+			{} as never,
+			JSON.stringify({
+				scope: 'user',
+				projectId: '',
+				operation: 'add',
+				memoryEntryId: '',
+				content: 'Prefers async updates'
+			})
+		);
+		expect(received).toMatchObject([
+			{ scope: 'user', operation: 'add', content: 'Prefers async updates' }
+		]);
+	});
+
+	it('returns a broken memory proposal rule to the model as a correction', async () => {
+		const result = await directToolFor('auto_accept', 'propose_memory_change').invoke(
+			{} as never,
+			JSON.stringify({
+				scope: 'user',
+				operation: 'add',
+				memoryEntryId: '0b0b0b0b-0b0b-4b0b-8b0b-0b0b0b0b0b0b',
+				content: 'Prefers async updates'
+			})
+		);
+		expect(readToolOutput(result)).toMatchObject({
+			kind: 'failure',
+			failure: { code: 'VALIDATION' }
+		});
 	});
 
 	it('treats blank optional todo filters as omitted', async () => {

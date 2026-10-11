@@ -17,7 +17,7 @@
 	import { ChatPanel } from '$lib/components/chat';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import { FtClose as X } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		sessionKey,
@@ -109,7 +109,7 @@
 							aria-label="Close split view"
 							onclick={onCloseSplit}
 						>
-							<X />
+							<Icon.Close />
 						</Button>
 					{/snippet}
 				</Tip>

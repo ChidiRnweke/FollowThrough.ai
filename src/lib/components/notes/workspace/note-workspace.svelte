@@ -41,7 +41,7 @@
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
 	import NoteOutlineRail from '../note-outline-rail.svelte';
 	import type { OutlineHeading } from '$lib/models/notes';
-	import { FtSuggestion as Lightbulb } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import NoteWorkspaceDialogs from './note-workspace-dialogs.svelte';
 	import NoteWorkspaceHeader from './note-workspace-header.svelte';
 	import {
@@ -338,8 +338,15 @@
 			toast.error('Select some text first.');
 			return;
 		}
-		if (!(await ensureSynchronized('Sync the note before running an AI action.'))) return;
-		const selection = { ...capturedSelection, revision: note.currentRevision };
+		if (!(await ensureSynchronized('Sync the note before running an agent action.'))) return;
+		// The editor's copy keeps the revision it observed; the server advanced it on
+		// the last acknowledged save, and the action is checked against the server.
+		const confirmed = draft.confirmed;
+		if (!confirmed) {
+			toast.error('Sync the note before running an agent action.');
+			return;
+		}
+		const selection = { ...capturedSelection, revision: confirmed.currentRevision };
 		const receipt =
 			action === 'promises'
 				? await noteActions.extractPromises(selection)
@@ -626,7 +633,7 @@
 					publishedRevision: result.value.publishedRevision,
 					publishedAt: result.value.publishedAt
 				};
-			toast.success('Publication saved on this device');
+			toast.success('Published', { description: 'Saved on this device. It syncs to the server.' });
 		} finally {
 			publishing = false;
 		}
@@ -754,7 +761,7 @@
 			{/each}
 			{#if pendingCount > 0}
 				<Button size="xs" variant="outline" onclick={() => rightPanel.openSuggestions()}>
-					<Lightbulb class="size-3.5" />
+					<Icon.Suggestion class="size-3.5" />
 					{pendingCount} suggestion{pendingCount === 1 ? '' : 's'}
 				</Button>
 			{/if}

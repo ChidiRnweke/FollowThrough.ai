@@ -4,10 +4,11 @@ const presentation = new AgentStreamPresentationService();
 it('keeps reported failure details in the tool result instead of losing its output', () => {
 	const output = { kind: 'failure', code: 'STALE_REVIEW', message: 'Read the note again' };
 	expect(
-		presentation.outcome(
-			{ callId: 'call-1', name: 'save_note' },
-			{ kind: 'reported_failure', value: output, failure: 'Read the note again' }
-		)
+		presentation.settled({ callId: 'call-1', name: 'save_note', readable: true }, 'save_note', {
+			kind: 'reported_failure',
+			value: output,
+			failure: 'Read the note again'
+		})
 	).toEqual({
 		type: 'tool_reported_failure',
 		callId: 'call-1',

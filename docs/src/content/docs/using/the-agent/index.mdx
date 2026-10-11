@@ -8,7 +8,7 @@ import Screenshot from '../../../../components/screenshot.astro';
 
 Open the chat and ask for anything you'd otherwise do by hand: create a note, update a todo, rename a project, generate a document. The agent runs on one rule: **everything you can do in the app, the agent can do.** Every capability is implemented once, in a controller, and the agent reaches it through a tool that wraps that same controller method. You never have to brief it either. Before it answers, it reads your workspace on its own.
 
-There are sixty-odd of these tools, and each one is classified as a **read**, a **proposal**, or a **mutation**:
+There are more than eighty of these tools, and each one is classified as a **read**, a **proposal**, or a **mutation**:
 
 - **Reads** run freely. Searching your knowledge base, listing todos, and reading memory ask nothing of you, because none of them change anything.
 - **Proposals** never bypass review. Extracting promises from a selection, proposing a memory change, and generating a diagram all produce suggestion cards for you to accept or reject. A few writes have no direct path at all: memory can only change through `propose_memory_change` review, and the agent cannot delete todos.
@@ -18,7 +18,8 @@ A few capabilities stay out of the agent's reach on purpose. It cannot upload yo
 
 <Screenshot
 	id="tools"
-	alt="The tools settings page listing every agent tool with its on/off toggle"
+	alt="Settings > Tools: 84 of 85 tools on, filters for changes, proposals, and reading, and a toggle beside each tool, with archive_project turned off."
+	caption="Every capability in the app is a tool the agent can use. Turn any of them off for one project or for all of them."
 />
 
 ## Turn a tool off
@@ -45,7 +46,19 @@ Above an empty thread, a plain-language sentence names the scope ("Before it ans
 
 Behind that sentence, a run starts by reading your workspace context: your projects, the note tree, your skills, and pending work. From there the agent pulls what it needs with read tools: semantic search over notes, documents, and PDFs; user and project memory; todo lists; full note contents. Your preferences and limits freeze onto the run at submission, so retrying a run replays it under the settings it was submitted with, not whatever they've since become.
 
-While you chat you can steer the context directly too. Type `@` to attach a note or skill as a chip, attach up to four images per message (PNG, JPEG, or WebP), and pick the model from the gear next to the composer (the picker searches the OpenRouter catalogue and disables models that can't call tools).
+While you chat you can steer the context directly too. Type `@` to attach a note or skill as a chip, attach up to four images per message (PNG, JPEG, or WebP).
+
+## Choose a model
+
+The agent is not tied to one model. Select the model button in the composer to pick the model for one chat. The picker searches the whole OpenRouter catalogue, shows each model's provider, context size, and whether it can see images, and disables models that cannot call tools.
+
+To set defaults, open **Settings > Models**. There you choose the default chat model, the vision model that describes images for a chat model that cannot see them, the model that reads attachments, and the small, fast model behind inline writing suggestions. A setting you leave unset follows the deployment's default.
+
+<Screenshot
+	id="models"
+	alt="Settings > Models with the default chat model picker open: a search box and a scrolling list of models, including Amazon Nova and Anthropic Claude models, each with its provider and context size."
+	caption="Any model on OpenRouter is available. The picker listed 458 models from 55 providers when this was captured."
+/>
 
 ## Choose an execution mode
 

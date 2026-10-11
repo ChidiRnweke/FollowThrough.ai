@@ -48,11 +48,16 @@ describe('Inline note media upload', () => {
 		);
 	});
 	it.each([
-		{ detail: 'Bucket full', message: 'Object storage rejected the upload: Bucket full' },
-		{ detail: undefined, message: 'Object storage rejected the upload (403)' }
+		{ detail: 'Bucket full', message: 'File storage rejected the image: Bucket full' },
+		{ detail: undefined, message: 'File storage rejected the image (403)' }
 	])('refuses completion after $message', async ({ detail, message }) => {
 		const { controller, remote, browser } = attachmentActionsFixture();
-		browser.writeResult = { kind: 'failure', status: 403, ...(detail ? { detail } : {}) };
+		browser.writeResult = {
+			kind: 'failure',
+			reason: 'refused',
+			status: 403,
+			...(detail ? { detail } : {})
+		};
 		const outcome = await controller.uploadInline(testNoteId(), file).then(
 			() => 'unexpected success',
 			(error: Error) => error.message

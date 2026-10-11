@@ -2,7 +2,7 @@
 	import type { BacklinkView } from '$lib/models/relationships';
 	import * as HoverCard from '$lib/components/ui/hover-card';
 	import { Badge } from '$lib/components/ui/badge';
-	import { FtLink as Link2, FtWarning as TriangleAlert } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { formatDateTime, relationshipLabels } from '../shared/labels';
 
 	let {
@@ -29,9 +29,9 @@
 					: ''}
 			>
 				{#if contradicts}
-					<TriangleAlert class="size-3.5 text-warning" />
+					<Icon.Warning class="size-3.5 text-warning" />
 				{:else}
-					<Link2 class="size-3.5" />
+					<Icon.Link class="size-3.5" />
 				{/if}
 				{other.title}
 			</Badge>

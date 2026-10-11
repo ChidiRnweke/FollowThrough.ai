@@ -235,7 +235,7 @@ export function scanSurfaceText(
 				if (
 					node.type === 'ImportDeclaration' &&
 					typeof node.source.value === 'string' &&
-					/(?:lucide|components\/icons)/.test(node.source.value)
+					/components\/icons$/.test(node.source.value)
 				) {
 					for (const specifier of node.specifiers) icons.add(specifier.local.name);
 				}
@@ -259,7 +259,8 @@ export function scanSurfaceText(
 							);
 					}
 					const textBearing =
-						icons.has(node.name) ||
+						// `<Icon.Search>` resolves through the namespace import.
+						icons.has(node.name.split('.')[0]) ||
 						node.name === 'svg' ||
 						/^(?:input|textarea|Input|Textarea)$/.test(node.name) ||
 						node.fragment.nodes.some(

@@ -255,6 +255,5 @@ export const accessSurface = {
 	resumeSession: true,
 	endSession: true,
 	issueApiToken: true,
-	authenticateMcp: true,
-	attributeLocalMcp: true
+	authenticateMcp: true
 } satisfies ControllerSurface<import('../controllers/identity/access').AccessController>;

@@ -1,14 +1,6 @@
 import { goto } from '$app/navigation';
 import type { Component } from 'svelte';
-import {
-	FtDocumentPlus as FilePlus,
-	FtChat as MessageSquare,
-	FtPanelLeft as PanelLeft,
-	FtSearch as SearchIcon,
-	FtSettings as Settings,
-	FtTheme as Sun
-} from '$lib/components/icons';
-import ListTodo from '@lucide/svelte/icons/list-todo';
+import * as Icon from '$lib/components/icons';
 import { toggleMode } from 'mode-watcher';
 import { palette } from '$lib/stores/shell/palette.svelte';
 import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
@@ -28,7 +20,7 @@ export const commandRegistry: readonly AppCommand[] = [
 		id: 'new-note',
 		label: 'Create a note',
 		shortcut: '⌘K N',
-		icon: FilePlus,
+		icon: Icon.DocumentPlus,
 		async run() {
 			// Sends the user to quick capture rather than creating a note here. A note
 			// belongs to a project and the palette knows none, so this used to leave
@@ -42,7 +34,7 @@ export const commandRegistry: readonly AppCommand[] = [
 		id: 'quick-todo',
 		label: 'Create todo quickly',
 		shortcut: '⌘K T',
-		icon: ListTodo,
+		icon: Icon.Todos,
 		async run() {
 			palette.close();
 			await goto('/todos?view=board&quickTodo=1');
@@ -52,7 +44,7 @@ export const commandRegistry: readonly AppCommand[] = [
 		id: 'toggle-chat',
 		label: 'Toggle chat side pane',
 		shortcut: '⌘K C',
-		icon: MessageSquare,
+		icon: Icon.Chat,
 		run() {
 			palette.close();
 			rightPanel.toggle('chat');
@@ -62,7 +54,7 @@ export const commandRegistry: readonly AppCommand[] = [
 		id: 'quick-capture',
 		label: 'Focus quick capture',
 		shortcut: '⌘K Q',
-		icon: FilePlus,
+		icon: Icon.DocumentPlus,
 		async run() {
 			palette.close();
 			await goto('/today?quickCapture=1');
@@ -72,7 +64,7 @@ export const commandRegistry: readonly AppCommand[] = [
 		id: 'focus-chat',
 		label: 'Toggle chat and focus composer',
 		shortcut: '⌘⇧I',
-		icon: MessageSquare,
+		icon: Icon.Chat,
 		async run() {
 			palette.close();
 			if (rightPanel.mode === 'chat') {
@@ -88,7 +80,7 @@ export const commandRegistry: readonly AppCommand[] = [
 		id: 'global-search',
 		label: 'Search all notes',
 		shortcut: '⌘⇧F',
-		icon: SearchIcon,
+		icon: Icon.Search,
 		async run() {
 			palette.close();
 			// Open or refocus — the point of the shortcut is typing immediately,
@@ -105,21 +97,21 @@ export const commandRegistry: readonly AppCommand[] = [
 	{
 		id: 'todos',
 		label: 'Go to todos',
-		icon: ListTodo,
+		icon: Icon.Todos,
 		run: () => void goto('/todos')
 	},
 	{
 		id: 'settings',
 		label: 'Open Settings',
 		shortcut: '⌘,',
-		icon: Settings,
+		icon: Icon.Settings,
 		run: () => void goto('/settings')
 	},
 	{
 		id: 'toggle-sidebar',
 		label: 'Toggle sidebar',
 		shortcut: '⌘\\',
-		icon: PanelLeft,
+		icon: Icon.PanelLeft,
 		run: () => {
 			palette.close();
 			sidebarToggle.toggle();
@@ -128,7 +120,7 @@ export const commandRegistry: readonly AppCommand[] = [
 	{
 		id: 'theme',
 		label: 'Toggle theme',
-		icon: Sun,
+		icon: Icon.Theme,
 		run: () => toggleMode()
 	}
 ];

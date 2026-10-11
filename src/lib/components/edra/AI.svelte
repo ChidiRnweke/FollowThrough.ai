@@ -14,23 +14,7 @@
 		SUMMARIZE_PROMPT
 	} from './commands/index.js';
 	import { fade, slide } from 'svelte/transition';
-	import {
-		Sparkle,
-		Check,
-		CornerDownLeft,
-		Copy,
-		RotateCcw,
-		Trash2,
-		Brain,
-		ArrowDownWideNarrow,
-		CheckCheck,
-		Feather,
-		PenLine,
-		RefreshCcwDot,
-		Sparkles,
-		TextWrap,
-		Send
-	} from '@lucide/svelte';
+	import * as Icon from '$lib/components/icons';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { tick } from 'svelte';
 
@@ -355,49 +339,49 @@
 		{
 			id: 'improve',
 			label: 'Improve writing',
-			icon: Sparkles,
+			icon: Icon.Suggestion,
 			handler: () => processText('improve')
 		},
 		{
 			id: 'grammer',
 			label: 'Fix spelling & grammar',
-			icon: CheckCheck,
+			icon: Icon.CheckAll,
 			handler: () => processText('grammer')
 		},
 		{
 			id: 'shorter',
 			label: 'Make shorter',
-			icon: ArrowDownWideNarrow,
+			icon: Icon.Shorten,
 			handler: () => processText('shorter')
 		},
 		{
 			id: 'longer',
 			label: 'Make longer',
-			icon: TextWrap,
+			icon: Icon.Lengthen,
 			handler: () => processText('longer')
 		},
 		{
 			id: 'simplify',
 			label: 'Simplify language',
-			icon: Feather,
+			icon: Icon.Simplify,
 			handler: () => processText('simplify')
 		},
 		{
 			id: 'summarize',
 			label: 'Summarize',
-			icon: RefreshCcwDot,
+			icon: Icon.Summarize,
 			handler: () => processText('summarize')
 		},
 		{
 			id: 'continue',
 			label: 'Continue writing',
-			icon: PenLine,
+			icon: Icon.ContinueWriting,
 			handler: () => processText('continue')
 		},
 		{
 			id: 'solve',
 			label: 'Solve problem',
-			icon: Brain,
+			icon: Icon.Solve,
 			handler: () => processText('solve')
 		}
 	];
@@ -458,7 +442,7 @@
 <svelte:document onkeydown={handleKeydown} />
 
 {#snippet MenuButton(action: (typeof quickActions)[0], idx: number)}
-	{@const Icon = action.icon}
+	{@const Glyph = action.icon}
 	<button
 		bind:this={quickActionElements[idx]}
 		onclick={action.handler}
@@ -467,7 +451,7 @@
 			? 'bg-accent text-accent-foreground'
 			: 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'}"
 	>
-		<Icon />
+		<Glyph />
 		<span class="flex-1 text-start font-medium ml-2">{action.label}</span>
 		{#if activeOptionIndex === idx}
 			<span class="bg-muted/75 text-muted-foreground rounded-sm px-1">Enter</span>
@@ -520,7 +504,7 @@
 					rows={1}
 					placeholder="Ask AI anything..."
 					class="w-full border-0 outline-hidden resize-none h-auto max-h-40"></textarea>
-				<Button type="submit" size="icon-lg" class="rounded-full"><Send /></Button>
+				<Button type="submit" size="icon-lg" class="rounded-full"><Icon.Send /></Button>
 			</form>
 
 			{#if isAIActive() && inputValue.trim()?.length === 0}
@@ -540,7 +524,7 @@
 			<!-- AI is writing — content streams directly into editor -->
 			<div transition:fade class="animated-gradient-border rounded p-0.5">
 				<div class="flex bg-popover items-center gap-2 rounded-md p-1">
-					<Sparkle class="size-4!" />
+					<Icon.Suggestion class="size-4!" />
 					<span
 						class="bg-linear-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text font-semibold text-transparent"
 					>
@@ -566,23 +550,23 @@
 				class="flex items-center gap-2 border shadow-md justify-between p-2 rounded-lg"
 			>
 				<Button size="sm" onclick={replaceSelection}>
-					<Check />
+					<Icon.Check />
 					Replace
 				</Button>
 				<Button variant="outline" size="sm" onclick={insertNext}>
-					<CornerDownLeft />
+					<Icon.Enter />
 					Insert
 				</Button>
 				<Button variant="outline" size="sm" onclick={copyToClipboard}>
-					<Copy />
+					<Icon.Copy />
 					Copy
 				</Button>
 				<Button variant="outline" size="sm" onclick={retry}>
-					<RotateCcw />
+					<Icon.Retry />
 					Retry
 				</Button>
 				<Button variant="destructive" size="sm" onclick={discardChanges}>
-					<Trash2 />
+					<Icon.Trash />
 					Discard
 				</Button>
 			</div>

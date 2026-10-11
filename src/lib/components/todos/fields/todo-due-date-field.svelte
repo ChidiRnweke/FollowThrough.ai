@@ -4,7 +4,7 @@
 	import * as Popover from '$lib/components/ui/popover';
 	import { Calendar } from '$lib/components/ui/calendar';
 	import { Button } from '$lib/components/ui/button';
-	import { FtCalendar as CalendarIcon, FtClose as X } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { parseDate, type DateValue } from '@internationalized/date';
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
@@ -35,16 +35,16 @@
 				aria-label={value ? `Due ${formatDate(value)}` : 'No due date'}
 				class={quiet ? 'field-quiet' : undefined}
 				data-empty={value ? undefined : 'true'}
-				>{#if value}<CalendarIcon data-icon="inline-start" />{formatDate(
+				>{#if value}<Icon.Calendar data-icon="inline-start" />{formatDate(
 						value
-					)}{:else if quiet}—{:else}<CalendarIcon data-icon="inline-start" />No due date{/if}</Button
+					)}{:else if quiet}—{:else}<Icon.Calendar data-icon="inline-start" />No due date{/if}</Button
 			>{/snippet}
 	</Popover.Trigger>
 	<Popover.Content class="w-auto p-0" align="start">
 		<Calendar value={calendarValue} onValueChange={(next) => void commit(next)} />
 		{#if value}<div class="border-t p-2">
 				<Button variant="ghost" size="sm" class="w-full" onclick={() => void commit(undefined)}
-					><X data-icon="inline-start" />Clear due date</Button
+					><Icon.Close data-icon="inline-start" />Clear due date</Button
 				>
 			</div>{/if}
 	</Popover.Content>

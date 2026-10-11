@@ -1,4 +1,4 @@
-import { DOMAIN_ERROR_ADVICE, ToolLifecycleError } from '$lib/errors';
+import { DOMAIN_ERROR_ADVICE, ValidationError } from '$lib/errors';
 import type {
 	AgentTool,
 	AgentToolPolicy,
@@ -10,10 +10,8 @@ import { agentPayloadResultSchema, type AgentPayload } from '$lib/models/agent/p
 import { toolFailure } from '$lib/models/agent/tool-failure';
 import { ModelBehaviorError, tool, type Tool } from '@openai/agents';
 import { z } from 'zod';
-import { bindToolArguments, jsonObjectSchema, toolCallFailure, toolOutput } from './arguments';
+import { bindToolArguments, jsonObjectSchema, toolOutput, withToolFeedback } from './arguments';
 import { describeTools } from './catalog';
-
-type Phase = 'approval' | 'execute';
 
 const SEARCH_DESCRIPTION =
 	'Find more FollowThrough tools relevant to what you want to do, when the tool you need is not already available directly. Each match comes back with its exact input schema and becomes a direct tool from your next message onward: call it by its own name with its arguments as flat top-level fields, exactly as the schema describes. There is no wrapper tool and no nested payload.';
@@ -45,67 +43,60 @@ export const createAgentToolset = (
 	for (const decision of policy.parked) {
 		const entry = byName.get(decision.toolName);
 		if (entry?.kind !== 'reviewed') continue;
-		if (!decision.review)
-			throw new ToolLifecycleError('A saved note approval is missing its prepared review');
+		if (!decision.review) throw new Error('A saved note approval is missing its prepared review');
 		reviews.set(decision.callId, entry.review.restore(decision.review.content));
 	}
 
 	const prepareCall = async (
 		entry: AgentTool,
 		input: AgentPayload,
-		callId: string | undefined,
-		phase: Phase
+		callId: string | undefined
 	): Promise<ToolPreparation> => {
 		const requirement = policy.plan.approvalRequired.includes(entry.name)
 			? 'approval_required'
 			: 'ready';
 		if (entry.kind === 'direct') return { kind: requirement, action: entry.prepare(input) };
-		if (!callId) throw new ToolLifecycleError('A note change requires a tool call identity');
+		// The review is bound to its call id, so the approval checkpoint can carry it.
+		if (callId === undefined)
+			throw new Error('A note change cannot be reviewed without a tool call identity');
+		// A resumed approval was restored from its checkpoint above; any other call prepares
+		// its review here, once, by call id.
 		const saved = reviews.get(callId);
-		// An approved call runs the change the user saw; without it there is nothing to apply.
-		if (saved === undefined && phase === 'execute' && requirement === 'approval_required')
-			throw new ToolLifecycleError('A resumed note approval is missing its prepared review');
 		const prepared = await entry.review.prepare(input, saved);
 		reviews.set(callId, prepared.review);
-		if (prepared.kind === 'failure') return { kind: 'failure', failure: prepared.failure };
+		if (prepared.kind === 'failure') return prepared.failure;
 		return {
 			kind: requirement,
 			action: { arguments: prepared.arguments, execute: prepared.apply }
 		};
 	};
 
-	/** One preparation per call identity, so approval and execution act on the same bound call. */
+	/**
+	 * One preparation per call identity, so the user approves exactly what runs. Everything here
+	 * is tool work, so any error is feedback, including a provider reusing a call id for
+	 * different arguments.
+	 */
 	const prepare = (
 		bind: (input: AgentPayload) => Promise<ToolPreparation>,
 		input: AgentPayload,
 		callId: string | undefined
 	): Promise<ToolPreparation> => {
-		policy.signal.throwIfAborted();
 		const serialized = JSON.stringify(input);
 		const prior = callId === undefined ? undefined : preparations.get(callId);
 		if (prior) {
 			if (prior.input !== serialized)
-				throw new ToolLifecycleError('A tool call identity was reused with different arguments');
+				throw new ValidationError('A tool call identity was reused with different arguments');
 			return prior.preparation;
 		}
-		const preparation = bind(input).catch((error: unknown): ToolPreparation => {
-			policy.signal.throwIfAborted();
-			if (error instanceof ToolLifecycleError) throw error;
-			return { kind: 'failure', failure: toolCallFailure(error) };
-		});
+		const preparation = withToolFeedback(policy.signal, () => bind(input));
 		if (callId !== undefined) preparations.set(callId, { input: serialized, preparation });
 		return preparation;
 	};
 
+	/** Run a prepared action. Its errors reach the model through the tool's feedback boundary. */
 	const run = async (action: PreparedAction): Promise<AgentPayload> => {
 		policy.signal.throwIfAborted();
-		try {
-			return toolOutput(await action.execute());
-		} catch (error) {
-			policy.signal.throwIfAborted();
-			if (error instanceof ToolLifecycleError) throw error;
-			return { ...toolCallFailure(error), kind: 'failure' };
-		}
+		return toolOutput(await action.execute());
 	};
 
 	const build = (entry: AgentTool, gated: boolean): Tool<unknown> =>
@@ -115,10 +106,10 @@ export const createAgentToolset = (
 			parameters: entry.parameters,
 			signal: policy.signal,
 			...(gated ? { isEnabled: () => policy.isDiscovered(entry.name) } : {}),
-			prepare: (input, callId, phase) =>
-				prepare((payload) => prepareCall(entry, payload, callId, phase), input, callId),
+			prepare: (input, callId) =>
+				prepare((payload) => prepareCall(entry, payload, callId), input, callId),
 			execute: async (action, callId) => {
-				const result = await run(action);
+				const result = await withToolFeedback(policy.signal, () => run(action));
 				await policy.completed(
 					{
 						...(callId === undefined ? {} : { callId }),
@@ -152,7 +143,7 @@ export const createAgentToolset = (
 				input,
 				callId
 			),
-		execute: (action) => run(action)
+		execute: (action) => withToolFeedback(policy.signal, () => run(action))
 	});
 
 	return {
@@ -183,11 +174,7 @@ interface SdkToolOptions {
 	readonly parameters: z.ZodObject;
 	readonly signal: AbortSignal;
 	readonly isEnabled?: () => boolean;
-	readonly prepare: (
-		input: AgentPayload,
-		callId: string | undefined,
-		phase: Phase
-	) => Promise<ToolPreparation>;
+	readonly prepare: (input: AgentPayload, callId: string | undefined) => Promise<ToolPreparation>;
 	readonly execute: (action: PreparedAction, callId: string | undefined) => Promise<AgentPayload>;
 }
 
@@ -233,12 +220,12 @@ const normalizeInput = (
 
 const sdkTool = (options: SdkToolOptions): Tool<unknown> => {
 	const schema = z.toJSONSchema(options.parameters, { io: 'input' });
-	const prepare = (input: unknown, callId: string | undefined, phase: Phase) => {
-		options.signal.throwIfAborted();
-		const payload = agentPayloadResultSchema.parse(input);
-		if (payload.kind === 'corrupt') throw new ToolLifecycleError(payload.message);
-		return options.prepare(normalizeInput(payload.value, schema), callId, phase);
-	};
+	const prepare = (input: unknown, callId: string | undefined): Promise<ToolPreparation> =>
+		withToolFeedback(options.signal, async () => {
+			const payload = agentPayloadResultSchema.parse(input);
+			if (payload.kind === 'corrupt') throw new ValidationError(payload.message);
+			return options.prepare(normalizeInput(payload.value, schema), callId);
+		});
 	const built = tool({
 		name: options.name,
 		description: options.description,
@@ -246,7 +233,7 @@ const sdkTool = (options: SdkToolOptions): Tool<unknown> => {
 		strict: true,
 		...(options.isEnabled ? { isEnabled: options.isEnabled } : {}),
 		needsApproval: async (_context, input, callId) =>
-			(await prepare(input, callId, 'approval')).kind === 'approval_required',
+			(await prepare(input, callId)).kind === 'approval_required',
 		errorFunction: (_context, error) => {
 			options.signal.throwIfAborted();
 			if (error instanceof ModelBehaviorError && error.name === 'InvalidToolInputError')
@@ -258,8 +245,8 @@ const sdkTool = (options: SdkToolOptions): Tool<unknown> => {
 		},
 		execute: async (input, _context, details) => {
 			const callId = details?.toolCall?.callId;
-			const prepared = await prepare(input, callId, 'execute');
-			if (prepared.kind === 'failure') return prepared.failure;
+			const prepared = await prepare(input, callId);
+			if (prepared.kind === 'failure') return prepared;
 			return options.execute(prepared.action, callId);
 		}
 	});

@@ -2,7 +2,6 @@ import type { ProvenanceId } from '$lib/models/provenance';
 import type { ActorContext, ApiTokenScope, Session, User } from '$lib/models/identity';
 import type { IAccessTokens, MintedApiToken } from '$lib/server/services/identity/api-tokens';
 import type { ISessionRegistry } from '$lib/server/services/identity/sessions';
-import type { LocalUserProvisioner, UserReader } from '$lib/server/services/identity/users';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 
 /** An authenticated MCP request: who it acts for, what it may do, and where its writes are attributed. */
@@ -28,15 +27,11 @@ export interface AccessController {
 	): Promise<MintedApiToken>;
 	/** Verify a bearer credential and attribute the request. Returns null for anything unusable. */
 	authenticateMcp(authorizationHeader: string | null): Promise<McpAccess | null>;
-	/** Single-user mode: establish the local profile, then attribute the request with full scope. */
-	attributeLocalMcp(actor: ActorContext): Promise<McpAccess>;
 }
 
 export interface AccessDependencies {
 	readonly sessions: ISessionRegistry;
 	readonly tokens: IAccessTokens;
-	readonly provisioner: LocalUserProvisioner;
-	readonly users: UserReader;
 	readonly provenance: ProvenanceRecorder;
 }
 
@@ -62,12 +57,6 @@ export class Access implements AccessController {
 		const verified = await this.dependencies.tokens.verify(authorizationHeader);
 		if (!verified) return null;
 		return this.attribute({ userId: verified.user.id }, verified.scope);
-	}
-
-	async attributeLocalMcp(actor: ActorContext): Promise<McpAccess> {
-		await this.dependencies.provisioner.ensureLocal(actor);
-		await this.dependencies.users.get(actor);
-		return this.attribute(actor, 'full');
 	}
 
 	private async attribute(actor: ActorContext, scope: ApiTokenScope): Promise<McpAccess> {

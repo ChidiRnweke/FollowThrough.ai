@@ -13,9 +13,14 @@ import { AgentTurnService } from '$lib/server/services/agent/runs/turns';
 import { createAgentTools } from '$lib/server/factories/agent/tools/definitions';
 import { parseProviderStreamEvent } from '$lib/server/infrastructure/agents/provider-events';
 import type { AgentTool } from '$lib/models/agent-tool-protocol';
-import type OpenAI from 'openai';
 import { RunContext } from '@openai/agents';
-import { InMemoryToolCallingModel } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
+import {
+	InMemoryToolBatchModel,
+	InMemoryToolCallingModel
+} from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
+import { OpenAIProvider, type Model } from '@openai/agents';
+import OpenAI from 'openai';
+import type { Note } from '$lib/models/notes';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
@@ -624,17 +629,27 @@ describe('Durable note approval publication', () => {
 	});
 });
 
-it('journals a failed tool call and its correction through the production runner', async () => {
+/**
+ * The production runner over one note that says "Launch Monday.", against a scripted model or,
+ * with `fetch`, against the real provider client and a scripted HTTP transport.
+ */
+const productionRun = async (
+	model: ((note: Note) => Model) | { readonly fetch: typeof globalThis.fetch }
+) => {
 	const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.') });
 	const notes = reviewedNoteFixture(note);
-	const model = new InMemoryToolCallingModel(
-		'edit_note',
-		JSON.stringify({ noteId: note.id, edits: [] }),
-		JSON.stringify({ noteId: note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] }),
-		'Too small'
-	);
 	const reasoning = new AgentTurnService({
-		models: () => new InMemoryModelProvider(model),
+		models: () =>
+			typeof model === 'function'
+				? new InMemoryModelProvider(model(note))
+				: new OpenAIProvider({
+						openAIClient: new OpenAI({
+							apiKey: 'test-key',
+							baseURL: 'https://unused.test',
+							fetch: model.fetch
+						}),
+						useResponses: false
+					}),
 		images: capabilityDependencies<Pick<OpenAI, 'chat'>>({})
 	});
 	const tools = createAgentTools(notes.factory, testActor(), {
@@ -644,19 +659,134 @@ it('journals a failed tool call and its correction through the production runner
 	});
 	const fixture = setup(reasoning, { tools });
 	fixture.runs.runs = fixture.runs.runs.map((run) => ({ ...run, executionMode: 'auto_accept' }));
-	await fixture.lifecycle.execute(testRunId, new AbortController().signal);
-	expect({
+	// As the background executor does: a run whose execution threw is settled as failed.
+	await fixture.lifecycle
+		.execute(testRunId, new AbortController().signal)
+		.catch((error: Error) => fixture.lifecycle.failRun(testRunId, error));
+	return {
 		status: currentRun(fixture.runs).status,
+		failure: fixture.runs.events.find((record) => record.event.type === 'failed')?.event,
 		body: notes.content.notes[0].plainText,
 		rows: fixture.toolRows
 			.filter((row) => row.status !== 'running')
-			.map((row) => ({ status: row.status, callId: row.callId }))
-	}).toEqual({
+			.map((row) => ({ status: row.status, name: row.name, callId: row.callId }))
+	};
+};
+
+const editArguments = (note: Note) =>
+	JSON.stringify({ noteId: note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] });
+
+it('journals a failed tool call and its correction through the production runner', async () => {
+	expect(
+		await productionRun(
+			(note) =>
+				new InMemoryToolCallingModel(
+					'edit_note',
+					JSON.stringify({ noteId: note.id, edits: [] }),
+					editArguments(note),
+					'Too small'
+				)
+		)
+	).toEqual({
 		status: 'completed',
 		body: 'Launch Tuesday.',
 		rows: [
-			{ status: 'reported_failure', callId: 'call-invalid' },
-			{ status: 'succeeded', callId: 'call-corrected' }
+			{ status: 'reported_failure', name: 'edit_note', callId: 'call-invalid' },
+			{ status: 'succeeded', name: 'edit_note', callId: 'call-corrected' }
 		]
+	});
+});
+
+/**
+ * The SDK answers malformed JSON and unknown tool names itself, and the run goes on (ADR 0015:
+ * the failure is reported, not swallowed). Trace `1cde38f9…` (2026-10-08) held a malformed and
+ * a valid call in one generation; the run failed with `MALFORMED_TOOL_ARGUMENTS` instead.
+ */
+describe('A call the SDK recovers from does not end the run', () => {
+	// Sibling calls in one generation settle in no promised order.
+	const settled = async (outcome: ReturnType<typeof productionRun>) => {
+		const { rows, ...rest } = await outcome;
+		return {
+			...rest,
+			rows: [...rows].sort((a, b) => String(a.callId).localeCompare(String(b.callId)))
+		};
+	};
+	const sibling = (first: { name: string; arguments: string }) => (note: Note) =>
+		new InMemoryToolBatchModel([
+			{ ...first, callId: 'broken' },
+			{ name: 'edit_note', callId: 'valid', arguments: editArguments(note) }
+		]);
+
+	it('completes when malformed JSON arrives beside a valid call', async () => {
+		expect(
+			await settled(
+				productionRun(sibling({ name: 'edit_note', arguments: '{"noteId": "x", "edits": [' }))
+			)
+		).toEqual({
+			status: 'completed',
+			body: 'Launch Tuesday.',
+			rows: [
+				{ status: 'failed', name: 'edit_note', callId: 'broken' },
+				{ status: 'succeeded', name: 'edit_note', callId: 'valid' }
+			]
+		});
+	});
+
+	it('completes when the model calls a tool that does not exist, and journals the attempt', async () => {
+		expect(await settled(productionRun(sibling({ name: 'edit_notes', arguments: '{}' })))).toEqual({
+			status: 'completed',
+			body: 'Launch Tuesday.',
+			rows: [
+				{ status: 'failed', name: 'edit_notes', callId: 'broken' },
+				{ status: 'succeeded', name: 'edit_note', callId: 'valid' }
+			]
+		});
+	});
+
+	it("corrects malformed JSON once the model has the SDK's feedback", async () => {
+		const outcome = await productionRun(
+			(note) =>
+				new InMemoryToolCallingModel(
+					'edit_note',
+					'{"noteId": "x", "edits": [',
+					editArguments(note),
+					'valid JSON'
+				)
+		);
+		expect({ status: outcome.status, body: outcome.body }).toEqual({
+			status: 'completed',
+			body: 'Launch Tuesday.'
+		});
+	});
+});
+
+/**
+ * Six OpenRouter rejections in the agent error RCA (E1) kept only "400 Provider returned error":
+ * nothing said which upstream provider rejected the request or which request it was. The
+ * provider's name and request id identify it; its raw upstream body may echo user content and
+ * is not kept.
+ */
+it('settles a provider rejection as failed and keeps who rejected which request', async () => {
+	const rejection = async () =>
+		new Response(
+			JSON.stringify({
+				error: {
+					message: 'Provider returned error',
+					code: 400,
+					metadata: { raw: 'echoed private prompt', provider_name: 'OpenAI' }
+				}
+			}),
+			{ status: 400, headers: { 'content-type': 'application/json', 'x-request-id': 'req-e1' } }
+		);
+	const { status, failure } = await productionRun({ fetch: rejection });
+	expect({ status, failure }).toEqual({
+		status: 'failed',
+		failure: {
+			type: 'failed',
+			runId: testRunId,
+			code: '400',
+			message: '400 Provider returned error (provider OpenAI, request req-e1)',
+			retryable: false
+		}
 	});
 });

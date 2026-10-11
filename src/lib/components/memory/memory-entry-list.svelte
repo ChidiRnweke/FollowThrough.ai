@@ -17,11 +17,8 @@
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { toast } from 'svelte-sonner';
-	import {
-		FtEllipsis as MoreHorizontal,
-		FtMemory as Brain,
-		FtPlus as Plus
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
+	import * as Scene from '$lib/components/icons/scenes';
 	import EmptyState from '../shared/empty-state.svelte';
 
 	import type {
@@ -247,17 +244,25 @@
 			{@render addButton()}{:else if isEmpty}
 			<!-- Whole-page contexts (profile, project memory) get the hero-sized shared
 		     EmptyState; the side panel keeps the slot size. -->
-			<EmptyState
-				icon={Brain}
-				title={emptyText}
-				hint={emptyHint}
-				size={heroEmpty ? 'large' : 'default'}
-				label={heroEmpty ? 'Empty memory' : undefined}
-			>
-				{#snippet action()}
-					{@render addButton()}
-				{/snippet}
-			</EmptyState>
+			{#if heroEmpty}
+				<EmptyState
+					size="large"
+					scene={Scene.Memory}
+					title={emptyText}
+					hint={emptyHint}
+					label="Empty memory"
+				>
+					{#snippet action()}
+						{@render addButton()}
+					{/snippet}
+				</EmptyState>
+			{:else}
+				<EmptyState icon={Icon.Memory} title={emptyText} hint={emptyHint}>
+					{#snippet action()}
+						{@render addButton()}
+					{/snippet}
+				</EmptyState>
+			{/if}
 		{:else}
 			<div class="flex justify-end">
 				{@render addButton()}
@@ -293,7 +298,7 @@
 
 	{#snippet addButton()}
 		<Button size="sm" onclick={() => (addOpen = true)}>
-			<Plus data-icon />
+			<Icon.Plus data-icon />
 			Add memory
 		</Button>
 	{/snippet}
@@ -365,7 +370,7 @@
 							<DropdownMenu.Trigger>
 								{#snippet child({ props })}
 									<Button {...props} variant="ghost" size="icon-sm" aria-label="Memory actions">
-										<MoreHorizontal data-icon />
+										<Icon.Ellipsis data-icon />
 									</Button>
 								{/snippet}
 							</DropdownMenu.Trigger>

@@ -22,27 +22,16 @@ export const positiveNumberFromEnvironment = (name: string): number | undefined 
 export const optionalProperty = <K extends string, V>(key: K, value: V | undefined) =>
 	(value === undefined ? {} : { [key]: value }) as { [P in K]?: V };
 
-export const localActor = () => ({
-	userId: z
-		.string()
-		.uuid()
-		.parse(process.env.LOCAL_USER_ID ?? '00000000-0000-4000-8000-000000000001') as UserId
-});
-
-export const authenticationEnabled = (): boolean =>
-	Boolean(process.env.AUTHENTIK_CLIENT_ID?.trim());
-
 export const requestActor = (user?: { readonly id: UserId }) => {
-	if (!authenticationEnabled()) return localActor();
-	if (!user) throw new Error('Authenticated user is required when authentication is enabled');
+	if (!user) throw new Error('Authenticated user is required');
 	return { userId: user.id };
 };
 
 export const authentikConfiguration = () => {
-	const domain = process.env.AUTHENTIK_DOMAIN;
-	const clientId = process.env.AUTHENTIK_CLIENT_ID;
-	const clientSecret = process.env.AUTHENTIK_CLIENT_SECRET;
-	const callbackUrl = process.env.AUTHENTIK_CALLBACK_URL;
+	const domain = process.env.AUTHENTIK_DOMAIN?.trim();
+	const clientId = process.env.AUTHENTIK_CLIENT_ID?.trim();
+	const clientSecret = process.env.AUTHENTIK_CLIENT_SECRET?.trim();
+	const callbackUrl = process.env.AUTHENTIK_CALLBACK_URL?.trim();
 	if (!domain || !clientId || !clientSecret || !callbackUrl)
 		throw new Error(
 			'Authentik OAuth not configured. Set AUTHENTIK_DOMAIN, AUTHENTIK_CLIENT_ID, AUTHENTIK_CLIENT_SECRET, AUTHENTIK_CALLBACK_URL.'
@@ -94,7 +83,11 @@ export class SecretsBackendError extends Error {}
 export const REQUIRED_APPLICATION_KEYS = [
 	'DATABASE_URL',
 	'OPENROUTER_API_KEY',
-	'MISTRAL_API_KEY'
+	'MISTRAL_API_KEY',
+	'AUTHENTIK_DOMAIN',
+	'AUTHENTIK_CLIENT_ID',
+	'AUTHENTIK_CLIENT_SECRET',
+	'AUTHENTIK_CALLBACK_URL'
 ] as const;
 
 export const APPLICATION_DEFAULTS = Object.freeze({
@@ -102,7 +95,6 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	ARCHIVE_MAX_ENTRIES: '2000',
 	DB_NAME: 'followthrough',
 	DB_USER: 'followthrough',
-	LOCAL_USER_ID: '00000000-0000-4000-8000-000000000001',
 	ORIGIN: 'http://localhost:5173',
 	OPENROUTER_BASE_URL: 'https://openrouter.ai/api/v1',
 	OPENROUTER_DEFAULT_MODEL: 'openai/gpt-5.6',
@@ -136,10 +128,6 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	S3_SECRET_ACCESS_KEY: 'followthrough-local-secret',
 	S3_BUCKET: 'followthrough-attachments',
 	S3_FORCE_PATH_STYLE: 'true',
-	AUTHENTIK_DOMAIN: '',
-	AUTHENTIK_CLIENT_ID: '',
-	AUTHENTIK_CLIENT_SECRET: '',
-	AUTHENTIK_CALLBACK_URL: 'http://localhost:5173/auth/callback',
 	EVAL_RECORD: '0',
 	EVAL_STRICT_CACHE: '0',
 	EVAL_MODEL: 'deepseek/deepseek-v4-pro',

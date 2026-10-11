@@ -3,7 +3,7 @@
 	import { untrack } from 'svelte';
 	import { beforeNavigate } from '$app/navigation';
 	import { mode as colorMode } from 'mode-watcher';
-	import { FtLoader as LoaderCircle } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import {
 		BrowserDrawioEmbedPort,
 		DRAWIO_EMBED_URL,
@@ -330,10 +330,7 @@
 <div class="relative min-h-96 flex-1 overflow-hidden rounded-md ring-1 ring-border ring-inset">
 	{#if phase === 'loading'}
 		<div class="absolute inset-0 z-10 flex items-center justify-center bg-background/80">
-			<LoaderCircle
-				class="size-5 animate-spin text-muted-foreground"
-				aria-label="Loading draw.io"
-			/>
+			<Icon.Loader class="size-5 animate-spin text-muted-foreground" aria-label="Loading draw.io" />
 		</div>
 	{/if}
 	{#key themeToken}

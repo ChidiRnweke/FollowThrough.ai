@@ -1,93 +1,107 @@
 ---
 title: Getting started
-description: Build your first project end-to-end, from a note to a finished deliverable.
+description: Follow one project from a brief to a working plan. The agent writes notes and todos, you edit them, and the agent builds on your changes.
 ---
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 import Screenshot from '../../../components/screenshot.astro';
-import Mermaid from '../../../components/mermaid.astro';
 
-FollowThrough is an agent-native note editor you never have to brief. You think in notes; the agent extracts the commitments and context, you triage on Today, the agent acts with your approval, and the work becomes artifacts and deliverables.
-
-One project, one note, all the way to a finished output: about ten minutes, start to finish.
-
-<Mermaid
-	source={`
-flowchart LR
-	notes["Think in notes"] --> extract["Agent extracts commitments & context"]
-	extract --> today["You triage on Today"]
-	today --> act["Agent acts: with your approval"]
-	act --> deliver["Work becomes artifacts & deliverables"]
-	deliver --> notes
-`}
-/>
+This guide follows one project, a docs site relaunch, from a brief to a working plan. You give the
+project its context. The agent reads that context and does work in the project. You edit the result
+yourself, and the agent builds on your edits. Every screen below is the real app, working on the same
+data.
 
 <Steps>
 
-1. ### Create a project
+1. ### Start with what you already have
 
-   Open the sidebar and create a project. A project is the unit of work that pulls everything else together: its notes, board, memory, skills, and outputs all live under it. Give it a name that tells you (and a future agent) what it is about.
+   Select **+** next to **Projects** in the sidebar and name the project. On the project page:
+   - Select **New note** and write what you know: scope, decisions, owners, and a schedule.
+   - Open **Attachments** and add the files you have, such as the brief as a PDF.
+   - Open **Memory** and add the facts that must hold, such as "The launch needs legal approval and
+     a completed QA pass."
+   - Open **Todos** and add the work that is already known.
 
    <Screenshot
-   	id="project-context"
-   	alt="A project overview: what the project produced above, what the agent works from below."
+   	id="walkthrough-01-context"
+   	alt="The Docs site relaunch project page: a planning note, two todos, two memories the agent can use, and one attached file."
+   	caption="The project holds the note, the brief, the memories, and the todos. They belong to the project, not to one conversation."
    />
 
-2. ### Write a note
+2. ### Ask for work, not answers
 
-   Create a note inside the project and write a few paragraphs. Notes are Markdown, so rough thinking, meeting notes, plans, and drafts all belong here. This is the material every later step works from.
+   Open a note and select the chat icon in the left rail. On a wide screen, the chat opens beside the
+   note, and the open note is already in its context. Ask for the work you want done:
+
+   > Read the launch brief and these planning notes. Write a release plan note, add the outstanding
+   > launch tasks to the board, and export the release plan as a Word brief for the team.
+
+   In approval mode, the agent stops before each change and shows an **Approve** and **Reject**
+   card. The chat lists every action it took, including any that failed.
 
    <Screenshot
-   	id="note-view"
-   	alt="A note open in the editor: one continuous writing surface, title in the breadcrumb."
+   	id="walkthrough-02-agent-acts"
+   	alt="The new Release plan note open beside the chat. The chat lists each action: the note and seven todos created, a Word export, and a proposed memory."
+   	caption="From one request, the agent wrote a release plan, added seven todos with owners and dates, and exported a Word brief."
    />
 
-3. ### Turn thinking into action
+3. ### Keep working yourself
 
-   Select a sentence or paragraph that contains a commitment: something you promised to do, or asked someone else to do. Run **Extract promises**. FollowThrough finds the commitments, and each one becomes a reviewable todo suggestion.
+   The agent's note is your note too. Edit it like any other note. In this example, QA changes from
+   3 to 5 days, and a new line makes a promise: "I will verify every redirect on staging before
+   Thursday."
 
-   Look at the suggestions pane: each suggestion carries a confidence score and traces back to the exact selection it came from. Accept the ones that are real. Accepted todos appear on your board.
+   Select that sentence and choose **Extract promises** in the toolbar above it. The todo appears
+   under the sentence as a proposal, with the owner and a due date worked out from the text. Select
+   **Accept** to add it to the board. The todo stays linked to the sentence it came from.
 
    <Screenshot
-   	id="in-editor-ai"
-   	alt="Extracted promises anchored in the note text, with reviewable suggestions alongside."
+   	id="walkthrough-03-extract-promise"
+   	alt="A highlighted sentence, 'I will verify every redirect on staging before Thursday', with the selection toolbar above it and a proposed todo below it, due 15 October, with Accept and Dismiss buttons."
+   	caption="Highlight a commitment and extract it. The proposed todo appears in place until you accept or dismiss it."
    />
 
-4. ### Ask the agent
+4. ### Build on what changed
 
-   Open the chat in the project and ask a question, for example: _"Summarize what still needs doing this week."_ The agent reads the project's notes, board, and memory rather than asking you to explain the context again.
+   Ask the agent for something new that uses the edited note:
 
-   If the agent wants to make a change (update the project memory, edit a note, create a todo) it proposes the change first. Accept or reject it in the approval card. Agents propose; you accept.
+   > Build an interactive critical-path simulator for this launch plan. Use the stages and durations
+   > in this note. Let me change each stage with a slider and show which workstream sets the launch
+   > date. Embed it in this note.
+
+   The agent reads the note as it is now, so it uses 5 days for QA. It proposes a
+   [widget](/FollowThrough.ai/using/widgets/) and shows a preview in the chat. Nothing goes into the
+   note until you approve it.
 
    <Screenshot
-   	id="in-editor-chat"
-   	alt="The project chat open beside a note: the agent answers from the project's own context."
+   	id="walkthrough-04-widget-proposal"
+   	alt="The chat shows a proposed Critical-Path Simulator widget: the development stream ends on day 16, content on day 9, and sliders hold each stage's duration, with QA at 5 days."
+   	caption="The proposal computes from the edited plan: development takes 16 days and sets the launch date."
    />
 
-5. ### Review what the agent learned
+5. ### The work stays
 
-   Each project has its own memory: the facts, decisions, and constraints an agent needs to help without being re-briefed. When the agent proposes a memory update, review it. Anything you reject never becomes part of the project's durable understanding.
-
-6. ### Finish something
-
-   When your project has enough material, produce an output that can leave the app. Select a note and generate a document from a template, turn a paragraph into a diagram, or draft a brief. The result is an artifact of the project: connected to the source it came from, not an isolated generation.
+   After you approve, the widget is part of the note. Move a slider and the results change at once.
+   Here, Legal review moves to 12 days, so the content stream takes 17 days and becomes the critical
+   path.
 
    <Screenshot
-   	id="diagram-render"
-   	alt="A Mermaid diagram rendered inline in a note, with a draw.io conversion available."
+   	id="walkthrough-05-widget-result"
+   	alt="The simulator embedded in the Release plan note. Legal review is set to 12 days, the content stream now ends on day 17, and the critical path reads Content stream."
+   	caption="The release plan, the todos, the widget, and the Word brief are now part of the project."
    />
 
 </Steps>
 
-<Aside type="note">
-
-Throughout, work moves one direction: notes become actions, actions become artifacts, artifacts become finished work. If a step ever feels like a dead end, it is probably being done in the wrong order: the loop always starts from a note.
-
+<Aside type="tip">
+	Everything you keep becomes context for the next conversation. The next time you ask about this
+	project, the agent starts from the plan, the todos, the widget, and the decisions in memory.
 </Aside>
 
 ## What's next
 
-- [The agent](/FollowThrough.ai/using/the-agent/): everything you can do in the app, the agent can do. Chat surfaces, execution modes, and approval cards.
+- [The agent](/FollowThrough.ai/using/the-agent/): everything you can do in the app, the agent can do. Chat surfaces, execution modes, tools, and model choice.
+- [Widgets](/FollowThrough.ai/using/widgets/): add, use, and edit interactive tools inside a note.
 - [Todos](/FollowThrough.ai/using/todos/): the board the agent keeps honest, and the Today triage view.
 - [Memory](/FollowThrough.ai/using/memory/): what the agent is allowed to remember, per project and per profile.
 - [Agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/): the trust model behind every approval card.

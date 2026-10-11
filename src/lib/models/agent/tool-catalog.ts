@@ -394,6 +394,10 @@ export const TOOL_DESCRIPTIONS = [
 		name: 'propose_memory_change',
 		classification: 'proposal',
 		description:
+			'Propose adding, updating, or removing a memory entry without bypassing review. Scope "project" remembers durable project facts, decisions, constraints, and terminology. Scope "user" builds the user profile: whenever the user reveals who they are — role, team, goals, relationships, expertise, preferences, or how they like to work — propose remembering it so future conversations already know them. For a user add, send scope, operation, and content; omit projectId and memoryEntryId entirely. Confidence is an optional integer percentage from 0 to 100; use 90, never 0.9. A proposal is not saved: it waits for the user to approve it, unless the result has an appliedEntry. Tell the user it is proposed, never that it is saved or remembered, unless appliedEntry is present.',
+		// Discovery reads the unchanged wording; the last sentences only govern how a
+		// result is reported, so tool search and its stored vectors stay as they were.
+		retrievalText:
 			'Propose adding, updating, or removing a memory entry without bypassing review. Scope "project" remembers durable project facts, decisions, constraints, and terminology. Scope "user" builds the user profile: whenever the user reveals who they are — role, team, goals, relationships, expertise, preferences, or how they like to work — propose remembering it so future conversations already know them. For a user add, send scope, operation, and content; omit projectId and memoryEntryId entirely. Confidence is an optional integer percentage from 0 to 100; use 90, never 0.9.'
 	},
 	{
@@ -593,8 +597,13 @@ export type LongTailToolName = Exclude<ToolName, FirstClassToolName>;
  * and 129 stored tool messages in `tests/corpus/`, every name is a catalog name
  * except `search_tools`, which accounts for 38 and 10 rows respectively.
  * `tests/unit/corpus.spec.ts` holds that at zero exceptions.
+ *
+ * The two diagram submission tools belong to the Diagram Agent, which records
+ * its calls through the same mapper and journal. They are names, not grants:
+ * the chat agent is never handed them.
  */
-export type AgentToolName = ToolName | 'search_tools';
+export type AgentToolName =
+	ToolName | 'search_tools' | 'submit_mermaid_diagram' | 'submit_drawio_diagram';
 
 export const LOCKED_TOOL_NAMES = [
 	'get_workspace_context',

@@ -10,20 +10,7 @@
 	import * as HoverCard from '$lib/components/ui/hover-card';
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import { ModelInlinePicker } from '$lib/components/agent';
-	import {
-		FtSend as SendHorizontal,
-		FtDocument as FileText,
-		FtFolder as Folder,
-		FtSkills as Wrench,
-		FtPin as Pin,
-		FtCheck as Check,
-		FtWorkflow as Workflow,
-		FtAttachments as Paperclip,
-		FtClose as X,
-		FtLoader as Loader,
-		FtStop as Square,
-		FtWidget
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import ImageLightbox from '../image-lightbox.svelte';
 
 	/**
@@ -39,14 +26,14 @@
 	/** Total over the resource kinds, so a new kind is a type error here, not a "Note" label. */
 	const resourceKinds: Record<
 		ResourceChip['kind'],
-		{ readonly label: string; readonly icon: typeof FileText }
+		{ readonly label: string; readonly icon: typeof Icon.Document }
 	> = {
-		note: { label: 'Note', icon: FileText },
-		folder: { label: 'Folder', icon: Folder },
-		skill: { label: 'Skill', icon: Wrench },
-		widget: { label: 'Widget', icon: FtWidget },
-		diagram: { label: 'Diagram', icon: Workflow },
-		attachment: { label: 'File', icon: Paperclip }
+		note: { label: 'Note', icon: Icon.Document },
+		folder: { label: 'Folder', icon: Icon.Folder },
+		skill: { label: 'Skill', icon: Icon.Skill },
+		widget: { label: 'Widget', icon: Icon.Widget },
+		diagram: { label: 'Diagram', icon: Icon.Diagram },
+		attachment: { label: 'File', icon: Icon.Attachment }
 	};
 
 	let {
@@ -151,16 +138,16 @@
 							aria-label="Pin this passage to the message"
 							onclick={() => onpinselection(chip)}
 						>
-							<Pin />
+							<Icon.Pin />
 						</Button>
 					{/snippet}
 				</Tip>
 			{:else}
-				<Pin class="size-3 shrink-0" />
+				<Icon.Pin class="size-3 shrink-0" />
 			{/if}
 		{:else}
-			{@const Icon = resourceKinds[chip.kind].icon}
-			<Icon class="size-3 shrink-0" />
+			{@const Glyph = resourceKinds[chip.kind].icon}
+			<Glyph class="size-3 shrink-0" />
 		{/if}
 		<!-- Naming the note would be a worse label here: the highlight is not the note, and it
 		     is about to be some other part of it. The title is on the hover card instead. -->
@@ -190,7 +177,7 @@
 					: `Remove ${chip.name} from context`}
 			onclick={() => onremovechip(chip, automatic)}
 		>
-			<X />
+			<Icon.Close />
 		</Button>
 	</Badge>
 {/snippet}
@@ -313,7 +300,7 @@
 								aria-label={`Remove ${image.name}`}
 								onclick={() => onremoveimage(image.id)}
 							>
-								<X />
+								<Icon.Close />
 							</Button>
 						</div>
 					{/each}
@@ -352,7 +339,7 @@
 							class="tactile inline-flex size-8 shrink-0 items-center justify-center rounded-md"
 							aria-label="Attach images"
 						>
-							<Paperclip class="size-4" />
+							<Icon.Attachment class="size-4" />
 						</Label>
 					{/snippet}
 				</Tip>
@@ -373,9 +360,9 @@
 							onclick={ontoggleexecutionmode}
 						>
 							{#if executionMode === 'auto_accept'}
-								<Workflow data-icon="inline-start" /> Auto-accept
+								<Icon.Diagram data-icon="inline-start" /> Auto-accept
 							{:else}
-								<Check data-icon="inline-start" /> Approval
+								<Icon.Check data-icon="inline-start" /> Approval
 							{/if}
 						</Button>
 					{/snippet}
@@ -405,7 +392,7 @@
 						that reads as motion.
 					-->
 					{#if isStreaming && connection === 'connected'}
-						<Loader
+						<Icon.Loader
 							class="size-4 animate-spin text-muted-foreground group-has-[[data-slot=input-group-control]:focus-visible]/input-group:text-brand-muted-foreground"
 							aria-hidden="true"
 						/>
@@ -429,9 +416,9 @@
 							(!isStreaming && prompt.trim() === '' && !selectedImages.length)}
 					>
 						{#if isStreaming}
-							<Square />
+							<Icon.Stop />
 						{:else}
-							<SendHorizontal class="size-4" />
+							<Icon.Send class="size-4" />
 						{/if}
 					</Button>
 				</div>

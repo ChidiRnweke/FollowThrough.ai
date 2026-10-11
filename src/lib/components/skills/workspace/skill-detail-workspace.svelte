@@ -9,13 +9,8 @@
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import SkillEditor from '../skill-editor.svelte';
 	import { NoteConflictDialog, NoteSyncStatus, NoteTitleInlineInput } from '$lib/components/notes';
+	import * as Icon from '$lib/components/icons';
 	import { workspaceSession } from '$lib/factories/workspace/session';
-	import {
-		FtDownload as Download,
-		FtEdit as Pencil,
-		FtExport as FileOutput,
-		FtLoader as LoaderCircle
-	} from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import WorkspaceWriteReview from '$lib/components/shared/workspace-write-review.svelte';
 	import type { WorkspaceSkill } from '$lib/models/workspace-views';
@@ -141,7 +136,7 @@
 									aria-label="Rename skill"
 									onclick={() => (editingTitle = true)}
 								>
-									<Pencil />
+									<Icon.Edit />
 								</Button>
 							{/snippet}
 						</Tip>
@@ -190,9 +185,9 @@
 							onclick={() => fileInput?.click()}
 						>
 							{#if importing}
-								<LoaderCircle class="size-4 animate-spin" />
+								<Icon.Loader class="size-4 animate-spin" />
 							{:else}
-								<Download class="size-4" />
+								<Icon.Download class="size-4" />
 							{/if}
 						</Button>
 					{/snippet}
@@ -208,9 +203,9 @@
 							onclick={() => void exportSkill()}
 						>
 							{#if exporting}
-								<LoaderCircle class="size-4 animate-spin" />
+								<Icon.Loader class="size-4 animate-spin" />
 							{:else}
-								<FileOutput class="size-4" />
+								<Icon.Export class="size-4" />
 							{/if}
 						</Button>
 					{/snippet}

@@ -119,6 +119,8 @@ export interface WorkspaceDraftController<K extends WorkspaceResourceType> {
 	readonly active: boolean;
 	readonly state: CacheAccess<WorkspaceValues[K]>;
 	readonly newer: WorkspaceValues[K] | null;
+	/** The server's copy, once no local write for this resource is outstanding. */
+	readonly confirmed: WorkspaceValues[K] | null;
 	readonly value: WorkspaceValues[K] | null;
 	readonly status: DraftStatus;
 	readonly lastError: string | undefined;
@@ -696,6 +698,18 @@ export class WorkspaceDraft<
 		return observed !== null && this.syncResourceRules.compareSyncEtags(snapshot.etag, observed) > 0
 			? this.valueOf(snapshot.value)
 			: null;
+	}
+	/**
+	 * The server's copy, once no local write for this resource is outstanding.
+	 *
+	 * A local save keeps the revision the editor observed, and only the server
+	 * advances it. A command that names a revision (a selection action) must
+	 * read it here, or it sends the revision before the acknowledged save.
+	 */
+	get confirmed(): WorkspaceValues[K] | null {
+		if (this.entries.length) return null;
+		const snapshot = this.resources.snapshot(this.identity);
+		return snapshot ? this.valueOf(snapshot.value) : null;
 	}
 	/** Move the observed base to what the workspace holds now. Performs no read. */
 	adopt(): WorkspaceValues[K] {

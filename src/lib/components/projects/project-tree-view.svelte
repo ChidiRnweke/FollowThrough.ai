@@ -12,20 +12,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { cn, mergeProps } from '$lib/utils';
-	import {
-		FtChevronRight as ChevronRight,
-		FtEllipsis as Ellipsis,
-		FtDocument as FileText,
-		FtFolder as Folder,
-		FtFolderOpen as FolderOpen,
-		FtFolderBoard as FolderKanban,
-		FtFolderPlus as FolderPlus,
-		FtPin as Pin,
-		FtPlus as Plus,
-		FtSkills as Wrench,
-		FtGrip as GripVertical
-	} from '$lib/components/icons';
-	import ListTodo from '@lucide/svelte/icons/list-todo';
+	import * as Icon from '$lib/components/icons';
 	import TreeInlineInput from '../shared/tree-inline-input.svelte';
 
 	type InlineEdit =
@@ -131,15 +118,15 @@
 	Menu: typeof ContextMenu | typeof DropdownMenu
 )}
 	<Menu.Item disabled={!inventoryReady} onclick={() => startCreate('note', projectId, parentId)}>
-		<FileText class="size-4" />
+		<Icon.Document class="size-4" />
 		New note
 	</Menu.Item>
 	<Menu.Item disabled={!inventoryReady} onclick={() => startCreate('folder', projectId, parentId)}>
-		<FolderPlus class="size-4" />
+		<Icon.FolderPlus class="size-4" />
 		New folder
 	</Menu.Item>
 	<Menu.Item disabled={!inventoryReady} onclick={() => startCreate('skill', projectId, parentId)}>
-		<Wrench class="size-4" />
+		<Icon.Skill class="size-4" />
 		New skill
 	</Menu.Item>
 {/snippet}
@@ -208,7 +195,7 @@
 		<div
 			class="flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 transition-colors focus-within:border-sidebar-ring focus-within:ring-1 focus-within:ring-sidebar-ring"
 		>
-			<Plus class="size-3.5 shrink-0 text-muted-foreground" />
+			<Icon.Plus class="size-3.5 shrink-0 text-muted-foreground" />
 			<Input
 				class="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
 				{placeholder}
@@ -222,7 +209,11 @@
 		</div>
 	{:else}
 		<TreeInlineInput
-			icon={edit.kind === 'folder' ? Folder : edit.kind === 'skill' ? Wrench : FileText}
+			icon={edit.kind === 'folder'
+				? Icon.Folder
+				: edit.kind === 'skill'
+					? Icon.Skill
+					: Icon.Document}
 			placeholder={edit.kind === 'folder'
 				? 'Folder name…'
 				: edit.kind === 'skill'
@@ -243,7 +234,7 @@
 	<Sidebar.MenuSubItem class={cn(isFolder && folderDrop(entry).holdsSlot && 'mt-7')}>
 		{#if inlineEdit?.mode === 'rename' && inlineEdit.entryId === entry.id}
 			<TreeInlineInput
-				icon={isFolder ? Folder : entry.kind === 'skill' ? Wrench : FileText}
+				icon={isFolder ? Icon.Folder : entry.kind === 'skill' ? Icon.Skill : Icon.Document}
 				placeholder="Rename…"
 				initialValue={inlineEdit.current}
 				{busy}
@@ -274,7 +265,7 @@
 								: 'text-muted-foreground'} opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring active:cursor-grabbing group-hover/entry:opacity-100"
 							aria-label="Reorder {entry.title}"
 						>
-							<GripVertical class="size-3" />
+							<Icon.Grip class="size-3" />
 						</span>
 					{/snippet}
 				</Tip>
@@ -308,15 +299,15 @@
 												onclick={() => toggle(entry.id)}
 												aria-expanded={isOpen}
 											>
-												<ChevronRight
+												<Icon.ChevronRight
 													class="size-3.5 shrink-0 text-muted-foreground transition-transform duration-(--duration-micro) {isOpen
 														? 'rotate-90'
 														: ''}"
 												/>
 												{#if isOpen}
-													<FolderOpen class="size-4 shrink-0 text-muted-foreground" />
+													<Icon.FolderOpen class="size-4 shrink-0 text-muted-foreground" />
 												{:else}
-													<Folder class="size-4 shrink-0 text-muted-foreground" />
+													<Icon.Folder class="size-4 shrink-0 text-muted-foreground" />
 												{/if}
 												<span class="truncate">{entry.title}</span>
 											</Button>
@@ -352,13 +343,13 @@
 												}}
 											>
 												{#if entry.kind === 'skill'}
-													<Wrench class="size-4 shrink-0 text-muted-foreground" />
+													<Icon.Skill class="size-4 shrink-0 text-muted-foreground" />
 												{:else}
-													<FileText class="size-4 shrink-0 text-muted-foreground" />
+													<Icon.Document class="size-4 shrink-0 text-muted-foreground" />
 												{/if}
 												<span class="truncate">{entry.title}</span>
 												{#if entry.isPinned}
-													<Pin class="ml-auto size-3 shrink-0 text-muted-foreground" />
+													<Icon.Pin class="ml-auto size-3 shrink-0 text-muted-foreground" />
 												{/if}
 											</a>
 										{/snippet}
@@ -412,7 +403,7 @@
 											class="tactile absolute top-0 right-7 bottom-0 my-auto size-5 rounded-md text-muted-foreground opacity-0 group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
 											aria-label="Create in {entry.title}"
 										>
-											<Plus class="size-3.5" />
+											<Icon.Plus class="size-3.5" />
 										</Button>
 									{/snippet}
 								</Tip>
@@ -437,7 +428,7 @@
 											: 'text-muted-foreground'} opacity-0 group-hover/entry:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:opacity-100"
 										aria-label="Actions for {entry.title}"
 									>
-										<Ellipsis class="size-3.5" />
+										<Icon.Ellipsis class="size-3.5" />
 									</Button>
 								{/snippet}
 							</Tip>
@@ -502,7 +493,7 @@
 								disabled={!inventoryReady}
 								onclick={() => startCreate('note', entry.projectId, entry.id)}
 							>
-								<Plus class="size-3.5 shrink-0" />
+								<Icon.Plus class="size-3.5 shrink-0" />
 								Create your first note
 							</Button>
 						</div>
@@ -553,7 +544,7 @@
 							<a href={projectHref} {...props}>
 								<!-- Project rows are identity moments: the icon stays brand-teal so
 								     projects stand apart from their gray child rows. -->
-								<FolderKanban class="size-4 shrink-0 text-brand" />
+								<Icon.ProjectBoard class="size-4 shrink-0 text-brand" />
 								<span class="truncate font-medium">{project.name}</span>
 							</a>
 						{/snippet}
@@ -579,7 +570,7 @@
 											{...mergeProps(actionProps, menuProps, tipProps)}
 											disabled={!inventoryReady}
 										>
-											<Ellipsis class="size-3.5" />
+											<Icon.Ellipsis class="size-3.5" />
 										</Button>
 									{/snippet}
 								</Tip>
@@ -603,7 +594,7 @@
 											{...mergeProps(actionProps, menuProps, tipProps)}
 											disabled={!inventoryReady}
 										>
-											<Plus class="size-3.5" />
+											<Icon.Plus class="size-3.5" />
 										</Button>
 									{/snippet}
 								</Tip>
@@ -620,7 +611,7 @@
 				aria-label="{isOpen ? 'Collapse' : 'Expand'} {project.name}"
 				class="group-data-[collapsible=icon]:hidden"
 			>
-				<ChevronRight
+				<Icon.ChevronRight
 					class="size-4 {transitionsReady
 						? 'transition-transform duration-(--duration-micro)'
 						: ''} {isOpen ? 'rotate-90' : ''}"
@@ -636,7 +627,7 @@
 								<Sidebar.MenuSubButton isActive={activePath.startsWith(`${projectHref}/todos`)}>
 									{#snippet child({ props })}
 										<a {...props} href="{projectHref}/todos">
-											<ListTodo class="size-4 shrink-0 text-muted-foreground" />
+											<Icon.Todos class="size-4 shrink-0 text-muted-foreground" />
 											<span class="truncate">Todos</span>
 										</a>
 									{/snippet}
@@ -677,7 +668,7 @@
 									disabled={!inventoryReady}
 									onclick={() => startCreate('note', project.id)}
 								>
-									<Plus class="size-3.5 shrink-0" />
+									<Icon.Plus class="size-3.5 shrink-0" />
 									Create your first note
 								</Button>
 							{/if}

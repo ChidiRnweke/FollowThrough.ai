@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { FtChevronRight, FtExternal, FtLoader } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import { canOpenEntity, entityActionLabel, entityIcon, openEntity } from './open-entity';
 	import {
@@ -27,7 +27,7 @@
 		title: string;
 	} = $props();
 
-	const Icon = $derived(entityIcon[subject.entity.kind]);
+	const Glyph = $derived(entityIcon[subject.entity.kind]);
 	const openable = $derived(canOpenEntity(subject.entity));
 
 	/**
@@ -65,9 +65,9 @@
 
 {#snippet statement()}
 	{#if subject.outcome === 'running'}
-		<FtLoader class="{CHAT_ROW_ICON} animate-spin text-muted-foreground" />
+		<Icon.Loader class="{CHAT_ROW_ICON} animate-spin text-muted-foreground" />
 	{:else}
-		<Icon class="{CHAT_ROW_ICON} text-muted-foreground" />
+		<Glyph class="{CHAT_ROW_ICON} text-muted-foreground" />
 	{/if}
 	<!-- A phrase, not a table row: pushing the verb to the far edge with `flex-1` made two
 	     entries scan as the columns of a table that has no other rows. -->
@@ -108,7 +108,7 @@
 			aria-label={entityActionLabel(subject.entity)}
 			onclick={() => openEntity(subject.entity)}
 		>
-			<FtExternal />
+			<Icon.External />
 		</Button>
 	{/if}
 {/snippet}
@@ -150,7 +150,7 @@
 						size="sm"
 						class="{CHAT_ROW_STATEMENT} min-w-0 flex-1 shrink [&[data-state=open]>svg:first-child]:rotate-90"
 					>
-						<FtChevronRight
+						<Icon.ChevronRight
 							class="{CHAT_ROW_ICON} shrink-0 text-muted-foreground transition-transform duration-(--duration-micro)"
 						/>
 						{@render statement()}

@@ -1,18 +1,19 @@
 import { AgentProviderFailure } from '$lib/errors';
 import {
 	providerItemSchema,
+	providerRejectionSchema,
 	providerToolEventHeaderSchema,
 	runItemStreamEventSchema,
 	rawModelStreamEventSchema,
 	type ProviderItem,
 	type ProviderStreamEvent,
+	type ProviderToolArguments,
 	type ProviderToolCall,
 	type ProviderToolOutput
 } from '$lib/models/agent';
 import {
 	agentPayloadResultSchema,
-	agentPayloadObjectResultSchema,
-	type AgentPayloadObject
+	agentPayloadObjectResultSchema
 } from '$lib/models/agent/payload';
 
 const providerToolOutput = (value: unknown): ProviderToolOutput => {
@@ -26,34 +27,27 @@ const providerToolOutput = (value: unknown): ProviderToolOutput => {
 /**
  * Tool arguments, whether the provider sent them as JSON text or as an object.
  *
- * Both failures are fatal to the turn and always have been: a call whose
- * arguments nobody can read is a call that must not be presented as though it
- * ran.
+ * Unreadable arguments are a value, not a throw. The SDK has already answered
+ * that call with its own correction and the run continues; a reader that only
+ * records the call must not veto the recovery.
  */
-const providerArguments = (value: unknown): AgentPayloadObject => {
-	if (value === undefined) return {};
+const providerArguments = (value: unknown): ProviderToolArguments => {
+	if (value === undefined) return { kind: 'value', value: {} };
 	let candidate: unknown = value;
 	if (typeof value === 'string') {
 		try {
 			candidate = JSON.parse(value);
 		} catch (error) {
-			throw new AgentProviderFailure(
-				'The provider returned malformed JSON tool arguments',
-				'MALFORMED_TOOL_ARGUMENTS',
-				false,
-				{ cause: error }
-			);
+			return {
+				kind: 'corrupt',
+				message: error instanceof Error ? error.message : String(error)
+			};
 		}
 	}
 	const read = agentPayloadObjectResultSchema.parse(candidate);
-	if (read.kind === 'corrupt')
-		throw new AgentProviderFailure(
-			'The provider returned tool arguments that were not an object',
-			'MALFORMED_TOOL_ARGUMENTS',
-			false,
-			{ cause: new Error(read.message) }
-		);
-	return read.value;
+	return read.kind === 'valid'
+		? { kind: 'value', value: read.value }
+		: { kind: 'corrupt', message: read.message };
 };
 
 const providerReasoningText = (item: ProviderItem): string => {
@@ -81,7 +75,8 @@ const providerCall = (item: ProviderItem): ProviderToolCall => {
 /**
  * One stream event as an arm of {@link ProviderStreamEvent}.
  *
- * Rejects malformed known tool events and unreadable arguments. Unfamiliar SDK
+ * Rejects malformed known tool events. Unreadable arguments stay a value on the
+ * call (see {@link ProviderToolArguments}). Unfamiliar SDK
  * event types settle as `ignored`, so adding an event type cannot fail a turn.
  */
 export const parseProviderStreamEvent = (event: unknown): ProviderStreamEvent => {
@@ -113,11 +108,34 @@ export const parseProviderStreamEvent = (event: unknown): ProviderStreamEvent =>
  * A tool call held outside the stream — a `RunState` interruption parked on an
  * approval, which is not a stream event and never reaches the loop above.
  *
- * Absent when the value is not a tool item at all. The caller decides what that
- * means: for an approval it means a parked call nothing can be matched against,
- * which is a failure rather than a call to skip.
+ * Absent when the value is not a tool item at all, or when its arguments cannot
+ * be read. The SDK asks for approval only after it has parsed the arguments, so
+ * an unreadable parked call is not something the model did. The caller decides
+ * what that means: for an approval it means a parked call nothing can be matched
+ * against, which is a failure rather than a call to skip.
  */
-export const parseProviderToolCall = (item: unknown): ProviderToolCall | undefined => {
+export const parseProviderToolCall = (
+	item: unknown
+): (ProviderToolCall & { readonly arguments: { readonly kind: 'value' } }) | undefined => {
 	const parsed = providerItemSchema.safeParse(item);
-	return parsed.success ? providerCall(parsed.data) : undefined;
+	if (!parsed.success) return undefined;
+	const call = providerCall(parsed.data);
+	const { arguments: args } = call;
+	return args.kind === 'value' ? { ...call, arguments: args } : undefined;
+};
+
+/**
+ * Who rejected which request, as a suffix for the failure message: `" (provider OpenAI,
+ * request req-1)"`, or `""` when the error carries neither. An operator needs both to find
+ * the rejection in the provider's own records.
+ */
+export const providerRejectionContext = (error: unknown): string => {
+	const read = providerRejectionSchema.safeParse(error);
+	if (!read.success) return '';
+	const parts = [
+		read.data.error?.metadata?.provider_name &&
+			`provider ${read.data.error.metadata.provider_name}`,
+		read.data.requestID && `request ${read.data.requestID}`
+	].filter((part): part is string => Boolean(part));
+	return parts.length > 0 ? ` (${parts.join(', ')})` : '';
 };

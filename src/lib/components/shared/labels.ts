@@ -45,10 +45,14 @@ export const todoStatusLabels: Record<TodoStatus, string> = {
 	cancelled: 'Cancelled'
 };
 
-/** One dry voice line per empty kanban column — see docs/design/design-system.md "Voice & tone". */
+/**
+ * One dry voice line per empty kanban column — see docs/design/design-system.md "Voice & tone".
+ * The Open column also says where todos come from, because extraction lives in the
+ * note toolbar and an empty board is the moment someone looks for it.
+ */
 export const todoStatusEmptyCopy: Record<TodoStatus, string> = {
 	backlog: 'Nothing waiting in the wings.',
-	open: 'Nothing open. Pull something in.',
+	open: 'Nothing open. Select a commitment in a note and choose Extract promises.',
 	in_progress: 'Nothing in flight.',
 	done: 'Nothing finished yet.',
 	cancelled: 'Nothing called off.'

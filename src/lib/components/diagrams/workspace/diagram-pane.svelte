@@ -19,7 +19,7 @@
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import { FtClose as X } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { userFacingMessage } from '$lib/errors';
 	import {
@@ -180,7 +180,7 @@
 	}
 	async function publish(output: DrawioExport): Promise<void> {
 		await stage({ kind: 'publishDiagram', diagramId, source: output.xml, renderedSvg: output.svg });
-		toast.success('Publication saved on this device');
+		toast.success('Published', { description: 'Saved on this device. It syncs to the server.' });
 	}
 
 	async function retry(): Promise<void> {
@@ -317,7 +317,7 @@
 							aria-label="Close split view"
 							onclick={onCloseSplit}
 						>
-							<X />
+							<Icon.Close />
 						</Button>
 					{/snippet}
 				</Tip>

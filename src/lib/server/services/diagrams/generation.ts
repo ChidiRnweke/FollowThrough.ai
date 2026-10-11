@@ -1,5 +1,6 @@
 import { Agent, Runner, tool, type AgentInputItem, type ModelProvider } from '@openai/agents';
-import { ValidationError } from '$lib/errors';
+import { DomainError, ValidationError, failureReport } from '$lib/errors';
+import { toolFailure } from '$lib/models/agent/tool-failure';
 import {
 	drawioSubmissionSchema,
 	mermaidSubmissionSchema,
@@ -16,8 +17,7 @@ import {
 	type ProviderToolOutput
 } from '$lib/models/agent';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
-import { AgentProviderFailure } from '$lib/errors';
-import { readToolFailure } from '$lib/server/repositories/agent/tool-failure';
+import { readToolOutput } from '$lib/server/repositories/agent/tool-failure';
 
 import { parseProviderStreamEvent } from '$lib/server/infrastructure/agents/provider-events';
 
@@ -45,9 +45,25 @@ export type DiagramGenerationRun = AsyncGenerator<
 export interface DiagramGeneration {
 	generate(request: DiagramGenerationRequest, signal: AbortSignal): DiagramGenerationRun;
 	/** The agent tool a provider event names; an unknown name fails the generation. */
-	toolName(name: string): AgentToolName;
+	toolName(name: string): AgentToolName | undefined;
 	toolOutcome(output: ProviderToolOutput): AgentToolOutcome;
 }
+
+/** A submission the model sent, or a `ValidationError` naming what to correct. */
+const readSubmission = (
+	// audit-allow: no-unknown-type — the model's submission, parsed here by the service that owns the provider.
+	value: unknown,
+	kind: 'drawio' | 'mermaid'
+): DiagramSubmission => {
+	if (kind === 'drawio') {
+		const parsed = drawioSubmissionSchema.safeParse(value);
+		if (parsed.success) return { kind, ...parsed.data };
+		throw new ValidationError(z.prettifyError(parsed.error));
+	}
+	const parsed = mermaidSubmissionSchema.safeParse(value);
+	if (parsed.success) return { kind, ...parsed.data };
+	throw new ValidationError(z.prettifyError(parsed.error));
+};
 
 const diagramSubmissionParameters = (kind: 'drawio' | 'mermaid') => {
 	const schema = kind === 'drawio' ? drawioSubmissionSchema : mermaidSubmissionSchema;
@@ -172,15 +188,24 @@ export class DiagramGenerationService implements DiagramGeneration {
 					: 'Submit the final Mermaid source. This is the only tool that completes the diagram task. Labels: for multi-line text use escaped \\n inside quoted labels; never use HTML tags such as <br/>.',
 			parameters: diagramSubmissionParameters(kind),
 			strict: true,
-			errorFunction: (_context, error) =>
-				JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
+			// Invalid JSON, a schema-invalid draft and a rejected draft all reach the model as the
+			// same failure envelope every agent tool returns, and the session continues to a valid
+			// draft. Only cancellation escapes.
+			errorFunction: (_context, error) => {
+				signal.throwIfAborted();
+				const report = failureReport(error);
+				return JSON.stringify(
+					toolFailure(
+						error instanceof DomainError ? error.code : 'INTERNAL_ERROR',
+						report.message,
+						report.advice
+					)
+				);
+			},
 			execute: async (value) => {
 				signal.throwIfAborted();
 				if (accepted) throw new ValidationError('A diagram has already been submitted.');
-				const draft: DiagramSubmission =
-					kind === 'drawio'
-						? { kind, ...drawioSubmissionSchema.parse(value) }
-						: { kind, ...mermaidSubmissionSchema.parse(value) };
+				const draft = readSubmission(value, kind);
 				const decision = await events.submit(draft);
 				signal.throwIfAborted();
 				if (decision.kind === 'rejected') throw new ValidationError(decision.message);
@@ -225,21 +250,14 @@ export class DiagramGenerationService implements DiagramGeneration {
 		if (!accepted) throw new ValidationError('The Diagram Agent did not submit a valid diagram.');
 		return accepted;
 	}
-	toolName(name: string): AgentToolName {
-		const read = agentToolNameSchema.safeParse(name).data;
-		if (read === undefined)
-			throw new AgentProviderFailure(
-				`The provider called "${name}", which is not a tool this agent offers`,
-				'UNKNOWN_TOOL_CALL',
-				false
-			);
-		return read;
+	toolName(name: string): AgentToolName | undefined {
+		return agentToolNameSchema.safeParse(name).data;
 	}
 	toolOutcome(output: ProviderToolOutput): AgentToolOutcome {
 		if (output.kind !== 'value') return output;
-		const failure = readToolFailure(output.value);
-		return failure === undefined
-			? { kind: 'succeeded', value: output.value }
-			: { kind: 'reported_failure', value: output.value, failure };
+		const reading = readToolOutput(output.value);
+		if (reading.kind === 'success') return { kind: 'succeeded', value: output.value };
+		if (reading.kind === 'corrupt') return { kind: 'unreadable_failure', message: reading.message };
+		return { kind: 'reported_failure', value: output.value, failure: reading.failure.message };
 	}
 }

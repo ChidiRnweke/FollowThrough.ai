@@ -9,7 +9,7 @@ import type {
 	DiagramGeneration,
 	DiagramGenerationRun
 } from '$lib/server/services/diagrams/generation';
-import { readToolFailure } from '$lib/server/repositories/agent/tool-failure';
+import { readToolOutput } from '$lib/server/repositories/agent/tool-failure';
 import { ValidationError } from '$lib/errors';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
@@ -23,15 +23,15 @@ export class InMemoryDiagramGeneration implements DiagramGeneration {
 	completion: Promise<void> | undefined;
 	readonly mermaidByModel = new Map<string, string>();
 
-	toolName(name: string): AgentToolName {
-		return agentToolNameSchema.parse(name);
+	toolName(name: string): AgentToolName | undefined {
+		return agentToolNameSchema.safeParse(name).data;
 	}
 	toolOutcome(output: ProviderToolOutput): AgentToolOutcome {
 		if (output.kind !== 'value') return output;
-		const failure = readToolFailure(output.value);
-		return failure === undefined
-			? { kind: 'succeeded', value: output.value }
-			: { kind: 'reported_failure', value: output.value, failure };
+		const reading = readToolOutput(output.value);
+		if (reading.kind === 'success') return { kind: 'succeeded', value: output.value };
+		if (reading.kind === 'corrupt') return { kind: 'unreadable_failure', message: reading.message };
+		return { kind: 'reported_failure', value: output.value, failure: reading.failure.message };
 	}
 	/** Offers each candidate draft in turn until the caller accepts one. */
 	async *generate(request: DiagramGenerationRequest, signal: AbortSignal): DiagramGenerationRun {

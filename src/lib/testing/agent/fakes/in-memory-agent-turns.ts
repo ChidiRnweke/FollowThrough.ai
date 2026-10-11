@@ -9,7 +9,7 @@ import {
 	type WebResearchSettings
 } from '$lib/models/agent';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
-import { readToolFailure } from '$lib/server/repositories/agent/tool-failure';
+import { readToolOutput } from '$lib/server/repositories/agent/tool-failure';
 import type {
 	AgentProviderTurn,
 	AgentProviderTurnInput,
@@ -41,19 +41,16 @@ export class InMemoryAgentTurns implements AgentTurns {
 		return history.flatMap((item) => (item.type === 'function_call' ? [item.name] : []));
 	}
 
-	toolName(name: string): AgentToolName {
-		const read = agentToolNameSchema.safeParse(name).data;
-		if (read === undefined)
-			throw new AgentProviderFailure(`Unknown tool ${name}`, 'UNKNOWN_TOOL_CALL', false);
-		return read;
+	toolName(name: string): AgentToolName | undefined {
+		return agentToolNameSchema.safeParse(name).data;
 	}
 
 	toolOutcome(output: ProviderToolOutput): AgentToolOutcome {
 		if (output.kind !== 'value') return output;
-		const failure = readToolFailure(output.value);
-		return failure === undefined
-			? { kind: 'succeeded', value: output.value }
-			: { kind: 'reported_failure', value: output.value, failure };
+		const reading = readToolOutput(output.value);
+		if (reading.kind === 'success') return { kind: 'succeeded', value: output.value };
+		if (reading.kind === 'corrupt') return { kind: 'unreadable_failure', message: reading.message };
+		return { kind: 'reported_failure', value: output.value, failure: reading.failure.message };
 	}
 
 	async describeImages(): Promise<string[]> {

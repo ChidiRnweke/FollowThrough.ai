@@ -35,8 +35,33 @@ export const bindToolArguments = <Shape extends z.ZodRawShape>(
 	return { arguments: payload, execute: async () => execute(data, payload) };
 };
 
-/** Only a tool-local stage may turn an exception into model feedback. */
-export const toolCallFailure = (error: unknown): ToolFailure => {
+/**
+ * How a tool error becomes model feedback — decided here once, for every tool.
+ *
+ * A tool does its work and throws a meaningful error; it never catches one to report it.
+ * {@link withToolFeedback} turns that error into the one failure envelope the model reads, and
+ * the model corrects its next call within the same run. The SDK toolset and the MCP server
+ * wrap every preparation and execution in it, so the policy cannot be skipped.
+ *
+ * Only cancellation escapes. There is no "the model cannot fix this" category inside a tool:
+ * states a tool could not act on are excluded where their data enters (ADR 0037), and repeated
+ * execution is answered by idempotent writes rather than by ending the run (ADRs 0003, 0010).
+ */
+export const withToolFeedback = async <Result>(
+	signal: AbortSignal,
+	work: () => Promise<Result>
+): Promise<Result | ToolFailure> => {
+	signal.throwIfAborted();
+	try {
+		return await work();
+		// audit-allow: silent-catch — the failure is the tool's result: the model reads it as feedback and the chat records the call as failed.
+	} catch (error) {
+		signal.throwIfAborted();
+		return feedback(error);
+	}
+};
+
+const feedback = (error: unknown): ToolFailure => {
 	if (!(error instanceof DomainError))
 		trace.getActiveSpan()?.recordException(error instanceof Error ? error : String(error));
 	const report = failureReport(error);
@@ -50,10 +75,22 @@ export const toolCallFailure = (error: unknown): ToolFailure => {
 /**
  * The Agents SDK uses a different Zod major, so it cannot consume this app's
  * Zod objects directly. Keep Zod as the execution validator and publish the
- * exact strict object schema Zod generates for the model-facing protocol.
+ * strict object schema Zod generates for the model-facing protocol, within the
+ * subset strict function calling documents.
  */
 export const jsonObjectSchema = (schema: z.ZodObject) => {
-	const converted = z.toJSONSchema(schema, { io: 'input' });
+	const converted = z.toJSONSchema(schema, {
+		io: 'input',
+		// Zod writes a discriminated union as `oneOf`, which is outside the subset strict
+		// function calling documents (it accepts `anyOf`) and is answered with an error. The
+		// branches already exclude each other by their literal discriminator, so `anyOf`
+		// accepts exactly the same values.
+		override: ({ jsonSchema }) => {
+			if (!jsonSchema.oneOf) return;
+			jsonSchema.anyOf = jsonSchema.oneOf;
+			delete jsonSchema.oneOf;
+		}
+	});
 	if (
 		converted.type !== 'object' ||
 		converted.additionalProperties !== false ||

@@ -3,8 +3,7 @@
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { cn } from '$lib/utils.js';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import Check from '@lucide/svelte/icons/check';
+	import * as Icon from '$lib/components/icons';
 	import Tooltip from './Tooltip.svelte';
 	import { getEditor, useEditorState } from './commands/index.js';
 
@@ -30,7 +29,7 @@
 			style={`color: ${$editorState.currentColor || ''}; background-color: ${$editorState.currentHighlight || ''};`}
 		>
 			<span>A</span>
-			<ChevronDown class="text-muted-foreground size-2!" />
+			<Icon.ChevronDown class="text-muted-foreground size-2!" />
 		</DropdownMenu.Trigger>
 	</Tooltip>
 	<DropdownMenu.Content
@@ -62,7 +61,7 @@
 						<span class="capitalize">{color.label}</span>
 					</div>
 					{#if isActive}
-						<Check class="size-4 text-muted-foreground" />
+						<Icon.Check class="size-4 text-muted-foreground" />
 					{/if}
 				</DropdownMenu.Item>
 			{/each}
@@ -97,7 +96,7 @@
 						<span class="capitalize">{color.label}</span>
 					</div>
 					{#if isActive}
-						<Check class="size-4 text-muted-foreground" />
+						<Icon.Check class="size-4 text-muted-foreground" />
 					{/if}
 				</DropdownMenu.Item>
 			{/each}
