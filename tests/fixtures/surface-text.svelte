@@ -1,5 +1,5 @@
 <script lang="ts">
-	import TodoCard from '$lib/components/todos/todo-card.svelte';
+	import TodoRow from '$lib/components/todos/todo-row.svelte';
 	import ChatMarkdown from '$lib/components/chat/chat-markdown.svelte';
 	import { Calendar } from '$lib/components/ui/calendar';
 	import { CalendarDate } from '@internationalized/date';
@@ -66,7 +66,7 @@
 			</InputGroup.Root>
 		</section>
 		<section data-additional-surfaces class="mt-8 flex max-w-xl flex-col gap-4">
-			<TodoCard
+			<TodoRow
 				lifted
 				view={{
 					todo: todoBuilder({
@@ -77,10 +77,7 @@
 					sourceNote: { id: notes[0].id, title: notes[0].title }
 				}}
 			/>
-			<TodoCard
-				lifted
-				view={{ todo: todoBuilder({ title: 'Completed review', status: 'done' }) }}
-			/>
+			<TodoRow lifted view={{ todo: todoBuilder({ title: 'Completed review', status: 'done' }) }} />
 			<div class="bg-brand/10 p-4 dark:bg-brand/15">
 				<ChatMarkdown
 					surface="brand"

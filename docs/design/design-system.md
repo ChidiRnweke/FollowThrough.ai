@@ -58,6 +58,8 @@
   sidebar project icon, `Badge variant="brand"`, breadcrumb links, chat origin lines, artifact
   format badges, and overview resource chips use `--brand` text on the shared `bg-brand/10` wash
   (`dark:bg-brand/15`). No new wash tokens — the badge `brand` variant is the canonical recipe.
+  On a divided row (a todo, a recent note) the project is plain `text-brand` text with no wash:
+  the row is already a unit, and a filled chip on every row is the weight the list rule removes.
 - **The workspace tab strip carries the identity wash; its tabs do not.** The strip surface is
   `bg-brand/10` (`dark:bg-brand/15`); resting tabs and run group labels paint nothing at all —
   they are labels on that surface. The only painted tiles are the tabs currently on screen:
@@ -218,7 +220,15 @@ is feedback rather than ornament.
 
 Three lift exceptions, all for the same reason (a surface that moves out from under the pointer
 mid-click causes mis-selection): menu/select/command rows, controls holding a nested control (a
-workspace tab and its close button), and sidebar tree rows — cursor only, never the lift.
+workspace tab and its close button), and sidebar tree rows — cursor only, never the lift. A todo
+row is the second kind (checkbox, title, drag handle and move menu): it takes the hover wash and
+no lift.
+
+**Structure appears during interaction, not at rest.** A resting todo row paints nothing. Held by a
+drag, it takes the `bg-brand/20` wash (`dark:/25`) on an opaque paper base and `rounded-lg`,
+never a shadow; the place it will land is a 2px brand line; every zone it can land in shows the
+brand outline, an empty column included. The floating clone keeps the row's size and draws no
+focus frame. All of it lives under `[data-slot='todo-row']` in `layout.css`.
 
 **The cursor is not your problem.** A `@layer base` rule in `layout.css` gives `cursor: pointer`
 to every `button`, `summary`, `a[href]`, file-input `label`, and ARIA interactive role. A
@@ -297,7 +307,10 @@ product celebrates the absence of work rather than apologizing for empty screens
   "Not waiting on anyone." · "Pin a note to keep it at hand." · "Notes you touch show up here." ·
   kanban columns use `todoStatusEmptyCopy` in `labels.ts`.
 - The Today page greets with the date as an eyebrow ("Tuesday · 22 July") and a time-aware
-  subtitle. No user name, no weather, no emoji.
+  subtitle. No user name, no weather, no emoji. Its counts are three typographic groups
+  (label, `stat-value`, caption) with no container, a zero in muted ink. Composition follows
+  content: a todo section with nothing in it reserves no space, so the remaining ones run full
+  width, and Pinned takes a column only when it holds notes.
 - Errors state what happened and the fix, specifically and without apology.
 
 ## Empty states
@@ -330,8 +343,12 @@ while the region is empty; the empty state and its one action are the whole surf
   connection explanation, one retry action. Never imply that uncached server data or
   online-only mutations are available.
 - **Todos:** Board and List are alternate URL-addressable views of the same set; the independent
-  right panel is the complete master-detail editor. No second board-density toggle — a card shows
-  its title plus whatever metadata is actually set. Editable popovers never resize cards or rows;
+  right panel is the complete master-detail editor. A todo is a divided row on Today and the
+  board, never a card: the title leads, and one muted caption line carries whatever metadata is
+  actually set (project, due date — "Overdue" in words when it is — priority, who it waits on,
+  provenance). Board columns are zones separated by hairlines, not filled trays. Row controls
+  (drag handle, move menu) reveal on hover or focus on pointer layouts and stay visible on touch.
+  No second board-density toggle. Editable popovers never resize rows;
   provenance stays separate from the user-selected source. Controls use the flat shadcn Select,
   Popover, Calendar, Command, Input, and Textarea; selection commits immediately, text on
   blur/Enter (Escape restores), and saving/errors are announced without a Save button.

@@ -11,7 +11,7 @@
 	import * as Icon from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from './todo-updates';
-	import TodoCard from './todo-card.svelte';
+	import TodoRow from './todo-row.svelte';
 	import { todoStatusEmptyCopy, todoStatusLabels, todoStatusStyle } from '../shared/labels';
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
@@ -167,17 +167,17 @@
 	}
 </script>
 
+<!-- Columns are zones separated by hairlines, not filled trays: structure appears
+     during a drag (the lifted row, the drop line, the zone outline), not at rest. -->
 <div
-	class="flex min-h-0 flex-1 snap-x snap-mandatory gap-row overflow-x-auto pb-3 2xl:grid 2xl:grid-cols-4 2xl:grid-rows-1 2xl:overflow-visible 2xl:pb-0"
+	class="flex min-h-0 flex-1 snap-x snap-mandatory divide-x divide-border overflow-x-auto pb-3 2xl:grid 2xl:grid-cols-4 2xl:grid-rows-1 2xl:overflow-visible 2xl:pb-0"
 >
 	{#each columns as status (status)}
 		{@const items = board[status]}
 		{@const isExpanded = expanded.has(status)}
 		{@const visible = visibleItems(items, isExpanded)}
-		<!-- Tinted tray holding default cards — the same layering recipe as the
-		     docked right panel (bg-sidebar + ring hairline). -->
 		<section
-			class="flex min-h-40 w-80 shrink-0 snap-start flex-col gap-bind overflow-hidden rounded-xl bg-sidebar p-2 ring-inset ring-1 ring-foreground/10 2xl:w-auto 2xl:min-w-0"
+			class="flex min-h-40 w-80 shrink-0 snap-start flex-col gap-bind overflow-hidden px-row first:pl-0 last:pr-0 2xl:w-auto 2xl:min-w-0"
 		>
 			<h3 class="eyebrow flex items-center gap-1.5 px-1.5 pt-1 pb-2">
 				{#if status === 'done'}
@@ -215,33 +215,52 @@
 						}}
 					/>
 				{/if}
-				<!-- A long column scrolls inside the tray; the header and the add row
+				<!-- A long column scrolls inside its zone; the header and the add row
 				     stay put, which is what lets the board fill the page height. The p-0.5
-				     keeps the cards' ring hairline (and the dnd drop outline) from being
-				     clipped by the overflow scrollport. -->
+				     keeps the dnd drop outline from being clipped by the overflow
+				     scrollport. Rows touch; the hairlines between them separate. -->
 				<div
 					data-todo-status={status}
-					class="flex min-h-20 flex-1 flex-col gap-item overflow-y-auto p-0.5"
+					class="flex min-h-20 flex-1 flex-col divide-y divide-border overflow-y-auto rounded-md p-0.5"
 					use:dragHandleZone={{
 						items: visible,
 						flipDurationMs: 150,
+						/* The placeholder is a 2px drop line, so morphing the clone to its
+						   size would crush the held row. The clone keeps the row's size. */
+						morphDisabled: true,
 						type: 'todo',
 						/* The default drop-target outline is library yellow. */
-						dropTargetStyle: { outline: '2px solid var(--color-brand)' }
+						dropTargetStyle: { outline: '2px solid var(--color-brand)' },
+						/* The floating clone is a DOM copy made before Svelte re-renders,
+						   so it is marked lifted directly; layout.css styles both. */
+						transformDraggedElement: (element) => {
+							element?.querySelector('[data-slot="todo-row"]')?.setAttribute('data-lifted', '');
+						}
 					}}
 					onconsider={(event) => handleConsider(status, event)}
 					onfinalize={(event) => handleFinalize(status, event)}
 				>
 					{#each visible as item (item.id)}
-						<TodoCard
-							view={item.view}
-							compact
-							draggable
-							lifted={item.id === draggingId}
-							projectName={projectNames?.get(item.view.todo.projectId)}
-							{onopen}
-							onstatus={onmove}
-						/>
+						<!-- The pointer-drag placeholder is where the row will land: a
+						     brand line, not a second copy of the row. Wrapped so the
+						     zone always sees one element per item. -->
+						<div>
+							{#if isShadowItem(item)}
+								<!-- The library hides its placeholder; the line opts back in. -->
+								<div class="visible py-1" aria-hidden="true">
+									<div class="h-0.5 rounded-full bg-brand"></div>
+								</div>
+							{:else}
+								<TodoRow
+									view={item.view}
+									draggable
+									lifted={item.id === draggingId}
+									projectName={projectNames?.get(item.view.todo.projectId)}
+									{onopen}
+									onstatus={onmove}
+								/>
+							{/if}
+						</div>
 					{/each}
 				</div>
 				{#if items.length > VISIBLE_LIMIT}

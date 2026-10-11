@@ -1736,6 +1736,48 @@
 	   pointed at, then reveals its control — so a board card or property list is
 	   scannable rather than reading as a form. The affordance is never removed,
 	   only deferred: hover, keyboard focus, and the open state all surface it. */
+	/* A todo is a divided row, never a card: it paints only while hovered or held.
+	   The hover is a wash without the 1px lift, because the row holds nested
+	   controls (checkbox, drag handle, move menu) — see "Interaction states". */
+	[data-slot='todo-row']:hover {
+		@apply bg-accent;
+	}
+	/* Held by a drag, the row is the live thing: the brand wash, and secondary ink
+	   follows the wash. Set on the in-list row by the board and on the floating
+	   drag clone by `transformDraggedElement`, so both read the same. No shadow. */
+	/* The wash sits on an opaque paper base: the drag clone floats over other
+	   rows, and a bare alpha wash lets their text show through it. */
+	[data-slot='todo-row'][data-lifted] {
+		@apply rounded-lg bg-background;
+		background-image: linear-gradient(color-mix(in oklab, var(--color-brand) 20%, transparent) 0 0);
+	}
+	.dark [data-slot='todo-row'][data-lifted] {
+		background-image: linear-gradient(color-mix(in oklab, var(--color-brand) 25%, transparent) 0 0);
+	}
+	[data-slot='todo-row'][data-lifted] .text-muted-foreground {
+		@apply text-brand-muted-foreground;
+	}
+	/* svelte-dnd-action focuses its floating pointer-drag clone, which draws the
+	   global focus outline as a square frame around the held row. The clone is a
+	   transient copy that keyboard users never reach (keyboard drags move the row
+	   in place), and the lifted wash already marks it. */
+	#dnd-action-dragged-el {
+		outline: none;
+	}
+	/* Row controls are quiet at rest on pointer layouts and reveal on hover, focus,
+	   or while their menu is open. Touch layouts keep them visible: there is no
+	   hover to reveal them. Opacity, not display, so the row never reflows. */
+	@media (hover: hover) and (min-width: 48rem) {
+		[data-slot='todo-row'] [data-row-reveal] {
+			@apply opacity-0 transition-opacity;
+		}
+		[data-slot='todo-row']:hover [data-row-reveal],
+		[data-slot='todo-row']:focus-within [data-row-reveal],
+		[data-slot='todo-row'][data-lifted] [data-row-reveal],
+		[data-slot='todo-row'] [data-row-reveal][data-state='open'] {
+			@apply opacity-100;
+		}
+	}
 	.field-quiet {
 		@apply border-transparent bg-transparent px-2 font-normal;
 	}

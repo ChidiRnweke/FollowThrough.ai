@@ -3,15 +3,14 @@
 
 	import type { NoteSummary } from '$lib/models/notes';
 	import type { Project } from '$lib/models/projects';
+	import type { TodoId, TodoStatus } from '$lib/models/todos';
 
-	import * as Card from '$lib/components/ui/card';
-	import { Badge } from '$lib/components/ui/badge';
 	import * as Icon from '$lib/components/icons';
 	import EmptyState from '../../shared/empty-state.svelte';
 	import { openTodoSurface } from '$lib/client/shell/responsive-surfaces';
 	import { page } from '$app/state';
 	import { todoUpdates } from '$lib/components/todos';
-	import TodoCard from '../../todos/todo-card.svelte';
+	import TodoRow from '../../todos/todo-row.svelte';
 	import { formatDateTime } from '../../shared/labels';
 
 	let { view, projects = [] }: { view: TodayView; projects?: readonly Project[] } = $props();
@@ -29,59 +28,61 @@
 		if (match) openTodoSurface(match, `${page.url.pathname}${page.url.search}`);
 	}
 
-	const hasActionable = $derived(
-		view.overdue.length > 0 || view.dueToday.length > 0 || view.waitingOn.length > 0
+	const setStatus = (id: TodoId, status: TodoStatus) => void todoUpdates.setStatus(id, status);
+
+	/* Composition follows content: a section with nothing in it reserves no space,
+	   and the remaining sections take the full width. */
+	const todoGroups = $derived(
+		[
+			{ label: 'Overdue', items: view.overdue, actionable: true },
+			{ label: 'Due today', items: view.dueToday, actionable: true },
+			{ label: 'Waiting on', items: view.waitingOn, actionable: false }
+		].filter((group) => group.items.length > 0)
 	);
 </script>
 
-{#snippet statTile(label: string, count: number, tone: string, zero: string, some: string)}
-	<Card.Root class="gap-0 py-4">
-		<Card.Content class="flex flex-col gap-bind px-4">
-			<span class="text-sm text-muted-foreground">{label}</span>
-			<span
-				class={['text-2xl font-semibold tabular-nums', count > 0 ? tone : 'text-muted-foreground']}
-			>
-				{count}
-			</span>
-			<span class="text-xs text-muted-foreground">{count > 0 ? some : zero}</span>
-		</Card.Content>
-	</Card.Root>
+{#snippet stat(label: string, count: number, tone: string, zero: string, some: string)}
+	<div class="flex flex-col gap-bind">
+		<span class="text-sm text-muted-foreground">{label}</span>
+		<span class={['stat-value', count > 0 ? tone : 'text-muted-foreground']}>{count}</span>
+		<span class="text-xs text-muted-foreground">{count > 0 ? some : zero}</span>
+	</div>
 {/snippet}
 
 {#snippet noteRow(note: NoteSummary, pinned: boolean)}
 	<a
 		href="/notes/{note.id}"
-		class="row-interactive flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+		class="row-interactive flex items-baseline gap-2 rounded-md px-2 py-1.5 text-sm"
 	>
 		{#if pinned}
-			<Icon.Pin class="size-3.5 shrink-0 text-muted-foreground" />
+			<Icon.Pin class="size-3.5 shrink-0 self-center text-muted-foreground" />
 		{/if}
 		<span class="min-w-0 flex-1 truncate">{note.title}</span>
 		{#if projectName(note.projectId)}
-			<Badge variant="brand" class="shrink-0">
-				{projectName(note.projectId)}
-			</Badge>
+			<span class="shrink-0 text-xs text-brand">{projectName(note.projectId)}</span>
 		{/if}
 		<span class="shrink-0 text-xs text-muted-foreground">{formatDateTime(note.updatedAt)}</span>
 	</a>
 {/snippet}
 
-<section class="grid grid-cols-1 gap-row sm:grid-cols-3" aria-label="Today at a glance">
-	{@render statTile(
+<!-- Three typographic groups, no containers: spacing groups them, and a zero
+     recedes to muted ink so the count that needs attention leads. -->
+<section class="grid grid-cols-1 gap-group sm:grid-cols-3" aria-label="Today at a glance">
+	{@render stat(
 		'Overdue',
 		view.overdue.length,
 		'text-destructive',
 		'Nothing overdue. Well held.',
 		`${view.overdue.length} to catch up on`
 	)}
-	{@render statTile(
+	{@render stat(
 		'Due today',
 		view.dueToday.length,
 		'text-warning',
 		'Nothing due today.',
 		`${view.dueToday.length} to finish`
 	)}
-	{@render statTile(
+	{@render stat(
 		'Waiting on',
 		view.waitingOn.length,
 		'text-foreground',
@@ -90,53 +91,43 @@
 	)}
 </section>
 
-{#if hasActionable}
-	<div class="grid gap-group lg:grid-cols-2">
-		<section class="space-y-row" aria-label="Due and overdue todos">
-			{#if view.overdue.length > 0}
-				<h2 class="eyebrow">Overdue</h2>
-				{#each view.overdue as item (item.todo.id)}
-					<TodoCard
-						view={item}
-						projectName={projectName(item.todo.projectId)}
-						onopen={open}
-						onstatus={(id, status) => void todoUpdates.setStatus(id, status)}
-					/>
-				{/each}
-			{/if}
-			{#if view.dueToday.length > 0}
-				<h2 class="eyebrow" class:pt-2={view.overdue.length > 0}>Due today</h2>
-				{#each view.dueToday as item (item.todo.id)}
-					<TodoCard
-						view={item}
-						projectName={projectName(item.todo.projectId)}
-						onopen={open}
-						onstatus={(id, status) => void todoUpdates.setStatus(id, status)}
-					/>
-				{/each}
-			{/if}
-		</section>
-		{#if view.waitingOn.length > 0}
-			<section class="space-y-row" aria-label="Waiting on others">
-				<h2 class="eyebrow">Waiting on</h2>
-				{#each view.waitingOn as item (item.todo.id)}
-					<TodoCard view={item} projectName={projectName(item.todo.projectId)} onopen={open} />
-				{/each}
+{#if todoGroups.length > 0}
+	<div class="flex flex-col gap-group">
+		{#each todoGroups as group (group.label)}
+			<section class="flex flex-col gap-item" aria-label={group.label}>
+				<h2 class="eyebrow">{group.label}</h2>
+				<!-- -mx-2 hangs the row padding outside the column so titles align with the eyebrow. -->
+				<div class="-mx-2 divide-y divide-border">
+					{#each group.items as item (item.todo.id)}
+						<TodoRow
+							view={item}
+							projectName={projectName(item.todo.projectId)}
+							onopen={open}
+							onstatus={group.actionable ? setStatus : undefined}
+						/>
+					{/each}
+				</div>
 			</section>
-		{/if}
+		{/each}
 	</div>
 {/if}
 
-<div class="grid gap-group border-t border-border pt-6 lg:grid-cols-2">
-	<section class="space-y-item" aria-label="Pinned notes">
+<!-- Pinned takes a column only when it has notes; empty, it is one quiet line
+     above a full-width Recent rather than half the page holding an invitation. -->
+<div class={['grid gap-group', view.pinnedNotes.length > 0 && 'lg:grid-cols-2']}>
+	<section class="flex flex-col gap-item" aria-label="Pinned notes">
 		<h2 class="eyebrow">Pinned</h2>
 		{#each view.pinnedNotes as note (note.id)}
 			{@render noteRow(note, true)}
 		{:else}
-			<EmptyState icon={Icon.Pin} title="Pin a note to keep it at hand." />
+			<EmptyState
+				icon={Icon.Pin}
+				title="Pin a note to keep it at hand."
+				class="flex-row justify-start gap-2 py-0 text-left"
+			/>
 		{/each}
 	</section>
-	<section class="space-y-item" aria-label="Recently edited notes">
+	<section class="flex flex-col gap-item" aria-label="Recently edited notes">
 		<h2 class="eyebrow">Recent</h2>
 		{#each view.recentNotes as note (note.id)}
 			{@render noteRow(note, false)}
