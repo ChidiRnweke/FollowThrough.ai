@@ -58,6 +58,20 @@ export default defineConfig({
 		}
 	},
 	test: {
+		// A local report (`pnpm test:coverage`), not a gate: it locates public behaviour without a
+		// test. The application layers only; fakes, fixtures and specs are not code under test.
+		coverage: {
+			provider: 'v8',
+			include: [
+				'src/lib/server/services/**/*.ts',
+				'src/lib/server/controllers/**/*.ts',
+				'src/lib/services/**/*.ts',
+				'src/lib/controllers/**/*.ts'
+			],
+			exclude: ['**/*.spec.ts', '**/*.d.ts'],
+			reporter: ['text-summary', 'json-summary', 'html'],
+			reportsDirectory: 'artifacts/coverage'
+		},
 		projects: [
 			{
 				plugins: [
