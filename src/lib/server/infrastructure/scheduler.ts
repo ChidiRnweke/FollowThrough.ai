@@ -3,7 +3,7 @@ import type {
 	ScheduledTask,
 	Scheduler,
 	SchedulerClock,
-	SchedulerState
+	TimerHandle
 } from '$lib/models/maintenance';
 
 const tracer = trace.getTracer('followthrough-worker');
@@ -13,41 +13,45 @@ const tracer = trace.getTracer('followthrough-worker');
  * after it settles; stop drains every active task. The worker entry point owns which tasks run.
  */
 export class WorkerScheduler implements Scheduler {
+	// One worker lifetime of timers and in-flight ticks. Stopping is permanent, including
+	// before the first start.
+	private status: 'idle' | 'running' | 'stopped' = 'idle';
+	private readonly timers = new Set<TimerHandle>();
+	private readonly executions = new Set<Promise<void>>();
 	constructor(
 		private readonly tasks: readonly ScheduledTask[],
-		private readonly state: SchedulerState,
 		private readonly clock: SchedulerClock,
 		private readonly logger: Pick<Console, 'error' | 'info'>,
 		private readonly runOnStart: boolean
 	) {}
 	start(): void {
-		if (this.state.status !== 'idle') return;
-		this.state.setStatus('running');
+		if (this.status !== 'idle') return;
+		this.status = 'running';
 		for (const task of this.tasks) {
 			if (this.runOnStart) this.execute(task);
 			else this.schedule(task);
 		}
 	}
 	async stop(): Promise<void> {
-		this.state.setStatus('stopped');
-		for (const timer of this.state.pendingTimers()) this.clock.clearTimeout(timer);
-		this.state.clearTimers();
-		await Promise.allSettled(this.state.pendingExecutions());
+		this.status = 'stopped';
+		for (const timer of this.timers) this.clock.clearTimeout(timer);
+		this.timers.clear();
+		await Promise.allSettled([...this.executions]);
 	}
 	private execute(task: ScheduledTask): void {
 		const running = this.tick(task).finally(() => {
-			this.state.removeExecution(running);
+			this.executions.delete(running);
 			this.schedule(task);
 		});
-		this.state.addExecution(running);
+		this.executions.add(running);
 	}
 	private schedule(task: ScheduledTask): void {
-		if (this.state.status !== 'running') return;
+		if (this.status !== 'running') return;
 		const timer = this.clock.setTimeout(() => {
-			this.state.removeTimer(timer);
-			if (this.state.status === 'running') this.execute(task);
+			this.timers.delete(timer);
+			if (this.status === 'running') this.execute(task);
 		}, task.intervalMs);
-		this.state.addTimer(timer);
+		this.timers.add(timer);
 	}
 	private async tick(task: ScheduledTask): Promise<void> {
 		await tracer.startActiveSpan(`worker.${task.name}`, async (span) => {

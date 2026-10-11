@@ -1,6 +1,6 @@
 import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
-import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
+import { InMemoryMaintenanceProgress } from '$lib/testing/maintenance/fakes/in-memory-maintenance-progress';
 import { expect, it } from 'vitest';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
@@ -26,7 +26,7 @@ const setup = async () => {
 	const worker = new EmbeddingMaintenance(
 		createTestContentIndex(repository, client.model, undefined, false, client),
 		new InMemoryTransactionRunner([repository]),
-		new EmbeddingProgressStore(),
+		new InMemoryMaintenanceProgress(),
 		{ maxSourcesPerTick: 2, logger: { error: () => {}, log: () => {} } }
 	);
 	return { repository, client, worker };

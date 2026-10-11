@@ -1,6 +1,6 @@
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
+import { InMemoryMaintenanceProgress } from '$lib/testing/maintenance/fakes/in-memory-maintenance-progress';
 import { describe, expect, it } from 'vitest';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -22,7 +22,7 @@ const backfill = (repository: InMemorySearchRepository, client: InMemoryRetrieva
 	new EmbeddingMaintenance(
 		createContentIndex(repository, client.model, undefined, false, client),
 		immediateTransactions,
-		new EmbeddingProgressStore(),
+		new InMemoryMaintenanceProgress(),
 		{
 			logger: {
 				error: (_message, error: Error) => {

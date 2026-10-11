@@ -1338,3 +1338,9 @@ export const attachmentObjectRemovals = pgTable('attachment_object_removals', {
 	objectKey: text('object_key').primaryKey(),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
+
+export const maintenanceCursors = pgTable('maintenance_cursors', {
+	task: text('task').primaryKey(),
+	position: jsonb('position').notNull(),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});

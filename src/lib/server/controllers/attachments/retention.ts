@@ -1,5 +1,6 @@
 import type { ScheduledTask } from '$lib/models/maintenance';
-import type { UploadRetentionStore } from '$lib/server/stores/attachments/upload-retention';
+import type { DateTime } from '$lib/models/workspace';
+import type { MaintenanceProgress } from '$lib/server/services/maintenance/progress';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AttachmentUpload,
@@ -53,7 +54,7 @@ export class UploadRetention implements ScheduledTask {
 	constructor(
 		private readonly repository: UploadRetentionRepository,
 		private readonly storage: AttachmentStorage,
-		private readonly state: UploadRetentionStore,
+		private readonly progress: MaintenanceProgress,
 		options: UploadRetentionOptions = {}
 	) {
 		this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
@@ -66,15 +67,17 @@ export class UploadRetention implements ScheduledTask {
 	async run(): Promise<void> {
 		// Finish a bounded pass before including newly expired rows. Persistent failures
 		// cannot monopolize the first page or be starved by a stream of new uploads.
-		const traversal = this.state.read();
-		let cutoff = traversal?.cutoff ?? new Date(this.now().getTime() - this.graceMs);
+		const traversal = await this.progress.resume(this.name);
+		let cutoff = traversal
+			? new Date(traversal.cutoff)
+			: new Date(this.now().getTime() - this.graceMs);
 		let expired = await this.repository.listExpiredUploads(
 			cutoff,
 			this.maxPerTick,
 			traversal?.after
 		);
 		if (!expired.length && traversal) {
-			this.state.update(undefined);
+			await this.progress.restart(this.name);
 			cutoff = new Date(this.now().getTime() - this.graceMs);
 			expired = await this.repository.listExpiredUploads(cutoff, this.maxPerTick);
 		}
@@ -91,11 +94,12 @@ export class UploadRetention implements ScheduledTask {
 			}
 		}
 		const last = expired[expired.length - 1]!;
-		this.state.update(
-			expired.length === this.maxPerTick
-				? { cutoff, after: { expiresAt: last.upload.expiresAt, id: last.upload.id } }
-				: undefined
-		);
+		if (expired.length === this.maxPerTick)
+			await this.progress.advance(this.name, {
+				cutoff: cutoff.toISOString() as DateTime,
+				after: { expiresAt: last.upload.expiresAt, id: last.upload.id }
+			});
+		else await this.progress.restart(this.name);
 		this.logger.log(`[expired-upload-sweep] reclaimed ${swept} of ${expired.length} upload(s)`);
 	}
 

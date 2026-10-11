@@ -442,6 +442,13 @@
       "when": 1791618967033,
       "tag": "0062_attachment_object_removals",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1791715712557,
+      "tag": "0063_maintenance_cursors",
+      "breakpoints": true
     }
   ]
 }

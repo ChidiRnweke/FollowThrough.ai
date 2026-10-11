@@ -27,7 +27,8 @@ import {
 	InlineContextService,
 	type IInlineContextService
 } from '$lib/server/services/inline-suggestions/inline-context';
-import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
+import { MaintenanceProgressService } from '$lib/server/services/maintenance/progress';
+import { MaintenanceCursorRecords } from '$lib/server/repositories/maintenance/postgres/cursors';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 
 import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
@@ -148,7 +149,7 @@ export const createKnowledgeSearchCapability = (
 		maintenance: new EmbeddingMaintenance(
 			knowledge,
 			input.transactionRunner,
-			new EmbeddingProgressStore(),
+			new MaintenanceProgressService(new MaintenanceCursorRecords(input.db)),
 			{
 				...optionalProperty(
 					'intervalMs',

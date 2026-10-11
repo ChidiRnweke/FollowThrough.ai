@@ -1,5 +1,5 @@
 import type { ScheduledTask } from '$lib/models/maintenance';
-import type { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
+import type { MaintenanceProgress } from '$lib/server/services/maintenance/progress';
 import type { ActorContext } from '$lib/models/identity';
 import type { IndexSource, PendingIndexSource } from '$lib/models/knowledge-search';
 import type { IndexBackfill } from '$lib/server/services/knowledge-search/retrieval';
@@ -33,7 +33,7 @@ export class EmbeddingMaintenance implements ScheduledTask {
 	constructor(
 		private readonly backlog: IndexBackfill,
 		private readonly transactions: TransactionRunner,
-		private readonly progress: EmbeddingProgressStore,
+		private readonly progress: MaintenanceProgress,
 		options: EmbeddingBackfillOptions = {}
 	) {
 		this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
@@ -42,9 +42,10 @@ export class EmbeddingMaintenance implements ScheduledTask {
 	}
 
 	async run(): Promise<void> {
-		let pending = await this.backlog.pendingSources(this.maxSourcesPerTick, this.progress.read());
-		if (!pending.length && this.progress.read() !== undefined) {
-			this.progress.update(undefined);
+		const resumed = await this.progress.resume(this.name);
+		let pending = await this.backlog.pendingSources(this.maxSourcesPerTick, resumed?.after);
+		if (!pending.length && resumed) {
+			await this.progress.restart(this.name);
 			pending = await this.backlog.pendingSources(this.maxSourcesPerTick);
 		}
 		if (!pending.length) return;
@@ -63,7 +64,7 @@ export class EmbeddingMaintenance implements ScheduledTask {
 				);
 			} finally {
 				// Failed sources stay pending, but cannot monopolize the next tick.
-				this.progress.update(entry.cursor);
+				await this.progress.advance(this.name, { after: entry.cursor });
 			}
 		}
 		this.logger.log(

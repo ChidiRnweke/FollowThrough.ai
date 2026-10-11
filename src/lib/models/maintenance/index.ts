@@ -1,3 +1,11 @@
+import { z } from 'zod';
+
+type Brand<T, Name extends string> = T & { readonly __brand: Name };
+
+type DateTime = Brand<string, 'DateTime'>;
+
+type AttachmentUploadId = Brand<string, 'AttachmentUploadId'>;
+
 /**
  * A unit of periodic background work. Tasks are discovered from durable state on
  * every tick rather than handed to them, so a restart loses nothing and a missed
@@ -17,21 +25,6 @@ export interface SchedulerHandle {
 /** Runs each task on its own interval. Each tick runs one task; ticks never sequence tasks. */
 export interface Scheduler extends SchedulerHandle {
 	start(): void;
-}
-
-export type SchedulerStatus = 'idle' | 'running' | 'stopped';
-
-/** One worker lifetime of timers and in-flight ticks. Stopping is permanent. */
-export interface SchedulerState {
-	readonly status: SchedulerStatus;
-	setStatus(status: 'running' | 'stopped'): void;
-	addTimer(timer: TimerHandle): void;
-	removeTimer(timer: TimerHandle): void;
-	pendingTimers(): readonly TimerHandle[];
-	clearTimers(): void;
-	addExecution(execution: Promise<void>): void;
-	removeExecution(execution: Promise<void>): void;
-	pendingExecutions(): readonly Promise<void>[];
 }
 
 /**
@@ -57,3 +50,34 @@ export interface SchedulerOptions {
 	/** Run every task once immediately instead of waiting out the first interval. */
 	readonly runOnStart?: boolean;
 }
+
+/**
+ * Where each maintenance task resumes its traversal on the next tick.
+ *
+ * A pass is bounded per tick, so the position outlives the tick and the worker process; it is
+ * stored per task, and an absent position starts a fresh pass.
+ */
+export interface MaintenanceCursors {
+	readonly 'embedding-backfill': { readonly after: string };
+	readonly 'expired-upload-sweep': {
+		readonly cutoff: DateTime;
+		readonly after: { readonly expiresAt: DateTime; readonly id: AttachmentUploadId };
+	};
+}
+
+export type MaintenanceTask = keyof MaintenanceCursors;
+
+const dateTime = z.iso.datetime({ offset: true }).transform((value) => value as DateTime);
+
+export const maintenanceCursorSchemas: {
+	readonly [Task in MaintenanceTask]: z.ZodType<MaintenanceCursors[Task]>;
+} = {
+	'embedding-backfill': z.object({ after: z.string() }),
+	'expired-upload-sweep': z.object({
+		cutoff: dateTime,
+		after: z.object({
+			expiresAt: dateTime,
+			id: z.string().transform((value) => value as AttachmentUploadId)
+		})
+	})
+};

@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
+import { InMemoryMaintenanceProgress } from '$lib/testing/maintenance/fakes/in-memory-maintenance-progress';
 import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { context, replaceNoteFixture, seedNote } from '../database-harness';
 
@@ -67,7 +67,7 @@ const setup = async (suffix: string) => {
 		new EmbeddingMaintenance(
 			createTestContentIndex(repository, model, undefined, false, provider(embed)),
 			transactionRunner,
-			new EmbeddingProgressStore(),
+			new InMemoryMaintenanceProgress(),
 			{
 				logger: {
 					log: () => {},

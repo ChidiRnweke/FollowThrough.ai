@@ -1,4 +1,4 @@
-import { UploadRetentionStore } from '$lib/server/stores/attachments/upload-retention';
+import { InMemoryMaintenanceProgress } from '$lib/testing/maintenance/fakes/in-memory-maintenance-progress';
 import { describe, expect, it } from 'vitest';
 import type { AttachmentUpload } from '$lib/models/attachments';
 import type { ProjectId } from '$lib/models/projects';
@@ -35,7 +35,7 @@ const sweep = (
 	objects: InMemoryUploadObjects,
 	graceMs = 60 * 60 * 1000
 ) =>
-	new UploadRetention(store, objects, new UploadRetentionStore(), {
+	new UploadRetention(store, objects, new InMemoryMaintenanceProgress(), {
 		now,
 		graceMs,
 		logger: { error: () => {}, log: () => {} }
@@ -108,7 +108,7 @@ it('reaches later expired uploads when an earlier object repeatedly fails deleti
 	]);
 	const objects = new InMemoryUploadObjects();
 	objects.failOn = 'staging/a';
-	const worker = new UploadRetention(store, objects, new UploadRetentionStore(), {
+	const worker = new UploadRetention(store, objects, new InMemoryMaintenanceProgress(), {
 		now,
 		maxPerTick: 1,
 		logger: { error: () => {}, log: () => {} }
@@ -125,7 +125,7 @@ it('retries a failed reservation after completing the current expiry pass', asyn
 	]);
 	const objects = new InMemoryUploadObjects();
 	objects.failOn = 'staging/a';
-	const worker = new UploadRetention(store, objects, new UploadRetentionStore(), {
+	const worker = new UploadRetention(store, objects, new InMemoryMaintenanceProgress(), {
 		now,
 		maxPerTick: 1,
 		logger: { error: () => {}, log: () => {} }
@@ -145,7 +145,7 @@ it('finishes its original expiry pass before newly expired arrivals can postpone
 	const objects = new InMemoryUploadObjects();
 	objects.failOn = 'staging/a';
 	let time = now();
-	const worker = new UploadRetention(store, objects, new UploadRetentionStore(), {
+	const worker = new UploadRetention(store, objects, new InMemoryMaintenanceProgress(), {
 		now: () => time,
 		maxPerTick: 1,
 		logger: { error: () => {}, log: () => {} }
@@ -164,7 +164,7 @@ it('finishes a reservation after its object was removed but its database deletio
 	const store = new InMemoryUploadReservations([first, uploadAt('2026-07-28T09:00:00.000Z', 'b')]);
 	store.deleteFailures.add(first.upload.id);
 	const objects = new InMemoryUploadObjects();
-	const worker = new UploadRetention(store, objects, new UploadRetentionStore(), {
+	const worker = new UploadRetention(store, objects, new InMemoryMaintenanceProgress(), {
 		now,
 		maxPerTick: 1,
 		logger: { error: () => {}, log: () => {} }

@@ -5,7 +5,6 @@ import type {
 	SchedulerOptions
 } from '$lib/models/maintenance';
 import { WorkerScheduler } from '$lib/server/infrastructure/scheduler';
-import { SchedulerStore } from '$lib/server/stores/maintenance/scheduler';
 
 const clock: SchedulerClock = {
 	setTimeout: (callback, ms) => setTimeout(callback, ms),
@@ -17,7 +16,6 @@ export const createScheduler = (
 ): Scheduler =>
 	new WorkerScheduler(
 		tasks,
-		new SchedulerStore(),
 		options.clock ?? clock,
 		options.logger ?? console,
 		options.runOnStart ?? false

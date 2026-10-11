@@ -2,7 +2,8 @@ import { AttachmentExtraction } from '$lib/server/services/attachments/extractio
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/retrieval';
 import type { ScheduledTask } from '$lib/models/maintenance';
-import { UploadRetentionStore } from '$lib/server/stores/attachments/upload-retention';
+import { MaintenanceProgressService } from '$lib/server/services/maintenance/progress';
+import { MaintenanceCursorRecords } from '$lib/server/repositories/maintenance/postgres/cursors';
 import { AttachmentObjectRemoval } from '$lib/server/controllers/attachments/object-removal';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments';
@@ -121,9 +122,20 @@ export const createAttachmentsCapability = (
 			logger: console
 		}),
 		objectRemoval: new AttachmentObjectRemoval(repository, storage),
-		retention: new UploadRetention(repository, storage, new UploadRetentionStore(), {
-			...optionalProperty('intervalMs', positiveNumberFromEnvironment('UPLOAD_SWEEP_INTERVAL_MS')),
-			...optionalProperty('maxPerTick', positiveNumberFromEnvironment('UPLOAD_SWEEP_MAX_PER_TICK'))
-		})
+		retention: new UploadRetention(
+			repository,
+			storage,
+			new MaintenanceProgressService(new MaintenanceCursorRecords(input.db)),
+			{
+				...optionalProperty(
+					'intervalMs',
+					positiveNumberFromEnvironment('UPLOAD_SWEEP_INTERVAL_MS')
+				),
+				...optionalProperty(
+					'maxPerTick',
+					positiveNumberFromEnvironment('UPLOAD_SWEEP_MAX_PER_TICK')
+				)
+			}
+		)
 	};
 };

@@ -1,4 +1,4 @@
-import { UploadRetentionStore } from '$lib/server/stores/attachments/upload-retention';
+import { InMemoryMaintenanceProgress } from '$lib/testing/maintenance/fakes/in-memory-maintenance-progress';
 import { expect, it } from 'vitest';
 import type { AttachmentUploadId } from '$lib/models/attachments';
 import type { DateTime } from '$lib/models/workspace';
@@ -32,7 +32,7 @@ it('advances past a failed reservation when equal expiry times span PostgreSQL p
 	uploads.sort((a, b) => a.id.localeCompare(b.id));
 	const objects = new InMemoryUploadObjects();
 	objects.failOn = uploads[0]!.objectKey;
-	const worker = new UploadRetention(records, objects, new UploadRetentionStore(), {
+	const worker = new UploadRetention(records, objects, new InMemoryMaintenanceProgress(), {
 		now: () => new Date('2000-01-01T12:00:00.000Z'),
 		maxPerTick: 1,
 		logger: { error: () => {}, log: () => {} }

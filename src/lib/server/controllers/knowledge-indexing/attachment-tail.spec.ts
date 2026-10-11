@@ -1,5 +1,5 @@
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
+import { InMemoryMaintenanceProgress } from '$lib/testing/maintenance/fakes/in-memory-maintenance-progress';
 import { describe, expect, it } from 'vitest';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 const tokenizer = testTokenizer;
@@ -44,7 +44,7 @@ describe('complete attachment search', () => {
 		await new EmbeddingMaintenance(
 			createContentIndex(repository, client.model, undefined, false, client),
 			new InMemoryTransactionRunner([repository]),
-			new EmbeddingProgressStore(),
+			new InMemoryMaintenanceProgress(),
 			{
 				logger: {
 					log: () => {},
