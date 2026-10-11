@@ -4,7 +4,7 @@ import type { NoteCreator } from '$lib/server/services/notes/catalog';
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
 import type { NoteEditingRules } from '$lib/services/notes/editing';
 import type { NoteCreationRules } from '$lib/services/notes/lifecycle';
-import type { ProjectChoiceRules } from '$lib/services/projects/choice';
+import type { ProjectChoiceRules } from '$lib/services/projects/rules';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';

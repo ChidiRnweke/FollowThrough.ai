@@ -69,7 +69,7 @@ active record under a row lock, applies the rule and coordinates persistence wit
 
 ## Project rules
 
-Project controllers and downloaded workspace commands use `services/projects/details.ts` for
+Project controllers and downloaded workspace commands use `services/projects/rules.ts` for
 name and description normalization. Controllers apply `services/projects/presentation.ts` to
 resolved entry records. Projects owns the move transaction, obtains the locked project tree from
 ProjectCatalog and applies decideProjectEntryMove before persisting the resolved sibling order.

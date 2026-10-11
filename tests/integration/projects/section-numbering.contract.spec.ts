@@ -3,7 +3,7 @@ import { Projects, type ProjectsDependencies } from '$lib/server/controllers/pro
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
-import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectRules } from '$lib/services/projects/rules';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
@@ -22,9 +22,9 @@ const setup = async (suffix: string) => {
 			capabilityDependencies<ProjectsDependencies>({
 				...agentToolResultsFixture(),
 				noteCreationRules: new NoteLifecycleRulesService(),
-				details: new ProjectDetailService(),
+				details: new ProjectRules(),
 				presentation: new ProjectTreePresentationService(),
-				projectEditor: createProjectServices(actor, projects, projects).editor
+				projects: createProjectServices(actor, projects, projects).catalog
 			})
 		);
 	};

@@ -14,7 +14,7 @@ import type { IWidgetLifecycleService } from '$lib/services/widgets/trash';
 import type { IWidgetPatchService } from '$lib/services/widgets/patches';
 import type { IWidgetEditingService } from '$lib/services/widgets/edits';
 import type { TodoCreationRules, TodoEditingRules } from '$lib/services/todos/edits';
-import type { ProjectDetailRules } from '$lib/services/projects/details';
+import type { ProjectDetailRules } from '$lib/services/projects/rules';
 import type { DiagramRules } from '$lib/services/diagrams/editing';
 import type { SkillMetadataEditing } from '$lib/services/skills/metadata';
 import type { IMemoryEditingService } from '$lib/services/memory/edits';
@@ -2647,7 +2647,7 @@ const newProject = (
 	name: string,
 	timestamp: DateTime
 ): Project => {
-	const decision = rules.decide({ name });
+	const decision = rules.decideDetails({ name });
 	if (decision.kind === 'invalid') throw new Error(decision.message);
 	return {
 		id,
@@ -2950,7 +2950,7 @@ class ReplicaCommands implements AccountCommands {
 				]);
 			}
 			case 'renameProject': {
-				const decision = this.rules.projectDetails.decide(command);
+				const decision = this.rules.projectDetails.decideDetails(command);
 				if (decision.kind === 'invalid') throw new Error(decision.message);
 				return content({
 					type: 'projects',

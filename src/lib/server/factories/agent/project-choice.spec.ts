@@ -33,19 +33,19 @@ const toolsFor = (hasProject: boolean) => {
 			capabilityDependencies<ProductionControllerDependencies>({
 				notes: capabilityDependencies<ProductionControllerDependencies['notes']>({
 					...agentToolResultsFixture(),
-					projectLister: catalog.lister
+					projectLister: catalog.catalog
 				}),
 				skills: capabilityDependencies<ProductionControllerDependencies['skills']>({
 					...agentToolResultsFixture(),
-					projectLister: catalog.lister
+					projectLister: catalog.catalog
 				}),
 				diagramStudio: capabilityDependencies<ProductionControllerDependencies['diagramStudio']>({
 					...agentToolResultsFixture(),
-					projectLister: catalog.lister
+					projectLister: catalog.catalog
 				}),
 				widgets: capabilityDependencies<ProductionControllerDependencies['widgets']>({
 					...agentToolResultsFixture(),
-					projectLister: catalog.lister
+					projectLister: catalog.catalog
 				})
 			})
 		),

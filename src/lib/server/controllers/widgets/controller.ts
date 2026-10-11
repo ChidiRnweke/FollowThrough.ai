@@ -2,7 +2,7 @@ import { StaleRevisionError, ValidationError } from '$lib/errors';
 import type { WidgetCatalogReader } from '$lib/models/widgets';
 import type { WidgetIndexing } from '$lib/server/services/knowledge-search/retrieval';
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
-import type { ProjectChoiceRules } from '$lib/services/projects/choice';
+import type { ProjectChoiceRules } from '$lib/services/projects/rules';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
 import type {
