@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.2.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.1.0...v5.2.0) (2026-10-11)
+
+
+### Features
+
+* **design:** name the spacing ladder and move vertical stacks onto it ([#437](https://github.com/ChidiRnweke/FollowThrough.ai/issues/437)) ([291c8bc](https://github.com/ChidiRnweke/FollowThrough.ai/commit/291c8bc357a4ad442ed9c7308d54270436f90bb2))
+* **todos:** render today and the board as cardless rows ([#439](https://github.com/ChidiRnweke/FollowThrough.ai/issues/439)) ([bfe7090](https://github.com/ChidiRnweke/FollowThrough.ai/commit/bfe7090db18ec72304f0a41e462af6f3c77b7d2d))
+
 ## [5.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.0.1...v5.1.0) (2026-10-11)
 
 
