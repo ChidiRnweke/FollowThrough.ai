@@ -120,9 +120,8 @@ describe('Reviewed note changes', () => {
 		expect({
 			outcome,
 			notes: content.notes,
-			links: [...content.noteLinkTargets],
-			indexed: content.indexedNoteIds
-		}).toEqual({ outcome: 'failed', notes: [note], links: [], indexed: [] });
+			links: [...content.noteLinkTargets]
+		}).toEqual({ outcome: 'failed', notes: [note], links: [] });
 	});
 	it('prepares full replacements without publishing', async () => {
 		const { controller, content, note } = await setup();

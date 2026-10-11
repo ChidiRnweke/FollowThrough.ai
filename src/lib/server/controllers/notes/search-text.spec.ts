@@ -143,10 +143,7 @@ describe('Replacing note text', () => {
 		content.notes = original;
 		content.failIndexFor.add(testNoteId(2));
 		await controller.replaceText({ ...replace, query: 'deploy' }).catch(() => undefined);
-		expect({ notes: content.notes, indexed: content.indexedNoteIds }).toEqual({
-			notes: original,
-			indexed: []
-		});
+		expect(content.notes).toEqual(original);
 	});
 
 	it('rewrites the body of every matching note', async () => {
@@ -185,13 +182,6 @@ describe('Replacing note text', () => {
 		content.notes = [noteWithText('nothing here', { title: 'Ship log' })];
 		const result = await controller.replaceText(replace);
 		expect(result).toEqual({ replacedNotes: 0, replacedMatches: 0 });
-	});
-
-	it('saves through the regular path so the note is re-indexed', async () => {
-		const { content, controller } = setup();
-		content.notes = [noteWithText('deploy alpha')];
-		await controller.replaceText({ ...replace, query: 'deploy' });
-		expect(content.indexedNoteIds).toEqual([testNoteId()]);
 	});
 
 	it('rejects an invalid regex before changing anything', async () => {

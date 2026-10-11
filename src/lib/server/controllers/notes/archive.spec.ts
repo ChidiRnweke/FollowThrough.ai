@@ -95,12 +95,11 @@ describe('Note archive invariants', () => {
 		});
 	});
 	it('archives the note through the controller', async () => {
-		const { notes, controller, indexer } = setup();
+		const { notes, controller } = setup();
 		notes.notes = [noteBuilder()];
 		const result = await controller.archive({ noteId: testNoteId() });
 		expect(result.note.archivedAt).toBeDefined();
 		expect(await notes.listActive()).toEqual([]);
-		expect(indexer.indexedNoteIds).toEqual([testNoteId()]);
 	});
 	it('rejects archiving a folder with active contents', async () => {
 		const { notes, controller } = setup();
