@@ -1,6 +1,6 @@
 import type { AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
 import { noteChangeReviewSchema } from '$lib/models/notes';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -8,7 +8,7 @@ import { RunContext } from '@openai/agents';
 import { describe, expect, it } from 'vitest';
 import type { AgentToolSurface } from './agent-tool-factory';
 import { createAgentToolSurface } from './agent-tool-factory';
-const noteMarkdown = new NodeNoteMarkdown();
+const noteMarkdown = new NoteMarkdownCodec();
 
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {

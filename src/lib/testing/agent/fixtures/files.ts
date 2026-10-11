@@ -1,4 +1,4 @@
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { AgentFiles } from '$lib/server/controllers/agent-files/controller';
 import { AgentVirtualFiles } from '$lib/server/services/agent-files/virtual-files';
 import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
@@ -18,6 +18,6 @@ export const agentFilesFixture = () =>
 			attachments: new InMemoryAttachmentRepository(),
 			diagrams: new InMemoryDiagramRepository(),
 			stored: new InMemoryAgentFiles(),
-			noteMarkdown: new NodeNoteMarkdown()
+			noteMarkdown: new NoteMarkdownCodec()
 		})
 	});

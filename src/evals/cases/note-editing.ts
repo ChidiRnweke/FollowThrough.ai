@@ -1,5 +1,5 @@
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+const noteMarkdown = new NoteMarkdownCodec();
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
 import { seedWorkspace } from '../lab/workspace';

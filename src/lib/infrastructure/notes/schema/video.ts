@@ -262,3 +262,20 @@ export const Video = Node.create<VideoOptions>({
 		];
 	}
 });
+
+/**
+ * Schema and Markdown behaviour for videos, with no view layer attached.
+ * The editor's `VideoExtended.ts` attaches the Svelte node view.
+ */
+export const VideoNode = Video.extend({
+	addAttributes() {
+		return {
+			src: { default: null },
+			alt: { default: null },
+			title: { default: null },
+			width: { default: '100%' },
+			height: { default: null },
+			align: { default: 'left' }
+		};
+	}
+});

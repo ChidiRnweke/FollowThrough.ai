@@ -1,11 +1,11 @@
 import { toolFailureSchema } from '$lib/models/agent/tool-failure';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { agentFilesFixture } from '$lib/testing/agent/fixtures/files';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { z } from 'zod';
-const noteMarkdown = new NodeNoteMarkdown();
+const noteMarkdown = new NoteMarkdownCodec();
 
 import type { ApiTokenScope } from '$lib/models/identity';
 import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-factory';

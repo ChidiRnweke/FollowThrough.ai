@@ -12,7 +12,7 @@ import {
 	DocxTemplateStyleReader,
 	type TemplateStyleReader
 } from '$lib/server/services/deliverables/template-styles';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { PdfDocumentService, type PdfRendering } from '$lib/server/services/deliverables/pdf';
 import {
 	DiagramRenderingService,
@@ -94,5 +94,5 @@ export const createDeliverablesCapability = (
 	docxGenerator: new DocxDocumentService(),
 	pdfGenerator: new PdfDocumentService(),
 	zipPacker: new DocumentBundleService(),
-	markdownToContent: new NodeNoteMarkdown()
+	markdownToContent: new NoteMarkdownCodec()
 });

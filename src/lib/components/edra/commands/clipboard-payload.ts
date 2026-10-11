@@ -2,10 +2,12 @@ import { getTextBetween, getTextSerializersFromSchema } from '@tiptap/core';
 import { DOMSerializer } from '@tiptap/pm/model';
 import { TextSelection, type EditorState } from '@tiptap/pm/state';
 import { selectionMedia } from './diagram-copy.js';
-import { noteMarkdownFromContent } from './note-markdown.js';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+
+const markdown = new NoteMarkdownCodec();
 import { withoutClipboardPadding } from './paste-slice.js';
 import { withoutBoundaryBlankLines } from './paste.js';
-import { parseEdraDocument } from './document.js';
+import { parseEdraDocument } from '$lib/infrastructure/notes/editor-document';
 
 const BLOCK_SEPARATOR = '\n\n';
 
@@ -77,7 +79,7 @@ export const selectionMarkdown = (state: EditorState): string => {
 	const content = withoutClipboardPadding(state.selection.content()).content.toJSON();
 	if (!content) return '';
 	const document = parseEdraDocument({ type: 'doc', content });
-	return noteMarkdownFromContent(document);
+	return markdown.markdown(document);
 };
 
 /** Serialize the captured editor selection before asynchronous clipboard preparation begins. */

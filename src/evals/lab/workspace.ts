@@ -1,5 +1,5 @@
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+const noteMarkdown = new NoteMarkdownCodec();
 import { LocalIdentity } from '$lib/server/controllers/identity/local';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';

@@ -3,7 +3,7 @@ import { createWidgetRules } from '$lib/factories/widgets/rules';
 import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
 import { widgetTemplates } from '$lib/models/widgets';
 import { jsonObjectSchema } from '$lib/server/adapters/agent/tool-call';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { WidgetLibrary } from '$lib/server/services/widgets/library';
@@ -28,7 +28,7 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { createAgentToolSurface } from './agent-tool-factory';
-const noteMarkdown = new NodeNoteMarkdown();
+const noteMarkdown = new NoteMarkdownCodec();
 
 import { NoteReferenceService } from '$lib/services/notes/references';
 const noteReferences = new NoteReferenceService();

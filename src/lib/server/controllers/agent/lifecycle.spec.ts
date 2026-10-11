@@ -1,5 +1,5 @@
 import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { AgentExecution } from '$lib/server/controllers/agent/execution';
 import { createAgentToolSurface } from '$lib/server/factories/agent/agent-tool-factory';
 import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
@@ -15,7 +15,7 @@ import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-const noteMarkdown = new NodeNoteMarkdown();
+const noteMarkdown = new NoteMarkdownCodec();
 
 import { AgentProviderFailure } from '$lib/errors';
 import type {

@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { getSchema } from '@tiptap/core';
 import { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { AllSelection, EditorState, TextSelection } from '@tiptap/pm/state';
-import { noteMarkdownExtensions } from './markdown-extensions';
+import { headlessEditorExtensions } from '$lib/testing/notes/fixtures/headless-editor';
 import { selectRange, selectionMarkdown } from './clipboard-payload';
 
 /**
  * "Copy as markdown" has to describe the note the same way the agent's `edit_note` patch
  * does, so it shares the one serializer rather than flattening the selection to text.
  */
-const schema = getSchema(noteMarkdownExtensions);
+const schema = getSchema(headlessEditorExtensions);
 
 const stateOf = (content: readonly Record<string, unknown>[]): EditorState =>
 	EditorState.create({

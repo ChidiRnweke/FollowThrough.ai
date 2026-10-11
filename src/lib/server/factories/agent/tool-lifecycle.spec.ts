@@ -1,4 +1,4 @@
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { streamExecutionFixture } from '$lib/testing/agent/fixtures/stream-execution';
 import type { ProviderStreamEvent } from '$lib/models/agent';
 import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
@@ -7,7 +7,7 @@ import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { Agent, Runner, RunState } from '@openai/agents';
 import { describe, expect, it } from 'vitest';
 import { createAgentToolSurface } from './agent-tool-factory';
-const noteMarkdown = new NodeNoteMarkdown();
+const noteMarkdown = new NoteMarkdownCodec();
 
 import type { NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { AgentToolCompletionObserver } from '$lib/server/services/agent/runs/contracts';

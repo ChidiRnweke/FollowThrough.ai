@@ -1,4 +1,4 @@
-import { Table as TiptapTable } from '@tiptap/extension-table';
+import { NoteTable } from '$lib/infrastructure/notes/schema/tables';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 
 /** Class set on a `.tableWrapper` whose table is wider than the wrapper's content box. */
@@ -65,14 +65,10 @@ const tableOverflowPlugin = () =>
 		}
 	});
 
-export const Table = TiptapTable.extend({
+export const Table = NoteTable.extend({
 	addProseMirrorPlugins() {
 		return [...(this.parent?.() ?? []), tableOverflowPlugin()];
 	}
-}).configure({
-	resizable: true,
-	lastColumnResizable: true,
-	allowTableNodeSelection: true
 });
 
 export default Table;

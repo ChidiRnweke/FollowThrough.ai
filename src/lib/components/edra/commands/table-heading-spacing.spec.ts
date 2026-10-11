@@ -2,7 +2,7 @@
 
 import { Editor, type JSONContent } from '@tiptap/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { noteMarkdownExtensions } from './markdown-extensions';
+import { headlessEditorExtensions } from '$lib/testing/notes/fixtures/headless-editor';
 
 const editors: Editor[] = [];
 afterEach(() => editors.splice(0).forEach((editor) => editor.destroy()));
@@ -30,7 +30,7 @@ const table: JSONContent = {
 const createEditor = (content: JSONContent) => {
 	const editor = new Editor({
 		element: document.createElement('div'),
-		extensions: noteMarkdownExtensions
+		extensions: headlessEditorExtensions
 	});
 	editors.push(editor);
 	editor.chain().setContent(content).setMeta('addToHistory', false).run();

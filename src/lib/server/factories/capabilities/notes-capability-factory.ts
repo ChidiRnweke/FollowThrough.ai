@@ -1,4 +1,4 @@
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import {
 	NoteArchiveImportService,
 	type NoteArchiveImportPreparation
@@ -113,7 +113,7 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 		trashRules: lifecycleRules,
 		publicationRules: lifecycleRules,
 		editingRules: new SharedNoteEditingService(),
-		markdown: new NodeNoteMarkdown(),
+		markdown: new NoteMarkdownCodec(),
 		repository,
 		anchors,
 		services,

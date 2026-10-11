@@ -1,5 +1,5 @@
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
+import { NoteMarkdownCodec } from './markdown';
+const noteMarkdown = new NoteMarkdownCodec();
 import { describe, expect, it } from 'vitest';
 import {
 	proseMirrorDocumentSchema,

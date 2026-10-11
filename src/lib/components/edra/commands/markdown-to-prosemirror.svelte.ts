@@ -1,5 +1,5 @@
 import { createEditor } from '$lib/components/edra/commands/editor';
-import { parseEdraDocument, type EdraDocument } from './document.js';
+import { parseEdraDocument, type EdraDocument } from '$lib/infrastructure/notes/editor-document';
 
 export async function markdownToProseMirror(markdown: string): Promise<{
 	document: EdraDocument;

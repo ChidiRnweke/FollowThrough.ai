@@ -1,6 +1,6 @@
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+const noteMarkdown = new NoteMarkdownCodec();
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';

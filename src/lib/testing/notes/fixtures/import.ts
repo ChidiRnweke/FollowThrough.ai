@@ -1,4 +1,4 @@
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
@@ -18,7 +18,7 @@ import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import AdmZip from 'adm-zip';
-const noteMarkdown = new NodeNoteMarkdown();
+const noteMarkdown = new NoteMarkdownCodec();
 
 import {
 	describeArchiveRejection,

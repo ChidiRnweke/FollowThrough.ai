@@ -2,13 +2,13 @@
 
 import { Editor, getTextBetween, getTextSerializersFromSchema } from '@tiptap/core';
 import { describe, expect, it } from 'vitest';
-import { noteMarkdownExtensions } from './markdown-extensions';
+import { headlessEditorExtensions } from '$lib/testing/notes/fixtures/headless-editor';
 import { plainTextRangeToPm, type PmTextRange } from './plain-text-range';
 
 const createEditor = (content: Record<string, unknown>) =>
 	new Editor({
 		element: document.createElement('div'),
-		extensions: noteMarkdownExtensions,
+		extensions: headlessEditorExtensions,
 		content
 	});
 

@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { getSchema } from '@tiptap/core';
 import { Fragment, Slice, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { withoutClipboardPadding } from './paste-slice';
-import { noteMarkdownExtensions } from './markdown-extensions';
+import { headlessEditorExtensions } from '$lib/testing/notes/fixtures/headless-editor';
 
 /**
  * Copying a paragraph that ends in line breaks used to carry `<br><br>` onto the
  * clipboard, and pasting merged them into the paragraph at the caret — a blank line above
  * and below the text, and one more on every round of copy and paste.
  */
-const schema = getSchema(noteMarkdownExtensions);
+const schema = getSchema(headlessEditorExtensions);
 
 const text = (value: string): ProseMirrorNode =>
 	schema.nodes.paragraph.create(null, schema.text(value));

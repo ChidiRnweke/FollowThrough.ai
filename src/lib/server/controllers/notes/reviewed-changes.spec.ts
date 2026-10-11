@@ -1,5 +1,5 @@
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
+const noteMarkdown = new NoteMarkdownCodec();
 import { describe, it, expect } from 'vitest';
 import {
 	reviewedNoteFixture,

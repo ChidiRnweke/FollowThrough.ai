@@ -1,5 +1,5 @@
 import type { AgentRunId } from '$lib/models/agent';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { SkillPins } from '$lib/server/services/skills/pins';
@@ -12,7 +12,7 @@ import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-const noteMarkdown = new NodeNoteMarkdown();
+const noteMarkdown = new NoteMarkdownCodec();
 
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';

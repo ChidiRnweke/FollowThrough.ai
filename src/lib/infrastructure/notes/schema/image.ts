@@ -4,10 +4,8 @@ import Image, { type ImageOptions } from '@tiptap/extension-image';
 /**
  * Schema and Markdown behaviour for images, with no view layer attached.
  *
- * Kept apart from `ImageExtended.ts` on purpose: the server's Markdown
- * serializer needs this schema, and anything it imports ends up in the server
- * bundle. Pairing it with the node-view factory would drag Svelte — and through
- * it `$app/*` — into code that never renders anything. See `nodes.ts`.
+ * The editor's `ImageExtended.ts` attaches the node view. The server's Markdown
+ * serializer needs only this schema, so nothing here may import Svelte.
  */
 export const ImageNode: Node<ImageOptions, unknown> = Image.extend({
 	addAttributes() {

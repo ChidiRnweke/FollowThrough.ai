@@ -22,7 +22,7 @@ import { unreadableDocumentBlocks } from '$lib/testing/notes/fixtures/unreadable
  * stored next: it runs the real extension list, so adding or reconfiguring an
  * extension fails here rather than in production.
  *
- * The extension set is *imported*, never re-listed. `noteMarkdownExtensions`
+ * The extension set is *imported*, never re-listed. The headless Markdown schema
  * is a hand-maintained subset that dropped TableOfContents as "contributing no
  * schema" — true of node types, false of the global attributes that broke this.
  * A conformance test that maintains its own copy of the producer is not testing

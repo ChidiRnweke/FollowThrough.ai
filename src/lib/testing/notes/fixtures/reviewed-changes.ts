@@ -1,4 +1,4 @@
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
@@ -17,7 +17,7 @@ import { SuggestionPresentationService } from '$lib/services/suggestions/present
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
-const noteMarkdown = new NodeNoteMarkdown();
+const noteMarkdown = new NoteMarkdownCodec();
 
 import type { Note, NoteChangeReview, PreparedNoteChange } from '$lib/models/notes';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';

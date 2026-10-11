@@ -1,7 +1,7 @@
 import { ToolLifecycleError } from '$lib/errors';
 import type { PendingAgentDecision } from '$lib/models/agent';
 import type { AgentToolSessionInput } from '$lib/models/agent-tool-session';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import {
 	ToolPreferences,
 	type ToolPreferencesDependencies
@@ -28,7 +28,7 @@ import { describe, expect, it } from 'vitest';
 import { agentToolRegistry } from './agent-tool-factory';
 
 const setup = () => {
-	const note = noteBuilder({ ...new NodeNoteMarkdown().read('Launch Monday.') });
+	const note = noteBuilder({ ...new NoteMarkdownCodec().read('Launch Monday.') });
 	const fixture = reviewedNoteFixture(note);
 	const preferences = new InMemoryToolPreferenceRepository();
 	const settings = new ToolPreferences(

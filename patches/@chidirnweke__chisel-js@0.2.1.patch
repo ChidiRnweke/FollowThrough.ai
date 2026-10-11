@@ -1,5 +1,5 @@
 diff --git a/dist/main.js b/dist/main.js
-index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27153fe01e 100644
+index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..893095becbc02fe0f2f8088a130bf5698d370fe7 100644
 --- a/dist/main.js
 +++ b/dist/main.js
 @@ -8267,6 +8267,7 @@ var Layer = {
@@ -25,7 +25,16 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27
    [/^src\/lib\/server\/controllers\//, Layer.CONTROLLERS],
    [/^src\/lib\/server\/config\.(ts|js)$/, Layer.CONFIG],
    [/^src\/lib\/server\/[^/]*[Ff]actory\.(ts|js)$/, Layer.FACTORY],
-@@ -8998,7 +9002,6 @@ var BANNED_INTERNAL = new Map([
+@@ -8355,6 +8359,8 @@ var LAYER_MATCHERS = [
+   [/^src\/lib\/(client|hooks|commands)\//, Layer.CLIENT],
+   [/^src\/lib\/utils\.(ts|js)$/, Layer.UTILS],
+   [/^src\/lib\/utils\//, Layer.UTILS],
++  // Vendored format libraries shared by browser and server, such as the note editor schema.
++  [/^src\/lib\/infrastructure\//, Layer.UTILS],
+   [/^src\/service-worker\.(ts|js)$/, Layer.CLIENT]
+ ];
+ var BFF_LAYER_MATCHERS = [
+@@ -8998,7 +9004,6 @@ var BANNED_INTERNAL = new Map([
      Layer.REMOTE,
      Layer.HOOKS,
      Layer.CONFIG,
@@ -33,7 +42,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27
      Layer.CLIENT,
      Layer.COMPONENTS
    ])],
-@@ -9033,6 +9036,15 @@ var BANNED_INTERNAL = new Map([
+@@ -9033,6 +9038,15 @@ var BANNED_INTERNAL = new Map([
      Layer.HOOKS
    ])]
  ]);
@@ -49,7 +58,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27
  var PACKAGE_RULES = [
    {
      match: (s) => s === "drizzle-orm" || s.startsWith("drizzle-orm/"),
-@@ -9068,6 +9080,7 @@ class ImportBoundaryService {
+@@ -9068,6 +9082,7 @@ class ImportBoundaryService {
      this.mode = mode;
    }
    check(project) {
@@ -57,7 +66,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27
      const layers = new Map(project.files.map((f) => [f.path, f.layer]));
      const violations = [];
      for (const edge of this.graph.allImports) {
-@@ -9087,6 +9100,21 @@ class ImportBoundaryService {
+@@ -9087,6 +9102,21 @@ class ImportBoundaryService {
      const importedLayer = layers.get(edge.imported);
      if (importedLayer === undefined)
        return [];
@@ -79,7 +88,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27
      const banned = BANNED_INTERNAL.get(importerLayer);
      if (banned === undefined)
        return [];
-@@ -9100,6 +9128,68 @@ class ImportBoundaryService {
+@@ -9100,6 +9130,68 @@ class ImportBoundaryService {
        return [];
      return [this._violation(edge, "banned-layer-import", `${importerLayer} must not import ${importedLayer} (${edge.imported}). ` + `${fixFor(importerLayer, importedLayer)}`)];
    }
@@ -148,7 +157,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27
    _checkExternal(edge, importerLayer) {
      if (!BANNED_INTERNAL.has(importerLayer))
        return [];
-@@ -9190,30 +9280,26 @@ function fixFor(importer, imported) {
+@@ -9190,30 +9282,26 @@ function fixFor(importer, imported) {
      return "One service never imports another. If you need a shared type, it is domain " + "data — move it to $lib/models. Service-local data is fine, but no other " + "service may reach for it. If you need the behaviour, orchestrate both " + "services from a controller.";
    }
    if (importer === Layer.CONTROLLERS && imported === Layer.CONTROLLERS) {
@@ -183,7 +192,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27
  class LayoutService {
    ruleIdPrefix = "structure";
    check(project) {
-@@ -9375,8 +9461,8 @@ class StructuralSvelteService {
+@@ -9375,8 +9463,8 @@ class StructuralSvelteService {
        {
          id: "structural:missing-service-interface",
          category: "structural",
@@ -194,7 +203,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27
        },
        {
          id: "structural:factory-contains-logic",
-@@ -9445,16 +9531,19 @@ class StructuralSvelteService {
+@@ -9445,16 +9533,19 @@ class StructuralSvelteService {
          if (!ts3.isClassDeclaration(statement) || statement.name === undefined)
            continue;
          const name = statement.name.text;
@@ -217,7 +226,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27
          }));
        }
      }
-@@ -10244,7 +10333,6 @@ class TestStructureService {
+@@ -10244,7 +10335,6 @@ class TestStructureService {
          continue;
        violations.push(...this._checkTestLocation(file));
        violations.push(...this._checkTestNaming(file));
@@ -225,7 +234,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27
        violations.push(...this._checkMockingBanned(file));
        violations.push(...this._checkSkipReason(file));
      }
-@@ -10291,29 +10379,6 @@ class TestStructureService {
+@@ -10291,29 +10381,6 @@ class TestStructureService {
      }
      return violations;
    }
@@ -255,7 +264,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27
    _checkMockingBanned(file) {
      const violations = [];
      if (!file.path.includes("tests/"))
-@@ -10370,7 +10435,6 @@ class TestStructureService {
+@@ -10370,7 +10437,6 @@ class TestStructureService {
          description: "Test name does not describe an invariant",
          fixGuidance: "Name the test after the invariant it proves: test_cannot_X, test_returns_Y_when_Z."
        },

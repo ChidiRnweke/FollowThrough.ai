@@ -1,5 +1,5 @@
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import type { TokenCounter } from '$lib/models/tokenization';
 import type { Database } from '$lib/server/db';
 import { AgentFileRecords } from '$lib/server/repositories/agent-files/postgres/agent-files';
@@ -42,7 +42,7 @@ export const createAgentFilesCapability = (
 			attachments: new AttachmentRecords(input.db),
 			diagrams: new DiagramRecords(input.db),
 			stored: repository,
-			noteMarkdown: new NodeNoteMarkdown()
+			noteMarkdown: new NoteMarkdownCodec()
 		})
 	};
 };

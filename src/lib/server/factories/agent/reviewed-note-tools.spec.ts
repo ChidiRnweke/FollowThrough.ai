@@ -1,6 +1,6 @@
 import { type AgentExecutionMode, type PendingAgentDecision } from '$lib/models/agent';
 import { noteChangeReviewSchema } from '$lib/models/notes';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { readPendingDecisions } from '$lib/server/repositories/agent/stored-values';
@@ -31,7 +31,7 @@ import { RunContext } from '@openai/agents';
 import { describe, expect, it } from 'vitest';
 import type { AgentToolSurface } from './agent-tool-factory';
 import { createAgentToolSurface } from './agent-tool-factory';
-const noteMarkdown = new NodeNoteMarkdown();
+const noteMarkdown = new NoteMarkdownCodec();
 
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {

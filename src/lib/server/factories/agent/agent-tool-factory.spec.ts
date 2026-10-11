@@ -2,7 +2,7 @@ import { createWidgetRules } from '$lib/factories/widgets/rules';
 import type { AgentToolSessionInput } from '$lib/models/agent-tool-session';
 import type { TextSelection } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { ApiTokens } from '$lib/server/controllers/api-tokens/controller';
 import {
 	DiagramStudio,
@@ -61,7 +61,7 @@ import type { FunctionTool, Tool } from '@openai/agents';
 import { RunContext } from '@openai/agents';
 import { describe, expect, it } from 'vitest';
 import type { AgentToolSurface } from './agent-tool-factory';
-const noteMarkdown = new NodeNoteMarkdown();
+const noteMarkdown = new NoteMarkdownCodec();
 
 import type { AgentToolContractBinding } from '$lib/models/agent';
 import { LOCKED_TOOL_NAMES, TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
