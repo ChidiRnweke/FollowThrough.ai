@@ -108,7 +108,7 @@ export interface ChatUsage {
 }
 
 /** Lookups in one week, by the kind of thing looked up. */
-export interface WeeklyLookups {
+export interface WeeklyReads {
 	/** Monday, 00:00 UTC. */
 	readonly weekStart: DateTime;
 	readonly note: number;
@@ -134,7 +134,7 @@ export interface ProjectContextUsageSummary {
 	/** Most-repeated first, then most recent. */
 	readonly missedSearches: readonly MissedSearch[];
 	/** Every week from the first lookup to this one, empty weeks included; none without lookups. */
-	readonly activity: readonly WeeklyLookups[];
+	readonly activity: readonly WeeklyReads[];
 	/** Notes, files and memory, in that order. */
 	readonly coverage: readonly KindCoverage[];
 	readonly unreadableCalls: number;

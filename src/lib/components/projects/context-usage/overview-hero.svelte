@@ -17,67 +17,59 @@
 		onattention: () => void;
 	} = $props();
 
-	const used = $derived(summary.coverage.reduce((sum, kind) => sum + kind.used, 0));
+	const read = $derived(summary.coverage.reduce((sum, kind) => sum + kind.used, 0));
 	const total = $derived(summary.coverage.reduce((sum, kind) => sum + kind.total, 0));
-	const lookups = $derived(
+	const times = $derived(
 		summary.activity.reduce(
 			(sum, week) => sum + week.note + week.attachment + week.memory + week.skill,
 			0
 		)
 	);
-	const lastUsed = $derived(
+	const lastRead = $derived(
 		summary.mostUsed.reduce<DateTime | undefined>(
 			(latest, row) => (!latest || row.lastUsedAt > latest ? row.lastUsedAt : latest),
 			undefined
 		)
 	);
+
+	/** Each figure is the number over the sentence that says what it counts, on one left edge. */
+	const figures = $derived([
+		{ value: String(times), caption: 'times the agent read something here' },
+		{ value: String(summary.chats.length), caption: 'chats used this project' },
+		{
+			value: lastRead ? formatRelativeTime(lastRead) : 'Never',
+			caption: 'last time the agent read something here'
+		}
+	]);
 </script>
 
-<!--
-	No boxes: size and colour carry the order. The ring and its percentage are the answer to
-	"is the agent using my project"; the brand figure is how much; warning is what needs you.
--->
-<section class="flex flex-col items-center gap-8 sm:flex-row sm:items-center sm:gap-12">
-	<div class="flex flex-col items-center gap-2">
-		<CoverageDonut {used} {total} />
-		<p class="max-w-52 text-center text-sm text-muted-foreground">
+<section class="grid items-center gap-8 sm:grid-cols-[auto_1fr]" aria-label="Summary">
+	<CoverageDonut {read} {total} />
+	<div class="flex flex-col gap-6">
+		<p class="section-title">
 			{total === 0
-				? 'Add notes, files or memory to give the agent something to work from.'
-				: `${used} of ${total} notes, files and memory entries have been looked up.`}
+				? 'This project has no notes, files or memory for the agent to read yet.'
+				: `The agent has read ${read} of your ${total} notes, files and memory entries.`}
 		</p>
-	</div>
-
-	<div class="flex w-full flex-col divide-y divide-border sm:w-auto sm:min-w-72">
-		<div class="flex flex-col gap-0.5 pb-4">
-			<span class="text-4xl font-semibold tracking-tight text-brand tabular-nums">{lookups}</span>
-			<span class="text-sm text-muted-foreground">
-				{lookups === 1 ? 'lookup' : 'lookups'} across {summary.chats.length}
-				{summary.chats.length === 1 ? 'chat' : 'chats'}
-			</span>
-		</div>
-		<div class="flex flex-col gap-0.5 py-4">
-			<span class="text-2xl font-medium tracking-tight"
-				>{lastUsed ? formatRelativeTime(lastUsed) : 'Never'}</span
-			>
-			<span class="text-sm text-muted-foreground">last time it looked something up here</span>
-		</div>
-		<div class="pt-3">
-			{#if attention > 0}
-				<Button
-					variant="ghost"
-					class="-mx-3 h-auto gap-2 px-3 py-2 text-lg font-medium text-warning hover:bg-warning/10 hover:text-warning"
-					onclick={onattention}
-				>
-					<Icon.Warning class="size-5" />
-					{attention}
-					{attention === 1 ? 'thing needs' : 'things need'} you
-					<Icon.ArrowRight class="size-4" />
-				</Button>
-			{:else}
-				<p class="flex items-center gap-2 py-2 text-lg text-muted-foreground">
-					<Icon.Success class="size-5" /> Nothing needs you
-				</p>
-			{/if}
-		</div>
+		<dl class="grid gap-6 sm:grid-cols-3">
+			{#each figures as figure (figure.caption)}
+				<!-- The caption is the term, so it comes first; reversed, the number reads first. -->
+				<div class="flex flex-col-reverse justify-end gap-1">
+					<dt class="text-sm text-muted-foreground">{figure.caption}</dt>
+					<dd class="stat-value">{figure.value}</dd>
+				</div>
+			{/each}
+		</dl>
+		{#if attention > 0}
+			<Button variant="outline" size="sm" class="w-fit" onclick={onattention}>
+				Review {attention}
+				{attention === 1 ? 'item' : 'items'}
+				<Icon.ArrowRight class="size-4" />
+			</Button>
+		{:else}
+			<p class="flex items-center gap-2 text-sm text-muted-foreground">
+				<Icon.Success class="size-4" /> Nothing needs your attention.
+			</p>
+		{/if}
 	</div>
 </section>

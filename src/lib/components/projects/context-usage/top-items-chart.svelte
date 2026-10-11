@@ -10,20 +10,22 @@
 	 * it, so this is a choice about what fits a chart, not a limit on what is read.
 	 */
 	const shown = 8;
-	const series: readonly Chart.ChartSeries[] = [{ key: 'uses', label: 'Lookups' }];
+	const series: readonly Chart.ChartSeries[] = [{ key: 'uses', label: 'Times read' }];
 	const shorten = (title: string) => (title.length > 22 ? `${title.slice(0, 21)}…` : title);
 	const rows = $derived(
 		mostUsed.slice(0, shown).map((row) => ({ name: shorten(row.item.title), uses: row.uses }))
 	);
 </script>
 
-<figure class="flex min-w-0 flex-col gap-2">
-	<figcaption class="flex flex-col gap-0.5">
-		<span class="text-base font-medium">What it relies on most</span>
-		<span class="text-label text-muted-foreground">The items it looked up most often.</span>
+<figure class="flex min-w-0 flex-col gap-4">
+	<figcaption class="flex flex-col gap-1">
+		<span class="section-title">What the agent reads most</span>
+		<span class="text-sm text-muted-foreground"
+			>The notes, files and memory it went back to most often.</span
+		>
 	</figcaption>
 	{#if rows.length === 0}
-		<p class="text-sm text-muted-foreground">It hasn't looked anything up here yet.</p>
+		<p class="text-sm text-muted-foreground">The agent hasn't read anything here yet.</p>
 	{:else}
 		<Chart.Container config={Chart.chartConfigOf(series)} class="aspect-auto h-56 w-full">
 			<BarChart

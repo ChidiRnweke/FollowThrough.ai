@@ -8,6 +8,7 @@ export {
 	chartConfigOf,
 	layerSeriesOf,
 	seriesColor,
+	remainderColor,
 	valueTick,
 	countTick,
 	type ChartSeries

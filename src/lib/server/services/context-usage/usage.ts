@@ -4,7 +4,7 @@ import type {
 	ContextTouch,
 	HiddenAttachment,
 	KindCoverage,
-	WeeklyLookups,
+	WeeklyReads,
 	MissedSearch,
 	ProjectContextUsageSummary,
 	ProjectItem,
@@ -34,7 +34,7 @@ const fileName = (path: string) => path.split('/').at(-1) ?? path;
 
 const DAY = 24 * 60 * 60 * 1000;
 
-const emptyWeek = (week: number): WeeklyLookups => ({
+const emptyWeek = (week: number): WeeklyReads => ({
 	weekStart: new Date(week).toISOString() as DateTime,
 	note: 0,
 	attachment: 0,
@@ -102,7 +102,7 @@ export class ProjectContextUsageService implements ProjectContextUsage {
 
 		const usage = new Map<string, { item: ContextItem; uses: number; lastUsedAt: string }>();
 		const chats = new Map<string, { lastUsedAt: string; items: Map<string, ContextItem> }>();
-		const weeks = new Map<number, WeeklyLookups>();
+		const weeks = new Map<number, WeeklyReads>();
 		for (const touch of log.touches) {
 			const item = resolve(touch);
 			if (!item) continue;
@@ -178,7 +178,7 @@ export class ProjectContextUsageService implements ProjectContextUsage {
 
 		// Every week from the first lookup to this one, so a quiet week reads as a gap, not as
 		// nothing between two neighbours.
-		const activity: WeeklyLookups[] = [];
+		const activity: WeeklyReads[] = [];
 		if (weeks.size > 0)
 			for (let week = Math.min(...weeks.keys()); week <= weekOf(this.now()); week += 7 * DAY)
 				activity.push(weeks.get(week) ?? emptyWeek(week));

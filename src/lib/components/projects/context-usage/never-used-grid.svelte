@@ -5,6 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Icon from '$lib/components/icons';
+	import SectionHeading from './section-heading.svelte';
 	import ItemLink from './item-link.svelte';
 	import { kindNoun } from './kinds';
 
@@ -23,21 +24,15 @@
 </script>
 
 <section class="flex flex-col gap-4" aria-labelledby="unused-heading">
-	<header class="flex items-baseline gap-3">
-		<span class="text-4xl font-semibold tracking-tight text-warning tabular-nums"
-			>{items.length}</span
-		>
-		<div class="flex flex-col">
-			<h2 id="unused-heading" class="text-base font-medium">Never looked up</h2>
-			<p class="text-sm text-muted-foreground">
-				One square per item the agent has never used. A clear title and the words people search for
-				help it find them; remove what is out of date.
-			</p>
-		</div>
-	</header>
+	<SectionHeading
+		id="unused-heading"
+		title="Never read by the agent"
+		count={items.length}
+		description="One square per item. A clear title and the words people search for help the agent find them; remove what is out of date."
+	/>
 
 	<!-- A square per item: the count becomes something the eye can weigh, and each one opens. -->
-	<ul class="flex flex-wrap gap-1.5" aria-label="Items never looked up">
+	<ul class="flex flex-wrap gap-1.5" aria-label="Items the agent never read">
 		{#each items as item (`${item.kind}:${item.id}`)}
 			{@const Glyph = glyph[item.kind]}
 			<li>
@@ -49,7 +44,7 @@
 							size="icon"
 							href={hrefOf(item)}
 							aria-label="Open {item.title}"
-							class="size-10 rounded-md border-dashed text-muted-foreground hover:border-warning hover:text-warning"
+							class="size-10 rounded-md border-dashed text-muted-foreground hover:text-foreground"
 						>
 							<Glyph class="size-4" />
 						</Button>

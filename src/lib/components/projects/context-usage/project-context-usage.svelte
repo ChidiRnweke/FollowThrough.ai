@@ -11,7 +11,7 @@
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Icon from '$lib/components/icons';
 	import OverviewHero from './overview-hero.svelte';
-	import LookupsChart from './lookups-chart.svelte';
+	import UsageOverTimeChart from './usage-over-time-chart.svelte';
 	import TopItemsChart from './top-items-chart.svelte';
 	import CoverageChart from './coverage-chart.svelte';
 	import AttentionTab from './attention-tab.svelte';
@@ -36,7 +36,7 @@
 		replaceState(url, page.state);
 	};
 
-	const lookups = (count: number) => `${count} ${count === 1 ? 'lookup' : 'lookups'}`;
+	const times = (count: number) => `read ${count} ${count === 1 ? 'time' : 'times'}`;
 	let rankingOpen = $state(false);
 </script>
 
@@ -68,11 +68,9 @@
 			<Tabs.Trigger value="attention" class="gap-2">
 				Needs attention
 				{#if attention > 0}
-					<!-- The dot is the signal at a glance; the count says how much. -->
-					<span
-						class="inline-flex items-center gap-1 rounded-full bg-warning/15 px-1.5 py-0.5 text-xs font-medium text-warning tabular-nums"
-					>
-						<span class="size-1.5 rounded-full bg-warning" aria-hidden="true"></span>
+					<!-- Teal is the live thing: a dot says "something is here", the count says how much. -->
+					<span class="inline-flex items-center gap-1.5 text-foreground tabular-nums">
+						<span class="size-1.5 rounded-full bg-primary" aria-hidden="true"></span>
 						{attention}
 						<span class="sr-only">{attention === 1 ? 'item' : 'items'} need attention</span>
 					</span>
@@ -83,10 +81,10 @@
 		</Tabs.List>
 
 		<Tabs.Content value="overview">
-			<div class="flex flex-col gap-14">
+			<div class="flex flex-col gap-12">
 				<OverviewHero {summary} {attention} onattention={() => show('attention')} />
 
-				<LookupsChart activity={summary.activity} />
+				<UsageOverTimeChart activity={summary.activity} />
 
 				<div class="grid gap-12 lg:grid-cols-2">
 					<div class="flex flex-col gap-3">
@@ -112,7 +110,7 @@
 											<li class="row-interactive flex items-center gap-3 px-3 py-2 text-sm">
 												<div class="min-w-0 flex-1"><ItemLink item={row.item} {projectId} /></div>
 												<span class="shrink-0 text-xs text-muted-foreground">
-													{kindNoun[row.item.kind][0]} · {lookups(row.uses)} · {formatRelativeTime(
+													{kindNoun[row.item.kind][0]} · {times(row.uses)} · {formatRelativeTime(
 														row.lastUsedAt
 													)}
 												</span>
@@ -128,7 +126,7 @@
 
 				{#if summary.chats.length > 0}
 					<section class="flex flex-col gap-2" aria-labelledby="chats-heading">
-						<h2 id="chats-heading" class="text-base font-medium">Recent chats</h2>
+						<h2 id="chats-heading" class="section-title">Recent chats</h2>
 						<ul class="divide-y divide-border">
 							{#each summary.chats as chat (chat.conversationId)}
 								<li class="row-interactive flex flex-col gap-1 px-3 py-2.5 text-sm">

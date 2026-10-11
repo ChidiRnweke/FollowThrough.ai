@@ -33,7 +33,7 @@
 <div
 	class={cn(
 		'mx-auto flex w-full flex-col px-4 pt-6 pb-6 md:px-8',
-		wide ? 'max-w-7xl gap-8' : 'max-w-5xl gap-6',
+		wide ? 'max-w-7xl gap-8' : 'max-w-5xl gap-8',
 		fill && 'flex-1',
 		className
 	)}
@@ -45,16 +45,17 @@
 				{@render header()}
 			{:else}
 				<!-- Spacing ladder, per docs/design/design-system.md "Grouping is spacing and similarity":
-				     navigation sits a step away from identity, and title+description read as one unit. -->
+				     the breadcrumb is the title's parent and sits tight above it, the description is
+				     tucked under the title, and the page body is a clear step away from all three. -->
 				<div class="flex flex-col">
 					{#if breadcrumb}
 						{@render breadcrumb()}
 					{/if}
 					{#if title}
-						<h1 class={cn('page-title', breadcrumb && 'mt-3')}>{title}</h1>
+						<h1 class={cn('page-title', breadcrumb && 'mt-1')}>{title}</h1>
 					{/if}
 					{#if description}
-						<p class="mt-1 text-sm text-muted-foreground">{description}</p>
+						<p class="mt-1.5 text-sm text-muted-foreground">{description}</p>
 					{/if}
 				</div>
 			{/if}

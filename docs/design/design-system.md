@@ -26,26 +26,34 @@
   `--brand`. Data values, metadata, and resting chrome use neutral ink on neutral surfaces.
   On colored surfaces, secondary ink follows the surface hue (see below). `--brand` equals `--primary`
   in light mode and lifts to the sidebar teal in dark mode for AA contrast on washes.
-- **Charts:** Widget charts are the shadcn-svelte Chart over LayerChart; nothing is drawn by
-  hand. The first series is `--brand`, the one value the chart is about. Further series take the
-  neutral `--chart-2` to `--chart-5` ramp, darkest last; `--chart-1` is too light for a line on
-  paper. A chart with more than one series always shows its legend, so colour is never the only
-  key. Value-axis ticks are compact (`120K`), and a chart with no rows says so in muted text.
-  The series helpers (`chartConfigOf`, `layerSeriesOf`, `valueTick`, `countTick`) live in
-  `components/ui/chart`; an axis of counts uses `countTick`, which leaves fractional ticks blank.
+- **Charts:** Charts are the shadcn-svelte Chart over LayerChart (widgets and the Agent activity
+  dashboard); nothing is drawn by hand. They are **one hue, the brand teal**: `--chart-1`
+  (lightest) to `--chart-5` (darkest) is a teal ramp, validated as an ordered ramp in both modes
+  (monotone lightness, a visible step between neighbours, the light end at 2:1 or more against the
+  page). Gray read as jarring against the rest of the product and stopped a chart reading as
+  ours. The first series is `--brand`, the one value the chart is about; further series take
+  `--chart-2`, `--chart-5`, `--chart-3`, `--chart-1` in that fixed order, so neighbours alternate
+  light and dark. Never cycled: widgets cap a chart at five series, exactly that order. The
+  remainder of a part-of-whole (what is "not yet") is `--chart-1`. Prefer one series: a stack of
+  shades of one hue asks the reader to tell them apart, so split a breakdown into its own chart.
+  A chart with more than one series always shows its legend, so shade is never the only key.
+  Value-axis ticks are compact (`120K`); a count axis uses `countTick`, which leaves fractional
+  ticks blank; a chart with no rows says so in muted text. No status colours (warning,
+  destructive) in a chart. The series helpers (`chartConfigOf`, `layerSeriesOf`, `seriesColor`,
+  `remainderColor`, `valueTick`, `countTick`) live in `components/ui/chart`.
 - **Dashboards** (the project's Agent activity page) speak to someone who does not know how the
-  agent works, and they are infographics, not panels. **No cards and no boxes:** hierarchy comes
-  from size and colour alone — a `text-5xl` hero figure, `text-4xl` key figures, `text-2xl`
-  secondary ones, each with a sentence saying what it counts (a bare number with a two-word label
-  is a riddle) — separated by whitespace and hairlines. Colour carries meaning: brand teal is the
-  agent's activity, `--warning` is "needs you", and red is never used for a state. What to fix
-  lives in its own **Needs attention** tab whose trigger carries a warning dot and count when it
-  has anything, and a muted check when it has nothing; the overview links to it from its hero.
-  Every attention item leads with a big warning count, shows itself visually (a bar per missed
-  search, a square per unused item), and offers the action that fixes it ("Write a note", "Fix in
-  Attachments"). Every chart carries a title and a one-line plain caption. Use everyday words
-  ("lookups", "files it can't read", "searches with no answer"), never internal ones ("context",
-  "tool call", "touch").
+  agent works. **No cards and no boxes**, and no new colours: hierarchy comes from the named type
+  scale and from teal versus gray. A figure is `stat-value` with its caption on the line beneath,
+  both on one left edge, figures side by side in a grid so their tops line up; a number never sits
+  beside a multi-line block. Section headings are `section-title` with any count inline after the
+  title. Teal is the agent's activity (charts, the donut) and the live thing (the attention tab's
+  dot); everything else is neutral ink — warning and destructive never mark a state here. What to
+  fix lives in its own **Needs attention** tab whose trigger carries a teal dot and the count when
+  it has anything, a muted check when not; the overview links to it with an outline button. Every
+  attention item shows itself visually (a bar per missed search, a square per unused item) and
+  offers the action that fixes it ("Write a note", "Fix in Attachments"). Words are everyday and
+  whole: "times the agent read something here", never coined nouns ("lookups") or internal ones
+  ("context", "tool call").
 - **Project identity:** Projects are identified by the brand teal, never per-project hues: the
   sidebar project icon, `Badge variant="brand"`, breadcrumb links, chat origin lines, artifact
   format badges, and overview resource chips use `--brand` text on the shared `bg-brand/10` wash
@@ -102,7 +110,8 @@
   exceptions, not content captions. `xs` is reserved for eyebrows and provenance captions.
 - **Type scale:** app code uses the named utilities in `layout.css` — `page-title` (one per
   page), `section-title` (content sections), `eyebrow` (uppercase muted label above a group),
-  `provenance-caption` (per-item metadata). The ladder is
+  `provenance-caption` (per-item metadata), `stat-value` (a dashboard figure, always with a caption
+  line beneath it). The ladder is
   2xs → eyebrow/caption → label → body → section-title → page-title. Form labels are small and
   muted so values lead; `Field.Title` stays at body size above its muted description.
 - **Two rungs below caption, for nested chrome only.** `text-label` (13px) is a line that titles
@@ -307,7 +316,9 @@ while the region is empty; the empty state and its one action are the whole surf
   tips are chosen in the loader, never at render time.
 - **Grouping is spacing and similarity, not more rules:** different kinds of thing get different
   density — spaces cluster at base size with no dividers while the documents list uses `sm` rows
-  and hairlines; gaps step 8px → 24px → a further step. Equal gaps and repeated dividers flatten
+  and hairlines; gaps step 8px → 24px → a further step. The page header (`PageShell`) follows it:
+  the breadcrumb sits 4px above the title as its parent, the description 6px under the title, and
+  the page body a 32px step below the header. Equal gaps and repeated dividers flatten
   a page into peer sections however well its content is grouped.
 - **Notes:** one continuous rich-text surface at `note-measure`, preceded by a quiet utility row
   (breadcrumb, save status, actions). The title lives only in the breadcrumb's current-page

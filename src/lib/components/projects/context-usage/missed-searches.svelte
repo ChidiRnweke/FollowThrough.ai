@@ -10,13 +10,12 @@
 	import * as Chart from '$lib/components/ui/chart';
 	import { Button } from '$lib/components/ui/button';
 	import * as Icon from '$lib/components/icons';
+	import SectionHeading from './section-heading.svelte';
 
 	let { searches, projectId }: { searches: readonly MissedSearch[]; projectId: ProjectId } =
 		$props();
 
-	const series: readonly Chart.ChartSeries[] = [
-		{ key: 'times', label: 'Times asked', color: 'var(--warning)' }
-	];
+	const series: readonly Chart.ChartSeries[] = [{ key: 'times', label: 'Times searched' }];
 	const shorten = (query: string) => (query.length > 26 ? `${query.slice(0, 25)}…` : query);
 	const rows = $derived(
 		searches.map((search) => ({ query: shorten(search.query), times: search.times }))
@@ -47,19 +46,12 @@
 </script>
 
 <section class="flex flex-col gap-4" aria-labelledby="missed-heading">
-	<header class="flex items-baseline gap-3">
-		<span class="text-4xl font-semibold tracking-tight text-warning tabular-nums"
-			>{searches.length}</span
-		>
-		<div class="flex flex-col">
-			<h2 id="missed-heading" class="text-base font-medium">
-				{searches.length === 1 ? 'Search' : 'Searches'} with no answer
-			</h2>
-			<p class="text-sm text-muted-foreground">
-				The agent looked for these and this project had nothing. Longer bars were asked more often.
-			</p>
-		</div>
-	</header>
+	<SectionHeading
+		id="missed-heading"
+		title="Searches that found nothing"
+		count={searches.length}
+		description="The agent searched this project for these and found nothing. A longer bar was searched more often; writing a note on it fills the gap."
+	/>
 
 	<Chart.Container config={Chart.chartConfigOf(series)} class={['aspect-auto w-full', height]}>
 		<BarChart
@@ -79,7 +71,7 @@
 	<ul class="divide-y divide-border">
 		{#each searches as search (search.query)}
 			<li class="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5">
-				<Icon.Search class="size-4 shrink-0 text-warning" />
+				<Icon.Search class="size-4 shrink-0 text-muted-foreground" />
 				<span class="min-w-0 flex-1 truncate font-medium" title={search.query}>{search.query}</span>
 				<span class="text-xs text-muted-foreground"
 					>{search.times > 1 ? `${search.times} times · ` : ''}{formatRelativeTime(

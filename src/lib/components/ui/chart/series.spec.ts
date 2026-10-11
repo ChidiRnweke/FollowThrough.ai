@@ -21,11 +21,11 @@ describe('chart series', () => {
 	});
 });
 
-describe('meaningful colour', () => {
+describe('colour with a role', () => {
 	it('lets a series name its own colour instead of taking the ramp', () => {
 		expect(
-			chartConfigOf([{ key: 'times', label: 'Times asked', color: 'var(--warning)' }])
-		).toEqual({ times: { label: 'Times asked', color: 'var(--warning)' } });
+			chartConfigOf([{ key: 'unread', label: 'Not read yet', color: 'var(--chart-1)' }])
+		).toEqual({ unread: { label: 'Not read yet', color: 'var(--chart-1)' } });
 	});
 });
 

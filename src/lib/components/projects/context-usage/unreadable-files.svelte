@@ -3,6 +3,7 @@
 	import type { ProjectId } from '$lib/models/projects';
 	import { Button } from '$lib/components/ui/button';
 	import * as Icon from '$lib/components/icons';
+	import SectionHeading from './section-heading.svelte';
 
 	let { files, projectId }: { files: readonly HiddenAttachment[]; projectId: ProjectId } = $props();
 
@@ -16,23 +17,16 @@
 </script>
 
 <section class="flex flex-col gap-4" aria-labelledby="files-heading">
-	<header class="flex items-baseline gap-3">
-		<span class="text-4xl font-semibold tracking-tight text-warning tabular-nums"
-			>{files.length}</span
-		>
-		<div class="flex flex-col">
-			<h2 id="files-heading" class="text-base font-medium">
-				{files.length === 1 ? "File it can't read" : "Files it can't read"}
-			</h2>
-			<p class="text-sm text-muted-foreground">
-				The agent finds files by searching their text. Until these have text, it cannot use them.
-			</p>
-		</div>
-	</header>
+	<SectionHeading
+		id="files-heading"
+		title="Files the agent can't read"
+		count={files.length}
+		description="The agent finds files by searching their text. Until these have text, it cannot use them."
+	/>
 	<ul class="divide-y divide-border">
 		{#each files as file (file.id)}
 			<li class="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5">
-				<Icon.Warning class="size-4 shrink-0 text-warning" />
+				<Icon.Warning class="size-4 shrink-0 text-muted-foreground" />
 				<div class="flex min-w-0 flex-1 flex-col">
 					<span class="truncate font-medium" title={file.title}>{file.title}</span>
 					<span class="text-xs text-muted-foreground"

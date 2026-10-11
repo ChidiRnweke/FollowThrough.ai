@@ -2,35 +2,34 @@
 	import { PieChart } from 'layerchart';
 	import * as Chart from '$lib/components/ui/chart';
 
-	let { used, total }: { used: number; total: number } = $props();
+	let { read, total }: { read: number; total: number } = $props();
 
+	// Teal is what the agent read; the light end of the same ramp is what it has not.
 	const config: Chart.ChartConfig = {
-		used: { label: 'Looked up', color: 'var(--brand)' },
-		unused: { label: 'Not looked up yet', color: 'var(--muted)' }
+		read: { label: 'Read', color: Chart.seriesColor(0) },
+		unread: { label: 'Not read yet', color: Chart.remainderColor }
 	};
 	const slices = $derived([
-		{ part: 'used', value: used },
-		{ part: 'unused', value: total - used }
+		{ part: 'read', value: read },
+		{ part: 'unread', value: total - read }
 	]);
-	const share = $derived(total === 0 ? 0 : Math.round((used / total) * 100));
+	const share = $derived(total === 0 ? 0 : Math.round((read / total) * 100));
 </script>
 
-<!-- The ring is the picture; the number in its middle is the fact. -->
-<div class="relative size-44 shrink-0 sm:size-52">
+<div class="relative size-36 shrink-0">
 	<Chart.Container {config} class="aspect-square size-full">
 		<PieChart
 			data={slices}
 			key="part"
 			value="value"
 			c="part"
-			cRange={['var(--color-used)', 'var(--color-unused)']}
-			innerRadius={0.74}
-			cornerRadius={4}
+			cRange={['var(--color-read)', 'var(--color-unread)']}
+			innerRadius={0.72}
+			cornerRadius={3}
 			padAngle={0.02}
 		/>
 	</Chart.Container>
-	<div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-		<span class="text-5xl font-semibold tracking-tight text-brand tabular-nums">{share}%</span>
-		<span class="text-label text-muted-foreground">looked up</span>
-	</div>
+	<span class="stat-value pointer-events-none absolute inset-0 flex items-center justify-center"
+		>{share}%</span
+	>
 </div>

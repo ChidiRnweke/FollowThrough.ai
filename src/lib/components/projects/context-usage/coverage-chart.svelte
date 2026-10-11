@@ -7,8 +7,8 @@
 	let { coverage }: { coverage: readonly KindCoverage[] } = $props();
 
 	const series: readonly Chart.ChartSeries[] = [
-		{ key: 'used', label: 'Looked up' },
-		{ key: 'unused', label: 'Not looked up yet' }
+		{ key: 'used', label: 'Read' },
+		{ key: 'unused', label: 'Not read yet', color: Chart.remainderColor }
 	];
 	const rows = $derived(
 		coverage
@@ -21,11 +21,11 @@
 	);
 </script>
 
-<figure class="flex min-w-0 flex-col gap-2">
-	<figcaption class="flex flex-col gap-0.5">
-		<span class="text-base font-medium">How much of each kind it uses</span>
-		<span class="text-label text-muted-foreground">
-			Of everything in this project, how much the agent has looked up at least once.
+<figure class="flex min-w-0 flex-col gap-4">
+	<figcaption class="flex flex-col gap-1">
+		<span class="section-title">How much of each kind it has read</span>
+		<span class="text-sm text-muted-foreground">
+			Of everything in this project, how much the agent has read at least once.
 		</span>
 	</figcaption>
 	{#if rows.length === 0}

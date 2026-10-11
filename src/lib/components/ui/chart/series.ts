@@ -4,17 +4,39 @@ import type { ChartConfig } from './chart-utils.js';
 export interface ChartSeries {
 	readonly key: string;
 	readonly label: string;
-	/** A colour that carries meaning — `var(--warning)` for "needs you" — instead of the ramp. */
+	/** A colour with a role instead of the next ramp step — `remainderColor` for part-of-whole. */
 	readonly color?: string;
 }
 
 /**
- * The first series is the brand teal, the thing the chart is about; the rest take the neutral
- * chart ramp, darkest last. `--chart-1` is skipped: it is too light to read as a line on paper.
- * `--brand` rather than `--primary`, because it lifts in dark mode for contrast.
+ * Charts are one hue: the teal ramp in `--chart-1` (lightest) to `--chart-5` (darkest), validated
+ * as an ordered ramp in both modes. The first series is the brand teal, the thing the chart is
+ * about; the rest alternate light and dark so neighbouring series never sit one step apart.
+ * Identity never rests on the shade alone: a chart with several series always shows its legend.
  */
-export const seriesColor = (index: number): string =>
-	index === 0 ? 'var(--brand)' : `var(--chart-${index + 1})`;
+const seriesOrder = [
+	'var(--brand)',
+	'var(--chart-2)',
+	'var(--chart-5)',
+	'var(--chart-3)',
+	'var(--chart-1)'
+] as const;
+
+/**
+ * Never cycled: a sixth series would repaint the first one's colour. Widgets cap series at five
+ * (`models/widgets`), which is exactly this order, so reaching past it is a bug, not a case.
+ */
+export const seriesColor = (index: number): string => {
+	const color = seriesOrder[index];
+	if (color === undefined)
+		throw new RangeError(
+			`A chart has ${seriesOrder.length} colours; series ${index + 1} has none.`
+		);
+	return color;
+};
+
+/** The remainder of a part-of-whole chart: what is not yet the thing the chart counts. */
+export const remainderColor = 'var(--chart-1)';
 
 /** The shadcn chart config: a label and colour per series, read by the tooltip and legend. */
 export const chartConfigOf = (series: readonly ChartSeries[]): ChartConfig =>
