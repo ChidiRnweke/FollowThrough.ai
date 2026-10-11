@@ -620,11 +620,22 @@ function recovered(subject: SubjectActivity, tools: readonly ChatToolActivity[])
  * A count of tool calls was the old label and it named mechanism: "called 6 tools" tells you
  * how hard it worked, never what it worked from. This counts subjects, and only where they are
  * not on screen — the rule the rest of this surface follows.
+ *
+ * Attachments are the exception, up to `namedAttachments` of them: an uploaded file is the
+ * context a reader most wants to know the answer stood on, and a count ("1 attachment") made
+ * them open the door to learn which. A file is named only when the fold knows its name — one
+ * read by path alone has no title and stays in the count.
  */
+const namedAttachments = 2;
+
 export function readDoorLabel(context: TurnContext): string {
+	const named = context.read
+		.filter((subject) => subject.entity.kind === 'attachment' && subject.entity.named)
+		.slice(0, namedAttachments);
 	const kinds = new Map<string, number>();
 	for (const subject of context.read)
-		kinds.set(subject.entity.kind, (kinds.get(subject.entity.kind) ?? 0) + 1);
+		if (!named.includes(subject))
+			kinds.set(subject.entity.kind, (kinds.get(subject.entity.kind) ?? 0) + 1);
 	const nouns: Readonly<Record<string, readonly [string, string]>> = {
 		note: ['note', 'notes'],
 		folder: ['folder', 'folders'],
@@ -639,10 +650,15 @@ export function readDoorLabel(context: TurnContext): string {
 		setting: ['setting', 'settings'],
 		plain: ['item', 'items']
 	};
-	const parts = [...kinds.entries()].map(([kind, count]) => {
-		const noun = nouns[kind] ?? nouns.plain;
-		return `${count} ${count === 1 ? noun[0] : noun[1]}`;
-	});
+	const parts = [
+		...named.map((subject) => subject.entity.title),
+		...[...kinds.entries()].map(([kind, count]) => {
+			const noun = nouns[kind] ?? nouns.plain;
+			// Beside named files, the rest of them are the ones not on screen.
+			const more = kind === 'attachment' && named.length > 0 ? 'more ' : '';
+			return `${count} ${more}${count === 1 ? noun[0] : noun[1]}`;
+		})
+	];
 	if (parts.length === 0) return 'What it looked at';
 	const listed =
 		parts.length === 1

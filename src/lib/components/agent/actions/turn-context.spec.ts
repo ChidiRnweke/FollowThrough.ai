@@ -266,3 +266,56 @@ describe('A failure the call could not name still gets a row', () => {
 		});
 	});
 });
+
+describe('The read door names the files an answer stood on', () => {
+	const attachmentHit = (id: string, title: string) => ({
+		source: { kind: 'attachment', id, projectId: 'proj-1', title },
+		content: `passage from ${title}`,
+		score: 0.9
+	});
+	const search = (results: readonly ReturnType<typeof attachmentHit>[]) =>
+		call({ name: 'search', arguments: { query: 'liability cap' }, output: [...results] });
+	const sedAttachment = (id: string) =>
+		call({
+			name: 'sed',
+			arguments: { path: `/projects/proj-1/attachments/${id}.txt`, startLine: 1, endLine: 20 },
+			output: {
+				kind: 'content',
+				path: `/projects/proj-1/attachments/${id}.txt`,
+				startLine: 1,
+				lines: ['Liability is capped at fees paid.']
+			}
+		});
+
+	it('names a searched attachment beside the notes it counts', () => {
+		const context = turnContext([search([attachmentHit('att-1', 'MSA-2026.pdf')]), grep()], shell);
+		expect(readDoorLabel(context)).toBe('Read MSA-2026.pdf and 1 note');
+	});
+
+	it('names two files and counts the rest as more', () => {
+		const context = turnContext(
+			[
+				search([
+					attachmentHit('att-1', 'MSA-2026.pdf'),
+					attachmentHit('att-2', 'SOW.docx'),
+					attachmentHit('att-3', 'Pricing.xlsx')
+				])
+			],
+			shell
+		);
+		expect(readDoorLabel(context)).toBe('Read MSA-2026.pdf, SOW.docx and 1 more attachment');
+	});
+
+	it('keeps the name a search gave a file the agent then read by path', () => {
+		const context = turnContext(
+			[search([attachmentHit('att-1', 'MSA-2026.pdf')]), sedAttachment('att-1')],
+			shell
+		);
+		expect(readDoorLabel(context)).toBe('Read MSA-2026.pdf');
+	});
+
+	it('counts a file read only by path, whose name it never learned', () => {
+		const context = turnContext([sedAttachment('att-9')], shell);
+		expect(readDoorLabel(context)).toBe('Read 1 attachment');
+	});
+});

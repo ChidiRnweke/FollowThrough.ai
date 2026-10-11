@@ -144,12 +144,18 @@
 							{...props}
 							variant="ghost"
 							size="sm"
-							class="{CHAT_ROW} text-muted-foreground [&[data-state=open]>svg:first-child]:rotate-90"
+							class="{CHAT_ROW} items-start whitespace-normal text-muted-foreground [&[data-state=open]>svg:first-child]:rotate-90"
 						>
 							<Icon.ChevronRight
-								class="{CHAT_ROW_ICON} transition-transform duration-(--duration-micro)"
+								class="{CHAT_ROW_ICON} mt-0.5 transition-transform duration-(--duration-micro)"
 							/>
-							<span class="min-w-0 truncate">{readDoorLabel(context)}</span>
+							<!-- Two lines rather than one: the label names uploaded files, and at panel width
+							     a truncated one cut off the counts after them — "and 1 note" was the part
+							     lost. `whitespace-normal` cancels the Button base's `nowrap`, which would
+							     otherwise survive the merge (AGENTS.md). Titled for what still clamps. -->
+							<span class="line-clamp-2 min-w-0" title={readDoorLabel(context)}
+								>{readDoorLabel(context)}</span
+							>
 						</Button>
 					{/snippet}
 				</Collapsible.Trigger>

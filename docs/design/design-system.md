@@ -387,7 +387,10 @@ while the region is empty; the empty state and its one action are the whole surf
      own parts.
   5. **Three depths, one door.** The thread carries what changed. **One door per turn** carries
      what was only read, and it is labelled by what it holds — "Read 4 notes and your project
-     memory" — rather than by how many calls it took to get there. A dialog, offered per subject,
+     memory" — rather than by how many calls it took to get there. Uploaded files are named on
+     the door, up to two, because which file an answer stood on is the thing a reader checks
+     first: "Read MSA-2026.pdf, SOW.docx and 1 note"; further files count as "N more
+     attachments", and a file the fold has no name for stays in the count. A dialog, offered per subject,
      carries the passages at full width — the panel is 384px and file content is mono, so more
      than a few lines of it there is a column of fragments. That dialog is an escalation for
      raw passages only; the depths above it stay in place, and the reader never loses the
