@@ -1,4 +1,5 @@
 import { RunSignalService } from '$lib/server/services/agent/runs/signals';
+import { InMemoryMermaidDocuments } from '$lib/testing/diagrams/fakes/mermaid-documents';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import { DomainError } from '$lib/errors';
 import type { AgentRunId } from '$lib/models/agent';
@@ -14,7 +15,7 @@ import {
 	type PostgresDatabaseContext
 } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
+import { DiagramLibraryService } from '$lib/server/services/diagrams/library';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import {
@@ -29,7 +30,7 @@ import { ConversationArchive } from '$lib/server/services/agent/conversations/ar
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
+import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -61,7 +62,7 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 	});
 	const fixture = diagramGenerationFixture();
 	const records = new DiagramRecords(actor, database);
-	const library = createDiagramServices(
+	const library = new DiagramLibraryService(
 		actor,
 		records,
 		notes.repository,
@@ -76,11 +77,9 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 			...agentToolResultsFixture(),
 			generationRules: new DiagramGenerationRuleService(),
 			...fixture,
-			diagramFinder: library.finder,
-			diagramWriter: library.writer,
+			diagrams: library,
 			diagramSourceNotes: notes.services.reader,
-			mermaidRenderer: diagrams,
-			textExtractor: diagrams,
+			mermaid: new InMemoryMermaidDocuments(),
 			diagramIndexer: diagrams,
 			generation: {
 				...fixture.generation,
@@ -95,7 +94,7 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 				provenance: notes.provenance
 			},
 			transactionRunner,
-			drawioXmlValidator: new DrawioXmlValidator(),
+			drawio: new DrawioDocumentService(),
 			suggestionCreator: suggestions.creator,
 			runSignals: new RunSignalService(
 				new AgentRunNotificationRecords(notifications),

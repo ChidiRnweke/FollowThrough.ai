@@ -3,7 +3,7 @@ import { RunSignalService } from '$lib/server/services/agent/runs/signals';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { AgentStreamPresentationService } from '$lib/server/services/agent/runs/stream-presentation';
-import { InMemoryMermaidValidator } from '$lib/testing/diagrams/fakes/mermaid-validator';
+import { InMemoryMermaidDocuments } from '$lib/testing/diagrams/fakes/mermaid-documents';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import type { DiagramAgentDependencies } from '$lib/server/controllers/diagrams/controller';
@@ -75,7 +75,7 @@ export const diagramGenerationFixture = () => {
 		conversations,
 		provenance,
 		notes,
-		mermaidValidator: new InMemoryMermaidValidator(),
+		mermaid: new InMemoryMermaidDocuments(),
 		runSignals: new RunSignalService(persistence, persistence),
 		runSettlements: new RunSettlements(persistence, persistence),
 		now: () => testNow

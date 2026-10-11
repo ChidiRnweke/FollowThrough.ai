@@ -1,8 +1,7 @@
 import type { DateTime } from '$lib/models/workspace';
-import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
-import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLibraryService } from '$lib/server/services/diagrams/library';
+import { DiagramRuleService } from '$lib/services/diagrams/editing';
 import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
-import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
@@ -36,7 +35,7 @@ const setup = () => {
 	const diagrams = new InMemoryDiagramRepository(testActor());
 	const index = new InMemoryDiagrams(testActor());
 	const notes = new InMemoryNoteRepository(testActor());
-	const library = createDiagramServices(
+	const library = new DiagramLibraryService(
 		testActor(),
 		diagrams,
 		notes,
@@ -49,19 +48,14 @@ const setup = () => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
 			...agentToolResultsFixture(),
-			diagramEditing: new DiagramEditingService(),
-			diagramLifecycle: new DiagramLifecycleService(),
+			diagramRules: new DiagramRuleService(),
 			diagramSourceNotes: sourceNotes,
-			diagramFinder: library.finder,
-			diagramDraftWriter: library.draftWriter,
-			diagramTrash: library.lifecycle,
+			diagrams: library,
 			now: () => timestamp,
 			transactionRunner: new InMemoryTransactionRunner([diagrams, index]),
 			diagramIndexer: index,
-			drawioXmlValidator: { validate: (source) => source },
-			diagramLabelPresentation: new DiagramLabelPresentationService(),
-			drawioLabels: { read: () => ['labels'] },
-			drawioSvgSanitizer: { sanitize: (svg) => svg }
+			drawio: { validate: (source) => source, read: () => ['labels'], sanitize: (svg) => svg },
+			diagramLabelPresentation: new DiagramLabelPresentationService()
 		})
 	);
 	return { diagrams, controller, index, library, notes };
@@ -150,8 +144,8 @@ describe('Diagram soft delete', () => {
 		diagrams.diagrams = [diagram];
 		await controller.archiveProjectDiagram({ diagramId: diagram.id });
 		await controller.restoreProjectDiagram({ diagramId: diagram.id });
-		expect(await library.lifecycle.listArchived()).toHaveLength(0);
-		const listed = await library.lister.listForProject(diagram.projectId);
+		expect(await library.listArchived()).toHaveLength(0);
+		const listed = await library.listForProject(diagram.projectId);
 		expect(listed.diagrams).toHaveLength(1);
 	});
 	// The defect this whole block exists for: archiving marked the row and hid it
@@ -162,12 +156,12 @@ describe('Diagram soft delete', () => {
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
 		await controller.archiveProjectDiagram({ diagramId: diagram.id });
-		const listed = await library.lister.listForProject(diagram.projectId);
+		const listed = await library.listForProject(diagram.projectId);
 		expect(listed.diagrams).toHaveLength(0);
-		expect(await library.lifecycle.listArchived()).toMatchObject([
+		expect(await library.listArchived()).toMatchObject([
 			{ id: diagram.id, archivedAt: timestamp, updatedAt: timestamp }
 		]);
-		expect(await library.lister.countForProject(diagram.projectId)).toBe(0);
+		expect(await library.countForProject(diagram.projectId)).toBe(0);
 	});
 	// The gallery's confirmation promises a note shows the diagram as unavailable
 	// until it is restored, so the note's own listing has to agree.
@@ -178,7 +172,7 @@ describe('Diagram soft delete', () => {
 		const diagram = drawioBuilder({ sourceNoteId: testNoteId() });
 		diagrams.diagrams = [diagram];
 		await controller.archiveProjectDiagram({ diagramId: diagram.id });
-		expect(await library.lister.listForNote(testNoteId())).toHaveLength(0);
+		expect(await library.listForNote(testNoteId())).toHaveLength(0);
 	});
 	// Otherwise `create_diagram` refuses a new diagram by naming one the user threw
 	// away, which is worse than the guess that refusal replaced.
@@ -187,6 +181,6 @@ describe('Diagram soft delete', () => {
 		const diagram = drawioBuilder({ conversationId: testConversationId() });
 		diagrams.diagrams = [diagram];
 		await controller.archiveProjectDiagram({ diagramId: diagram.id });
-		expect(await library.conversations.findByConversation(testConversationId())).toBeUndefined();
+		expect(await library.findByConversation(testConversationId())).toBeUndefined();
 	});
 });

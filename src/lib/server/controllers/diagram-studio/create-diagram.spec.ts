@@ -1,7 +1,6 @@
-import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
-import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLibraryService } from '$lib/server/services/diagrams/library';
+import { DiagramRuleService } from '$lib/services/diagrams/editing';
 import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
-import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
@@ -41,7 +40,7 @@ const setup = (
 	// A diagram is created in a project, and creating one verifies the project is
 	// there — the same rule that stopped notes being filed wherever sorted first.
 	projects.projects = [projectBuilder({ id: testProjectId() })];
-	const library = createDiagramServices(
+	const library = new DiagramLibraryService(
 		testActor(),
 		diagrams,
 		new InMemoryNoteRepository(testActor()),
@@ -56,13 +55,9 @@ const setup = (
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
 				...agentToolResultsFixture(),
-				diagramEditing: new DiagramEditingService(),
-				diagramLifecycle: new DiagramLifecycleService(),
+				diagramRules: new DiagramRuleService(),
 				diagramSourceNotes: sourceNotes,
-				diagramFinder: library.finder,
-				diagramDraftWriter: library.draftWriter,
-				diagramConversations: library.conversations,
-				diagramWriter: library.writer,
+				diagrams: library,
 				transactionRunner: new InMemoryTransactionRunner([diagrams]),
 				now: () => testNow,
 				// Indexing is a downstream effect, not part of what these tests state.
@@ -71,9 +66,12 @@ const setup = (
 						new InMemoryDiagrams(testActor()).diagramContextRequirement(diagram),
 					indexDiagram: index
 				},
-				drawioXmlValidator: { validate: (source: string) => source },
-				diagramLabelPresentation: new DiagramLabelPresentationService(),
-				drawioLabels: { read: () => ['Ingest Index Answer'] }
+				drawio: {
+					validate: (source: string) => source,
+					read: () => ['Ingest Index Answer'],
+					sanitize: (svg: string) => svg
+				},
+				diagramLabelPresentation: new DiagramLabelPresentationService()
 			})
 		)
 	};
@@ -122,12 +120,13 @@ describe('Creating a diagram', () => {
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
 				...agentToolResultsFixture(),
-				diagramEditing: new DiagramEditingService(),
-				diagramLifecycle: new DiagramLifecycleService(),
-				drawioXmlValidator: {
+				diagramRules: new DiagramRuleService(),
+				drawio: {
 					validate: () => {
 						throw new Error('bad xml');
-					}
+					},
+					sanitize: (svg: string) => svg,
+					read: () => []
 				}
 			})
 		);

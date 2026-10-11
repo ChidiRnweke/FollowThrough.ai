@@ -1,15 +1,10 @@
 import type { ActorContext } from '$lib/models/identity';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { diagramEtag, type DiagramWriteOutcome } from '$lib/models/diagrams';
-import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
-import {
-	DrawioLabelReader,
-	DrawioSvgSanitizer,
-	DrawioXmlValidator
-} from '$lib/server/services/diagrams/drawio';
-import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLibraryService } from '$lib/server/services/diagrams/library';
+import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
+import { DiagramRuleService } from '$lib/services/diagrams/editing';
 import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
-import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
@@ -43,7 +38,7 @@ const setup = (viewer: ActorContext = testActor()) => {
 		renderedSvg: '<svg xmlns="http://www.w3.org/2000/svg"><text>Before</text></svg>'
 	});
 	diagrams.diagrams = [original];
-	const library = createDiagramServices(
+	const library = new DiagramLibraryService(
 		viewer,
 		diagrams,
 		new InMemoryNoteRepository(viewer),
@@ -59,17 +54,12 @@ const setup = (viewer: ActorContext = testActor()) => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
 			...agentToolResultsFixture(),
-			diagramEditing: new DiagramEditingService(),
-			diagramLifecycle: new DiagramLifecycleService(),
+			diagramRules: new DiagramRuleService(),
 			diagramSourceNotes: notes,
-			diagramFinder: library.finder,
-			diagramTrash: library.lifecycle,
-			diagramDraftWriter: library.draftWriter,
+			diagrams: library,
 			diagramIndexer: index,
-			drawioXmlValidator: new DrawioXmlValidator(),
-			drawioSvgSanitizer: new DrawioSvgSanitizer(),
+			drawio: new DrawioDocumentService(),
 			diagramLabelPresentation: new DiagramLabelPresentationService(),
-			drawioLabels: new DrawioLabelReader(),
 			now: () => testNow,
 			transactionRunner: new InMemoryTransactionRunner([diagrams, search])
 		})

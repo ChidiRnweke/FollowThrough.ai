@@ -1,4 +1,4 @@
-import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
+import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
@@ -20,7 +20,7 @@ const setup = () => {
 			...agentToolResultsFixture(),
 			generationRules: new DiagramGenerationRuleService(),
 			...fixture,
-			drawioXmlValidator: new DrawioXmlValidator(),
+			drawio: new DrawioDocumentService(),
 			suggestionCreator: suggestions,
 			transactionRunner: new InMemoryTransactionRunner([
 				suggestions,
@@ -151,9 +151,9 @@ describe('Diagram generation run settlement', () => {
 	});
 
 	it('rejects Mermaid click handlers before offering an inline revision', async () => {
-		const { controller, provider, mermaidValidator } = setup();
+		const { controller, provider, mermaid } = setup();
 		provider.mermaidSource = 'flowchart LR\nA --> B\nclick A "https://example.com"';
-		mermaidValidator.rejections.set(
+		mermaid.rejections.set(
 			provider.mermaidSource,
 			'Links and click handlers are not allowed in Mermaid diagrams.'
 		);

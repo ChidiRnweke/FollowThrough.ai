@@ -1,4 +1,5 @@
 import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
+import type { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import { createWidgetRules } from '$lib/factories/widgets/rules';
 import type { TextSelection } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
@@ -537,7 +538,7 @@ describe('Agent tool coverage invariants', () => {
 			capabilityDependencies<DiagramStudioDependencies>({
 				...agentToolResultsFixture(),
 				canvasSource: new PresentedCanvasSource(sessions),
-				diagramFinder: diagrams
+				diagrams: capabilityDependencies<DiagramLibrary>({ get: (id) => diagrams.get(id) })
 			})
 		);
 		const factory = capabilityDependencies<ControllerFactory>({ diagramStudio: () => controller });

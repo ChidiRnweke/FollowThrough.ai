@@ -13,7 +13,7 @@ import { ExternalServiceError, ValidationError } from '$lib/errors';
  * that do not exist, and a diagram full of broken boxes it could not see. Iconify
  * carries the brand marks — `logos:aws-s3`, `logos:kubernetes` — and serves each
  * one as an SVG over HTTPS with permissive CORS, which is exactly what draw.io
- * needs for `shape=image;image=<url>` and what `DrawioXmlValidator` already
+ * needs for `shape=image;image=<url>` and what `DrawioDocumentService` already
  * permits. No key, no account.
  */
 const ICON_ORIGIN = 'https://api.iconify.design';

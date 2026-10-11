@@ -2,11 +2,11 @@ import { expect, it } from 'vitest';
 import { diagramEtag } from '$lib/models/diagrams';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import { DiagramEditingService } from './editing';
+import { DiagramRuleService } from './editing';
 
 it('preserves publication state when restoring an untitled revision as a draft', () => {
 	const current = drawioBuilder({ currentRevision: 4, publishedRevision: 2, title: 'Later title' });
-	const result = new DiagramEditingService().prepare(
+	const result = new DiagramRuleService().prepare(
 		current,
 		{
 			kind: 'restore',
@@ -27,7 +27,7 @@ it('preserves publication state when restoring an untitled revision as a draft',
 
 it('does not treat an unchanged unpublished draft as an already completed publication', () => {
 	expect(
-		new DiagramEditingService().revision(
+		new DiagramRuleService().revision(
 			{ kind: 'publish', baseMatches: false, contentChanged: false },
 			{ currentRevision: 4, publishedRevision: 2 }
 		)
@@ -41,7 +41,7 @@ it('keeps the original preview on a completed publication retry', () => {
 		renderedSvg: '<svg>original</svg>'
 	});
 	expect(
-		new DiagramEditingService().prepare(
+		new DiagramRuleService().prepare(
 			current,
 			{
 				kind: 'publish',

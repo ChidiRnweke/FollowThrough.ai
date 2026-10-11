@@ -15,8 +15,7 @@ import type { IWidgetPatchService } from '$lib/services/widgets/patches';
 import type { IWidgetEditingService } from '$lib/services/widgets/edits';
 import type { TodoCreationRules, TodoEditingRules } from '$lib/services/todos/edits';
 import type { ProjectDetailRules } from '$lib/services/projects/details';
-import type { DiagramEditingRules } from '$lib/services/diagrams/editing';
-import type { DiagramLifecycleRules } from '$lib/services/diagrams/trash';
+import type { DiagramRules } from '$lib/services/diagrams/editing';
 import type { SkillMetadataEditing } from '$lib/services/skills/metadata';
 import type { IMemoryEditingService } from '$lib/services/memory/edits';
 import type { AgentPreferenceEditing } from '$lib/services/agent/preferences';
@@ -157,8 +156,7 @@ export interface WorkspaceRules {
 	readonly fields: FieldReplay;
 	readonly commands: WorkspaceCommandRules;
 	readonly exportSettings: ExportSettingsRules;
-	readonly diagramEditing: DiagramEditingRules;
-	readonly diagramLifecycle: DiagramLifecycleRules;
+	readonly diagramRules: DiagramRules;
 	readonly skillMetadata: SkillMetadataEditing;
 	readonly todoCreation: TodoCreationRules;
 	readonly todoEditing: TodoEditingRules;
@@ -3122,11 +3120,11 @@ class ReplicaCommands implements AccountCommands {
 							? 'restore'
 							: 'delete';
 				if (action === 'delete') {
-					const decision = this.rules.diagramLifecycle.decide(action, diagram);
+					const decision = this.rules.diagramRules.decide(action, diagram);
 					if (decision.kind === 'invalid') throw new Error(decision.message);
 					return content(null);
 				}
-				const decision = this.rules.diagramLifecycle.change(action, diagram, now);
+				const decision = this.rules.diagramRules.change(action, diagram, now);
 				if (decision.kind === 'invalid') throw new Error(decision.message);
 				return content({ type: 'diagrams', value: decision.diagram });
 			}
@@ -3134,7 +3132,7 @@ class ReplicaCommands implements AccountCommands {
 			case 'publishDiagram': {
 				const diagram = value('diagrams');
 				if (diagram.kind !== 'drawio') throw new Error('Only draw.io diagrams can be edited');
-				const decision = this.rules.diagramEditing.revision(
+				const decision = this.rules.diagramRules.revision(
 					{
 						kind: command.kind === 'saveDiagram' ? 'save' : 'publish',
 						baseMatches: true,

@@ -242,44 +242,42 @@ const assertFiniteGeometry = (model: Element): void => {
 	}
 };
 
-export class DrawioXmlValidator implements DrawioXmlContentValidator {
-	validate(source: string): string {
-		const normalized = source.trim();
-		if (!normalized) throw new ValidationError('draw.io XML is required.');
-		// Checked before parsing so the answer names the mistake. Deliberately not
-		// unescaped and retried: that would repair a document nobody verified, and
-		// `assertSafeAttributes` below relies on escaped values staying escaped.
-		if (isEscapedMarkup(normalized))
-			throw new ValidationError(
-				'draw.io XML is HTML-escaped: the source begins with "&lt;" rather than "<". Send the raw XML, escaping only inside attribute values.'
-			);
-		if (/<!DOCTYPE|<!ENTITY|<\?xml-stylesheet/i.test(normalized))
-			throw new ValidationError('draw.io XML cannot contain declarations or entities.');
+const validateDrawioXml = (source: string): string => {
+	const normalized = source.trim();
+	if (!normalized) throw new ValidationError('draw.io XML is required.');
+	// Checked before parsing so the answer names the mistake. Deliberately not
+	// unescaped and retried: that would repair a document nobody verified, and
+	// `assertSafeAttributes` below relies on escaped values staying escaped.
+	if (isEscapedMarkup(normalized))
+		throw new ValidationError(
+			'draw.io XML is HTML-escaped: the source begins with "&lt;" rather than "<". Send the raw XML, escaping only inside attribute values.'
+		);
+	if (/<!DOCTYPE|<!ENTITY|<\?xml-stylesheet/i.test(normalized))
+		throw new ValidationError('draw.io XML cannot contain declarations or entities.');
 
-		const dom = parseXml(normalized, 'draw.io XML');
-		try {
-			const document = dom.window.document;
-			const mxfile = document.documentElement;
-			if (mxfile.nodeName !== 'mxfile')
-				throw new ValidationError('draw.io XML must have an mxfile root.');
-			const diagrams = directChildrenNamed(mxfile, 'diagram');
-			if (!diagrams.length) throw new ValidationError('draw.io XML requires a diagram.');
-			for (const diagram of diagrams) {
-				const models = directChildrenNamed(diagram, 'mxGraphModel');
-				if (models.length !== 1)
-					throw new ValidationError('Each draw.io diagram requires one uncompressed mxGraphModel.');
-				const roots = directChildrenNamed(models[0]!, 'root');
-				if (roots.length !== 1) throw new ValidationError('draw.io XML requires a graph root.');
-				assertGraphReferences(models[0]!);
-				assertFiniteGeometry(models[0]!);
-			}
-			assertSafeAttributes(document);
-			return normalized;
-		} finally {
-			dom.window.close();
+	const dom = parseXml(normalized, 'draw.io XML');
+	try {
+		const document = dom.window.document;
+		const mxfile = document.documentElement;
+		if (mxfile.nodeName !== 'mxfile')
+			throw new ValidationError('draw.io XML must have an mxfile root.');
+		const diagrams = directChildrenNamed(mxfile, 'diagram');
+		if (!diagrams.length) throw new ValidationError('draw.io XML requires a diagram.');
+		for (const diagram of diagrams) {
+			const models = directChildrenNamed(diagram, 'mxGraphModel');
+			if (models.length !== 1)
+				throw new ValidationError('Each draw.io diagram requires one uncompressed mxGraphModel.');
+			const roots = directChildrenNamed(models[0]!, 'root');
+			if (roots.length !== 1) throw new ValidationError('draw.io XML requires a graph root.');
+			assertGraphReferences(models[0]!);
+			assertFiniteGeometry(models[0]!);
 		}
+		assertSafeAttributes(document);
+		return normalized;
+	} finally {
+		dom.window.close();
 	}
-}
+};
 
 const safeSvgUrl = (value: string): boolean => value.trim().startsWith('#');
 
@@ -296,72 +294,68 @@ const purifierWindow = (window: JSDOM['window']): WindowLike => ({
 	trustedTypes: window.trustedTypes
 });
 
-export class DrawioSvgSanitizer implements DrawioSvgPreviewSanitizer {
-	sanitize(source: string): string {
-		const normalized = source.trim();
-		if (!normalized) throw new ValidationError('A draw.io SVG preview is required.');
+const sanitizeDrawioSvg = (source: string): string => {
+	const normalized = source.trim();
+	if (!normalized) throw new ValidationError('A draw.io SVG preview is required.');
 
-		const window = new JSDOM('').window;
+	const window = new JSDOM('').window;
+	try {
+		const purifier = createDOMPurify(purifierWindow(window));
+		const sanitized = purifier.sanitize(normalized, {
+			USE_PROFILES: { svg: true, svgFilters: true },
+			FORBID_TAGS: ['script', 'foreignObject', 'iframe', 'object', 'embed', 'style'],
+			FORBID_ATTR: ['onload', 'onclick', 'onerror', 'onbegin', 'onend']
+		});
+		const svgDom = parseXml(String(sanitized), 'SVG preview');
 		try {
-			const purifier = createDOMPurify(purifierWindow(window));
-			const sanitized = purifier.sanitize(normalized, {
-				USE_PROFILES: { svg: true, svgFilters: true },
-				FORBID_TAGS: ['script', 'foreignObject', 'iframe', 'object', 'embed', 'style'],
-				FORBID_ATTR: ['onload', 'onclick', 'onerror', 'onbegin', 'onend']
-			});
-			const svgDom = parseXml(String(sanitized), 'SVG preview');
-			try {
-				const document = svgDom.window.document;
-				if (document.documentElement.nodeName.toLowerCase() !== 'svg')
-					throw new ValidationError('The preview must be an SVG document.');
-				for (const element of Array.from(document.querySelectorAll('*'))) {
-					for (const attribute of Array.from(element.attributes)) {
-						const name = attribute.name.toLowerCase();
-						const value = attribute.value;
-						if (name.startsWith('on')) element.removeAttribute(attribute.name);
-						else if (URL_ATTRIBUTES.has(name) && !safeSvgUrl(value))
-							element.removeAttribute(attribute.name);
-						else if (
-							/\b(?:javascript|vbscript|data)\s*:/i.test(value) ||
-							/url\s*\(\s*['"]?(?!#)/i.test(value) ||
-							/@import|expression\s*\(/i.test(value)
-						)
-							element.removeAttribute(attribute.name);
-					}
+			const document = svgDom.window.document;
+			if (document.documentElement.nodeName.toLowerCase() !== 'svg')
+				throw new ValidationError('The preview must be an SVG document.');
+			for (const element of Array.from(document.querySelectorAll('*'))) {
+				for (const attribute of Array.from(element.attributes)) {
+					const name = attribute.name.toLowerCase();
+					const value = attribute.value;
+					if (name.startsWith('on')) element.removeAttribute(attribute.name);
+					else if (URL_ATTRIBUTES.has(name) && !safeSvgUrl(value))
+						element.removeAttribute(attribute.name);
+					else if (
+						/\b(?:javascript|vbscript|data)\s*:/i.test(value) ||
+						/url\s*\(\s*['"]?(?!#)/i.test(value) ||
+						/@import|expression\s*\(/i.test(value)
+					)
+						element.removeAttribute(attribute.name);
 				}
-				return document.documentElement.outerHTML;
-			} finally {
-				svgDom.window.close();
 			}
+			return document.documentElement.outerHTML;
 		} finally {
-			window.close();
+			svgDom.window.close();
 		}
+	} finally {
+		window.close();
 	}
-}
+};
 
 export interface DrawioLabels {
 	read(source: string): readonly string[];
 }
-export class DrawioLabelReader implements DrawioLabels {
-	/** Decode XML attributes and rich HTML labels; callers apply label policy. */
-	read(source: string): readonly string[] {
-		const xmlDom = parseXml(source, 'draw.io XML');
-		const htmlDom = new JSDOM('');
-		try {
-			const body = htmlDom.window.document.body;
-			// draw.io labels come from a rich-text editor, so the value is HTML. The
-			// walk is shared with the browser; only this decoding differs.
-			return drawioLabelValues(xmlDom.window.document).map((html) => {
-				body.textContent = '';
-				body.innerHTML = html;
-				return body.textContent ?? '';
-			});
-		} finally {
-			xmlDom.window.close();
-			htmlDom.window.close();
-		}
+/** Decode XML attributes and rich HTML labels; callers apply label policy. */
+const readDrawioLabels = (source: string): readonly string[] => {
+	const xmlDom = parseXml(source, 'draw.io XML');
+	const htmlDom = new JSDOM('');
+	try {
+		const body = htmlDom.window.document.body;
+		// draw.io labels come from a rich-text editor, so the value is HTML. The
+		// walk is shared with the browser; only this decoding differs.
+		return drawioLabelValues(xmlDom.window.document).map((html) => {
+			body.textContent = '';
+			body.innerHTML = html;
+			return body.textContent ?? '';
+		});
+	} finally {
+		xmlDom.window.close();
+		htmlDom.window.close();
 	}
-}
+};
 
 export interface DrawioXmlContentValidator {
 	validate(source: string): string;
@@ -369,4 +363,21 @@ export interface DrawioXmlContentValidator {
 
 export interface DrawioSvgPreviewSanitizer {
 	sanitize(source: string): string;
+}
+
+/** Every draw.io document check, for a controller that validates, previews and reads labels. */
+export interface DrawioDocuments
+	extends DrawioXmlContentValidator, DrawioSvgPreviewSanitizer, DrawioLabels {}
+
+/** draw.io documents: structural validation, safe SVG previews and label reading. */
+export class DrawioDocumentService implements DrawioDocuments {
+	validate(source: string): string {
+		return validateDrawioXml(source);
+	}
+	sanitize(source: string): string {
+		return sanitizeDrawioSvg(source);
+	}
+	read(source: string): readonly string[] {
+		return readDrawioLabels(source);
+	}
 }

@@ -1,10 +1,7 @@
 import type { DiagramIndexing } from '$lib/server/services/knowledge-search/retrieval';
+import type { DrawioDocuments } from '$lib/server/services/diagrams/drawio';
 import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import type { DiagramIndexContext } from '$lib/models/knowledge-search';
-import type {
-	DrawioSvgPreviewSanitizer,
-	DrawioXmlContentValidator
-} from '$lib/server/services/diagrams/drawio';
 import type { DiagramWriter } from '$lib/server/services/diagrams/library';
 import type { AppliedRecord } from '$lib/server/services/suggestions/inbox';
 import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
@@ -37,7 +34,6 @@ import type {
 	SuggestionView
 } from '$lib/models/suggestions';
 import type { DateTime, AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { DrawioLabels } from '$lib/server/services/diagrams/drawio';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type {
 	SuggestionAccepter,
@@ -127,9 +123,7 @@ export interface SuggestionsDependencies {
 	memoryIndexer: MemoryIndexer;
 	diagramIndexer: DiagramIndexing;
 	diagramWriter: DiagramWriter;
-	drawioXmlValidator: DrawioXmlContentValidator;
-	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
-	drawioLabels: DrawioLabels;
+	drawio: DrawioDocuments;
 	readonly diagramLabelPresentation: DiagramLabelPresentation;
 	now: () => DateTime;
 	transactionRunner: TransactionRunner;
@@ -203,12 +197,10 @@ export class Suggestions implements SuggestionsController {
 					throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
 				if (created.after.value.sourceNoteId !== input.drawioReview.noteId)
 					throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
-				const source = this.dependencies.drawioXmlValidator.validate(input.drawioReview.source);
-				const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(
-					input.drawioReview.renderedSvg
-				);
+				const source = this.dependencies.drawio.validate(input.drawioReview.source);
+				const renderedSvg = this.dependencies.drawio.sanitize(input.drawioReview.renderedSvg);
 				const searchableText = this.dependencies.diagramLabelPresentation.searchText(
-					this.dependencies.drawioLabels.read(source)
+					this.dependencies.drawio.read(source)
 				);
 				const diagram = await this.dependencies.diagramWriter.persistContent({
 					kind: 'drawio',
@@ -309,7 +301,7 @@ export class Suggestions implements SuggestionsController {
 	): Promise<SuggestionApplicationResult> {
 		const source =
 			suggestion.payload.kind === 'drawio'
-				? this.dependencies.drawioXmlValidator.validate(suggestion.payload.source)
+				? this.dependencies.drawio.validate(suggestion.payload.source)
 				: suggestion.payload.source;
 		const note = await this.dependencies.sourceNotes.get(suggestion.payload.noteId);
 		const now = this.dependencies.now();
@@ -323,7 +315,7 @@ export class Suggestions implements SuggestionsController {
 			searchableText:
 				suggestion.payload.kind === 'drawio'
 					? this.dependencies.diagramLabelPresentation.searchText(
-							this.dependencies.drawioLabels.read(source)
+							this.dependencies.drawio.read(source)
 						)
 					: source,
 			sourceAnchorId: suggestion.sourceAnchorId,

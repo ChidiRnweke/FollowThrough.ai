@@ -8,7 +8,7 @@ import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/dia
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
+import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
@@ -51,7 +51,7 @@ export const durableDiagramFixture = () => {
 		generationRules: new DiagramGenerationRuleService(),
 		...state,
 		selectionOrigins: new InMemorySelectionOrigins(state.notes, state.provenance),
-		drawioXmlValidator: new DrawioXmlValidator(),
+		drawio: new DrawioDocumentService(),
 		suggestionCreator: suggestions,
 		transactionRunner: transactions,
 		noteActionRequests: requests,

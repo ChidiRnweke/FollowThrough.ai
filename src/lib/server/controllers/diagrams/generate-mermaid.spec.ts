@@ -2,7 +2,7 @@ import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/gene
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { DiagramGenerationService } from '$lib/server/services/diagrams/generation';
-import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
+import { MermaidDocumentService } from '$lib/server/services/diagrams/mermaid';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
 import {
 	InMemoryDiagramModel,
@@ -39,7 +39,7 @@ const setup = (generator?: DiagramGenerationService) => {
 			generationRules: new DiagramGenerationRuleService(),
 			selectionOrigins: new InMemorySelectionOrigins(notes, provenance),
 			...generation,
-			...(generator ? { mermaidValidator: new MermaidSubmissionValidator() } : {}),
+			...(generator ? { mermaid: new MermaidDocumentService() } : {}),
 			suggestionCreator: suggestions,
 			transactionRunner: new InMemoryTransactionRunner([
 				notes,

@@ -1,8 +1,13 @@
 import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
+import type {
+	DiagramFinder,
+	DiagramWriteReader,
+	DiagramWriter
+} from '$lib/server/services/diagrams/library';
+import type { MermaidDocuments } from '$lib/server/services/diagrams/mermaid';
 import { DuplicateNoteActionRequest } from '$lib/errors';
 import type { DiagramTask } from '$lib/models/diagrams';
 import type { DiagramGenerationRules } from '$lib/server/services/diagrams/generation-rules';
-import type { DiagramDraftWriter } from '$lib/server/services/diagrams/library';
 import type { DiagramRunContexts } from '$lib/server/services/diagrams/run-context';
 import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
 
@@ -67,14 +72,8 @@ import {
 	type NoteActionSubmission
 } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type {
-	DiagramTextExtractor,
-	MermaidDiagramRenderer
-} from '$lib/server/services/diagrams/content';
 import type { DiagramIndexing as DiagramIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import type { DrawioXmlContentValidator } from '$lib/server/services/diagrams/drawio';
-import type { DiagramFinder, DiagramWriter } from '$lib/server/services/diagrams/library';
-import type { MermaidSourceValidator } from '$lib/server/services/diagrams/submission-validation';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type { RunSignals } from '$lib/server/services/agent/runs/signals';
@@ -198,13 +197,10 @@ export interface DiagramsDependencies {
 	selectionOrigins: Pick<SelectionOriginService, 'resolve'>;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
-	diagramFinder: DiagramFinder & Pick<DiagramDraftWriter, 'getForWrite'>;
-	mermaidValidator: MermaidSourceValidator;
+	diagrams: DiagramFinder & DiagramWriteReader & DiagramWriter;
+	mermaid: MermaidDocuments;
 	now: () => DateTime;
-	drawioXmlValidator: DrawioXmlContentValidator;
-	mermaidRenderer: MermaidDiagramRenderer;
-	textExtractor: DiagramTextExtractor;
-	diagramWriter: DiagramWriter;
+	drawio: DrawioXmlContentValidator;
 	diagramSourceNotes: NoteReader;
 	diagramIndexer: DiagramIndexer;
 	noteActionRequests: NoteActionSubmission;
@@ -451,7 +447,7 @@ export class Diagrams implements DiagramsController {
 		draft: Extract<DiagramSubmission, { kind: 'drawio' }> & { readonly provenanceId: ProvenanceId }
 	): Promise<ConvertInlineMermaidOutput<DiagramSuggestion>> {
 		const { provenanceId, ...diagram } = draft;
-		this.dependencies.drawioXmlValidator.validate(diagram.source);
+		this.dependencies.drawio.validate(diagram.source);
 		const suggestion = await this.dependencies.suggestionCreator.create({
 			kind: 'diagram',
 			noteId,
@@ -462,7 +458,7 @@ export class Diagrams implements DiagramsController {
 	}
 
 	async reviseMermaid(input: ReviseMermaidDiagramInput): Promise<ReviseMermaidDiagramOutput> {
-		const existing = await this.dependencies.diagramFinder.get(input.diagramId);
+		const existing = await this.dependencies.diagrams.get(input.diagramId);
 		if (existing.kind !== 'mermaid')
 			throw new UnsupportedDiagramOperationError('Only Mermaid diagrams can be revised by AI');
 		if (existing.sourceNoteId === undefined)
@@ -475,16 +471,16 @@ export class Diagrams implements DiagramsController {
 				instruction: input.instruction
 			},
 			async (draft) => {
-				const current = await this.dependencies.diagramFinder.getForWrite(existing.id);
+				const current = await this.dependencies.diagrams.getForWrite(existing.id);
 				const revised = this.dependencies.generationRules.revision(
 					current,
 					existing,
 					draft,
 					this.dependencies.now()
 				);
-				const renderedSvg = await this.dependencies.mermaidRenderer.render(revised.source);
-				const searchableText = await this.dependencies.textExtractor.extract(revised);
-				const saved = await this.dependencies.diagramWriter.persistContent({
+				const renderedSvg = await this.dependencies.mermaid.render(revised.source);
+				const searchableText = await this.dependencies.mermaid.extract(revised);
+				const saved = await this.dependencies.diagrams.persistContent({
 					kind: 'mermaid',
 					diagramId: revised.id,
 					title: revised.title,
@@ -504,7 +500,7 @@ export class Diagrams implements DiagramsController {
 	}
 
 	async promote(input: PromoteDiagramInput): Promise<PromoteDiagramOutput<DiagramSuggestion>> {
-		const source = await this.dependencies.diagramFinder.get(input.diagramId);
+		const source = await this.dependencies.diagrams.get(input.diagramId);
 		if (source.kind !== 'mermaid')
 			throw new UnsupportedDiagramOperationError('Only Mermaid diagrams can be promoted');
 		// This is the note-inline promotion, which raises a suggestion against the
@@ -522,7 +518,7 @@ export class Diagrams implements DiagramsController {
 			},
 			async (draft) => {
 				if (draft.kind !== 'drawio') throw new ValidationError('Expected a draw.io diagram');
-				this.dependencies.drawioXmlValidator.validate(draft.source);
+				this.dependencies.drawio.validate(draft.source);
 				const provenanceId = draft.provenanceId;
 				const suggestion = await this.dependencies.suggestionCreator.create({
 					kind: 'diagram',
@@ -809,8 +805,8 @@ export class Diagrams implements DiagramsController {
 	/** Validates a submitted draft; the model may correct a rejected one. */
 	private async decideSubmission(draft: DiagramSubmission): Promise<DiagramSubmissionDecision> {
 		try {
-			if (draft.kind === 'drawio') this.dependencies.drawioXmlValidator.validate(draft.source);
-			else await this.dependencies.mermaidValidator.validate(draft.source);
+			if (draft.kind === 'drawio') this.dependencies.drawio.validate(draft.source);
+			else await this.dependencies.mermaid.validate(draft.source);
 		} catch (error) {
 			if (!(error instanceof ValidationError)) throw error;
 			return { kind: 'rejected', message: error.message };

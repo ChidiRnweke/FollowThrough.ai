@@ -15,10 +15,6 @@ import type { Skill } from '$lib/models/skills';
 import { ExternalServiceError, NotFoundError, StaleRevisionError } from '$lib/errors';
 import type { DiagramFinder, DiagramWriter } from '$lib/server/services/diagrams/library';
 import type { DiagramIndexing as DiagramIndexer } from '$lib/server/services/knowledge-search/retrieval';
-import type {
-	DiagramTextExtractor,
-	MermaidDiagramRenderer
-} from '$lib/server/services/diagrams/content';
 import type { SkillCreator } from '$lib/server/services/skills/library';
 import {
 	noteBuilder,
@@ -64,13 +60,7 @@ export const drawioBuilder = (overrides: Partial<DrawioDiagram> = {}): DrawioDia
 });
 
 export class InMemoryDiagrams
-	implements
-		DiagramFinder,
-		MermaidDiagramRenderer,
-		DiagramTextExtractor,
-		DiagramWriter,
-		DiagramIndexer,
-		SnapshotParticipant
+	implements DiagramFinder, DiagramWriter, DiagramIndexer, SnapshotParticipant
 {
 	constructor(private readonly actor: ActorContext) {}
 	diagrams: Diagram[] = [];
@@ -96,17 +86,6 @@ export class InMemoryDiagrams
 
 	getForWrite(diagramId: DiagramId): Promise<Diagram> {
 		return this.get(diagramId);
-	}
-
-	async render(source: string): Promise<string> {
-		return `<svg>${source}</svg>`;
-	}
-
-	async extract(diagram: { readonly source: string }): Promise<string> {
-		return diagram.source
-			.replace(/<[^>]+>/g, ' ')
-			.replace(/\s+/g, ' ')
-			.trim();
 	}
 
 	async create(diagram: Diagram): Promise<Diagram> {

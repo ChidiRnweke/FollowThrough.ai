@@ -6,13 +6,12 @@ import {
 } from '$lib/server/controllers/diagram-studio/controller';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
+import { DiagramLibraryService } from '$lib/server/services/diagrams/library';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramRuleService } from '$lib/services/diagrams/editing';
 import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
-import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
@@ -46,7 +45,7 @@ it.each([
 		const { database, transactionRunner } = createTransactionContext(writer.db);
 		const projects = new ProjectRecords(owner, database);
 		const notes = createNotesCapability(owner, { db: database, projects });
-		const library = createDiagramServices(
+		const library = new DiagramLibraryService(
 			owner,
 			new DiagramRecords(owner, database),
 			notes.repository,
@@ -59,13 +58,14 @@ it.each([
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
 				...agentToolResultsFixture(),
-				diagramEditing: new DiagramEditingService(),
-				diagramLifecycle: new DiagramLifecycleService(),
-				diagramTrash: library.lifecycle,
-				diagramDraftWriter: library.draftWriter,
-				drawioXmlValidator: { validate: (source) => source },
+				diagramRules: new DiagramRuleService(),
+				diagrams: library,
+				drawio: {
+					validate: (source) => source,
+					read: () => [diagram.searchableText],
+					sanitize: (svg: string) => svg
+				},
 				diagramLabelPresentation: new DiagramLabelPresentationService(),
-				drawioLabels: { read: () => [diagram.searchableText] },
 				diagramIndexer: new InMemoryDiagrams(owner),
 				transactionRunner,
 				now: () => now

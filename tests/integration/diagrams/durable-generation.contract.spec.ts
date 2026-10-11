@@ -22,7 +22,7 @@ import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
+import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { AgentRunStatusService } from '$lib/services/agent/run-status';
@@ -92,7 +92,7 @@ const setup = async (suffix: string) => {
 		},
 		transactionRunner,
 		selectionOrigins: notes.selectionOrigins,
-		drawioXmlValidator: new DrawioXmlValidator(),
+		drawio: new DrawioDocumentService(),
 		suggestionCreator: suggestions.creator,
 		noteActionRequests: requests,
 		runSettlements: settlements,

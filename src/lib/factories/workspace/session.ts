@@ -19,8 +19,7 @@ import { FieldReplayService } from '$lib/services/sync/rebase';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
 import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
-import { DiagramEditingService } from '$lib/services/diagrams/editing';
-import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
+import { DiagramRuleService } from '$lib/services/diagrams/editing';
 import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { NoteLifecycleService } from '$lib/services/notes/lifecycle';
@@ -70,8 +69,7 @@ export const createWorkspaceRules = (): WorkspaceRules => ({
 	fields: new FieldReplayService(),
 	commands: new WorkspaceCommandRulesService(),
 	exportSettings: new ExportSettingsRuleService(),
-	diagramEditing: new DiagramEditingService(),
-	diagramLifecycle: new DiagramLifecycleService(),
+	diagramRules: new DiagramRuleService(),
 	skillMetadata: new SkillMetadataEditingService(),
 	todoCreation: new TodoEditingRulesService(),
 	todoEditing: new TodoEditingRulesService(),

@@ -1,5 +1,5 @@
 import { JSDOM } from 'jsdom';
-import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
+import { DrawioDocumentService } from '$lib/server/services/diagrams/drawio';
 
 export interface DrawioEdge {
 	readonly source: string;
@@ -24,7 +24,7 @@ const textOf = (html: Document, value: string | null): string => {
 /** Inspect semantics only after the production boundary accepts the editable document. */
 export const inspectDrawio = (source: string): DrawioInspection => {
 	try {
-		const validated = new DrawioXmlValidator().validate(source);
+		const validated = new DrawioDocumentService().validate(source);
 		const xml = new JSDOM(validated, { contentType: 'text/xml' });
 		const html = new JSDOM('').window.document;
 		try {

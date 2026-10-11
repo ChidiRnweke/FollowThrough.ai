@@ -64,17 +64,27 @@ export interface DiagramLifecycle {
 	deleteArchived(diagramId: DiagramId): Promise<void>;
 	listArchived(projectId?: ProjectId): Promise<readonly Diagram[]>;
 }
-export class DiagramReadingService
-	implements
+/** Every diagram record operation, for a controller that works across all of them. */
+export interface DiagramLibrary
+	extends
 		DiagramFinder,
 		DiagramLister,
+		DiagramWriter,
 		DiagramConversationFinder,
 		DiagramReferenceCounter,
-		DiagramWriteReader
-{
+		DiagramDraftWriter,
+		DiagramRevisionReader,
+		DiagramWriteReader,
+		DiagramLifecycle {}
+/** The user's diagrams: reads, scoped creation, content and draft writes, revisions and trash. */
+export class DiagramLibraryService implements DiagramLibrary {
 	constructor(
+		private readonly actor: ActorContext,
 		private readonly diagrams: DiagramRepository,
-		private readonly notes: NoteRepository
+		private readonly notes: NoteRepository,
+		private readonly anchors: SourceAnchorRepository,
+		private readonly provenance: ProvenanceRepository,
+		private readonly projects: ProjectRepository
 	) {}
 	async get(diagramId: DiagramId): Promise<Diagram> {
 		const diagram = await this.diagrams.findById(diagramId);
@@ -106,16 +116,6 @@ export class DiagramReadingService
 		await this.get(diagramId);
 		return this.diagrams.countReferencingNotes(diagramId);
 	}
-}
-export class DiagramWritingService implements DiagramWriter {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly diagrams: DiagramRepository,
-		private readonly notes: NoteRepository,
-		private readonly anchors: SourceAnchorRepository,
-		private readonly provenance: ProvenanceRepository,
-		private readonly projects: ProjectRepository
-	) {}
 	async create(diagram: Diagram): Promise<Diagram> {
 		if (diagram.userId !== this.actor.userId)
 			throw new OwnershipError('Cannot create another user’s diagram');
@@ -136,41 +136,6 @@ export class DiagramWritingService implements DiagramWriter {
 		if (!saved)
 			throw new StaleRevisionError('The diagram changed before its content could be saved');
 		return saved;
-	}
-	private async requireOwnedScope(diagram: Diagram): Promise<void> {
-		if (!(await this.projects.findById(diagram.projectId)))
-			throw new NotFoundError('Diagram project was not found');
-		if (diagram.sourceNoteId === undefined) return;
-		const note = await this.notes.findById(diagram.sourceNoteId);
-		if (!note) throw new NotFoundError('Diagram note was not found');
-		if (note.projectId !== diagram.projectId)
-			throw new ValidationError('The diagram and its source note must belong to the same project');
-	}
-}
-export class DiagramLifecycleService implements DiagramLifecycle {
-	constructor(private readonly diagrams: DiagramRepository) {}
-	async getForWrite(diagramId: DiagramId): Promise<Diagram> {
-		const diagram = await this.diagrams.findForWrite(diagramId);
-		if (!diagram) throw new NotFoundError('Diagram was not found');
-		return diagram;
-	}
-	persistTrash(diagram: Diagram): Promise<Diagram> {
-		return this.diagrams.updateTrash(diagram);
-	}
-	async deleteArchived(diagramId: DiagramId): Promise<void> {
-		if (!(await this.diagrams.deleteArchived(diagramId)))
-			throw new StaleRevisionError('The diagram changed before it could be deleted');
-	}
-	listArchived(projectId?: ProjectId): Promise<readonly Diagram[]> {
-		return this.diagrams.listArchived(projectId);
-	}
-}
-export class DiagramRevisionService implements DiagramDraftWriter, DiagramRevisionReader {
-	constructor(private readonly diagrams: DiagramRepository) {}
-	async getForWrite(diagramId: DiagramId): Promise<Diagram> {
-		const diagram = await this.diagrams.findForWrite(diagramId);
-		if (!diagram) throw new NotFoundError('Diagram was not found');
-		return diagram;
 	}
 	persistEdit(write: DiagramRevisionWrite): Promise<DrawioDiagram | undefined> {
 		return this.diagrams.updateIfRevision(
@@ -198,5 +163,24 @@ export class DiagramRevisionService implements DiagramDraftWriter, DiagramRevisi
 		const revision = await this.diagrams.findRevision(diagramId, revisionId);
 		if (!revision) throw new NotFoundError('That version of the diagram is no longer available');
 		return revision;
+	}
+	persistTrash(diagram: Diagram): Promise<Diagram> {
+		return this.diagrams.updateTrash(diagram);
+	}
+	async deleteArchived(diagramId: DiagramId): Promise<void> {
+		if (!(await this.diagrams.deleteArchived(diagramId)))
+			throw new StaleRevisionError('The diagram changed before it could be deleted');
+	}
+	listArchived(projectId?: ProjectId): Promise<readonly Diagram[]> {
+		return this.diagrams.listArchived(projectId);
+	}
+	private async requireOwnedScope(diagram: Diagram): Promise<void> {
+		if (!(await this.projects.findById(diagram.projectId)))
+			throw new NotFoundError('Diagram project was not found');
+		if (diagram.sourceNoteId === undefined) return;
+		const note = await this.notes.findById(diagram.sourceNoteId);
+		if (!note) throw new NotFoundError('Diagram note was not found');
+		if (note.projectId !== diagram.projectId)
+			throw new ValidationError('The diagram and its source note must belong to the same project');
 	}
 }

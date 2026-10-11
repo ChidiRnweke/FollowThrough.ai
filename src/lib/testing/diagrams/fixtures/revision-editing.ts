@@ -3,10 +3,9 @@ import {
 	DiagramStudio,
 	type DiagramStudioDependencies
 } from '$lib/server/controllers/diagram-studio/controller';
-import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
-import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLibraryService } from '$lib/server/services/diagrams/library';
+import { DiagramRuleService } from '$lib/services/diagrams/editing';
 import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
-import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
@@ -30,7 +29,7 @@ export const diagramRevisionFixture = () => {
 	sourceNotes.notes = [noteBuilder()];
 	const diagrams = new InMemoryDiagramRepository(testActor());
 	const index = new InMemoryDiagrams(testActor());
-	const library = createDiagramServices(
+	const library = new DiagramLibraryService(
 		testActor(),
 		diagrams,
 		new InMemoryNoteRepository(testActor()),
@@ -43,20 +42,14 @@ export const diagramRevisionFixture = () => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
 			...agentToolResultsFixture(),
-			diagramEditing: new DiagramEditingService(),
-			diagramLifecycle: new DiagramLifecycleService(),
+			diagramRules: new DiagramRuleService(),
 			diagramSourceNotes: sourceNotes,
-			diagramFinder: library.finder,
-			diagramDraftWriter: library.draftWriter,
-			diagramRevisionReader: library.revisionReader,
-			diagramTrash: library.lifecycle,
+			diagrams: library,
 			now: () => drawioBuilder().createdAt,
 			transactionRunner: new InMemoryTransactionRunner([diagrams, index]),
 			diagramIndexer: index,
-			drawioXmlValidator: { validate: (source) => source },
-			diagramLabelPresentation: new DiagramLabelPresentationService(),
-			drawioLabels: { read: () => ['labels'] },
-			drawioSvgSanitizer: { sanitize: (svg) => svg }
+			drawio: { validate: (source) => source, read: () => ['labels'], sanitize: (svg) => svg },
+			diagramLabelPresentation: new DiagramLabelPresentationService()
 		})
 	);
 	return { diagrams, controller, index };
