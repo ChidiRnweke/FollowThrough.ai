@@ -157,7 +157,6 @@ UI conventions — tokens, type scale, the interaction contract — are in
 
 - [Architecture rules](docs/architecture/README.md) and [type narrowing](docs/architecture/type-narrowing.md)
 - [Design system](docs/design/design-system.md) and its [derived agent digest](docs/design/agent-digest.md)
-- [Implementation plans](docs/plans/)
 - [Contribution and PR evidence rules](AGENTS.md)
 - [Published documentation source](docs/src/content/docs/)
 

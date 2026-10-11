@@ -42,8 +42,7 @@ repair protocol. Account reset removes local records and unsent work after confi
 server data remains. The guarded outbox handles single-resource commands. Compound operations,
 binary transfers, historical retrieval and agent execution remain online.
 
-See the [implementation plan](../plans/workspace-sync-simplification-plan.md) for execution
-results. The [earlier client-only benchmark](../pr-evidence/incremental-sync/performance.md)
+The [earlier client-only benchmark](../pr-evidence/incremental-sync/performance.md)
 does not establish PostgreSQL or production PWA performance. Historical review captures live
 in [the earlier evidence](../pr-evidence/incremental-sync/invariants/README.md); their granular
 storage-recovery behavior has been superseded by account export/reset.
