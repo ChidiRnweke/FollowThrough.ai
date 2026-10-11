@@ -78,7 +78,7 @@ export const promiseExtractionFixture = () => {
 		runSignals: new RunSignalService(runs, runs),
 		suggestionCreator: suggestions,
 		trustPolicyEvaluator: trust,
-		todoCreator: todos,
+		todoLibrary: todos,
 		suggestionAccepter: suggestions,
 		suggestionEffects: effects,
 		transactionRunner: transactions

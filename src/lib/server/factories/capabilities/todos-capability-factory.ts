@@ -14,20 +14,7 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import { TodoRecords } from '$lib/server/repositories/todos/postgres/todos';
-import {
-	TodoCreationService,
-	TodoReadingService,
-	TodoEditingService,
-	TodoLifecycleService,
-	TodoContextService,
-	type TodoCreator,
-	type TodoReader,
-	type TodoEditor,
-	type TodoDeleter,
-	type TodoLister,
-	type WaitingOnFinder,
-	type TodoContextReader
-} from '$lib/server/services/todos/catalog';
+import { TodoCatalog, type TodoLibrary } from '$lib/server/services/todos/catalog';
 import type { TodoRepository } from '$lib/server/repositories/todos/todos';
 import type { DateTime } from '$lib/models/workspace';
 import {
@@ -61,7 +48,7 @@ export interface TodosCapability {
 	readonly creationRules: TodoCreationRules;
 	readonly editingRules: TodoEditingRules;
 	readonly presentation: TodoPresentation;
-	readonly services: TodoServices;
+	readonly catalog: TodoLibrary;
 	readonly batchReceipts: TodoBatchReceiptService;
 	readonly promiseExtractor: PromiseExtractor;
 	readonly promiseRules: IPromiseRules;
@@ -77,7 +64,7 @@ export const createTodosCapability = (
 	editingRules: new TodoEditingRulesService(),
 	presentation: new TodoPresentationService(),
 	batchReceipts: new TodoBatchReceipts(new TodoBatchReceiptRecords(actor, input.db)),
-	services: createTodoServices(
+	catalog: createTodoCatalog(
 		actor,
 		new TodoRecords(actor, input.db),
 		input.projects,
@@ -98,16 +85,7 @@ export const createTodosCapability = (
 	)
 });
 
-export interface TodoServices {
-	readonly creator: TodoCreator;
-	readonly reader: TodoReader;
-	readonly editor: TodoEditor;
-	readonly deleter: TodoDeleter;
-	readonly lister: TodoLister;
-	readonly waitingOn: WaitingOnFinder;
-	readonly context: TodoContextReader;
-}
-export const createTodoServices = (
+export const createTodoCatalog = (
 	actor: ActorContext,
 	todos: TodoRepository,
 	projects: ProjectRepository,
@@ -115,15 +93,4 @@ export const createTodoServices = (
 	notes: NoteRepository,
 	provenance: ProvenanceRepository,
 	clock: () => DateTime = () => new Date().toISOString() as DateTime
-): TodoServices => {
-	const reading = new TodoReadingService(todos);
-	return {
-		creator: new TodoCreationService(actor, todos, projects, anchors, notes, provenance),
-		reader: reading,
-		lister: reading,
-		waitingOn: reading,
-		editor: new TodoEditingService(actor, todos, anchors, notes, provenance),
-		deleter: new TodoLifecycleService(todos, clock),
-		context: new TodoContextService(anchors, notes, provenance)
-	};
-};
+): TodoLibrary => new TodoCatalog(actor, todos, projects, anchors, notes, provenance, clock);

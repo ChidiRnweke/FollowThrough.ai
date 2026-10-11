@@ -886,7 +886,7 @@ describe('Agent tool coverage invariants', () => {
 				todoPresentation: new TodoPresentationService(),
 				todoEditingRules: new TodoEditingRulesService(),
 				todoCreationRules: new TodoEditingRulesService(),
-				todoCreator: todos,
+				todoLibrary: todos,
 				todoBatchReceipts: new TodoBatchReceipts(receipts),
 				transactionRunner: new InMemoryTransactionRunner([todos, receipts])
 			})

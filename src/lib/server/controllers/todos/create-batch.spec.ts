@@ -1,5 +1,5 @@
 import { createTodoBatchSchema } from '$lib/models/todos';
-import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
+import { createTodoCatalog } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
@@ -29,7 +29,7 @@ const setup = () => {
 	const receipts = new InMemoryTodoBatchReceipts(testActor());
 	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const catalog = createTodoServices(
+	const catalog = createTodoCatalog(
 		testActor(),
 		records,
 		projects,
@@ -46,7 +46,7 @@ const setup = () => {
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),
 			todoCreationRules: new TodoEditingRulesService(),
-			todoCreator: catalog.creator,
+			todoLibrary: catalog,
 			todoBatchReceipts: new TodoBatchReceipts(receipts),
 			transactionRunner: new InMemoryTransactionRunner([records, receipts])
 		})

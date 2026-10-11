@@ -27,12 +27,8 @@ const setup = () => {
 				todoPresentation: new TodoPresentationService(),
 				todoEditingRules: new TodoEditingRulesService(),
 				todoCreationRules: new TodoEditingRulesService(),
-				todoLister: todos,
-				todoContextReader: todos,
-				todoReader: todos,
-				todoEditor: todos,
-				transactionRunner: new InMemoryTransactionRunner([todos]),
-				todoDeleter: todos
+				todoLibrary: todos,
+				transactionRunner: new InMemoryTransactionRunner([todos])
 			})
 		)
 	};

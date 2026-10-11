@@ -21,7 +21,7 @@ const setup = async (suffix: string) => {
 	const sync = createSyncCapability(actor, { db: database });
 	const projects = new ProjectRecords(actor, database);
 	const notes = createNotesCapability(actor, { db: database, projects });
-	const { services: catalog } = createTodosCapability(actor, {
+	const { catalog } = createTodosCapability(actor, {
 		db: database,
 		projects,
 		notes: notes.repository,
@@ -40,11 +40,7 @@ const setup = async (suffix: string) => {
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			transactionRunner,
-			todoCreator: catalog.creator,
-			todoReader: catalog.reader,
-			todoEditor: catalog.editor,
-			todoContextReader: catalog.context,
-			todoDeleter: catalog.deleter
+			todoLibrary: catalog
 		})
 	);
 	return { ...seeded, controller, sync };

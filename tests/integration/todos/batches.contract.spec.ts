@@ -35,9 +35,7 @@ const setup = async (suffix: string) => {
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),
 			todoCreationRules: new TodoEditingRulesService(),
-			todoCreator: capability.services.creator,
-			todoEditor: capability.services.editor,
-			todoContextReader: capability.services.context,
+			todoLibrary: capability.catalog,
 			todoBatchReceipts: capability.batchReceipts,
 			transactionRunner
 		})

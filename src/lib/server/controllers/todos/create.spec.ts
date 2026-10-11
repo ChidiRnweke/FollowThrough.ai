@@ -1,5 +1,5 @@
 import type { CreateTodoInput } from '$lib/models/todos';
-import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
+import { createTodoCatalog } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
@@ -32,7 +32,7 @@ const setup = () => {
 	const notes = new InMemoryNoteRepository(testActor());
 	const provenance = new InMemoryProvenanceRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const service = createTodoServices(testActor(), todos, projects, anchors, notes, provenance);
+	const service = createTodoCatalog(testActor(), todos, projects, anchors, notes, provenance);
 	const controller = new Todos(
 		testActor(),
 		new WorkspaceCommandRulesService(),
@@ -42,7 +42,7 @@ const setup = () => {
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),
 			todoCreationRules: new TodoEditingRulesService(),
-			todoCreator: service.creator
+			todoLibrary: service
 		}),
 		() => testNow
 	);

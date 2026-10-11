@@ -1,5 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { CreateTodoInput, Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
+import type { Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
 import type { DateTime } from '$lib/models/workspace';
 import { NotFoundError, OwnershipError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
@@ -42,42 +42,37 @@ export interface TodoContextReader {
 	readContexts(todos: readonly Todo[]): Promise<readonly TodoContext[]>;
 }
 
-async function validateAnchor(
-	anchors: SourceAnchorRepository,
-	notes: NoteRepository,
-	anchorId: NonNullable<CreateTodoInput['sourceAnchorId']>,
-	projectId: CreateTodoInput['projectId']
-): Promise<void> {
-	const anchor = await anchors.findById(anchorId);
-	const note = anchor ? await notes.findById(anchor.noteId) : undefined;
-	if (!anchor || !note || note.projectId !== projectId)
-		throw new NotFoundError('Todo source anchor was not found');
-}
+/** Everything the todos controller needs from the catalog, as one seam. */
+export interface TodoLibrary
+	extends
+		TodoCreator,
+		TodoReader,
+		TodoLister,
+		WaitingOnFinder,
+		TodoEditor,
+		TodoDeleter,
+		TodoContextReader {}
 
-export class TodoCreationService implements TodoCreator {
+export class TodoCatalog implements TodoLibrary {
 	constructor(
 		private readonly actor: ActorContext,
 		private readonly todos: TodoRepository,
 		private readonly projects: ProjectRepository,
 		private readonly anchors: SourceAnchorRepository,
 		private readonly notes: NoteRepository,
-		private readonly provenance: ProvenanceRepository
+		private readonly provenance: ProvenanceRepository,
+		private readonly clock: () => DateTime = now
 	) {}
+
 	async create(todo: Todo): Promise<Todo> {
 		if (todo.userId !== this.actor.userId)
 			throw new OwnershipError('Cannot create another user’s task');
 		if (!(await this.projects.findById(todo.projectId)))
 			throw new NotFoundError('Todo project was not found');
-		if (todo.sourceAnchorId)
-			await validateAnchor(this.anchors, this.notes, todo.sourceAnchorId, todo.projectId);
-		if (todo.provenanceId && !(await this.provenance.findById(todo.provenanceId)))
-			throw new NotFoundError('Todo provenance was not found');
+		await this.validateReferences(todo);
 		return this.todos.insert(todo);
 	}
-}
 
-export class TodoReadingService implements TodoReader, TodoLister, WaitingOnFinder {
-	constructor(private readonly todos: TodoRepository) {}
 	async get(todoId: TodoId): Promise<Todo> {
 		const todo = await this.todos.findById(todoId);
 		if (!todo) throw new NotFoundError('Todo was not found', { todoId });
@@ -95,16 +90,7 @@ export class TodoReadingService implements TodoReader, TodoLister, WaitingOnFind
 	findWaitingOn(): Promise<readonly Todo[]> {
 		return this.list({ responsibility: 'waiting_on' });
 	}
-}
 
-export class TodoEditingService implements TodoEditor {
-	constructor(
-		private readonly actor: ActorContext,
-		private readonly todos: TodoRepository,
-		private readonly anchors: SourceAnchorRepository,
-		private readonly notes: NoteRepository,
-		private readonly provenance: ProvenanceRepository
-	) {}
 	async getForEdit(todoId: TodoId): Promise<Todo> {
 		const todo = await this.todos.findForUpdate(todoId);
 		if (!todo) throw new NotFoundError('Todo was not found', { todoId });
@@ -114,10 +100,7 @@ export class TodoEditingService implements TodoEditor {
 		if (todo.userId !== this.actor.userId)
 			throw new OwnershipError('Cannot edit another user’s task');
 		if (!todo.title) throw new ValidationError('Todo title is required');
-		if (todo.sourceAnchorId)
-			await validateAnchor(this.anchors, this.notes, todo.sourceAnchorId, todo.projectId);
-		if (todo.provenanceId && !(await this.provenance.findById(todo.provenanceId)))
-			throw new NotFoundError('Todo provenance was not found');
+		await this.validateReferences(todo);
 		return this.todos.update(todo);
 	}
 	async validateLinkedNote(
@@ -128,26 +111,12 @@ export class TodoEditingService implements TodoEditor {
 		if (!note || note.projectId !== projectId || note.kind !== 'note' || note.archivedAt)
 			throw new NotFoundError('Todo linked note was not found');
 	}
-}
 
-export class TodoLifecycleService implements TodoDeleter {
-	constructor(
-		private readonly todos: TodoRepository,
-		private readonly clock: () => DateTime = now
-	) {}
 	async softDelete(todoId: TodoId): Promise<void> {
-		if (!(await this.todos.findById(todoId)))
-			throw new NotFoundError('Todo was not found', { todoId });
+		await this.get(todoId);
 		await this.todos.softDelete(todoId, this.clock());
 	}
-}
 
-export class TodoContextService implements TodoContextReader {
-	constructor(
-		private readonly anchors: SourceAnchorRepository,
-		private readonly notes: NoteRepository,
-		private readonly provenance: ProvenanceRepository
-	) {}
 	async readContext(todo: Todo): Promise<TodoContext> {
 		const anchor = todo.sourceAnchorId
 			? await this.anchors.findById(todo.sourceAnchorId)
@@ -167,5 +136,16 @@ export class TodoContextService implements TodoContextReader {
 	}
 	async readContexts(todos: readonly Todo[]): Promise<readonly TodoContext[]> {
 		return Promise.all(todos.map((todo) => this.readContext(todo)));
+	}
+
+	private async validateReferences(todo: Todo): Promise<void> {
+		if (todo.sourceAnchorId) {
+			const anchor = await this.anchors.findById(todo.sourceAnchorId);
+			const note = anchor ? await this.notes.findById(anchor.noteId) : undefined;
+			if (!anchor || !note || note.projectId !== todo.projectId)
+				throw new NotFoundError('Todo source anchor was not found');
+		}
+		if (todo.provenanceId && !(await this.provenance.findById(todo.provenanceId)))
+			throw new NotFoundError('Todo provenance was not found');
 	}
 }

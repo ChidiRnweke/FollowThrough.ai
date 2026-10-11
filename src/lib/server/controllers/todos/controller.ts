@@ -52,14 +52,7 @@ import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { SuggestionAccepter, SuggestionCreator } from '$lib/server/services/suggestions/inbox';
-import type {
-	TodoContextReader,
-	TodoCreator,
-	TodoDeleter,
-	TodoEditor,
-	TodoLister,
-	TodoReader
-} from '$lib/server/services/todos/catalog';
+import type { TodoLibrary } from '$lib/server/services/todos/catalog';
 import type { PromiseExtractor } from '$lib/server/services/todos/promise-discovery';
 import type { IPromiseRules } from '$lib/server/services/todos/promise-rules';
 import type { RunSignals } from '$lib/server/services/agent/runs/signals';
@@ -123,16 +116,11 @@ export interface TodosDependencies {
 	readonly todoCreationRules: TodoCreationRules;
 	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
-	todoLister: TodoLister;
-	todoContextReader: TodoContextReader;
-	todoReader: TodoReader;
-	todoEditor: TodoEditor;
-	todoDeleter: TodoDeleter;
+	todoLibrary: TodoLibrary;
 	selectionOrigins: SelectionOriginService;
 	promiseExtractor: PromiseExtractor;
 	suggestionCreator: SuggestionCreator;
 	trustPolicyEvaluator: TrustPolicyEvaluator;
-	todoCreator: TodoCreator;
 	todoBatchReceipts: TodoBatchReceiptService;
 	suggestionAccepter: SuggestionAccepter;
 	suggestionEffects: SuggestionEffectService;
@@ -195,14 +183,14 @@ export class Todos implements TodosController {
 		private readonly clock: () => DateTime = () => new Date().toISOString() as DateTime
 	) {}
 	async get(input: GetTodoViewInput): Promise<TodoView> {
-		const todo = await this.dependencies.todoReader.get(input.todoId);
-		const context = await this.dependencies.todoContextReader.readContext(todo);
+		const todo = await this.dependencies.todoLibrary.get(input.todoId);
+		const context = await this.dependencies.todoLibrary.readContext(todo);
 		const view = this.dependencies.todoPresentation.view(todo, context);
 		return view;
 	}
 	async list(filter: TodoListFilter): Promise<ListTodosOutput> {
-		const todos = await this.dependencies.todoLister.list(filter);
-		const contexts = await this.dependencies.todoContextReader.readContexts(todos);
+		const todos = await this.dependencies.todoLibrary.list(filter);
+		const contexts = await this.dependencies.todoLibrary.readContexts(todos);
 		return {
 			todos: contexts.map((context) =>
 				this.dependencies.todoPresentation.view(context.todo, context)
@@ -210,21 +198,21 @@ export class Todos implements TodosController {
 		};
 	}
 	async count(filter: TodoListFilter): Promise<number> {
-		return this.dependencies.todoLister.count(filter);
+		return this.dependencies.todoLibrary.count(filter);
 	}
 	async listCategories(): Promise<readonly string[]> {
-		return this.dependencies.todoLister.listCategories();
+		return this.dependencies.todoLibrary.listCategories();
 	}
 	async exportBoardPdf(filter: TodoListFilter): Promise<BoardPdfExportResult> {
 		const [todos, projects] = await Promise.all([
-			this.dependencies.todoLister.list(filter),
+			this.dependencies.todoLibrary.list(filter),
 			this.dependencies.projectLister.list()
 		]);
 		const projectNames = new Map(projects.map((project) => [project.id, project.name]));
 		const projectName = filter.projectId ? projectNames.get(filter.projectId) : undefined;
 		if (filter.projectId && projectName === undefined)
 			throw new NotFoundError('Todo project was not found');
-		const contexts = await this.dependencies.todoContextReader.readContexts(todos);
+		const contexts = await this.dependencies.todoLibrary.readContexts(todos);
 		const views = contexts.map((context) =>
 			this.dependencies.todoPresentation.view(context.todo, context)
 		);
@@ -255,23 +243,23 @@ export class Todos implements TodosController {
 			timestamp: this.clock()
 		});
 		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		return { todo: await this.dependencies.todoCreator.create(decision.todo) };
+		return { todo: await this.dependencies.todoLibrary.create(decision.todo) };
 	}
 	async update(input: UpdateTodoInput): Promise<UpdateTodoOutput> {
 		if (!this.dependencies.todoEditingRules.hasEdits(input)) {
 			throw new InvalidGeneratedContentError('A todo update requires at least one edit');
 		}
 		return this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.todoEditor.getForEdit(input.todoId);
+			const current = await this.dependencies.todoLibrary.getForEdit(input.todoId);
 			if (input.linkedNoteId) {
-				await this.dependencies.todoEditor.validateLinkedNote(
+				await this.dependencies.todoLibrary.validateLinkedNote(
 					input.linkedNoteId,
 					current.projectId
 				);
 			}
 			const edited = this.dependencies.todoEditingRules.edit(current, input, this.clock());
-			const todo = await this.dependencies.todoEditor.update(edited);
-			const context = await this.dependencies.todoContextReader.readContext(todo);
+			const todo = await this.dependencies.todoLibrary.update(edited);
+			const context = await this.dependencies.todoLibrary.readContext(todo);
 			return { todo, view: this.dependencies.todoPresentation.view(todo, context) };
 		});
 	}
@@ -299,8 +287,8 @@ export class Todos implements TodosController {
 		);
 	}
 	async remove(todoId: TodoId): Promise<void> {
-		await this.dependencies.todoReader.get(todoId);
-		await this.dependencies.todoDeleter.softDelete(todoId);
+		await this.dependencies.todoLibrary.get(todoId);
+		await this.dependencies.todoLibrary.softDelete(todoId);
 	}
 	async startExtractPromises(input: StartExtractPromisesInput): Promise<AgentRunReceipt> {
 		const request = {

@@ -1,4 +1,4 @@
-import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
+import { createTodoCatalog } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
@@ -34,7 +34,7 @@ it('clearing a linked note restores the extraction origin in the returned task v
 	tasks.todos = [task];
 	notes.notes = [origin, linked];
 	anchors.anchors = [anchor];
-	const catalog = createTodoServices(
+	const catalog = createTodoCatalog(
 		testActor(),
 		tasks,
 		new InMemoryProjectRepository(testActor()),
@@ -51,8 +51,7 @@ it('clearing a linked note restores the extraction origin in the returned task v
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),
 			todoCreationRules: new TodoEditingRulesService(),
-			todoEditor: catalog.editor,
-			todoContextReader: catalog.context,
+			todoLibrary: catalog,
 			transactionRunner: new InMemoryTransactionRunner([tasks])
 		})
 	);

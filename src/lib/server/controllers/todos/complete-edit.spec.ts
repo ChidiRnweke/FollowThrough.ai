@@ -1,5 +1,5 @@
 import type { UpdateTodoInput } from '$lib/models/todos';
-import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
+import { createTodoCatalog } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
@@ -33,7 +33,7 @@ const setup = () => {
 		waitingOn: 'Sam'
 	});
 	records.todos = [original];
-	const catalog = createTodoServices(
+	const catalog = createTodoCatalog(
 		testActor(),
 		records,
 		new InMemoryProjectRepository(testActor()),
@@ -51,8 +51,7 @@ const setup = () => {
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),
 			todoCreationRules: new TodoEditingRulesService(),
-			todoEditor: catalog.editor,
-			todoContextReader: catalog.context,
+			todoLibrary: catalog,
 			transactionRunner: new InMemoryTransactionRunner([records])
 		}),
 		() => testNow
