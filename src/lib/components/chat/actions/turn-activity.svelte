@@ -8,7 +8,7 @@
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Icon from '$lib/components/icons';
 	import {
-		readDoorLabel,
+		sourcesRowLabel,
 		runningSteps,
 		turnContext,
 		type SubjectActivity
@@ -51,17 +51,15 @@
 	const context = $derived(turnContext(everything, shell));
 	const steps = $derived(running ? runningSteps(tools) : []);
 
-	/** Everything the reader can see at a glance, so the door knows whether it has a job. */
-	const behindTheDoor = $derived(
-		context.read.length + context.barren.length + context.setup.length
-	);
+	/** Everything the reader can see at a glance, so the sources row knows whether it has a job. */
+	const inSourcesRow = $derived(context.read.length + context.barren.length + context.setup.length);
 
 	/**
 	 * State, never `$derived` of the run: a turn that is still streaming re-renders on every
 	 * delta, and a derived flag would throw away the reader's click each time — the same trap
 	 * `chat-reasoning.svelte` documents.
 	 */
-	let doorOpen = $state(false);
+	let sourcesRowOpen = $state(false);
 
 	let titleError = $state<string | null>(null);
 	const resources = $derived(workspaceSession.current?.resources);
@@ -90,7 +88,7 @@
 	all six.
 
 	Two levels, because there are two questions. What changed is the reader's own work and leads.
-	What was only read is the context the answer stands on, and lives behind one door — nobody
+	What was only read is the context the answer stands on, and lives in one sources row — nobody
 	needs it to trust an answer that looks right, and everybody needs it the moment one does not.
 -->
 {#if running}
@@ -114,7 +112,7 @@
 			{/each}
 		</ul>
 	{/if}
-{:else if summarise && (context.changed.length > 0 || behindTheDoor > 0)}
+{:else if summarise && (context.changed.length > 0 || inSourcesRow > 0)}
 	<div class="flex flex-col {CHAT_GAP_SUBJECT}">
 		<!--
 			A change that did not land says so on its own row, in red, and opens onto why.
@@ -131,25 +129,31 @@
 			<SubjectRow {subject} title={titleOf(subject)} />
 		{/each}
 
-		{#if behindTheDoor > 0}
+		{#if inSourcesRow > 0}
 			<!--
-				One door, and it says what it holds rather than how hard the agent worked. "Called 6
+				One sources row, and it says what it holds rather than how hard the agent worked. "Called 6
 				tools" named mechanism: it told the reader the number of times something happened and
 				nothing about what. A count of notes is a count of things they own.
 			-->
-			<Collapsible.Root bind:open={doorOpen}>
+			<Collapsible.Root bind:open={sourcesRowOpen}>
 				<Collapsible.Trigger>
 					{#snippet child({ props })}
 						<Button
 							{...props}
 							variant="ghost"
 							size="sm"
-							class="{CHAT_ROW} text-muted-foreground [&[data-state=open]>svg:first-child]:rotate-90"
+							class="{CHAT_ROW} items-start whitespace-normal text-muted-foreground [&[data-state=open]>svg:first-child]:rotate-90"
 						>
 							<Icon.ChevronRight
-								class="{CHAT_ROW_ICON} transition-transform duration-(--duration-micro)"
+								class="{CHAT_ROW_ICON} mt-0.5 transition-transform duration-(--duration-micro)"
 							/>
-							<span class="min-w-0 truncate">{readDoorLabel(context)}</span>
+							<!-- Two lines rather than one: the label names uploaded files, and at panel width
+							     a truncated one cut off the counts after them — "and 1 note" was the part
+							     lost. `whitespace-normal` cancels the Button base's `nowrap`, which would
+							     otherwise survive the merge (AGENTS.md). Titled for what still clamps. -->
+							<span class="line-clamp-2 min-w-0" title={sourcesRowLabel(context)}
+								>{sourcesRowLabel(context)}</span
+							>
 						</Button>
 					{/snippet}
 				</Collapsible.Trigger>

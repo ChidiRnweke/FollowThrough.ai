@@ -369,7 +369,7 @@ while the region is empty; the empty state and its one action are the whole surf
      below it; the row is the better of the two places, because it is the one already carrying
      the identity and the way in. A run that failed outright is the turn's own error line, which
      sits under the whole turn with its Retry — never a second copy inside the block.
-     **Everything behind the door is a row too**, including the looks that found nothing. Such a
+     **Everything in the sources row is a row too**, including the looks that found nothing. Such a
      look has no subject to be titled by, so its row is titled by what it did — "Read project
      memory" — and the emptiness goes behind its chevron, on the same evidence wash a result
      would have used. An empty result is still a result, and it belongs where a result goes.
@@ -385,16 +385,19 @@ while the region is empty; the empty state and its one action are the whole surf
      line with what came back indented beneath it. Dot-joining the two into one string put the
      question and the answer at one size, separated by the same character that separated their
      own parts.
-  5. **Three depths, one door.** The thread carries what changed. **One door per turn** carries
+  5. **Three depths, one sources row.** The thread carries what changed. **One sources row per turn** — the collapsed row under each assistant reply that lists what the agent read to answer — carries
      what was only read, and it is labelled by what it holds — "Read 4 notes and your project
-     memory" — rather than by how many calls it took to get there. A dialog, offered per subject,
+     memory" — rather than by how many calls it took to get there. Uploaded files are named in
+     the sources row, up to two, because which file an answer stood on is the thing a reader checks
+     first: "Read MSA-2026.pdf, SOW.docx and 1 note"; further files count as "N more
+     attachments", and a file the fold has no name for stays in the count. A dialog, offered per subject,
      carries the passages at full width — the panel is 384px and file content is mono, so more
      than a few lines of it there is a column of fragments. That dialog is an escalation for
      raw passages only; the depths above it stay in place, and the reader never loses the
      conversation to read what was said about it.
   6. **One vertical ladder, declared once.** 4px binds a request to the evidence it introduces
      and to that evidence's own footer link; 12px separates one pass from the next; 20px
-     separates one subject from another and from the read door. Each step is at least 1.6× the
+     separates one subject from another and from the sources row. Each step is at least 1.6× the
      one below it, because a 4px difference at 12px type is below the size the eye reads as a
      grouping — which is exactly what an opened row was before: two gaps, 4 and 8, so the
      excerpt sat as far from its own request as the next request sat from it. 20px and not 24
@@ -415,7 +418,7 @@ while the region is empty; the empty state and its one action are the whole surf
      back as English to recover it.
 
   Mechanism (tool searches, wrapper envelopes, workspace context, preference reads) never earns
-  an entry; it is named once, last, behind the door. A failure a later call put right is a
+  an entry; it is named once, last, in the sources row. A failure a later call put right is a
   retry, not news — its record stays inside the subject, where a reader who opens it can see the
   agent correcting itself.
 
@@ -511,7 +514,7 @@ while the region is empty; the empty state and its one action are the whole surf
 - Do not show raw tool identifiers as primary chat status, silently wait for a first token,
   duplicate a prompt during retry, or hide chat entirely on mobile.
 - Do not give a tool call a row, a name, or a disclosure of its own. The row is the subject it
-  touched; the call is a pass inside it. Do not label a door by how many calls it opens onto, and
+  touched; the call is a pass inside it. Do not label a sources row by how many calls it opens onto, and
   do not print a count above the items it counts. Do not echo raw payloads or version-retention
   housekeeping copy.
 - Do not wrap an approval, or the change preview inside it, in a card; do not repeat the change

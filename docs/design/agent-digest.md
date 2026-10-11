@@ -93,8 +93,9 @@
   and the answer fills space reserved below it (thread-anchor.ts). reserved space collapses as the
   answer grows; once the answer outgrows the port, follow-the-bottom resumes. following never
   scrolls backwards
-- turn reports things touched, not calls made. log door=ONE per turn, inline collapsible, NEVER a
-  dialog
+- turn reports things touched, not calls made. sources row=ONE per turn, inline collapsible, NEVER a
+  dialog. sources row label counts subjects by kind, but NAMES up to 2 uploaded files ("Read MSA.pdf,
+  SOW.docx and 1 note"); extra files="N more attachments"; unnamed file stays counted
 - disclosure is EARNED: a chevron only where something sits behind it the row cannot already say.
   reads of one thing link out w/ no chevron; no generic args+result fallback bucket
 - animated-height disclosure @ --duration-disclosure (200ms), opt-in via chat-disclosure utility
