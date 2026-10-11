@@ -99,6 +99,10 @@
 	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
 	/* The icon dot landing: a short overshoot, so arriving reads as a placement. */
 	--ease-land: cubic-bezier(0.3, 1.55, 0.5, 1);
+	/* An icon becoming live: the line retraces, then the dot lands as the line closes. */
+	--duration-icon-trace: 380ms;
+	--duration-icon-land: 400ms;
+	--delay-icon-land: 230ms;
 	--note-content-width: 90ch;
 	/* Authored document type is deliberately independent from app chrome. The
 	   editor, skill content, and full-size diffs share this ladder; compact diff
@@ -217,7 +221,7 @@
 
 .ft-knob {
 	transition:
-		transform 240ms var(--ease-land),
+		transform 320ms var(--ease-land),
 		fill var(--duration-micro) var(--ease-standard);
 }
 
@@ -237,16 +241,136 @@
 	}
 
 	& .ft-stroke {
-		animation: ft-trace 280ms var(--ease-standard) both;
+		animation: ft-trace var(--duration-icon-trace) var(--ease-standard) both;
 	}
 
 	& .ft-accent {
-		animation: ft-land 300ms 170ms var(--ease-land) both;
+		animation: ft-land var(--duration-icon-land) var(--delay-icon-land) var(--ease-land) both;
 	}
 
 	& .ft-knob {
 		transform: translateX(9px);
 		animation: none;
+	}
+}
+
+/* Pointing at a control outside the rail replays the same motion, so the icon answers the pointer
+   before the click. The dot stays ink: teal still means live. The rail is left out because its
+   icons are destinations whose motion already marks arriving there. */
+:is(a[href], button, [role='button'], [role='menuitem'], [role='tab'], [role='option']):is(
+		:hover,
+		:focus-visible
+	):not(:disabled, [aria-disabled='true'], [data-sidebar='icon-rail'] *) {
+	& .ft-stroke {
+		animation: ft-trace var(--duration-icon-trace) var(--ease-standard) both;
+	}
+
+	& .ft-accent {
+		animation: ft-land var(--duration-icon-land) var(--delay-icon-land) var(--ease-land) both;
+	}
+}
+
+/* The theme mark draws the mode in force: only the half matching `.dark` is displayed. */
+.ft-theme-dark,
+.dark .ft-theme-light {
+	display: none;
+}
+
+.dark .ft-theme-dark {
+	display: inline;
+}
+
+/* A switch morphs one body into the other. The outgoing one pulls in its rays and turns away below
+   the horizon; the incoming one turns up into place and its dot lands last. Keyframes rather than
+   transitions, because mode-watcher suppresses transitions for the frame the mode changes in.
+   The glyph sets `data-morph` only on a switch, so nothing moves when a page loads. Both halves are
+   displayed for the morph, so the block is motion-gated: under reduced motion the swap is instant. */
+@media (prefers-reduced-motion: no-preference) {
+	[data-morph] :is(.ft-theme-light, .ft-theme-dark) {
+		display: inline;
+	}
+
+	[data-morph] :is(.ft-theme-light, .ft-theme-dark, .ft-sun-rays) {
+		transform-box: view-box;
+		transform-origin: center;
+	}
+
+	[data-morph='to-dark'] {
+		& .ft-sun-rays {
+			animation: ft-rays-in 200ms var(--ease-standard) both;
+		}
+
+		& .ft-theme-light {
+			animation: ft-body-set-right 320ms 80ms var(--ease-standard) both;
+		}
+
+		& .ft-theme-dark {
+			animation: ft-body-rise-left 460ms 180ms var(--ease-land) both;
+		}
+
+		& .ft-theme-dark .ft-accent {
+			animation: ft-land var(--duration-icon-land) 520ms var(--ease-land) both;
+		}
+	}
+
+	[data-morph='to-light'] {
+		& .ft-theme-dark {
+			animation: ft-body-set-left 320ms var(--ease-standard) both;
+		}
+
+		& .ft-theme-light {
+			animation: ft-body-rise-right 460ms 160ms var(--ease-land) both;
+		}
+
+		& .ft-sun-rays {
+			animation: ft-rays-out 320ms 380ms var(--ease-land) both;
+		}
+
+		& .ft-theme-light .ft-accent {
+			animation: ft-land var(--duration-icon-land) 560ms var(--ease-land) both;
+		}
+	}
+}
+
+@keyframes ft-rays-in {
+	to {
+		transform: scale(0.4);
+		opacity: 0;
+	}
+}
+
+@keyframes ft-rays-out {
+	from {
+		transform: scale(0.4);
+		opacity: 0;
+	}
+}
+
+@keyframes ft-body-set-right {
+	to {
+		transform: rotate(90deg) scale(0.4);
+		opacity: 0;
+	}
+}
+
+@keyframes ft-body-set-left {
+	to {
+		transform: rotate(-90deg) scale(0.4);
+		opacity: 0;
+	}
+}
+
+@keyframes ft-body-rise-left {
+	from {
+		transform: rotate(-90deg) scale(0.4);
+		opacity: 0;
+	}
+}
+
+@keyframes ft-body-rise-right {
+	from {
+		transform: rotate(90deg) scale(0.4);
+		opacity: 0;
 	}
 }
 

@@ -249,10 +249,19 @@ including the ones the shadcn-svelte CLI writes into a newly added primitive —
   live (`aria-current`, `aria-pressed`, `data-state="on"`/`"active"`, `data-active`). The rest of
   the glyph stays ink, so a selected row shows one teal point, not a teal icon.
 - **Three motions, no per-component code.** Becoming live, the stroke retraces once and the dot
-  lands (`ft-trace`, `ft-land`, under 500ms). Leaving, the dot fades back; nothing retraces.
-  Ongoing work (sync saving or downloading) moves the dot in a loop. The contract is the
-  `ft-stroke` / `ft-accent` classes plus the block in `layout.css`; reduced motion turns the
-  animations off and every state still reads by colour and position.
+  lands (`ft-trace`, `ft-land`, about 630ms, timed by the `--duration-icon-*` tokens). Leaving,
+  the dot fades back; nothing retraces. Ongoing work (sync saving or downloading) moves the dot in
+  a loop. The contract is the `ft-stroke` / `ft-accent` classes plus the block in `layout.css`;
+  reduced motion turns the animations off and every state still reads by colour and position.
+- **Live state needs a live attribute.** A control that styles itself active must also set
+  `aria-current` or `aria-pressed`, or its icon never animates. Styling alone is not the contract.
+- **Pointing replays the motion, outside the rail.** Hovering or keyboard-focusing a link, button,
+  menu item, tab or option replays the trace and the landing with the dot still ink. Rail icons
+  move only when they become live.
+- **Theme draws the mode in force.** A sun in light, a moon in dark. A switch morphs one into the
+  other: the outgoing body pulls in and turns away, the incoming one turns up into place, and its
+  dot lands last. Loading a page does not morph. Which glyph shows is decided by `.dark` in CSS,
+  so it is right before hydration; under reduced motion the swap is instant.
 - **Preferences is a switch, Settings is a gear.** The switch's knob is its dot and slides across
   when on. A skill is a repeatable workflow, so Skill takes the workflow mark and Diagram has its
   own two-box mark.
