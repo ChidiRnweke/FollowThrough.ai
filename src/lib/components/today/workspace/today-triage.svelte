@@ -115,24 +115,35 @@
 <!-- Pinned takes a column only when it has notes; empty, it is one quiet line
      above a full-width Recent rather than half the page holding an invitation. -->
 <div class={['grid gap-x-group gap-y-section', view.pinnedNotes.length > 0 && 'lg:grid-cols-2']}>
-	<section class="flex flex-col gap-item" aria-label="Pinned notes">
+	<!-- The eyebrow binds to its list a step tighter than the rows sit to each other,
+	     so it reads as the list's label rather than its first row. -->
+	<section class="flex flex-col gap-bind" aria-label="Pinned notes">
 		<h2 class="eyebrow">Pinned</h2>
-		{#each view.pinnedNotes as note (note.id)}
-			{@render noteRow(note, true)}
+		{#if view.pinnedNotes.length > 0}
+			<!-- -mx-2 hangs the row padding outside the column so titles align with the eyebrow. -->
+			<div class="-mx-2 flex flex-col gap-item">
+				{#each view.pinnedNotes as note (note.id)}
+					{@render noteRow(note, true)}
+				{/each}
+			</div>
 		{:else}
 			<EmptyState
 				icon={Icon.Pin}
 				title="Pin a note to keep it at hand."
 				class="flex-row justify-start gap-2 py-0 text-left"
 			/>
-		{/each}
+		{/if}
 	</section>
-	<section class="flex flex-col gap-item" aria-label="Recently edited notes">
+	<section class="flex flex-col gap-bind" aria-label="Recently edited notes">
 		<h2 class="eyebrow">Recent</h2>
-		{#each view.recentNotes as note (note.id)}
-			{@render noteRow(note, false)}
+		{#if view.recentNotes.length > 0}
+			<div class="-mx-2 flex flex-col gap-item">
+				{#each view.recentNotes as note (note.id)}
+					{@render noteRow(note, false)}
+				{/each}
+			</div>
 		{:else}
 			<EmptyState icon={Icon.Document} title="Notes you touch show up here." />
-		{/each}
+		{/if}
 	</section>
 </div>
