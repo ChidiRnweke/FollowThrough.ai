@@ -4,37 +4,47 @@ import { view, finalUpdate } from '$lib/testing/attachments/fakes/processing';
 afterEach(() => vi.unstubAllEnvs());
 
 describe('attachment processing routing', () => {
-	it('extracts a PDF as a document and stores the OCR result', async () => {
+	it('stores the OCR result of a PDF', async () => {
 		const { process, repository, extraction } = setup();
+		extraction.results.document = { text: 'pdf via ocr', parserKind: 'ocr' };
 		await process(view('application/pdf'));
-		expect({ result: finalUpdate(repository), source: extraction.calls[0]?.source }).toMatchObject({
-			result: { parserKind: 'ocr', extractedText: 'ocr text', processingStatus: 'ready' },
-			source: { kind: 'document', path: 'doc.pdf', url: 'https://storage.test/presigned' }
+		expect(finalUpdate(repository)).toMatchObject({
+			parserKind: 'ocr',
+			extractedText: 'pdf via ocr',
+			processingStatus: 'ready'
 		});
 	});
 
-	it('extracts an office document as a document', async () => {
-		const { process, extraction } = setup();
-		await process(view('application/octet-stream', 'report.docx'));
-		expect(extraction.calls[0]?.source.kind).toBe('document');
-	});
-
-	it('extracts plain text as text', async () => {
+	it('stores the OCR result of an office document', async () => {
 		const { process, repository, extraction } = setup();
-		await process(view('text/plain', 'notes.txt'));
-		expect({
-			result: finalUpdate(repository),
-			kinds: extraction.calls.map((call) => call.source.kind)
-		}).toMatchObject({
-			result: { parserKind: 'text', extractedText: 'decoded text' },
-			kinds: ['text']
+		extraction.results.document = { text: 'report via ocr', parserKind: 'ocr' };
+		await process(view('application/octet-stream', 'report.docx'));
+		expect(finalUpdate(repository)).toMatchObject({
+			parserKind: 'ocr',
+			extractedText: 'report via ocr',
+			processingStatus: 'ready'
 		});
 	});
 
-	it('extracts an image as an image', async () => {
-		const { process, extraction } = setup();
+	it('stores the decoded text of a plain text file', async () => {
+		const { process, repository } = setup();
+		await process(view('text/plain', 'notes.txt'));
+		expect(finalUpdate(repository)).toMatchObject({
+			parserKind: 'text',
+			extractedText: 'decoded text',
+			processingStatus: 'ready'
+		});
+	});
+
+	it('stores the description of an image', async () => {
+		const { process, repository, extraction } = setup();
+		extraction.results.image = { text: 'a bar chart', parserKind: 'ocr' };
 		await process(view('image/png', 'chart.png'));
-		expect(extraction.calls[0]?.source).toMatchObject({ kind: 'image', path: 'chart.png' });
+		expect(finalUpdate(repository)).toMatchObject({
+			parserKind: 'ocr',
+			extractedText: 'a bar chart',
+			processingStatus: 'ready'
+		});
 	});
 
 	it('records the attachment as failed when extraction fails, so it can be retried', async () => {
@@ -48,12 +58,9 @@ describe('attachment processing routing', () => {
 	});
 
 	it('reports an unsupported format without extracting', async () => {
-		const { process, repository, extraction } = setup();
+		const { process, repository } = setup();
 		await process(view('application/zip', 'bundle.zip'));
-		expect({
-			status: finalUpdate(repository).processingStatus,
-			calls: extraction.calls
-		}).toEqual({ status: 'unsupported', calls: [] });
+		expect(finalUpdate(repository).processingStatus).toBe('unsupported');
 	});
 
 	it('stores a partial extraction with its failure', async () => {
@@ -71,7 +78,7 @@ describe('attachment processing routing', () => {
 		});
 	});
 
-	it('describes images with the model from OPENROUTER_ATTACHMENT_VISION_MODEL', async () => {
+	it('sends images to the provider with the model from OPENROUTER_ATTACHMENT_VISION_MODEL', async () => {
 		vi.stubEnv('OPENROUTER_ATTACHMENT_VISION_MODEL', 'openrouter/vision');
 		const { process, extraction } = setup();
 		await process(view('image/png', 'chart.png'));

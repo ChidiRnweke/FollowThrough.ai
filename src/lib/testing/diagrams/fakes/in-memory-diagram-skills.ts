@@ -64,15 +64,12 @@ export class InMemoryDiagrams
 {
 	constructor(private readonly actor: ActorContext) {}
 	diagrams: Diagram[] = [];
-	indexedIds: DiagramId[] = [];
 	failIndex = false;
 
 	snapshot(): RestoreSnapshot {
 		const diagrams = structuredClone(this.diagrams);
-		const indexedIds = [...this.indexedIds];
 		return () => {
 			this.diagrams = diagrams;
-			this.indexedIds = indexedIds;
 		};
 	}
 
@@ -126,9 +123,8 @@ export class InMemoryDiagrams
 	diagramContextRequirement(diagram: Diagram): DiagramIndexContextRequirement {
 		return this.indexing.diagramContextRequirement(diagram);
 	}
-	async indexDiagram(diagram: Diagram): Promise<void> {
+	async indexDiagram(_diagram: Diagram): Promise<void> {
 		if (this.failIndex) throw new ExternalServiceError('Indexing failed');
-		this.indexedIds.push(diagram.id);
 	}
 }
 

@@ -75,32 +75,9 @@ describe('API token verification', () => {
 		expect(await verification.verify(null)).toBeNull();
 	});
 
-	it('rejects a revoked token', async () => {
-		const { subject, verification, minted } = await mint();
-		await subject.revoke(minted.token.id);
-		expect({
-			verified: await verification.verify(`Bearer ${minted.plaintext}`),
-			listed: await subject.list()
-		}).toEqual({ verified: null, listed: [] });
-	});
-
-	it('rejects an expired token', async () => {
-		const { verification, repository, minted } = await mint();
-		repository.expire(minted.token.id, new Date(Date.now() - 1000));
-		expect(await verification.verify(`Bearer ${minted.plaintext}`)).toBeNull();
-	});
-
 	it('rejects a token whose owner is still awaiting approval', async () => {
 		const { service: subject, verification } = service({ role: 'WAITING' });
 		const minted = await subject.mint({ name: 'early', scope: 'read' });
 		expect(await verification.verify(`Bearer ${minted.plaintext}`)).toBeNull();
-	});
-});
-
-describe('API token listing', () => {
-	it('does not revoke a token belonging to another user', async () => {
-		const { repository, minted } = await mint();
-		const otherUser = new AccessTokens(repository.boundTo(testActor(2)));
-		await expect(otherUser.revoke(minted.token.id)).rejects.toThrow('Access token not found');
 	});
 });

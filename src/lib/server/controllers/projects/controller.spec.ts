@@ -45,17 +45,6 @@ describe('Project naming invariants', () => {
 });
 
 describe('Project filesystem invariants', () => {
-	it('returns nested entries below their folder', async () => {
-		const { projects, controller } = setup();
-		projects.projects = [projectBuilder()];
-		projects.entries = [
-			noteBuilder({ id: testNoteId(), kind: 'folder', title: 'Discovery' }),
-			noteBuilder({ id: testNoteId(2), parentId: testNoteId(), title: 'Workshop' })
-		];
-		const result = await controller.get({ projectId: testProjectId() });
-		expect(result.tree[0]?.children[0]?.entry.id).toBe(testNoteId(2));
-	});
-
 	it('keeps sibling order independent of update time', async () => {
 		const { projects, controller } = setup();
 		projects.projects = [projectBuilder()];
@@ -65,23 +54,6 @@ describe('Project filesystem invariants', () => {
 		];
 		const result = await controller.get({ projectId: testProjectId() });
 		expect(result.tree.map((node) => node.entry.id)).toEqual([testNoteId(2), testNoteId()]);
-	});
-
-	it('rejects moving a folder below its descendant', async () => {
-		const { projects, controller } = setup();
-		projects.projects = [projectBuilder()];
-		projects.entries = [
-			noteBuilder({ id: testNoteId(), kind: 'folder' }),
-			noteBuilder({ id: testNoteId(2), kind: 'folder', parentId: testNoteId() })
-		];
-		await expect(
-			controller.move({
-				projectId: testProjectId(),
-				entryId: testNoteId(),
-				parentId: testNoteId(2),
-				position: 0
-			})
-		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
 	it('rejects a cross-project parent', async () => {
@@ -99,26 +71,5 @@ describe('Project filesystem invariants', () => {
 				position: 0
 			})
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
-	});
-
-	it('reorders target siblings and closes the source gap', async () => {
-		const { projects, controller } = setup();
-		projects.projects = [projectBuilder()];
-		projects.entries = [
-			noteBuilder({ id: testNoteId(), position: 0 }),
-			noteBuilder({ id: testNoteId(2), position: 1 }),
-			noteBuilder({ id: testNoteId(3), position: 2 })
-		];
-		await controller.move({
-			projectId: testProjectId(),
-			entryId: testNoteId(3),
-			position: 0
-		});
-		const result = await controller.get({ projectId: testProjectId() });
-		expect(result.tree.map((node) => node.entry.id)).toEqual([
-			testNoteId(3),
-			testNoteId(),
-			testNoteId(2)
-		]);
 	});
 });

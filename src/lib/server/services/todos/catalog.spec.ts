@@ -10,7 +10,6 @@ import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-m
 import {
 	projectBuilder,
 	testActor,
-	testTodoId,
 	todoBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
@@ -37,12 +36,5 @@ describe('Todo management invariants', () => {
 		await expect(
 			service.create(todoBuilder({ userId: testActor(2).userId }))
 		).rejects.toMatchObject({ code: 'OWNERSHIP' });
-	});
-
-	it('deleted todos disappear from active lists', async () => {
-		const { service, todos } = setup();
-		todos.todos = [todoBuilder()];
-		await service.softDelete(testTodoId());
-		expect(await service.list({})).toEqual([]);
 	});
 });

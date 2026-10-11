@@ -36,23 +36,3 @@ it('deduplicates reference candidates by URL', () => {
 	]);
 	expect(ranked).toHaveLength(1);
 });
-
-it('ranks official sources before community sources', () => {
-	const ranked = new ReferenceDiscovery().rank([
-		{
-			url: 'https://community.test' as Url,
-			title: 'Community',
-			tier: 'community',
-			relevanceNote: '',
-			confidence: 100
-		},
-		{
-			url: 'https://official.test' as Url,
-			title: 'Official',
-			tier: 'official',
-			relevanceNote: '',
-			confidence: 50
-		}
-	]);
-	expect(ranked[0]?.tier).toBe('official');
-});

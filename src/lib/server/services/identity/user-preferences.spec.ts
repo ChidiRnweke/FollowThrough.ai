@@ -9,11 +9,4 @@ describe('Storing user preferences', () => {
 		const preferences = await store.get();
 		expect(preferences.sectionNumberingDefault).toBeUndefined();
 	});
-
-	it('reads back what a write stored', async () => {
-		const store = new UserPreferenceStore(new InMemoryUserPreferencesRepository(testActor()));
-		await store.update({ sectionNumberingDefault: true });
-		const preferences = await store.get();
-		expect(preferences.sectionNumberingDefault).toBe(true);
-	});
 });

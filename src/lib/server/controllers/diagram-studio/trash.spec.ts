@@ -23,7 +23,6 @@ import {
 	noteBuilder,
 	testActor,
 	testConversationId,
-	testNoteId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
@@ -58,7 +57,7 @@ const setup = () => {
 			diagramLabelPresentation: new DiagramLabelPresentationService()
 		})
 	);
-	return { diagrams, controller, index, library, notes };
+	return { diagrams, controller, index };
 };
 describe('diagram trash transitions', () => {
 	it('requires trashing a diagram before permanent deletion', async () => {
@@ -139,48 +138,46 @@ describe('diagram trash transitions', () => {
 });
 describe('Diagram soft delete', () => {
 	it('takes a restored diagram back out of the trash', async () => {
-		const { controller, library, diagrams } = setup();
+		const { controller, diagrams } = setup();
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
 		await controller.archiveProjectDiagram({ diagramId: diagram.id });
 		await controller.restoreProjectDiagram({ diagramId: diagram.id });
-		expect(await library.listArchived()).toHaveLength(0);
-		const listed = await library.listForProject(diagram.projectId);
-		expect(listed.diagrams).toHaveLength(1);
+		expect({
+			trashed: await controller.listTrashedProjectDiagrams({}),
+			listed: (await controller.listProjectDiagrams({ projectId: diagram.projectId })).total
+		}).toEqual({ trashed: [], listed: 1 });
 	});
 	// The defect this whole block exists for: archiving marked the row and hid it
 	// from nothing, so the gallery still listed it. Pressing "Move to trash" again
 	// then failed, because the diagram was already there.
 	it('takes an archived diagram out of the project listing', async () => {
-		const { controller, library, diagrams } = setup();
+		const { controller, diagrams } = setup();
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
 		await controller.archiveProjectDiagram({ diagramId: diagram.id });
-		const listed = await library.listForProject(diagram.projectId);
-		expect(listed.diagrams).toHaveLength(0);
-		expect(await library.listArchived()).toMatchObject([
-			{ id: diagram.id, archivedAt: timestamp, updatedAt: timestamp }
-		]);
-		expect(await library.countForProject(diagram.projectId)).toBe(0);
-	});
-	// The gallery's confirmation promises a note shows the diagram as unavailable
-	// until it is restored, so the note's own listing has to agree.
-	it('takes an archived diagram out of its note listing', async () => {
-		const { controller, library, diagrams, notes } = setup();
-		// The note has to exist: listing a note's diagrams verifies the note first.
-		notes.notes = [noteBuilder({ id: testNoteId() })];
-		const diagram = drawioBuilder({ sourceNoteId: testNoteId() });
-		diagrams.diagrams = [diagram];
-		await controller.archiveProjectDiagram({ diagramId: diagram.id });
-		expect(await library.listForNote(testNoteId())).toHaveLength(0);
+		const input = { projectId: diagram.projectId };
+		expect({
+			listed: (await controller.listProjectDiagrams(input)).diagrams,
+			count: await controller.countProjectDiagrams(input),
+			trashed: (await controller.listTrashedProjectDiagrams({})).map(
+				({ id, archivedAt, updatedAt }) => ({ id, archivedAt, updatedAt })
+			)
+		}).toEqual({
+			listed: [],
+			count: 0,
+			trashed: [{ id: diagram.id, archivedAt: timestamp, updatedAt: timestamp }]
+		});
 	});
 	// Otherwise `create_diagram` refuses a new diagram by naming one the user threw
 	// away, which is worse than the guess that refusal replaced.
 	it('treats a conversation whose diagram is archived as having none', async () => {
-		const { controller, library, diagrams } = setup();
+		const { controller, diagrams } = setup();
 		const diagram = drawioBuilder({ conversationId: testConversationId() });
 		diagrams.diagrams = [diagram];
 		await controller.archiveProjectDiagram({ diagramId: diagram.id });
-		expect(await library.findByConversation(testConversationId())).toBeUndefined();
+		expect(
+			await controller.findConversationDiagram({ conversationId: testConversationId() })
+		).toEqual({});
 	});
 });
