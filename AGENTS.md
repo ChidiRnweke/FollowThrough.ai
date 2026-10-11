@@ -119,8 +119,8 @@ the same header to exercise persisted UI preferences (`sidebar_state`,
 | ------------------------------- | ----------------------------------------------------------------------- |
 | `models/<domain>/`              | Values, types, Zod schemas and constructors. No business logic.         |
 | `services/<domain>/`            | Business rules shared by browser and server. No I/O (ADR 0041).         |
-| `controllers/<area>/`           | Browser operations; sequence browser services. Never repositories.      |
-| `client/services/<area>/`       | Browser services: own IndexedDB repositories and their remote calls.    |
+| `controllers/<area>/`           | Browser local sequencing only: the workspace replica, uploads, exports. |
+| `client/services/<area>/`       | Browser services: own the workspace's IndexedDB and sync transport.     |
 | `client/repositories/<area>/`   | Browser persistence (IndexedDB) only; domain types in and out.          |
 | `server/services/<domain>/`     | Server-only logic against repositories.                                 |
 | `server/repositories/<domain>/` | Database persistence only; domain types in and out.                     |
@@ -207,13 +207,15 @@ dev, info in prod.
   tool factory turns one public controller operation into a tool and converts its arguments and
   result. Tools never sequence operations or call services, and controllers carry no tool vocabulary.
   `docs/architecture/agent-harness.md` describes the harness architecture.
-- Components and adjacent TypeScript call controllers for complete application operations and
-  observe readonly application state. They do not assemble service or remote calls.
+- Components and adjacent TypeScript call controllers for local operations and remote functions
+  for server-only operations, and observe readonly application state. They never call services.
 - Factories construct and connect dependencies and expose their interfaces. They do not execute
   application workflows or expose mutable internals to components.
-- The browser follows the same architecture: component → browser controller → browser service
-  (`client/services`) → browser repository (`client/repositories`, IndexedDB). The server is the
-  browser's provider: the browser service that owns an interaction calls the remote function.
+- A remote function is already the server controller plus boundary parsing, so a component calls
+  it directly. A browser controller exists only for real local sequencing — the workspace (replica,
+  outbox, sync, conflict review), uploads, exports, chat, editor sessions — and never wraps a
+  remote function or calls another controller. The workspace is the only writer of the replica;
+  after a server-only change, refresh it with `workspaceSession.serverChange(request)`.
 - The actor is bound when the request's factory is built, never passed to a method. Entry points
   build `AppFactory.forActor(actor)`; work across all users uses the system composition.
 

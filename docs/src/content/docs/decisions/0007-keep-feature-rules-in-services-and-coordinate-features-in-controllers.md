@@ -70,13 +70,19 @@ only construct and connect; a tool's call runs in the harness.
 `docs/architecture/agent-harness.md` describes how the harness, its services and the tool
 factories connect.
 
-The browser and the server follow one architecture. A component is the browser's entry point; it
-calls a browser controller. Browser controllers sequence browser services under `src/lib/client/services/`,
-which own local storage through browser repositories under `src/lib/client/repositories/` and own
-their interactions with the server. The server is to the browser what a provider is to a server
-service: the browser service that owns an interaction calls the remote function, the server
-controller's entry point, and parses its result. There is no transport layer. Browser controllers
-read reactive state from stores; they never call a browser repository or another controller.
+The browser follows the same rules with fewer layers in use. A component is the browser's entry
+point. A remote function is already the server controller behind boundary parsing and error
+handling, so a component calls it directly for an operation that only the server performs, such as
+moving a project entry or deleting a note permanently. A browser controller exists only where the
+browser itself sequences work: the local-first workspace (its IndexedDB replica, durable outbox,
+synchronization and conflict review, ADR 0040), and flows such as uploads, exports, agent chat and
+editor sessions. A browser controller never wraps a remote function on its own and never calls
+another controller; a component that needs both a server operation and the workspace calls each.
+Browser services under `src/lib/client/services/` own the workspace's storage
+(`src/lib/client/repositories/`, IndexedDB) and parse the server's answers to the workspace's
+synchronization functions. The workspace is the only writer of the replica: every local edit goes
+through its outbox, and a change made directly on the server is followed by a workspace refresh
+before the caller continues.
 
 The actor is part of the request, not of an operation. The entry point builds the controller
 factory for the actor it authenticated, and that factory binds the actor into every controller,
@@ -104,8 +110,9 @@ than the steps callers would need to assemble those operations. Their public int
 expose services, transports, queues or mutable workflow internals. A controller owns the transaction when results must commit
 together; it also owns the sequence and failure handling when an operation crosses a network.
 
-Components use controllers for both local and remote application operations. They do not import
-services, repositories or remote transport functions. Rendering, focus, DOM interaction and local
+Components call browser controllers for local operations and remote functions for server-only
+operations. They do not import services or repositories, and they do not wrap a remote function in a
+controller of their own. Rendering, focus, DOM interaction and local
 form state remain component concerns. Readonly application state and model types may be exposed to
 components without exposing the mechanisms that change that state.
 

@@ -29,7 +29,8 @@ When the user has authorized implementation, proceed without asking again whethe
 - Private helpers stay private. A test does not justify a public export.
 - Controllers own application operations, sequencing, coordination and transactions.
 - Stores own state and controlled updates, without business rules, transport or workflows.
-- Components call controllers and observe readonly application state.
+- Components call controllers for local work and remote functions for server-only work, and
+  observe readonly application state. No controller wraps a remote function.
 - Factories construct dependencies and expose interface-typed results, without running workflows.
 - Services never call other services, including through injected callbacks.
 

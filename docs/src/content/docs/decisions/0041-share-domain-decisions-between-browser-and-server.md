@@ -51,12 +51,12 @@ Server services perform storage work around these rules. Controllers continue to
 across features and own their transactions, as described in ADR 0007. The durable queue and conflict
 review retain the synchronization contract in ADR 0040.
 
-Shared services stay pure in both places. The browser's storage work happens in browser services
-under `src/lib/client/services/<area>/`, over browser repositories under
-`src/lib/client/repositories/<area>/` (IndexedDB), exactly as server services work over server
-repositories. A browser service that owns a server interaction, such as reading a resource or
-submitting a queued command, calls the remote function itself. Browser controllers sequence those
-services and never reach a repository or another controller.
+Shared services stay pure in both places. In the browser, the workspace controller applies these
+rules to local edits before they enter the durable outbox; its browser services under
+`src/lib/client/services/<area>/` own IndexedDB through browser repositories under
+`src/lib/client/repositories/<area>/` and parse the server's synchronization answers. Operations
+only the server performs are remote functions that components call directly (ADR 0007); no browser
+controller wraps them.
 
 This decision covers rules whose meaning is the same in both paths. It does not require shared code
 for different behavior, such as PDF and DOCX layout, or make server-only actions available offline.
