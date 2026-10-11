@@ -14,7 +14,6 @@ export { explainToolFailure, summariseToolResult } from './actions/tool-result';
 export {
 	opensInPlace,
 	toolDisclosure,
-	toolFamily,
 	type EntityKind,
 	type EntityRef,
 	type FieldChange,

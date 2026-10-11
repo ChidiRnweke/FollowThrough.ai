@@ -320,11 +320,3 @@ export function toolDisclosure(tool: ChatToolActivity, shell?: ShellContext): To
  */
 export const opensInPlace = (disclosure: ToolDisclosure): boolean =>
 	disclosure.kind === 'file-output' && disclosure.lines.length > 0;
-
-/**
- * The family a tool was explicitly given, or `undefined` if it would fall through to a guess
- * at its payload. Exported for the spec that holds this map total over the catalog: a guess is
- * a reasonable last resort for a name we have never seen, and a bug for one shipped in
- * `TOOL_DESCRIPTIONS`.
- */
-export const toolFamily = (name: string): Family | undefined => toolPresentationKind(name)?.family;
