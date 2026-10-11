@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.0.1...v5.1.0) (2026-10-11)
+
+
+### Features
+
+* **icons:** draw the theme by mode and replay icon motion on hover ([#430](https://github.com/ChidiRnweke/FollowThrough.ai/issues/430)) ([9a0005d](https://github.com/ChidiRnweke/FollowThrough.ai/commit/9a0005d60e5303831eaa681820e2da9df19eefb3))
+* **motion:** answer ticking, copying, sending and new suggestions ([#441](https://github.com/ChidiRnweke/FollowThrough.ai/issues/441)) ([75b3967](https://github.com/ChidiRnweke/FollowThrough.ai/commit/75b396723f89b96ebbfb32f98cf7fd8d6776b1af))
+
 ## [5.0.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.0.0...v5.0.1) (2026-10-11)
 
 
