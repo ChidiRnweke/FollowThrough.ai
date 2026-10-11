@@ -95,7 +95,8 @@
 			tools: Extract<ReturnType<typeof groupChatParts>[number], { kind: 'approvals' }>['tools']
 		) => void;
 		onretry: (entry: ChatEntry) => void;
-		oncopy: (entry: ChatEntry) => void;
+		/** Resolves once the text is on the clipboard, so the button confirms only a real copy. */
+		oncopy: (entry: ChatEntry) => Promise<void>;
 		onstartediting: (entry: ChatEntry) => void;
 		onaskagain: (entry: ChatEntry) => void;
 		onsuggestion: (id: SuggestionId, decision: 'accept' | 'reject') => void;
@@ -118,6 +119,14 @@
 	// --- keeping the newest question at the top of the port ---
 
 	let stack = $state<HTMLElement | null>(null);
+	let copiedId = $state<ChatEntry['id']>();
+	async function copy(entry: ChatEntry): Promise<void> {
+		await oncopy(entry);
+		copiedId = entry.id;
+		setTimeout(() => {
+			if (copiedId === entry.id) copiedId = undefined;
+		}, 2000);
+	}
 	const latestQuestionId = $derived(entries.findLast((entry) => entry.role === 'user')?.id);
 
 	/**
@@ -370,7 +379,9 @@
 												variant="ghost"
 												size="icon-xs"
 												aria-label="Copy message"
-												onclick={() => oncopy(entry)}><Icon.Copy /></Button
+												onclick={() => void copy(entry)}
+												>{#if copiedId === entry.id}<Icon.Check class="ft-draw" />{:else}<Icon.Copy
+													/>{/if}</Button
 											>
 										{/snippet}
 									</Tip>

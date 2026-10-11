@@ -11,6 +11,7 @@
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import { ModelInlinePicker } from '$lib/components/agent';
 	import * as Icon from '$lib/components/icons';
+	import { Increases } from '$lib/hooks/increases.svelte';
 	import ImageLightbox from '../image-lightbox.svelte';
 
 	/**
@@ -107,6 +108,10 @@
 		onsend: () => void;
 		onstop: () => void;
 	} = $props();
+
+	// A message going out lifts the arrow off while the stop square draws in. Keyed on starts the
+	// user saw, so a page that loads mid-stream shows the stop square still.
+	const sends = new Increases(() => (isStreaming ? 1 : 0));
 </script>
 
 {#snippet chipBadge(chip: ContextChip, automatic: boolean)}
@@ -415,11 +420,16 @@
 							connection === 'offline' ||
 							(!isStreaming && prompt.trim() === '' && !selectedImages.length)}
 					>
-						{#if isStreaming}
-							<Icon.Stop />
-						{:else}
-							<Icon.Send class="size-4" />
-						{/if}
+						<span class="grid *:col-start-1 *:row-start-1">
+							{#if isStreaming}
+								<Icon.Stop class={sends.count > 0 ? 'ft-draw' : undefined} />
+							{:else}
+								<Icon.Send class={['size-4', sends.count > 0 && 'ft-draw']} />
+							{/if}
+							{#key sends.count}{#if sends.count > 0}<Icon.Send
+										class="ft-launch pointer-events-none size-4"
+									/>{/if}{/key}
+						</span>
 					</Button>
 				</div>
 			</InputGroup.Addon>

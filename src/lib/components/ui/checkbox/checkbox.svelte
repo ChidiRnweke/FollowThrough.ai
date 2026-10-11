@@ -2,6 +2,7 @@
 	import { Checkbox as CheckboxPrimitive } from 'bits-ui';
 	import { cn, type WithoutChildrenOrChild } from '$lib/utils.js';
 	import * as Icon from '$lib/components/icons';
+	import { Increases } from '$lib/hooks/increases.svelte';
 
 	let {
 		ref = $bindable(null),
@@ -10,6 +11,9 @@
 		class: className,
 		...restProps
 	}: WithoutChildrenOrChild<CheckboxPrimitive.RootProps> = $props();
+
+	// Ticking draws the check in; a box that loads already ticked just shows it.
+	const ticks = new Increases(() => (checked ? 1 : 0));
 </script>
 
 <CheckboxPrimitive.Root
@@ -29,7 +33,7 @@
 			class="[&>svg]:size-3.5 grid place-content-center text-current transition-none"
 		>
 			{#if checked}
-				<Icon.Check />
+				<Icon.Check class={ticks.count > 0 ? 'ft-draw' : undefined} />
 			{:else if indeterminate}
 				<Icon.Minus />
 			{/if}

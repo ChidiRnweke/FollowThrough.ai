@@ -270,6 +270,78 @@
 	}
 }
 
+/* A glyph that mounts because of something the user just did draws itself in: the tick on a
+   copy button, the check in a ticked box. Put it only on a glyph that mounts after an action —
+   on one that mounts with the page it would animate every load. */
+.ft-draw {
+	& .ft-stroke {
+		animation: ft-trace var(--duration-icon-trace) var(--ease-standard) both;
+	}
+
+	& .ft-accent {
+		animation: ft-land var(--duration-icon-land) var(--delay-icon-land) var(--ease-land) both;
+	}
+}
+
+/* A new notification swings the bell once and settles, the clapper landing last. One swing,
+   never a loop: it reports an arrival, it does not nag. */
+.ft-ring {
+	transform-box: view-box;
+	transform-origin: 50% 12%;
+	animation: ft-ring 720ms var(--ease-standard) both;
+
+	& .ft-accent {
+		animation: ft-land var(--duration-icon-land) 420ms var(--ease-land) both;
+	}
+}
+
+@keyframes ft-ring {
+	0%,
+	100% {
+		rotate: 0deg;
+	}
+	15% {
+		rotate: 14deg;
+	}
+	35% {
+		rotate: -10deg;
+	}
+	55% {
+		rotate: 6deg;
+	}
+	75% {
+		rotate: -3deg;
+	}
+}
+
+/* The send arrow leaving with the message. The resting arrow is swapped out at once; this copy
+   of it flies off up its own heading and fades. */
+.ft-launch {
+	animation: ft-launch 360ms var(--ease-standard) both;
+}
+
+@keyframes ft-launch {
+	to {
+		translate: 9px -9px;
+		opacity: 0;
+	}
+}
+
+/* A todo struck through on completion: the line sweeps across the title the way a pen would.
+   A background line rather than `text-decoration`, because only a background can grow; on a
+   wrapped title each line fragment sweeps at once. */
+.strike-sweep {
+	background: linear-gradient(currentColor, currentColor) no-repeat 0 55% / 100% 1px;
+	box-decoration-break: clone;
+	animation: strike-sweep var(--duration-icon-trace) var(--ease-standard) both;
+}
+
+@keyframes strike-sweep {
+	from {
+		background-size: 0% 1px;
+	}
+}
+
 /* The theme mark draws the mode in force: only the half matching `.dark` is displayed. */
 .ft-theme-dark,
 .dark .ft-theme-light {
@@ -463,9 +535,16 @@
 @media (prefers-reduced-motion: reduce) {
 	.ft-stroke,
 	.ft-accent,
-	.ft-knob {
+	.ft-knob,
+	.ft-ring,
+	.strike-sweep {
 		animation: none !important;
 		transition: none;
+	}
+
+	/* The departing arrow exists only to move; without motion it would sit on the stop square. */
+	.ft-launch {
+		display: none;
 	}
 }
 

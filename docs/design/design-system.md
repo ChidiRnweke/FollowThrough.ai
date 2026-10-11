@@ -258,6 +258,12 @@ including the ones the shadcn-svelte CLI writes into a newly added primitive —
 - **Pointing replays the motion, outside the rail.** Hovering or keyboard-focusing a link, button,
   menu item, tab or option replays the trace and the landing with the dot still ink. Rail icons
   move only when they become live.
+- **Moments answer an action, never a load.** A few moments carry their own motion, each played
+  once: ticking a box draws its check, completing a todo sweeps a line through its title, a copy
+  button's tick draws in once the text is on the clipboard, a new memory suggestion swings the bell,
+  and sending lifts the arrow off while the stop square draws in. Each is keyed on a change the
+  user watched (`Increases` in `$lib/hooks`), so a page that loads in that state shows it still.
+  No loops besides sync; one motion per moment.
 - **Theme draws the mode in force.** A sun in light, a moon in dark. A switch morphs one into the
   other: the outgoing body pulls in and turns away, the incoming one turns up into place, and its
   dot lands last. Loading a page does not morph. Which glyph shows is decided by `.dark` in CSS,

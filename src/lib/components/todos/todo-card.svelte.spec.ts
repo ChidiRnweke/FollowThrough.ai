@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import '../../../routes/layout.css';
 import TodoCard from './todo-card.svelte';
 import type { Todo, TodoView } from '$lib/models/todos';
 import { todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -46,5 +47,16 @@ describe('TodoCard status intent', () => {
 		});
 		await screen.getByRole('checkbox', { name: 'Complete todo' }).click();
 		await vi.waitFor(() => expect(statuses).toEqual([`${id}:done`]));
+	});
+
+	it('sweeps a line through the title while the completion settles', async () => {
+		const screen = await render(TodoCard, {
+			view: view(),
+			onstatus: () => undefined,
+			onopen: () => undefined
+		});
+		await screen.getByRole('checkbox', { name: 'Complete todo' }).click();
+		const title = screen.getByText('Ship the manifest').element();
+		await expect.poll(() => getComputedStyle(title).animationName).toBe('strike-sweep');
 	});
 });
