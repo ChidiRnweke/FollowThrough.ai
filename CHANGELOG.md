@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.2.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.2.0...v5.2.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **today:** keep the workspace strip opaque and space pinned from recent ([#447](https://github.com/ChidiRnweke/FollowThrough.ai/issues/447)) ([cae1c12](https://github.com/ChidiRnweke/FollowThrough.ai/commit/cae1c127b8fa8e68a21149b3476ac841a2158523))
+
 ## [5.2.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.1.0...v5.2.0) (2026-10-11)
 
 
