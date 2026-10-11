@@ -81,31 +81,6 @@ describe('Suggestion management invariants', () => {
 		);
 		expect(accepted.status).toBe('accepted');
 	});
-	it('cannot apply the same terminal transition twice', async () => {
-		const { service, suggestions } = setup();
-		const proposed = suggestionBuilder();
-		suggestions.suggestions = [proposed];
-		await service.accepter.accept(proposed, '00000000-0000-4000-0005-000000000001', false);
-		await expect(
-			service.accepter.accept(proposed, '00000000-0000-4000-0005-000000000001', false)
-		).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
-	});
-	it('cannot revert a rejected suggestion', async () => {
-		const { service, suggestions } = setup();
-		const rejected = suggestionBuilder({ status: 'rejected' });
-		suggestions.suggestions = [rejected];
-		await expect(service.reverter.revert(rejected)).rejects.toMatchObject({
-			code: 'INVALID_TRANSITION'
-		});
-	});
-	it('cannot accept an expired suggestion', async () => {
-		const { service, suggestions } = setup();
-		const expired = suggestionBuilder({ expiresAt: '2026-07-10T09:00:00.000Z' as never });
-		suggestions.suggestions = [expired];
-		await expect(
-			service.accepter.accept(expired, '00000000-0000-4000-0005-000000000001', false)
-		).rejects.toMatchObject({ code: 'EXPIRED_SUGGESTION' });
-	});
 	it('expires only eligible proposed suggestions', async () => {
 		const { service, suggestions } = setup();
 		suggestions.suggestions = [

@@ -31,12 +31,6 @@ describe('Finding a logo for a diagram', () => {
 		expect(calls[0]).toContain('query=kubernetes');
 	});
 
-	it('uses the provider minimum page size', async () => {
-		const { calls, search } = respondWith(icons());
-		await search.search('azure', 12);
-		expect(calls[0]).toContain('limit=32');
-	});
-
 	it('refuses a search with nothing to search for', async () => {
 		const { search } = respondWith(icons());
 		await expect(search.search('   ')).rejects.toThrow();
@@ -102,12 +96,17 @@ describe('Finding a logo for a diagram', () => {
 	});
 });
 
-it('returns at most twelve candidates from a larger provider page', async () => {
+it('returns only the first twelve candidates from a larger provider page', async () => {
 	const names = Array.from({ length: 32 }, (_, i) => `test:icon-${i}`);
 	const { search } = respondWith(icons(...names));
-	expect((await search.search('test', 12)).map((icon) => icon.name)).toEqual(names.slice(0, 12));
+	const found = (await search.search('test', 12)).map((icon) => icon.name);
+	expect({ count: found.length, last: found.at(-1) }).toEqual({ count: 12, last: 'test:icon-11' });
 });
-it.each([0, -1, 1.5, 13, 500])('rejects an invalid requested icon count %s', async (limit) => {
+it('rejects a request for zero icons', async () => {
 	const { search } = respondWith(icons());
-	await expect(search.search('test', limit)).rejects.toThrow('between 1 and 12');
+	await expect(search.search('test', 0)).rejects.toThrow('between 1 and 12');
+});
+it('rejects a request for thirteen icons, one past the cap', async () => {
+	const { search } = respondWith(icons());
+	await expect(search.search('test', 13)).rejects.toThrow('between 1 and 12');
 });

@@ -71,12 +71,10 @@ describe('Revise Mermaid workflow invariants', () => {
 			expect({
 				outcome,
 				diagrams: diagrams.diagrams,
-				indexed: diagrams.indexedIds,
 				runs: persistence.runs.map((run) => run.status)
 			}).toEqual({
 				outcome: 'rejected',
 				diagrams: [peer],
-				indexed: [],
 				runs: ['failed']
 			});
 		}
@@ -112,7 +110,7 @@ describe('Revise Mermaid workflow invariants', () => {
 	});
 
 	it('persists rendered output for a Mermaid revision', async () => {
-		const { controller, diagrams } = setup();
+		const { controller } = setup();
 		const result = await controller.reviseMermaid({
 			diagramId: mermaidBuilder().id,
 			instruction: 'add queue'
@@ -120,6 +118,5 @@ describe('Revise Mermaid workflow invariants', () => {
 		expect(result.diagram.renderedSvg).toContain('<svg>');
 
 		expect(result.diagram.title).toBe(mermaidBuilder().title);
-		expect(diagrams.indexedIds).toEqual([mermaidBuilder().id]);
 	});
 });

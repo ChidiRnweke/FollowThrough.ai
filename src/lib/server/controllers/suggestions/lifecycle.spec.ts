@@ -216,6 +216,22 @@ describe('Suggestion lifecycle invariants', () => {
 			remainingArtifacts: []
 		});
 	});
+	it('cannot accept the same suggestion twice', async () => {
+		const { suggestions, accept } = setup();
+		suggestions.suggestions = [suggestionBuilder()];
+		await accept.accept({ suggestionId: testSuggestionId() });
+		await expect(accept.accept({ suggestionId: testSuggestionId() })).rejects.toMatchObject({
+			code: 'INVALID_TRANSITION'
+		});
+	});
+
+	it('cannot revert a rejected suggestion', async () => {
+		const { suggestions, revert } = setup();
+		suggestions.suggestions = [suggestionBuilder({ status: 'rejected' })];
+		await expect(revert.revert({ suggestionId: testSuggestionId() })).rejects.toMatchObject({
+			code: 'INVALID_TRANSITION'
+		});
+	});
 });
 
 describe('Suggestion transaction invariants', () => {

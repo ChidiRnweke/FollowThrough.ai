@@ -11,7 +11,6 @@ export class InMemoryUploadReservations implements Pick<
 	'listExpiredUploads' | 'deleteExpiredUpload'
 > {
 	deleted: string[] = [];
-	cutoffs: Date[] = [];
 	deleteFailures = new Set<AttachmentUpload['id']>();
 
 	constructor(public rows: OwnedAttachmentUpload[] = []) {}
@@ -21,7 +20,6 @@ export class InMemoryUploadReservations implements Pick<
 		limit: number,
 		after?: UploadRetentionCursor
 	): Promise<readonly OwnedAttachmentUpload[]> {
-		this.cutoffs.push(before);
 		return this.rows
 			.filter(
 				({ upload }) =>

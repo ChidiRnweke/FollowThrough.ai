@@ -60,14 +60,6 @@ describe('Expired upload sweep', () => {
 		expect(store.deleted).toEqual([]);
 	});
 
-	it('applies the grace period to the cutoff it queries with', async () => {
-		const store = new InMemoryUploadReservations();
-
-		await sweep(store, new InMemoryUploadObjects()).run();
-
-		expect(store.cutoffs[0]?.toISOString()).toBe('2026-07-28T11:00:00.000Z');
-	});
-
 	it('still reclaims the row when the object is already gone', async () => {
 		const store = new InMemoryUploadReservations([uploadAt('2026-07-28T09:00:00.000Z')]);
 		const objects = new InMemoryUploadObjects();

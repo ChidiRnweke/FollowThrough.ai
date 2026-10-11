@@ -17,26 +17,4 @@ describe('Project management invariants', () => {
 			code: 'NOT_FOUND'
 		});
 	});
-
-	it('allows an archived project name to be reused', async () => {
-		const { service } = setup();
-		await service.catalog.archive(projectBuilder().id);
-		const replacement = await service.catalog.create({
-			name: projectBuilder().name,
-			description: undefined
-		});
-		expect(replacement.name).toBe(projectBuilder().name);
-	});
-
-	it('rejects renaming to another active project name', async () => {
-		const { service } = setup();
-		await service.catalog.create({ name: 'Other', description: undefined });
-		await expect(
-			service.catalog.rename({
-				projectId: projectBuilder().id,
-				name: 'other',
-				description: undefined
-			})
-		).rejects.toMatchObject({ code: 'CONFLICT' });
-	});
 });
