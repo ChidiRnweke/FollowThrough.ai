@@ -19,7 +19,7 @@
 
 <figure class="flex min-w-0 flex-col gap-2">
 	<figcaption class="flex flex-col gap-0.5">
-		<span class="text-sm font-medium">What it relies on most</span>
+		<span class="text-base font-medium">What it relies on most</span>
 		<span class="text-label text-muted-foreground">The items it looked up most often.</span>
 	</figcaption>
 	{#if rows.length === 0}

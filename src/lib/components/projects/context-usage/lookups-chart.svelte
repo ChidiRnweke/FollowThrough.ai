@@ -21,7 +21,7 @@
 
 <figure class="flex min-w-0 flex-col gap-2">
 	<figcaption class="flex flex-col gap-0.5">
-		<span class="text-sm font-medium">Lookups over time</span>
+		<span class="text-base font-medium">Lookups over time</span>
 		<span class="text-label text-muted-foreground">
 			Each bar is one week: how often the agent looked something up in this project.
 		</span>
@@ -29,7 +29,7 @@
 	{#if rows.length === 0}
 		<p class="text-sm text-muted-foreground">Nothing yet. Ask about this project in a chat.</p>
 	{:else}
-		<Chart.Container config={Chart.chartConfigOf(series)} class="aspect-auto h-56 w-full">
+		<Chart.Container config={Chart.chartConfigOf(series)} class="aspect-auto h-64 w-full">
 			<BarChart
 				data={rows}
 				x="week"

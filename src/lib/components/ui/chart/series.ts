@@ -4,6 +4,8 @@ import type { ChartConfig } from './chart-utils.js';
 export interface ChartSeries {
 	readonly key: string;
 	readonly label: string;
+	/** A colour that carries meaning — `var(--warning)` for "needs you" — instead of the ramp. */
+	readonly color?: string;
 }
 
 /**
@@ -17,7 +19,10 @@ export const seriesColor = (index: number): string =>
 /** The shadcn chart config: a label and colour per series, read by the tooltip and legend. */
 export const chartConfigOf = (series: readonly ChartSeries[]): ChartConfig =>
 	Object.fromEntries(
-		series.map((entry, index) => [entry.key, { label: entry.label, color: seriesColor(index) }])
+		series.map((entry, index) => [
+			entry.key,
+			{ label: entry.label, color: entry.color ?? seriesColor(index) }
+		])
 	);
 
 /** LayerChart series: each reads its field by key and draws in the colour the config names. */

@@ -21,6 +21,14 @@ describe('chart series', () => {
 	});
 });
 
+describe('meaningful colour', () => {
+	it('lets a series name its own colour instead of taking the ramp', () => {
+		expect(
+			chartConfigOf([{ key: 'times', label: 'Times asked', color: 'var(--warning)' }])
+		).toEqual({ times: { label: 'Times asked', color: 'var(--warning)' } });
+	});
+});
+
 describe('count ticks', () => {
 	it('labels whole counts and leaves fractional ticks blank', () => {
 		expect([0, 0.2, 1, 1500].map(countTick)).toEqual(['0', '', '1', '1.5K']);

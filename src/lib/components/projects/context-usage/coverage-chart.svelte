@@ -23,7 +23,7 @@
 
 <figure class="flex min-w-0 flex-col gap-2">
 	<figcaption class="flex flex-col gap-0.5">
-		<span class="text-sm font-medium">How much of each kind it uses</span>
+		<span class="text-base font-medium">How much of each kind it uses</span>
 		<span class="text-label text-muted-foreground">
 			Of everything in this project, how much the agent has looked up at least once.
 		</span>

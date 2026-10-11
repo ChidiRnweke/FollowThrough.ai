@@ -34,14 +34,18 @@
   The series helpers (`chartConfigOf`, `layerSeriesOf`, `valueTick`, `countTick`) live in
   `components/ui/chart`; an axis of counts uses `countTick`, which leaves fractional ticks blank.
 - **Dashboards** (the project's Agent activity page) speak to someone who does not know how the
-  agent works. They read top to bottom as three questions: how is it going (stat tiles, then
-  charts), what should I fix ("Needs your attention"), and where did that come from (the full
-  ranking and the chats). A stat tile is a bordered card — a self-contained unit, not a row —
-  with a label, one number and a sentence saying what the number counts; a bare number with a
-  two-word label is a riddle. Only a number that asks for action takes the destructive tone.
-  Every chart carries a title and a one-line plain caption. Use everyday words ("lookups",
-  "files it can't read", "searches with no answer"), never internal ones ("context", "tool
-  call", "touch").
+  agent works, and they are infographics, not panels. **No cards and no boxes:** hierarchy comes
+  from size and colour alone — a `text-5xl` hero figure, `text-4xl` key figures, `text-2xl`
+  secondary ones, each with a sentence saying what it counts (a bare number with a two-word label
+  is a riddle) — separated by whitespace and hairlines. Colour carries meaning: brand teal is the
+  agent's activity, `--warning` is "needs you", and red is never used for a state. What to fix
+  lives in its own **Needs attention** tab whose trigger carries a warning dot and count when it
+  has anything, and a muted check when it has nothing; the overview links to it from its hero.
+  Every attention item leads with a big warning count, shows itself visually (a bar per missed
+  search, a square per unused item), and offers the action that fixes it ("Write a note", "Fix in
+  Attachments"). Every chart carries a title and a one-line plain caption. Use everyday words
+  ("lookups", "files it can't read", "searches with no answer"), never internal ones ("context",
+  "tool call", "touch").
 - **Project identity:** Projects are identified by the brand teal, never per-project hues: the
   sidebar project icon, `Badge variant="brand"`, breadcrumb links, chat origin lines, artifact
   format badges, and overview resource chips use `--brand` text on the shared `bg-brand/10` wash

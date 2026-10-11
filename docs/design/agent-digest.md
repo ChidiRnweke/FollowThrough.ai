@@ -66,7 +66,7 @@
 - focus ring visible on everything interactive. keyboard-first
 - dark mode: class .dark, first-class. test every component both themes
 - charts: shadcn Chart over LayerChart; helpers in ui/chart (chartConfigOf, layerSeriesOf, valueTick, countTick for count axes)
-- dashboards: plain-language for non-experts. order = stat tiles (bordered cards: label, number, sentence) → charts (title + one-line caption) → "Needs your attention" → full ranking/chats. destructive tone only on a number asking for action
+- dashboards: infographic, plain-language, NO cards/boxes. hierarchy = size (text-5xl hero, 4xl key, 2xl secondary, each + a sentence) + colour (brand=agent activity, --warning="needs you", red never a state). fixes live in a "Needs attention" tab (warning dot+count, muted check when empty); each item = big warning count → visual (bars/squares) → fixing action
 
 ## ai-provenance (signature — no per-feature variants)
 
