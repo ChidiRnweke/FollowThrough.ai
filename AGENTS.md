@@ -115,20 +115,21 @@ the same header to exercise persisted UI preferences (`sidebar_state`,
 
 `src/lib/` is split by role, and the audits enforce the direction of imports between them:
 
-| Directory                      | Holds                                                                   |
-| ------------------------------ | ----------------------------------------------------------------------- |
-| `models/<domain>/`             | Values, types, Zod schemas and constructors. No business logic.         |
-| `services/<domain>/`           | Business rules shared by browser and server. No I/O (ADR 0041).         |
-| `controllers/<area>/`          | Browser-side coordination over shared services, such as offline edits.  |
-| `server/services/<domain>/`    | Server-only logic against repositories.                                 |
-| `server/controllers/<domain>/` | Orchestration across services; the only cross-service seam.             |
-| `remote/<domain>/`             | Zod-validated `query`/`command` — the sole UI→server entry point.       |
-| `stores/<area>/`               | Client `$state` singletons (`workbench`, `rightPanel`, `palette`, …).   |
-| `client/<area>/`               | Browser-only helpers: IndexedDB repositories, sync, drag payloads.      |
-| `hooks/`                       | Reactive environment wrappers (`IsMobile`, `IsDockedPanel`).            |
-| `components/ui/`               | Vendored shadcn-svelte primitives. **Ours to edit** — not a dependency. |
-| `components/<feature>/`        | App components. `components/shell/` is the app chrome.                  |
-| `testing/`                     | Typed fakes, stubs, and recorders for externally observable effects.    |
+| Directory                       | Holds                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------- |
+| `models/<domain>/`              | Values, types, Zod schemas and constructors. No business logic.         |
+| `services/<domain>/`            | Business rules shared by browser and server. No I/O (ADR 0041).         |
+| `controllers/<area>/`           | Browser-side coordination over shared services, such as offline edits.  |
+| `server/services/<domain>/`     | Server-only logic against repositories.                                 |
+| `server/repositories/<domain>/` | External I/O (database, providers, files); domain types in and out.     |
+| `server/controllers/<domain>/`  | Orchestration across services; the only cross-service seam.             |
+| `remote/<domain>/`              | Zod-validated `query`/`command` — the sole UI→server entry point.       |
+| `stores/<area>/`                | Client `$state` singletons (`workbench`, `rightPanel`, `palette`, …).   |
+| `client/<area>/`                | Browser-only helpers: IndexedDB repositories, sync, drag payloads.      |
+| `hooks/`                        | Reactive environment wrappers (`IsMobile`, `IsDockedPanel`).            |
+| `components/ui/`                | Vendored shadcn-svelte primitives. **Ours to edit** — not a dependency. |
+| `components/<feature>/`         | App components. `components/shell/` is the app chrome.                  |
+| `testing/`                      | Typed fakes, stubs, and recorders for externally observable effects.    |
 
 Two locations are easy to miss:
 
@@ -187,13 +188,19 @@ dev, info in prod.
 - Public services are stateless classes that explicitly implement narrow capability interfaces.
   Private helpers stay private. Do not expose a helper solely for a test or wrap every helper
   in a separate class. Production callers define the public capability.
+- The layers are closed: models, services, repositories, controllers and factories, plus stores
+  and components in the browser. Do not introduce another layer to satisfy a checker.
 - Services never call other services, including through function dependencies or renamed ports.
-  Controllers own cross-capability sequencing and transactions.
-- Retained mutable state belongs in a store with an account, editor, execution, worker or process
-  lifetime. A readonly Map is still mutable state. Services may keep readonly collaborators and
-  immutable configuration; operation-local collections are valid.
-- Stores retain state and expose controlled updates. They do not fetch, retry, call providers or
-  make business decisions. Server stores live in `src/lib/server/stores/`.
+  If a service needs another service, cut the capability differently. Controllers own
+  cross-capability sequencing and transactions, and depend on services, never on repositories.
+- The server is stateless. A value one service produces for another stays local to the operation;
+  anything that outlives an operation is a database record. Client caches go through sync.
+- Browser stores retain reactive state and expose controlled updates. They do not fetch, retry,
+  call providers or make business decisions.
+- Entry points (remote functions, API routes, form actions, hooks, the worker) parse incoming
+  data into a model, then call controllers.
+- The agent controller is a harness over an injected tool list. Agent tool factories build tools
+  from service methods and may sequence services privately; they never call controllers.
 - Components and adjacent TypeScript call controllers for complete application operations and
   observe readonly application state. They do not assemble service or remote calls.
 - Factories construct and connect dependencies and expose their interfaces. They do not execute
@@ -246,8 +253,9 @@ Parse external data into narrow types at the boundary; inward of the boundary, r
 total. The pattern catalog with remedies lives in @docs/architecture/type-narrowing.md; the decision and its limits
 are in ADR 0037.
 
-- Parsing happens only in the parse zones: `remote/`, the DB mappers and repository read paths,
-  the provider event mappers, and the client event/storage readers. Schemas live in `models/`
+- Parsing happens only in the parse zones: the caller of a controller (remote functions, API
+  routes, form actions, hooks, the worker), agent tools for model-sent arguments, repositories for
+  the rows and provider data they read, and the client event/storage readers. Schemas live in `models/`
   next to the type they produce. Services and controllers never parse — they receive narrow
   values from both directions.
 - `unknown` type positions, `Record<string, unknown>`, `isRecord`-style guards, cast-probes

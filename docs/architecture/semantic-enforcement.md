@@ -10,6 +10,11 @@ locations. Its diagnostics contain the rule, file, line, column and resolved pro
 The CLI exits with status 1 for violations. A missing local module or a syntax error is a failure,
 not an empty result. No baseline, suppression comment or migration allowance hides findings.
 
+ADR 0007 closes the layer list: models, services, repositories, controllers and factories, plus
+browser stores and components, called from entry points. The `adapters` layer and server stores
+still exist while their code moves to repositories, services and agent tool factories. The rules
+below that name adapters are transitional and are removed with the last of that code.
+
 ## Rules and corrections
 
 | Rule                       | Rejects                                                                                                                                                                                              | Correction                                                                    |

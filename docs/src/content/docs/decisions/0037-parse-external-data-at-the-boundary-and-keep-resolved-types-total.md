@@ -34,16 +34,18 @@ the code can act on.
 
 Parsing happens only in named parse zones:
 
-- the remote functions (`src/lib/remote/`), for request data;
-- the database mappers and repository read paths, for stored rows and JSON columns;
-- co-located external-provider adapters and event mappers, for provider responses and LLM stream
-  items;
+- the caller of a controller — a remote function, API route, form action, server hook or the
+  worker — for request data, before it calls the controller;
+- an agent tool, built by an agent tool factory, for the arguments a model sends, before it calls
+  a service;
+- repositories, for stored rows, JSON columns, provider responses and LLM stream items. A
+  repository takes domain types in and returns domain types;
 - the client event and storage readers, for server events and persisted browser state.
 
 A schema lives next to the type it produces in `src/lib/models/`, with no I/O. Boundaries
 call that schema directly. Models do not export parser wrappers or procedural readers. A
-service or controller never parses: it receives narrow values from the remote functions above it
-and from repositories or provider adapters below it.
+service or controller never parses: it receives narrow values from its caller and from
+repositories.
 
 Strictness is a per-boundary choice, and it follows who owns the producer and who can act on a
 failure. A list read returns an explicit fallback arm for a row that fails to parse, because no

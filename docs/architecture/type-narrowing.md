@@ -700,7 +700,7 @@ execute(input: { readonly arguments: Readonly<Record<string, unknown>> }, action
 ```
 
 `unknown` is the honest type of data nobody has parsed yet. It is legal inside a parse zone, as
-the input to a model-local parser or co-located provider adapter schema. The moment it appears on a field, parameter, or return type in `models/`,
+the input to a model-local parser or the schema the reading repository uses. The moment it appears on a field, parameter, or return type in `models/`,
 `services/`, or `controllers/`, every consumer must guess the shape — and each guesses
 differently.
 
@@ -787,7 +787,7 @@ shape. `JSON.parse(x) as unknown` followed by a schema is the honest form.
 (`src/lib/client/agent/runs/session-storage.ts`).
 
 The same applies to HTTP: `const body: unknown = await response.json(); return schema.parse(body)`.
-The honest intermediate stays weak only inside the provider adapter.
+The honest intermediate stays weak only inside the provider repository.
 
 ## 6. Double casts — [judgment]
 
@@ -797,7 +797,7 @@ const item = value as unknown as AgentInputItem;
 ```
 
 **Remedy:** parse foreign data into a locally owned persisted union, then map that union to the
-SDK type inside the provider adapter. A third-party generic that cannot be expressed locally needs
+SDK type inside the provider repository. A third-party generic that cannot be expressed locally needs
 a precise `audit-allow`, not a second assertion. Exemplar: `PersistedSessionItem`
 (`src/lib/models/agent/session-item.ts`) — parsed at the repository mapper, mapped to
 `AgentInputItem` only in `services/agent/conversations/buffer.ts`, with an `unrecognised` arm so a
