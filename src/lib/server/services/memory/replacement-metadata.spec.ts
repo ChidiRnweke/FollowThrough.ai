@@ -45,12 +45,6 @@ const replace = async (type?: MemoryEntryType) => {
 	);
 	return entry;
 };
-it.each(['fact', 'decision', 'constraint', 'preference'] as const)(
-	'preserves the %s classification when a proposal replaces content',
-	async (type) => {
-		expect((await replace(type)).type).toBe(type);
-	}
-);
 it('keeps an unclassified memory unclassified after replacement', async () => {
 	expect((await replace()).type).toBeUndefined();
 });

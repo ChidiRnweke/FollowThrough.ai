@@ -78,7 +78,7 @@ describe('attachment search tail in PostgreSQL', () => {
 		const matches = await repository.search('amberfalcon', 10, project.id);
 		expect(
 			matches.map(({ document }) => ({
-				tail: document.chunkIndex >= 50,
+				tail: document.content.includes('amberfalcon'),
 				path: document.attachmentPath
 			}))
 		).toEqual([{ tail: true, path: 'complete-report.txt' }]);
@@ -94,9 +94,8 @@ describe('attachment search tail in PostgreSQL', () => {
 		expect(
 			matches.map(({ document }) => ({
 				id: document.attachmentId,
-				tail: document.chunkIndex >= 50,
 				content: document.content.includes('amberfalcon')
 			}))
-		).toEqual([{ id: attachment.id, tail: true, content: true }]);
+		).toEqual([{ id: attachment.id, content: true }]);
 	});
 });

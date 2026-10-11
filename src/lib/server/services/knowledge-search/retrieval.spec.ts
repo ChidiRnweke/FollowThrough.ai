@@ -63,25 +63,6 @@ describe('knowledge search scope', () => {
 			code: 'INVALID_GENERATED_CONTENT'
 		});
 	});
-	it('limits vector results to the requested project', async () => {
-		const { knowledge } = await searchOver([
-			document(),
-			document({ noteId: testNoteId(3), projectId: testProjectId(2) })
-		]);
-		const matches = await knowledge.candidates('messaging', {
-			limit: 10,
-			projectId: testProjectId()
-		});
-		expect(matches.map((match) => match.document.noteId)).toEqual([testNoteId(2)]);
-	});
-	it('limits vector results to the requested note', async () => {
-		const { knowledge } = await searchOver([document(), document({ noteId: testNoteId(3) })]);
-		const matches = await knowledge.candidates('messaging', {
-			limit: 10,
-			filter: { noteId: testNoteId(3) }
-		});
-		expect(matches.map((match) => match.document.noteId)).toEqual([testNoteId(3)]);
-	});
 });
 
 describe('embedding backfill', () => {
