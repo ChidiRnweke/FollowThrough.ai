@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -66,6 +67,7 @@ const setup = async (
 		owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
+			now: testClock,
 			...agentRulesFixture(),
 			...fixture.dependencies,
 			records: new AgentRunHarnessRecords(
@@ -78,8 +80,8 @@ const setup = async (
 			transactionRunner,
 			contextMemory: memory,
 			settlements: new RunSettlements(runs, events),
-			conversationMessages: new ConversationArchive(owner, conversations),
-			conversationSessions: new ConversationArchive(owner, conversations)
+			conversationMessages: new ConversationArchive(owner, conversations, testClock),
+			conversationSessions: new ConversationArchive(owner, conversations, testClock)
 		})
 	);
 	return { owner, run, runs, events, controller };

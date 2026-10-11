@@ -17,8 +17,6 @@ import type { DateTime } from '$lib/models/workspace';
 import { NotFoundError } from '$lib/errors';
 import type { ConversationRepository } from '$lib/server/repositories/agent';
 
-const now = (): DateTime => new Date().toISOString() as DateTime;
-
 /**
  * Journal-safe projection of user images. The input interface has no index
  * signature, so the wire type would not take it; the values are plain JSON and
@@ -101,7 +99,8 @@ export interface ConversationMessages {
 export class ConversationArchive implements ConversationSessions, ConversationMessages {
 	constructor(
 		private readonly actor: ActorContext,
-		private readonly repository: ConversationRepository
+		private readonly repository: ConversationRepository,
+		private readonly now: () => DateTime
 	) {}
 
 	async getForWrite(id: ConversationId): Promise<Conversation> {
@@ -137,10 +136,10 @@ export class ConversationArchive implements ConversationSessions, ConversationMe
 					: input.executionModeOverride !== undefined
 						? { executionModeOverride: input.executionModeOverride }
 						: {}),
-				updatedAt: now()
+				updatedAt: this.now()
 			});
 		}
-		const timestamp = now();
+		const timestamp = this.now();
 		return this.repository.insert({
 			id: crypto.randomUUID() as ConversationId,
 			userId: this.actor.userId,
@@ -169,7 +168,7 @@ export class ConversationArchive implements ConversationSessions, ConversationMe
 		return this.repository.update({
 			...conversation,
 			title: title.trim(),
-			updatedAt: now()
+			updatedAt: this.now()
 		});
 	}
 
@@ -182,7 +181,7 @@ export class ConversationArchive implements ConversationSessions, ConversationMe
 		contextProjectId?: ProjectId;
 		contextNoteId?: NoteId;
 	}): Promise<Conversation> {
-		const timestamp = now();
+		const timestamp = this.now();
 		return this.repository.insert({
 			id: crypto.randomUUID() as ConversationId,
 			userId: this.actor.userId,
@@ -327,7 +326,7 @@ export class ConversationArchive implements ConversationSessions, ConversationMe
 			...(provenance?.runId ? { runId: provenance.runId } : {}),
 			...(provenance?.eventCursor ? { eventCursor: provenance.eventCursor } : {}),
 			...(model ? { model } : {}),
-			createdAt: now()
+			createdAt: this.now()
 		});
 	}
 }

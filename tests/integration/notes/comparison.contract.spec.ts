@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import type { Note } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
@@ -36,6 +37,7 @@ const setup = async (suffix: string) => {
 	const tx = createTransactionContext(context.db);
 	const controllerFor = (actor: ActorContext) => {
 		const { services: catalog } = createNotesCapability(actor, {
+			now: testClock,
 			db: tx.database,
 			projects: new ProjectRecords(actor, tx.database)
 		});

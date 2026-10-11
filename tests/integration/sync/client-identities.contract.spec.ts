@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -22,6 +23,7 @@ describe('stable offline creation identities', () => {
 		const id = crypto.randomUUID() as NoteId;
 		const { database, transactionRunner } = createTransactionContext(context.db);
 		const { services: catalog } = createNotesCapability(owner, {
+			now: testClock,
 			db: database,
 			projects: new ProjectRecords(owner, database)
 		});

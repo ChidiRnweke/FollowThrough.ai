@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
@@ -35,14 +36,16 @@ const setup = () => {
 		testActor(),
 		noteRepository,
 		new InMemoryAnchorRepository(testActor()),
-		projects
+		projects,
+		testClock
 	);
 	const skills = new InMemorySkillRepository(noteRepository);
 	const library = createSkillServices(
 		testActor(),
 		skills,
 		noteRepository,
-		new InMemoryProvenanceRepository(testActor())
+		new InMemoryProvenanceRepository(testActor()),
+		testClock
 	);
 	const content = new InMemoryNoteContent(testActor());
 	const controller = new Skills(

@@ -108,8 +108,6 @@ import type {
 } from '$lib/server/services/skills/built-ins';
 import type { SkillFinder } from '$lib/server/services/skills/library';
 import type { RunSignals } from '$lib/server/services/agent/runs/signals';
-const now = (): DateTime => new Date().toISOString() as DateTime;
-
 /** Grace period the executor gets to settle a cancelled run before the backstop does it. */
 const CANCELLATION_GRACE_MS = 10_000;
 
@@ -257,6 +255,8 @@ export interface AgentHarness {
  * controller can be built and tested with repository and provider fakes.
  */
 export interface AgentHarnessDependencies {
+	/** The process clock, shared by every capability that stamps time. */
+	readonly now: () => DateTime;
 	readonly runStatus: AgentRunStatusRules;
 	readonly streamPresentation: AgentStreamPresentation;
 	readonly conversationHistory: ConversationHistory;
@@ -415,7 +415,7 @@ export class AgentSdkHarness implements AgentHarness {
 		}
 		try {
 			const receipt = await this.dependencies.transactionRunner.run(async () => {
-				const submittedAt = now();
+				const submittedAt = this.dependencies.now();
 				// Limits are frozen onto the input alongside the prompt: a run replayed
 				// later should run under the settings it was submitted with, not
 				// whatever they have since become.
@@ -539,7 +539,11 @@ export class AgentSdkHarness implements AgentHarness {
 	async decideMany(input: DecideAgentRunBatchInput): Promise<AgentRunSnapshot> {
 		const result = await this.dependencies.transactionRunner.run(async () => {
 			const run = await this.dependencies.transitions.getForWrite(input.runId);
-			const change = this.dependencies.transitions.planApproval(run, input.callIds, now());
+			const change = this.dependencies.transitions.planApproval(
+				run,
+				input.callIds,
+				this.dependencies.now()
+			);
 			for (const callId of input.callIds)
 				await this.dependencies.records.record({
 					runId: input.runId,
@@ -566,7 +570,10 @@ export class AgentSdkHarness implements AgentHarness {
 	async cancel(runId: AgentRunId): Promise<AgentRunSnapshot> {
 		const { run, executing } = await this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.transitions.getForWrite(runId);
-			const change = this.dependencies.transitions.planCancellation(current.status, now());
+			const change = this.dependencies.transitions.planCancellation(
+				current.status,
+				this.dependencies.now()
+			);
 			if (!change) return { run: current, executing: false };
 			const requested = await this.dependencies.transitions.persistCancellation(runId, change);
 			if (requested.status === 'cancelled') {
@@ -623,7 +630,7 @@ export class AgentSdkHarness implements AgentHarness {
 					original.status === 'completed'
 				)
 					throw new ValidationError('Only failed or cancelled runs can be retried');
-				const submittedAt = now();
+				const submittedAt = this.dependencies.now();
 				// Joins the retry request's trace, same as a fresh submit.
 				const retryTraceparent = this.dependencies.traceContext.activeTraceparent();
 				const retry: AgentRun = {
@@ -925,12 +932,20 @@ export class AgentSdkHarness implements AgentHarness {
 				if (update.type === 'approval_checkpoint') {
 					let parked: AgentRun | undefined;
 					await this.dependencies.transactionRunner.run(async () => {
-						const change = this.dependencies.transitions.prepareCheckpoint(run, update, now());
+						const change = this.dependencies.transitions.prepareCheckpoint(
+							run,
+							update,
+							this.dependencies.now()
+						);
 						parked = await this.dependencies.transitions.persistCheckpoint(run.id, change);
 						if (!parked) return;
 						await this.dependencies.records.replace(run.conversationId, update.sessionItems);
 						for (const decision of decisions)
-							await this.dependencies.records.consume(run.id, decision.callId, new Date());
+							await this.dependencies.records.consume(
+								run.id,
+								decision.callId,
+								new Date(this.dependencies.now())
+							);
 						for (const pending of update.pendingDecisions) {
 							const event: AgentEvent = {
 								type: 'approval_required',
@@ -1311,7 +1326,7 @@ export class AgentSdkHarness implements AgentHarness {
 	}
 
 	private async prepare(runId: AgentRunId): Promise<PreparedAgentRun | undefined> {
-		const transitioned = await this.dependencies.transitions.claim(runId, now());
+		const transitioned = await this.dependencies.transitions.claim(runId, this.dependencies.now());
 		if (!transitioned) return undefined;
 		let run = transitioned;
 
@@ -1326,7 +1341,11 @@ export class AgentSdkHarness implements AgentHarness {
 			});
 			run = await this.dependencies.transactionRunner.run(async () => {
 				const current = await this.dependencies.transitions.getForPreparation(runId);
-				const change = this.dependencies.transitions.provenance(current, provenance.id, now());
+				const change = this.dependencies.transitions.provenance(
+					current,
+					provenance.id,
+					this.dependencies.now()
+				);
 				return this.dependencies.transitions.persistProvenance(runId, change);
 			});
 		}
@@ -1334,7 +1353,11 @@ export class AgentSdkHarness implements AgentHarness {
 		const context = run.contextSnapshot ?? (await this.buildContext(run.inputSnapshot));
 		const prepared = await this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.transitions.getForPreparation(runId);
-			const change = this.dependencies.transitions.context(current, context, now());
+			const change = this.dependencies.transitions.context(
+				current,
+				context,
+				this.dependencies.now()
+			);
 			const saved = await this.dependencies.transitions.persistContext(runId, change);
 			await this.dependencies.records.append(runId, 1, { type: 'run_started', runId, attempt: 1 });
 			return saved;
@@ -1519,7 +1542,7 @@ export class AgentSdkHarness implements AgentHarness {
 
 			await this.dependencies.records.replace(run.conversationId, sessionItems);
 			for (const callId of decisionCallIds)
-				await this.dependencies.records.consume(run.id, callId, new Date());
+				await this.dependencies.records.consume(run.id, callId, new Date(this.dependencies.now()));
 			// One message per contiguous run of output, each carrying the cursor it began at.
 			// Written as a single blob it could only be replayed after every tool call, which
 			// is why a reopened conversation read as "all the work, then all the words".

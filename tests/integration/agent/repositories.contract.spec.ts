@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -355,6 +356,7 @@ describe('Postgres durable agent run repository invariants', () => {
 			owner,
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentHarnessDependencies>({
+				now: testClock,
 				...agentRulesFixture(),
 				records: new AgentRunHarnessRecords(
 					runs,
@@ -423,6 +425,7 @@ describe('Postgres durable agent run repository invariants', () => {
 			actor('17804'),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentHarnessDependencies>({
+				now: testClock,
 				...agentRulesFixture(),
 				records: new AgentRunHarnessRecords(
 					new AgentRunRecords(actor('17804'), context.db),

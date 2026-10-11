@@ -1,3 +1,4 @@
+import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import {
@@ -59,6 +60,7 @@ import {
 export interface NotesCapabilityInput {
 	readonly db: Database;
 	readonly projects: ProjectRepository;
+	readonly now: () => DateTime;
 }
 
 export interface NotesCapability {
@@ -90,7 +92,7 @@ export const createNotesCapability = (
 	const anchors = new SourceAnchorRecords(actor, input.db);
 	const provenanceRepository = new ProvenanceRecords(actor, input.db);
 	const lifecycleRules = new SharedNoteLifecycleService();
-	const services = createNoteServices(actor, repository, anchors, input.projects);
+	const services = createNoteServices(actor, repository, anchors, input.projects, input.now);
 	return {
 		archiveImport: new NoteArchiveImportService(),
 		patchPreparation: new NotePatchPreparationService(),
@@ -108,7 +110,7 @@ export const createNotesCapability = (
 		anchors,
 		services,
 		selectionOrigins: new SelectionOrigins(actor, repository, anchors, provenanceRepository),
-		provenance: new NoteProvenance(actor, provenanceRepository, anchors),
+		provenance: new NoteProvenance(actor, provenanceRepository, anchors, input.now),
 		provenanceRepository
 	};
 };
@@ -124,10 +126,11 @@ export const createNoteServices = (
 	actor: ActorContext,
 	notes: NoteRepository,
 	anchors: SourceAnchorRepository,
-	projects: ProjectRepository
+	projects: ProjectRepository,
+	now: () => DateTime
 ): NoteServices => {
 	const catalog = new NoteCatalog(notes, projects);
-	const writing = new NoteWriting(actor, notes, projects, anchors);
+	const writing = new NoteWriting(actor, notes, projects, anchors, now);
 	return {
 		library: catalog,
 		trashReader: catalog,

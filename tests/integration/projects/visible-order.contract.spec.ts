@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -22,6 +23,7 @@ const setup = async (suffix: string) => {
 	const records = new ProjectRecords(owner, tx.database);
 	const notes = new NoteRecords(owner, tx.database);
 	const { builtIns } = createSkillsCapability(owner, {
+		now: testClock,
 		db: tx.database,
 		projects: records,
 		notes,
@@ -44,7 +46,13 @@ const setup = async (suffix: string) => {
 		})
 	);
 	const creation = noteCreationControllers(
-		createNoteServices(owner, notes, new SourceAnchorRecords(owner, tx.database), records).creator,
+		createNoteServices(
+			owner,
+			notes,
+			new SourceAnchorRecords(owner, tx.database),
+			records,
+			testClock
+		).creator,
 		tx.transactionRunner
 	);
 	return { owner, projectId, skill, projects, creation, records };

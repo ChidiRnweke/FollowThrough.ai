@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import type { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import { createWidgetRules } from '$lib/factories/widgets/rules';
@@ -536,6 +537,7 @@ describe('Agent tool coverage invariants', () => {
 			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
+				now: testClock,
 				...agentToolResultsFixture(),
 				canvasSource: new PresentedCanvasSource(sessions),
 				diagrams: capabilityDependencies<DiagramLibrary>({ get: (id) => diagrams.get(id) })
@@ -881,6 +883,7 @@ describe('Agent tool coverage invariants', () => {
 			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<TodosDependencies>({
+				now: testClock,
 				...agentToolResultsFixture(),
 				boardExport: new TodoBoardExportService(),
 				todoPresentation: new TodoPresentationService(),
@@ -1019,6 +1022,7 @@ describe('Agent tool coverage invariants', () => {
 			testActor(),
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<WidgetsDependencies>({
+				now: testClock,
 				...agentToolResultsFixture(),
 				...createWidgetRules()
 			})
@@ -1195,8 +1199,13 @@ describe('Agent tool coverage invariants', () => {
 		const projects = new InMemoryProjectRepository(testActor(), records);
 		projects.projects = [projectBuilder()];
 		const { notes } = noteCreationControllers(
-			createNoteServices(testActor(), records, new InMemoryAnchorRepository(testActor()), projects)
-				.creator,
+			createNoteServices(
+				testActor(),
+				records,
+				new InMemoryAnchorRepository(testActor()),
+				projects,
+				testClock
+			).creator,
 			new InMemoryTransactionRunner([records, projects])
 		);
 		const factory = capabilityDependencies<ControllerFactory>({ notes: () => notes });

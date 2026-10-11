@@ -41,7 +41,6 @@ const validateAttachmentPath = (value: string): string => {
 };
 
 const MAX_READ_CHARS = 20_000;
-const now = (): DateTime => new Date().toISOString() as DateTime;
 /**
  * The attachment records around an upload. Object storage is a separate provider: the caller
  * signs the upload, inspects and promotes the stored object between these steps.
@@ -69,7 +68,8 @@ export class AttachmentUploadService implements AttachmentUploads {
 	constructor(
 		private readonly actor: ActorContext,
 		private readonly attachments: AttachmentRepository,
-		private readonly notes: NoteRepository
+		private readonly notes: NoteRepository,
+		private readonly now: () => DateTime
 	) {}
 
 	async initiate(input: {
@@ -91,7 +91,7 @@ export class AttachmentUploadService implements AttachmentUploads {
 			throw new ValidationError('Attachment size must be a positive safe integer');
 		if (!/^[a-f0-9]{64}$/i.test(input.checksumSha256))
 			throw new ValidationError('Attachment checksum must be a SHA-256 hex digest');
-		const timestamp = now();
+		const timestamp = this.now();
 		const uploadId = crypto.randomUUID() as AttachmentUploadId;
 		const objectKey = `staging/${this.actor.userId}/${projectId}/${uploadId}`;
 		const upload = await this.attachments.createUpload({
@@ -103,7 +103,7 @@ export class AttachmentUploadService implements AttachmentUploads {
 			mediaType: input.mediaType || 'application/octet-stream',
 			byteSize: input.byteSize,
 			checksumSha256: input.checksumSha256.toLowerCase(),
-			expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() as DateTime,
+			expiresAt: new Date(Date.parse(timestamp) + 10 * 60 * 1000).toISOString() as DateTime,
 			createdAt: timestamp
 		});
 		return {
@@ -117,7 +117,7 @@ export class AttachmentUploadService implements AttachmentUploads {
 
 	async pending(uploadId: AttachmentUpload['id']): Promise<AttachmentUpload> {
 		const upload = await this.attachments.findUpload(uploadId);
-		if (!upload || new Date(upload.expiresAt).getTime() <= Date.now())
+		if (!upload || Date.parse(upload.expiresAt) <= Date.parse(this.now()))
 			throw new NotFoundError('Attachment upload was not found or has expired');
 		return upload;
 	}
@@ -139,7 +139,7 @@ export class AttachmentUploadService implements AttachmentUploads {
 			byteSize: upload.byteSize,
 			checksumSha256: upload.checksumSha256,
 			processingStatus: 'queued',
-			createdAt: now()
+			createdAt: this.now()
 		};
 	}
 

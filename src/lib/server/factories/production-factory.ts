@@ -20,6 +20,7 @@ import {
 	type ApplicationConfig,
 	type ProductionApplication
 } from '../application';
+import { systemClock } from './system-clock';
 import { createSystemApplication, type SystemApplication } from './system-factory';
 
 export type { ProductionApplication } from '../application';
@@ -52,6 +53,7 @@ export function createProductionComposition(): ProductionComposition {
 
 function productionConfig(): ApplicationConfig {
 	return {
+		now: systemClock,
 		attachmentClaims: new PostgresAttachmentClaims(
 			postgresSessionConnections,
 			postgresConnectionScope

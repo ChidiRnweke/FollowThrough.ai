@@ -41,6 +41,7 @@ export interface TodosCapabilityInput {
 	readonly notes: NoteRepository;
 	readonly anchors: SourceAnchorRepository;
 	readonly provenance: ProvenanceRepository;
+	readonly now: () => DateTime;
 }
 
 export interface TodosCapability {
@@ -70,7 +71,8 @@ export const createTodosCapability = (
 		input.projects,
 		input.anchors,
 		input.notes,
-		input.provenance
+		input.provenance,
+		input.now
 	),
 	promiseRules: new DeterministicPromiseExtractor(),
 	promiseGeneration: process.env.OPENROUTER_API_KEY
@@ -92,5 +94,5 @@ export const createTodoCatalog = (
 	anchors: SourceAnchorRepository,
 	notes: NoteRepository,
 	provenance: ProvenanceRepository,
-	clock: () => DateTime = () => new Date().toISOString() as DateTime
-): TodoLibrary => new TodoCatalog(actor, todos, projects, anchors, notes, provenance, clock);
+	now: () => DateTime
+): TodoLibrary => new TodoCatalog(actor, todos, projects, anchors, notes, provenance, now);

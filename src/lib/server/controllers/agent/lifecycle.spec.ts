@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { z } from 'zod';
@@ -141,6 +142,7 @@ const setup = <T extends InMemoryAgentTurns | AgentTurnService>(
 			...agentRulesFixture(),
 			records: new AgentRunHarnessRecords(runs, runs, runs, sessions),
 			transitions: new RunTransitions(runs),
+			now: testClock,
 			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			transactionRunner: transactions,
 			settlements: new RunSettlements(runs, runs),
@@ -152,7 +154,8 @@ const setup = <T extends InMemoryAgentTurns | AgentTurnService>(
 			contextMemory: options?.contextMemory ?? new InMemoryMemoryEntryRepository(testActor()),
 			conversationSessions: new ConversationArchive(
 				testActor(),
-				new InMemoryConversationRepository(testActor())
+				new InMemoryConversationRepository(testActor()),
+				testClock
 			),
 			provenance: {
 				record: async () => {
@@ -278,8 +281,12 @@ describe('a cancellation that races the end of a run', () => {
 		return Object.assign(turns, { release: () => release() });
 	};
 
+	// Fails instead of spinning when the run settles without ever running.
 	const untilRunning = async (runs: InMemoryAgentRunPersistence) => {
-		while (currentRun(runs).status !== 'running') await Promise.resolve();
+		for (let turn = 0; currentRun(runs).status !== 'running'; turn += 1) {
+			if (turn > 1000) throw new Error(`The run never started: ${currentRun(runs).status}`);
+			await Promise.resolve();
+		}
 	};
 
 	it('wins against a completion that lands after it', async () => {

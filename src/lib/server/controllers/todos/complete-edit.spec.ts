@@ -52,9 +52,9 @@ const setup = () => {
 			todoEditingRules: new TodoEditingRulesService(),
 			todoCreationRules: new TodoEditingRulesService(),
 			todoLibrary: catalog,
-			transactionRunner: new InMemoryTransactionRunner([records])
-		}),
-		() => testNow
+			transactionRunner: new InMemoryTransactionRunner([records]),
+			now: () => testNow
+		})
 	);
 	return { records, original, controller };
 };

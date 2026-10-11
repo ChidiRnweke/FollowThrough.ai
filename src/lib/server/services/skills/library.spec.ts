@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { SkillPortabilityService } from '$lib/services/skills/manifest';
@@ -38,7 +39,7 @@ const setup = () => {
 	return {
 		skills,
 		notes,
-		service: createSkillServices(testActor(), skills, notes, provenance)
+		service: createSkillServices(testActor(), skills, notes, provenance, testClock)
 	};
 };
 

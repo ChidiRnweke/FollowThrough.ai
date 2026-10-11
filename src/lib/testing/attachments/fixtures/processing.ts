@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { InMemoryAttachmentExtraction } from '../fakes/extraction';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
@@ -28,10 +29,11 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 	const claims = new InMemoryAttachmentClaims();
 	const extraction = new InMemoryAttachmentExtraction();
 	const storage = new InMemoryStorage();
-	const uploads = new AttachmentUploadService(testActor(), repository, notes);
+	const uploads = new AttachmentUploadService(testActor(), repository, notes, testClock);
 	const reader = new AttachmentReadingService(repository);
 	const lifecycle = new AttachmentLifecycleService(repository, notes);
 	const worker = new AttachmentProcessing({
+		now: testClock,
 		modelSelection: new AgentModelSelectionService(),
 		records: new AttachmentVersionService(repository),
 		claims: new AttachmentClaimService(claims),

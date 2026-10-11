@@ -1,3 +1,4 @@
+import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import { MemoryEditingService, type IMemoryEditingService } from '$lib/services/memory/edits';
 import {
@@ -15,6 +16,7 @@ export interface MemoryCapabilityInput {
 	readonly db: Database;
 	readonly projects: ProjectRepository;
 	readonly provenance: ProvenanceRepository;
+	readonly now: () => DateTime;
 }
 export interface MemoryCapability {
 	readonly editing: IMemoryEditingService;
@@ -26,17 +28,24 @@ export const createMemoryServices = (
 	actor: ActorContext,
 	entries: MemoryEntryRepository,
 	projects: ProjectRepository,
-	provenance: ProvenanceRepository
+	provenance: ProvenanceRepository,
+	now: () => DateTime
 ): MemoryCapability => {
 	return {
 		editing: new MemoryEditingService(),
 		presentation: new MemoryPresentationService(),
-		library: new MemoryLibraryService(actor, entries, projects),
-		changes: new MemoryProposalService(actor, entries, projects, provenance)
+		library: new MemoryLibraryService(actor, entries, projects, now),
+		changes: new MemoryProposalService(actor, entries, projects, provenance, now)
 	};
 };
 export const createMemoryCapability = (
 	actor: ActorContext,
 	input: MemoryCapabilityInput
 ): MemoryCapability =>
-	createMemoryServices(actor, new MemoryRecords(actor, input.db), input.projects, input.provenance);
+	createMemoryServices(
+		actor,
+		new MemoryRecords(actor, input.db),
+		input.projects,
+		input.provenance,
+		input.now
+	);

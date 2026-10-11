@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
@@ -41,7 +42,9 @@ const application = (
 	const notes = new NoteRecords(actor, database);
 	const provenance = new ProvenanceRecords(actor, database);
 	const anchors = new SourceAnchorRecords(actor, database);
-	const inbox = createSuggestionServices(actor, suggestions, notes, provenance, anchors);
+	const inbox = createSuggestionServices(actor, suggestions, notes, provenance, anchors, {
+		now: testClock
+	});
 	const repository = new SuggestionEffectRecords(
 		actor,
 		database,
@@ -73,14 +76,16 @@ const application = (
 				actor,
 				entries,
 				new ProjectRecords(actor, database),
-				provenance
+				provenance,
+				testClock
 			).changes,
 			relationshipCreator: createRelationshipServices(
 				actor,
 				relationships,
 				notes,
 				anchors,
-				provenance
+				provenance,
+				testClock
 			).creator,
 			memoryIndexer: index,
 			transactionRunner,

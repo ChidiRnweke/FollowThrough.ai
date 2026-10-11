@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
@@ -48,7 +49,7 @@ const setup = () => {
 			createdAt: testNow
 		}
 	];
-	const library = createSkillServices(testActor(), skills, notes, provenance);
+	const library = createSkillServices(testActor(), skills, notes, provenance, testClock);
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({

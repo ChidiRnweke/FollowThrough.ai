@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
 import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
@@ -24,6 +25,7 @@ it('returns the same memory review view from server and downloaded records', asy
 		testActor(),
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
+			now: testClock,
 			...agentToolResultsFixture(),
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),

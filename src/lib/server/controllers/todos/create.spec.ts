@@ -32,7 +32,15 @@ const setup = () => {
 	const notes = new InMemoryNoteRepository(testActor());
 	const provenance = new InMemoryProvenanceRepository(testActor());
 	projects.projects = [projectBuilder()];
-	const service = createTodoCatalog(testActor(), todos, projects, anchors, notes, provenance);
+	const service = createTodoCatalog(
+		testActor(),
+		todos,
+		projects,
+		anchors,
+		notes,
+		provenance,
+		() => testNow
+	);
 	const controller = new Todos(
 		testActor(),
 		new WorkspaceCommandRulesService(),
@@ -42,9 +50,9 @@ const setup = () => {
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),
 			todoCreationRules: new TodoEditingRulesService(),
-			todoLibrary: service
-		}),
-		() => testNow
+			todoLibrary: service,
+			now: () => testNow
+		})
 	);
 	return {
 		todos,

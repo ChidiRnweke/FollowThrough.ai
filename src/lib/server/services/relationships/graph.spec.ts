@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
 import { InMemoryRelationshipRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
@@ -26,7 +27,14 @@ const setup = () => {
 		notes,
 		anchors,
 		provenance,
-		service: createRelationshipServices(testActor(), relationships, notes, anchors, provenance)
+		service: createRelationshipServices(
+			testActor(),
+			relationships,
+			notes,
+			anchors,
+			provenance,
+			testClock
+		)
 	};
 };
 

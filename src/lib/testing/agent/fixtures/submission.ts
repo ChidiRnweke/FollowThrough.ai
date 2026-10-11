@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -43,14 +44,15 @@ export const agentSubmissionFixture = (
 	const conversations = new InMemoryConversationRepository(testActor(), (runId) =>
 		runs.runs.some((run) => run.id === runId)
 	);
-	const journal = new ConversationArchive(testActor(), conversations);
+	const journal = new ConversationArchive(testActor(), conversations, testClock);
 	const models = new InMemoryModelCatalog();
 	const preferenceRecords = new InMemoryAgentPreferencesRepository(testActor());
-	const preferences = new AgentPreferenceCatalog(testActor(), preferenceRecords);
+	const preferences = new AgentPreferenceCatalog(testActor(), preferenceRecords, testClock);
 	const controller = new AgentSdkHarness(
 		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
+			now: testClock,
 			...agentRulesFixture(),
 			...dependencies,
 			conversationMessages: journal,

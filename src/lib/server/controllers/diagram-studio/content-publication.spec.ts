@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { diagramEtag, type DiagramWriteOutcome } from '$lib/models/diagrams';
@@ -44,7 +45,8 @@ const setup = (viewer: ActorContext = testActor()) => {
 		new InMemoryNoteRepository(viewer),
 		new InMemoryAnchorRepository(viewer),
 		new InMemoryProvenanceRepository(viewer),
-		new InMemoryProjectRepository(viewer)
+		new InMemoryProjectRepository(viewer),
+		testClock
 	);
 	const search = new InMemorySearchRepository(viewer);
 	const embeddings = new InMemoryRetrievalProvider();

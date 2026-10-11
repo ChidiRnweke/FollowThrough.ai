@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { createTodoCatalog } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
@@ -26,7 +27,7 @@ const setup = () => {
 		anchors,
 		notes,
 		provenance,
-		service: createTodoCatalog(testActor(), todos, projects, anchors, notes, provenance)
+		service: createTodoCatalog(testActor(), todos, projects, anchors, notes, provenance, testClock)
 	};
 };
 

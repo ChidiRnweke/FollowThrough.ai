@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { WidgetExportService } from '$lib/services/widgets/export-blocks';
 import { WidgetSourceService } from '$lib/services/widgets/sources';
@@ -64,7 +65,7 @@ export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 			...agentToolResultsFixture(),
 			exportSettingsRules: new ExportSettingsRuleService(),
 			artifactFiles: new ArtifactFileService(),
-			templateStore: createTemplateServices(testActor(), templates),
+			templateStore: createTemplateServices(testActor(), templates, testClock),
 			artifactStorage: storage,
 			artifactStore: library.artifactStore,
 			exportSettings: library.exportSettings,

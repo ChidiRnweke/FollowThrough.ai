@@ -27,5 +27,5 @@ export const createArtifactServices = (
 export const createTemplateServices = (
 	actor: ActorContext,
 	repository: TemplateRepository,
-	now: () => DateTime = () => new Date().toISOString() as DateTime
+	now: () => DateTime
 ): TemplateStore => new TemplateLibrary(actor, repository, now);

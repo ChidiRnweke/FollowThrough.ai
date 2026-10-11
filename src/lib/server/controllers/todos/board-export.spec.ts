@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ExportPreparationService } from '$lib/services/deliverables/export-preparation';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
@@ -39,6 +40,7 @@ const setup = () => {
 		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
+			now: testClock,
 			...agentToolResultsFixture(),
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),

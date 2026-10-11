@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { SkillEditInput } from '$lib/models/skills';
 import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
@@ -27,16 +28,24 @@ const setup = async () => {
 		testActor(),
 		skills,
 		notes,
-		new InMemoryProvenanceRepository(testActor())
+		new InMemoryProvenanceRepository(testActor()),
+		testClock
 	);
 	const transactionRunner = new InMemoryTransactionRunner([projects, notes, skills]);
 	const released = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough');
 	if (!released) throw new Error('The released guide fixture is required');
 	await transactionRunner.run(() =>
-		new BuiltInSkills(testActor(), projects, notes, skills, {
-			active: [released],
-			retired: []
-		}).ensure()
+		new BuiltInSkills(
+			testActor(),
+			projects,
+			notes,
+			skills,
+			{
+				active: [released],
+				retired: []
+			},
+			testClock
+		).ensure()
 	);
 	const note = await notes.findByBuiltInKey(released.key);
 	if (!note) throw new Error('The installed guide is required');
@@ -53,10 +62,17 @@ const setup = async () => {
 			skillEditor: library.editor,
 			skillFinder: library.finder,
 			skillUsageLister: library.usageLister,
-			builtInSkills: new BuiltInSkills(testActor(), projects, notes, skills, {
-				active: BUILT_INS,
-				retired: RETIRED_BUILT_INS
-			})
+			builtInSkills: new BuiltInSkills(
+				testActor(),
+				projects,
+				notes,
+				skills,
+				{
+					active: BUILT_INS,
+					retired: RETIRED_BUILT_INS
+				},
+				testClock
+			)
 		})
 	);
 	return { controller, library, notes, note, released };

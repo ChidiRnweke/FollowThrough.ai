@@ -2,6 +2,7 @@ import type { ActorContext } from '$lib/models/identity';
 import { expect, it } from 'vitest';
 import { seedActor } from './workspace';
 import { createApplication } from '$lib/server/application';
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryAttachmentClaims } from '$lib/testing/attachments/fakes/claims';
 import { createPGliteDatabase } from './pglite-database';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -16,6 +17,7 @@ it('initializes a fresh evaluation account before opening its provisioned shell'
 				notifications: db.notifications,
 				transactionRunner: db.transactionRunner,
 				tokenizer: testTokenizer,
+				now: testClock,
 				attachmentClaims: new InMemoryAttachmentClaims(),
 				openRouterApiKey: 'unused-local-test',
 				mistralApiKey: 'unused-local-test',

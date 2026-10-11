@@ -110,6 +110,8 @@ export interface TodosController {
 	resumeQueuedPromiseRun(runId: AgentRunId): Promise<void>;
 }
 export interface TodosDependencies {
+	/** The process clock, shared by every capability that stamps time. */
+	readonly now: () => DateTime;
 	readonly boardExport: TodoBoardExport;
 	readonly todoPresentation: TodoPresentation;
 	readonly todoEditingRules: TodoEditingRules;
@@ -179,8 +181,7 @@ export class Todos implements TodosController {
 	constructor(
 		private readonly actor: ActorContext,
 		private readonly workspaceCommandRules: WorkspaceCommandRules,
-		private readonly dependencies: TodosDependencies,
-		private readonly clock: () => DateTime = () => new Date().toISOString() as DateTime
+		private readonly dependencies: TodosDependencies
 	) {}
 	async get(input: GetTodoViewInput): Promise<TodoView> {
 		const todo = await this.dependencies.todoLibrary.get(input.todoId);
@@ -216,7 +217,7 @@ export class Todos implements TodosController {
 		const views = contexts.map((context) =>
 			this.dependencies.todoPresentation.view(context.todo, context)
 		);
-		const generatedAt = new Date();
+		const generatedAt = new Date(this.dependencies.now());
 		const title = projectName !== undefined ? `${projectName} todos` : 'Todos';
 		const board = this.dependencies.boardExport.prepare(
 			views,
@@ -240,7 +241,7 @@ export class Todos implements TodosController {
 		const decision = this.dependencies.todoCreationRules.create(input, {
 			id: input.id ?? (crypto.randomUUID() as TodoId),
 			userId: this.actor.userId,
-			timestamp: this.clock()
+			timestamp: this.dependencies.now()
 		});
 		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 		return { todo: await this.dependencies.todoLibrary.create(decision.todo) };
@@ -257,7 +258,11 @@ export class Todos implements TodosController {
 					current.projectId
 				);
 			}
-			const edited = this.dependencies.todoEditingRules.edit(current, input, this.clock());
+			const edited = this.dependencies.todoEditingRules.edit(
+				current,
+				input,
+				this.dependencies.now()
+			);
 			const todo = await this.dependencies.todoLibrary.update(edited);
 			const context = await this.dependencies.todoLibrary.readContext(todo);
 			return { todo, view: this.dependencies.todoPresentation.view(todo, context) };
@@ -404,7 +409,7 @@ export class Todos implements TodosController {
 		input: ExtractPromisesInput,
 		signal?: AbortSignal
 	): Promise<ExtractPromisesOutput<TodoSuggestion>> {
-		const requestedAt = new Date().toISOString() as DateTime;
+		const requestedAt = this.dependencies.now();
 		await this.dependencies.selectionOrigins.validate(input.selection);
 		const extracted = await this.extractCandidates(
 			input,

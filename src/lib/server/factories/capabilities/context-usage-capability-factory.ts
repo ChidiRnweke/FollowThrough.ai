@@ -9,6 +9,7 @@ import {
 
 export interface ContextUsageCapabilityInput {
 	readonly db: Database;
+	readonly now: () => DateTime;
 }
 
 export interface ContextUsageCapability {
@@ -19,8 +20,5 @@ export const createContextUsageCapability = (
 	actor: ActorContext,
 	input: ContextUsageCapabilityInput
 ): ContextUsageCapability => ({
-	usage: new ProjectContextUsageService(
-		new ToolContextLogRecords(actor, input.db),
-		() => new Date().toISOString() as DateTime
-	)
+	usage: new ProjectContextUsageService(new ToolContextLogRecords(actor, input.db), input.now)
 });

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { describe, expect, it } from 'vitest';
@@ -35,9 +36,10 @@ const setup = async (suffix: string) => {
 		owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
+			now: testClock,
 			...agentRulesFixture(),
-			conversationMessages: new ConversationArchive(owner, records),
-			conversationSessions: new ConversationArchive(owner, records),
+			conversationMessages: new ConversationArchive(owner, records, testClock),
+			conversationSessions: new ConversationArchive(owner, records, testClock),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			transactionRunner

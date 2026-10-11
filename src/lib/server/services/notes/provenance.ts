@@ -10,13 +10,12 @@ export interface ProvenanceRecorder {
 	record(input: ProvenanceRequest): Promise<Provenance>;
 }
 
-const now = (): DateTime => new Date().toISOString() as DateTime;
-
 export class NoteProvenance implements ProvenanceRecorder {
 	constructor(
 		private readonly actor: ActorContext,
 		private readonly provenance: ProvenanceRepository,
-		private readonly anchors: SourceAnchorRepository
+		private readonly anchors: SourceAnchorRepository,
+		private readonly now: () => DateTime
 	) {}
 	async record(input: ProvenanceRequest): Promise<Provenance> {
 		if (input.sourceAnchorId && !(await this.anchors.findById(input.sourceAnchorId)))
@@ -25,7 +24,7 @@ export class NoteProvenance implements ProvenanceRecorder {
 			...input,
 			id: crypto.randomUUID() as ProvenanceId,
 			userId: this.actor.userId,
-			createdAt: now()
+			createdAt: this.now()
 		});
 	}
 }

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
@@ -31,7 +32,7 @@ const setup = (
 		createdAt: testNow,
 		updatedAt: testNow
 	});
-	const preferences = new AgentPreferenceCatalog(viewer, repository);
+	const preferences = new AgentPreferenceCatalog(viewer, repository, testClock);
 	const models = new InMemoryModelCatalog();
 	models.models = [
 		{

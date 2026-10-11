@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { widgetTemplates, type WidgetId } from '$lib/models/widgets';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -33,6 +34,7 @@ const setup = async (suffix: string) => {
 		seeded.owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<WidgetsDependencies>({
+			now: testClock,
 			...agentToolResultsFixture(),
 			catalogReader: widgets.catalogReader,
 			widgetEditingRules: widgets.widgetEditingRules,

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
@@ -23,8 +24,9 @@ const editor = (
 ) => {
 	const { database, transactionRunner } = createTransactionContext(connection.db);
 	const projects = new ProjectRecords(actor, database);
-	const notes = createNotesCapability(actor, { db: database, projects });
+	const notes = createNotesCapability(actor, { now: testClock, db: database, projects });
 	const { catalog } = createTodosCapability(actor, {
+		now: testClock,
 		db: database,
 		projects,
 		notes: notes.repository,
@@ -35,6 +37,7 @@ const editor = (
 		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
+			now: testClock,
 			...agentToolResultsFixture(),
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),

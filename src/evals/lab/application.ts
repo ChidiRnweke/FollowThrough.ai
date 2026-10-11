@@ -10,6 +10,7 @@ import {
 	type ApplicationConfig,
 	type ProductionApplication
 } from '$lib/server/application';
+import { systemClock } from '$lib/server/factories/system-clock';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
@@ -111,6 +112,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	});
 
 	const config: ApplicationConfig = {
+		now: systemClock,
 		attachmentClaims: new InMemoryAttachmentClaims(),
 		db: database,
 		notifications,

@@ -23,8 +23,6 @@ import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import type { SourceAnchorRepository } from '$lib/server/repositories/provenance';
 
-const now = (): DateTime => new Date().toISOString() as DateTime;
-
 export interface NoteReader {
 	get(noteId: NoteId): Promise<Note>;
 }
@@ -201,7 +199,8 @@ export class NoteWriting
 		private readonly actor: ActorContext,
 		private readonly notes: NoteRepository,
 		private readonly projects: ProjectRepository,
-		private readonly anchors: SourceAnchorRepository
+		private readonly anchors: SourceAnchorRepository,
+		private readonly now: () => DateTime
 	) {}
 	async creationFacts(
 		input: Pick<CreateNoteInput, 'projectId' | 'parentId'>
@@ -250,7 +249,7 @@ export class NoteWriting
 			document: note.document,
 			plainText: note.plainText,
 			...(provenance ? { provenanceId: provenance.id } : {}),
-			createdAt: now()
+			createdAt: this.now()
 		};
 		await this.notes.insertRevision(revision);
 		await this.notes.pruneRevisions(note.id, NOTE_REVISION_HISTORY_LIMIT);

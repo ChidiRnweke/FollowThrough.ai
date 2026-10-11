@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -31,6 +32,7 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const { services: catalog, markdown } = createNotesCapability(seeded.owner, {
+		now: testClock,
 		db: database,
 		projects: new ProjectRecords(seeded.owner, database)
 	});

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { ToolTrust } from './tool-trust';
 import { InMemoryTrustPolicyRepository } from '$lib/testing/agent/fakes/in-memory-trust-policy-repository';
@@ -9,7 +10,11 @@ import {
 
 describe('Trust policy invariants', () => {
 	it.each(['agent'] as const)('rejects changes to the ineffective %s policy', async (pipeline) => {
-		const service = new ToolTrust(testActor(), new InMemoryTrustPolicyRepository(testActor()));
+		const service = new ToolTrust(
+			testActor(),
+			new InMemoryTrustPolicyRepository(testActor()),
+			testClock
+		);
 		await expect(service.upsert({ pipeline, autoAcceptEnabled: true })).rejects.toMatchObject({
 			code: 'VALIDATION'
 		});
@@ -28,7 +33,10 @@ describe('Trust policy invariants', () => {
 				}
 			];
 			expect(
-				await new ToolTrust(testActor(), repository).shouldAutoAccept(pipeline, suggestionBuilder())
+				await new ToolTrust(testActor(), repository, testClock).shouldAutoAccept(
+					pipeline,
+					suggestionBuilder()
+				)
 			).toBe(false);
 		}
 	);
@@ -42,7 +50,7 @@ describe('Trust policy invariants', () => {
 			updatedAt: testNow
 		};
 		repository.policies = [legacy];
-		await new ToolTrust(testActor(), repository).list();
+		await new ToolTrust(testActor(), repository, testClock).list();
 		expect(repository.policies).toEqual([legacy]);
 	});
 	it('requires the configured confidence threshold', async () => {
@@ -57,7 +65,7 @@ describe('Trust policy invariants', () => {
 				updatedAt: testNow
 			}
 		];
-		const service = new ToolTrust(testActor(), repository);
+		const service = new ToolTrust(testActor(), repository, testClock);
 		expect(
 			await service.shouldAutoAccept(
 				'extract_promises',
@@ -66,7 +74,11 @@ describe('Trust policy invariants', () => {
 		).toBe(false);
 	});
 	it('accepts a supported proposal exactly at the confidence threshold', async () => {
-		const service = new ToolTrust(testActor(), new InMemoryTrustPolicyRepository(testActor()));
+		const service = new ToolTrust(
+			testActor(),
+			new InMemoryTrustPolicyRepository(testActor()),
+			testClock
+		);
 		await service.upsert({
 			pipeline: 'extract_promises',
 			autoAcceptEnabled: true,
@@ -82,7 +94,7 @@ describe('Trust policy invariants', () => {
 
 	it('does not reuse another pipeline policy', async () => {
 		const repository = new InMemoryTrustPolicyRepository(testActor());
-		const service = new ToolTrust(testActor(), repository);
+		const service = new ToolTrust(testActor(), repository, testClock);
 		await service.upsert({
 			pipeline: 'extract_promises',
 			autoAcceptEnabled: true

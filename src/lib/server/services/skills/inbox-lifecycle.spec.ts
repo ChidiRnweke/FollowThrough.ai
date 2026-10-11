@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import { BuiltInSkills } from './built-ins';
 import { BUILT_INS, RETIRED_BUILT_INS } from './built-in-definitions';
@@ -10,10 +11,17 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository(testActor());
 	const notes = new InMemoryNoteRepository(testActor());
 	const skills = new InMemorySkillRepository(notes);
-	const provisioner = new BuiltInSkills(testActor(), projects, notes, skills, {
-		active: BUILT_INS,
-		retired: RETIRED_BUILT_INS
-	});
+	const provisioner = new BuiltInSkills(
+		testActor(),
+		projects,
+		notes,
+		skills,
+		{
+			active: BUILT_INS,
+			retired: RETIRED_BUILT_INS
+		},
+		testClock
+	);
 	return { projects, notes, provisioner };
 };
 

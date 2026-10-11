@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
@@ -64,6 +65,7 @@ export const promiseExtractionFixture = () => {
 	const settlements = new RunSettlements(runs, runs);
 	const requests = new NoteActionRequests(testActor(), runs, runs, conversations);
 	const dependencies = capabilityDependencies<TodosDependencies>({
+		now: testClock,
 		...agentToolResultsFixture(),
 		boardExport: new TodoBoardExportService(),
 		todoPresentation: new TodoPresentationService(),
@@ -87,6 +89,7 @@ export const promiseExtractionFixture = () => {
 		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
+			now: testClock,
 			...agentRulesFixture(),
 			records: new AgentRunHarnessRecords(runs, runs, runs, new InMemoryAgentSessionRepository()),
 			transitions: new RunTransitions(runs),

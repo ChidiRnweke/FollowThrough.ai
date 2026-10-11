@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentSessionRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
@@ -53,10 +54,12 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 	const actor = seeded.owner;
 	const { database, transactionRunner } = createTransactionContext(connection.db);
 	const notes = createNotesCapability(actor, {
+		now: testClock,
 		db: database,
 		projects: new ProjectRecords(actor, database)
 	});
 	const suggestions = createSuggestionsCapability(actor, {
+		now: testClock,
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
@@ -70,7 +73,8 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 		notes.repository,
 		notes.anchors,
 		notes.provenanceRepository,
-		new ProjectRecords(actor, database)
+		new ProjectRecords(actor, database),
+		testClock
 	);
 	const diagrams = new InMemoryDiagrams(actor);
 	const controller = new Diagrams(
@@ -86,10 +90,15 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 			generation: {
 				...fixture.generation,
 				contextNotes: notes.services.library,
-				conversations: new ConversationArchive(actor, new ConversationRecords(actor, database)),
+				conversations: new ConversationArchive(
+					actor,
+					new ConversationRecords(actor, database),
+					testClock
+				),
 				conversationMessages: new ConversationArchive(
 					actor,
-					new ConversationRecords(actor, database)
+					new ConversationRecords(actor, database),
+					testClock
 				),
 				runs: new AgentRunLedger(actor, new AgentRunRecords(actor, database)),
 				runContext: new DiagramRunContext(new AgentRunRecords(actor, database)),
@@ -266,6 +275,7 @@ it('does not publish a direct result after cancellation settles its run', async 
 			state.owner,
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentHarnessDependencies>({
+				now: testClock,
 				...agentRulesFixture(),
 				records: new AgentRunHarnessRecords(
 					runs,

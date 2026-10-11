@@ -37,6 +37,7 @@ export interface SuggestionsCapabilityInput {
 	readonly notes: NoteRepository;
 	readonly provenance: ProvenanceRepository;
 	readonly anchors: SourceAnchorRepository;
+	readonly now: () => DateTime;
 }
 export interface SuggestionServices {
 	readonly creator: SuggestionCreator;
@@ -57,7 +58,7 @@ export const createSuggestionServices = (
 	notes: NoteRepository,
 	provenance: ProvenanceRepository,
 	anchors: SourceAnchorRepository,
-	clock: Clock = { now: () => new Date().toISOString() as DateTime }
+	clock: Clock
 ): SuggestionServices => {
 	const inbox = new SuggestionInbox(records, notes, provenance, anchors);
 	const lifecycle = new SuggestionLifecycleService(records, clock);
@@ -80,7 +81,8 @@ export const createSuggestionsCapability = (
 		new SuggestionRecords(actor, input.db),
 		input.notes,
 		input.provenance,
-		input.anchors
+		input.anchors,
+		{ now: input.now }
 	),
 	presentation: new SuggestionPresentationService(),
 	effects: new SuggestionEffects(

@@ -1,3 +1,4 @@
+import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import {
 	WidgetExportService,
@@ -50,6 +51,7 @@ import type { TemplateStore } from '$lib/server/services/deliverables/templates'
 export interface DeliverablesCapabilityInput {
 	readonly db: Database;
 	readonly storage: IAttachmentStorage;
+	readonly now: () => DateTime;
 }
 
 export interface DeliverablesCapability {
@@ -78,7 +80,7 @@ export const createDeliverablesCapability = (
 ): DeliverablesCapability => ({
 	exportSettingsRules: new ExportSettingsRuleService(),
 	artifactFiles: new ArtifactFileService(),
-	templates: createTemplateServices(actor, new TemplateRecords(actor, input.db)),
+	templates: createTemplateServices(actor, new TemplateRecords(actor, input.db), input.now),
 	templateStorage: input.storage,
 	templateStyles: new DocxTemplateStyleReader(),
 	artifacts: createArtifactServices(

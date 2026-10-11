@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	DiagramStudio,
@@ -35,7 +36,8 @@ export const diagramRevisionFixture = () => {
 		new InMemoryNoteRepository(testActor()),
 		new InMemoryAnchorRepository(testActor()),
 		new InMemoryProvenanceRepository(testActor()),
-		new InMemoryProjectRepository(testActor())
+		new InMemoryProjectRepository(testActor()),
+		testClock
 	);
 	const controller = new DiagramStudio(
 		testActor(),

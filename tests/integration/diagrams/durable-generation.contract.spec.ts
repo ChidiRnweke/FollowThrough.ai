@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentSessionRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
@@ -51,10 +52,12 @@ const setup = async (suffix: string) => {
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
 	const notes = createNotesCapability(seeded.owner, {
+		now: testClock,
 		db: database,
 		projects: new ProjectRecords(seeded.owner, database)
 	});
 	const suggestions = createSuggestionsCapability(seeded.owner, {
+		now: testClock,
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
@@ -86,8 +89,8 @@ const setup = async (suffix: string) => {
 		generation: {
 			...fixture.generation,
 			contextNotes: notes.services.library,
-			conversations: new ConversationArchive(seeded.owner, conversations),
-			conversationMessages: new ConversationArchive(seeded.owner, conversations),
+			conversations: new ConversationArchive(seeded.owner, conversations, testClock),
+			conversationMessages: new ConversationArchive(seeded.owner, conversations, testClock),
 			runs: new AgentRunLedger(seeded.owner, runs),
 			runContext: new DiagramRunContext(runs),
 			provenance: notes.provenance
@@ -104,6 +107,7 @@ const setup = async (suffix: string) => {
 		seeded.owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
+			now: testClock,
 			...agentRulesFixture(),
 			records: new AgentRunHarnessRecords(
 				runs,

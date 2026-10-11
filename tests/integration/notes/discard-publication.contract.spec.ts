@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import type { Note } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
@@ -32,6 +33,7 @@ import { context, seedNote } from '../database-harness';
 
 const controllerFor = (actor: ActorContext, db: Database, transactionRunner: AtomicOperation) => {
 	const { services: catalog } = createNotesCapability(actor, {
+		now: testClock,
 		db,
 		projects: new ProjectRecords(actor, db)
 	});

@@ -6,8 +6,6 @@ import type { DateTime } from '$lib/models/workspace';
 import { ValidationError } from '$lib/errors';
 import type { AgentPreferencesRepository } from '$lib/server/repositories/agent';
 
-const now = (): DateTime => new Date().toISOString() as DateTime;
-
 export interface AgentPreferencesStore {
 	get(): Promise<AgentPreferences>;
 }
@@ -25,7 +23,8 @@ export interface AgentPreferenceEditor extends AgentPreferencesStore {
 export class AgentPreferenceCatalog implements AgentPreferencesStore, AgentPreferenceEditor {
 	constructor(
 		private readonly actor: ActorContext,
-		private readonly repository: AgentPreferencesRepository
+		private readonly repository: AgentPreferencesRepository,
+		private readonly now: () => DateTime
 	) {}
 
 	defaults(timestamp: DateTime): AgentPreferences {
@@ -38,7 +37,7 @@ export class AgentPreferenceCatalog implements AgentPreferencesStore, AgentPrefe
 		};
 	}
 	async get(): Promise<AgentPreferences> {
-		return (await this.repository.get()) ?? this.defaults(now());
+		return (await this.repository.get()) ?? this.defaults(this.now());
 	}
 	getForWrite(resourceKey: string): Promise<AgentPreferences | undefined> {
 		return this.repository.getForWrite(resourceKey);

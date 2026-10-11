@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import type { User } from '$lib/models/identity';
 import { AccessTokens, TokenVerification } from '$lib/server/services/identity/api-tokens';
@@ -35,7 +36,8 @@ const setup = () => {
 			provenance: new NoteProvenance(
 				testActor(),
 				provenance,
-				new InMemoryAnchorRepository(testActor())
+				new InMemoryAnchorRepository(testActor()),
+				testClock
 			)
 		})
 	);

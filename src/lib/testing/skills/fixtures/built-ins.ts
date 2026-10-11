@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
 import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
@@ -12,16 +13,24 @@ export const builtInSkillsFixture = () => {
 	const notes = new InMemoryNoteRepository(testActor());
 	const projects = new InMemoryProjectRepository(testActor(), notes);
 	const skills = new InMemorySkillRepository(notes);
-	const builtInSkills = new BuiltInSkills(testActor(), projects, notes, skills, {
-		active: BUILT_INS,
-		retired: RETIRED_BUILT_INS
-	});
+	const builtInSkills = new BuiltInSkills(
+		testActor(),
+		projects,
+		notes,
+		skills,
+		{
+			active: BUILT_INS,
+			retired: RETIRED_BUILT_INS
+		},
+		testClock
+	);
 	const transactionRunner = new InMemoryTransactionRunner([projects, notes, skills]);
 	const skillFinder = createSkillServices(
 		testActor(),
 		skills,
 		notes,
-		new InMemoryProvenanceRepository(testActor())
+		new InMemoryProvenanceRepository(testActor()),
+		testClock
 	).finder;
 	return { notes, projects, skills, builtInSkills, transactionRunner, skillFinder };
 };

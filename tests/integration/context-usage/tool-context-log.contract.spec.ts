@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import type { ConversationId, ToolActivity } from '$lib/models/agent';
 import type { ProjectId } from '$lib/models/projects';
@@ -39,7 +40,7 @@ const journal = async (suffix: string, calls: (project: ProjectId) => ToolActivi
 		createdAt: now,
 		updatedAt: now
 	});
-	const archive = new ConversationArchive(owner, records);
+	const archive = new ConversationArchive(owner, records, testClock);
 	for (const rows of calls(project.id))
 		for (const row of rows) await archive.recordToolActivity(conversation.id, row);
 	return { owner, project: project.id, conversation: conversation.id };

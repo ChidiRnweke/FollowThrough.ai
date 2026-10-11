@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { MemoryEntryId } from '$lib/models/memory';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
@@ -22,6 +23,7 @@ const setup = async (suffix: string) => {
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const sync = createSyncCapability(actor, { db: database });
 	const memory = createMemoryCapability(actor, {
+		now: testClock,
 		db: database,
 		projects: new ProjectRecords(actor, database),
 		provenance: new ProvenanceRecords(actor, database)

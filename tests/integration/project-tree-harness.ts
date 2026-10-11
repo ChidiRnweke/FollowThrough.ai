@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
@@ -44,7 +45,8 @@ export const treeControllers = (
 		actor,
 		records,
 		new SourceAnchorRecords(actor, database),
-		projects
+		projects,
+		testClock
 	);
 	return {
 		records,

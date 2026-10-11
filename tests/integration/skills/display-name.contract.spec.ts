@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { initialSyncCursor } from '$lib/models/sync';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -28,6 +29,7 @@ const setup = async (suffix: string) => {
 	const { owner, project } = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const { services: catalog } = createNotesCapability(owner, {
+		now: testClock,
 		db: database,
 		projects: new ProjectRecords(owner, database)
 	});
@@ -36,7 +38,8 @@ const setup = async (suffix: string) => {
 		owner,
 		records,
 		new NoteRecords(owner, database),
-		new ProvenanceRecords(owner, database)
+		new ProvenanceRecords(owner, database),
+		testClock
 	);
 	const content = new InMemoryNoteContent(owner);
 	const controller = new Skills(

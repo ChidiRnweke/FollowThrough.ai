@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { AgentRunId } from '$lib/models/agent';
@@ -61,7 +62,8 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 		actor,
 		entries,
 		new InMemoryProjectRepository(actor),
-		provenance
+		provenance,
+		testClock
 	);
 	const suggestions = new InMemorySuggestions(actor);
 	const effects = new InMemorySuggestionEffects();

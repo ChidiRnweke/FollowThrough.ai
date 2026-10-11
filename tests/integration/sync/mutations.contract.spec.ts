@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { NoteId } from '$lib/models/notes';
 import { workspaceMutationRequestSchema } from '$lib/models/workspace-mutations';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -39,6 +40,7 @@ const setup = async (suffix: string) => {
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const synchronization = createSyncCapability(seeded.owner, { db: database });
 	const { services: catalog } = createNotesCapability(seeded.owner, {
+		now: testClock,
 		db: database,
 		projects: new ProjectRecords(seeded.owner, database)
 	});

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import type { ActorContext } from '$lib/models/identity';
@@ -78,6 +79,7 @@ const approvalController = (actor: ActorContext, db: typeof context.db) => {
 		actor,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentHarnessDependencies>({
+			now: testClock,
 			...agentRulesFixture(),
 			records: new AgentRunHarnessRecords(
 				runs,
@@ -96,11 +98,13 @@ const approvalController = (actor: ActorContext, db: typeof context.db) => {
 			),
 			conversationMessages: new ConversationArchive(
 				actor,
-				new ConversationRecords(actor, database)
+				new ConversationRecords(actor, database),
+				testClock
 			),
 			conversationSessions: new ConversationArchive(
 				actor,
-				new ConversationRecords(actor, database)
+				new ConversationRecords(actor, database),
+				testClock
 			),
 			transactionRunner,
 			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,

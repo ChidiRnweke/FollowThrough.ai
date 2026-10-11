@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { NoteProvenance } from './provenance';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -11,7 +12,11 @@ import {
 const setup = () => {
 	const provenance = new InMemoryProvenanceRepository(testActor());
 	const anchors = new InMemoryAnchorRepository(testActor());
-	return { provenance, anchors, service: new NoteProvenance(testActor(), provenance, anchors) };
+	return {
+		provenance,
+		anchors,
+		service: new NoteProvenance(testActor(), provenance, anchors, testClock)
+	};
 };
 
 describe('Provenance management invariants', () => {

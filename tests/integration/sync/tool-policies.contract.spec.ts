@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
 import { ToolPreferences } from '$lib/server/controllers/agent/tool-preferences/controller';
 import { TrustPolicies } from '$lib/server/controllers/agent/trust-policies/controller';
@@ -32,7 +33,7 @@ const setup = async (suffix: string) => {
 		syncMutations: sync.mutations,
 		syncRetry: sync.mutationRetry,
 		transactionRunner,
-		trustPolicyStore: new ToolTrust(actor, new TrustPolicyRecords(actor, database))
+		trustPolicyStore: new ToolTrust(actor, new TrustPolicyRecords(actor, database), testClock)
 	});
 	return { ...seeded, sync, preferences, tools, policies };
 };

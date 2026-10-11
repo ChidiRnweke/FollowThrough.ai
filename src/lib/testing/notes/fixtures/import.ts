@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -53,7 +54,8 @@ export const importedNotesFixture = () => {
 		testActor(),
 		records,
 		new InMemoryAnchorRepository(testActor()),
-		projects
+		projects,
+		testClock
 	);
 	const consequences = new InMemoryNoteContent(testActor());
 	const controller = new Notes(

@@ -1,3 +1,4 @@
+import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
@@ -34,6 +35,7 @@ export interface RelationshipsCapabilityInput {
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
 	readonly defaultModel: string;
+	readonly now: () => DateTime;
 }
 
 export interface RelationshipsCapability extends RelationshipServices {
@@ -62,7 +64,8 @@ export const createRelationshipsCapability = (
 		new RelationshipRecords(actor, input.db),
 		input.notes,
 		input.anchors,
-		input.provenance
+		input.provenance,
+		input.now
 	)
 });
 
@@ -76,8 +79,9 @@ export const createRelationshipServices = (
 	relationships: NoteRelationshipRepository,
 	notes: NoteRepository,
 	anchors: SourceAnchorRepository,
-	provenance: ProvenanceRepository
+	provenance: ProvenanceRepository,
+	now: () => DateTime
 ): RelationshipServices => {
-	const graph = new RelationshipGraph(actor, relationships, notes, anchors, provenance);
+	const graph = new RelationshipGraph(actor, relationships, notes, anchors, provenance, now);
 	return { creator: graph, reader: graph, reconciler: graph };
 };

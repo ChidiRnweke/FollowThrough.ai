@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { createWidgetRules } from '$lib/factories/widgets/rules';
@@ -51,6 +52,7 @@ const setup = () => {
 		testActor(),
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<WidgetsDependencies>({
+			now: testClock,
 			...agentToolResultsFixture(),
 			...createWidgetRules(),
 			widgetReader: library,

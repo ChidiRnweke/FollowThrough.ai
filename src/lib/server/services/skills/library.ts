@@ -17,7 +17,6 @@ import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProvenanceRepository } from '$lib/server/repositories/provenance/provenance';
 import type { SkillRepository } from '$lib/server/repositories/skills/skills';
 
-const now = (): DateTime => new Date().toISOString() as DateTime;
 const slug = (value: string): string =>
 	value
 		.toLowerCase()
@@ -190,7 +189,8 @@ export class SkillUsageService implements SkillUsageRecorder, SkillUsageLister {
 	constructor(
 		private readonly skills: SkillRepository,
 		private readonly notes: NoteRepository,
-		private readonly provenance: ProvenanceRepository
+		private readonly provenance: ProvenanceRepository,
+		private readonly now: () => DateTime
 	) {}
 	async record(input: {
 		skillNoteId: NoteId;
@@ -207,7 +207,7 @@ export class SkillUsageService implements SkillUsageRecorder, SkillUsageLister {
 		await this.skills.recordUsage({
 			id: crypto.randomUUID() as SkillUsageId,
 			...input,
-			createdAt: now()
+			createdAt: this.now()
 		});
 	}
 	async list(skillNoteId: NoteId): Promise<readonly SkillUsageView[]> {

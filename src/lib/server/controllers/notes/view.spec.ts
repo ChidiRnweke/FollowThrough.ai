@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import type { Url } from '$lib/models/references';
 import {
@@ -73,14 +74,16 @@ describe('note view assembly', () => {
 			new InMemoryRelationshipRepository(actor),
 			notes,
 			anchors,
-			provenance
+			provenance,
+			testClock
 		);
 		const library = createReferenceServices(
 			actor,
 			new InMemoryReferenceRepository(actor),
 			notes,
 			anchors,
-			provenance
+			provenance,
+			testClock
 		);
 		const relationship = await graph.creator
 			.createWithChange({
@@ -102,7 +105,8 @@ describe('note view assembly', () => {
 			new InMemorySuggestionRepository(actor),
 			notes,
 			provenance,
-			anchors
+			anchors,
+			{ now: testClock }
 		);
 		const origins = new SelectionOrigins(actor, notes, anchors, provenance);
 		const source = await origins.resolve({

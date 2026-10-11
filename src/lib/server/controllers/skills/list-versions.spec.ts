@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { NoteRevisionId } from '$lib/models/notes';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
@@ -42,7 +43,8 @@ const setup = async () => {
 		testActor(),
 		new InMemorySkillRepository(notes),
 		notes,
-		new InMemoryProvenanceRepository(testActor())
+		new InMemoryProvenanceRepository(testActor()),
+		testClock
 	);
 	await library.creator.create(note, {
 		name: 'Review',
@@ -55,7 +57,8 @@ const setup = async () => {
 		testActor(),
 		notes,
 		new InMemoryAnchorRepository(testActor()),
-		projects
+		projects,
+		testClock
 	);
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),

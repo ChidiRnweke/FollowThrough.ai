@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { UserDirectory } from '$lib/server/services/identity/users';
@@ -32,7 +33,8 @@ it('returns the newly provisioned Inbox together with its skills on the first sh
 				testActor(),
 				state.notes,
 				new InMemoryAnchorRepository(testActor()),
-				state.projects
+				state.projects,
+				testClock
 			).library,
 			suggestionExpirer: suggestions,
 			suggestionLister: suggestions

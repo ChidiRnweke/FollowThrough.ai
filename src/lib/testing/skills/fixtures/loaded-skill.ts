@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { AgentRunId } from '$lib/models/agent';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
@@ -60,7 +61,7 @@ export const loadedSkillFixture = (body = 'Number every finding.') => {
 			createdAt: testNow
 		}
 	];
-	const library = createSkillServices(testActor(), skills, notes, provenance);
+	const library = createSkillServices(testActor(), skills, notes, provenance, testClock);
 	const projects = new InMemoryProjectRepository(testActor());
 	projects.projects = [projectBuilder()];
 	const controller = new Skills(

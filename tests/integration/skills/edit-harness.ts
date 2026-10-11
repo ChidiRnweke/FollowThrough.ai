@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { ActorContext } from '$lib/models/identity';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -37,12 +38,13 @@ export const skillController = (
 	const notes = new NoteRecords(actor, database);
 	const skills = new SkillRecords(actor, database);
 	const provenance = new ProvenanceRecords(actor, database);
-	const library = createSkillServices(actor, skills, notes, provenance);
+	const library = createSkillServices(actor, skills, notes, provenance, testClock);
 	const catalog = createNoteServices(
 		actor,
 		notes,
 		new SourceAnchorRecords(actor, database),
-		projects
+		projects,
+		testClock
 	);
 	const content = new InMemoryNoteContent(actor);
 	const sync = createSyncCapability(actor, { db: database });
@@ -63,10 +65,17 @@ export const skillController = (
 			),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
-			builtInSkills: new BuiltInSkills(actor, projects, notes, skills, {
-				active: BUILT_INS,
-				retired: RETIRED_BUILT_INS
-			}),
+			builtInSkills: new BuiltInSkills(
+				actor,
+				projects,
+				notes,
+				skills,
+				{
+					active: BUILT_INS,
+					retired: RETIRED_BUILT_INS
+				},
+				testClock
+			),
 			skillFinder: library.finder,
 			skillCreator: library.creator,
 			noteCreation: catalog.creator,

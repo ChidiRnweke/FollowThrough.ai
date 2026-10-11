@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createTodoCatalog } from '$lib/server/factories/capabilities/todos-capability-factory';
@@ -25,12 +26,14 @@ const archivedLink = async (suffix: string) => {
 		new ProjectRecords(seeded.owner, database),
 		new SourceAnchorRecords(seeded.owner, database),
 		new NoteRecords(seeded.owner, database),
-		new ProvenanceRecords(seeded.owner, database)
+		new ProvenanceRecords(seeded.owner, database),
+		testClock
 	);
 	const controller = new Todos(
 		seeded.owner,
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
+			now: testClock,
 			...agentToolResultsFixture(),
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),

@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, expect, it } from 'vitest';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
@@ -8,6 +9,7 @@ const seedSkillNote = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const actor = seeded.owner;
 	const { services: catalog } = createNotesCapability(actor, {
+		now: testClock,
 		db: context.db,
 		projects: new ProjectRecords(actor, context.db)
 	});

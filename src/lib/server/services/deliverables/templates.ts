@@ -43,7 +43,7 @@ export class TemplateLibrary implements TemplateStore {
 	constructor(
 		private readonly actor: ActorContext,
 		private readonly repository: TemplateRepository,
-		private readonly now: () => DateTime = () => new Date().toISOString() as DateTime
+		private readonly now: () => DateTime
 	) {}
 	async reserveUpload(input: TemplateUploadRequest): Promise<TemplateUpload> {
 		if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 1)

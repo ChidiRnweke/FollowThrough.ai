@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { expect, it } from 'vitest';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
@@ -18,7 +19,7 @@ it('selects queued chat runs without selecting running chats or queued note acti
 	const runs = new AgentRunRecords(owner, database);
 	const events = new AgentRunEventRecords(owner, database);
 	const conversations = new ConversationRecords(owner, database);
-	const journal = new ConversationArchive(owner, conversations);
+	const journal = new ConversationArchive(owner, conversations, testClock);
 	const queuedChat = async () =>
 		transactionRunner.run(async () => {
 			const conversation = await conversations.insert({

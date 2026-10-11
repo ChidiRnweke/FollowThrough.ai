@@ -1,3 +1,4 @@
+import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -32,6 +33,7 @@ const setup = async (suffix: string) => {
 	const second = await seedNote(`${suffix}1`, first.owner);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const { services: catalog, markdown } = createNotesCapability(first.owner, {
+		now: testClock,
 		db: database,
 		projects: new ProjectRecords(first.owner, database)
 	});
