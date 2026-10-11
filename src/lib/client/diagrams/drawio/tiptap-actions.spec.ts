@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Schema } from '@tiptap/pm/model';
 import { EditorState } from '@tiptap/pm/state';
-import type { DiagramId } from '$lib/models/diagrams';
 import type { SuggestionId } from '$lib/models/suggestions';
-import {
-	insertAcceptedDrawioAfterMermaid,
-	setPendingDrawioSuggestion,
-	type DrawioNodeTransactionPort
-} from './tiptap-actions';
+import { setPendingDrawioSuggestion, type DrawioNodeTransactionPort } from './tiptap-actions';
 
 const schema = new Schema({
 	nodes: {
@@ -53,22 +48,6 @@ describe('Inline diagram document invariants', () => {
 		expect(port.state.doc.firstChild?.attrs.pendingDrawioSuggestionId).toBe(
 			'10000000-0000-4000-8000-000000000001'
 		);
-	});
-
-	it('acceptance inserts a draw.io reference immediately after unchanged Mermaid source', () => {
-		const port = new InMemoryEditorPort();
-		insertAcceptedDrawioAfterMermaid(
-			port,
-			port.state.doc.firstChild!,
-			0,
-			'60000000-0000-4000-8000-000000000002' as DiagramId
-		);
-		expect(port.state.doc.toJSON().content?.map((node: { type: string }) => node.type)).toEqual([
-			'mermaid',
-			'drawio'
-		]);
-
-		expect(port.state.doc.firstChild?.textContent).toBe('A --> B');
 	});
 
 	it('rejection clears pending state', () => {

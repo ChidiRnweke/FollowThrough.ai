@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import AdmZip from 'adm-zip';
 import {
-	archiveEntryPath,
-	DEFAULT_ARCHIVE_LIMITS,
 	parseMarkdownNote,
 	readMarkdownArchive,
-	splitFrontmatter,
-	type ArchiveEntry
+	type ArchiveEntry,
+	type ArchiveLimits
 } from './archive-reader.server';
+
+const limits: ArchiveLimits = { maxTotalBytes: 25 * 1024 * 1024, maxEntries: 2000 };
 
 /** Archives are built in memory, so the suite needs no fixture files. */
 const zipOf = (files: Readonly<Record<string, string>>): Uint8Array => {
@@ -17,8 +17,8 @@ const zipOf = (files: Readonly<Record<string, string>>): Uint8Array => {
 	return new Uint8Array(zip.toBuffer());
 };
 
-const read = (files: Readonly<Record<string, string>>, limits = DEFAULT_ARCHIVE_LIMITS) =>
-	readMarkdownArchive(zipOf(files), limits);
+const read = (files: Readonly<Record<string, string>>, archiveLimits = limits) =>
+	readMarkdownArchive(zipOf(files), archiveLimits);
 
 const entry = (path: string, text: string): ArchiveEntry => ({
 	path,
@@ -62,10 +62,7 @@ describe('Reading a Markdown archive', () => {
 
 describe('Refusing a hostile archive', () => {
 	it('rejects an archive that expands past the byte limit', () => {
-		const outcome = read(
-			{ 'big.md': 'x'.repeat(4096) },
-			{ ...DEFAULT_ARCHIVE_LIMITS, maxTotalBytes: 1024 }
-		);
+		const outcome = read({ 'big.md': 'x'.repeat(4096) }, { ...limits, maxTotalBytes: 1024 });
 		expect(outcome.ok === false && outcome.rejection.reason).toBe('too_large');
 	});
 
@@ -73,7 +70,7 @@ describe('Refusing a hostile archive', () => {
 		const files = Object.fromEntries(
 			Array.from({ length: 5 }, (_unused, index) => [`note-${index}.md`, '# x'])
 		);
-		const outcome = read(files, { ...DEFAULT_ARCHIVE_LIMITS, maxEntries: 3 });
+		const outcome = read(files, { ...limits, maxEntries: 3 });
 		expect(outcome.ok === false && outcome.rejection.reason).toBe('too_many_entries');
 	});
 
@@ -121,56 +118,73 @@ describe('Choosing a note’s title', () => {
 });
 
 describe('Handling frontmatter', () => {
-	it('strips frontmatter from the body rather than rendering it as prose', () => {
-		expect(splitFrontmatter('---\ntags: [a]\n---\nBody.').body.trim()).toBe('Body.');
+	const parse = (text: string) => parseMarkdownNote(entry('one.md', text));
 
-		expect(splitFrontmatter('---\ntags: [a]\nauthor: Ada\n---\nBody.').keys).toEqual([
-			'tags',
-			'author'
-		]);
+	it('strips frontmatter from the body rather than rendering it as prose', () => {
+		const note = parse('---\ntags: [a]\nauthor: Ada\n---\nBody.');
+		expect({ markdown: note.markdown, keys: note.frontmatterKeys }).toEqual({
+			markdown: 'Body.',
+			keys: ['tags', 'author']
+		});
 	});
 
 	it('still strips a malformed block instead of showing raw YAML', () => {
-		expect(splitFrontmatter('---\n: : :\n---\nBody.').body.trim()).toBe('Body.');
+		const note = parse('---\n: : :\n---\nBody.');
+		expect({ markdown: note.markdown, keys: note.frontmatterKeys }).toEqual({
+			markdown: 'Body.',
+			keys: []
+		});
 	});
 
 	it('leaves a body with no frontmatter untouched', () => {
-		expect(splitFrontmatter('Just prose.').body).toBe('Just prose.');
+		expect(parse('Just prose.').markdown).toBe('Just prose.');
 	});
 
 	it('does not treat a thematic break as frontmatter', () => {
-		expect(splitFrontmatter('Intro.\n\n---\n\nMore.').keys).toEqual([]);
+		const note = parse('Intro.\n\n---\n\nMore.');
+		expect({ markdown: note.markdown, keys: note.frontmatterKeys }).toEqual({
+			markdown: 'Intro.\n\n---\n\nMore.',
+			keys: []
+		});
 	});
 });
 
 /**
- * The guard is tested directly rather than through a crafted archive: adm-zip's writer
- * strips traversal from a name as it packs it, so `addFile('../x.md')` produces a
- * harmless `x.md` and could never exercise this. Only its reader returns such names,
- * and these are the names it returns.
+ * adm-zip's writer strips traversal from a name as it packs it, so a hostile archive is
+ * made by writing a same-length placeholder name and patching the stored name bytes
+ * (local header and central directory) afterwards, as a malicious tool would.
  */
+const archiveNamed = (placeholder: string, name: string): Uint8Array => {
+	const bytes = zipOf({ [placeholder]: '# Escaped' });
+	const from = Buffer.from(placeholder);
+	const to = Buffer.from(name);
+	const buffer = Buffer.from(bytes);
+	for (let at = buffer.indexOf(from); at !== -1; at = buffer.indexOf(from, at + 1))
+		to.copy(buffer, at);
+	return new Uint8Array(buffer);
+};
+
 describe('Refusing an entry path that escapes the archive root', () => {
 	it.each([
-		['a parent reference', '../escaped.md'],
-		['a nested parent reference', 'notes/../../escaped.md'],
-		['a Windows-style parent reference', 'a\\..\\..\\escaped.md'],
-		['a bare parent directory', '..'],
-		['an empty name', '']
-	])('refuses %s', (_label, path) => {
-		expect(archiveEntryPath(path)).toBeUndefined();
+		['a parent reference', 'xx/escaped.md', '../escaped.md'],
+		['a nested parent reference', 'notes/xx/xx/escaped.md', 'notes/../../escaped.md'],
+		['a Windows-style parent reference', 'axxaxxxxescaped.md', 'a\\..\\..\\escaped.md']
+	])('refuses %s', (_label, placeholder, name) => {
+		const outcome = readMarkdownArchive(archiveNamed(placeholder, name));
+		expect(outcome.ok === false && outcome.rejection).toEqual({
+			reason: 'unsafe_path',
+			path: name
+		});
 	});
 
 	it.each([
-		['a plain file', 'one.md', 'one.md'],
-		['a nested file', 'notes/one.md', 'notes/one.md'],
-		// Made root-relative rather than refused, which is what unzip itself does: the
-		// path lands inside the import, and an absolute one cannot reach outside it.
-		['a leading slash', '/notes/one.md', 'notes/one.md'],
-		['an absolute path', '/etc/passwd', 'etc/passwd'],
-		['Windows separators', 'notes\\one.md', 'notes/one.md'],
-		['a redundant current directory', './notes/one.md', 'notes/one.md'],
-		['a name merely containing dots', 'notes/v1..2.md', 'notes/v1..2.md']
-	])('accepts %s', (_label, path, expected) => {
-		expect(archiveEntryPath(path)).toBe(expected);
+		['a leading slash', 'xnotes/one.md', '/notes/one.md', 'notes/one.md'],
+		['an absolute path', 'xetc/passwd.md', '/etc/passwd.md', 'etc/passwd.md'],
+		['Windows separators', 'notes_one.md', 'notes\\one.md', 'notes/one.md'],
+		['a redundant current directory', 'xxnotes/one.md', './notes/one.md', 'notes/one.md'],
+		['a name merely containing dots', 'notes/vx..2.md', 'notes/v1..2.md', 'notes/v1..2.md']
+	])('keeps %s inside the import', (_label, placeholder, name, expected) => {
+		const outcome = readMarkdownArchive(archiveNamed(placeholder, name));
+		expect(outcome.ok && outcome.result.entries.map((e) => e.path)).toEqual([expected]);
 	});
 });

@@ -31,10 +31,6 @@ export const rememberCanvasRender = (sessionKey: ChatSessionKey, pngDataUrl: str
 	});
 };
 
-export const forgetCanvasRender = (sessionKey: ChatSessionKey): void => {
-	renders.delete(sessionKey);
-};
-
 /** Take the complete pending render for the next turn. */
 export const takeCanvasRender = (
 	sessionKey: ChatSessionKey

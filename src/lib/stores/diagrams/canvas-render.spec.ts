@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { ConversationImageInput } from '$lib/models/agent';
 import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
-import { forgetCanvasRender, rememberCanvasRender, takeCanvasRender } from './canvas-render.svelte';
+import { rememberCanvasRender, takeCanvasRender } from './canvas-render.svelte';
 
 const session = (name: string): ChatSessionKey => name as ChatSessionKey;
 const png = (kilobytes: number): string =>
@@ -11,12 +11,6 @@ const attachment = (kilobytes: number): ConversationImageInput => ({
 	mediaType: 'image/png',
 	dataUrl: png(kilobytes),
 	name: 'user.png'
-});
-
-afterEach(() => {
-	for (const name of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']) {
-		forgetCanvasRender(session(name));
-	}
 });
 
 describe('The picture of what the agent drew', () => {
@@ -40,12 +34,6 @@ describe('The picture of what the agent drew', () => {
 	it('belongs to its own conversation', () => {
 		rememberCanvasRender(session('c'), png(4));
 		expect(takeCanvasRender(session('d'))).toBeUndefined();
-	});
-
-	it('is dropped when the canvas asks for it to be', () => {
-		rememberCanvasRender(session('e'), png(4));
-		forgetCanvasRender(session('e'));
-		expect(takeCanvasRender(session('e'))).toBeUndefined();
 	});
 
 	it('preserves a render beyond the former byte budget', () => {

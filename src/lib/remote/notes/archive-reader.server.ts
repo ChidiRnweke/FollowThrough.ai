@@ -27,7 +27,7 @@ export interface ArchiveLimits {
 	readonly maxEntries: number;
 }
 
-export const DEFAULT_ARCHIVE_LIMITS: ArchiveLimits = {
+const DEFAULT_ARCHIVE_LIMITS: ArchiveLimits = {
 	maxTotalBytes: 25 * 1024 * 1024,
 	maxEntries: 2000
 };
@@ -62,12 +62,8 @@ const isMarkdown = (path: string): boolean =>
  *
  * Backslashes are folded to `/` because archives written on Windows use them as
  * separators, which would otherwise smuggle a `..\..` past a `/`-only check.
- *
- * Exported so the guard can be tested against the names a hostile archive carries:
- * `adm-zip`'s *writer* strips traversal from a name as it packs it, so a malicious
- * archive cannot be constructed with `addFile` — only its reader hands such names back.
  */
-export const archiveEntryPath = (raw: string): string | undefined => {
+const archiveEntryPath = (raw: string): string | undefined => {
 	const normalised = raw.replace(/\\/g, '/').replace(/^\/+/, '');
 	const segments = normalised.split('/').filter((segment) => segment !== '' && segment !== '.');
 	if (segments.length === 0) return undefined;
@@ -175,7 +171,7 @@ const frontmatterBlock = (block: string): FrontmatterBlock => {
 };
 
 /** Split and parse a leading YAML frontmatter block, tolerating a malformed one. */
-export const splitFrontmatter = (source: string): Frontmatter => {
+const splitFrontmatter = (source: string): Frontmatter => {
 	const match = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(source);
 	if (!match) return { keys: [], body: source };
 	const body = source.slice(match[0].length);

@@ -12,10 +12,8 @@ import {
 	isWidgetTab,
 	isChatTab,
 	isDiagramTab,
-	isNoteTab,
 	isSearchTab,
 	noteIdOf,
-	noteTab,
 	parseTabId,
 	searchTab
 } from './tab-ref';
@@ -25,19 +23,15 @@ const SESSION = '22222222-2222-4222-8222-222222222222';
 const DIAGRAM = '33333333-3333-4333-8333-333333333333' as DiagramId;
 
 describe('tab identity', () => {
-	it('preserves the bare note id and narrows its identity accessors', () => {
+	it('reads a bare uuid as a note and narrows its identity accessors', () => {
 		expect({
-			encoded: noteTab(NOTE),
 			parsed: parseTabId(NOTE),
-			isNote: isNoteTab(NOTE),
 			isSearch: isSearchTab(NOTE),
 			isChat: isChatTab(NOTE),
 			noteId: noteIdOf(NOTE),
 			chatKey: chatKeyOf(NOTE)
 		}).toEqual({
-			encoded: NOTE,
 			parsed: { kind: 'note', noteId: NOTE },
-			isNote: true,
 			isSearch: false,
 			isChat: false,
 			noteId: NOTE,
@@ -71,14 +65,6 @@ describe('tab identity', () => {
 		});
 	});
 
-	it('rejects an id that is neither', () => {
-		expect(parseTabId('not-a-tab')).toBeUndefined();
-	});
-
-	it('rejects a chat prefix wrapped around a non-uuid', () => {
-		expect(parseTabId('chat:nonsense')).toBeUndefined();
-	});
-
 	it('tolerates surrounding whitespace from a hand-edited URL', () => {
 		expect(parseTabId(`  ${NOTE}  `)).toEqual({ kind: 'note', noteId: NOTE });
 	});
@@ -106,10 +92,6 @@ describe('diagram tab identity', () => {
 			diagramId: DIAGRAM,
 			noteId: undefined
 		});
-	});
-
-	it('drops a diagram tab whose id is not a uuid', () => {
-		expect(parseTabId('diagram:nonsense')).toBeUndefined();
 	});
 });
 

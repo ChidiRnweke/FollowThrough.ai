@@ -2,18 +2,6 @@ import { Dexie, type Table, type Transaction, type TransactionMode } from 'dexie
 import { z } from 'zod';
 import { resourceStateSchema } from '$lib/models/sync';
 
-export const requestValue = <T>(request: IDBRequest<T>): Promise<T> =>
-	new Promise((resolve, reject) => {
-		request.onsuccess = () => resolve(request.result);
-		request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'));
-	});
-export const completed = (transaction: IDBTransaction): Promise<void> =>
-	new Promise((resolve, reject) => {
-		transaction.oncomplete = () => resolve();
-		transaction.onerror = transaction.onabort = () =>
-			reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
-	});
-
 export const accountDatabaseName = (accountId: string, prefix = 'followthrough-workspace-sync') =>
 	`${prefix}:${encodeURIComponent(accountId)}`;
 export class WorkspaceStorageError extends Error {}
