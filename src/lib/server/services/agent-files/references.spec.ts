@@ -1,0 +1,46 @@
+import { createHash } from 'node:crypto';
+import { expect, it } from 'vitest';
+import type { AttachmentId } from '$lib/models/attachments';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import {
+	diagramBuilder,
+	noteBuilder,
+	testProjectId
+} from '$lib/testing/workspace/fixtures/domain-builders';
+import { AgentFileReferenceService } from './virtual-files';
+
+const references = () => new AgentFileReferenceService(testTokenizer);
+
+it('describes real Markdown bytes, tokens, lines and checksum', () => {
+	const note = noteBuilder();
+	const markdown = '**Café**';
+	const path = `/projects/${note.projectId}/notes/${note.id}.md`;
+	expect(references().noteMetadata(note, markdown)).toEqual({
+		kind: 'file',
+		id: createHash('sha256').update(path).digest('hex'),
+		path,
+		mediaType: 'text/markdown',
+		byteSize: Buffer.byteLength(markdown, 'utf8'),
+		tokenCount: testTokenizer.count(markdown),
+		lineCount: 1,
+		checksumSha256: createHash('sha256').update(markdown).digest('hex')
+	});
+});
+it('keeps attachment text paths compatible', () => {
+	const id = '00000000-0000-4000-8000-000000000002' as AttachmentId;
+	expect(references().attachmentPath(testProjectId(), id)).toBe(
+		`/projects/${testProjectId()}/attachments/${id}.txt`
+	);
+});
+it('keeps Mermaid paths compatible', () => {
+	const diagram = diagramBuilder();
+	expect(references().diagramPath(diagram)).toBe(
+		`/projects/${diagram.projectId}/diagrams/${diagram.id}.mmd`
+	);
+});
+it('keeps draw.io paths compatible', () => {
+	const diagram = { ...diagramBuilder(), kind: 'drawio' as const };
+	expect(references().diagramPath(diagram)).toBe(
+		`/projects/${diagram.projectId}/diagrams/${diagram.id}.drawio`
+	);
+});
