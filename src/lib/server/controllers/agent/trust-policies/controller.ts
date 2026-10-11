@@ -1,8 +1,3 @@
-import type { ToolResultReader } from '$lib/models/agent-tool-context';
-import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
-import type { AgentPayload } from '$lib/models/agent/payload';
-import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
-import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
 import { ValidationError } from '$lib/errors';
@@ -33,21 +28,8 @@ export interface TrustPoliciesController {
 	list(actor: ActorContext): Promise<GetTrustPoliciesOutput>;
 	/** Replace the user's auto-accept rule for one supported proposal workflow. */
 	update(actor: ActorContext, input: UpdateTrustPolicyInput): Promise<UpdateTrustPolicyOutput>;
-
-	agentListTrustPolicies(
-		actor: ActorContext,
-		input: AgentToolInput<'list_trust_policies'>
-	): Promise<AgentPayload>;
-	agentUpdateTrustPolicy(
-		actor: ActorContext,
-		input: AgentToolInput<'update_trust_policy'>
-	): Promise<AgentPayload>;
 }
 export interface TrustPoliciesDependencies {
-	readonly toolPresentation: AgentToolPresentation;
-	readonly toolPayloads: AgentPayloadInspection;
-	readonly toolResults: ToolResultReader;
-
 	syncMutations: WorkspaceMutationGuard;
 	transactionRunner: AtomicOperation;
 	syncRetry: 'database-only' | 'never';
@@ -98,32 +80,5 @@ export class TrustPolicies implements TrustPoliciesController {
 		input: UpdateTrustPolicyInput
 	): Promise<UpdateTrustPolicyOutput> {
 		return { policy: await this.dependencies.trustPolicyStore.upsert(actor, input) };
-	}
-
-	async agentListTrustPolicies(
-		actor: ActorContext,
-		input: AgentToolInput<'list_trust_policies'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.list(actor);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentUpdateTrustPolicy(
-		actor: ActorContext,
-		input: AgentToolInput<'update_trust_policy'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.update(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
 	}
 }

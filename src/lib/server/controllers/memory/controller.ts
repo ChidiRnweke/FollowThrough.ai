@@ -1,13 +1,6 @@
 import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/retrieval';
 import { ValidationError } from '$lib/errors';
-import type { ToolResultReader } from '$lib/models/agent-tool-context';
-import type { AgentMemoryProposalInput, AgentToolInput } from '$lib/models/agent-tool-inputs';
-import type { AgentPayload } from '$lib/models/agent/payload';
-import type { ProjectId } from '$lib/models/projects';
 import type { AppliedChange } from '$lib/models/proposal-effects';
-import type { ProvenanceId } from '$lib/models/provenance';
-import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
-import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { IMemoryEditingService } from '$lib/services/memory/edits';
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
@@ -77,27 +70,9 @@ export interface MemoryController {
 		actor: ActorContext,
 		input: ProposeMemoryChangeInput
 	): Promise<ProposeMemoryChangeOutput<Suggestion>>;
-
-	agentListProjectMemory(
-		actor: ActorContext,
-		input: AgentToolInput<'list_project_memory'>
-	): Promise<AgentPayload>;
-	agentListUserMemory(
-		actor: ActorContext,
-		input: AgentToolInput<'list_user_memory'>
-	): Promise<AgentPayload>;
-	agentProposeMemoryChange(
-		actor: ActorContext,
-		provenanceId: ProvenanceId,
-		input: AgentMemoryProposalInput
-	): Promise<AgentPayload>;
 }
 
 export interface MemoryDependencies {
-	readonly toolPresentation: AgentToolPresentation;
-	readonly toolPayloads: AgentPayloadInspection;
-	readonly toolResults: ToolResultReader;
-
 	readonly editing: IMemoryEditingService;
 	readonly presentation: IMemoryPresentationService;
 	memoryIndexer: MemoryIndexer;
@@ -256,62 +231,6 @@ export class Memory implements MemoryController {
 			}
 			return { suggestion };
 		});
-	}
-
-	async agentListProjectMemory(
-		actor: ActorContext,
-		input: AgentToolInput<'list_project_memory'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return {
-				entries: (
-					await this.list(actor, {
-						projectId: input.projectId as ProjectId,
-						sharedOnly: true
-					})
-				).entries.map((value) => this.dependencies.toolPresentation.projectMemory(value))
-			};
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentListUserMemory(
-		actor: ActorContext,
-		input: AgentToolInput<'list_user_memory'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			const entries = (await this.list(actor, { sharedOnly: true })).entries.map((value) =>
-				this.dependencies.toolPresentation.projectMemory(value)
-			);
-			return { entries };
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentProposeMemoryChange(
-		actor: ActorContext,
-		provenanceId: ProvenanceId,
-		input: AgentMemoryProposalInput
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			const { confidence, ...payload } = input;
-			return this.propose(actor, {
-				...payload,
-				provenanceId: provenanceId,
-				...(confidence !== undefined ? { confidence } : {})
-			});
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
 	}
 }
 

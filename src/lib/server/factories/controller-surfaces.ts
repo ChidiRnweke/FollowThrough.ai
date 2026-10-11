@@ -4,18 +4,11 @@ import type { ControllerFactory } from './controller-factory';
 /** The explicit public controller surface. Adding a capability requires declaring its boundary here. */
 export const controllerSurfaces = {
 	agentFiles: {
-		agentLs: true,
-		agentGrep: true,
-		agentSed: true,
-
 		ls: true,
 		grep: true,
 		sed: true
 	},
 	workspace: {
-		agentGetWorkspaceContext: true,
-		agentGetTodayView: true,
-
 		pullChangePage: true,
 		cancelMutation: true,
 		readResource: true,
@@ -23,14 +16,6 @@ export const controllerSurfaces = {
 		getTodayView: true
 	},
 	projects: {
-		agentListProjects: true,
-		agentGetProject: true,
-		agentCreateProject: true,
-		agentRenameProject: true,
-		agentArchiveProject: true,
-		agentCreateFolder: true,
-		agentMoveProjectEntry: true,
-
 		synchronize: true,
 		list: true,
 		get: true,
@@ -42,26 +27,6 @@ export const controllerSurfaces = {
 		move: true
 	},
 	notes: {
-		prepareAgentReviewedChange: true,
-		applyAgentReviewedChange: true,
-		agentGetNote: true,
-		agentCreateNote: true,
-		agentSaveNote: true,
-		agentEditNote: true,
-		agentRenameNote: true,
-		agentArchiveNote: true,
-		agentRestoreNote: true,
-		agentListTrashedNotes: true,
-		agentDeleteNoteForever: true,
-		agentEmptyNoteTrash: true,
-		agentListNoteVersions: true,
-		agentDiffNoteVersions: true,
-		agentRestoreNoteVersion: true,
-		agentPublishNote: true,
-		agentDiscardNoteDraft: true,
-		agentSaveSkill: true,
-		agentEditSkill: true,
-
 		importMarkdownArchive: true,
 		prepareChange: true,
 		applyReviewedChange: true,
@@ -69,6 +34,7 @@ export const controllerSurfaces = {
 		get: true,
 		setSectionNumbering: true,
 		listDocuments: true,
+		readDocument: true,
 		create: true,
 		save: true,
 		publish: true,
@@ -88,12 +54,6 @@ export const controllerSurfaces = {
 		restoreRevision: true
 	},
 	todos: {
-		agentExtractPromises: true,
-		agentListTodos: true,
-		agentCreateTodo: true,
-		agentCreateTodos: true,
-		agentUpdateTodo: true,
-
 		createBatch: true,
 		synchronize: true,
 		get: true,
@@ -110,25 +70,18 @@ export const controllerSurfaces = {
 		recoverQueuedPromiseRuns: true
 	},
 	relationships: {
-		agentRelateSelection: true,
-
 		suggestFromSelection: true,
 		startSuggestFromSelection: true,
 		executeRelatedNoteRun: true,
 		recoverQueuedRelatedNoteRuns: true
 	},
 	references: {
-		agentFindReferences: true,
-
 		suggestFromSelection: true,
 		startSuggestFromSelection: true,
 		executeReferenceRun: true,
 		recoverQueuedReferenceRuns: true
 	},
 	diagrams: {
-		agentReviseMermaidDiagram: true,
-		agentPromoteDiagram: true,
-
 		generateMermaid: true,
 		reviseMermaid: true,
 		reviseInlineMermaid: true,
@@ -141,12 +94,6 @@ export const controllerSurfaces = {
 		recoverQueuedDiagramRuns: true
 	},
 	diagramStudio: {
-		agentCreateDiagram: true,
-		agentEditDiagram: true,
-		agentReadCanvasDiagram: true,
-		agentSearchIcons: true,
-		agentReadProjectDiagram: true,
-
 		synchronize: true,
 		createDiagram: true,
 		editDiagram: true,
@@ -170,11 +117,6 @@ export const controllerSurfaces = {
 		countDiagramReferences: true
 	},
 	suggestions: {
-		agentListSuggestions: true,
-		agentAcceptSuggestion: true,
-		agentRejectSuggestion: true,
-		agentRevertSuggestion: true,
-
 		list: true,
 		listPendingMemory: true,
 		accept: true,
@@ -183,19 +125,10 @@ export const controllerSurfaces = {
 		revert: true
 	},
 	skills: {
-		agentLoadSkill: true,
-		agentCreateSkillFromSelection: true,
-		agentListSkills: true,
-		agentCreateSkill: true,
-		agentListSkillVersions: true,
-		agentRestoreSkillVersion: true,
-		agentUpdateSkill: true,
-		agentSetSkillPinned: true,
-
 		synchronize: true,
 		list: true,
 		get: true,
-		loadForAgent: true,
+		use: true,
 		create: true,
 		createFromSelection: true,
 		listVersions: true,
@@ -224,13 +157,10 @@ export const controllerSurfaces = {
 		deleteSession: true
 	},
 	agentSettings: {
-		agentGetAgentPreferences: true,
-		agentUpdateAgentPreferences: true,
-		agentListAgentModels: true,
-
 		synchronize: true,
 		getPreferences: true,
 		updatePreferences: true,
+		changePreferences: true,
 		listModels: true,
 		resolveDefaults: true,
 		bootstrap: true
@@ -241,24 +171,16 @@ export const controllerSurfaces = {
 		updatePreferences: true
 	},
 	apiTokens: {
-		agentListApiTokens: true,
-		agentRevokeApiToken: true,
-
 		list: true,
 		revoke: true
 	},
 	toolPreferences: {
-		agentListToolPreferences: true,
-		agentSetToolEnabled: true,
-
 		synchronize: true,
 		list: true,
 		setEnabled: true,
 		clearOverride: true
 	},
 	attachments: {
-		agentListAttachments: true,
-
 		initiate: true,
 		complete: true,
 		completeForTodo: true,
@@ -273,16 +195,6 @@ export const controllerSurfaces = {
 		remove: true
 	},
 	deliverables: {
-		agentExportDocument: true,
-		agentListArtifacts: true,
-		agentListTemplates: true,
-		agentGetExportSettings: true,
-		agentUpdateExportSettings: true,
-		agentGetArtifact: true,
-		agentDownloadArtifact: true,
-		agentDeleteArtifact: true,
-		agentRegenerateArtifact: true,
-
 		synchronize: true,
 		initiateTemplateUpload: true,
 		completeTemplateUpload: true,
@@ -300,18 +212,11 @@ export const controllerSurfaces = {
 		regenerateArtifact: true
 	},
 	trustPolicies: {
-		agentListTrustPolicies: true,
-		agentUpdateTrustPolicy: true,
-
 		synchronize: true,
 		list: true,
 		update: true
 	},
 	memory: {
-		agentListProjectMemory: true,
-		agentListUserMemory: true,
-		agentProposeMemoryChange: true,
-
 		synchronize: true,
 		list: true,
 		create: true,
@@ -320,13 +225,6 @@ export const controllerSurfaces = {
 		propose: true
 	},
 	widgets: {
-		agentReadWidgetCatalog: true,
-		agentCreateWidget: true,
-		agentListWidgets: true,
-		agentReadWidget: true,
-		agentEditWidgetData: true,
-		agentEditWidgetLayout: true,
-
 		synchronize: true,
 		get: true,
 		catalog: true,
@@ -338,9 +236,6 @@ export const controllerSurfaces = {
 		delete: true
 	},
 	retrieval: {
-		agentSearch: true,
-		agentSearchNote: true,
-
 		search: true
 	},
 	inlineSuggestions: {

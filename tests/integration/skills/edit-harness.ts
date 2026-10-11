@@ -1,3 +1,4 @@
+import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { SkillPortabilityService } from '$lib/services/skills/manifest';
 import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
@@ -64,7 +65,8 @@ export const skillController = (database: Database, transactionRunner: Transacti
 			attachmentRestorer: catalog.attachmentRestorer,
 			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: content,
-			noteIndexer: content
+			noteIndexer: content,
+			markdown: new NoteMarkdownCodec()
 		})
 	);
 };

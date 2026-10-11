@@ -98,7 +98,6 @@ export const createAgentToolSurface = (
 	) =>
 		createAgentToolset(tools, {
 			plan,
-			mode,
 			isDiscovered: (name) => discovered.has(name),
 			discover: async (query, limit) => {
 				const found = await rank(retriever, permitted, discoveryCatalog, query, limit);

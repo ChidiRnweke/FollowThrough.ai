@@ -10,6 +10,7 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import { describe, expect, it } from 'vitest';
 import { createAgentToolSurface } from '$lib/testing/agent/fixtures/tool-surface';
 
@@ -40,7 +41,9 @@ describe('agent export settings', () => {
 			includeTitle: true,
 			diagramTheme: { base: 'dark', colors: { primaryColor: '#123456' } }
 		};
-		await tool.prepare({ projectId: testProjectId(), ...settings }).execute();
+		await directTool(tool)
+			.prepare({ projectId: testProjectId(), ...settings })
+			.execute();
 		expect(await service.getExportSettings(testActor(), testProjectId())).toEqual(settings);
 	});
 });

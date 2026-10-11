@@ -1,17 +1,12 @@
 import type { DiagramIndexing } from '$lib/server/services/knowledge-search/retrieval';
 import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/retrieval';
-import type { ToolResultReader } from '$lib/models/agent-tool-context';
-import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
-import type { AgentPayload } from '$lib/models/agent/payload';
 import type { DiagramIndexContext } from '$lib/models/knowledge-search';
-import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type {
 	DrawioSvgPreviewSanitizer,
 	DrawioXmlContentValidator
 } from '$lib/server/services/diagrams/drawio';
 import type { DiagramWriter } from '$lib/server/services/diagrams/library';
 import type { AppliedRecord } from '$lib/server/services/suggestions/inbox';
-import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
 import type { ProvenancePresentation } from '$lib/services/provenance/presentation';
 import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
@@ -118,30 +113,9 @@ export interface SuggestionsController {
 	 * what was applied.
 	 */
 	revert(actor: ActorContext, input: RevertSuggestionInput): Promise<Suggestion>;
-
-	agentListSuggestions(
-		actor: ActorContext,
-		input: AgentToolInput<'list_suggestions'>
-	): Promise<AgentPayload>;
-	agentAcceptSuggestion(
-		actor: ActorContext,
-		input: AgentToolInput<'accept_suggestion'>
-	): Promise<AgentPayload>;
-	agentRejectSuggestion(
-		actor: ActorContext,
-		input: AgentToolInput<'reject_suggestion'>
-	): Promise<AgentPayload>;
-	agentRevertSuggestion(
-		actor: ActorContext,
-		input: AgentToolInput<'revert_suggestion'>
-	): Promise<AgentPayload>;
 }
 /** Everything the {@link SuggestionsController} needs, injected so it can be built and tested without real stores. */
 export interface SuggestionsDependencies {
-	readonly toolPresentation: AgentToolPresentation;
-	readonly toolPayloads: AgentPayloadInspection;
-	readonly toolResults: ToolResultReader;
-
 	readonly todoCreationRules: TodoCreationRules;
 	readonly suggestionPresentation: ISuggestionPresentationService;
 	suggestionLister: SuggestionLister;
@@ -418,65 +392,6 @@ export class Suggestions implements SuggestionsController {
 						title: (await this.dependencies.sourceNotes.get(actor, requirement.noteId)).title
 					};
 		await this.dependencies.diagramIndexer.indexDiagram(actor, diagram, context);
-	}
-
-	async agentListSuggestions(
-		actor: ActorContext,
-		input: AgentToolInput<'list_suggestions'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return {
-				suggestions: (await this.list(actor, input)).groups.flatMap((group) =>
-					group.suggestions.map((view) =>
-						this.dependencies.toolPresentation.projectSuggestion(view.suggestion)
-					)
-				)
-			};
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentAcceptSuggestion(
-		actor: ActorContext,
-		input: AgentToolInput<'accept_suggestion'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.acceptReviewed(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentRejectSuggestion(
-		actor: ActorContext,
-		input: AgentToolInput<'reject_suggestion'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.reject(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentRevertSuggestion(
-		actor: ActorContext,
-		input: AgentToolInput<'revert_suggestion'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.revert(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
 	}
 }
 

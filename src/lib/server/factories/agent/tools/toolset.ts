@@ -43,34 +43,34 @@ export const createAgentToolset = (
 	const reviews = new Map<string, string>();
 	const preparations = new Map<string, { input: string; preparation: Promise<ToolPreparation> }>();
 	for (const decision of policy.parked) {
-		const review = byName.get(decision.toolName)?.review;
-		if (!review) continue;
+		const entry = byName.get(decision.toolName);
+		if (entry?.kind !== 'reviewed') continue;
 		if (!decision.review)
 			throw new ToolLifecycleError('A saved note approval is missing its prepared review');
-		reviews.set(decision.callId, review.restore(decision.review.content));
+		reviews.set(decision.callId, entry.review.restore(decision.review.content));
 	}
 
 	const prepareCall = async (
 		entry: AgentTool,
-		action: PreparedAction,
+		input: AgentPayload,
 		callId: string | undefined,
 		phase: Phase
 	): Promise<ToolPreparation> => {
 		const requirement = policy.plan.approvalRequired.includes(entry.name)
 			? 'approval_required'
 			: 'ready';
-		if (!entry.review) return { kind: requirement, action };
+		if (entry.kind === 'direct') return { kind: requirement, action: entry.prepare(input) };
 		if (!callId) throw new ToolLifecycleError('A note change requires a tool call identity');
-		const prepared = await entry.review.prepare(action.arguments, {
-			mode: policy.mode,
-			phase,
-			saved: reviews.get(callId)
-		});
+		const saved = reviews.get(callId);
+		// An approved call runs the change the user saw; without it there is nothing to apply.
+		if (saved === undefined && phase === 'execute' && requirement === 'approval_required')
+			throw new ToolLifecycleError('A resumed note approval is missing its prepared review');
+		const prepared = await entry.review.prepare(input, saved);
 		reviews.set(callId, prepared.review);
 		if (prepared.kind === 'failure') return { kind: 'failure', failure: prepared.failure };
 		return {
-			kind: prepared.kind,
-			action: { arguments: action.arguments, execute: prepared.apply }
+			kind: requirement,
+			action: { arguments: prepared.arguments, execute: prepared.apply }
 		};
 	};
 
@@ -116,11 +116,7 @@ export const createAgentToolset = (
 			signal: policy.signal,
 			...(gated ? { isEnabled: () => policy.isDiscovered(entry.name) } : {}),
 			prepare: (input, callId, phase) =>
-				prepare(
-					async (payload) => prepareCall(entry, entry.prepare(payload), callId, phase),
-					input,
-					callId
-				),
+				prepare((payload) => prepareCall(entry, payload, callId, phase), input, callId),
 			execute: async (action, callId) => {
 				const result = await run(action);
 				await policy.completed(
@@ -173,7 +169,7 @@ export const createAgentToolset = (
 		],
 		checkpoint(pending) {
 			const entry = byName.get(pending.toolName);
-			if (!entry?.review) return pending;
+			if (entry?.kind !== 'reviewed') return pending;
 			const content = reviews.get(pending.callId);
 			if (content === undefined) throw new Error('A note approval has no prepared review');
 			return { ...pending, review: { kind: entry.review.kind, content } };

@@ -2,9 +2,6 @@ import { syncEtag } from '$lib/models/sync';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { WorkspaceJournalReader } from '$lib/server/services/workspace/journal';
 import type { WorkspaceResourceVersionReader } from '$lib/server/services/workspace/resource-versions';
-import type { ToolResultReader } from '$lib/models/agent-tool-context';
-import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
-import type { AgentPayload } from '$lib/models/agent/payload';
 import type { ActorContext, User } from '$lib/models/identity';
 import type { NoteSummary } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
@@ -22,9 +19,7 @@ import type {
 } from '$lib/models/workspace-mutations';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type { SyncObjectReader, SyncWriteRecovery } from '$lib/server/services/workspace/contracts';
-import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import type { TodoPresentation } from '$lib/services/todos/presentation';
 import type { TodayPresentation } from '$lib/services/workspace/today';
@@ -63,21 +58,8 @@ export interface WorkspaceController {
 	getShellContext(actor: ActorContext): Promise<ShellContext>;
 	/** Assemble the today view: overdue/due-today todos, waiting-on items, pending suggestion count, and notes. */
 	getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView>;
-
-	agentGetWorkspaceContext(
-		actor: ActorContext,
-		input: AgentToolInput<'get_workspace_context'>
-	): Promise<AgentPayload>;
-	agentGetTodayView(
-		actor: ActorContext,
-		input: AgentToolInput<'get_today_view'>
-	): Promise<AgentPayload>;
 }
 export interface WorkspaceDependencies {
-	readonly toolPresentation: AgentToolPresentation;
-	readonly toolPayloads: AgentPayloadInspection;
-	readonly toolResults: ToolResultReader;
-
 	readonly todoPresentation: TodoPresentation;
 	readonly memoryPresentation: IMemoryPresentationService;
 	builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
@@ -185,45 +167,6 @@ export class Workspace implements WorkspaceController {
 			pendingSuggestionCount,
 			notes
 		});
-	}
-
-	async agentGetWorkspaceContext(
-		actor: ActorContext,
-		input: AgentToolInput<'get_workspace_context'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			const shell = await this.getShellContext(actor);
-			return {
-				user: this.dependencies.toolPresentation.projectUser(shell.user),
-				projects: shell.projects.map((value) =>
-					this.dependencies.toolPresentation.projectProject(value)
-				),
-				// Structure only — the agent calls get_note for content.
-				noteTree: shell.noteTree.map((value) =>
-					this.dependencies.toolPresentation.projectNoteSummary(value)
-				),
-				skills: shell.skills,
-				pendingSuggestionCount: shell.pendingSuggestionCount
-			};
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentGetTodayView(
-		actor: ActorContext,
-		input: AgentToolInput<'get_today_view'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.getTodayView(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
 	}
 }
 

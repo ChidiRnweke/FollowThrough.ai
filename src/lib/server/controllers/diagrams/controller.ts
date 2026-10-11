@@ -1,15 +1,10 @@
 import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
 import { DuplicateNoteActionRequest } from '$lib/errors';
-import type { ToolResultReader } from '$lib/models/agent-tool-context';
-import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
-import type { AgentPayload } from '$lib/models/agent/payload';
 import type { DiagramTask } from '$lib/models/diagrams';
-import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type { DiagramGenerationRules } from '$lib/server/services/diagrams/generation-rules';
 import type { DiagramDraftWriter } from '$lib/server/services/diagrams/library';
 import type { DiagramRunContexts } from '$lib/server/services/diagrams/run-context';
 import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
-import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 
 import type {
 	AgentEvent,
@@ -161,15 +156,6 @@ export interface DiagramsController {
 	): Promise<AgentRunReceipt>;
 	executeDiagramRun(actor: ActorContext, runId: AgentRunId): Promise<void>;
 	recoverQueuedDiagramRuns(): Promise<number>;
-
-	agentReviseMermaidDiagram(
-		actor: ActorContext,
-		input: AgentToolInput<'revise_mermaid_diagram'>
-	): Promise<AgentPayload>;
-	agentPromoteDiagram(
-		actor: ActorContext,
-		input: AgentToolInput<'promote_diagram'>
-	): Promise<AgentPayload>;
 }
 
 type DiagramWorkflowObserver = <T>(
@@ -224,10 +210,6 @@ export interface DiagramAgentDependencies {
 }
 
 export interface DiagramsDependencies {
-	readonly toolPresentation: AgentToolPresentation;
-	readonly toolPayloads: AgentPayloadInspection;
-	readonly toolResults: ToolResultReader;
-
 	readonly generationRules: DiagramGenerationRules;
 	generation: DiagramAgentDependencies;
 	selectionOrigins: Pick<SelectionOriginService, 'resolve'>;
@@ -860,32 +842,6 @@ export class Diagrams implements DiagramsController {
 		return `Convert this Mermaid source into an editable draw.io diagram. Preserve every meaningful label and relationship, use normal draw.io shapes and connectors, and return uncompressed XML.${task.instruction ? `\n\nAdditional direction: ${task.instruction}` : ''}\n\nMermaid source:\n${task.source}`;
 	}
 
-	async agentReviseMermaidDiagram(
-		actor: ActorContext,
-		input: AgentToolInput<'revise_mermaid_diagram'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.reviseMermaid(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentPromoteDiagram(
-		actor: ActorContext,
-		input: AgentToolInput<'promote_diagram'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.promote(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
 	private mapToolEvent(
 		activeCalls: Map<string, ProviderToolCall>,
 		event: ProviderStreamEvent

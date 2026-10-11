@@ -3,16 +3,11 @@ import {
 	DEFAULT_AGENT_MAX_TURNS,
 	type WebResearchOptions
 } from '$lib/models/agent';
-import type { ToolResultReader } from '$lib/models/agent-tool-context';
-import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
-import type { AgentPayload } from '$lib/models/agent/payload';
 import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
-import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type {
 	IAgentModelChoiceService,
 	IAgentModelSelectionService
 } from '$lib/services/agent/model-selection';
-import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { AgentRunSettings } from '$lib/services/agent/run-settings';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
@@ -58,6 +53,16 @@ export interface AgentSettingsController {
 		actor: ActorContext,
 		input: UpdateAgentPreferencesInput
 	): Promise<AgentPreferences>;
+	/**
+	 * {@link updatePreferences}, answered with the preferences before the update as well. A
+	 * preference is a bare scalar, so the result alone cannot say whether a value changed or
+	 * was restated; the before-image is read here, before the write, because reading it after
+	 * is the one moment it is guaranteed to be wrong.
+	 */
+	changePreferences(
+		actor: ActorContext,
+		input: UpdateAgentPreferencesInput
+	): Promise<AgentPreferenceChange>;
 	/** List the models the user can choose from for the agent. */
 	listModels(actor: ActorContext): Promise<readonly AgentModel[]>;
 	/**
@@ -70,26 +75,9 @@ export interface AgentSettingsController {
 	 */
 	resolveDefaults(actor: ActorContext): Promise<AgentModelDefaults>;
 	bootstrap(actor: ActorContext): Promise<WorkspaceBootstrap>;
-
-	agentGetAgentPreferences(
-		actor: ActorContext,
-		input: AgentToolInput<'get_agent_preferences'>
-	): Promise<AgentPayload>;
-	agentUpdateAgentPreferences(
-		actor: ActorContext,
-		input: AgentToolInput<'update_agent_preferences'>
-	): Promise<AgentPayload>;
-	agentListAgentModels(
-		actor: ActorContext,
-		input: AgentToolInput<'list_agent_models'>
-	): Promise<AgentPayload>;
 }
 
 export interface AgentSettingsDependencies {
-	readonly toolPresentation: AgentToolPresentation;
-	readonly toolPayloads: AgentPayloadInspection;
-	readonly toolResults: ToolResultReader;
-
 	readonly preferenceEditing: AgentPreferenceEditing;
 	readonly modelSelection: IAgentModelSelectionService;
 	readonly modelChoices: IAgentModelChoiceService;
@@ -148,6 +136,14 @@ export class AgentSettings implements AgentSettingsController {
 
 	getPreferences(actor: ActorContext): Promise<AgentPreferences> {
 		return this.dependencies.preferences.get(actor);
+	}
+
+	async changePreferences(
+		actor: ActorContext,
+		input: UpdateAgentPreferencesInput
+	): Promise<AgentPreferenceChange> {
+		const previous = await this.getPreferences(actor);
+		return { ...(await this.updatePreferences(actor, input)), previous };
 	}
 
 	async updatePreferences(
@@ -246,46 +242,7 @@ export class AgentSettings implements AgentSettingsController {
 			)
 		};
 	}
-
-	async agentGetAgentPreferences(
-		actor: ActorContext,
-		input: AgentToolInput<'get_agent_preferences'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.getPreferences(actor);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentUpdateAgentPreferences(
-		actor: ActorContext,
-		input: AgentToolInput<'update_agent_preferences'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			const previous = await this.getPreferences(actor);
-			const updated = await this.updatePreferences(actor, input);
-			return { ...updated, previous };
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentListAgentModels(
-		actor: ActorContext,
-		input: AgentToolInput<'list_agent_models'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.listModels(actor);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
 }
+
+/** Agent preferences after an update, with the preferences it replaced. */
+export type AgentPreferenceChange = AgentPreferences & { readonly previous: AgentPreferences };

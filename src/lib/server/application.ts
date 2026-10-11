@@ -2,7 +2,6 @@ import type { KnowledgeRetrievalCapabilities } from './services/knowledge-search
 import type { ToolRanking, ToolSeeding } from './services/agent/tools/tool-search';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { WebReferenceClient } from '$lib/server/services/references/web-research';
-import { createAgentToolResults } from '$lib/server/factories/agent/tool-result-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import {
 	ProductionControllerFactory,
@@ -292,14 +291,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		projects: projectRepository
 	});
 	const diagrams = diagramCapability.services;
-	const toolResults = createAgentToolResults();
 	const dependencies: ProductionControllerDependencies = {
 		agentFiles: {
-			...toolResults,
 			reader: agentFilesCapability.reader
 		},
 		todos: {
-			...toolResults,
 			boardExport: todoCapability.boardExport,
 			todoPresentation: todoCapability.presentation,
 			todoEditingRules: todoCapability.editingRules,
@@ -331,7 +327,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			promiseRules: todoCapability.promiseRules
 		},
 		relationships: {
-			...toolResults,
 			selectionOrigins: noteCapability.selectionOrigins,
 			knowledge,
 			relationshipClassifier: relationshipCapability.classifier,
@@ -344,7 +339,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			relationshipRules: relationshipCapability.rules
 		},
 		references: {
-			...toolResults,
 			selectionOrigins: noteCapability.selectionOrigins,
 			referenceClient: referenceCapability.client,
 			referenceCandidates: referenceCapability.candidates,
@@ -359,7 +353,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			referenceModel: referenceCapability.model
 		},
 		diagrams: {
-			...toolResults,
 			generationRules: diagramCapability.generationRules,
 			diagramSourceNotes: notes.reader,
 			selectionOrigins: noteCapability.selectionOrigins,
@@ -379,8 +372,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			runSignals
 		},
 		diagramStudio: {
+			projectChoice: projects.choice,
 			projectLister: projects.lister,
-			...toolResults,
 			diagramEditing: diagramCapability.editingRules,
 			diagramLifecycle: diagramCapability.lifecycleRules,
 			diagramSourceNotes: notes.reader,
@@ -405,7 +398,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			now: diagramCapability.now
 		},
 		suggestions: {
-			...toolResults,
 			todoCreationRules: todoCapability.creationRules,
 			suggestionPresentation: suggestionCapability.presentation,
 			suggestionLister: suggestions.lister,
@@ -484,7 +476,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			provenance
 		},
 		agentSettings: {
-			...toolResults,
 			preferenceEditing: agentCapability.preferenceEditing,
 			modelSelection: agentCapability.modelSelection,
 			modelChoices: agentCapability.modelChoices,
@@ -507,11 +498,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		apiTokens: {
-			...toolResults,
 			tokens: identity.apiTokens
 		},
 		toolPreferences: {
-			...toolResults,
 			preferences: toolPreferences,
 			catalog: agentCapability.toolCatalog,
 			syncMutations: synchronization.mutations,
@@ -519,7 +508,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		attachments: {
-			...toolResults,
 			uploads: attachmentCapability.uploads,
 			reader: attachmentCapability.reader,
 			downloads: attachmentCapability.downloads,
@@ -529,7 +517,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			attachmentIndexer: knowledge
 		},
 		deliverables: {
-			...toolResults,
 			exportSettingsRules: deliverables.exportSettingsRules,
 			artifactFiles: deliverables.artifactFiles,
 			syncMutations: synchronization.mutations,
@@ -565,8 +552,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		skills: {
 			markdown: noteCapability.markdown,
+			projectChoice: projects.choice,
 			projectLister: projects.lister,
-			...toolResults,
 			skillPortability: skillCapability.portability,
 			skillMetadataEditing: skillCapability.metadataEditing,
 			noteReferences: noteCapability.references,
@@ -593,7 +580,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		workspace: {
-			...toolResults,
 			todoPresentation: todoCapability.presentation,
 			memoryPresentation: memory.presentation,
 			syncChanges: synchronization.changes,
@@ -615,8 +601,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		notes: {
 			agentFiles: agentFilesCapability.references,
+			projectChoice: projects.choice,
 			projectLister: projects.lister,
-			...toolResults,
 			todoPresentation: todoCapability.presentation,
 			textSearch: noteCapability.textSearch,
 			sections: noteCapability.sections,
@@ -664,14 +650,12 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		trustPolicies: {
-			...toolResults,
 			trustPolicyStore: trust,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner
 		},
 		memory: {
-			...toolResults,
 			editing: memory.editing,
 			presentation: memory.presentation,
 			memoryIndexer,
@@ -689,8 +673,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		widgets: {
+			projectChoice: projects.choice,
 			projectLister: projects.lister,
-			...toolResults,
 			catalogReader: widgets.catalogReader,
 			widgetEditingRules: widgets.widgetEditingRules,
 			widgetPatches: widgets.widgetPatches,
@@ -707,7 +691,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		projects: {
-			...toolResults,
 			noteCreationRules: noteCapability.creationRules,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
@@ -725,7 +708,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		retrieval: {
-			...toolResults,
 			knowledge,
 			conversations: conversationMessages
 		},

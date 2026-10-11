@@ -28,6 +28,16 @@ const SEARCH_DESCRIPTION =
  * The same tools the in-app agent calls, served over MCP for one request. An MCP host makes
  * its own approval decisions, so calls run as soon as they are authorized.
  */
+const ready = (action: PreparedAction): ToolPreparation => ({ kind: 'ready', action });
+
+/** An MCP host approves its own calls, so a reviewed change is applied as soon as it is prepared. */
+const prepareCall = async (entry: AgentTool, input: AgentPayload): Promise<ToolPreparation> => {
+	if (entry.kind === 'direct') return ready(entry.prepare(input));
+	const prepared = await entry.review.prepare(input, undefined);
+	if (prepared.kind === 'failure') return { kind: 'failure', failure: prepared.failure };
+	return ready({ arguments: prepared.arguments, execute: prepared.apply });
+};
+
 export const createMcpServer = (session: McpToolSession): McpToolConnection => ({
 	open: () => {
 		const discovered = new Set<ToolName>();
@@ -72,19 +82,21 @@ export const createMcpServer = (session: McpToolSession): McpToolConnection => (
 			if (payload.kind === 'corrupt') throw new ToolLifecycleError(payload.message);
 			const value = await invoke(
 				name,
-				() => {
+				async () => {
 					if (name === 'search_tools')
-						return bindToolArguments(searchParameters, payload.value, async ({ query, limit }) => {
-							const found = await session.discover(query, limit ?? 5);
-							for (const discoveredName of found) discovered.add(discoveredName);
-							return describeTools(permitted, found);
-						});
+						return ready(
+							bindToolArguments(searchParameters, payload.value, async ({ query, limit }) => {
+								const found = await session.discover(query, limit ?? 5);
+								for (const discoveredName of found) discovered.add(discoveredName);
+								return describeTools(permitted, found);
+							})
+						);
 					const entry = offered().find((candidate) => candidate.name === name);
 					if (!entry)
 						throw new ToolLifecycleError(
 							'Registered MCP tool is absent from its permitted catalog'
 						);
-					return entry.prepare(payload.value);
+					return prepareCall(entry, payload.value);
 				},
 				extra.signal
 			);
@@ -98,7 +110,7 @@ export const createMcpServer = (session: McpToolSession): McpToolConnection => (
 
 		async function invoke(
 			toolName: string,
-			bind: () => PreparedAction,
+			bind: () => Promise<ToolPreparation>,
 			signal: AbortSignal
 		): Promise<AgentPayload> {
 			if (toolName !== 'search_tools' && !offered().some((entry) => entry.name === toolName))
@@ -108,15 +120,11 @@ export const createMcpServer = (session: McpToolSession): McpToolConnection => (
 					'Use search_tools to discover an available capability.'
 				);
 			signal.throwIfAborted();
-			const prepared = ((): ToolPreparation => {
-				try {
-					return { kind: 'ready', action: bind() };
-				} catch (error) {
-					signal.throwIfAborted();
-					if (error instanceof ToolLifecycleError) throw error;
-					return { kind: 'failure', failure: toolCallFailure(error) };
-				}
-			})();
+			const prepared = await bind().catch((error: unknown): ToolPreparation => {
+				signal.throwIfAborted();
+				if (error instanceof ToolLifecycleError) throw error;
+				return { kind: 'failure', failure: toolCallFailure(error) };
+			});
 			if (prepared.kind === 'failure') return prepared.failure;
 			try {
 				return toolOutput(await prepared.action.execute());

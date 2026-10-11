@@ -1,25 +1,15 @@
-import { ToolLifecycleError } from '$lib/errors';
-import type { ToolResultReader } from '$lib/models/agent-tool-context';
-import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
-import type {
-	AgentNoteReviewPreparation,
-	AgentNoteReviewRequest
-} from '$lib/models/agent-tool-reviews';
-import type { AgentPayload } from '$lib/models/agent/payload';
-import { toolFailure } from '$lib/models/agent/tool-failure';
+import type { AgentFile } from '$lib/models/agent-files';
 import type { NoteMarkdown } from '$lib/models/note-markdown';
+import type { WithProjectChoice } from '$lib/models/projects';
 import { noteEtag } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentFileReferences } from '$lib/server/services/agent-files/virtual-files';
-import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type {
 	NoteCreator,
 	NoteDeletion,
 	NoteTrashOperations
 } from '$lib/server/services/notes/catalog';
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
-import type { AgentPayloadInspection } from '$lib/services/agent/payload';
-import type { AgentToolApprovalPolicy } from '$lib/services/agent/tool-approval';
 import type { NoteEditingRules } from '$lib/services/notes/editing';
 import type {
 	NoteCreationRules,
@@ -27,7 +17,7 @@ import type {
 	NoteTrashRules
 } from '$lib/services/notes/lifecycle';
 import type { NotePresentation } from '$lib/services/notes/presentation';
-import type { AgentProjectChoiceRules } from '$lib/services/projects/agent-choice';
+import type { ProjectChoiceRules } from '$lib/services/projects/choice';
 import type { ProvenancePresentation } from '$lib/services/provenance/presentation';
 import type { ReferencePresentation } from '$lib/services/references/presentation';
 import type { BacklinkPresentation } from '$lib/services/relationships/presentation';
@@ -161,15 +151,6 @@ import type { TodoContextReader, TodoLister } from '$lib/server/services/todos/c
  * runner so a save and its link/index side effects commit atomically.
  */
 export interface NotesController {
-	prepareAgentReviewedChange(
-		actor: ActorContext,
-		input: AgentNoteReviewRequest
-	): Promise<AgentNoteReviewPreparation>;
-	applyAgentReviewedChange(
-		actor: ActorContext,
-		review: NoteChangeReview,
-		target: NoteChangeTarget
-	): Promise<AgentPayload>;
 	importMarkdownArchive(
 		actor: ActorContext,
 		input: ImportMarkdownArchiveInput
@@ -214,8 +195,14 @@ export interface NotesController {
 		actor: ActorContext,
 		input: ListNoteDocumentsInput
 	): Promise<readonly NoteDocument[]>;
-	/** Create a new, empty note. */
-	create(actor: ActorContext, input: CreateNoteInput): Promise<CreateNoteOutput>;
+	/** The note as a document file: its read model with the Markdown body as file metadata. */
+	readDocument(actor: ActorContext, input: GetNoteViewInput): Promise<NoteDocumentFile>;
+	/**
+	 * Create a new, empty note.
+	 *
+	 * @throws ProjectChoiceRequiredError if the request names no project.
+	 */
+	create(actor: ActorContext, input: WithProjectChoice<CreateNoteInput>): Promise<CreateNoteOutput>;
 	/**
 	 * Persist a note body and, in the same transaction, repair its anchors, reconcile its
 	 * links, and re-index it.
@@ -344,63 +331,11 @@ export interface NotesController {
 		actor: ActorContext,
 		input: RestoreNoteRevisionInput
 	): Promise<RestoreNoteRevisionOutput>;
-
-	agentGetNote(actor: ActorContext, input: AgentToolInput<'get_note'>): Promise<AgentPayload>;
-	agentCreateNote(actor: ActorContext, input: AgentToolInput<'create_note'>): Promise<AgentPayload>;
-	agentSaveNote(actor: ActorContext, input: AgentToolInput<'save_note'>): Promise<AgentPayload>;
-	agentEditNote(actor: ActorContext, input: AgentToolInput<'edit_note'>): Promise<AgentPayload>;
-	agentRenameNote(actor: ActorContext, input: AgentToolInput<'rename_note'>): Promise<AgentPayload>;
-	agentArchiveNote(
-		actor: ActorContext,
-		input: AgentToolInput<'archive_note'>
-	): Promise<AgentPayload>;
-	agentRestoreNote(
-		actor: ActorContext,
-		input: AgentToolInput<'restore_note'>
-	): Promise<AgentPayload>;
-	agentListTrashedNotes(
-		actor: ActorContext,
-		input: AgentToolInput<'list_trashed_notes'>
-	): Promise<AgentPayload>;
-	agentDeleteNoteForever(
-		actor: ActorContext,
-		input: AgentToolInput<'delete_note_forever'>
-	): Promise<AgentPayload>;
-	agentEmptyNoteTrash(
-		actor: ActorContext,
-		input: AgentToolInput<'empty_note_trash'>
-	): Promise<AgentPayload>;
-	agentListNoteVersions(
-		actor: ActorContext,
-		input: AgentToolInput<'list_note_versions'>
-	): Promise<AgentPayload>;
-	agentDiffNoteVersions(
-		actor: ActorContext,
-		input: AgentToolInput<'diff_note_versions'>
-	): Promise<AgentPayload>;
-	agentRestoreNoteVersion(
-		actor: ActorContext,
-		input: AgentToolInput<'restore_note_version'>
-	): Promise<AgentPayload>;
-	agentPublishNote(
-		actor: ActorContext,
-		input: AgentToolInput<'publish_note'>
-	): Promise<AgentPayload>;
-	agentDiscardNoteDraft(
-		actor: ActorContext,
-		input: AgentToolInput<'discard_note_draft'>
-	): Promise<AgentPayload>;
-	agentSaveSkill(actor: ActorContext, input: AgentToolInput<'save_skill'>): Promise<AgentPayload>;
-	agentEditSkill(actor: ActorContext, input: AgentToolInput<'edit_skill'>): Promise<AgentPayload>;
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
-	readonly toolApproval: AgentToolApprovalPolicy;
-	readonly toolPresentation: AgentToolPresentation;
-	readonly toolPayloads: AgentPayloadInspection;
-	readonly toolResults: ToolResultReader;
 	readonly agentFiles: AgentFileReferences;
-	readonly toolProjectChoice: AgentProjectChoiceRules;
+	readonly projectChoice: ProjectChoiceRules;
 	readonly projectLister: ProjectLister;
 
 	readonly archiveImport: NoteArchiveImportPreparation;
@@ -741,8 +676,22 @@ export class Notes implements NotesController {
 			})
 		);
 	}
-	async create(actor: ActorContext, input: CreateNoteInput): Promise<CreateNoteOutput> {
-		return { note: await this.createDocument(actor, input, 'note') };
+	async readDocument(actor: ActorContext, input: GetNoteViewInput): Promise<NoteDocumentFile> {
+		const view = await this.get(actor, input);
+		const markdown = this.dependencies.markdown.write(view.note.document);
+		return { view, file: this.dependencies.agentFiles.noteMetadata(view.note, markdown) };
+	}
+	async create(
+		actor: ActorContext,
+		input: WithProjectChoice<CreateNoteInput>
+	): Promise<CreateNoteOutput> {
+		const projectId =
+			input.projectId ??
+			this.dependencies.projectChoice.requireChoice(
+				await this.dependencies.projectLister.list(actor),
+				'create a note'
+			);
+		return { note: await this.createDocument(actor, { ...input, projectId }, 'note') };
 	}
 	private async createDocument(
 		actor: ActorContext,
@@ -1198,345 +1147,11 @@ export class Notes implements NotesController {
 			return { note: restored, etag: noteEtag(restored.id, restored.currentRevision) };
 		});
 	}
-
-	async agentGetNote(
-		actor: ActorContext,
-		input: AgentToolInput<'get_note'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			const view = await this.get(actor, { noteId: input.noteId as NoteId });
-			const markdown = this.dependencies.markdown.write(view.note.document);
-			return this.dependencies.toolPresentation.projectNoteView(
-				view,
-				this.dependencies.agentFiles.noteMetadata(view.note, markdown)
-			);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentCreateNote(
-		actor: ActorContext,
-		input: AgentToolInput<'create_note'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			const chosenProjectId =
-				input.projectId ??
-				(await this.dependencies.toolProjectChoice.requireChoice(
-					await this.dependencies.projectLister.list(actor),
-					'create a note'
-				));
-			const created = await this.create(actor, { ...input, projectId: chosenProjectId });
-			return this.dependencies.toolPresentation.projectNoteWrite(created.note);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentSaveNote(
-		actor: ActorContext,
-		input: AgentToolInput<'save_note'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.changeAgentNote(
-				actor,
-				{
-					kind: 'replace',
-					noteId: input.noteId as NoteId,
-					markdown: input.markdown
-				},
-				'authored'
-			);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentEditNote(
-		actor: ActorContext,
-		input: AgentToolInput<'edit_note'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.changeAgentNote(
-				actor,
-				{
-					kind: 'patch',
-					noteId: input.noteId as NoteId,
-					edits: input.edits
-				},
-				'authored'
-			);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentRenameNote(
-		actor: ActorContext,
-		input: AgentToolInput<'rename_note'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.dependencies.toolPresentation.projectNoteWrite(
-				(await this.rename(actor, input)).note
-			);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentArchiveNote(
-		actor: ActorContext,
-		input: AgentToolInput<'archive_note'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.dependencies.toolPresentation.projectNoteWrite(
-				(await this.archive(actor, input)).note
-			);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentRestoreNote(
-		actor: ActorContext,
-		input: AgentToolInput<'restore_note'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.dependencies.toolPresentation.projectNoteWrite(
-				(await this.restore(actor, input)).note
-			);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentListTrashedNotes(
-		actor: ActorContext,
-		input: AgentToolInput<'list_trashed_notes'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.listTrash(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentDeleteNoteForever(
-		actor: ActorContext,
-		input: AgentToolInput<'delete_note_forever'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.deleteForever(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentEmptyNoteTrash(
-		actor: ActorContext,
-		input: AgentToolInput<'empty_note_trash'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.emptyTrash(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentListNoteVersions(
-		actor: ActorContext,
-		input: AgentToolInput<'list_note_versions'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.listRevisions(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentDiffNoteVersions(
-		actor: ActorContext,
-		input: AgentToolInput<'diff_note_versions'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.compareRevisions(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentRestoreNoteVersion(
-		actor: ActorContext,
-		input: AgentToolInput<'restore_note_version'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			// The etag survives the projection: publish_note takes it as an argument, and
-			// restoring a version is the step most likely to be followed by publishing it.
-			const restored = await this.restoreRevision(actor, input);
-			return {
-				...this.dependencies.toolPresentation.projectNoteWrite(restored.note),
-				etag: restored.etag
-			};
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentPublishNote(
-		actor: ActorContext,
-		input: AgentToolInput<'publish_note'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			const published = await this.publish(actor, input);
-			return {
-				...this.dependencies.toolPresentation.projectNoteWrite(published.note),
-				etag: published.etag
-			};
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentDiscardNoteDraft(
-		actor: ActorContext,
-		input: AgentToolInput<'discard_note_draft'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.discardDraft(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentSaveSkill(
-		actor: ActorContext,
-		input: AgentToolInput<'save_skill'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.changeAgentNote(
-				actor,
-				{
-					kind: 'replace',
-					noteId: input.noteId as NoteId,
-					markdown: input.markdown
-				},
-				'skill'
-			);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentEditSkill(
-		actor: ActorContext,
-		input: AgentToolInput<'edit_skill'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.changeAgentNote(
-				actor,
-				{
-					kind: 'patch',
-					noteId: input.noteId as NoteId,
-					edits: input.edits
-				},
-				'skill'
-			);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-
-	private async changeAgentNote(
-		actor: ActorContext,
-		input: NoteChangeRequest,
-		target: NoteChangeTarget
-	): Promise<AgentPayload> {
-		return this.applyAgentReviewedChange(
-			actor,
-			await this.prepareChange(actor, input, target),
-			target
-		);
-	}
-	async prepareAgentReviewedChange(
-		actor: ActorContext,
-		input: AgentNoteReviewRequest
-	): Promise<AgentNoteReviewPreparation> {
-		if (!input.saved && input.phase === 'execute' && input.mode === 'approval_required')
-			throw new ToolLifecycleError('A resumed note approval is missing its prepared review');
-		const review = input.saved ?? (await this.prepareChange(actor, input.request, input.target));
-		if (review.kind === 'failure')
-			return { kind: 'failure', review, failure: this.dependencies.toolApproval.failure(review) };
-		return { kind: this.dependencies.toolApproval.requirement('mutation', input.mode), review };
-	}
-	async applyAgentReviewedChange(
-		actor: ActorContext,
-		review: NoteChangeReview,
-		target: NoteChangeTarget
-	): Promise<AgentPayload> {
-		if (review.kind === 'failure')
-			return this.dependencies.toolResults.read(
-				toolFailure(
-					'NOTE_REVIEW_FAILED',
-					'No changes were applied.',
-					'Correct the problems below and submit a new tool call.',
-					{ problems: [...review.problems] }
-				)
-			);
-		const result = await this.applyReviewedChange(actor, review.change, target);
-		if (result.kind === 'failure')
-			return this.dependencies.toolResults.read(
-				toolFailure(
-					result.code,
-					result.message,
-					'Read the note and submit a new tool call for review.'
-				)
-			);
-		const projection = this.dependencies.toolPresentation.projectNoteWrite(result.note);
-		return this.dependencies.toolResults.read(
-			review.change.operation.kind === 'patch'
-				? {
-						...projection,
-						appliedEdits: review.change.operation.appliedEdits,
-						matchedTexts: [...review.change.operation.matchedTexts]
-					}
-				: { ...projection }
-		);
-	}
 }
 
 type ResolvedNoteView = NoteView<BacklinkView, ReferenceView, Diagram, TodoView, SuggestionView>;
+/** A note's read model and the virtual file that carries its Markdown body. */
+export interface NoteDocumentFile {
+	readonly view: ResolvedNoteView;
+	readonly file: AgentFile['metadata'];
+}

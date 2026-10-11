@@ -1,3 +1,4 @@
+import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import {
@@ -89,8 +90,7 @@ const settingsTool = (controller: AgentSettings) => {
 	)
 		.definitions()
 		.find((tool) => tool.name === 'update_agent_preferences');
-	if (!tool) throw new Error('Missing update_agent_preferences');
-	return tool;
+	return directTool(tool);
 };
 it('returns the previous preferences alongside the saved settings', async () => {
 	const { controller, repository } = setup();

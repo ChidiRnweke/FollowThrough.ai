@@ -1,3 +1,5 @@
+import { widgetTemplates } from '$lib/models/widgets';
+import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import {
@@ -66,7 +68,11 @@ const requests: { name: string; action: string; input: AgentPayloadObject }[] = 
 	{
 		name: 'create_widget',
 		action: 'create a widget',
-		input: { title: 'Dashboard', layout: 'invalid JSON', data: 'invalid JSON' }
+		input: {
+			title: 'Dashboard',
+			layout: JSON.stringify(widgetTemplates.checklist.layout),
+			data: JSON.stringify(widgetTemplates.checklist.data)
+		}
 	},
 	{ name: 'create_note', action: 'create a note', input: { title: 'New note' } },
 	{ name: 'create_skill', action: 'create a skill', input: { name: 'New skill' } },
@@ -77,7 +83,7 @@ it.each(requests)(
 	async ({ name, action, input }) => {
 		const tool = toolsFor(true).find((tool) => tool.name === name);
 		if (!tool) throw new Error(`Missing ${name}`);
-		await expect(tool.prepare(input).execute()).rejects.toThrow(
+		await expect(directTool(tool).prepare(input).execute()).rejects.toThrow(
 			`projectId is required to ${action}. Retry naming one of these projects: Renamed inbox (${testProjectId()}).`
 		);
 	}
@@ -87,7 +93,7 @@ it.each(requests)(
 	async ({ name, action, input }) => {
 		const tool = toolsFor(false).find((tool) => tool.name === name);
 		if (!tool) throw new Error(`Missing ${name}`);
-		await expect(tool.prepare(input).execute()).rejects.toThrow(
+		await expect(directTool(tool).prepare(input).execute()).rejects.toThrow(
 			`projectId is required to ${action}, and this workspace has no projects yet. Call create_project first, then retry with its id.`
 		);
 	}

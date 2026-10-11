@@ -1128,7 +1128,6 @@ export class AgentSdkHarness implements AgentHarness {
 			const plan = this.toolPlan(permitted, this.approvalRequired(run.executionMode));
 			const toolset = this.dependencies.toolset(tools, {
 				plan,
-				mode: run.executionMode,
 				isDiscovered: (name) => discovered.has(name),
 				discover: async (query, limit) => {
 					const found = await this.rankTools(permitted, catalog, query, limit);

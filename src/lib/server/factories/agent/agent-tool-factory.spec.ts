@@ -1,3 +1,4 @@
+import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import { createWidgetRules } from '$lib/factories/widgets/rules';
 import type { TextSelection } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
@@ -249,7 +250,7 @@ describe('Accepting a suggestion on the user\u2019s behalf', () => {
 		const tool = registry('auto_accept', { factory })
 			.definitions()
 			.find((tool) => tool.name === 'accept_suggestion');
-		const outcome = await tool!
+		const outcome = await directTool(tool)
 			.prepare({ suggestionId: input.suggestionId })
 			.execute()
 			.then(
@@ -479,7 +480,7 @@ describe('Agent tool coverage invariants', () => {
 			.definitions()
 			.find((tool) => tool.name === 'search_note');
 		expect(
-			await tool?.prepare({ noteId: testNoteId(), query: 'messaging' }).execute()
+			await directTool(tool).prepare({ noteId: testNoteId(), query: 'messaging' }).execute()
 		).toMatchObject([{ noteId: testNoteId() }]);
 	});
 
@@ -508,7 +509,7 @@ describe('Agent tool coverage invariants', () => {
 		})
 			.definitions()
 			.find((tool) => tool.name === 'read_canvas_diagram');
-		expect(await tool?.prepare({}).execute()).toEqual({
+		expect(await directTool(tool).prepare({}).execute()).toEqual({
 			kind: 'present',
 			diagramId: diagram.id,
 			source: diagram.source,
@@ -615,7 +616,7 @@ describe('Agent tool coverage invariants', () => {
 		const tool = registry('auto_accept', { factory })
 			.definitions()
 			.find((tool) => tool.name === 'get_note');
-		expect(await tool?.prepare({ noteId: note.id }).execute()).toEqual({
+		expect(await directTool(tool).prepare({ noteId: note.id }).execute()).toEqual({
 			noteId: note.id,
 			title: note.title,
 			etag: noteEtag(note.id, note.currentRevision),
@@ -648,7 +649,8 @@ describe('Agent tool coverage invariants', () => {
 			input: { conversationId: testConversationId(), prompt: 'Use a skill' },
 			model: 'openai/gpt-5.6'
 		}).definitions();
-		const skillTool = (name: string) => definitions.find((definition) => definition.name === name);
+		const skillTool = (name: string) =>
+			directTool(definitions.find((definition) => definition.name === name));
 		return { noteId: note.id, skillTool };
 	};
 
@@ -656,7 +658,7 @@ describe('Agent tool coverage invariants', () => {
 		const fixture = skillFixture();
 		const loaded = await fixture
 			.skillTool('load_skill')
-			?.prepare({ noteId: fixture.noteId })
+			.prepare({ noteId: fixture.noteId })
 			.execute();
 		expect(loaded).toMatchObject({
 			instructions: expect.stringContaining('Number every finding.'),
@@ -764,7 +766,7 @@ describe('Agent tool coverage invariants', () => {
 			.definitions()
 			.find((tool) => tool.name === 'search');
 		expect(
-			definition?.prepare({
+			directTool(definition).prepare({
 				query: 'deployment procedures',
 				projectId: '',
 				createdAfter: '',
@@ -780,7 +782,7 @@ describe('Agent tool coverage invariants', () => {
 			.definitions()
 			.find((tool) => tool.name === 'list_todos');
 		expect(
-			definition?.prepare({
+			directTool(definition).prepare({
 				projectId,
 				noteId,
 				status: '',
@@ -832,7 +834,7 @@ describe('Agent tool coverage invariants', () => {
 			.definitions()
 			.find((definition) => definition.name === 'create_todos');
 		if (!mcp) throw new Error('Missing task batch tool');
-		const externalRetry = await mcp.prepare(payload).execute();
+		const externalRetry = await directTool(mcp).prepare(payload).execute();
 		expect({ first, retry, externalRetry, titles: todos.todos.map((todo) => todo.title) }).toEqual({
 			first: {
 				todos: todos.todos.map((todo) => ({
@@ -1288,7 +1290,7 @@ describe('Explicit mutation receipts', () => {
 			.definitions()
 			.find((tool) => tool.name === 'set_skill_pinned');
 		const input = { noteId: note.id, projectId: note.projectId, pinned: true };
-		const receipt = await tool?.prepare(input).execute();
+		const receipt = await directTool(tool).prepare(input).execute();
 		expect({ receipt, pins: skills.pins }).toEqual({
 			receipt: input,
 			pins: [{ skillNoteId: note.id, projectId: note.projectId }]
@@ -1308,7 +1310,7 @@ describe('Explicit mutation receipts', () => {
 		const tool = registry('auto_accept', { factory })
 			.definitions()
 			.find((tool) => tool.name === 'revoke_api_token');
-		const receipt = await tool?.prepare({ tokenId: minted.token.id }).execute();
+		const receipt = await directTool(tool).prepare({ tokenId: minted.token.id }).execute();
 		expect({ receipt, verified: await tokens.verify(`Bearer ${minted.plaintext}`) }).toEqual({
 			receipt: { tokenId: minted.token.id, name: 'Local integration', revoked: true },
 			verified: null
@@ -1328,7 +1330,7 @@ describe('Explicit mutation receipts', () => {
 		const tool = registry('auto_accept', { factory })
 			.definitions()
 			.find((tool) => tool.name === 'delete_artifact');
-		const receipt = await tool?.prepare({ artifactId: artifact.id }).execute();
+		const receipt = await directTool(tool).prepare({ artifactId: artifact.id }).execute();
 		expect({ receipt, artifacts: artifacts.artifacts }).toEqual({
 			receipt: { artifactId: artifact.id, title: 'Report', deleted: true },
 			artifacts: []
@@ -1342,7 +1344,7 @@ describe('Explicit mutation receipts', () => {
 			.definitions()
 			.find((tool) => tool.name === 'get_artifact');
 		await expect(
-			tool?.prepare({ artifactId: '5b7e8904-6a3c-4d25-9f48-4a88e6f0c235' }).execute()
+			directTool(tool).prepare({ artifactId: '5b7e8904-6a3c-4d25-9f48-4a88e6f0c235' }).execute()
 		).rejects.toThrow('Artifact not found');
 	});
 });

@@ -478,6 +478,7 @@ describe('settling a run whose execution threw', () => {
 
 /** Each successful mutation requests workspace synchronization. */
 const mutatingTool = (name: ToolName): AgentTool => ({
+	kind: 'direct',
 	name,
 	description: name,
 	classification: 'mutation',

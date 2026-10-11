@@ -1,9 +1,4 @@
-import type {
-	AgentExecutionMode,
-	AgentReview,
-	PendingAgentDecision,
-	ToolClassification
-} from '$lib/models/agent';
+import type { AgentReview, PendingAgentDecision, ToolClassification } from '$lib/models/agent';
 import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ToolName } from '$lib/models/agent/tool-catalog';
 import type { ToolFailure } from '$lib/models/agent/tool-failure';
@@ -20,43 +15,53 @@ export type ToolPreparation =
 	| { readonly kind: 'approval_required'; readonly action: PreparedAction }
 	| { readonly kind: 'failure'; readonly failure: ToolFailure };
 
-/** What the user approves for a reviewed tool call, as the review it produced. */
+/** A reviewed call's prepared change, and how to apply it once approved. */
 export type AgentToolReviewPreparation =
 	| {
-			readonly kind: 'ready' | 'approval_required';
+			readonly kind: 'prepared';
+			readonly arguments: AgentPayloadObject;
 			readonly review: string;
 			readonly apply: () => Promise<AgentPayload>;
 	  }
-	| { readonly kind: 'failure'; readonly review: string; readonly failure: ToolFailure };
+	| {
+			readonly kind: 'failure';
+			readonly arguments: AgentPayloadObject;
+			readonly review: string;
+			readonly failure: ToolFailure;
+	  };
 
 /**
- * A tool whose exact change is prepared before approval and applied as approved. `saved` is
- * the review an earlier phase of the same call prepared, so approval and execution agree.
+ * How a reviewed tool prepares its exact change before approval and applies it as approved.
+ * `saved` is the review an earlier phase of the same call prepared, so approval and execution
+ * agree.
  */
 export interface AgentToolReview {
 	readonly kind: AgentReview['kind'];
 	/** Reads a review saved at a checkpoint; a review that cannot be read throws. */
 	restore(saved: string): string;
-	prepare(
-		args: AgentPayloadObject,
-		request: {
-			readonly mode: AgentExecutionMode;
-			readonly phase: 'approval' | 'execute';
-			readonly saved: string | undefined;
-		}
-	): Promise<AgentToolReviewPreparation>;
+	/** Parses the model's arguments; invalid arguments throw a ValidationError. */
+	prepare(input: AgentPayload, saved: string | undefined): Promise<AgentToolReviewPreparation>;
 }
 
-/** One capability the agent can call: a controller operation behind a model-facing schema. */
-export interface AgentTool {
+interface AgentToolDescription {
 	readonly name: ToolName;
 	readonly description: string;
 	readonly classification: ToolClassification;
 	readonly parameters: z.ZodObject;
-	/** Binds the model's arguments to the operation. Invalid arguments throw a ValidationError. */
-	readonly prepare: (input: AgentPayload) => PreparedAction;
-	readonly review?: AgentToolReview;
 }
+
+/**
+ * One capability the agent can call, behind a model-facing schema. A direct tool runs one
+ * controller operation. A reviewed tool prepares a change with one operation and applies the
+ * approved change with another.
+ */
+export type AgentTool =
+	| (AgentToolDescription & {
+			readonly kind: 'direct';
+			/** Binds the model's arguments to the operation. Invalid arguments throw a ValidationError. */
+			readonly prepare: (input: AgentPayload) => PreparedAction;
+	  })
+	| (AgentToolDescription & { readonly kind: 'reviewed'; readonly review: AgentToolReview });
 
 /** Which tools one run or MCP request may call, and how. */
 export interface AgentToolPlan {
@@ -77,7 +82,6 @@ export interface AgentToolCompletion {
 /** The harness's decisions for one run's tool set; the tool set applies them to each call. */
 export interface AgentToolPolicy {
 	readonly plan: AgentToolPlan;
-	readonly mode: AgentExecutionMode;
 	readonly isDiscovered: (name: ToolName) => boolean;
 	readonly discover: (query: string, limit: number) => Promise<readonly ToolName[]>;
 	readonly completed: (call: AgentToolCompletion, output: AgentPayload) => Promise<void>;

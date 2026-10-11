@@ -15,7 +15,7 @@ it('keeps disabled skills out of automatic discovery while allowing an explicit 
 	});
 	await controller.update(owner, { noteId: skill.note.id, isEnabled: false });
 	const provenance = await seedProvenance(owner, '21901');
-	const loaded = await controller.loadForAgent(owner, {
+	const loaded = await controller.use(owner, {
 		noteId: skill.note.id,
 		provenanceId: provenance.id
 	});
@@ -23,7 +23,7 @@ it('keeps disabled skills out of automatic discovery while allowing an explicit 
 	expect({
 		automatic: (await records.listEnabled(owner)).map((value) => value.noteId),
 		browsable: (await records.listAll(owner)).map((value) => value.noteId),
-		loaded: loaded.skill.note.plainText,
+		loaded: loaded.view.skill.note.plainText,
 		usages: (await records.listUsages(owner, skill.note.id)).map((value) => value.provenanceId)
 	}).toEqual({
 		automatic: [],

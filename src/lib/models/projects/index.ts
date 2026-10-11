@@ -36,6 +36,15 @@ export const INBOX_PROJECT_NAME = 'Inbox';
  */
 export type ProjectRole = 'inbox' | 'workspace';
 
+/**
+ * A request to an operation that writes into a project, from a caller that may not have named
+ * one. The operation does not pick a project: it fails with the projects the caller can choose.
+ */
+export type WithProjectChoice<Input extends { readonly projectId: ProjectId }> = Omit<
+	Input,
+	'projectId'
+> & { readonly projectId?: ProjectId };
+
 export interface Project {
 	readonly id: ProjectId;
 	readonly userId: UserId;

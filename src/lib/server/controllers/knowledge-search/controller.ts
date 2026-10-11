@@ -1,15 +1,10 @@
 import type { ConversationId } from '$lib/models/agent';
-import type { ToolResultReader } from '$lib/models/agent-tool-context';
-import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
-import type { AgentPayload } from '$lib/models/agent/payload';
 import type { ActorContext } from '$lib/models/identity';
 import type { KnowledgeSearchSource } from '$lib/models/knowledge-search';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { DateTime } from '$lib/models/workspace';
 import type { ConversationMessages } from '$lib/server/services/agent/conversations/archive';
-import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
-import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { KnowledgeSearch } from '$lib/server/services/knowledge-search/retrieval';
 
 export interface SearchKnowledgeInput {
@@ -41,16 +36,9 @@ export interface RetrievalController {
 		actor: ActorContext,
 		input: SearchKnowledgeInput
 	): Promise<readonly KnowledgeSearchResult[]>;
-
-	agentSearch(actor: ActorContext, input: AgentToolInput<'search'>): Promise<AgentPayload>;
-	agentSearchNote(actor: ActorContext, input: AgentToolInput<'search_note'>): Promise<AgentPayload>;
 }
 
 export interface RetrievalDependencies {
-	readonly toolPresentation: AgentToolPresentation;
-	readonly toolPayloads: AgentPayloadInspection;
-	readonly toolResults: ToolResultReader;
-
 	knowledge: KnowledgeSearch;
 	conversations: Pick<ConversationMessages, 'listMessages'>;
 }
@@ -87,39 +75,5 @@ export class Retrieval implements RetrievalController {
 			score: match.score,
 			sourceCreatedAt: match.document.sourceCreatedAt
 		}));
-	}
-
-	async agentSearch(actor: ActorContext, input: AgentToolInput<'search'>): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.search(actor, {
-				query: input.query,
-				...(input.projectId ? { projectId: input.projectId as ProjectId } : {}),
-				...(input.createdAfter ? { createdAfter: input.createdAfter } : {}),
-				...(input.createdBefore ? { createdBefore: input.createdBefore } : {})
-			});
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentSearchNote(
-		actor: ActorContext,
-		input: AgentToolInput<'search_note'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.search(actor, {
-				query: input.query,
-				noteId: input.noteId as NoteId,
-				...(input.createdAfter ? { createdAfter: input.createdAfter } : {}),
-				...(input.createdBefore ? { createdBefore: input.createdBefore } : {})
-			});
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
 	}
 }

@@ -1,3 +1,4 @@
+import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
@@ -98,7 +99,9 @@ it.each(['user', 'project'] as const)(
 	'lists only shared active %s memory through the agent tool',
 	async (scope) => {
 		const { tool, shared, projectId } = setup(scope);
-		const result = await tool.prepare(projectId ? { projectId } : {}).execute();
+		const result = await directTool(tool)
+			.prepare(projectId ? { projectId } : {})
+			.execute();
 		expect(result).toEqual({
 			entries: [
 				{
@@ -114,7 +117,7 @@ it.each(['user', 'project'] as const)(
 it('refuses an archived project through the agent memory tool', async () => {
 	const { tool, projects } = setup('project');
 	await projects.archive(testActor(), testProjectId());
-	await expect(tool.prepare({ projectId: testProjectId() }).execute()).rejects.toThrow(
+	await expect(directTool(tool).prepare({ projectId: testProjectId() }).execute()).rejects.toThrow(
 		'Memory project was not found'
 	);
 });

@@ -1,3 +1,4 @@
+import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import { createWidgetRules } from '$lib/factories/widgets/rules';
 import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
@@ -69,8 +70,7 @@ const setup = () => {
 	);
 	const tool = (name: string) => {
 		const definition = tools.definitions().find((candidate) => candidate.name === name);
-		if (!definition) throw new Error(`${name} is missing`);
-		return definition;
+		return directTool(definition);
 	};
 	return { repository, tool };
 };

@@ -1,18 +1,8 @@
 import { StaleRevisionError, ValidationError } from '$lib/errors';
-import type { ToolResultReader } from '$lib/models/agent-tool-context';
-import type {
-	AgentToolInput,
-	AgentWidgetCreationInput,
-	AgentWidgetDataEditInput,
-	AgentWidgetLayoutEditInput
-} from '$lib/models/agent-tool-inputs';
-import type { AgentPayload } from '$lib/models/agent/payload';
 import type { WidgetCatalogReader } from '$lib/models/widgets';
-import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type { WidgetIndexing } from '$lib/server/services/knowledge-search/retrieval';
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
-import type { AgentPayloadInspection } from '$lib/services/agent/payload';
-import type { AgentProjectChoiceRules } from '$lib/services/projects/agent-choice';
+import type { ProjectChoiceRules } from '$lib/services/projects/choice';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
 import type {
@@ -31,7 +21,7 @@ import type { IWidgetSearchService } from '$lib/services/widgets/search-text';
 import type { IWidgetLifecycleService } from '$lib/services/widgets/trash';
 
 import type { ActorContext } from '$lib/models/identity';
-import type { ProjectId } from '$lib/models/projects';
+import type { ProjectId, WithProjectChoice } from '$lib/models/projects';
 import {
 	widgetCatalog,
 	type CreateWidgetInput,
@@ -62,14 +52,19 @@ export interface WidgetsController {
 	get(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
 	/** The catalog a layout must fit, written for an agent that is about to write one. */
 	catalog(actor: ActorContext): Promise<{ catalogVersion: number; reference: string }>;
+	/** @throws ProjectChoiceRequiredError if the request names no project. */
 	list(
 		actor: ActorContext,
-		input: { readonly projectId: ProjectId }
+		input: { readonly projectId?: ProjectId }
 	): Promise<{ widgets: readonly Widget[] }>;
 	/**
 	 * @throws ValidationError if the draft uses a component or prop the catalog rejects.
+	 * @throws ProjectChoiceRequiredError if the request names no project.
 	 */
-	create(actor: ActorContext, input: CreateWidgetInput): Promise<{ widget: Widget }>;
+	create(
+		actor: ActorContext,
+		input: WithProjectChoice<CreateWidgetInput>
+	): Promise<{ widget: Widget }>;
 	/**
 	 * @throws StaleRevisionError if the edited part changed since the edit was made.
 	 * @throws ValidationError if the patch does not apply or its result is not a valid widget.
@@ -80,29 +75,10 @@ export interface WidgetsController {
 	restore(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
 	/** @throws ValidationError unless the widget is in the trash. */
 	delete(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<void>;
-
-	agentReadWidgetCatalog(
-		actor: ActorContext,
-		input: AgentToolInput<'read_widget_catalog'>
-	): Promise<AgentPayload>;
-	agentCreateWidget(actor: ActorContext, input: AgentWidgetCreationInput): Promise<AgentPayload>;
-	agentListWidgets(
-		actor: ActorContext,
-		input: AgentToolInput<'list_widgets'>
-	): Promise<AgentPayload>;
-	agentReadWidget(actor: ActorContext, input: AgentToolInput<'read_widget'>): Promise<AgentPayload>;
-	agentEditWidgetData(actor: ActorContext, input: AgentWidgetDataEditInput): Promise<AgentPayload>;
-	agentEditWidgetLayout(
-		actor: ActorContext,
-		input: AgentWidgetLayoutEditInput
-	): Promise<AgentPayload>;
 }
 
 export interface WidgetsDependencies {
-	readonly toolPresentation: AgentToolPresentation;
-	readonly toolPayloads: AgentPayloadInspection;
-	readonly toolResults: ToolResultReader;
-	readonly toolProjectChoice: AgentProjectChoiceRules;
+	readonly projectChoice: ProjectChoiceRules;
 	readonly projectLister: ProjectLister;
 
 	catalogReader: WidgetCatalogReader;
@@ -208,12 +184,27 @@ export class Widgets implements WidgetsController {
 
 	async list(
 		actor: ActorContext,
-		input: { readonly projectId: ProjectId }
+		input: { readonly projectId?: ProjectId }
 	): Promise<{ widgets: readonly Widget[] }> {
-		return { widgets: await this.dependencies.widgetLister.listForProject(actor, input.projectId) };
+		const projectId =
+			input.projectId ??
+			this.dependencies.projectChoice.requireChoice(
+				await this.dependencies.projectLister.list(actor),
+				'list widgets'
+			);
+		return { widgets: await this.dependencies.widgetLister.listForProject(actor, projectId) };
 	}
 
-	async create(actor: ActorContext, input: CreateWidgetInput): Promise<{ widget: Widget }> {
+	async create(
+		actor: ActorContext,
+		input: WithProjectChoice<CreateWidgetInput>
+	): Promise<{ widget: Widget }> {
+		const projectId =
+			input.projectId ??
+			this.dependencies.projectChoice.requireChoice(
+				await this.dependencies.projectLister.list(actor),
+				'create a widget'
+			);
 		return this.dependencies.transactionRunner.run(async () => {
 			const widget = decided(
 				this.createWidget(
@@ -221,7 +212,7 @@ export class Widgets implements WidgetsController {
 					{
 						id: input.id,
 						userId: actor.userId,
-						projectId: input.projectId,
+						projectId,
 						...(input.sourceNoteId ? { sourceNoteId: input.sourceNoteId } : {}),
 						now: now()
 					},
@@ -301,147 +292,6 @@ export class Widgets implements WidgetsController {
 			actor,
 			widget,
 			this.dependencies.search.text(widget)
-		);
-	}
-
-	async agentReadWidgetCatalog(
-		actor: ActorContext,
-		input: AgentToolInput<'read_widget_catalog'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.catalog(actor);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentCreateWidget(
-		actor: ActorContext,
-		input: AgentWidgetCreationInput
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			const chosenProjectId =
-				input.projectId ??
-				(await this.dependencies.toolProjectChoice.requireChoice(
-					await this.dependencies.projectLister.list(actor),
-					'create a widget'
-				));
-			if (input.draft.kind === 'failure') throw input.draft.error;
-			const { widget } = await this.create(actor, {
-				id: crypto.randomUUID() as WidgetId,
-				projectId: chosenProjectId,
-				draft: input.draft.draft
-			});
-			// Single quotes parse the same as double ones, and need no escaping inside the JSON
-			// arguments of the edit_note call that inserts the line. An unescaped double quote
-			// there fails the whole run as malformed tool arguments.
-			const embed = `:::widgetNode {widgetId='${widget.id}'} :::`;
-			// Creating saves the widget in the project; only a reviewed note edit shows it in a
-			// note (ADR 0003), so the result names that edit rather than performing it.
-			return {
-				widgetId: widget.id,
-				title: widget.title,
-				embed,
-				nextActions: [
-					input.noteId
-						? {
-								tool: 'edit_note' as const,
-								noteId: input.noteId,
-								reason: `The widget is not in the note yet. Call edit_note on note ${input.noteId} now and insert ${embed} on its own line where the user asked for it.`
-							}
-						: {
-								tool: 'edit_note' as const,
-								reason:
-									'If the user asked for the widget in a note, insert the embed line on its own line in that note before you finish.'
-							}
-				]
-			};
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentListWidgets(
-		actor: ActorContext,
-		input: AgentToolInput<'list_widgets'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			const chosenProjectId =
-				input.projectId ??
-				(await this.dependencies.toolProjectChoice.requireChoice(
-					await this.dependencies.projectLister.list(actor),
-					'list widgets'
-				));
-			const { widgets } = await this.list(actor, { projectId: chosenProjectId });
-			return {
-				widgets: widgets.map((widget) => ({
-					widgetId: widget.id,
-					title: widget.title,
-					updatedAt: widget.updatedAt
-				}))
-			};
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentReadWidget(
-		actor: ActorContext,
-		input: AgentToolInput<'read_widget'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.get(actor, input);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentEditWidgetData(
-		actor: ActorContext,
-		input: AgentWidgetDataEditInput
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.edit(actor, {
-				widgetId: input.widgetId,
-				edit: {
-					kind: 'data',
-					expectedDataRevision: input.expectedDataRevision,
-					patch: input.patch
-				}
-			});
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentEditWidgetLayout(
-		actor: ActorContext,
-		input: AgentWidgetLayoutEditInput
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.edit(actor, {
-				widgetId: input.widgetId,
-				edit: {
-					kind: 'layout',
-					expectedLayoutRevision: input.expectedLayoutRevision,
-					patch: input.patch
-				}
-			});
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
 		);
 	}
 

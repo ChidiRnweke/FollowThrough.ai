@@ -1,14 +1,9 @@
-import type { ToolResultReader } from '$lib/models/agent-tool-context';
-import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
-import type { AgentPayload } from '$lib/models/agent/payload';
 import type { TemplateStyleReader } from '$lib/server/services/deliverables/template-styles';
 import type { PdfRendering } from '$lib/server/services/deliverables/pdf';
 import type { DiagramRasterization } from '$lib/server/services/deliverables/diagram-rendering';
 
-import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type { DocumentBundlePacker } from '$lib/server/services/deliverables/bundle';
 import type { DocxRenderer } from '$lib/server/services/deliverables/docx';
-import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { IWidgetExportService } from '$lib/services/widgets/export-blocks';
 import type { IWidgetSourceService } from '$lib/services/widgets/sources';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
@@ -176,51 +171,10 @@ export interface DeliverablesController {
 	 * state. Preserve the original artifact and its stored content.
 	 */
 	regenerateArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GenerateDocumentOutput>;
-
-	agentExportDocument(
-		actor: ActorContext,
-		input: AgentToolInput<'export_document'>
-	): Promise<AgentPayload>;
-	agentListArtifacts(
-		actor: ActorContext,
-		input: AgentToolInput<'list_artifacts'>
-	): Promise<AgentPayload>;
-	agentListTemplates(
-		actor: ActorContext,
-		input: AgentToolInput<'list_templates'>
-	): Promise<AgentPayload>;
-	agentGetExportSettings(
-		actor: ActorContext,
-		input: AgentToolInput<'get_export_settings'>
-	): Promise<AgentPayload>;
-	agentUpdateExportSettings(
-		actor: ActorContext,
-		input: AgentToolInput<'update_export_settings'>
-	): Promise<AgentPayload>;
-	agentGetArtifact(
-		actor: ActorContext,
-		input: AgentToolInput<'get_artifact'>
-	): Promise<AgentPayload>;
-	agentDownloadArtifact(
-		actor: ActorContext,
-		input: AgentToolInput<'download_artifact'>
-	): Promise<AgentPayload>;
-	agentDeleteArtifact(
-		actor: ActorContext,
-		input: AgentToolInput<'delete_artifact'>
-	): Promise<AgentPayload>;
-	agentRegenerateArtifact(
-		actor: ActorContext,
-		input: AgentToolInput<'regenerate_artifact'>
-	): Promise<AgentPayload>;
 }
 
 /** Everything the {@link DeliverablesController} needs, injected so it can be built and tested without real stores. */
 export interface DeliverablesDependencies {
-	readonly toolPresentation: AgentToolPresentation;
-	readonly toolPayloads: AgentPayloadInspection;
-	readonly toolResults: ToolResultReader;
-
 	readonly exportSettingsRules: ExportSettingsRules;
 	readonly artifactFiles: ArtifactFiles;
 	syncMutations: WorkspaceMutationGuard;
@@ -692,134 +646,5 @@ export class Deliverables implements DeliverablesController {
 			todos,
 			notes
 		});
-	}
-
-	async agentExportDocument(
-		actor: ActorContext,
-		input: AgentToolInput<'export_document'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.generateDocument(actor, {
-				projectId: input.projectId as ProjectId,
-				noteIds: input.noteIds.map((noteId) => noteId as NoteId),
-				title: input.title,
-				format: input.format,
-				...(input.templateId ? { templateId: input.templateId as TemplateId } : {})
-			});
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentListArtifacts(
-		actor: ActorContext,
-		input: AgentToolInput<'list_artifacts'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.listArtifacts(actor, input.projectId);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentListTemplates(
-		actor: ActorContext,
-		input: AgentToolInput<'list_templates'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.listTemplates(actor, input.projectId);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentGetExportSettings(
-		actor: ActorContext,
-		input: AgentToolInput<'get_export_settings'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.getExportSettings(actor, input.projectId);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentUpdateExportSettings(
-		actor: ActorContext,
-		input: AgentToolInput<'update_export_settings'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			const { projectId, ...settings } = input;
-
-			return this.updateExportSettings(actor, projectId, settings);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentGetArtifact(
-		actor: ActorContext,
-		input: AgentToolInput<'get_artifact'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			const artifact = await this.getArtifact(actor, input.artifactId);
-			if (!artifact) throw new NotFoundError('Artifact not found');
-			return artifact;
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentDownloadArtifact(
-		actor: ActorContext,
-		input: AgentToolInput<'download_artifact'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.downloadArtifact(actor, input.artifactId);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentDeleteArtifact(
-		actor: ActorContext,
-		input: AgentToolInput<'delete_artifact'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			const deleted = await this.deleteArtifact(actor, input.artifactId);
-			return { artifactId: deleted.id, title: deleted.title, deleted: true as const };
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
-	}
-	async agentRegenerateArtifact(
-		actor: ActorContext,
-		input: AgentToolInput<'regenerate_artifact'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return this.regenerateArtifact(actor, input.artifactId);
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
-		);
 	}
 }

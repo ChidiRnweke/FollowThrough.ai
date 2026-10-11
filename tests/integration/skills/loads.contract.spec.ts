@@ -38,7 +38,7 @@ const setup = async (suffix: string) => {
 it('records an agent load with context in another owned project and leaves read-only views uncounted', async () => {
 	const { owner, note, provenance, controller, records } = await setup('20301');
 	const other = await seedNote('20302', owner);
-	const result = await controller.loadForAgent(owner, {
+	const result = await controller.use(owner, {
 		noteId: note.id,
 		provenanceId: provenance.id,
 		contextNoteId: other.note.id
@@ -52,7 +52,7 @@ it('records an agent load with context in another owned project and leaves read-
 				provenanceId
 			})
 		),
-		context: result.usages.map((view) => view.contextNote)
+		context: result.view.usages.map((view) => view.contextNote)
 	}).toEqual({
 		stored: [{ skillNoteId: note.id, contextNoteId: other.note.id, provenanceId: provenance.id }],
 		context: [{ id: other.note.id, title: other.note.title }]
@@ -61,12 +61,12 @@ it('records an agent load with context in another owned project and leaves read-
 
 it('records a context-free agent load with its provenance', async () => {
 	const { owner, note, provenance, controller } = await setup('20303');
-	const result = await controller.loadForAgent(owner, {
+	const result = await controller.use(owner, {
 		noteId: note.id,
 		provenanceId: provenance.id
 	});
 	expect(
-		result.usages.map(({ usage, contextNote }) => ({
+		result.view.usages.map(({ usage, contextNote }) => ({
 			context: usage.contextNoteId,
 			provenance: usage.provenanceId,
 			contextNote
@@ -84,7 +84,7 @@ it.each([
 		const other = await seedNote(foreign, actor(foreign));
 		const foreignProvenance = await seedProvenance(other.owner, foreign);
 		const result = await controller
-			.loadForAgent(owner, {
+			.use(owner, {
 				noteId: note.id,
 				provenanceId: resource === 'provenance' ? foreignProvenance.id : provenance.id,
 				contextNoteId: resource === 'context' ? other.note.id : undefined
@@ -103,12 +103,10 @@ it.each([
 it('hides an archived skill from discovery and refuses to count it as loaded', async () => {
 	const { owner, note, provenance, controller, records } = await setup('20308');
 	await replaceNoteFixture({ ...note, archivedAt: now });
-	const result = await controller
-		.loadForAgent(owner, { noteId: note.id, provenanceId: provenance.id })
-		.then(
-			() => ({ kind: 'success' as const }),
-			(error: Error) => ({ kind: 'failure' as const, error })
-		);
+	const result = await controller.use(owner, { noteId: note.id, provenanceId: provenance.id }).then(
+		() => ({ kind: 'success' as const }),
+		(error: Error) => ({ kind: 'failure' as const, error })
+	);
 	expect({
 		result,
 		catalog: await records.listAll(owner),

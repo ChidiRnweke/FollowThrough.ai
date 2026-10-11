@@ -71,7 +71,7 @@ it('does not commit usage when the loaded response cannot be assembled', async (
 	const { controller, skills, note } = setup();
 	skills.usageReadFailure = new Error('Usage history unavailable');
 	const result = await controller
-		.loadForAgent(testActor(), {
+		.use(testActor(), {
 			noteId: note.id,
 			provenanceId: testProvenanceId()
 		})
@@ -89,7 +89,7 @@ it('does not load or record usage for an archived skill', async () => {
 	const { controller, skills, notes, note } = setup();
 	notes.notes = [{ ...note, archivedAt: testNow }];
 	const result = await controller
-		.loadForAgent(testActor(), {
+		.use(testActor(), {
 			noteId: note.id,
 			provenanceId: testProvenanceId()
 		})
@@ -105,11 +105,14 @@ it('does not load or record usage for an archived skill', async () => {
 
 it('returns the persisted usage for a context-free load', async () => {
 	const { controller, skills, note } = setup();
-	const result = await controller.loadForAgent(testActor(), {
+	const result = await controller.use(testActor(), {
 		noteId: note.id,
 		provenanceId: testProvenanceId()
 	});
-	expect({ skill: result.skill, usages: result.usages.map(({ usage }) => usage) }).toEqual({
+	expect({
+		skill: result.view.skill,
+		usages: result.view.usages.map(({ usage }) => usage)
+	}).toEqual({
 		skill: skills.skills[0],
 		usages: skills.usages
 	});
@@ -119,7 +122,7 @@ it('rejects a load with another actor’s provenance without recording usage', a
 	const { controller, skills, provenance, note } = setup();
 	provenance.provenance[0] = { ...provenance.provenance[0], userId: testActor(2).userId };
 	const result = await controller
-		.loadForAgent(testActor(), {
+		.use(testActor(), {
 			noteId: note.id,
 			provenanceId: testProvenanceId()
 		})

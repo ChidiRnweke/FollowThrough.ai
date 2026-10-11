@@ -20,11 +20,13 @@ import {
 	type ProjectTreeReader,
 	type ProjectTreeWriter
 } from '$lib/server/services/projects/catalog';
+import { ProjectChoiceService, type ProjectChoiceRules } from '$lib/services/projects/choice';
 import { ProjectPlacementService, type ProjectPlacement } from '$lib/services/projects/placement';
 export interface ProjectServices {
 	readonly creator: ProjectCreator;
 	readonly reader: ProjectReader;
 	readonly lister: ProjectLister;
+	readonly choice: ProjectChoiceRules;
 	readonly editor: ProjectEditor;
 	readonly lifecycle: ProjectLifecycle;
 	readonly treeReader: ProjectTreeReader;
@@ -43,6 +45,7 @@ export const createProjectServices = (
 		creator: new ProjectCreationService(repository),
 		reader,
 		lister: reader,
+		choice: new ProjectChoiceService(),
 		editor: new ProjectEditingService(repository),
 		lifecycle: new ProjectLifecycleService(repository),
 		treeReader: entries,

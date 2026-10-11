@@ -1,3 +1,4 @@
+import { directTool } from '$lib/testing/agent/fixtures/direct-tool';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
 import type { AgentRunId } from '$lib/models/agent';
 import type { Provenance } from '$lib/models/provenance';
@@ -107,8 +108,10 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 	const tool = tools.definitions().find((item) => item.name === 'propose_memory_change');
 	if (!tool) throw new Error('Memory proposal tool is missing');
 	const propose = () =>
-		tool.prepare({ scope: 'user', operation: 'add', content: 'Prefer concise answers.' }).execute();
-	return { propose, tool, origin, provenance, suggestions, entries };
+		directTool(tool)
+			.prepare({ scope: 'user', operation: 'add', content: 'Prefer concise answers.' })
+			.execute();
+	return { propose, tool: directTool(tool), origin, provenance, suggestions, entries };
 };
 it.each(['agent', 'mcp'] as const)(
 	'retains the %s caller source on a pending memory proposal',

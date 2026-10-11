@@ -1,7 +1,4 @@
 import { DuplicateNoteActionRequest } from '$lib/errors';
-import type { ToolResultReader } from '$lib/models/agent-tool-context';
-import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
-import type { AgentPayload } from '$lib/models/agent/payload';
 import type { ActorContext } from '$lib/models/identity';
 import type { Note, TextSelection } from '$lib/models/notes';
 import type {
@@ -11,8 +8,6 @@ import type {
 	StartRelateSelectionInput
 } from '$lib/models/relationships';
 import type { BacklinkSuggestion } from '$lib/models/suggestions';
-import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
-import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { RelationshipCandidates } from '$lib/services/relationships/candidates';
 
 import type {
@@ -54,19 +49,9 @@ export interface RelationshipsController {
 	): Promise<AgentRunReceipt>;
 	executeRelatedNoteRun(actor: ActorContext, runId: AgentRunId): Promise<void>;
 	recoverQueuedRelatedNoteRuns(): Promise<number>;
-
-	agentRelateSelection(
-		actor: ActorContext,
-		selection: TextSelection,
-		input: AgentToolInput<'relate_selection'>
-	): Promise<AgentPayload>;
 }
 
 export interface RelationshipsDependencies {
-	readonly toolPresentation: AgentToolPresentation;
-	readonly toolPayloads: AgentPayloadInspection;
-	readonly toolResults: ToolResultReader;
-
 	selectionOrigins: SelectionOriginService;
 	knowledge: KnowledgeSearch;
 	relationshipClassifier: RelationshipClassifier;
@@ -271,24 +256,6 @@ export class Relationships implements RelationshipsController {
 				signal?.throwIfAborted();
 				return this.relationshipCandidates.relatedNoteCandidate(match, classification);
 			})
-		);
-	}
-
-	async agentRelateSelection(
-		actor: ActorContext,
-		selection: TextSelection,
-		input: AgentToolInput<'relate_selection'>
-	): Promise<AgentPayload> {
-		const result = await (async () => {
-			return {
-				...(await this.suggestFromSelection(actor, { selection: selection })),
-				sourceNoteId: selection.noteId
-			};
-		})();
-		const payload = this.dependencies.toolResults.read(result);
-		return this.dependencies.toolPayloads.filterResult(
-			payload,
-			this.dependencies.toolResults.arguments(input)
 		);
 	}
 }
