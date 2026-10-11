@@ -9,6 +9,11 @@ export interface SuggestionEffectService {
 	lock(id: SuggestionId): Promise<void>;
 	record(id: SuggestionId, changes: readonly AppliedChange<AppliedRecord>[]): Promise<void>;
 	restore(suggestion: Suggestion): Promise<readonly AppliedRecord[]>;
+	/** Label every record of an applied change with its artifact `type`, keeping the change kind. */
+	tag<Record, Type extends string>(
+		change: AppliedChange<Record>,
+		type: Type
+	): AppliedChange<{ readonly type: Type; readonly value: Record }>;
 }
 export class SuggestionEffects implements SuggestionEffectService {
 	constructor(private readonly effects: ApplicationEffectRepository) {}
@@ -42,5 +47,22 @@ export class SuggestionEffects implements SuggestionEffectService {
 			if (change.kind !== 'unchanged') restored.push(await this.effects.restore(change));
 		}
 		return restored;
+	}
+	tag<Record, Type extends string>(
+		change: AppliedChange<Record>,
+		type: Type
+	): AppliedChange<{ readonly type: Type; readonly value: Record }> {
+		switch (change.kind) {
+			case 'created':
+				return { kind: 'created', after: { type, value: change.after } };
+			case 'modified':
+				return {
+					kind: 'modified',
+					before: { type, value: change.before },
+					after: { type, value: change.after }
+				};
+			case 'unchanged':
+				return { kind: 'unchanged', after: { type, value: change.after } };
+		}
 	}
 }

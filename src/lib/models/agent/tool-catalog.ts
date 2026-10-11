@@ -43,6 +43,9 @@ export const FIRST_CLASS_TOOL_NAMES = [
 	'edit_diagram'
 ] as const satisfies readonly ToolName[];
 
+/** Tools whose arguments carry a whole diagram source. */
+export const DIAGRAM_WRITE_TOOLS: ReadonlySet<string> = new Set(['create_diagram', 'edit_diagram']);
+
 export interface ToolCatalogEntry {
 	readonly name: string;
 	readonly description: string;

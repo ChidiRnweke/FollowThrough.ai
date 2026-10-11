@@ -11,7 +11,11 @@ import {
 	type SessionJsonObject
 } from '$lib/models/agent';
 import { readToolOutput } from '$lib/server/repositories/agent/tool-failure';
-import type { AgentToolName, ToolName } from '$lib/models/agent/tool-catalog';
+import {
+	DIAGRAM_WRITE_TOOLS,
+	type AgentToolName,
+	type ToolName
+} from '$lib/models/agent/tool-catalog';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import {
 	parseProviderToolCall,
@@ -292,8 +296,6 @@ const parkedCall = (
 	return { callId, name, arguments: call.arguments.value };
 };
 
-const isDiagramWrite = (name: string): boolean =>
-	name === 'create_diagram' || name === 'edit_diagram';
 const DIAGRAM_SOURCE_PLACEHOLDER =
 	'[source omitted from history; call read_canvas_diagram to read the current diagram]';
 
@@ -314,14 +316,14 @@ const jsonObject = (json: string): SessionJsonObject | undefined =>
 const replayView = (items: readonly PersistedSessionItem[]): readonly PersistedSessionItem[] => {
 	const failed = new Set(
 		items.flatMap((item) => {
-			if (item.type !== 'function_call_result' || !isDiagramWrite(item.name)) return [];
+			if (item.type !== 'function_call_result' || !DIAGRAM_WRITE_TOOLS.has(item.name)) return [];
 			const text = outputText(item);
 			return text !== undefined && readToolOutput(text).kind !== 'success' ? [item.callId] : [];
 		})
 	);
 	return items.map((item) => {
 		if (item.type !== 'function_call' && item.type !== 'function_call_result') return item;
-		if (!isDiagramWrite(item.name) || failed.has(item.callId)) return item;
+		if (!DIAGRAM_WRITE_TOOLS.has(item.name) || failed.has(item.callId)) return item;
 		const json = item.type === 'function_call' ? item.arguments : outputText(item);
 		const parsed = json === undefined ? undefined : jsonObject(json);
 		if (!parsed || typeof parsed.source !== 'string') return item;

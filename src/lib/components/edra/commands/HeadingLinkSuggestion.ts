@@ -1,6 +1,7 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion';
+import { rankLinkTargets } from './link-ranking.js';
 
 /**
  * `#` to link a heading in the same note.
@@ -113,36 +114,18 @@ export const HeadingLinkSuggestion = Extension.create<HeadingLinkSuggestionOptio
 });
 
 /**
- * Rank headings for a query.
- *
- * Pure, so the ordering is testable without an editor. Same ordering as note
- * links — a prefix match outranks a word-start match, which outranks a match
- * anywhere — with shallower headings breaking ties, because the top-level
- * section is the likelier target.
+ * Rank headings for a query; see `rankLinkTargets`. Shallower headings break
+ * ties, because the top-level section is the likelier target.
  */
 export const rankHeadingTargets = (
 	headings: readonly HeadingLinkTarget[],
 	query: string,
 	limit = 8
-): readonly HeadingLinkTarget[] => {
-	const needle = query.trim().toLowerCase();
-	if (!needle) return headings.slice(0, limit);
-
-	const scored: { heading: HeadingLinkTarget; score: number }[] = [];
-	for (const heading of headings) {
-		const title = heading.textContent.toLowerCase();
-		const at = title.indexOf(needle);
-		if (at === -1) continue;
-		const startsWord = at === 0 || /[\s\-_/]/.test(title[at - 1] ?? '');
-		scored.push({ heading, score: at === 0 ? 0 : startsWord ? 1 : 2 });
-	}
-	return scored
-		.sort(
-			(a, b) =>
-				a.score - b.score ||
-				a.heading.level - b.heading.level ||
-				a.heading.textContent.localeCompare(b.heading.textContent)
-		)
-		.slice(0, limit)
-		.map((entry) => entry.heading);
-};
+): readonly HeadingLinkTarget[] =>
+	rankLinkTargets(
+		headings,
+		query,
+		(heading) => heading.textContent,
+		(a, b) => a.level - b.level,
+		limit
+	);
