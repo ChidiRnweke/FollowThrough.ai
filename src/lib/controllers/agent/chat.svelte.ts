@@ -466,7 +466,7 @@ export class Chat implements ChatSession {
 			this.hydratedConversationId = conversationId;
 			this.loading = false;
 			await this.revalidate();
-			// audit-allow: silent-catch — hydration failure moves the store to an explicit reconnecting/offline state rather than an empty chat.
+			// chisel-ignore fail-loudly:silent-catch -- hydration failure moves the store to an explicit reconnecting/offline state rather than an empty chat.
 		} catch (error) {
 			if (generation !== this.generation) return;
 			this.historyError =
@@ -657,7 +657,7 @@ export class Chat implements ChatSession {
 			this.runStatus = receipt.status;
 			this.persistConversationChoices();
 			this.attach(reply, receipt.runId, receipt.latestCursor, 0);
-			// audit-allow: silent-catch — submission failure is attached to the pending reply and connection state exposes uncertainty.
+			// chisel-ignore fail-loudly:silent-catch -- submission failure is attached to the pending reply and connection state exposes uncertainty.
 		} catch {
 			reply.error = 'Submission could not be confirmed. Reconnect to check its status.';
 			this.connection = navigator.onLine ? 'reconnecting' : 'offline';
@@ -676,7 +676,7 @@ export class Chat implements ChatSession {
 			const snapshot = await this.transport.cancel(runId);
 			if (generation !== this.generation) return;
 			if (reply) this.reconcileSnapshot(reply, snapshot);
-			// audit-allow: silent-catch — an unconfirmed cancel triggers an explicit server reconciliation attempt.
+			// chisel-ignore fail-loudly:silent-catch -- an unconfirmed cancel triggers an explicit server reconciliation attempt.
 		} catch {
 			// The cancel may still have landed server-side, so ask before giving up:
 			// `cancelling` gates the composer and must never be a resting state here.
@@ -684,7 +684,7 @@ export class Chat implements ChatSession {
 				const snapshot = await this.transport.get(runId);
 				if (generation !== this.generation) return;
 				if (reply) this.reconcileSnapshot(reply, snapshot);
-				// audit-allow: silent-catch — failed reconciliation marks cancellation unconfirmed instead of claiming success.
+				// chisel-ignore fail-loudly:silent-catch -- failed reconciliation marks cancellation unconfirmed instead of claiming success.
 			} catch {
 				if (generation !== this.generation) return;
 				if (reply) reply.error = 'Cancellation has not been confirmed yet.';
@@ -796,7 +796,7 @@ export class Chat implements ChatSession {
 				);
 			this.reconcileSnapshot(reply, snapshot);
 			this.attach(reply, snapshot.run.id, this.cursor, this.attempt);
-			// audit-allow: silent-catch — every affected tool is marked failed so the decision is never presented as applied.
+			// chisel-ignore fail-loudly:silent-catch -- every affected tool is marked failed so the decision is never presented as applied.
 		} catch {
 			if (generation !== this.generation) return;
 			for (const tool of parked)
@@ -929,7 +929,7 @@ export class Chat implements ChatSession {
 				await this.history?.refresh();
 				if (generation === this.connectionGeneration) this.detach();
 			}
-			// audit-allow: silent-catch — refresh failure moves the connection into its visible reconnecting/offline state.
+			// chisel-ignore fail-loudly:silent-catch -- refresh failure moves the connection into its visible reconnecting/offline state.
 		} catch {
 			this.connection = navigator.onLine ? 'reconnecting' : 'offline';
 		}

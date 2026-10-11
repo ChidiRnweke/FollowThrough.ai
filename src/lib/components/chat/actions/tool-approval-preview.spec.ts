@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { agentPreferencesBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { AgentPreferences } from '$lib/models/agent';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { NoteChangeReview } from '$lib/models/notes';
 import { approvalPreview } from './tool-approval-preview';
@@ -108,11 +108,7 @@ describe('Previewing the saved note review', () => {
  * force, so the question it asks can name both sides.
  */
 describe('reviewing a change to the settings the agent runs under', () => {
-	const preferences = {
-		defaultModel: 'openai/gpt-5.6',
-		executionMode: 'approval_required',
-		inlineSuggestionsEnabled: true
-	} as unknown as AgentPreferences;
+	const preferences = agentPreferencesBuilder({ defaultModel: 'openai/gpt-5.6' });
 
 	const settings = (args: AgentPayloadObject) =>
 		approvalPreview('update_agent_preferences', args, { kind: 'preferences', preferences });

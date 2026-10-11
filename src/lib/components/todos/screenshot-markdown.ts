@@ -7,7 +7,7 @@ export const SCREENSHOT_MEDIA_TYPES = new Set([
 ]);
 
 /** The image files in a paste or drop that a description can actually take. */
-export const screenshotsFrom = (files: FileList | null | undefined): readonly File[] =>
+export const screenshotsFrom = (files: ArrayLike<File> | null | undefined): readonly File[] =>
 	Array.from(files ?? []).filter((file) => SCREENSHOT_MEDIA_TYPES.has(file.type));
 
 /**

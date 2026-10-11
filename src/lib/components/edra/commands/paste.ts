@@ -65,7 +65,7 @@ const markdownSlice = (
 			schema,
 			markdown.editorDocument(withoutBoundaryBlankLines(text))
 		);
-		// audit-allow: silent-catch — undefined is the parser's explicit “not valid Markdown document” result
+		// chisel-ignore fail-loudly:silent-catch -- undefined is the parser's explicit “not valid Markdown document” result
 	} catch {
 		return undefined;
 	}
@@ -141,7 +141,15 @@ export const isLiteralPasteShortcut = (event: KeyboardEvent): boolean =>
  * system, a snipping-tool-style copy may expose that file through `files` or only
  * through a file-kind item, with no usable `text/plain` in either case.
  */
-export const clipboardImage = (event: ClipboardEvent): File | undefined => {
+/** The parts of a paste event the image lookup reads; a `ClipboardEvent` is one. */
+export interface PastedFiles {
+	readonly clipboardData: {
+		readonly files: Iterable<File>;
+		readonly items: Iterable<Pick<DataTransferItem, 'kind' | 'type' | 'getAsFile'>>;
+	} | null;
+}
+
+export const clipboardImage = (event: PastedFiles): File | undefined => {
 	const clipboard = event.clipboardData;
 	if (!clipboard) return undefined;
 	const files = clipboard.files;

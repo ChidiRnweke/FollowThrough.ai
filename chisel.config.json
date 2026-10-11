@@ -7,6 +7,18 @@
 			"src/lib/components/primitives/",
 			"src/lib/components/ui/",
 			"src/lib/components/edra/"
+		],
+		"icons": "$lib/components/icons",
+		"tokens": "src/routes/layout.css",
+		"headingUtilities": ["page-title", "section-title", "eyebrow", "provenance-caption"],
+		"displayUtilities": ["page-title", "section-title"]
+	},
+	"entryPoints": ["src/worker.ts", "src/worker-tasks.ts"],
+	"agent": {
+		"tools": "src/lib/server/factories/agent/tools/",
+		"toolAdapters": [
+			"src/lib/server/infrastructure/agents/sdk-tool.ts",
+			"src/lib/server/factories/agent/tools/mcp.ts"
 		]
 	}
 }

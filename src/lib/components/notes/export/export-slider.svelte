@@ -1,4 +1,3 @@
-<!-- chisel-ignore-file structural:inline-style-banned -- Slider markers are positioned from caller-provided runtime ranges. -->
 <script lang="ts">
 	import { Input } from '$lib/components/ui/input';
 	let {

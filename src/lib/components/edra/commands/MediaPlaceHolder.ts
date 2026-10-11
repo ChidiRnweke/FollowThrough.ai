@@ -5,7 +5,7 @@ import { NodeSelection } from '@tiptap/pm/state';
 import { toast } from 'svelte-sonner';
 
 export interface MediaPlaceholderOptions {
-	// audit-allow: no-record-unknown — Tiptap's HTMLAttributes are open DOM attributes typed any by the library.
+	// chisel-ignore narrowing:no-record-unknown -- Tiptap's HTMLAttributes are open DOM attributes typed any by the library.
 	HTMLAttributes: Record<string, unknown>;
 	onUpload?: (file: File) => Promise<string>;
 }
@@ -132,7 +132,7 @@ export const MediaPlaceholder = (component: Component<NodeViewProps>) =>
 							}
 						}
 
-						// audit-allow: silent-catch — upload failure is shown and the placeholder remains in the document for retry.
+						// chisel-ignore fail-loudly:silent-catch -- upload failure is shown and the placeholder remains in the document for retry.
 						void onUpload(file)
 							.then((src) => {
 								editor.view.focus();

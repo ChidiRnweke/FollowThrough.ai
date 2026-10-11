@@ -358,11 +358,11 @@
 	border-radius: 4px;
 	/* The ink reveal: mask starts off to the right (hidden) and settles fully
 	   opaque at the end, so the changed text appears with the ripple and stays. */
-	/* audit-allow: no-hex-rgb-color — Mask luminance channel; the mask's black is alpha data, not a rendered color. */
-	/* audit-allow: no-pure-black — Mask luminance channel; the mask's black is alpha data, not a rendered color. */
+	/* chisel-ignore design-system:no-hex-rgb-color -- Mask luminance channel; the mask's black is alpha data, not a rendered color. */
+	/* chisel-ignore design-system:no-pure-black -- Mask luminance channel; the mask's black is alpha data, not a rendered color. */
 	-webkit-mask-image: linear-gradient(90deg, #000 0%, #000 40%, transparent 60%, transparent 100%);
-	/* audit-allow: no-hex-rgb-color — Mask luminance channel; the mask's black is alpha data, not a rendered color. */
-	/* audit-allow: no-pure-black — Mask luminance channel; the mask's black is alpha data, not a rendered color. */
+	/* chisel-ignore design-system:no-hex-rgb-color -- Mask luminance channel; the mask's black is alpha data, not a rendered color. */
+	/* chisel-ignore design-system:no-pure-black -- Mask luminance channel; the mask's black is alpha data, not a rendered color. */
 	mask-image: linear-gradient(90deg, #000 0%, #000 40%, transparent 60%, transparent 100%);
 	-webkit-mask-size: 300% 100%;
 	mask-size: 300% 100%;
@@ -455,7 +455,7 @@
 	--sidebar-accent-foreground: oklch(0.988 0.003 106.5);
 	--sidebar-border: oklch(1 0 0 / 14%);
 	--sidebar-ring: oklch(0.58 0.031 107.3);
-	/* audit-allow: token-contrast-aa — text-brand on the brand/15 wash measures 3.9:1; clearing 4.5:1 needs L≈0.83, which reads near-white against the rail. Deferred: the badge recipe needs a design decision, not a silent token lift. */
+	/* chisel-ignore design-system:token-contrast-aa -- text-brand on the brand/15 wash measures 3.9:1; clearing 4.5:1 needs L≈0.83, which reads near-white against the rail. Deferred: the badge recipe needs a design decision, not a silent token lift. */
 	--brand: oklch(0.704 0.14 182.503);
 	--brand-muted-foreground: oklch(0.82 0.065 182.503);
 	--destructive-muted-foreground: oklch(0.8 0.065 22.216);
@@ -1405,7 +1405,7 @@
 
 	/* Inline highlights for pending AI suggestions anchored to note text. */
 	.suggestion-anchor {
-		/* audit-allow: no-accent-bars — Dotted bottom border standing in for a text-decoration underline; the word-marking convention, not an edge accent. */
+		/* chisel-ignore design-system:no-accent-bars -- Dotted bottom border standing in for a text-decoration underline; the word-marking convention, not an edge accent. */
 		border-bottom: 2px dotted var(--color-primary);
 		background-color: color-mix(in oklab, var(--color-primary) 9%, transparent);
 		transition: background-color var(--duration-micro) var(--ease-standard);

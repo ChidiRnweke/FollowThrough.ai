@@ -1,4 +1,5 @@
-import type { ShellContext } from '$lib/models/workspace-views';
+import { noteBuilder, shellContextBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { NoteId } from '$lib/models/notes';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import { describe, expect, it } from 'vitest';
 
@@ -52,10 +53,9 @@ describe('Tool presentation invariants', () => {
 
 describe('A read names the note it read', () => {
 	const noteId = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
-	const shell = {
-		projects: [],
-		noteTree: [{ id: noteId, title: 'Runtime notes' }]
-	} as unknown as ShellContext;
+	const shell = shellContextBuilder({
+		noteTree: [noteBuilder({ id: noteId as NoteId, title: 'Runtime notes' })]
+	});
 	const read = <Status extends 'succeeded' | 'rejected' | 'running'>(status: Status) => ({
 		...tool('get_note', status),
 		arguments: { noteId }
@@ -73,9 +73,7 @@ describe('A read names the note it read', () => {
 	});
 
 	it('keeps the plain label when the note is not in the tree', () => {
-		expect(toolStatusLabel(read('succeeded'), { noteTree: [] } as unknown as ShellContext)).toBe(
-			'Read note'
-		);
+		expect(toolStatusLabel(read('succeeded'), shellContextBuilder())).toBe('Read note');
 	});
 
 	it('keeps the plain label when no shell is available', () => {
@@ -95,9 +93,7 @@ describe('A read names the note it read', () => {
 	});
 
 	it('keeps navigation when the note is outside the current tree', () => {
-		expect(
-			toolStatusParts(read('succeeded'), { noteTree: [] } as unknown as ShellContext).noteId
-		).toBe(noteId);
+		expect(toolStatusParts(read('succeeded'), shellContextBuilder()).noteId).toBe(noteId);
 	});
 });
 
@@ -114,10 +110,9 @@ describe('Every call in the log is named in the reader language', () => {
 
 describe('A file path subject resolves to the note it points at', () => {
 	const noteId = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
-	const shell = {
-		projects: [],
-		noteTree: [{ id: noteId, title: 'Runtime notes' }]
-	} as unknown as ShellContext;
+	const shell = shellContextBuilder({
+		noteTree: [noteBuilder({ id: noteId as NoteId, title: 'Runtime notes' })]
+	});
 	const excerpt = () => ({
 		...tool('sed', 'succeeded'),
 		arguments: { path: `/projects/proj-1/notes/${noteId}.md` }

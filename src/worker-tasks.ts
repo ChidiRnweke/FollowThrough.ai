@@ -42,7 +42,7 @@ export const embeddingBackfill = (
 		for (const entry of pending) {
 			try {
 				embedded += await controllers.indexingFor({ userId: entry.userId }).backfill(entry.source);
-				// audit-allow: silent-catch — the batch counts and reports this failed source while leaving it pending for retry.
+				// chisel-ignore fail-loudly:silent-catch -- the batch counts and reports this failed source while leaving it pending for retry.
 			} catch (error) {
 				failed += 1;
 				logger.error(

@@ -1,23 +1,28 @@
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
+import {
+	agentPreferencesBuilder,
+	noteBuilder,
+	projectBuilder,
+	shellContextBuilder
+} from '$lib/testing/workspace/fixtures/domain-builders';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import ToolApprovalGroup from './tool-approval-group.svelte';
-import type { ShellContext } from '$lib/models/workspace-views';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
-import type { NoteSummary } from '$lib/models/notes';
-import type { Project } from '$lib/models/projects';
 
 import ToolApprovalCard from './tool-approval-card.svelte';
 
 const PROJECT_ID = 'e0d3f07c-460b-40c3-9b8c-a8dc00ddc565';
 const NOTE_ID = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
 
-const shell = {
-	projects: [{ id: PROJECT_ID, name: 'Platform Notes' } as unknown as Project],
-	noteTree: [{ id: NOTE_ID, title: 'Infrastructure' } as unknown as NoteSummary]
-} as unknown as ShellContext;
+const shell = shellContextBuilder({
+	projects: [projectBuilder({ id: PROJECT_ID as ProjectId, name: 'Platform Notes' })],
+	noteTree: [noteBuilder({ id: NOTE_ID as NoteId, title: 'Infrastructure' })]
+});
 
 const pendingCall = (
 	name: AgentToolName,
@@ -98,11 +103,7 @@ describe('The review card names what an id-only call acts on', () => {
  * user to open a window in order to learn nothing.
  */
 describe('The review card only offers the room a change actually needs', () => {
-	const preferences = {
-		defaultModel: 'openai/gpt-5.6',
-		executionMode: 'approval_required',
-		inlineSuggestionsEnabled: true
-	} as unknown as Parameters<typeof ToolApprovalCard>[1]['preferences'];
+	const preferences = agentPreferencesBuilder({ defaultModel: 'openai/gpt-5.6' });
 
 	const renderSettings = () =>
 		render(ToolApprovalCard, {

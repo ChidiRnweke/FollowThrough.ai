@@ -33,7 +33,7 @@ const canStore = (response: Response): boolean =>
 const store = async (cache: Cache, key: Request | string, response: Response): Promise<void> => {
 	try {
 		await cache.put(key, response.clone());
-		// audit-allow: silent-catch — cache quota failure cannot invalidate the already-received network response
+		// chisel-ignore fail-loudly:silent-catch -- cache quota failure cannot invalidate the already-received network response
 	} catch {
 		// Nothing to recover: the response still goes to the page.
 	}
@@ -83,7 +83,7 @@ const cacheFirst = async (request: Request, pathname: string): Promise<Response>
 		// are used, so switching proofreading on once makes it work offline after.
 		if (isOnDemandAsset(pathname) && canStore(response)) await store(cache, pathname, response);
 		return response;
-		// audit-allow: silent-catch — the offline path returns cached content only when present, otherwise an explicit redirect or 503.
+		// chisel-ignore fail-loudly:silent-catch -- the offline path returns cached content only when present, otherwise an explicit redirect or 503.
 	} catch {
 		return unavailable();
 	}
@@ -99,7 +99,7 @@ const navigation = async (request: Request, pathname: string): Promise<Response>
 		const response = await fetch(request);
 		if (response.status < 500) return response;
 		// A cached shell can still open local resources while the app server is unavailable.
-		// audit-allow: silent-catch — an unavailable navigation resolves to the data-free shell or the explicit offline page.
+		// chisel-ignore fail-loudly:silent-catch -- an unavailable navigation resolves to the data-free shell or the explicit offline page.
 	} catch {
 		return fallbackNavigation(pathname);
 	}

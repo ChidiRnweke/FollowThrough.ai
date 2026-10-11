@@ -672,7 +672,7 @@
 				return;
 			}
 			await navigator.clipboard.writeText(text);
-			// audit-allow: silent-catch — clipboard write failure is reported while the source text remains selected.
+			// chisel-ignore fail-loudly:silent-catch -- clipboard write failure is reported while the source text remains selected.
 		} catch {
 			toast.error('The clipboard could not be written');
 		}
@@ -685,7 +685,7 @@
 		// it shares the payload builder instead, and pastes the same pictures.
 		try {
 			await copySelection(clipboardSource(state));
-			// audit-allow: silent-catch — formatted clipboard write failure is reported while the selection remains intact.
+			// chisel-ignore fail-loudly:silent-catch -- formatted clipboard write failure is reported while the selection remains intact.
 		} catch {
 			toast.error('The clipboard could not be written');
 		}
@@ -710,7 +710,7 @@
 			editor.view.focus();
 			restoreContextRange();
 			editor.view.pasteText(text);
-			// audit-allow: silent-catch — clipboard read failure is reported and the document is not changed.
+			// chisel-ignore fail-loudly:silent-catch -- clipboard read failure is reported and the document is not changed.
 		} catch {
 			toast.error('The clipboard could not be read');
 		}
@@ -728,7 +728,7 @@
 			editor.view.focus();
 			restoreContextRange();
 			editor.view.pasteHTML(html);
-			// audit-allow: silent-catch — formatted clipboard read failure is reported and the document is not changed.
+			// chisel-ignore fail-loudly:silent-catch -- formatted clipboard read failure is reported and the document is not changed.
 		} catch {
 			toast.error('The clipboard could not be read');
 		}
@@ -1180,7 +1180,7 @@
 				})
 				.run();
 			return true;
-			// audit-allow: silent-catch — false is the typed decision outcome consumed by the suggestion UI, which keeps the action available.
+			// chisel-ignore fail-loudly:silent-catch -- false is the typed decision outcome consumed by the suggestion UI, which keeps the action available.
 		} catch {
 			return false;
 		}
@@ -1239,7 +1239,7 @@
 			Your saved note is untouched — nothing was written while it was down. Try again, or reload the
 			page if it keeps failing.
 		</p>
-		<!-- audit-allow: no-raw-font-family — A raw diagnostic message is machine text. -->
+		<!-- chisel-ignore design-system:no-raw-font-family -- A raw diagnostic message is machine text. -->
 		<p class="font-mono text-xs text-destructive-muted-foreground">{error.message}</p>
 		<div class="flex items-center gap-2">
 			<Button variant="outline" size="sm" onclick={reset}>Try again</Button>
@@ -1428,7 +1428,7 @@
 						onurlchange={(url) => (activeLinkUrl = url)}
 						onclose={scheduleActiveLinkClose}
 					/>
-					<!-- audit-allow: no-raw-font-family — The link-destination pill shows a URL literal. -->
+					<!-- chisel-ignore design-system:no-raw-font-family -- The link-destination pill shows a URL literal. -->
 					<div
 						class="pointer-events-none fixed right-3 bottom-3 z-50 max-w-lg truncate rounded-sm border border-border bg-popover px-2 py-1 font-mono text-xs text-popover-foreground"
 						role="status"

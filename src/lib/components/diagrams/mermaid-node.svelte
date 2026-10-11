@@ -22,7 +22,7 @@
 
 	const { node, editor, getPos, extension, updateAttributes }: NodeViewProps = $props();
 	const options = $derived(
-		// audit-allow: no-cast-probe — Tiptap types Extension.options as any, so the revise and convert callbacks this node view is configured with cannot be recovered from the framework type.
+		// chisel-ignore narrowing:no-cast-probe -- Tiptap types Extension.options as any, so the revise and convert callbacks this node view is configured with cannot be recovered from the framework type.
 		extension.options as {
 			onRevise?: (
 				source: string,
@@ -172,7 +172,7 @@
 			if (thisRender !== renderCounter) return;
 			target.innerHTML = svg;
 			error = null;
-			// audit-allow: silent-catch — the diagram node renders the parser error and removes any partial SVG.
+			// chisel-ignore fail-loudly:silent-catch -- the diagram node renders the parser error and removes any partial SVG.
 		} catch (err) {
 			if (thisRender !== renderCounter) return;
 			error =
@@ -264,7 +264,7 @@
 				throw new Error('The Mermaid diagram changed while conversion was running. Try again.');
 			setPendingDrawioSuggestion(reference);
 			options.onReview?.(reference);
-			// audit-allow: silent-catch — conversion failure is rendered beside the unchanged Mermaid source.
+			// chisel-ignore fail-loudly:silent-catch -- conversion failure is rendered beside the unchanged Mermaid source.
 		} catch (failure) {
 			conversionError =
 				failure instanceof Error ? failure.message : 'The diagram could not be converted.';
@@ -279,7 +279,7 @@
 		try {
 			await options.onDismiss(pendingDrawioSuggestionId);
 			setPendingDrawioSuggestion(null);
-			// audit-allow: silent-catch — dismissal failure is rendered and the pending conversion remains reviewable.
+			// chisel-ignore fail-loudly:silent-catch -- dismissal failure is rendered and the pending conversion remains reviewable.
 		} catch (failure) {
 			conversionError = failure instanceof Error ? failure.message : 'Dismissal failed.';
 		}
@@ -319,7 +319,7 @@
 			isEditing = false;
 			showAiRevision = false;
 			revisionInstruction = '';
-			// audit-allow: silent-catch — revision failure is rendered while the original diagram remains unchanged.
+			// chisel-ignore fail-loudly:silent-catch -- revision failure is rendered while the original diagram remains unchanged.
 		} catch (revisionFailure) {
 			revisionError =
 				revisionFailure instanceof Error ? revisionFailure.message : 'Diagram revision failed.';
@@ -416,7 +416,7 @@
 			const png = mermaidDiagrams.png(source, {
 				base: colorMode.current === 'dark' ? 'dark' : 'light'
 			});
-			// audit-allow: silent-catch — a rejected lazy image promise is reported while clipboard fallback continues below.
+			// chisel-ignore fail-loudly:silent-catch -- a rejected lazy image promise is reported while clipboard fallback continues below.
 			png.catch((error) =>
 				toast.error(
 					error instanceof Error ? error.message : 'The diagram image could not be copied'
@@ -430,7 +430,7 @@
 			]);
 			copiedImage = true;
 			setTimeout(() => (copiedImage = false), 2000);
-			// audit-allow: silent-catch — image-copy failure falls back to source text and tells the user exactly what was copied.
+			// chisel-ignore fail-loudly:silent-catch -- image-copy failure falls back to source text and tells the user exactly what was copied.
 		} catch (error) {
 			// A diagram that will not render still has its source to offer.
 			await navigator.clipboard.writeText(source);
@@ -546,7 +546,7 @@
 					<div
 						class={cn('flex-1 min-h-0 min-w-0 basis-0 relative', mode === 'both' ? 'border-r' : '')}
 					>
-						<!-- audit-allow: no-raw-font-family — A Mermaid source editor; mono is the code face. -->
+						<!-- chisel-ignore design-system:no-raw-font-family -- A Mermaid source editor; mono is the code face. -->
 						<Textarea
 							bind:value={editCode}
 							onkeydown={handleEditorKeydown}
@@ -595,7 +595,7 @@
 										<Icon.Warning class="text-destructive size-4" />
 									</div>
 									<p class="text-destructive text-xs font-medium">Syntax Error</p>
-									<!-- audit-allow: no-raw-font-family — Parser error output is machine text. -->
+									<!-- chisel-ignore design-system:no-raw-font-family -- Parser error output is machine text. -->
 									<p
 										class="text-muted-foreground font-mono text-xs leading-relaxed max-h-24 overflow-auto"
 									>
@@ -610,6 +610,7 @@
 									<span class="text-muted-foreground text-xs">Rendering...</span>
 								</div>
 							{/if}
+							<!-- chisel-ignore structural:inline-style-banned -- Pane width and zoom are measured and user-driven run-time values. -->
 							<div
 								bind:this={previewContainer}
 								style:--mermaid-pane-width={`${paneWidth}px`}
@@ -674,6 +675,7 @@
 		</div>
 	{:else}
 		<!-- Preview Mode -->
+		<!-- chisel-ignore structural:inline-style-banned -- Wrapper and SVG widths are measured from the rendered diagram. -->
 		<div
 			bind:this={previewWrapper}
 			class="mermaid-preview-wrapper relative group/preview"

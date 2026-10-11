@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { agentRunSnapshotBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { flushSync } from 'svelte';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import type {
@@ -108,10 +109,7 @@ class DecidingTransport extends FakeAgentRunTransport {
 	}
 	override async decideMany(input: Parameters<AgentRunTransport['decideMany']>[0]) {
 		this.record(input);
-		return {
-			run: { id: runId, status: 'queued', conversationId },
-			pendingDecisions: []
-		} as unknown as AgentRunSnapshot;
+		return agentRunSnapshotBuilder({ id: runId, status: 'queued', conversationId });
 	}
 }
 
@@ -136,10 +134,7 @@ class StoppableTransport implements AgentRunTransport {
 	}
 	async cancel(id: AgentRunId): Promise<AgentRunSnapshot> {
 		this.cancelled.push(id);
-		return {
-			run: { id: runId, status: 'cancelling', conversationId },
-			pendingDecisions: []
-		} as unknown as AgentRunSnapshot;
+		return agentRunSnapshotBuilder({ id: runId, status: 'cancelling', conversationId });
 	}
 	async retry(): Promise<Awaited<ReturnType<AgentRunTransport['retry']>>> {
 		throw new Error('Unexpected retry');
@@ -451,10 +446,9 @@ describe('a stop the server never confirms', () => {
 	};
 
 	it('reconciles the settled run when the cancel request failed', async () => {
-		const { store } = await unconfirmed({
-			run: { id: runId, status: 'cancelled', conversationId },
-			pendingDecisions: []
-		} as unknown as AgentRunSnapshot);
+		const { store } = await unconfirmed(
+			agentRunSnapshotBuilder({ id: runId, status: 'cancelled', conversationId })
+		);
 		await store.stop();
 		expect(store.isStreaming).toBe(false);
 	});

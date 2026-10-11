@@ -59,7 +59,7 @@ export interface AgentProviderTurnInput {
 	readonly model: string;
 	readonly instructions: string;
 	readonly webSearch: WebResearchSettings;
-	// audit-allow: no-unknown-type — Tool's context parameter belongs to the agent SDK, which owns execution of this protocol value.
+	// chisel-ignore narrowing:no-unknown-type -- Tool's context parameter belongs to the agent SDK, which owns execution of this protocol value.
 	readonly tools: Tool<unknown>[];
 	readonly conversationId: string;
 	/** The conversation so far, as stored. */
@@ -85,7 +85,7 @@ export interface AgentTurns {
 		model: string,
 		signal: AbortSignal
 	): Promise<string[]>;
-	// audit-allow: no-unknown-type — a caught provider failure is classified here, where the provider's error shapes are known.
+	// chisel-ignore narrowing:no-unknown-type -- a caught provider failure is classified here, where the provider's error shapes are known.
 	failure(error: unknown): AgentProviderFailure;
 }
 
@@ -144,7 +144,7 @@ export class AgentTurnService implements AgentTurns {
 		return { kind: 'reported_failure', value: output.value, failure: reading.failure.message };
 	}
 
-	// audit-allow: no-unknown-type — a caught provider failure is classified here, where the provider's error shapes are known.
+	// chisel-ignore narrowing:no-unknown-type -- a caught provider failure is classified here, where the provider's error shapes are known.
 	failure(error: unknown): AgentProviderFailure {
 		if (error instanceof AgentProviderFailure) return error;
 		return new AgentProviderFailure(
@@ -244,7 +244,7 @@ export class AgentTurnService implements AgentTurns {
 	}
 }
 
-// audit-allow: no-unknown-type — reads the code off a caught provider failure, whose shape the SDK does not type.
+// chisel-ignore narrowing:no-unknown-type -- reads the code off a caught provider failure, whose shape the SDK does not type.
 const providerErrorCode = (error: unknown): string | undefined => {
 	if (typeof error !== 'object' || error === null) return undefined;
 	if ('code' in error && typeof error.code === 'string') return error.code;
@@ -252,7 +252,7 @@ const providerErrorCode = (error: unknown): string | undefined => {
 	return undefined;
 };
 
-// audit-allow: no-unknown-type — reads the status off a caught provider failure, whose shape the SDK does not type.
+// chisel-ignore narrowing:no-unknown-type -- reads the status off a caught provider failure, whose shape the SDK does not type.
 const isRetryable = (error: unknown): boolean => {
 	if (typeof error !== 'object' || error === null) return false;
 	if (!('status' in error) || typeof error.status !== 'number') return false;

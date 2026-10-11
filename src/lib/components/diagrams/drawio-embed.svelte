@@ -250,7 +250,7 @@
 			onmodifiedchange?.(modified);
 			phase = modified || operation.kind === 'capture' ? 'ready' : 'saved';
 			if (operation.kind === 'commit' && operation.output.exit && !modified) onclose?.();
-			// audit-allow: silent-catch — the embedded editor enters a visible failed phase and retains the diagram for retry.
+			// chisel-ignore fail-loudly:silent-catch -- the embedded editor enters a visible failed phase and retains the diagram for retry.
 		} catch (error) {
 			if (document !== documentGeneration || persistence !== persistenceGeneration) return;
 			failure = userFacingMessage(error, 'The diagram could not be saved.');

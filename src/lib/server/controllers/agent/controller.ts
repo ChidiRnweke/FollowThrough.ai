@@ -604,7 +604,7 @@ export class AgentSdkHarness implements AgentHarness {
 	 */
 	private settleCancellationAfterGrace(runId: AgentRunId): void {
 		const timer = setTimeout(() => {
-			// audit-allow: silent-catch — this detached grace timer has no request caller; failure is emitted as an operational error for repair.
+			// chisel-ignore fail-loudly:silent-catch -- this detached grace timer has no request caller; failure is emitted as an operational error for repair.
 			this.finishCancellation(runId).catch((error) =>
 				console.error(`[agent-run] Could not settle cancelled run ${runId}:`, error)
 			);
@@ -669,7 +669,7 @@ export class AgentSdkHarness implements AgentHarness {
 	}
 
 	private executeInBackground(runId: AgentRunId): void {
-		// audit-allow: silent-catch — detached execution persists a failed run; only failure of that settlement reaches the terminal reporter.
+		// chisel-ignore fail-loudly:silent-catch -- detached execution persists a failed run; only failure of that settlement reaches the terminal reporter.
 		void this.executeCancellably(runId)
 			.catch(async (error) => {
 				// A detached run executes outside the instrumented boundary, so nothing else logs
@@ -874,7 +874,7 @@ export class AgentSdkHarness implements AgentHarness {
 	 * `throw` its result, which put an `unknown` on a controller's surface to
 	 * describe a value nobody ever holds: every path out of here is a throw.
 	 */
-	// audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this is one.
+	// chisel-ignore narrowing:no-unknown-type -- TypeScript types a caught error as unknown; this is one.
 	private raiseActiveRunConflict(error: unknown): never {
 		if (
 			typeof error === 'object' &&

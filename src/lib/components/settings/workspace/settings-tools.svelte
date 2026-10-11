@@ -168,7 +168,7 @@
 			);
 			if (result.kind === 'failure') throw new Error(result.message);
 			toast.success('Saved on device');
-			// audit-allow: silent-catch — the failed authority change is reported and refreshed state remains authoritative.
+			// chisel-ignore fail-loudly:silent-catch -- the failed authority change is reported and refreshed state remains authoritative.
 		} catch {
 			toast.error(`Could not change ${readable(preference.name)}. Try again.`);
 		} finally {
@@ -194,7 +194,7 @@
 			});
 			if (result.kind === 'failure') throw new Error(result.message);
 			toast.success(`${readable(preference.name)} follows your default again`);
-			// audit-allow: silent-catch — the failed authority reset is reported and the existing override remains visible.
+			// chisel-ignore fail-loudly:silent-catch -- the failed authority reset is reported and the existing override remains visible.
 		} catch {
 			toast.error(`Could not reset ${readable(preference.name)}. Try again.`);
 		} finally {
@@ -312,7 +312,7 @@
 											!preference.enabled && 'opacity-60'
 										]}
 									>
-										<!-- audit-allow: no-raw-font-family — Tool names are machine identifiers. -->
+										<!-- chisel-ignore design-system:no-raw-font-family -- Tool names are machine identifiers. -->
 										<span class="shrink-0 font-mono text-sm">{preference.name}</span>
 										<span
 											class="truncate text-sm text-muted-foreground"

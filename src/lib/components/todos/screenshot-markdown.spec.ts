@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { insertAtCaret, screenshotMarkdown, screenshotsFrom } from './screenshot-markdown';
 
-const fileList = (files: File[]): FileList =>
-	({
-		length: files.length,
-		item: (index: number) => files[index] ?? null,
-		[Symbol.iterator]: () => files[Symbol.iterator]()
-	}) as unknown as FileList;
+const fileList = (files: File[]): ArrayLike<File> => files;
 
 const imageFile = (name: string, type: string): File =>
 	new File([new Uint8Array([1])], name, { type });

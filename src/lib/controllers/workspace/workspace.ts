@@ -2050,7 +2050,7 @@ class ReplicaExecution implements AccountExecution {
 				if (result.kind === 'waiting') this.deferLane(lane);
 				else this.state.updateLane(lane, { failures: 0 });
 				this.lanes.failed(this.failure);
-				// audit-allow: silent-catch — the typed lane failure is retained for the account, reported to its subscriber and scheduled for retry.
+				// chisel-ignore fail-loudly:silent-catch -- the typed lane failure is retained for the account, reported to its subscriber and scheduled for retry.
 			} catch (error) {
 				if (this.stopped) return;
 				this.state.updateLane(lane, {

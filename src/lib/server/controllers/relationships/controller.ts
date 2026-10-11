@@ -89,7 +89,7 @@ export class Relationships implements RelationshipsController {
 	}
 
 	private launchRelatedNoteRun(runId: AgentRunId): void {
-		// audit-allow: silent-catch — detached execution persists its terminal state; settlement failures are emitted for operational repair.
+		// chisel-ignore fail-loudly:silent-catch -- detached execution persists its terminal state; settlement failures are emitted for operational repair.
 		void this.executeRelatedNoteRun(runId).catch((error) =>
 			console.error(`[related-note-run] Could not settle ${runId}:`, error)
 		);

@@ -142,7 +142,7 @@
 
 			await workspaceSession.synchronize();
 			toast.success('Memory accepted.');
-			// audit-allow: silent-catch — acceptance failure is reported and the suggestion remains pending.
+			// chisel-ignore fail-loudly:silent-catch -- acceptance failure is reported and the suggestion remains pending.
 		} catch {
 			toast.error('Could not accept the memory suggestion.');
 		} finally {
@@ -157,7 +157,7 @@
 			await rejectSuggestion({ suggestionId: id });
 			await workspaceSession.synchronize();
 			toast.success('Memory suggestion dismissed.');
-			// audit-allow: silent-catch — dismissal failure is reported and the suggestion remains pending.
+			// chisel-ignore fail-loudly:silent-catch -- dismissal failure is reported and the suggestion remains pending.
 		} catch {
 			toast.error('Could not dismiss the memory suggestion.');
 		} finally {
@@ -183,7 +183,7 @@
 			draft = '';
 			draftType = 'none';
 			return true;
-			// audit-allow: silent-catch — false is the dialog's typed save outcome and the toast explains that the dialog must stay open.
+			// chisel-ignore fail-loudly:silent-catch -- false is the dialog's typed save outcome and the toast explains that the dialog must stay open.
 		} catch {
 			toast.error('Could not save the memory entry.');
 			return false;

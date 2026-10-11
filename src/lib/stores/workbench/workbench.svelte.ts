@@ -330,7 +330,7 @@ export class WorkbenchStore {
 			}
 			this.syncFromUrl();
 			saveCurrent = true;
-			// audit-allow: silent-catch — restoration failure is shown to the user; URL state remains usable and the unreadable stored record is not overwritten.
+			// chisel-ignore fail-loudly:silent-catch -- restoration failure is shown to the user; URL state remains usable and the unreadable stored record is not overwritten.
 		} catch (error) {
 			if (generation !== this.generation) return;
 			toast.error(error instanceof Error ? error.message : 'Workspace tabs could not be restored');
@@ -715,7 +715,7 @@ export class WorkbenchStore {
 		};
 		try {
 			await repository.put(record);
-			// audit-allow: silent-catch — persistence failure is reported while the live workspace remains intact.
+			// chisel-ignore fail-loudly:silent-catch -- persistence failure is reported while the live workspace remains intact.
 		} catch (error) {
 			if (generation !== this.generation) return;
 			toast.error(error instanceof Error ? error.message : 'Workspace state could not be saved');

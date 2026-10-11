@@ -102,7 +102,7 @@ export class TokenVerification implements TokenVerifier {
 		if (result.user.role === 'WAITING') return null;
 
 		// Best-effort: a failed bookkeeping write must not fail the request.
-		// audit-allow: silent-catch — authentication already succeeded; failed usage bookkeeping is reported without denying the valid request.
+		// chisel-ignore fail-loudly:silent-catch -- authentication already succeeded; failed usage bookkeeping is reported without denying the valid request.
 		void this.tokens
 			.touchLastUsed(result.token.id, new Date())
 			.catch((error) => console.warn('Could not update API token last-used timestamp', error));

@@ -136,11 +136,10 @@ flowchart TB
 pnpm test:architecture
 ```
 
-Three checkers run, and each catches a different way this recipe goes wrong:
+Two checkers run, and each catches a different way this recipe goes wrong:
 
-- **Topology audit** (`scripts/audit-topology.ts`): a service importing another service, a model importing across capabilities, SQL outside a repository, a factory with the wrong shape.
-- **Test-quality audit** (`scripts/audit-tests.ts`): mocks or spies in server-layer tests; hand-written fakes only.
-- **chisel** (`chisel-js check`): the remaining architecture and design-system invariants.
+- **chisel** (`chisel-js check`): a service calling another service, a controller calling a repository, SQL outside a repository, mocks in tests, and the design-system invariants.
+- **Topology audit** (`scripts/audit-topology.ts`): a capability bypassing its entry point, or a factory outside `src/lib/server/factories/`.
 
 A red run names the file and the rule. Fix the import, not the checker.
 

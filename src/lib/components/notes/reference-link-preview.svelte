@@ -83,7 +83,7 @@
 						<Badge variant="ghost">{referenceTierLabels[source.tier]}</Badge>
 					{/if}
 				</div>
-				<!-- audit-allow: no-raw-font-family — The URL is a machine literal; mono keeps it legible. -->
+				<!-- chisel-ignore design-system:no-raw-font-family -- The URL is a machine literal; mono keeps it legible. -->
 				<a
 					href={source.url}
 					target="_blank"

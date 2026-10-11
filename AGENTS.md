@@ -9,7 +9,7 @@ published docs live at <https://chidirnweke.github.io/FollowThrough.ai/> with so
 
 Before architecture work, read any ADR in `docs/src/content/docs/decisions` whose title may
 explain the area you are changing. Run `pnpm test:architecture` after structural or test changes;
-its topology and test-quality audits supplement Chisel — do not silence one checker to satisfy
+it runs Chisel (`chisel.config.json`) and the repository's own topology audit — do not silence one checker to satisfy
 another.
 
 Load the `coding-standards` skill before writing or reviewing code. It holds the general
@@ -230,15 +230,16 @@ dev, info in prod.
 
 ## Semantic architecture checks
 
-`pnpm test:architecture:semantic` supplements Chisel with project-symbol checks for indirect
+Chisel's `architecture:*` rules check project symbols through the TypeScript type checker: indirect
 behavior dependencies, public service helpers, concrete dependency types, retained service state,
-and workflows in stores/factories. See `docs/architecture/semantic-enforcement.md` for the rule IDs,
-valid patterns and analysis limits. A type-only import or `Pick<ConcreteClass, ...>` does not hide
-a concrete dependency. A callback does not move workflow ownership out of its factory or store.
+and workflows in stores, factories and agent tools. See `docs/architecture/semantic-enforcement.md`
+for the rule IDs, valid patterns and analysis limits. A type-only import or `Pick<ConcreteClass, ...>`
+does not hide a concrete dependency. A callback does not move workflow ownership out of its factory
+or store. `chisel.config.json` names the facts the rules cannot derive: the agent tools folder, the
+worker entry points, the tool adapters, the icon module and the token stylesheet.
 
-Keep analyzer fixtures for both the prohibited pattern and its valid neighbor. Fix findings; there
-are no baselines or suppressions. When the chained
-architecture command stops, run the remaining stages individually and report each result.
+Fix findings; there are no baselines. When the chained architecture command stops, run
+`pnpm test:topology` and `pnpm test:chisel` individually and report each result.
 
 ## Layering rules the audits enforce
 
@@ -248,24 +249,25 @@ architecture command stops, run the remaining stages individually and report eac
 - Models hold no behavior. Business rules shared by client and server belong in `services/`;
   server-only logic in `server/services/` (ADR 0041).
 
-## Failing loudly (audit-enforced)
+## Failing loudly (Chisel-enforced)
 
-`scripts/audit-source.ts` enforces these at zero: there is no migration baseline and existing code
-is not grandfathered. The escape hatch is a `// audit-allow: <rule> — <reason>` comment on the line
-above, and the reason is the point — it puts a genuinely unavoidable boundary exception in the
-diff where a human can audit it. An allowance is not a migration mechanism.
+Chisel enforces these at zero: there is no migration baseline and existing code is not
+grandfathered. The escape hatch is a `// chisel-ignore <rule-id> -- <reason>` comment on the line
+above (`<!-- … -->` in markup, `/* … */` in CSS), and the reason is the point — it puts a genuinely
+unavoidable boundary exception in the diff where a human can audit it. An allowance is not a
+migration mechanism, and one that suppresses nothing fails the check.
 
-- **No type assertion onto an object literal** (`shape-cast`). `value as never` on a single
+- **No type assertion onto an object literal** (`narrowing:shape-cast`). `value as never` on a single
   branded id is fine — the value is one thing and the reader can see it. `{ … } as never` turns
   off field-by-field checking for a shape nobody verified; a required `conversationId` was once
   fed an optional one this way.
-- **No silent `catch`** (`silent-catch`). A `catch` that neither rethrows nor does anything
+- **No silent `catch`** (`fail-loudly:silent-catch`). A `catch` that neither rethrows nor does anything
   observable swallows the failure. The checker accepts exactly two things, and a log is not one
   of them: **rethrow**, or **return an explicit failure result** — an object literal whose `kind`
   is `'corrupt'`, `'error'` or `'failure'`. A `console.warn` and a bare `return null` still fail
   the audit, so the shape of the fix is decided for you: make the failure a value the caller has
   to read, and let the caller decide. Add a toast or a log _as well_ where an operator or a user
-  needs to know; it is never the thing that satisfies the rule. `audit-allow` is for the case
+  needs to know; it is never the thing that satisfies the rule. `chisel-ignore` is for the case
   where the recovery genuinely reports itself somewhere the type cannot show — say the returned
   placeholder that lands in a rendered document — and the reason must name where.
 
@@ -284,8 +286,8 @@ are in ADR 0037.
 - `unknown` type positions, `Record<string, unknown>`, `isRecord`-style guards, cast-probes
   (`x as { a?: unknown }`), `JSON.parse` casts, and `z.unknown()` schemas are banned in the
   strict layers (`models/`, `services/`, `controllers/`) and on their way to zero everywhere
-  else. `scripts/audit-source-rules.ts` gains one zero-baseline rule per pattern as its fix
-  batch lands; do not add new occurrences — there is no grandfathering.
+  else. Chisel's `narrowing:*` rules enforce each pattern at zero; do not add new occurrences —
+  there is no grandfathering.
 
 ## Defaults, limits, and blast radius
 
@@ -358,12 +360,13 @@ Its references are portable. Apply this repository's architecture and enforcemen
 
 ### Test enforcement
 
-`scripts/audit-tests.ts` rejects assertion-free non-E2E tests. Related assertions belong in
-one behavior test; there is no assertion-count ceiling in this audit or the pinned Chisel
-checker. Vitest also requires assertions at runtime. Do not split outcomes just to count
+Chisel's `test-structure:no-assertion` rejects assertion-free non-E2E tests. Related assertions
+belong in one behavior test; there is no assertion-count ceiling. Vitest also requires assertions
+at runtime. Do not split outcomes just to count
 assertions, hide assertions in helpers, or combine unrelated scenarios.
 
-The checker bans `vi`/`jest` mocking APIs, checks typed fake declarations and dependency casts,
-restricts `toHaveBeenCalled*` assertions in server controller/service specs, and rejects
-unexplained skips. Typed recorders can verify external effects through recorded values.
+Chisel bans `vi`/`jest` mocking APIs and `toHaveBeenCalled*` assertions, requires fakes declared
+in a spec to name their interface, rejects object and array literals cast through `unknown` (use
+the builders in `src/lib/testing/workspace/fixtures/domain-builders.ts`), and rejects unexplained
+skips. Typed recorders can verify external effects through recorded values.
 Keep architectural checks, independent expected results, and valid fixtures intact.

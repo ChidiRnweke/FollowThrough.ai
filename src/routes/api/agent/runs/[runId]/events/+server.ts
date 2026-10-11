@@ -22,7 +22,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 	let changed = () => {};
 	const unsubscribe = await agent.observeRun(runId, () => changed());
 	const stopObserving = () => {
-		// audit-allow: silent-catch — the stream is already closing; a failed UNLISTEN only leaves an idle listener on the shared connection.
+		// chisel-ignore fail-loudly:silent-catch -- the stream is already closing; a failed UNLISTEN only leaves an idle listener on the shared connection.
 		unsubscribe().catch((error: unknown) =>
 			console.error(`[agent-run] Could not stop observing ${runId}:`, error)
 		);
@@ -50,7 +50,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 				cleanup();
 				try {
 					controller.close();
-					// audit-allow: silent-catch — closing an already-disconnected SSE controller has no remaining observer
+					// chisel-ignore fail-loudly:silent-catch -- closing an already-disconnected SSE controller has no remaining observer
 				} catch {
 					// The runtime already closed the controller (e.g. client disconnect).
 				}
@@ -75,7 +75,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 										`id: ${record.cursor}\nevent: agent\ndata: ${JSON.stringify(record)}\n\n`
 									)
 								);
-								// audit-allow: silent-catch — enqueue failure means the SSE consumer disconnected; cleanup is the recovery
+								// chisel-ignore fail-loudly:silent-catch -- enqueue failure means the SSE consumer disconnected; cleanup is the recovery
 							} catch {
 								cleanup();
 								return;
@@ -87,13 +87,13 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 							return;
 						}
 					} while (pendingFlush && !closed);
-					// audit-allow: silent-catch — the SSE controller receives the stream failure, and cleanup closes every subscription.
+					// chisel-ignore fail-loudly:silent-catch -- the SSE controller receives the stream failure, and cleanup closes every subscription.
 				} catch (error) {
 					if (!closed) {
 						cleanup();
 						try {
 							controller.error(error);
-							// audit-allow: silent-catch — reporting to an already-closed SSE controller cannot be observed again
+							// chisel-ignore fail-loudly:silent-catch -- reporting to an already-closed SSE controller cannot be observed again
 						} catch {
 							// The runtime already closed the controller.
 						}
@@ -117,7 +117,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 				if (closed) return;
 				try {
 					controller.enqueue(encoder.encode(': keepalive\n\n'));
-					// audit-allow: silent-catch — keepalive enqueue failure proves disconnection and cleanup removes all producers
+					// chisel-ignore fail-loudly:silent-catch -- keepalive enqueue failure proves disconnection and cleanup removes all producers
 				} catch {
 					cleanup();
 				}

@@ -1,21 +1,8 @@
-import { existsSync, globSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const failures: string[] = [];
-
-const removedPaths = [
-	'src/lib/components/app',
-	'src/lib/models/domain.ts',
-	'src/lib/models/index.ts',
-	'src/lib/server/repositories/index.ts',
-	'src/lib/server/repositories/postgres',
-	'src/lib/server/db/schema.ts'
-];
-
-for (const path of removedPaths) {
-	if (existsSync(resolve(root, path))) failures.push(`${path} is a removed generic bucket`);
-}
 
 for (const entry of readdirSync(resolve(root, 'src/lib/server'))) {
 	if (/factory(?:\.spec)?\.ts$/.test(entry))
@@ -56,9 +43,6 @@ collect(resolve(root, 'src'));
 for (const absolute of sourceFiles) {
 	const file = relative(root, absolute);
 	const segments = file.split('/');
-	if (segments.includes('pages') || segments.includes('panels'))
-		failures.push(`${file} uses a removed generic component bucket`);
-
 	const source = readFileSync(absolute, 'utf8');
 	for (const match of source.matchAll(/from\s+['"]\$lib\/components\/([^/'"]+)(\/[^'"]+)['"]/g)) {
 		const importedCapability = match[1];
@@ -73,14 +57,6 @@ for (const absolute of sourceFiles) {
 			failures.push(`${file} bypasses the ${importedCapability} component capability entry`);
 		}
 	}
-	if (/from\s+['"]\$lib\/models['"]/.test(source))
-		failures.push(`${file} imports the removed global model barrel`);
-	if (/from\s+['"]\$lib\/server\/repositories['"]/.test(source))
-		failures.push(`${file} imports the removed global repository barrel`);
-	if (/from\s+['"]\$lib\/server\/services['"]/.test(source))
-		failures.push(`${file} imports the removed global service barrel`);
-	if (/from\s+['"]\$lib\/server\/controllers['"]/.test(source))
-		failures.push(`${file} imports the removed global controller barrel`);
 	if (
 		file.startsWith('src/lib/components/ui/') &&
 		source.includes('bind:ref') &&
@@ -103,17 +79,10 @@ for (const absolute of sourceFiles) {
 
 const applicationPath = resolve(root, 'src/lib/server/application.ts');
 const applicationSource = readFileSync(applicationPath, 'utf8');
-if (
-	/^import(?!\s+type\b)[^;]*from\s+['"][^'"]*\/(?:repositories|services)\//m.test(applicationSource)
-)
-	failures.push('src/lib/server/application.ts imports a concrete repository or service');
-for (const match of applicationSource.matchAll(/\bnew\s+([A-Z][A-Za-z0-9_]*)/g)) {
-	if (match[1] !== 'ProductionControllerFactory')
-		failures.push(
-			`src/lib/server/application.ts constructs ${match[1]} outside a capability factory`
-		);
-}
-if (/\bLateValue\b|undefined\s+as\s+unknown|\.executor\s*=/.test(applicationSource))
+// Chisel's composition-root rules cover concrete imports, construction and
+// placeholder casts. Assigning a collaborator after construction is the same
+// cycle spelled as a property write.
+if (/\.executor\s*=/.test(applicationSource))
 	failures.push('src/lib/server/application.ts contains cyclic placeholder wiring');
 
 for (const absolute of sourceFiles.filter((path) => path.endsWith('-capability-factory.ts'))) {
@@ -124,33 +93,6 @@ for (const absolute of sourceFiles.filter((path) => path.endsWith('-capability-f
 	];
 	if (createFunctions.length !== 1)
 		failures.push(`${file} must export exactly one create<Capability>Capability function`);
-}
-
-const vitestSource = readFileSync(resolve(root, 'vitest.config.ts'), 'utf8');
-for (const include of vitestSource.matchAll(/\binclude:\s*(\[[\s\S]*?\]|'[^']+'|"[^"]+")/g)) {
-	const patterns = [...include[1].matchAll(/['"]([^'"]+)['"]/g)].map((match) => match[1]);
-	for (const pattern of patterns) {
-		if (globSync(pattern, { cwd: root }).length === 0)
-			failures.push(`vitest include ${pattern} matches no files`);
-	}
-}
-
-const maintainedDocuments = [
-	'README.md',
-	'docs/architecture/README.md',
-	'docs/design/design-system.md',
-	...readdirSync(resolve(root, 'docs'))
-		.filter((name) => name.endsWith('.md') && name !== 'TEST_GAPS.md')
-		.map((name) => `docs/${name}`)
-];
-for (const document of maintainedDocuments) {
-	const source = readFileSync(resolve(root, document), 'utf8');
-	for (const match of source.matchAll(
-		/`((?:src|tests|scripts)\/[A-Za-z0-9_@./+()[\]-]+\.(?:ts|svelte|md))`/g
-	)) {
-		if (!existsSync(resolve(root, match[1])))
-			failures.push(`${document} references missing maintained path ${match[1]}`);
-	}
 }
 
 /**

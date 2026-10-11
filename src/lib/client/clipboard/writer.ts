@@ -1,7 +1,7 @@
 import type { RichClipboardContent } from '$lib/models/clipboard';
 
 const handled = <T>(promise: Promise<T>): Promise<T> => {
-	// audit-allow: silent-catch — ClipboardItem.write reports this rejection; observe it even if permission rejection prevents the native API from consuming a pending blob.
+	// chisel-ignore fail-loudly:silent-catch -- ClipboardItem.write reports this rejection; observe it even if permission rejection prevents the native API from consuming a pending blob.
 	promise.catch(() => {});
 	return promise;
 };

@@ -54,11 +54,10 @@ These layers are used to build the product's capabilities:
 
 ### Enforcement
 
-The layering is not a convention: it is checked. `pnpm test:architecture` runs three checkers:
+The layering is not a convention: it is checked. `pnpm test:architecture` runs two checkers:
 
-- **Topology audit** (`scripts/audit-topology.ts`): import direction, capability entry points, factory shape, and that maintained docs reference only existing paths.
-- **Test-quality audit** (`scripts/audit-tests.ts`): no mocks or spies in server layers; hand-written fakes only.
-- **chisel** (`chisel-js check`): architecture and design-system invariants with pointwise, justified exceptions.
+- **chisel** (`chisel-js check`): import direction, type-checked architecture (no service reached indirectly, no controller chains, no retained service state), failing loudly, parsing at the boundary, the design system and test quality, with pointwise, justified exceptions.
+- **Topology audit** (`scripts/audit-topology.ts`): this repository's capability entry points, the editor boundary, factory placement and the database corpus.
 
 A new controller method, a cross-service import, or an undocumented public symbol fails the build, not the code review.
 

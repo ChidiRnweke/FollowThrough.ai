@@ -159,7 +159,7 @@ function waitForTerminalStatus(
 		const finish = (outcome: () => void) => {
 			if (settled) return;
 			settled = true;
-			// audit-allow: silent-catch — a failed UNLISTEN cannot change the case outcome; the lab closes its database after the case.
+			// chisel-ignore fail-loudly:silent-catch -- a failed UNLISTEN cannot change the case outcome; the lab closes its database after the case.
 			unsubscribe().catch((error: unknown) =>
 				console.error('[eval] Could not stop listening:', error)
 			);
@@ -168,7 +168,7 @@ function waitForTerminalStatus(
 		};
 
 		const check = () => {
-			// audit-allow: silent-catch — the polling Promise propagates lookup failure through its reject continuation.
+			// chisel-ignore fail-loudly:silent-catch -- the polling Promise propagates lookup failure through its reject continuation.
 			lab
 				.forActor(actor)
 				.controllers.agentHarness()
@@ -179,7 +179,7 @@ function waitForTerminalStatus(
 				.catch((error: unknown) => finish(() => reject(error)));
 		};
 
-		// audit-allow: silent-catch — a failed subscription rejects the wait through `finish`.
+		// chisel-ignore fail-loudly:silent-catch -- a failed subscription rejects the wait through `finish`.
 		lab
 			.forActor(actor)
 			.controllers.agentHarness()

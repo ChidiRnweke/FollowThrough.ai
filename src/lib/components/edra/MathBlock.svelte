@@ -17,7 +17,7 @@
 	}
 </script>
 
-<!-- audit-allow: no-ad-hoc-shadow — The math bubble menu floats over the document; overlay elevation matching the ui popovers, from a primitive that is not one. -->
+<!-- chisel-ignore design-system:no-ad-hoc-shadow -- The math bubble menu floats over the document; overlay elevation matching the ui popovers, from a primitive that is not one. -->
 <BubbleMenu
 	{editor}
 	pluginKey="math-block-bubble-menu"

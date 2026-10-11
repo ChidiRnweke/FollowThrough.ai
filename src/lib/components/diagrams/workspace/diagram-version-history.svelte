@@ -51,7 +51,7 @@
 		failure = undefined;
 		try {
 			await onrestore(selectedId);
-			// audit-allow: silent-catch — the history dialog displays the failure and retains the selected version for retry.
+			// chisel-ignore fail-loudly:silent-catch -- the history dialog displays the failure and retains the selected version for retry.
 		} catch (error) {
 			failure = userFacingMessage(error, 'The diagram version could not be restored.');
 		} finally {

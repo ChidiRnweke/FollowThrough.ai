@@ -40,7 +40,7 @@
 			plaintext = minted.plaintext;
 			name = '';
 			toast.success('Token created. Copy it now — it will not be shown again.');
-			// audit-allow: silent-catch — token creation failure is reported and no credential is presented as created.
+			// chisel-ignore fail-loudly:silent-catch -- token creation failure is reported and no credential is presented as created.
 		} catch {
 			toast.error('Could not create the token. Try again.');
 		} finally {
@@ -53,7 +53,7 @@
 		try {
 			await revokeApiToken(token.id);
 			toast.success(`Revoked ${token.name}`);
-			// audit-allow: silent-catch — revocation failure is reported and the token remains listed.
+			// chisel-ignore fail-loudly:silent-catch -- revocation failure is reported and the token remains listed.
 		} catch {
 			toast.error('Could not revoke the token. Try again.');
 		} finally {
@@ -65,7 +65,7 @@
 		try {
 			await navigator.clipboard.writeText(value);
 			toast.success('Copied to clipboard');
-			// audit-allow: silent-catch — the token remains selected and the toast gives the manual-copy recovery.
+			// chisel-ignore fail-loudly:silent-catch -- the token remains selected and the toast gives the manual-copy recovery.
 		} catch {
 			toast.error('Could not copy. Select the text and copy manually.');
 		}
@@ -93,7 +93,7 @@
 				<Field.Description>Point your MCP client at this URL.</Field.Description>
 			</Field.Content>
 			<div class="flex items-center gap-2">
-				<!-- audit-allow: no-raw-font-family — The MCP endpoint is a copy-paste machine literal. -->
+				<!-- chisel-ignore design-system:no-raw-font-family -- The MCP endpoint is a copy-paste machine literal. -->
 				<Input readonly value={endpoint} class="font-mono text-sm" aria-label="MCP endpoint" />
 				<Button variant="outline" onclick={() => void copy(endpoint)}>Copy</Button>
 			</div>
@@ -138,7 +138,7 @@
 				It is stored hashed and cannot be shown again. If you lose it, revoke it and create another.
 			</p>
 			<div class="flex items-center gap-2">
-				<!-- audit-allow: no-raw-font-family — The one-time token is a copy-paste machine literal. -->
+				<!-- chisel-ignore design-system:no-raw-font-family -- The one-time token is a copy-paste machine literal. -->
 				<Input readonly value={plaintext} class="font-mono text-sm" />
 				<Button variant="outline" onclick={() => void copy(plaintext!)}>Copy</Button>
 				<Button variant="ghost" onclick={() => (plaintext = null)}>Done</Button>

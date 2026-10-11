@@ -68,7 +68,7 @@
 			if (result.kind === 'failure') throw new Error(result.message);
 			toast.success('Chat name saved on this device.');
 			return true;
-			// audit-allow: silent-catch — rename failure is reported and the existing chat title remains authoritative.
+			// chisel-ignore fail-loudly:silent-catch -- rename failure is reported and the existing chat title remains authoritative.
 		} catch {
 			toast.error('Chat could not be renamed.');
 			return false;
@@ -96,7 +96,7 @@
 			await workspaceSession.synchronize();
 			deleteOpen = false;
 			toast.success('Chat deleted.');
-			// audit-allow: silent-catch — deletion failure is reported with the recovery action to stop the active run.
+			// chisel-ignore fail-loudly:silent-catch -- deletion failure is reported with the recovery action to stop the active run.
 		} catch {
 			toast.error('Chat could not be deleted. Stop its active run and try again.');
 		} finally {

@@ -28,7 +28,7 @@ export class RunSignalService implements RunSignals {
 			if (status === 'cancelling' || status === 'cancelled') execution.abort();
 		};
 		const stop = await this.notifications.listen(runId, () => {
-			// audit-allow: silent-catch — a failed status read leaves the run executing; the next notification reads again, and the canceller's grace timer settles the run regardless.
+			// chisel-ignore fail-loudly:silent-catch -- a failed status read leaves the run executing; the next notification reads again, and the canceller's grace timer settles the run regardless.
 			check().catch((error) =>
 				console.error(`[agent-run] Could not read cancellation for ${runId}:`, error)
 			);

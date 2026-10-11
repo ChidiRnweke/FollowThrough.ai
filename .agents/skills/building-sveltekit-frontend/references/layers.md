@@ -75,7 +75,7 @@ no specific tool. A tool is an entry point: an agent tool factory turns one publ
 operation into a tool that parses its arguments, calls the operation and converts the result. It
 never sequences operations or calls services; controllers and services do not know they back a tool.
 
-Run `pnpm test:architecture:semantic` as well as Chisel. It follows symbol aliases, re-exports,
+Chisel's `architecture:*` rules follow symbol aliases, re-exports,
 callable objects and statically connected callback ports. A service calling another service
 through an injected function still violates ADR 0007. A factory callback that calls a controller
 still owns a workflow. Construct the controller and expose its operation interface instead.

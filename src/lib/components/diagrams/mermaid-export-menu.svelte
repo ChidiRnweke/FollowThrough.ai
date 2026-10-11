@@ -38,7 +38,7 @@
 		try {
 			await mermaidDiagrams.download({ source, theme, format, fileName });
 			open = false;
-			// audit-allow: silent-catch — export failure is reported and the menu remains available for retry.
+			// chisel-ignore fail-loudly:silent-catch -- export failure is reported and the menu remains available for retry.
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'The diagram could not be exported.');
 		} finally {

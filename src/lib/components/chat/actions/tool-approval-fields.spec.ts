@@ -1,18 +1,22 @@
-import type { ShellContext } from '$lib/models/workspace-views';
+import {
+	noteBuilder,
+	projectBuilder,
+	shellContextBuilder
+} from '$lib/testing/workspace/fixtures/domain-builders';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { describe, expect, it } from 'vitest';
-import type { NoteSummary } from '$lib/models/notes';
-import type { Project } from '$lib/models/projects';
 
 import { approvalFields } from './tool-approval-fields';
 
 const PROJECT_ID = 'e0d3f07c-460b-40c3-9b8c-a8dc00ddc565';
 const PARENT_ID = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
 
-const shell = {
-	projects: [{ id: PROJECT_ID, name: 'Platform Notes' } as unknown as Project],
-	noteTree: [{ id: PARENT_ID, title: 'Infrastructure' } as unknown as NoteSummary]
-} as unknown as ShellContext;
+const shell = shellContextBuilder({
+	projects: [projectBuilder({ id: PROJECT_ID as ProjectId, name: 'Platform Notes' })],
+	noteTree: [noteBuilder({ id: PARENT_ID as NoteId, title: 'Infrastructure' })]
+});
 
 /** The payload that shipped raw UUIDs to the chat sidebar. */
 const createNote = {

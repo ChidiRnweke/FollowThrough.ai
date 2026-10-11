@@ -423,6 +423,7 @@
 				<!-- Reserved room, not content: it is what the newest question is scrolled up
 				     into, and what the answer then fills. `-mt-6` cancels the column gap so the
 				     reserved height is exactly the height that was measured. -->
+				<!-- chisel-ignore structural:inline-style-banned -- The spacer height is measured at run time from the newest question. -->
 				<div class="-mt-6 shrink-0" aria-hidden="true" style:height="{anchorSpacer}px"></div>
 			{/if}
 		</div>

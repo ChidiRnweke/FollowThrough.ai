@@ -314,7 +314,7 @@ export class Todos implements TodosController {
 	}
 
 	private launchPromiseRun(runId: AgentRunId): void {
-		// audit-allow: silent-catch — detached execution persists its terminal state; settlement failures are emitted for operational repair.
+		// chisel-ignore fail-loudly:silent-catch -- detached execution persists its terminal state; settlement failures are emitted for operational repair.
 		void this.executePromiseRun(runId).catch((error) =>
 			console.error(`[promise-run] Could not settle ${runId}:`, error)
 		);

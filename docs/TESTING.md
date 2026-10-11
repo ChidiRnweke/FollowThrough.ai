@@ -17,10 +17,8 @@ test.
 
 ## Test shape
 
-- Unit and component tests have one behavioural assertion and one reason to fail. A single
-  structural equality assertion may describe one cohesive result.
-- The quality audit ratchets the current multi-assertion migration baseline: new exceptions fail
-  immediately, and consolidating an existing exception should lower the baseline in the same change.
+- A unit or component test covers one behaviour and may assert each of its outcomes. Every test
+  asserts something; Chisel's `test-structure:no-assertion` rejects one that does not.
 - E2E tests may use multiple visible checkpoints when setup is expensive and the checkpoints form
   one user journey.
 - Use hand-written fakes that implement the dependency interface. Do not use mocking or spying
@@ -45,14 +43,13 @@ isolated counterpart.
 - `pnpm test` — default Node and focused Chromium feedback.
 - `pnpm test:node` — Node-only test project, used in CI alongside the full browser suite.
 - `pnpm test:topology` — runs `scripts/audit-topology.ts`, the repository-specific structural audit.
-  It resolves imports, enforces capability entry points and Edra/server boundaries, and rejects stale
-  Vitest includes and maintained documentation paths.
-- `pnpm test:quality` — runs `scripts/audit-tests.ts`, the test-policy ratchet. It rejects mocking
-  libraries, unexplained skips, dependency casts, interaction assertions, untyped manual fakes, and
-  increases to the one-behavioural-assertion migration baseline.
-- `pnpm test:chisel` — runs the pinned Chisel rules independently. The project audits supplement
-  Chisel; they do not replace it or provide a reason to suppress a Chisel violation.
-- `pnpm test:architecture` — runs topology, test-quality, and Chisel checks together.
+  It enforces capability entry points, the Edra boundary, factory placement and that every database
+  mapper parser is covered by the captured corpus.
+- `pnpm test:chisel` — runs Chisel (`chisel.config.json`): layers, type-checked architecture,
+  failing loudly, type narrowing, the design system and test quality. It rejects mocking libraries,
+  unexplained skips, literal shapes cast through `unknown`, interaction assertions and
+  assertion-free tests.
+- `pnpm test:architecture` — runs topology and Chisel together.
 - `pnpm test:browser:full` — every Chromium component and browser-storage regression.
 - `pnpm test:contracts` — serial PostgreSQL contracts with a shared module graph for fast feedback.
 - `pnpm test:contracts:isolated` — the same PostgreSQL contracts with per-file module isolation.

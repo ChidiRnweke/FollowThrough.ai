@@ -739,7 +739,7 @@
 			editorSession.accept();
 			toast.success('Restored that version');
 			return true;
-			// audit-allow: silent-catch — restore failure is reported and the current note remains authoritative.
+			// chisel-ignore fail-loudly:silent-catch -- restore failure is reported and the current note remains authoritative.
 		} catch {
 			toast.error('Could not restore that version. Try again.');
 			return false;
@@ -774,7 +774,7 @@
 			editorSession.accept();
 			toast.success('Reverted to last published version');
 			await workspaceSession.synchronize();
-			// audit-allow: silent-catch — discard failure is reported and the local draft remains available.
+			// chisel-ignore fail-loudly:silent-catch -- discard failure is reported and the local draft remains available.
 		} catch {
 			toast.error('Could not discard changes. Try again.');
 		}
@@ -783,6 +783,7 @@
 
 <svelte:window {onkeydown} {onbeforeunload} />
 
+<!-- chisel-ignore structural:inline-style-banned -- The header height is measured at run time and shared with the layout. -->
 <div
 	class="note-measure @container relative mx-auto flex w-full min-w-0 flex-1 flex-col gap-4"
 	style:--note-header-h="{utilityHeaderHeight}px"

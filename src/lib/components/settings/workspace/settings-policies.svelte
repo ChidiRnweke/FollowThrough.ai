@@ -49,7 +49,7 @@
 			});
 			if (result.kind === 'failure') throw new Error(result.message);
 			toast.success('Saved on device');
-			// audit-allow: silent-catch — policy failure is reported and the persisted policy remains authoritative.
+			// chisel-ignore fail-loudly:silent-catch -- policy failure is reported and the persisted policy remains authoritative.
 		} catch {
 			toast.error('Could not update the policy. Try again.');
 		} finally {
