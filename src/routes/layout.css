@@ -99,6 +99,10 @@
 	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
 	/* The icon dot landing: a short overshoot, so arriving reads as a placement. */
 	--ease-land: cubic-bezier(0.3, 1.55, 0.5, 1);
+	/* An icon becoming live: the line retraces, then the dot lands as the line closes. */
+	--duration-icon-trace: 380ms;
+	--duration-icon-land: 400ms;
+	--delay-icon-land: 230ms;
 	--note-content-width: 90ch;
 	/* Authored document type is deliberately independent from app chrome. The
 	   editor, skill content, and full-size diffs share this ladder; compact diff
@@ -217,7 +221,7 @@
 
 .ft-knob {
 	transition:
-		transform 240ms var(--ease-land),
+		transform 320ms var(--ease-land),
 		fill var(--duration-micro) var(--ease-standard);
 }
 
@@ -237,16 +241,53 @@
 	}
 
 	& .ft-stroke {
-		animation: ft-trace 280ms var(--ease-standard) both;
+		animation: ft-trace var(--duration-icon-trace) var(--ease-standard) both;
 	}
 
 	& .ft-accent {
-		animation: ft-land 300ms 170ms var(--ease-land) both;
+		animation: ft-land var(--duration-icon-land) var(--delay-icon-land) var(--ease-land) both;
 	}
 
 	& .ft-knob {
 		transform: translateX(9px);
 		animation: none;
+	}
+}
+
+/* Pointing at a control outside the rail replays the same motion, so the icon answers the pointer
+   before the click. The dot stays ink: teal still means live. The rail is left out because its
+   icons are destinations whose motion already marks arriving there. */
+:is(a[href], button, [role='button'], [role='menuitem'], [role='tab'], [role='option']):is(
+		:hover,
+		:focus-visible
+	):not(:disabled, [aria-disabled='true'], [data-sidebar='icon-rail'] *) {
+	& .ft-stroke {
+		animation: ft-trace var(--duration-icon-trace) var(--ease-standard) both;
+	}
+
+	& .ft-accent {
+		animation: ft-land var(--duration-icon-land) var(--delay-icon-land) var(--ease-land) both;
+	}
+}
+
+/* The theme mark draws the mode in force. Only one half is displayed, and an element leaving
+   `display: none` starts its animations afresh, so every switch draws the new half in. */
+.ft-theme-dark,
+.dark .ft-theme-light {
+	display: none;
+}
+
+.dark .ft-theme-dark {
+	display: inline;
+}
+
+:is(.ft-theme-light, .ft-theme-dark) {
+	& .ft-stroke {
+		animation: ft-trace var(--duration-icon-trace) var(--ease-standard) both;
+	}
+
+	& .ft-accent {
+		animation: ft-land var(--duration-icon-land) var(--delay-icon-land) var(--ease-land) both;
 	}
 }
 

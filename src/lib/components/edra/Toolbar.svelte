@@ -58,6 +58,7 @@
 					variant="ghost"
 					size="icon"
 					class={cn(isActive(command) && 'bg-muted text-primary')}
+					aria-pressed={command.isActive ? isActive(command) : undefined}
 					disabled={!isClickable(command)}
 					onclick={() => {
 						command.onClick?.(editor);

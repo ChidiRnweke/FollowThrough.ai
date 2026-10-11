@@ -203,6 +203,7 @@
 							variant="ghost"
 							size="icon-xs"
 							class={cn(node.attrs.align === 'left' && 'bg-muted')}
+							aria-pressed={node.attrs.align === 'left'}
 							onclick={() => updateAttributes({ align: 'left' })}
 							aria-label={strings.extension.media.alignLeft}
 						>
@@ -217,6 +218,7 @@
 							variant="ghost"
 							size="icon-xs"
 							class={cn(node.attrs.align === 'center' && 'bg-muted')}
+							aria-pressed={node.attrs.align === 'center'}
 							onclick={() => updateAttributes({ align: 'center' })}
 							aria-label={strings.extension.media.alignCenter}
 						>
@@ -231,6 +233,7 @@
 							variant="ghost"
 							size="icon-xs"
 							class={cn(node.attrs.align === 'right' && 'bg-muted')}
+							aria-pressed={node.attrs.align === 'right'}
 							onclick={() => updateAttributes({ align: 'right' })}
 							aria-label={strings.extension.media.alignRight}
 						>

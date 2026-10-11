@@ -179,6 +179,7 @@
 									rightPanel.mode === 'chat' && railActive
 								)}
 								aria-label="Toggle chat panel"
+								aria-pressed={rightPanel.mode === 'chat'}
 								disabled={inventoryLoading || !shell}
 								onclick={() => rightPanel.toggle('chat')}
 							>
@@ -250,6 +251,7 @@
 								size="icon"
 								aria-label="Settings"
 								href="/settings"
+								aria-current={isActive('/settings') ? 'page' : undefined}
 								class={cn(railButton, isActive('/settings') && railActive)}
 							>
 								<Icon.Settings class="size-5" />
@@ -264,6 +266,7 @@
 								size="icon"
 								aria-label="Trash"
 								href="/trash"
+								aria-current={isActive('/trash') ? 'page' : undefined}
 								class={cn(
 									'size-9 text-destructive hover:bg-destructive/10 hover:text-destructive',
 									isActive('/trash') && 'bg-destructive/15'

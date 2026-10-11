@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { userEvent } from 'vitest/browser';
 import '../../../routes/layout.css';
 import * as Icon from './index';
 
@@ -54,5 +55,48 @@ describe('sync icon', () => {
 			'fall',
 			null
 		]);
+	});
+});
+
+describe('theme icon', () => {
+	const shownHalf = (root: Element) =>
+		['light', 'dark'].filter(
+			(half) => getComputedStyle(root.querySelector(`.ft-theme-${half}`)!).display !== 'none'
+		);
+
+	it('draws only the sun in light mode', async () => {
+		const { container } = await render(Icon.Theme);
+		expect(shownHalf(container)).toEqual(['light']);
+	});
+
+	it('draws only the moon under a dark ancestor', async () => {
+		const { container } = await render(Icon.Theme);
+		container.classList.add('dark');
+		await expect.poll(() => shownHalf(container)).toEqual(['dark']);
+	});
+});
+
+describe('icon motion on pointing', () => {
+	const motion = (root: Element) => ({
+		stroke: getComputedStyle(root.querySelector('.ft-stroke')!).animationName,
+		dotIsInk: accentFill(root) === getComputedStyle(root.querySelector('svg')!).color
+	});
+
+	it('replays the trace with an ink dot when a control is hovered', async () => {
+		const { container } = await render(Icon.Folder, { class: 'text-foreground' });
+		container.setAttribute('role', 'button');
+		await userEvent.hover(container);
+		await expect.poll(() => motion(container)).toEqual({ stroke: 'ft-trace', dotIsInk: true });
+	});
+
+	it('keeps a rail control still when it is hovered', async () => {
+		const { container } = await render(Icon.Folder, { class: 'text-foreground' });
+		const rail = document.createElement('nav');
+		rail.dataset.sidebar = 'icon-rail';
+		container.replaceWith(rail);
+		rail.append(container);
+		container.setAttribute('role', 'button');
+		await userEvent.hover(container);
+		expect(motion(container)).toEqual({ stroke: 'none', dotIsInk: true });
 	});
 });
