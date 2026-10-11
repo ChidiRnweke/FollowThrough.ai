@@ -297,6 +297,10 @@ including the ones the shadcn-svelte CLI writes into a newly added primitive —
 - **Preferences is a switch, Settings is a gear.** The switch's knob is its dot and slides across
   when on. A skill is a repeatable workflow, so Skill takes the workflow mark and Diagram has its
   own two-box mark.
+- **Widget is a small app, Activity is a monitor.** A widget is a tool you use inside a note, so
+  its mark is an app window with a pointer clicking into it, and the dot is where the click lands.
+  Agent activity is a monitor with a live trace. Neither reuses the open book, which means
+  reading and references.
 
 ## Voice & tone
 

@@ -148,7 +148,7 @@
 				<!-- A link, not a summary: what the agent used is a server read, and the overview
 				     should not pay for it on every visit. -->
 				<Button variant="outline" size="sm" href="/projects/{data.projectId}/agent-activity">
-					<Icon.Reading class="size-4" />
+					<Icon.Activity class="size-4" />
 					Agent activity
 				</Button>
 				<DropdownMenu.Root>

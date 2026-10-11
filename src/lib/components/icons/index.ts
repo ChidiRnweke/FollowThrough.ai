@@ -4,6 +4,7 @@
 // takes the brand accent, and only on a live item. Utility glyphs (verbs, arrows, editor) carry
 // no dot. Motion is CSS-only — see "Icons and motion" in docs/design/design-system.md.
 
+export { default as Activity } from './activity.svelte';
 export { default as AlignCenter } from './align-center.svelte';
 export { default as AlignJustify } from './align-justify.svelte';
 export { default as AlignLeft } from './align-left.svelte';

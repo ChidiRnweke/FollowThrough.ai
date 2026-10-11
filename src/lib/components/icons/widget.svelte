@@ -9,12 +9,12 @@
 	<path
 		class="ft-stroke"
 		pathLength="1"
-		d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"
-	/><path class="ft-stroke" pathLength="1" d="M7 10.5l1.5 1.5 2.5-2.5M14 11h3M7 16h7" /><circle
+		d="M18 9.5V5.5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h5M3 7.5h15"
+	/><path class="ft-stroke" pathLength="1" d="M13.5 12.5l7 2.6-3 1.3-1.3 3z" /><circle
 		class="ft-accent"
-		cx="17"
-		cy="16"
-		r="1.3"
+		cx="10.6"
+		cy="11.4"
+		r="1.45"
 		fill="currentColor"
 		stroke="none"
 	/>
