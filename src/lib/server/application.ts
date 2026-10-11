@@ -672,9 +672,9 @@ export function createApplication(
 		feedback,
 		contextUsage: {
 			usage: contextUsage.usage,
-			projectTree: projects.treeReader,
+			projectTree: projects.catalog,
 			attachments: attachmentCapability.reader,
-			memory: memory.lister
+			memory: memory.library
 		},
 		attachmentProcessing: attachmentCapability.processing,
 		knowledgeIndexing: knowledgeSearch.indexing
