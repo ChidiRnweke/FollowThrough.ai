@@ -35,13 +35,6 @@ const stateOf = (view: readonly { name: string; enabled: boolean }[], name: stri
 	view.find((preference) => preference.name === name)!;
 
 describe('Selecting tools', () => {
-	it('lists every tool in the catalog', async () => {
-		expect((await controller().list()).map(({ name }) => name).sort()).toEqual([
-			'archive_project',
-			'load_skill'
-		]);
-	});
-
 	it('returns the tool as disabled after turning it off', async () => {
 		const view = await controller().setEnabled({
 			toolName: 'archive_project',

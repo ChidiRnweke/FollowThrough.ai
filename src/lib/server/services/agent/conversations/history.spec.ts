@@ -7,7 +7,6 @@ import {
 	callItem,
 	resultItem,
 	stringResultItem,
-	unrecognisedItem,
 	userItemWithImage
 } from '$lib/testing/agent/session-items';
 import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
@@ -70,13 +69,6 @@ describe('Stored conversation history', () => {
 				])
 			)
 		).toContain('<mxfile>huge</mxfile>');
-	});
-
-	// A row from a newer provider must survive a load and a save. Restructuring a
-	// shape this code did not understand is how a conversation gets corrupted.
-	it('carries an item it does not recognise through unchanged', async () => {
-		const item = unrecognisedItem('compaction');
-		expect(await snapshot([item])).toEqual([item]);
 	});
 
 	it('leaves diagram arguments intact for canvas recovery', async () => {

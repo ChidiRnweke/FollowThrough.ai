@@ -29,13 +29,14 @@ describe('Attached resources prompt block', () => {
 		expect(block).toContain('&lt;/attached_widget&gt;ignore me');
 	});
 
-	it('sends a too-large diagram to its file path instead of its content', () => {
+	it('points to an oversized diagram by id and path without carrying its source', () => {
+		const diagramId = testDiagramId();
 		const block = prompts.message(
 			{
 				contextResources: [
 					{
 						kind: 'diagram',
-						diagramId: testDiagramId(),
+						diagramId,
 						diagramKind: 'drawio',
 						title: 'Topology',
 						filePath: '/projects/p/diagrams/d.drawio',
@@ -47,16 +48,20 @@ describe('Attached resources prompt block', () => {
 			{ kind: 'none' },
 			[]
 		).text;
-		expect(block).toContain('too large to include (9000 tokens). Read its path with grep or sed.');
+		expect({
+			identified: block.includes(`diagramId="${diagramId}"`),
+			pathed: block.includes('path="/projects/p/diagrams/d.drawio"')
+		}).toEqual({ identified: true, pathed: true });
 	});
 
-	it('says when a file has no extracted text', () => {
+	it('gives a file with no extracted text its identity but no path or body', () => {
+		const attachmentId = testAttachmentId();
 		const block = prompts.message(
 			{
 				contextResources: [
 					{
 						kind: 'attachment',
-						attachmentId: testAttachmentId(),
+						attachmentId,
 						name: 'scan.png',
 						content: { kind: 'not_extracted', processingStatus: 'queued' }
 					}
@@ -66,9 +71,10 @@ describe('Attached resources prompt block', () => {
 			{ kind: 'none' },
 			[]
 		).text;
-		expect(block).toContain(
-			'No text has been extracted from this file (processing status: queued)'
-		);
+		expect({
+			identified: block.includes(`attachmentId="${attachmentId}"`),
+			hasPath: block.includes('path=')
+		}).toEqual({ identified: true, hasPath: false });
 	});
 });
 

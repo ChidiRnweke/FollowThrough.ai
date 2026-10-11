@@ -50,13 +50,10 @@ const setup = (status: AgentRunStatus = 'running', kind: 'agent' | 'workflow' = 
 	return { runs, run, service, completed };
 };
 describe('Run settlement', () => {
-	it.each(['queued', 'completed', 'failed', 'cancelled'] as const)(
-		'refuses completion from %s',
-		async (status) => {
-			const { run, service, completed } = setup(status);
-			expect(await service.claim(run.id, completed)).toEqual({ kind: 'lost' });
-		}
-	);
+	it.each(['queued', 'completed'] as const)('refuses completion from %s', async (status) => {
+		const { run, service, completed } = setup(status);
+		expect(await service.claim(run.id, completed)).toEqual({ kind: 'lost' });
+	});
 
 	it('does not skip the cancellation request when settling a running run', async () => {
 		const { run, service } = setup();

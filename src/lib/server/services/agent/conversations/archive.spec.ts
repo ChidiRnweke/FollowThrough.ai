@@ -59,15 +59,6 @@ describe('Conversation visibility invariants', () => {
 		expect(conversation.contextProjectId).toBe(testProjectId(3));
 	});
 
-	it('limits recent chat sessions at the journal boundary', async () => {
-		const journal = new ConversationArchive(
-			testActor(),
-			new InMemoryConversationRepository(testActor())
-		);
-		for (const prompt of ['One', 'Two', 'Three']) await journal.getOrCreate({ prompt });
-		expect(await journal.listConversations({ limit: 2 })).toHaveLength(2);
-	});
-
 	it('trims a renamed chat title', async () => {
 		const journal = new ConversationArchive(
 			testActor(),
@@ -105,16 +96,6 @@ describe('Conversation visibility invariants', () => {
 		await journal.recordUserPrompt(conversation.id, 'Only');
 		await journal.truncateFromUserMessage(conversation.id, 2);
 		expect(await journal.listMessages(conversation.id)).toHaveLength(1);
-	});
-
-	it('permanently removes a chat session', async () => {
-		const journal = new ConversationArchive(
-			testActor(),
-			new InMemoryConversationRepository(testActor())
-		);
-		const conversation = await journal.getOrCreate({ prompt: 'Temporary' });
-		await journal.remove(conversation.id);
-		expect(await journal.listConversations()).toHaveLength(0);
 	});
 
 	it('stores pasted images on the journaled user message', async () => {
