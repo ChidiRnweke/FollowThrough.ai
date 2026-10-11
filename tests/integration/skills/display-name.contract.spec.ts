@@ -52,8 +52,7 @@ const setup = async (suffix: string) => {
 			skillEditor: library.editor,
 			skillFinder: library.finder,
 			skillUsageLister: library.usageLister,
-			noteEditor: catalog.editor,
-			anchorRepairer: content,
+			noteAuthoring: catalog.authoring,
 			noteLinkReconciler: content,
 			noteIndexer: content
 		})
@@ -92,7 +91,7 @@ describe('Skill display name authority', () => {
 	it('publishes the renamed skill and note resources with the derived database name', async () => {
 		const { owner, note, catalog, workspace, transactionRunner } = await setup('12202');
 		const initial = await workspace.pullChangePage(initialSyncCursor);
-		await saveNoteDraft(catalog.editor, transactionRunner, owner, {
+		await saveNoteDraft(catalog.authoring, transactionRunner, owner, {
 			...note,
 			title: 'Ship checklist'
 		});
@@ -126,7 +125,7 @@ describe('Skill display name authority', () => {
 		const initial = await workspace.pullChangePage(initialSyncCursor);
 		await transactionRunner
 			.run(async () => {
-				await saveNoteDraft(catalog.editor, transactionRunner, owner, {
+				await saveNoteDraft(catalog.authoring, transactionRunner, owner, {
 					...note,
 					title: 'Ship checklist'
 				});

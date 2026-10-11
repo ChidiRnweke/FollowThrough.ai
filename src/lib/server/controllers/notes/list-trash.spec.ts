@@ -65,7 +65,7 @@ const setup = () => {
 			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteTrash: service.trash,
+			noteLifecycle: service.lifecycle,
 			noteTrashReader: service.trashReader,
 			noteIndexer: indexer,
 			transactionRunner: { run: <T>(work: () => Promise<T>): Promise<T> => work() }

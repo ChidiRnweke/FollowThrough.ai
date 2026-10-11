@@ -143,7 +143,7 @@ describe('note view assembly', () => {
 				noteEditingRules: new NoteEditingRulesService(),
 				notePresentation: new NotePresentationService(),
 				suggestionPresentation: new SuggestionPresentationService(),
-				noteReader: content,
+				noteLibrary: content,
 				projectReader: projects,
 				userPreferences: new InMemoryUserPreferencesRepository(actor),
 				relationshipReader: graph.reader,

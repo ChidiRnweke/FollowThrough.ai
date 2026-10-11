@@ -78,12 +78,12 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 			generationRules: new DiagramGenerationRuleService(),
 			...fixture,
 			diagrams: library,
-			diagramSourceNotes: notes.services.reader,
+			diagramSourceNotes: notes.services.library,
 			mermaid: new InMemoryMermaidDocuments(),
 			diagramIndexer: diagrams,
 			generation: {
 				...fixture.generation,
-				contextNotes: notes.services.reader,
+				contextNotes: notes.services.library,
 				conversations: new ConversationArchive(actor, new ConversationRecords(actor, database)),
 				conversationMessages: new ConversationArchive(
 					actor,

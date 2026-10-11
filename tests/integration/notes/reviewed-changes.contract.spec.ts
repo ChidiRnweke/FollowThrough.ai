@@ -76,9 +76,8 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 			suggestionPresentation: new SuggestionPresentationService(),
 			markdown,
 			transactionRunner,
-			noteReader: catalog.reader,
-			noteEditor: catalog.editor,
-			anchorRepairer: consequences,
+			noteLibrary: catalog.library,
+			noteAuthoring: catalog.authoring,
 			noteLinkReconciler: consequences,
 			noteIndexer: consequences
 		})

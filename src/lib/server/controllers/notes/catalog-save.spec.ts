@@ -28,7 +28,7 @@ describe('Note edits through the real catalog', () => {
 		notes.notes = [noteBuilder({ currentRevision: 2 })];
 		await expect(
 			saveNoteDraft(
-				service.editor,
+				service.authoring,
 				transactionRunner,
 				testActor(),
 				noteBuilder({ currentRevision: 1 })
@@ -42,7 +42,7 @@ describe('Note edits through the real catalog', () => {
 		const { service, notes, transactionRunner } = setup();
 		notes.notes = [noteBuilder()];
 		const saved = await saveNoteDraft(
-			service.editor,
+			service.authoring,
 			transactionRunner,
 			testActor(),
 			noteBuilder()
@@ -54,7 +54,7 @@ describe('Note edits through the real catalog', () => {
 		const { service, notes, transactionRunner } = setup();
 		notes.notes = [noteBuilder()];
 		const saved = await saveNoteDraft(
-			service.editor,
+			service.authoring,
 			transactionRunner,
 			testActor(),
 			noteBuilder({ title: 'Changed' })
@@ -68,7 +68,7 @@ describe('Note edits through the real catalog', () => {
 		notes.failNextConditionalUpdate = true;
 		await expect(
 			saveNoteDraft(
-				service.editor,
+				service.authoring,
 				transactionRunner,
 				testActor(),
 				noteBuilder({ title: 'Changed' })
@@ -82,7 +82,7 @@ describe('Note edits through the real catalog', () => {
 		const { service, notes, transactionRunner } = setup();
 		notes.notes = [noteBuilder({ position: 0 })];
 		const saved = await saveNoteDraft(
-			service.editor,
+			service.authoring,
 			transactionRunner,
 			testActor(),
 			noteBuilder({ position: 1 })
@@ -95,7 +95,7 @@ describe('Note edits through the real catalog', () => {
 		notes.notes = [noteBuilder({ kind: 'folder' })];
 		await expect(
 			saveNoteDraft(
-				service.editor,
+				service.authoring,
 				transactionRunner,
 				testActor(),
 				noteBuilder({ kind: 'folder', plainText: 'content' })

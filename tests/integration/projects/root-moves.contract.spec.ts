@@ -113,7 +113,7 @@ it('restores a note at the root when its previous folder is archived', async () 
 			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteTrash: catalog.trash,
+			noteLifecycle: catalog.lifecycle,
 			noteIndexer: new InMemoryNoteContent(owner),
 			transactionRunner
 		})

@@ -74,11 +74,8 @@ export const skillController = (
 			skillPinWriter: new SkillPins(projects, notes, skills),
 			skillUsageLister: library.usageLister,
 			skillUsageRecorder: library.usageRecorder,
-			noteEditor: catalog.editor,
-			revisionReader: catalog.revisionReader,
-			revisionRecorder: catalog.revisionRecorder,
-			attachmentRestorer: catalog.attachmentRestorer,
-			anchorRepairer: catalog.anchorRepairer,
+			noteAuthoring: catalog.authoring,
+			revisionReader: catalog.library,
 			noteLinkReconciler: content,
 			noteIndexer: content,
 			markdown: new NoteMarkdownCodec()

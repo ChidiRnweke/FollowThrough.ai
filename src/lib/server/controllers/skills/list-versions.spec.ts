@@ -67,7 +67,7 @@ const setup = async () => {
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
 			skillFinder: library.finder,
-			revisionReader: catalog.revisionReader
+			revisionReader: catalog.library
 		})
 	);
 	return { controller, notes, note };

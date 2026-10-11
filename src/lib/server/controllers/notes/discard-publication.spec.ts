@@ -70,13 +70,8 @@ it('discards against the publication that committed before it acquired the note'
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner: new InMemoryTransactionRunner([records, effects]),
-			noteReader: catalog.reader,
-			noteEditor: catalog.editor,
-			notePublisher: catalog.publisher,
-			revisionRecorder: catalog.revisionRecorder,
-			revisionReader: catalog.revisionReader,
-			attachmentRestorer: catalog.attachmentRestorer,
-			anchorRepairer: catalog.anchorRepairer,
+			noteLibrary: catalog.library,
+			noteAuthoring: catalog.authoring,
 			noteLinkReconciler: effects,
 			noteIndexer: effects
 		})

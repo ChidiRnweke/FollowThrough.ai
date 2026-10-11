@@ -48,10 +48,9 @@ const setup = () => {
 			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteReader: content,
-			noteEditor: content,
+			noteLibrary: content,
+			noteAuthoring: content,
 			noteLinkReconciler: content,
-			revisionRecorder: content,
 			noteIndexer: content,
 			transactionRunner: new InMemoryTransactionRunner([content])
 		})

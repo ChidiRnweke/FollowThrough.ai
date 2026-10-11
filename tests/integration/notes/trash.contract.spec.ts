@@ -67,7 +67,7 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteTrash: catalog.trash,
+			noteLifecycle: catalog.lifecycle,
 			noteIndexer: new InMemoryNoteContent(owner),
 			transactionRunner
 		})
@@ -134,7 +134,7 @@ it('archives the authoritative note after a concurrent note edit commits', async
 			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteTrash: catalog.trash,
+			noteLifecycle: catalog.lifecycle,
 			noteIndexer: new InMemoryNoteContent(owner),
 			transactionRunner
 		})

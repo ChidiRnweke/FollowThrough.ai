@@ -54,8 +54,7 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
-			notePublisher: catalog.publisher,
-			revisionRecorder: catalog.revisionRecorder
+			noteAuthoring: catalog.authoring
 		})
 	);
 	const created = await skills.create({ projectId: project.id, name: 'Review' });

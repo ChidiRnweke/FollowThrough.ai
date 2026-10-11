@@ -33,7 +33,7 @@ it('returns the newly provisioned Inbox together with its skills on the first sh
 				state.notes,
 				new InMemoryAnchorRepository(testActor()),
 				state.projects
-			).treeReader,
+			).library,
 			suggestionExpirer: suggestions,
 			suggestionLister: suggestions
 		})

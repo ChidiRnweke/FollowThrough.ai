@@ -52,15 +52,9 @@ const setup = () => {
 			noteEditingRules: new NoteEditingRulesService(),
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteReader: content,
-			noteTreeReader: content,
-			noteEditor: content,
+			noteLibrary: content,
+			noteAuthoring: content,
 			noteLinkReconciler: content,
-			notePublisher: content,
-			revisionRecorder: content,
-			revisionReader: content,
-			attachmentRestorer: content,
-			anchorRepairer: content,
 			noteIndexer: content,
 			transactionRunner: new InMemoryTransactionRunner([content])
 		})

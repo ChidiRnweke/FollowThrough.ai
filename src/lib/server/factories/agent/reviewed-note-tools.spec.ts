@@ -259,9 +259,8 @@ describe('A note change that fails while it is being prepared', () => {
 					},
 					write: noteMarkdown.write
 				},
-				noteReader: content,
-				noteEditor: content,
-				anchorRepairer: content,
+				noteLibrary: content,
+				noteAuthoring: content,
 				noteLinkReconciler: content,
 				noteIndexer: content,
 				transactionRunner: new InMemoryTransactionRunner([content])

@@ -81,8 +81,7 @@ export const treeControllers = (
 				notePresentation: new NotePresentationService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				noteCreation: notes.creator,
-				noteTrash: notes.trash,
-				noteDeletion: notes.deletion,
+				noteLifecycle: notes.lifecycle,
 				noteIndexer: new InMemoryNoteContent(actor),
 				transactionRunner
 			})

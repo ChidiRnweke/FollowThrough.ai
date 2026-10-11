@@ -59,7 +59,7 @@ const setup = async (suffix: string) => {
 		provenance: notes.provenanceRepository
 	});
 	const text = 'Service A calls Service B';
-	const note = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
+	const note = await saveNoteDraft(notes.services.authoring, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
@@ -83,7 +83,7 @@ const setup = async (suffix: string) => {
 		...fixture,
 		generation: {
 			...fixture.generation,
-			contextNotes: notes.services.reader,
+			contextNotes: notes.services.library,
 			conversations: new ConversationArchive(seeded.owner, conversations),
 			conversationMessages: new ConversationArchive(seeded.owner, conversations),
 			runs: new AgentRunLedger(seeded.owner, runs),

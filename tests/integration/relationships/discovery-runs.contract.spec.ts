@@ -63,7 +63,7 @@ const setup = async (suffix: string) => {
 		provenance: notes.provenanceRepository
 	});
 	const text = 'Use OAuth';
-	const note = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
+	const note = await saveNoteDraft(notes.services.authoring, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
@@ -96,14 +96,19 @@ const setup = async (suffix: string) => {
 		projectId: seeded.project.id,
 		title: 'Earlier decision'
 	});
-	const savedTarget = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
-		...target,
-		plainText: targetText,
-		document: {
-			type: 'doc',
-			content: [{ type: 'paragraph', content: [{ type: 'text', text: targetText }] }]
+	const savedTarget = await saveNoteDraft(
+		notes.services.authoring,
+		transactionRunner,
+		seeded.owner,
+		{
+			...target,
+			plainText: targetText,
+			document: {
+				type: 'doc',
+				content: [{ type: 'paragraph', content: [{ type: 'text', text: targetText }] }]
+			}
 		}
-	});
+	);
 	const vector = Array.from({ length: 3072 }, (_, index) => (index === 0 ? 1 : 0));
 	const index = new KnowledgeIndexRecords(seeded.owner, database);
 	await index.replaceForNote(target.id, [

@@ -75,8 +75,8 @@ const setup = () => {
 			suggestionPresentation: new SuggestionPresentationService(),
 			syncMutations: mutations,
 			syncRetry: 'never',
-			noteReader: content,
-			noteEditor: content,
+			noteLibrary: content,
+			noteAuthoring: content,
 			noteIndexer: content,
 			transactionRunner
 		})
