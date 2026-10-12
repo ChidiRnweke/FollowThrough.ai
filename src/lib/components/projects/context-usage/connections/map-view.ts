@@ -51,7 +51,7 @@ export interface MapView {
 }
 
 /** How many partners each item keeps on a dense map. */
-export const STRONGEST_PER_ITEM = 3;
+const STRONGEST_PER_ITEM = 3;
 
 /**
  * How much two items belong together, not how often they happen to meet: shared chats over the
