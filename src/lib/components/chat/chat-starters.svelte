@@ -7,15 +7,15 @@
 	let {
 		hasNote,
 		hasProject,
+		prompts: offered,
 		onpick
 	}: {
 		hasNote: boolean;
 		hasProject: boolean;
+		/** Questions handed over by an invocation point; they replace the surface's starters. */
+		prompts?: readonly string[];
 		onpick: (prompt: string) => void;
 	} = $props();
-
-	const surface = $derived(starterSurface({ hasNote, hasProject, pathname: page.url.pathname }));
-	const prompts = $derived(chatStarters(surface));
 
 	// Deliberately the same three icons the capability row above counts, so a row
 	// and a stat that mean the same thing look the same.
@@ -24,6 +24,16 @@
 		todos: Icon.Todos,
 		memory: Icon.Memory
 	};
+
+	const surface = $derived(starterSurface({ hasNote, hasProject, pathname: page.url.pathname }));
+	const prompts = $derived(
+		offered
+			? offered.map((prompt) => ({ prompt, icon: Icon.Chat }))
+			: chatStarters(surface).map((starter) => ({
+					prompt: starter.prompt,
+					icon: icons[starter.target]
+				}))
+	);
 </script>
 
 <!--
@@ -49,20 +59,22 @@
 	that true.
 -->
 <div class="flex flex-col gap-item">
-	<p class="px-2 text-sm font-semibold">Ask it to do something</p>
+	<p class="px-2 text-sm font-semibold">{offered ? 'Or ask' : 'Ask it to do something'}</p>
 	<ul class="flex flex-col gap-bind">
 		{#each prompts as starter (starter.prompt)}
 			<li>
 				<AgentAction
 					variant="row"
-					action={{ label: starter.prompt, prompt: starter.prompt, icon: icons[starter.target] }}
+					action={{ label: starter.prompt, prompt: starter.prompt, icon: starter.icon }}
 					onclick={() => onpick(starter.prompt)}
 				/>
 			</li>
 		{/each}
 	</ul>
-	<!-- The agent also starts from a selection, which nothing in an empty chat shows. -->
-	<p class="px-2 text-xs text-muted-foreground">
-		Or select text in a note and choose Ask about this.
-	</p>
+	{#if !offered}
+		<!-- The agent also starts from a selection, which nothing in an empty chat shows. -->
+		<p class="px-2 text-xs text-muted-foreground">
+			Or select text in a note and choose Ask about this.
+		</p>
+	{/if}
 </div>

@@ -90,7 +90,7 @@
 			</Table.Row>
 		</Table.Header>
 		<Table.Body>
-			{#each rows as row (`${row.a}${row.b}${row.linked}`)}
+			{#each rows as row (`${row.a}|${row.b}|${row.linked}`)}
 				<Table.Row>
 					<Table.Cell class="truncate">
 						<Button

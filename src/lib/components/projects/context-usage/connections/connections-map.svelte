@@ -15,7 +15,7 @@
 	import ConnectionsPanel, { type Mismatch } from './connections-panel.svelte';
 	import ConnectionsTable from './connections-table.svelte';
 	import { layoutGraph, type LayoutNode } from './graph-layout';
-	import { MAP_CEILING, STRONGEST_PER_ITEM, mapView, type EdgeMode } from './map-view';
+	import { MAP_CEILING, mapView, type EdgeMode } from './map-view';
 
 	let {
 		report,
@@ -33,7 +33,6 @@
 	let selected = $state<ItemKey | undefined>(undefined);
 	let mismatch = $state<Mismatch | undefined>(undefined);
 	let ego = $state(false);
-	let allPairs = $state(false);
 
 	const byKey = $derived(new Map(report.nodes.map((node) => [node.key, node])));
 	/** The pairs of the list open in the panel, kept in colour on the map. */
@@ -54,13 +53,10 @@
 	const egoKey = $derived(ego ? selected : undefined);
 	// Laid out once from every pair and link that could be drawn, so switching between Together,
 	// In order and Linked changes the lines, never where the items sit.
-	// "Show every pair" draws more lines on the same picture: the layout keeps the strongest pairs.
 	const resting = $derived(
-		mapView(report, { mode: 'together', min, showLinked: true, ego: egoKey, allPairs: false })
+		mapView(report, { mode: 'together', min, showLinked: true, ego: egoKey })
 	);
-	const view = $derived(
-		mapView(report, { mode, min, showLinked, ego: egoKey, selected, allPairs })
-	);
+	const view = $derived(mapView(report, { mode, min, showLinked, ego: egoKey, selected }));
 
 	const maxTimes = $derived(
 		Math.max(1, ...report.nodes.map((node) => (node.use.kind === 'read' ? node.use.times : 0)))
@@ -83,8 +79,7 @@
 		mapView(report, {
 			mode: 'together',
 			min: report.defaultThreshold,
-			showLinked: true,
-			allPairs: false
+			showLinked: true
 		}).placed.length > MAP_CEILING
 			? 'table'
 			: 'map'
@@ -158,33 +153,6 @@
 				</div>
 			</div>
 
-			<!-- Room for two caption lines whether or not they show, so the map stays where it is. -->
-			<p class="min-h-8 text-xs text-muted-foreground">
-				{#if mode !== 'linked' && (view.belowThreshold > 0 || view.beyondStrongest > 0 || allPairs)}
-					{#if show === 'map' && view.beyondStrongest > 0}
-						Each item shows its {STRONGEST_PER_ITEM} strongest pairs · {view.beyondStrongest} more
-						{view.beyondStrongest === 1 ? 'pair' : 'pairs'} hidden.
-						<Button
-							variant="link"
-							size="xs"
-							class="h-auto p-0 text-xs text-brand"
-							onclick={() => (allPairs = true)}>Show every pair</Button
-						>
-					{:else if show === 'map' && allPairs}
-						Showing every pair.
-						<Button
-							variant="link"
-							size="xs"
-							class="h-auto p-0 text-xs text-brand"
-							onclick={() => (allPairs = false)}>Only the strongest</Button
-						>
-					{/if}
-					{#if view.belowThreshold > 0}
-						<br />Pairs read together in fewer than {chats(min)} are hidden ({view.belowThreshold}).
-					{/if}
-				{/if}
-			</p>
-
 			{#if show === 'table'}
 				{#if resting.placed.length > MAP_CEILING}
 					<p class="text-sm text-muted-foreground">
@@ -237,7 +205,11 @@
 							<span class="h-px w-4 bg-muted-foreground"></span>Linked
 						</li>
 					{/if}
-					<li>Size: times read{mode === 'linked' ? '' : ' · line: shared chats'}</li>
+					<li class="flex items-center gap-1.5">
+						<span class="size-1.5 rounded-full border border-muted-foreground"></span>few
+						<span class="size-3 rounded-full border-[1.5px] border-muted-foreground"></span>many
+						reads
+					</li>
 				</ul>
 				{#each ambient as node (node.key)}
 					<p>
@@ -250,17 +222,6 @@
 						is read in {node.chats} of {report.chats} chats, so its pairs show only when it is selected.
 					</p>
 				{/each}
-				{#if show === 'map' && mode !== 'linked' && view.alone.length > 0}
-					<p>
-						Read alone at this threshold · {view.alone.length}:
-						{#each view.alone as node, index (node.key)}<Button
-								variant="link"
-								size="xs"
-								class="h-auto p-0 text-xs font-normal text-foreground"
-								onclick={() => select(node.key)}>{node.item.title}</Button
-							>{index < view.alone.length - 1 ? ', ' : ''}{/each}
-					</p>
-				{/if}
 			</div>
 		</div>
 

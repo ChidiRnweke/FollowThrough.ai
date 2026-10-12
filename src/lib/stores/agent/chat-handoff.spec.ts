@@ -32,12 +32,13 @@ describe('Chat handoff lifecycle', () => {
 		expect(consumeChatHandoff(storage)).toEqual(handoff);
 	});
 
-	it('carries a pinned connections chip across the navigation', () => {
+	it('carries a pinned connections chip and its other questions across the navigation', () => {
 		const storage = new MemoryStorage();
 		const handoff: ChatHandoff = {
 			prompt: 'Which notes are always read together?',
 			projectId: testProjectId(),
-			chips: [{ kind: 'connections', id: testProjectId(), name: 'Connections · Launch' }]
+			chips: [{ kind: 'connections', id: testProjectId(), name: 'Connections · Launch' }],
+			starters: ['Which items are only ever read alone?']
 		};
 		stageChatHandoff(handoff, storage);
 		expect(consumeChatHandoff(storage)).toEqual(handoff);

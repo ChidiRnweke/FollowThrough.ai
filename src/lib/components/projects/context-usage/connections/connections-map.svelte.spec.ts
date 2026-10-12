@@ -45,13 +45,15 @@ const report: ProjectConnectionsReport = {
 	defaultThreshold: 2
 };
 
-it('starts at the report threshold and says how many weaker pairs it hides', async () => {
+it('keys node size in the legend', async () => {
 	const screen = await render(ConnectionsMap, {
 		report,
 		projectId: testProjectId(),
 		projectName: 'Launch'
 	});
-	await expect.element(screen.getByText(/fewer than 2 chats are hidden \(1\)/)).toBeVisible();
+	await expect
+		.element(screen.getByRole('list', { name: 'Legend' }))
+		.toHaveTextContent(/few\s*many\s*reads/);
 });
 
 it('names the item read in most chats, whose pairs wait for a selection', async () => {
@@ -91,4 +93,29 @@ it('lists the pairs as a table with the counts the map draws', async () => {
 	});
 	(screen.getByRole('radio', { name: 'Table' }).element() as HTMLElement).click();
 	await expect.element(screen.getByRole('row', { name: 'Note 1 Note 2 4 4 — —' })).toBeVisible();
+});
+
+it('lists links never read together in the table', async () => {
+	const screen = await render(ConnectionsMap, {
+		report: {
+			...report,
+			links: [
+				{ from: key(1), to: key(3), kind: 'elaborates' },
+				{ from: key(3), to: key(1), kind: 'elaborates' }
+			],
+			mismatches: {
+				linkedNeverTogether: [
+					{ from: key(1), to: key(3), kind: 'elaborates' },
+					{ from: key(3), to: key(1), kind: 'elaborates' }
+				],
+				togetherNotLinked: []
+			}
+		},
+		projectId: testProjectId(),
+		projectName: 'Launch'
+	});
+	(screen.getByRole('radio', { name: 'Table' }).element() as HTMLElement).click();
+	await expect
+		.element(screen.getByRole('row', { name: 'Note 3 Note 1 — — — elaborates' }))
+		.toBeVisible();
 });

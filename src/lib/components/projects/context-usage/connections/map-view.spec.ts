@@ -49,28 +49,25 @@ const report: ProjectConnectionsReport = {
 };
 
 describe('map view', () => {
-	it('hides pairs below the threshold and says how many', () => {
-		const view = mapView(report, { mode: 'together', min: 2, showLinked: false, allPairs: false });
+	it('hides pairs below the threshold', () => {
+		const view = mapView(report, { mode: 'together', min: 2, showLinked: false });
 		expect(view.edges).toEqual([
 			{ kind: 'together', a: key(1), b: key(2), chats: 4 },
 			{ kind: 'together', a: key(2), b: key(3), chats: 2 }
 		]);
-		expect(view.belowThreshold).toBe(2);
 	});
 
 	it("draws an ambient item's pairs only while it is selected, and never lays out on them", () => {
 		const resting = mapView(report, {
 			mode: 'together',
 			min: 1,
-			showLinked: false,
-			allPairs: false
+			showLinked: false
 		});
 		const selected = mapView(report, {
 			mode: 'together',
 			min: 1,
 			showLinked: false,
-			selected: skill.key,
-			allPairs: false
+			selected: skill.key
 		});
 		expect(resting.edges.some((edge) => edge.kind === 'together' && edge.a === skill.key)).toBe(
 			false
@@ -81,9 +78,8 @@ describe('map view', () => {
 		expect(selected.layoutEdges).toEqual(resting.layoutEdges);
 	});
 
-	it('lists a read item with no drawn pair beneath the map instead of placing it', () => {
-		const view = mapView(report, { mode: 'together', min: 2, showLinked: false, allPairs: false });
-		expect(view.alone.map((node) => node.key)).toEqual([key(4)]);
+	it('does not place a read item with no drawn pair', () => {
+		const view = mapView(report, { mode: 'together', min: 2, showLinked: false });
 		expect(view.placed.map((node) => node.key)).not.toContain(key(4));
 	});
 
@@ -91,14 +87,12 @@ describe('map view', () => {
 		const without = mapView(report, {
 			mode: 'together',
 			min: 1,
-			showLinked: false,
-			allPairs: false
+			showLinked: false
 		});
 		const withLinks = mapView(report, {
 			mode: 'together',
 			min: 1,
-			showLinked: true,
-			allPairs: false
+			showLinked: true
 		});
 		expect(without.placed.map((node) => node.key)).not.toContain(key(5));
 		expect(withLinks.placed.map((node) => node.key)).toContain(key(5));
@@ -109,8 +103,7 @@ describe('map view', () => {
 			mode: 'together',
 			min: 1,
 			showLinked: false,
-			ego: key(2),
-			allPairs: false
+			ego: key(2)
 		});
 		expect(view.placed.map((node) => node.key).sort()).toEqual([key(1), key(2), key(3)].sort());
 	});

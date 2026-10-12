@@ -44,33 +44,60 @@ const renderPanel = (onask: (request: ChatHandoff) => void, selected?: Connectio
 		onask
 	});
 
-it('hands a starter question to the chat with this map pinned', async () => {
+it('hands one question to the chat with this map pinned and the rest as starters', async () => {
 	const { asked, onask } = recorder();
 	const screen = await renderPanel(onask);
-	await screen.getByRole('button', { name: 'Which notes are always read together?' }).click();
+	await screen.getByRole('button', { name: 'Ask about connections' }).click();
 	expect(asked).toEqual([
 		{
 			prompt: 'Which notes are always read together?',
 			projectId: testProjectId(),
-			chips: [{ kind: 'connections', id: testProjectId(), name: 'Connections · Launch' }]
+			chips: [{ kind: 'connections', id: testProjectId(), name: 'Connections · Launch' }],
+			starters: [
+				'What does a skill make the agent read next?',
+				'Which items are only ever read alone?'
+			]
 		}
 	]);
 });
 
-it('offers a question about the selected item first', async () => {
-	const screen = await renderPanel(() => {}, brief);
-	const section = screen.getByRole('region', { name: 'Ask the agent' });
-	await expect
-		.element(section.getByRole('button').first())
-		.toHaveTextContent('What is Brief read with, and why?');
+it('loads the question about the selected item and offers the general ones', async () => {
+	const { asked, onask } = recorder();
+	const screen = await renderPanel(onask, brief);
+	await screen.getByRole('button', { name: 'Ask about connections' }).click();
+	expect(asked.map((request) => [request.prompt, request.starters?.length])).toEqual([
+		['What is Brief read with, and why?', 3]
+	]);
 });
 
-it('hands a typed question to the chat with this map pinned', async () => {
-	const { asked, onask } = recorder();
-	const screen = await renderPanel(onask);
-	await screen.getByRole('textbox', { name: 'Your question' }).fill('Why is Brief read so often?');
-	await screen.getByRole('button', { name: 'Ask', exact: true }).click();
-	expect(asked.map((request) => [request.prompt, request.chips?.[0]?.kind])).toEqual([
-		['Why is Brief read so often?', 'connections']
-	]);
+it('has no question box of its own', async () => {
+	const screen = await renderPanel(() => {});
+	expect(screen.getByRole('textbox').elements()).toHaveLength(0);
+});
+
+it('lists a partner linked both ways once per direction', async () => {
+	const plan: ConnectionNode = {
+		key: `note:${testNoteId(2)}`,
+		item: { kind: 'note', id: testNoteId(2), title: 'Plan' },
+		use: { kind: 'never' },
+		chats: 0
+	};
+	const screen = await render(ConnectionsPanel, {
+		report: {
+			...report,
+			nodes: [brief, plan],
+			links: [
+				{ from: brief.key, to: plan.key, kind: 'elaborates' },
+				{ from: plan.key, to: brief.key, kind: 'elaborates' }
+			]
+		},
+		projectId: testProjectId(),
+		projectName: 'Launch',
+		selected: brief,
+		mismatch: undefined,
+		onselect: () => {},
+		onmismatch: () => {},
+		onask: () => {}
+	});
+	await expect.element(screen.getByText('elaborates (to this)')).toBeVisible();
 });

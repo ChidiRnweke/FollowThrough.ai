@@ -13,6 +13,8 @@ export interface ChatHandoff {
 	readonly requestedSkillNames?: readonly string[];
 	/** Resources pinned to the composer as chips, exactly as if the user had `@`-mentioned them. */
 	readonly chips?: readonly ContextResourceChip[];
+	/** Other questions the invocation point offers; the empty chat shows them in place of its own. */
+	readonly starters?: readonly string[];
 }
 
 const chatHandoffSchema = z.object({
@@ -29,7 +31,8 @@ const chatHandoffSchema = z.object({
 		})
 		.optional(),
 	requestedSkillNames: z.array(z.string().min(1)).optional(),
-	chips: z.array(contextResourceChipSchema).optional()
+	chips: z.array(contextResourceChipSchema).optional(),
+	starters: z.array(z.string().min(1)).optional()
 });
 
 const parseChatHandoff = (value: string): ChatHandoff => {
@@ -50,7 +53,8 @@ const parseChatHandoff = (value: string): ChatHandoff => {
 				}
 			: {}),
 		...(parsed.requestedSkillNames ? { requestedSkillNames: parsed.requestedSkillNames } : {}),
-		...(parsed.chips ? { chips: parsed.chips } : {})
+		...(parsed.chips ? { chips: parsed.chips } : {}),
+		...(parsed.starters ? { starters: parsed.starters } : {})
 	};
 };
 
