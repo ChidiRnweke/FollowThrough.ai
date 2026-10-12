@@ -181,50 +181,59 @@
 						{ego ? 'Show every item' : `Only ${selectedNode.item.title} and what it is read with`}
 					</Button>
 				{/if}
-				<ConnectionsGraph
-					nodes={view.placed}
-					{layoutNodes}
-					edges={view.edges}
-					{layout}
-					{selected}
-					{emphasis}
-					onselect={select}
-				/>
+				<!-- The legend sits inside the map's top corners, over a band the layout keeps clear. -->
+				<div class="relative">
+					<ConnectionsGraph
+						nodes={view.placed}
+						{layoutNodes}
+						edges={view.edges}
+						{layout}
+						{selected}
+						{emphasis}
+						onselect={select}
+					/>
+					<div
+						class="pointer-events-none absolute inset-x-3 top-2 flex items-start justify-between gap-4 text-xs text-muted-foreground"
+					>
+						<ul class="flex flex-wrap gap-x-3 gap-y-1" aria-label="Legend">
+							<li class="flex items-center gap-1.5">
+								<span class="size-2.5 rounded-full bg-brand"></span>Note
+							</li>
+							<li class="flex items-center gap-1.5">
+								<span class="size-2.5 rounded-xs bg-chart-2"></span>File
+							</li>
+							<li class="flex items-center gap-1.5">
+								<span class="size-2.5 rotate-45 rounded-xs bg-chart-3"></span>Skill
+							</li>
+							<li class="flex items-center gap-1.5">
+								<span class="size-2.5 rounded-full border-[1.5px] border-muted-foreground"
+								></span>Never read
+							</li>
+							{#if mode !== 'linked'}
+								<li class="flex items-center gap-1.5">
+									<span class="h-0.5 w-4 bg-brand"></span>{mode === 'order'
+										? 'Read first → read next'
+										: 'Read together'}
+								</li>
+							{/if}
+							{#if mode === 'linked' || showLinked}
+								<li class="flex items-center gap-1.5">
+									<span class="h-px w-4 bg-muted-foreground"></span>Linked
+								</li>
+							{/if}
+						</ul>
+						<ul class="flex shrink-0 items-center" aria-label="Size">
+							<li class="flex items-center gap-1.5">
+								<span class="size-1.5 rounded-full border border-muted-foreground"></span>few
+								<span class="size-3 rounded-full border-[1.5px] border-muted-foreground"></span>many
+								reads
+							</li>
+						</ul>
+					</div>
+				</div>
 			{/if}
 
 			<div class="flex flex-col gap-1.5 text-xs text-muted-foreground">
-				<ul class="flex flex-wrap gap-x-4 gap-y-1" aria-label="Legend">
-					<li class="flex items-center gap-1.5">
-						<span class="size-2.5 rounded-full bg-brand"></span>Note
-					</li>
-					<li class="flex items-center gap-1.5">
-						<span class="size-2.5 rounded-xs bg-chart-2"></span>File
-					</li>
-					<li class="flex items-center gap-1.5">
-						<span class="size-2.5 rotate-45 rounded-xs bg-chart-3"></span>Skill
-					</li>
-					<li class="flex items-center gap-1.5">
-						<span class="size-2.5 rounded-full border-[1.5px] border-muted-foreground"></span>Never
-						read
-					</li>
-					{#if mode !== 'linked'}
-						<li class="flex items-center gap-1.5">
-							<span class="h-0.5 w-4 bg-brand"></span>{mode === 'order'
-								? 'Read first → read next'
-								: 'Read together'}
-						</li>
-					{/if}
-					{#if mode === 'linked' || showLinked}
-						<li class="flex items-center gap-1.5">
-							<span class="h-px w-4 bg-muted-foreground"></span>Linked
-						</li>
-					{/if}
-					<li class="flex items-center gap-1.5">
-						<span class="size-1.5 rounded-full border border-muted-foreground"></span>few
-						<span class="size-3 rounded-full border-[1.5px] border-muted-foreground"></span>many
-						reads
-					</li>
-				</ul>
 				{#each ambient as node (node.key)}
 					<p>
 						<Button

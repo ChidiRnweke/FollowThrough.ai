@@ -13,6 +13,8 @@ import {
 export const GRAPH_WIDTH = 720;
 export const GRAPH_HEIGHT = 520;
 const MARGIN = 28;
+/** Kept clear at the top for the legend the map draws over its corners. */
+const LEGEND_BAND = 26;
 
 export interface LayoutNode {
 	readonly key: string;
@@ -261,11 +263,12 @@ export function layoutGraph(
 	];
 	const scale = Math.min(
 		(GRAPH_WIDTH - 2 * MARGIN) / Math.max(1, maxX - minX),
-		(GRAPH_HEIGHT - 2 * MARGIN - LABEL_HEIGHT) / Math.max(1, maxY - minY),
+		(GRAPH_HEIGHT - 2 * MARGIN - LABEL_HEIGHT - LEGEND_BAND) / Math.max(1, maxY - minY),
 		1.6
 	);
 	const offsetX = (GRAPH_WIDTH - (maxX - minX) * scale) / 2;
-	const offsetY = (GRAPH_HEIGHT - LABEL_HEIGHT - (maxY - minY) * scale) / 2;
+	const offsetY =
+		LEGEND_BAND + (GRAPH_HEIGHT - LEGEND_BAND - LABEL_HEIGHT - (maxY - minY) * scale) / 2;
 	const placed = new Map<string, PlacedNode>(
 		simNodes.map((node) => [
 			node.key,

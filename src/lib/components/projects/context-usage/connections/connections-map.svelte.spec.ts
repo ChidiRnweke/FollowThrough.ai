@@ -52,7 +52,7 @@ it('keys node size in the legend', async () => {
 		projectName: 'Launch'
 	});
 	await expect
-		.element(screen.getByRole('list', { name: 'Legend' }))
+		.element(screen.getByRole('list', { name: 'Size' }))
 		.toHaveTextContent(/few\s*many\s*reads/);
 });
 
