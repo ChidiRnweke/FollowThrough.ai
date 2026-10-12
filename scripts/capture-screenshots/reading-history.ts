@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Sql } from 'postgres';
 import { journalRun, type JournalledCall, type JsonObject } from './journal.ts';
 
@@ -214,6 +215,7 @@ export const seedReadingHistory = async (sql: Sql, scope: ReadingHistoryScope): 
 				? (3 + index) * 60 * 60 * 1000
 				: (chat.weeksAgo * 7 + (index % 5)) * DAY + (index % 7) * 60 * 60 * 1000;
 		await journalRun(sql, {
+			runId: randomUUID(),
 			userId: scope.userId,
 			projectId: scope.projectId,
 			noteId: null,
@@ -221,7 +223,8 @@ export const seedReadingHistory = async (sql: Sql, scope: ReadingHistoryScope): 
 			prompt: chat.title,
 			startedAt: new Date(now - offset),
 			model: scope.model,
-			speech: null,
+			opening: null,
+			ending: { kind: 'silent' },
 			calls: await Promise.all(chat.calls.map((call) => callFor(scope, call)))
 		});
 	}

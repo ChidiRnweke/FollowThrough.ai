@@ -1,6 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import type { ScreenshotId } from '../../src/lib/components/marketing/screenshots.ts';
 import type { ShowcaseIds } from './showcase.ts';
+import type { WalkthroughMoment } from './walkthrough.ts';
 
 /**
  * How each product screenshot is reached. Keyed by every `ScreenshotId`, so an id without a
@@ -13,6 +14,8 @@ export interface Scene {
 	readonly viewport: { readonly width: number; readonly height: number };
 	/** Bring the page into the captured state and wait until it is settled. */
 	readonly ready: (page: Page, ids: ShowcaseIds) => Promise<void>;
+	/** The walkthrough moment the scene shows. The walkthrough advances to it first. */
+	readonly moment?: WalkthroughMoment;
 	/** Where the pointer rests for the shot: out of the way, or where `ready` left it. */
 	readonly pointer?: 'stay';
 	/** The region to capture, or the whole viewport when absent. */
@@ -57,18 +60,37 @@ const selectOpeningWords = async (page: Page): Promise<void> => {
 	await page.getByRole('button', { name: 'Ask about this' }).waitFor();
 };
 
-/** Open the agent panel beside the note and show the seeded conversation. */
-const openConversation = async (page: Page, ids: ShowcaseIds): Promise<void> => {
+/** Open the agent panel beside the open note and show one stored conversation in it. */
+const openChat = async (page: Page, title: string, until: string): Promise<void> => {
 	await noteBody(page).waitFor();
 	await page.getByRole('button', { name: 'Toggle chat panel' }).click();
 	const panel = page.getByRole('complementary', { name: 'Agent' });
 	await panel.waitFor();
-	const closing = panel.getByText(ids.closingLine);
-	if (!(await closing.isVisible())) {
-		await panel.getByRole('button', { name: ids.conversationTitle }).first().click();
+	const shown = panel.getByText(until).first();
+	// Rows seeded just before the page loaded can still be arriving through sync, and their
+	// arrival resets the panel to its start page. Open the chat until it stays open.
+	for (let attempt = 0; attempt < 5; attempt += 1) {
+		if (!(await shown.isVisible())) {
+			const row = panel.getByText(title.slice(0, 24)).first();
+			// The panel may have opened another conversation; its start page lists them all.
+			if (!(await row.isVisible())) await panel.getByRole('button', { name: 'New chat' }).click();
+			await row.click();
+		}
+		await shown.waitFor();
+		await page.waitForTimeout(3000);
+		if (await shown.isVisible()) break;
 	}
-	await closing.waitFor();
+	await shown.waitFor();
+	// A long turn opens partway down; show its end, as a reader who just ran it would see.
+	const latest = panel.getByRole('button', { name: 'Jump to latest' });
+	if (await latest.isVisible()) {
+		await latest.click();
+		await latest.waitFor({ state: 'hidden' });
+	}
 };
+
+const openConversation = (page: Page, ids: ShowcaseIds): Promise<void> =>
+	openChat(page, ids.conversationTitle, ids.closingLine);
 
 /** The Connections tab, once its map has laid out. */
 const openConnections = async (page: Page): Promise<void> => {
@@ -205,6 +227,72 @@ export const scenes: Readonly<Record<ScreenshotId, Scene>> = {
 					document.querySelector<HTMLTextAreaElement>('#chat-composer')?.value.includes(text),
 				question
 			);
+		}
+	},
+	'walkthrough-01-context': {
+		path: (ids) => `/projects/${ids.walkthrough.ids.projectId}`,
+		viewport: docked,
+		moment: 1,
+		ready: async (page) => {
+			await page.getByText('Planning notes').first().waitFor();
+			await page.getByText('Attachments').first().waitFor();
+		}
+	},
+	'walkthrough-02-agent-acts': {
+		path: (ids) => `/notes/${ids.walkthrough.ids.releasePlanNoteId()}`,
+		viewport: docked,
+		moment: 2,
+		ready: (page) => openChat(page, 'Read the launch brief', 'seven launch tasks are on the board')
+	},
+	'walkthrough-03-extract-promise': {
+		path: (ids) => `/notes/${ids.walkthrough.ids.releasePlanNoteId()}`,
+		viewport: docked,
+		moment: 3,
+		ready: async (page) => {
+			const promise = noteBody(page).getByText('I will verify every redirect on staging');
+			await promise.waitFor();
+			await promise.scrollIntoViewIfNeeded();
+			await page.getByRole('button', { name: 'Accept' }).first().waitFor();
+			// Select the sentence, as the reader did before choosing Extract promises. The editor
+			// follows the document selection, so a range over the text is a real selection.
+			await promise.evaluate((element) => {
+				const range = document.createRange();
+				range.selectNodeContents(element);
+				const selection = window.getSelection();
+				selection?.removeAllRanges();
+				selection?.addRange(range);
+			});
+			await page
+				.locator('[data-selection-menu]')
+				.getByRole('button', { name: 'Extract promises' })
+				.waitFor();
+		},
+		pointer: 'stay'
+	},
+	'walkthrough-04-widget-proposal': {
+		path: (ids) => `/notes/${ids.walkthrough.ids.releasePlanNoteId()}`,
+		viewport: docked,
+		moment: 4,
+		ready: async (page) => {
+			await openChat(page, 'Build an interactive', 'Stage durations (days)');
+			const approve = page
+				.getByRole('complementary', { name: 'Agent' })
+				.getByRole('button', { name: 'Approve' })
+				.first();
+			await approve.waitFor();
+			await approve.scrollIntoViewIfNeeded();
+			await page.getByRole('button', { name: 'Jump to latest' }).waitFor({ state: 'hidden' });
+		}
+	},
+	'walkthrough-05-widget-result': {
+		path: (ids) => `/notes/${ids.walkthrough.ids.releasePlanNoteId()}`,
+		viewport: docked,
+		moment: 5,
+		ready: async (page) => {
+			const simulator = noteBody(page).getByText('Critical-Path Simulator').first();
+			await simulator.waitFor();
+			await simulator.scrollIntoViewIfNeeded();
+			await noteBody(page).getByText('Content stream').first().waitFor();
 		}
 	}
 };

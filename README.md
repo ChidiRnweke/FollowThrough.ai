@@ -40,13 +40,13 @@ first todos. They belong to the project, not to one conversation.
 </picture>
 
 From one request, the agent wrote the release plan, added seven todos with owners and dates, and
-exported a Word brief. Every action is listed, including the one that failed before it retried.
+exported a Word brief. Every action is listed, with a link to what it made.
 
 ### 3. Keep working yourself
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="static/product-screenshots/walkthrough-03-extract-promise-dark.jpg" />
-  <img src="static/product-screenshots/walkthrough-03-extract-promise-light.jpg" alt="A highlighted sentence, 'I will verify every redirect on staging before Thursday', with the selection toolbar above it and a proposed todo below it, due 15 October, with Accept and Dismiss buttons." />
+  <img src="static/product-screenshots/walkthrough-03-extract-promise-light.jpg" alt="A highlighted sentence, 'I will verify every redirect on staging before Thursday', with the selection toolbar above it and a proposed todo below it with its due date, with Accept and Dismiss buttons." />
 </picture>
 
 It is your note too. Here QA went from 3 to 5 days by hand, and a new line made a promise.

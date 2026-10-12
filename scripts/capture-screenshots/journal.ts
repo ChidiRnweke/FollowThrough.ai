@@ -12,8 +12,22 @@ export interface JournalledCall {
 	readonly output: Json;
 }
 
-/** One finished agent turn: the prompt, what it called, and what it said around the calls. */
+/**
+ * How the turn ends. A turn that only read says nothing; a finished turn answers; a turn in
+ * approval mode can stop on a change it wants to make, which waits for the user.
+ */
+export type TurnEnding =
+	| { readonly kind: 'silent' }
+	| { readonly kind: 'answered'; readonly answer: string }
+	| {
+			readonly kind: 'awaiting_approval';
+			readonly call: { readonly name: string; readonly input: JsonObject };
+	  };
+
+/** One agent turn: the prompt, what it called, and what it said around the calls. */
 export interface JournalledRun {
+	/** Chosen by the caller, because records the run produced name it before it is stored. */
+	readonly runId: string;
 	readonly userId: string;
 	readonly projectId: string;
 	/** The note the chat was opened from, when it was opened from one. */
@@ -22,22 +36,35 @@ export interface JournalledRun {
 	readonly prompt: string;
 	readonly startedAt: Date;
 	readonly model: string;
-	/** Text before the calls, and the answer after them. A turn that only reads has neither. */
-	readonly speech: { readonly opening: string; readonly answer: string } | null;
+	/** What the agent said before its calls, if anything. */
+	readonly opening: string | null;
 	readonly calls: readonly JournalledCall[];
+	readonly ending: TurnEnding;
+}
+
+export interface JournalledIds {
+	readonly conversationId: string;
+	readonly runId: string;
 }
 
 const callId = (): string => `call_${randomBytes(12).toString('hex')}`;
 
 /**
- * Store a completed run the way the run writer does: an event log, a `running` row at each
+ * Store an agent turn the way the run writer does: an event log, a `running` row at each
  * `tool_started`, a `succeeded` row at each `tool_succeeded`, and one assistant row per
- * contiguous run of text, keyed by the cursor of the event it began at. The transcript and
- * the Agent activity page both read these rows, so a seeded turn is indistinguishable from a
- * real one without calling a model.
+ * contiguous run of text, keyed by the cursor of the event it began at. The transcript and the
+ * Agent activity page both read these rows, so a seeded turn renders like a real one without
+ * calling a model.
+ *
+ * A turn awaiting approval stops the way the harness stops: an `approval_required` event and
+ * row for the call, the run `awaiting_approval`, and the call in `pending_decisions`. The
+ * harness also saves the paused SDK state in `serialized_state` so that Approve can resume the
+ * run. A seed cannot produce that state without running a model, so a seeded pause can be shown
+ * but not approved: use it for a capture, then replace it with the finished turn.
  */
-export const journalRun = async (sql: Sql, turn: JournalledRun): Promise<void> => {
-	await sql.begin(async (tx) => {
+export const journalRun = async (sql: Sql, turn: JournalledRun): Promise<JournalledIds> =>
+	sql.begin(async (tx) => {
+		const awaiting = turn.ending.kind === 'awaiting_approval';
 		const [conversation] = await tx<{ id: string }[]>`
 			insert into conversations (
 				user_id, kind, context_project_id, context_note_id, title, created_at, updated_at
@@ -58,15 +85,16 @@ export const journalRun = async (sql: Sql, turn: JournalledRun): Promise<void> =
 		// is stamped a second after the one before it, as a real run spreads them out.
 		let sequence = 0;
 		const stamp = (): Date => new Date(turn.startedAt.getTime() + (sequence += 1) * 1000);
+		const finishedAt = new Date(turn.startedAt.getTime() + (turn.calls.length * 2 + 8) * 1000);
 		const [run] = await tx<{ id: string }[]>`
 			insert into agent_runs (
-				kind, user_id, conversation_id, model, execution_mode, status,
+				id, kind, user_id, conversation_id, model, execution_mode, status,
 				started_at, finished_at, input_snapshot, context_snapshot, created_at, updated_at
 			) values (
-				'agent', ${turn.userId}, ${conversation.id}, ${turn.model}, 'approval_required',
-				'completed', ${turn.startedAt},
-				${new Date(turn.startedAt.getTime() + (turn.calls.length * 2 + 6) * 1000)},
-				${tx.json(input)}, ${tx.json({})}, ${turn.startedAt}, ${turn.startedAt}
+				${turn.runId}, 'agent', ${turn.userId}, ${conversation.id}, ${turn.model}, 'approval_required',
+				${awaiting ? 'awaiting_approval' : 'completed'}, ${turn.startedAt},
+				${awaiting ? null : finishedAt}, ${tx.json(input)}, ${tx.json({})},
+				${turn.startedAt}, ${turn.startedAt}
 			)
 			returning id
 		`;
@@ -98,33 +126,29 @@ export const journalRun = async (sql: Sql, turn: JournalledRun): Promise<void> =
 			const cursor = await event({ type: 'text_delta', text });
 			await message('assistant', { type: 'text', text }, cursor);
 		};
-
-		await message('user', { type: 'text', text: turn.prompt }, null);
-		await event({ type: 'run_queued', runId: run.id, reason: 'submitted', attempt: 1 });
-		await event({ type: 'run_started', runId: run.id, attempt: 1 });
-		if (turn.speech) await say(turn.speech.opening);
-		const calls = turn.calls.map((call) => ({ ...call, callId: callId() }));
-		for (const call of calls) {
-			const cursor = await event({
-				type: 'tool_started',
-				name: call.name,
-				callId: call.callId,
-				arguments: call.input
-			});
+		const started = async (id: string, name: string, arguments_: JsonObject): Promise<void> => {
+			const cursor = await event({ type: 'tool_started', name, callId: id, arguments: arguments_ });
 			await message(
 				'tool',
 				{
 					type: 'tool_activity',
-					name: call.name,
-					callId: call.callId,
-					input: call.input,
+					name,
+					callId: id,
+					input: arguments_,
 					output: null,
 					status: 'running',
 					failure: null
 				},
 				cursor
 			);
-		}
+		};
+
+		await message('user', { type: 'text', text: turn.prompt }, null);
+		await event({ type: 'run_queued', runId: run.id, reason: 'submitted', attempt: 1 });
+		await event({ type: 'run_started', runId: run.id, attempt: 1 });
+		if (turn.opening) await say(turn.opening);
+		const calls = turn.calls.map((call) => ({ ...call, callId: callId() }));
+		for (const call of calls) await started(call.callId, call.name, call.input);
 		for (const call of calls) {
 			const cursor = await event({
 				type: 'tool_succeeded',
@@ -146,13 +170,47 @@ export const journalRun = async (sql: Sql, turn: JournalledRun): Promise<void> =
 				cursor
 			);
 		}
-		if (turn.speech) await say(turn.speech.answer);
-		await event({
-			type: 'completed',
-			model: turn.model,
-			runId: run.id,
-			conversationId: conversation.id
-		});
+
+		const ending = turn.ending;
+		if (ending.kind === 'awaiting_approval') {
+			const id = callId();
+			await started(id, ending.call.name, ending.call.input);
+			const cursor = await event({
+				type: 'approval_required',
+				name: ending.call.name,
+				runId: run.id,
+				callId: id,
+				arguments: ending.call.input
+			});
+			await message(
+				'tool',
+				{
+					type: 'tool_activity',
+					name: ending.call.name,
+					callId: id,
+					input: ending.call.input,
+					output: null,
+					status: 'approval_required',
+					failure: null
+				},
+				cursor
+			);
+			await tx`
+				update agent_runs
+				set pending_decisions = ${tx.json([
+					{ callId: id, toolName: ending.call.name, arguments: ending.call.input }
+				])}
+				where id = ${run.id}
+			`;
+		} else {
+			if (ending.kind === 'answered') await say(ending.answer);
+			await event({
+				type: 'completed',
+				model: turn.model,
+				runId: run.id,
+				conversationId: conversation.id
+			});
+		}
 		await tx`update conversations set updated_at = ${stamp()} where id = ${conversation.id}`;
+		return { conversationId: conversation.id, runId: run.id };
 	});
-};
