@@ -121,46 +121,52 @@ test('a status board from the picker saves a chosen status and shows its flag', 
 	await expect(page.getByText('Needs attention')).toHaveCount(2);
 });
 
-test('a blank widget started in the gallery is reshaped in the JSON editor and kept', async ({
+test('the gallery hands widget building to the agent and creates nothing itself', async ({
 	page
 }) => {
 	await page.goto('/today');
 	await page.getByRole('link', { name: 'Inbox', exact: true }).first().click();
 	await page.getByRole('link', { name: 'Widgets' }).click();
-	const created = delivered(page);
-	await page.getByRole('button', { name: 'New widget', exact: true }).click();
-	await created;
-	await expect(page.locator('[data-widget-pane]')).toBeVisible();
+	await page.getByRole('button', { name: 'Build a widget', exact: true }).click();
 
-	await page.getByRole('button', { name: 'Edit', exact: true }).click();
-	await page.getByLabel('Title', { exact: true }).fill('Release notes');
-	const layout = JSON.parse(await page.getByLabel('Layout', { exact: true }).inputValue());
-	layout.elements.card.children = ['text', 'items'];
-	layout.elements.items = {
-		type: 'Stack',
-		props: {},
-		repeat: { statePath: '/items', key: 'id' },
-		children: ['item']
-	};
-	layout.elements.item = {
-		type: 'Checkbox',
-		props: { label: { $item: 'label' }, checked: { $bindItem: 'done' } },
-		children: []
-	};
-	await page.getByLabel('Layout', { exact: true }).fill(JSON.stringify(layout));
-	const data = JSON.parse(await page.getByLabel('Data', { exact: true }).inputValue());
-	await page
-		.getByLabel('Data', { exact: true })
-		.fill(
-			JSON.stringify({ ...data, items: [{ id: 'a', label: 'Write the summary', done: false }] })
-		);
+	await expect(page.locator('#chat-composer')).toHaveValue(/Build a widget for this project that/);
+	await expect(page.locator('[data-widget-pane]')).toHaveCount(0);
+});
+
+test('a widget is changed through the agent, and its JSON waits under Advanced', async ({
+	page
+}) => {
+	await createNoteInInbox(page, `Widget e2e ${Date.now()}`);
+	await insertTemplate(page, 'Checklist');
+	await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 15_000 });
+	await page.getByRole('link', { name: 'Open widget' }).first().click();
+	const pane = page.locator('[data-widget-pane]');
+	await expect(pane.getByLabel('Layout', { exact: true })).toBeHidden();
+
+	await pane.getByRole('tab', { name: 'Advanced' }).click();
+	await pane.getByLabel('Title', { exact: true }).fill('Release notes');
 	const applied = delivered(page);
-	await page.getByRole('button', { name: 'Apply' }).click();
+	await pane.getByRole('button', { name: 'Apply' }).click();
 	await applied;
+	await expect(pane.getByRole('tab', { name: 'Widget', selected: true })).toBeVisible();
 	await saved(page);
 	await page.reload();
 	await expect(page.getByRole('heading', { name: 'Release notes' })).toBeVisible();
-	await expect(checkboxes(page)).toHaveCount(1);
+
+	// Last: below the docked breakpoint the chat is a page of its own and replaces the pane.
+	await pane.getByRole('button', { name: 'Change with agent' }).click();
+	await expect(page.locator('#chat-composer')).toHaveValue(/Change this widget so that/);
+	await expect(page.getByLabel('Chat context').getByText('Release notes')).toBeVisible();
+});
+
+test('the note picker hands a described widget to the agent for this note', async ({ page }) => {
+	await createNoteInInbox(page, `Widget e2e ${Date.now()}`);
+	await page.keyboard.type('/widget');
+	await page.keyboard.press('Enter');
+	await page.getByRole('button', { name: 'Build a widget', exact: true }).click();
+
+	await expect(page.locator('[data-widget-picker]')).toBeHidden();
+	await expect(page.locator('#chat-composer')).toHaveValue(/Build a widget in this note that/);
 });
 
 test('a savings simulator works its balance out as the inputs move, and keeps them', async ({

@@ -13,13 +13,20 @@
 	const widgetSources = (widget: Widget) => sourceViews.widgetSources(widget, todayLocalDate());
 	import WidgetJsonEditor from './widget-json-editor.svelte';
 	import type { WidgetChange } from '$lib/models/widgets';
+	import * as Tabs from '$lib/components/ui/tabs';
+	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	/** A widget opened on its own, in a workbench tab or at `/widgets/<id>`. */
 	let { widgetId, onCloseSplit }: { widgetId: WidgetId; onCloseSplit?: () => void } = $props();
 	const editor = untrack(() => widgetEdits.editor(widgetId));
 	void editor.open();
 	const widget = $derived(editor.state.kind === 'ready' ? editor.value : null);
-	let editing = $state(false);
+	/**
+	 * The agent writes widgets; the JSON it writes stays one tab away for whoever needs it.
+	 * Cancel in that tab throws the typed text away by mounting a fresh editor.
+	 */
+	let tab = $state<'widget' | 'advanced'>('widget');
+	let draft = $state(0);
 
 	/** Stage the editor's changes in order; a refused one stops the rest and keeps the editor open. */
 	async function apply(changes: readonly WidgetChange[]): Promise<void> {
@@ -27,7 +34,8 @@
 			const outcome = await widgetEdits.stage(editor, widgetId, change);
 			if (outcome.kind === 'failure') return;
 		}
-		editing = false;
+		draft += 1;
+		tab = 'widget';
 	}
 </script>
 
@@ -43,9 +51,15 @@
 				</p>
 			{/if}
 			{#if widget && !widget.archivedAt}
-				<Button variant="outline" size="sm" onclick={() => (editing = !editing)}
-					>{editing ? 'Done' : 'Edit'}</Button
-				>
+				<AgentAction
+					action={agentActions.widget}
+					variant="outline"
+					class="self-center"
+					context={{
+						projectId: widget.projectId,
+						chips: [{ kind: 'widget', id: widget.id, name: widget.title }]
+					}}
+				/>
 			{/if}
 			{#if onCloseSplit}
 				<div class="ms-4 flex shrink-0 items-center self-center">
@@ -65,8 +79,29 @@
 				</div>
 			{/if}
 		</header>
-		{#if widget && editing}
-			<WidgetJsonEditor {widget} onapply={apply} oncancel={() => (editing = false)} />
+		{#if widget && !widget.archivedAt}
+			<Tabs.Root bind:value={tab}>
+				<Tabs.List variant="line">
+					<Tabs.Trigger value="widget">Widget</Tabs.Trigger>
+					<Tabs.Trigger value="advanced">Advanced</Tabs.Trigger>
+				</Tabs.List>
+				<Tabs.Content value="widget" class="pt-6">
+					<WidgetView
+						{widget}
+						sources={widgetSources(widget)}
+						onChange={(change) => widgetEdits.stage(editor, widgetId, change)}
+					/>
+				</Tabs.Content>
+				<Tabs.Content value="advanced" class="flex flex-col gap-group pt-6">
+					<p class="text-sm text-muted-foreground">
+						The JSON the agent writes. Edit it by hand only if you know the widget catalog;
+						otherwise use Change with agent.
+					</p>
+					{#key draft}
+						<WidgetJsonEditor {widget} onapply={apply} oncancel={() => (draft += 1)} />
+					{/key}
+				</Tabs.Content>
+			</Tabs.Root>
 		{:else if widget}
 			<WidgetView
 				{widget}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { NoteId, TextSelection } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
+	import type { ContextResourceChip } from '$lib/models/chat';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import * as Icon from '$lib/components/icons';
@@ -29,6 +30,8 @@
 			noteId?: NoteId;
 			projectId?: ProjectId;
 			selection?: TextSelection;
+			/** Resources to pin to the composer, such as the widget the prompt is about. */
+			chips?: readonly ContextResourceChip[];
 		};
 		/**
 		 * `inline` joins an existing action cluster. `row` leads an empty region.

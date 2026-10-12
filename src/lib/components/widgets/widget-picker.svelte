@@ -11,6 +11,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { ProjectId } from '$lib/models/projects';
+	import type { NoteId } from '$lib/models/notes';
+	import { AgentAction, agentActions } from '$lib/components/agent';
 	import type { UserId } from '$lib/models/identity';
 	import type { DateTime } from '$lib/models/workspace';
 	import { widgetCatalog, widgetTemplates, type Widget } from '$lib/models/widgets';
@@ -22,6 +24,7 @@
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import * as Icon from '$lib/components/icons';
 	import { workspaceSession } from '$lib/factories/workspace/session';
+	import { askAgent } from '$lib/client/shell/responsive-surfaces';
 	import WidgetView from './widget-view.svelte';
 	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
 	import { todayLocalDate } from '$lib/client/todos/local-date';
@@ -30,8 +33,15 @@
 	let {
 		open = $bindable(false),
 		projectId,
+		noteId,
 		onpick
-	}: { open?: boolean; projectId: ProjectId; onpick: (pick: WidgetPick) => void } = $props();
+	}: {
+		open?: boolean;
+		projectId: ProjectId;
+		/** The note the widget goes in, so an agent-built one can be embedded there. */
+		noteId: NoteId;
+		onpick: (pick: WidgetPick) => void;
+	} = $props();
 
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before choosing a widget');
@@ -82,10 +92,20 @@
 		<Dialog.Header>
 			<Dialog.Title>Insert a widget</Dialog.Title>
 			<Dialog.Description>
-				Start from a template, or show a widget this project already has. A widget shown in several
-				notes is one widget: a change in one note appears in all of them.
+				Describe the widget you need and the agent builds it into this note, or start from a
+				template. A widget shown in several notes is one widget: a change in one note appears in all
+				of them.
 			</Dialog.Description>
 		</Dialog.Header>
+		<AgentAction
+			action={agentActions.widgetInNote}
+			variant="row"
+			onclick={(trigger) => {
+				// Close first: the chat opens beside the note, and the dialog would cover it.
+				open = false;
+				askAgent({ prompt: agentActions.widgetInNote.prompt, projectId, noteId }, trigger);
+			}}
+		/>
 		<Tabs.Root value="templates">
 			<Tabs.List>
 				<Tabs.Trigger value="templates">Templates</Tabs.Trigger>

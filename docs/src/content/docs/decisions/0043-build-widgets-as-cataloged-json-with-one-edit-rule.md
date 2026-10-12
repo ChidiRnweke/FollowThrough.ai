@@ -284,14 +284,21 @@ dashboard reads workspace sources. The "Widget" command opens a picker that prev
 `createWidget` would save it, and also offers the project's existing widgets, because many notes
 can show one widget.
 
-### People edit a widget as JSON
+### The agent authors widgets; the JSON editor is the advanced path
 
-The widget pane has an Edit mode with a title, the layout and the data as JSON. Typed text is
-parsed at the browser edge (`src/lib/client/widgets/json-text.ts`). `widgetChangesBetween` turns
-the edited content into the smallest changes, and the preview is those changes applied by
+A widget's layout is cataloged JSON, which is the format the agent writes. It is not a format
+people should have to read. So the screens send people to the agent. **Build a widget** in the
+gallery opens the chat with a started request and the project as context, and it creates
+nothing itself. The `/widget` picker leads with the same request for the open note, above the
+templates. The widget pane has **Change with agent**, which pins the widget to the composer as a
+chip. Each of these prefills the prompt and never sends it, as every agent action does.
+
+The JSON editor stays, under the pane's **Advanced** tab, with a line that says it is the format
+the agent writes. It edits the title, the layout and the data. Typed text is parsed at the
+browser edge (`src/lib/client/widgets/json-text.ts`). `widgetChangesBetween` turns the edited
+content into the smallest changes, and the preview is those changes applied by
 `applyWidgetChanges`, the same rule the server applies. The problems are listed with their JSON
-Pointer paths, and Apply stays off while there are any. A widget needs no note: the gallery
-starts a blank one.
+Pointer paths, and Apply stays off while there are any.
 
 ### The view turns control changes into data changes
 
@@ -478,7 +485,9 @@ would misrepresent the note.
 - `tests/e2e/widgets.e2e.ts` creates a widget from a note, ticks it, reloads, and edits it in its
   tab. A second case moves it to the trash from the gallery, sees the note show it as trashed, and
   restores it. A third inserts a status board from the picker and saves a chosen status. A fourth
-  starts a blank widget in the gallery, reshapes it in the JSON editor, and keeps it.
+  checks that the gallery's Build a widget opens the chat and creates no widget. A fifth renames a
+  widget in the Advanced tab, keeps it, and hands it to the agent as a chip. A sixth checks that
+  the picker's Build a widget closes the picker and starts the request for the note.
 - `src/lib/services/widgets/formulas.spec.ts` and `src/lib/models/widget-formulas/index.spec.ts`
   check the formula language, its failures, the step budget, and that every template works its
   formulas out; the savings and loan templates are checked against the closed-form results.

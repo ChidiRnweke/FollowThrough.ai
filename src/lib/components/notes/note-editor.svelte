@@ -1479,6 +1479,7 @@
 			}
 		}
 		{projectId}
+		{noteId}
 		onpick={(pick) => {
 			const target = widgetTarget;
 			widgetTarget = null;
