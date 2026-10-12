@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.5.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.4.0...v5.5.0) (2026-10-12)
+
+
+### Features
+
+* **context-usage:** ask the agent about a project's connections ([#457](https://github.com/ChidiRnweke/FollowThrough.ai/issues/457)) ([e3ba435](https://github.com/ChidiRnweke/FollowThrough.ai/commit/e3ba4350e4c8911ee94df173d55fcee3b8629a5a))
+* **context-usage:** map what the agent reads together ([#456](https://github.com/ChidiRnweke/FollowThrough.ai/issues/456)) ([e85b815](https://github.com/ChidiRnweke/FollowThrough.ai/commit/e85b8153c386652c1329379863995b6be11f2594))
+* **context-usage:** turn agent activity into a one-column briefing ([#454](https://github.com/ChidiRnweke/FollowThrough.ai/issues/454)) ([bd79245](https://github.com/ChidiRnweke/FollowThrough.ai/commit/bd7924576a777946e28fe6c12a06629bba961b65))
+
 ## [5.4.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.3.0...v5.4.0) (2026-10-11)
 
 
