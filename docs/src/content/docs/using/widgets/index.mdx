@@ -15,13 +15,14 @@ one widget, and a change in one place shows everywhere.
 
 ## Add a widget
 
-- **From a note.** Type `/widget` in the note. The picker previews each template as it will be
+- **From the agent.** Describe the tool you want, and the agent builds it from the context it
+  can read, such as the stages and durations in the open note. **Build a widget** on the project's
+  Widgets page opens the chat with the request started for you. In a note, **Build a widget** at the
+  top of the `/widget` picker does the same, and the agent puts the widget in that note.
+- **From a template.** Type `/widget` in a note. The picker previews each template as it will be
   saved: a checklist, a progress tracker, a decision log, a status board, a savings simulator, a
   loan calculator, an expense tracker, a habit tracker, a decision matrix, and a project dashboard.
   It also offers the project's existing widgets, so you can show one widget in more than one note.
-- **From the agent.** Describe the tool you want in chat, and say which note it belongs in. The
-  agent builds the widget from the context it can read, such as the stages and durations in the
-  open note.
 
 <Screenshot
 	id="walkthrough-04-widget-proposal"
@@ -37,10 +38,13 @@ In approval mode, a widget from the agent waits for you. The chat shows a previe
 Use a widget where it appears: tick a checkbox, move a slider, or type in a field. The widget saves
 each change, and it works offline like the rest of the workspace.
 
-A widget also opens in its own tab. There you can edit it directly: the **Edit** mode shows the
-title, the layout, and the data as JSON, lists any problems with their location, and keeps
-**Apply** off until the widget is valid. You can also ask the agent to change a widget, for example
-to add a stage or a column.
+A widget also opens in its own tab. To change how it works, for example to add a stage or a
+column, choose **Change with agent**. The chat opens with the widget attached, and you finish the
+sentence with what should change.
+
+The **Advanced** tab shows the JSON the agent writes: the title, the layout, and the data. You can
+edit it by hand if you know the widget catalog. The tab lists any problems with their location and
+keeps **Apply** off until the widget is valid.
 
 ## Compute values from the data
 

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { workspaceViews } from '$lib/factories/workspace/session';
 	import { goto } from '$app/navigation';
-	import { toast } from 'svelte-sonner';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { Widget } from '$lib/models/widgets';
 	import type { Project, ProjectId } from '$lib/models/projects';
@@ -24,6 +23,7 @@
 	import { widgetTab } from '$lib/stores/workbench/tab-ref';
 	import { widgetEdits } from '../widget-edits';
 	import WidgetView from '../widget-view.svelte';
+	import { AgentAction, agentActions } from '$lib/components/agent';
 	import { workspaceViews as sourceViews } from '$lib/factories/workspace/session';
 	import { todayLocalDate } from '$lib/client/todos/local-date';
 	const widgetSources = (widget: Widget) => sourceViews.widgetSources(widget, todayLocalDate());
@@ -75,21 +75,6 @@
 
 	const open = (widget: Widget) => void workbench.openTab(widgetTab(widget.id));
 
-	/** A widget needs no note: start a blank one here and open it to be edited. */
-	async function startWidget(): Promise<{ kind: 'opened' } | { kind: 'failure'; message: string }> {
-		const projectId = data.selectedProjectId;
-		if (!projectId) return { kind: 'failure', message: 'Select a project first' };
-		try {
-			const widgetId = await widgetEdits.createFromTemplate({ template: 'blank', projectId });
-			await workbench.openTab(widgetTab(widgetId));
-			return { kind: 'opened' };
-		} catch (error) {
-			const message = error instanceof Error ? error.message : 'The widget could not be created';
-			toast.error(message);
-			return { kind: 'failure', message };
-		}
-	}
-
 	async function confirmRemove(): Promise<void> {
 		const target = removeTarget;
 		if (!target || removing) return;
@@ -104,7 +89,7 @@
 <PageShell
 	width="wide"
 	title="Widgets"
-	description="Checklists and trackers you can embed in notes."
+	description="Checklists, trackers and calculators you can embed in notes. The agent builds them."
 >
 	<!-- Ancestors only: the trailing crumb would restate the h1 directly beneath it. -->
 	{#snippet breadcrumb()}
@@ -122,7 +107,11 @@
 
 	{#snippet actions()}
 		{#if data.selectedProjectId}
-			<Button onclick={() => void startWidget()}>New widget</Button>
+			<AgentAction
+				action={agentActions.widgetNew}
+				variant="outline"
+				context={{ projectId: data.selectedProjectId }}
+			/>
 		{/if}
 	{/snippet}
 
@@ -173,7 +162,7 @@
 			<EmptyState
 				scene={Scene.Widget}
 				title="No widgets yet."
-				hint="A widget is a small tool inside a note, such as a checklist, a tracker or a calculator. Type /widget in a note to add one, or ask the agent to build one."
+				hint="A widget is a small tool inside a note, such as a checklist, a tracker or a calculator. Use Build a widget to describe one for the agent, or type /widget in a note to start from a template."
 				size="large"
 				label="Widgets"
 			/>

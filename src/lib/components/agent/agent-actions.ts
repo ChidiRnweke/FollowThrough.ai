@@ -43,6 +43,9 @@ export type AgentActionKey =
 	| 'noteCompare'
 	| 'selection'
 	| 'diagram'
+	| 'widgetNew'
+	| 'widgetInNote'
+	| 'widget'
 	| 'skills'
 	| 'skillDetail'
 	| 'profile'
@@ -121,6 +124,26 @@ export const agentActions: Record<AgentActionKey, AgentActionSpec> = {
 		label: 'Explain this diagram',
 		prompt: 'Explain this diagram and what it is missing',
 		icon: Icon.Diagram
+	},
+	/**
+	 * Widgets are the one place the agent is the intended author, not a helper: the layout is
+	 * cataloged JSON that people should never have to write. Both prompts end open, so the
+	 * person finishes the sentence with what the widget should do before sending it.
+	 */
+	widgetNew: {
+		label: 'Build a widget',
+		prompt: 'Build a widget for this project that',
+		icon: Icon.Widget
+	},
+	widgetInNote: {
+		label: 'Build a widget',
+		prompt: 'Build a widget in this note that',
+		icon: Icon.Widget
+	},
+	widget: {
+		label: 'Change with agent',
+		prompt: 'Change this widget so that',
+		icon: Icon.Widget
 	},
 	skills: {
 		label: 'Draft a skill',
