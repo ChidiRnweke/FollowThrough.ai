@@ -218,9 +218,11 @@ export const scenes: Readonly<Record<ScreenshotId, Scene>> = {
 		ready: async (page) => {
 			await openConnections(page);
 			const question = 'Which notes are always read together?';
-			await page.getByRole('button', { name: question }).click();
+			await page.getByRole('button', { name: 'Ask about connections' }).click();
 			const panel = page.getByRole('complementary', { name: 'Agent' });
 			await panel.getByText('Connections · Acme rebrand').first().waitFor();
+			// The other questions wait in the empty chat as its starters.
+			await panel.getByText('Or ask').waitFor();
 			// The question is prefilled into the composer and waits there; it is never sent.
 			await page.waitForFunction(
 				(text) =>

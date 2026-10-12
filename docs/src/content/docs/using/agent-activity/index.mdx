@@ -50,13 +50,13 @@ read.
 
 <Screenshot
 	id="agent-connections"
-	alt="The Connections tab: a map of notes as circles and skills as diamonds joined by read-together lines, a legend, and a side panel with the items that disagree and questions to ask the agent."
+	alt="The Connections tab: a map of notes as circles and skills as diamonds joined by read-together lines, a legend with a size key, and a side panel with the items that disagree and an Ask about connections button."
 	caption="Each line joins two items the agent read in the same chats. Thicker lines mean more shared chats. The panel lists where your links and the agent's reading disagree."
 />
 
 The **Connections** tab draws a map of the items the agent reads in this project. Notes are
-circles, files are squares, and skills are diamonds, sized by how often they are read. An item that
-was never read is an empty circle.
+circles, files are squares, and skills are diamonds, sized by how often they are read: the legend's
+size key runs from few reads to many. An item that was never read is an empty circle.
 
 Choose what the lines mean:
 
@@ -65,8 +65,8 @@ Choose what the lines mean:
 - **Linked:** the links you recorded, such as note relationships and files attached to notes.
 
 The **≥ 1** to **≥ 8** buttons hide pairs read together in fewer chats. On a busy project the map
-starts at a threshold that keeps it readable, and a caption says what is hidden and how to show
-it. A skill that loads into most chats shows its lines only while it is selected. **Table** lists
+starts at a threshold that keeps it readable and draws only each item's strongest pairs. An item
+with no pair at the threshold is left off the map. A skill that loads into most chats shows its lines only while it is selected. **Table** lists
 the same values without the drawing.
 
 Select an item to see what it is **Read with**, what it **Leads the agent to**, what it is **Read
@@ -79,15 +79,16 @@ the agent's reading disagree:
 
 ## Ask the agent about the map
 
-**Ask about these connections** hands the map to the agent. Choose a starter question or type
-your own, and the chat opens with the question ready to send and the map attached as a
-**Connections** chip. The agent receives the map as two tables, one of items and one of pairs, so
+**Ask about connections** hands the map to the agent. The chat opens with a question ready to send
+and the map attached as a **Connections** chip. With an item selected, the question is about that
+item. The chat lists the other questions under **Or ask**; choose one to swap it in, or type your
+own. The agent receives the map as two tables, one of items and one of pairs, so
 it answers from the same data the page draws. Nothing is sent until you send it.
 
 <Screenshot
 	id="connections-ask"
-	alt="The Connections tab beside the chat panel. The composer holds the question 'Which notes are always read together?' with a Connections · Acme rebrand chip attached."
-	caption="A starter question opens the chat with the project's map attached. You review the question, then send it."
+	alt="The Connections tab beside the chat panel. The composer holds the question 'Which notes are always read together?' with a Connections · Acme rebrand chip attached, and the other questions are listed under Or ask."
+	caption="Ask about connections opens the chat with the project's map attached and a question loaded. You review the question, then send it."
 />
 
 You can attach a map from any chat too. Type `@` in the composer, then the project name or
