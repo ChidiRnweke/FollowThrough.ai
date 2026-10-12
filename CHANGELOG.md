@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.6.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.6.0...v5.6.1) (2026-10-12)
+
+
+### Bug Fixes
+
+* **context-usage:** stop connection crashes and simplify the map panel ([#464](https://github.com/ChidiRnweke/FollowThrough.ai/issues/464)) ([4b296c5](https://github.com/ChidiRnweke/FollowThrough.ai/commit/4b296c5434e38aa5ac749618fd8637e7e9d931ae))
+
 ## [5.6.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.5.0...v5.6.0) (2026-10-12)
 
 
