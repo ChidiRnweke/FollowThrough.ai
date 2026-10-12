@@ -15,10 +15,12 @@
 		{userFacingMessage(connections.error, 'Connections could not be loaded.')}
 	</p>
 {:else if !connections.current}
-	<div class="grid gap-section lg:grid-cols-[minmax(0,1fr)_20rem]" aria-busy="true">
-		<Skeleton class="aspect-[18/13] w-full" />
-		<div class="flex flex-col gap-row">
-			<Skeleton class="h-6 w-48" /><Skeleton class="h-24 w-full" />
+	<div class="@container" aria-busy="true">
+		<div class="grid gap-section @4xl:grid-cols-[minmax(0,1fr)_20rem]">
+			<Skeleton class="aspect-[18/13] w-full" />
+			<div class="flex flex-col gap-row">
+				<Skeleton class="h-6 w-48" /><Skeleton class="h-24 w-full" />
+			</div>
 		</div>
 	</div>
 {:else if connections.current.nodes.length === 0}
