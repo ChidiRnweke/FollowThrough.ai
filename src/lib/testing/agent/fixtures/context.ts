@@ -36,6 +36,10 @@ import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memo
 import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { noteBuilder, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
+import { InMemoryToolContextLog } from '$lib/testing/context-usage/fakes/in-memory-tool-context-log';
+import { InMemoryProjectLinks } from '$lib/testing/context-usage/fakes/in-memory-project-links';
+import { ProjectContextUsageService } from '$lib/server/services/context-usage/usage';
+import { ConnectionAnalysisService } from '$lib/services/context-usage/connections';
 
 /** Exercises context preparation through an executable run, including durable failures. */
 export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies> = {}) => {
@@ -45,6 +49,8 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 	const resources = new InMemoryContextResources();
 	const projects = new InMemoryProjects(testActor());
 	const memory = new InMemoryMemoryEntryRepository(testActor());
+	const contextLog = new InMemoryToolContextLog();
+	const projectLinks = new InMemoryProjectLinks();
 	const conversations = new InMemoryConversationRepository(testActor());
 	const journal = new ConversationArchive(testActor(), conversations, testClock);
 	const runs = new InMemoryAgentRunPersistence(testActor());
@@ -64,6 +70,10 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 		contextDiagrams: resources.diagramReader,
 		contextAttachments: resources.attachmentReader,
 		contextFiles: new AgentFileReferenceService(testTokenizer),
+		contextProjectTree: projects,
+		contextProjectAttachments: resources.attachmentReader,
+		contextConnections: new ProjectContextUsageService(contextLog, projectLinks, testClock),
+		connectionTables: new ConnectionAnalysisService(),
 		builtInSkills: builtInSkillsFixture().builtInSkills,
 		contextProjects: projects,
 		contextMemory: memory,
@@ -145,6 +155,8 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 		resources,
 		projects,
 		memory,
+		contextLog,
+		projectLinks,
 		conversations
 	};
 };

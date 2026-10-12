@@ -1,9 +1,13 @@
 import { NotFoundError } from '$lib/errors';
 import type { AttachmentId, AttachmentView } from '$lib/models/attachments';
 import type { Diagram, DiagramId } from '$lib/models/diagrams';
+import type { ProjectId } from '$lib/models/projects';
 import type { Widget, WidgetId } from '$lib/models/widgets';
 
-/** The widgets, diagrams and files a chat can attach, held by id and owned by any actor. */
+/**
+ * The widgets, diagrams and files a chat can attach, held by id and owned by any actor, and
+ * the files a project lists for its connection map.
+ */
 export class InMemoryContextResources {
 	widgets: Widget[] = [];
 	diagrams: Diagram[] = [];
@@ -30,6 +34,8 @@ export class InMemoryContextResources {
 			const view = this.attachments.find((candidate) => candidate.attachment.id === attachmentId);
 			if (!view) throw new NotFoundError('Attachment was not found', { attachmentId });
 			return view;
-		}
+		},
+		listForProject: async (projectId: ProjectId): Promise<readonly AttachmentView[]> =>
+			this.attachments.filter((view) => view.attachment.projectId === projectId)
 	};
 }

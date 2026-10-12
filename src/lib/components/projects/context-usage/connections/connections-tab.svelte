@@ -5,7 +5,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import ConnectionsMap from './connections-map.svelte';
 
-	let { projectId }: { projectId: ProjectId } = $props();
+	let { projectId, projectName }: { projectId: ProjectId; projectName: string } = $props();
 
 	const connections = $derived(getProjectConnections({ projectId }));
 </script>
@@ -31,6 +31,6 @@
 {:else}
 	<!-- Keyed, so a refreshed report starts the map from its own default threshold. -->
 	{#key connections.current}
-		<ConnectionsMap report={connections.current} {projectId} />
+		<ConnectionsMap report={connections.current} {projectId} {projectName} />
 	{/key}
 {/if}

@@ -138,7 +138,7 @@
 			</div>
 		</Tabs.Content>
 		<Tabs.Content value="connections">
-			<ConnectionsTab {projectId} />
+			<ConnectionsTab {projectId} {projectName} />
 		</Tabs.Content>
 	</Tabs.Root>
 {/if}

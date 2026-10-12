@@ -2,6 +2,7 @@ import type { FolderContextResolution, NoteId, NoteSummary } from '$lib/models/n
 import type { SkillSummary } from '$lib/models/skills';
 import { MENTION_PATTERN, type ResourceChip, type MentionableResources } from '$lib/models/chat';
 import type { Diagram } from '$lib/models/diagrams';
+import type { Project } from '$lib/models/projects';
 
 /** All live content below a folder. Provider token budgets do not change this selection. */
 function folderNoteIds(noteTree: readonly NoteSummary[], folderId: NoteId): NoteId[] {
@@ -65,11 +66,16 @@ const SKILL_CANDIDATES = 4;
 const WIDGET_CANDIDATES = 4;
 const DIAGRAM_CANDIDATES = 4;
 const ATTACHMENT_CANDIDATES = 4;
+const CONNECTIONS_CANDIDATES = 4;
 
 /** The non-note resources a mention can reach, already matched and scoped by the views. */
 
 const diagramNameOf = (diagram: Pick<Diagram, 'title'>): string =>
 	diagram.title || 'Untitled diagram';
+
+/** A project's connection map, named so it reads as the map rather than the project. */
+const connectionsNameOf = (project: Pick<Project, 'name'>): string =>
+	`Connections · ${project.name}`;
 
 const matches = (title: string, query: string): boolean => title.toLowerCase().includes(query);
 
@@ -114,7 +120,22 @@ const mentionCandidatesFor = (
 			id: view.attachment.id,
 			name: view.attachment.path
 		}));
-	return [...notes, ...folders, ...matched, ...widgets, ...diagrams, ...attachments];
+	const connections = resources.projects
+		.slice(0, CONNECTIONS_CANDIDATES)
+		.map((project): ResourceChip => ({
+			kind: 'connections',
+			id: project.id,
+			name: connectionsNameOf(project)
+		}));
+	return [
+		...notes,
+		...folders,
+		...matched,
+		...widgets,
+		...diagrams,
+		...attachments,
+		...connections
+	];
 };
 
 export interface AgentContextSelection {
@@ -126,6 +147,7 @@ export interface AgentContextSelection {
 	): FolderContextResolution;
 	query(prompt: string): string | undefined;
 	diagramName(diagram: Pick<Diagram, 'title'>): string;
+	connectionsName(project: Pick<Project, 'name'>): string;
 	candidates(
 		query: string,
 		noteTree: readonly NoteSummary[],
@@ -150,6 +172,9 @@ export class AgentContextSelectionService implements AgentContextSelection {
 	}
 	diagramName(diagram: Pick<Diagram, 'title'>): string {
 		return diagramNameOf(diagram);
+	}
+	connectionsName(project: Pick<Project, 'name'>): string {
+		return connectionsNameOf(project);
 	}
 	candidates(
 		query: string,

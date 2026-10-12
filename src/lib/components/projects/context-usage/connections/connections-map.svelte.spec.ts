@@ -46,12 +46,20 @@ const report: ProjectConnectionsReport = {
 };
 
 it('starts at the report threshold and says how many weaker pairs it hides', async () => {
-	const screen = await render(ConnectionsMap, { report, projectId: testProjectId() });
+	const screen = await render(ConnectionsMap, {
+		report,
+		projectId: testProjectId(),
+		projectName: 'Launch'
+	});
 	await expect.element(screen.getByText(/fewer than 2 chats are hidden \(1\)/)).toBeVisible();
 });
 
 it('names the item read in most chats, whose pairs wait for a selection', async () => {
-	const screen = await render(ConnectionsMap, { report, projectId: testProjectId() });
+	const screen = await render(ConnectionsMap, {
+		report,
+		projectId: testProjectId(),
+		projectName: 'Launch'
+	});
 	await expect
 		.element(
 			screen.getByText(/is read in 9 of 10 chats, so its pairs show only when it is selected/)
@@ -60,7 +68,11 @@ it('names the item read in most chats, whose pairs wait for a selection', async 
 });
 
 it('shows what a selected item is read with', async () => {
-	const screen = await render(ConnectionsMap, { report, projectId: testProjectId() });
+	const screen = await render(ConnectionsMap, {
+		report,
+		projectId: testProjectId(),
+		projectName: 'Launch'
+	});
 	(screen.getByRole('button', { name: /^Note 1 · Note/ }).element() as HTMLElement).dispatchEvent(
 		new MouseEvent('click', { bubbles: true })
 	);
@@ -72,7 +84,11 @@ it('shows what a selected item is read with', async () => {
 });
 
 it('lists the pairs as a table with the counts the map draws', async () => {
-	const screen = await render(ConnectionsMap, { report, projectId: testProjectId() });
+	const screen = await render(ConnectionsMap, {
+		report,
+		projectId: testProjectId(),
+		projectName: 'Launch'
+	});
 	(screen.getByRole('radio', { name: 'Table' }).element() as HTMLElement).click();
 	await expect.element(screen.getByRole('row', { name: 'Note 1 Note 2 4 4 — —' })).toBeVisible();
 });

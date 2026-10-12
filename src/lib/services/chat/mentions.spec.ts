@@ -4,7 +4,7 @@ const mentions = new ChatMentionService();
 import { describe, expect, it } from 'vitest';
 
 import type { ResourceChip } from '$lib/models/chat';
-import { testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testNoteId, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const first: ResourceChip = { kind: 'note', id: testNoteId(1), name: 'Research' };
 const second: ResourceChip = { kind: 'note', id: testNoteId(2), name: 'Research' };
@@ -75,5 +75,28 @@ describe('mentions attached to resource identities', () => {
 		expect(
 			mentions.add(createMentionHistory('Read @'), { ...first, name: '$& budget' }).present.text
 		).toBe('Read @$& budget ');
+	});
+});
+
+describe('a prompt handed over with pinned resources', () => {
+	const map: ResourceChip = {
+		kind: 'connections',
+		id: testProjectId(),
+		name: 'Connections · Launch'
+	};
+
+	it('mentions each pinned resource in front of the question', () => {
+		expect(mentions.startWith('Why?', [map]).present).toEqual({
+			text: '@Connections · Launch Why?',
+			references: [{ chip: map, from: 0, to: 21 }]
+		});
+	});
+
+	it('keeps the pinned resource attached while the question is edited', () => {
+		const history = mentions.startWith('Why?', [map]);
+		const end = history.present.text.length;
+		expect(
+			mentions.edit(history, { from: end, to: end, text: ' And how?' }).present.references
+		).toEqual([{ chip: map, from: 0, to: 21 }]);
 	});
 });

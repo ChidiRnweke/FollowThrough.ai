@@ -12,6 +12,7 @@ import type { TodayPresentation } from '$lib/services/workspace/today';
 import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { ShellContext, TodayView, NoteView } from '$lib/models/workspace-views';
 import type { Project } from '$lib/models/projects';
+import type { MentionableResources } from '$lib/models/chat';
 import type { Note } from '$lib/models/notes';
 import type { WorkspaceViewState } from '$lib/models/workspace-views';
 import type { TodoPresentation } from '$lib/services/todos/presentation';
@@ -74,14 +75,7 @@ export interface WorkspaceViewsController {
 	memories(projectId?: ProjectId): readonly MemoryEntry[];
 	memorySuggestions(projectId?: ProjectId): readonly MemorySuggestionView[];
 	attachments(owner: { kind: 'project' | 'note'; id: string }): readonly AttachmentView[];
-	mentionableResources(
-		query: string,
-		projectId?: ProjectId
-	): {
-		readonly widgets: readonly Widget[];
-		readonly diagrams: readonly Diagram[];
-		readonly attachments: readonly AttachmentView[];
-	};
+	mentionableResources(query: string, projectId?: ProjectId): MentionableResources;
 	trashedNotes(projectId?: ProjectId): readonly TrashedNote[];
 	trashedDiagrams(projectId?: ProjectId): readonly Diagram[];
 	widget(widgetId: string): Widget | null;
@@ -328,17 +322,11 @@ export class WorkspaceViews implements WorkspaceViewsController {
 
 	/**
 	 * What the chat composer can `@` mention besides notes: live widgets, diagrams of either
-	 * kind and files, in one project when the chat has one and across active projects when it
-	 * does not. Matched by title, or by file name for an attachment.
+	 * kind, files and project connection maps, in one project when the chat has one and across
+	 * active projects when it does not. Matched by title, by file name for an attachment, and
+	 * by project name or the word "connections" for a connection map.
 	 */
-	mentionableResources(
-		query: string,
-		projectId?: ProjectId
-	): {
-		readonly widgets: readonly Widget[];
-		readonly diagrams: readonly Diagram[];
-		readonly attachments: readonly AttachmentView[];
-	} {
+	mentionableResources(query: string, projectId?: ProjectId): MentionableResources {
 		const search = query.trim().toLowerCase();
 		const inScope = (owner: ProjectId): boolean =>
 			this.isActiveProject(owner) && (!projectId || owner === projectId);
@@ -365,7 +353,11 @@ export class WorkspaceViews implements WorkspaceViewsController {
 						? [{ attachment: { ...attachment, currentVersionId: version.id }, version }]
 						: [];
 				})
-				.sort((a, b) => a.attachment.path.localeCompare(b.attachment.path))
+				.sort((a, b) => a.attachment.path.localeCompare(b.attachment.path)),
+			projects: this.projects.filter(
+				(project) =>
+					inScope(project.id) && (matches(project.name) || 'connections'.includes(search))
+			)
 		};
 	}
 

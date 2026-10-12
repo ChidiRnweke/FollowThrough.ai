@@ -655,14 +655,15 @@ export interface ContextSelection extends TextSelection {
 }
 
 /**
- * A widget, diagram or file the user attached to a message: by `@` mention, or because it was
- * open in the focused pane. Notes keep their own `contextNoteIds`; these are the resources that
- * are not notes.
+ * A widget, diagram, file or project connection map the user attached to a message: by `@`
+ * mention, because it was open in the focused pane, or pinned by an "ask the agent" action.
+ * Notes keep their own `contextNoteIds`; these are the resources that are not notes.
  */
 export type ContextResourceRef =
 	| { readonly kind: 'widget'; readonly id: WidgetId }
 	| { readonly kind: 'diagram'; readonly id: DiagramId }
-	| { readonly kind: 'attachment'; readonly id: AttachmentId };
+	| { readonly kind: 'attachment'; readonly id: AttachmentId }
+	| { readonly kind: 'connections'; readonly id: ProjectId };
 
 /**
  * The text of one attached resource as it reaches the model. At or under the context token
@@ -710,6 +711,12 @@ export type ContextResource =
 						readonly kind: 'not_extracted';
 						readonly processingStatus: UnextractedAttachmentStatus;
 				  };
+	  }
+	| {
+			readonly kind: 'connections';
+			readonly projectId: ProjectId;
+			readonly projectName: string;
+			readonly text: ContextResourceText;
 	  };
 
 /** Image input resolved by the controller before provider execution. */
@@ -1782,6 +1789,14 @@ const contextResourceSchema = z.discriminatedUnion('kind', [
 					.strict()
 			])
 		})
+		.strict(),
+	z
+		.object({
+			kind: z.literal('connections'),
+			projectId: projectIdSchema,
+			projectName: z.string(),
+			text: contextResourceTextSchema
+		})
 		.strict()
 ]) satisfies z.ZodType<ContextResource>;
 const agentSkillCatalogItemSchema = z
@@ -1906,7 +1921,8 @@ const submittedSelectionSchema = textSelectionSchema.extend({ text: z.string() }
 export const contextResourceRefSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('widget'), id: brandedUuid<WidgetId>() }).strict(),
 	z.object({ kind: z.literal('diagram'), id: brandedUuid<DiagramId>() }).strict(),
-	z.object({ kind: z.literal('attachment'), id: brandedUuid<AttachmentId>() }).strict()
+	z.object({ kind: z.literal('attachment'), id: brandedUuid<AttachmentId>() }).strict(),
+	z.object({ kind: z.literal('connections'), id: projectIdSchema }).strict()
 ]) satisfies z.ZodType<ContextResourceRef>;
 const submittedImagesSchema = z.array(conversationImageSchema).optional();
 

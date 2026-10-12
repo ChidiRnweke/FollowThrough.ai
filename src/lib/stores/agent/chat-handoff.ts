@@ -1,3 +1,4 @@
+import { contextResourceChipSchema, type ContextResourceChip } from '$lib/models/chat';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import { z } from 'zod';
@@ -10,6 +11,8 @@ export interface ChatHandoff {
 	readonly projectId?: ProjectId;
 	readonly selection?: TextSelection;
 	readonly requestedSkillNames?: readonly string[];
+	/** Resources pinned to the composer as chips, exactly as if the user had `@`-mentioned them. */
+	readonly chips?: readonly ContextResourceChip[];
 }
 
 const chatHandoffSchema = z.object({
@@ -25,7 +28,8 @@ const chatHandoffSchema = z.object({
 			text: z.string()
 		})
 		.optional(),
-	requestedSkillNames: z.array(z.string().min(1)).optional()
+	requestedSkillNames: z.array(z.string().min(1)).optional(),
+	chips: z.array(contextResourceChipSchema).optional()
 });
 
 const parseChatHandoff = (value: string): ChatHandoff => {
@@ -45,7 +49,8 @@ const parseChatHandoff = (value: string): ChatHandoff => {
 					}
 				}
 			: {}),
-		...(parsed.requestedSkillNames ? { requestedSkillNames: parsed.requestedSkillNames } : {})
+		...(parsed.requestedSkillNames ? { requestedSkillNames: parsed.requestedSkillNames } : {}),
+		...(parsed.chips ? { chips: parsed.chips } : {})
 	};
 };
 

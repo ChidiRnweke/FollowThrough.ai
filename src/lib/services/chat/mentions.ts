@@ -57,6 +57,20 @@ function addMention(history: MentionHistory, chip: ResourceChip): MentionHistory
 	});
 }
 
+/**
+ * A prompt written elsewhere in the app, with the resources it is about already mentioned in
+ * front of it: the same tokens and references a pick would have written, so the chips stay
+ * attached through later edits exactly as typed mentions do.
+ */
+function startWithMentions(text: string, chips: readonly ResourceChip[]): MentionHistory {
+	const references = chips.reduce<MentionDocument['references']>((written, chip) => {
+		const from = written.length ? written[written.length - 1]!.to + 1 : 0;
+		return [...written, { chip, from, to: from + chip.name.length + 1 }];
+	}, []);
+	const tokens = chips.map((chip) => `@${chip.name} `).join('');
+	return { past: [], present: { text: tokens + text, references }, future: [] };
+}
+
 function removeMention(history: MentionHistory, chip: ResourceChip): MentionHistory {
 	let document = history.present;
 	const targets = document.references
@@ -99,12 +113,16 @@ function restoreMentions(
 }
 
 export interface ChatMentions {
+	startWith(text: string, chips: readonly ResourceChip[]): MentionHistory;
 	edit(history: MentionHistory, edit: MentionEdit): MentionHistory;
 	add(history: MentionHistory, chip: ResourceChip): MentionHistory;
 	remove(history: MentionHistory, chip: ResourceChip): MentionHistory;
 	restore(history: MentionHistory, text: string, direction: 'undo' | 'redo'): MentionRestore;
 }
 export class ChatMentionService implements ChatMentions {
+	startWith(text: string, chips: readonly ResourceChip[]): MentionHistory {
+		return startWithMentions(text, chips);
+	}
 	edit(history: MentionHistory, edit: MentionEdit): MentionHistory {
 		return editMentions(history, edit);
 	}

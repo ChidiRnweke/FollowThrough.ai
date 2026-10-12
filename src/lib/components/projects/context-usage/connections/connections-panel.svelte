@@ -4,10 +4,13 @@
 		ItemKey,
 		ProjectConnectionsReport
 	} from '$lib/models/context-usage';
+	import type { ContextResourceChip } from '$lib/models/chat';
 	import type { ProjectId } from '$lib/models/projects';
-	import { askAgent } from '$lib/client/shell/responsive-surfaces';
+	import type { ChatHandoff } from '$lib/stores/agent/chat-handoff';
+	import { agentContext } from '$lib/factories/agent/context';
 	import { formatRelativeTime } from '$lib/components/shared/labels';
 	import { Button } from '$lib/components/ui/button';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Icon from '$lib/components/icons';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import ItemLink from '../item-link.svelte';
@@ -18,17 +21,22 @@
 	let {
 		report,
 		projectId,
+		projectName,
 		selected,
 		mismatch,
 		onselect,
-		onmismatch
+		onmismatch,
+		onask
 	}: {
 		report: ProjectConnectionsReport;
 		projectId: ProjectId;
+		projectName: string;
 		selected: ConnectionNode | undefined;
 		mismatch: Mismatch | undefined;
 		onselect: (key: ItemKey | undefined) => void;
 		onmismatch: (mismatch: Mismatch | undefined) => void;
+		/** Opens the chat with the question prefilled and this map pinned; never sends. */
+		onask: (request: ChatHandoff, trigger: HTMLElement | undefined) => void;
 	} = $props();
 
 	const byKey = $derived(new Map(report.nodes.map((node) => [node.key, node])));
@@ -65,14 +73,50 @@
 
 	const read = $derived(report.nodes.filter((node) => node.use.kind === 'read').length);
 
+	/** This map as a chat chip: the agent receives its tables as attached context. */
+	const chip = $derived<ContextResourceChip>({
+		kind: 'connections',
+		id: projectId,
+		name: agentContext.connectionsName({ name: projectName })
+	});
+
+	function ask(prompt: string, trigger: EventTarget | null | undefined) {
+		onask(
+			{ prompt, projectId, chips: [chip] },
+			trigger instanceof HTMLElement ? trigger : undefined
+		);
+	}
+
 	function suggest(a: ItemKey, b: ItemKey, trigger: HTMLElement | undefined) {
-		askAgent(
-			{
-				prompt: `The agent keeps reading "${title(a)}" and "${title(b)}" in the same chats. Read both and suggest how they relate.`,
-				projectId
-			},
+		ask(
+			`The agent keeps reading "${title(a)}" and "${title(b)}" in the same chats. Read both and suggest how they relate.`,
 			trigger
 		);
+	}
+
+	const timesRead = (node: ConnectionNode) => (node.use.kind === 'read' ? node.use.times : 0);
+	const topSkill = $derived(
+		report.nodes
+			.filter((node) => node.item.kind === 'skill')
+			.reduce<ConnectionNode | undefined>(
+				(best, node) => (!best || timesRead(node) > timesRead(best) ? node : best),
+				undefined
+			)
+	);
+	const starters = $derived([
+		...(selected ? [`What is ${selected.item.title} read with, and why?`] : []),
+		'Which notes are always read together?',
+		`What does ${topSkill?.item.title ?? 'a skill'} make the agent read next?`,
+		'Which items are only ever read alone?'
+	]);
+	let question = $state('');
+
+	/** The typed question goes the way a starter does; the box clears for the next one. */
+	function askQuestion(trigger: EventTarget | null) {
+		const prompt = question.trim();
+		if (!prompt) return;
+		ask(prompt, trigger);
+		question = '';
 	}
 </script>
 
@@ -241,4 +285,50 @@
 			</ul>
 		</section>
 	{/if}
+
+	<section class="flex flex-col gap-row border-t border-border pt-group" aria-label="Ask the agent">
+		<header class="flex flex-col gap-bind">
+			<h3 class="text-sm font-medium">Ask about these connections</h3>
+			<p class="text-sm text-muted-foreground">
+				The agent gets this map's tables and your question in the chat panel.
+			</p>
+		</header>
+		<ul class="flex flex-col divide-y divide-border">
+			{#each starters as starter (starter)}
+				<li>
+					<Button
+						variant="ghost"
+						size="xs"
+						class="h-auto w-full items-start justify-start gap-2 px-3 py-2 text-left text-sm font-normal whitespace-normal"
+						onclick={(event) => ask(starter, event.currentTarget)}
+					>
+						<Icon.Chat class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+						<span class="flex-1 text-left">{starter}</span>
+					</Button>
+				</li>
+			{/each}
+		</ul>
+		<div class="flex flex-col gap-2 rounded-xl border border-border p-2 focus-within:border-brand">
+			<Textarea
+				bind:value={question}
+				aria-label="Your question"
+				placeholder="Ask about what gets read together…"
+				class="min-h-16 rounded-lg border-0 bg-transparent px-1 py-1 focus-visible:bg-transparent dark:bg-transparent dark:focus-visible:bg-transparent"
+				onkeydown={(event) => {
+					if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+					event.preventDefault();
+					askQuestion(event.currentTarget);
+				}}
+			/>
+			<div class="flex justify-end">
+				<Button
+					size="sm"
+					disabled={question.trim() === ''}
+					onclick={(event) => askQuestion(event.currentTarget)}
+				>
+					<Icon.ArrowUp /> Ask
+				</Button>
+			</div>
+		</div>
+	</section>
 </aside>

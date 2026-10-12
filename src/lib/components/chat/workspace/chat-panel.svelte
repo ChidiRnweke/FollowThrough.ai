@@ -185,6 +185,13 @@
 			const title = shell?.noteTree.find((entry) => entry.id === request.selection?.noteId)?.title;
 			chat.addChip(agentSelectionContext.pin(request.selection, title ?? 'Untitled note'));
 		}
+		// Pinned resources arrive as mentions in front of the question, so they show as chips
+		// and stay attached through edits, exactly as if the user had `@`-mentioned them.
+		if (request.chips?.length) {
+			chat.mentionDraft = agentContext.startWith(request.prompt, request.chips);
+			prompt = chat.mentionDraft.present.text;
+			for (const chip of request.chips) chat.addChip(chip);
+		}
 		saveDraft();
 		// The textarea may not be bound yet on the mount path, so go through the tick
 		// rather than `textareaRef` directly.

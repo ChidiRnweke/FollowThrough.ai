@@ -4,7 +4,10 @@ import type { ContextChip } from '$lib/models/chat';
 /** A chip's identity: ids are only unique within a kind, so the kind is part of the key. */
 const chipKeyOf = (chip: Pick<ContextChip, 'kind' | 'id'>): string => `${chip.kind}:${chip.id}`;
 
-/** The resource a widget, diagram or file chip points at, as the run request carries it. */
+/**
+ * The resource a widget, diagram, file or connections chip points at, as the run request
+ * carries it.
+ */
 const contextResourceRefOf = (chip: ContextChip): readonly ContextResourceRef[] => {
 	switch (chip.kind) {
 		case 'widget':
@@ -13,6 +16,8 @@ const contextResourceRefOf = (chip: ContextChip): readonly ContextResourceRef[] 
 			return [{ kind: 'diagram', id: chip.id }];
 		case 'attachment':
 			return [{ kind: 'attachment', id: chip.id }];
+		case 'connections':
+			return [{ kind: 'connections', id: chip.id }];
 		case 'note':
 		case 'skill':
 		case 'folder':

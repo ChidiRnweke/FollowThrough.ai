@@ -12,12 +12,14 @@ import type { FolderContextResolution, NoteId, NoteSummary } from '$lib/models/n
 import type { SkillSummary } from '$lib/models/skills';
 import type { ResourceChip, MentionableResources } from '$lib/models/chat';
 import type { Diagram } from '$lib/models/diagrams';
+import type { Project } from '$lib/models/projects';
 import type { AgentContextSelection } from '$lib/services/agent/context-selection';
 export interface AgentContextController {
 	chipKeyOf(chip: Pick<ContextChip, 'kind' | 'id'>): string;
 	contextResourceRefOf(chip: ContextChip): readonly ContextResourceRef[];
 	uniqueContextResources(refs: readonly ContextResourceRef[]): readonly ContextResourceRef[];
 	start(text: string): MentionHistory;
+	startWith(text: string, chips: readonly ResourceChip[]): MentionHistory;
 	edit(history: MentionHistory, edit: MentionEdit): MentionHistory;
 	add(history: MentionHistory, chip: ResourceChip): MentionHistory;
 	remove(history: MentionHistory, chip: ResourceChip): MentionHistory;
@@ -31,6 +33,7 @@ export interface AgentContextController {
 	): FolderContextResolution;
 	query(prompt: string): string | undefined;
 	diagramName(diagram: Pick<Diagram, 'title'>): string;
+	connectionsName(project: Pick<Project, 'name'>): string;
 	candidates(
 		query: string,
 		noteTree: readonly NoteSummary[],
@@ -54,6 +57,9 @@ export class AgentContext implements AgentContextController {
 	) {}
 	start(text: string): MentionHistory {
 		return createMentionHistory(text);
+	}
+	startWith(text: string, chips: readonly ResourceChip[]): MentionHistory {
+		return this.mentions.startWith(text, chips);
 	}
 	edit(history: MentionHistory, edit: MentionEdit): MentionHistory {
 		return this.mentions.edit(history, edit);
@@ -83,6 +89,9 @@ export class AgentContext implements AgentContextController {
 	}
 	diagramName(diagram: Pick<Diagram, 'title'>): string {
 		return this.selection.diagramName(diagram);
+	}
+	connectionsName(project: Pick<Project, 'name'>): string {
+		return this.selection.connectionsName(project);
 	}
 	candidates(
 		query: string,

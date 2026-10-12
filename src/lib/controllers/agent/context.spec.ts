@@ -3,7 +3,7 @@ import { agentContext } from '$lib/factories/agent/context';
 import type { MentionableResources } from '$lib/models/chat';
 import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import { attachmentViewBuilder } from '$lib/testing/attachments/fixtures/views';
-import { diagramBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import { diagramBuilder, projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { NoteId, NoteSummary } from '$lib/models/notes';
 import type { SkillSummary } from '$lib/models/skills';
 import { testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -24,7 +24,7 @@ const entry = (overrides: Partial<NoteSummary> & Pick<NoteSummary, 'id' | 'title
 		...overrides
 	}) as NoteSummary;
 
-const none: MentionableResources = { widgets: [], diagrams: [], attachments: [] };
+const none: MentionableResources = { widgets: [], diagrams: [], attachments: [], projects: [] };
 
 const skill = (name: string, noteId: NoteId): SkillSummary => ({
 	name,
@@ -111,10 +111,25 @@ describe('mention candidates', () => {
 				.candidates('', [], [], 'complete', {
 					widgets: [widgetBuilder()],
 					diagrams: [diagramBuilder()],
-					attachments: [attachmentViewBuilder()]
+					attachments: [attachmentViewBuilder()],
+					projects: [projectBuilder()]
 				})
 				.map((chip) => chip.kind)
-		).toEqual(['widget', 'diagram', 'attachment']);
+		).toEqual(['widget', 'diagram', 'attachment', 'connections']);
+	});
+
+	it("offers a project's connection map, which sends as the connections reference", () => {
+		const [chip] = agentContext.candidates('', [], [], 'complete', {
+			...none,
+			projects: [projectBuilder({ name: 'Launch' })]
+		});
+		expect({
+			name: chip?.name,
+			refs: chip ? agentContext.contextResourceRefOf(chip) : []
+		}).toEqual({
+			name: 'Connections · Launch',
+			refs: [{ kind: 'connections', id: testProjectId() }]
+		});
 	});
 
 	it('names a file by its file name', () => {
