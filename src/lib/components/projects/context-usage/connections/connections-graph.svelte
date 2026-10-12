@@ -18,7 +18,6 @@
 		edges,
 		layout,
 		selected,
-		emphasis,
 		onselect
 	}: {
 		nodes: readonly ConnectionNode[];
@@ -26,8 +25,6 @@
 		edges: readonly DrawnEdge[];
 		layout: GraphLayout;
 		selected: ItemKey | undefined;
-		/** Items to keep in colour when nothing is focused, such as the pairs of a list in the panel. */
-		emphasis: ReadonlySet<string> | undefined;
 		onselect: (key: ItemKey | undefined) => void;
 	} = $props();
 
@@ -36,7 +33,7 @@
 
 	/** The focused item and everything one drawn edge away keep their colour; the rest recede. */
 	const neighbourhood = $derived.by(() => {
-		if (!focus) return emphasis;
+		if (!focus) return undefined;
 		return new Set<string>([
 			focus,
 			...edges.flatMap((edge) => {

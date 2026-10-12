@@ -69,7 +69,7 @@ it('names the item read in most chats, whose pairs wait for a selection', async 
 		.toBeVisible();
 });
 
-it('shows what a selected item is read with', async () => {
+it('opens the details of a clicked item', async () => {
 	const screen = await render(ConnectionsMap, {
 		report,
 		projectId: testProjectId(),
@@ -78,9 +78,9 @@ it('shows what a selected item is read with', async () => {
 	(screen.getByRole('button', { name: /^Note 1 · Note/ }).element() as HTMLElement).dispatchEvent(
 		new MouseEvent('click', { bubbles: true })
 	);
-	const panel = screen.getByRole('complementary', { name: 'Selected item' });
-	await expect.element(panel.getByRole('heading', { name: 'Read with' })).toBeVisible();
-	expect(panel.element().textContent).toMatch(
+	const details = screen.getByRole('dialog');
+	await expect.element(details.getByRole('heading', { name: 'Read with' })).toBeVisible();
+	expect(details.element().textContent).toMatch(
 		/Read with\s*FollowThrough\s*5 chats\s*Note 2\s*4 chats/
 	);
 });

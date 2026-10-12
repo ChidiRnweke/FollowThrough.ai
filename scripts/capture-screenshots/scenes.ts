@@ -95,7 +95,7 @@ const openConversation = (page: Page, ids: ShowcaseIds): Promise<void> =>
 /** The Connections tab, once its map has laid out. */
 const openConnections = async (page: Page): Promise<void> => {
 	await page.getByRole('tab', { name: 'Connections' }).click();
-	await page.getByText('Pick an item on the map').waitFor();
+	await page.getByRole('button', { name: 'Ask about connections' }).waitFor();
 	await settled(
 		page
 			.locator('svg')

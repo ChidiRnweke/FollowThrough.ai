@@ -35,7 +35,6 @@ export type AgentActionKey =
 	| 'todosFromNotes'
 	| 'todoSource'
 	| 'projectConnect'
-	| 'relate'
 	| 'connectionsAsk'
 	| 'projectDistil'
 	| 'projectAttachments'
@@ -80,15 +79,6 @@ export const agentActions: Record<AgentActionKey, AgentActionSpec> = {
 	projectConnect: {
 		label: 'Connect these notes',
 		prompt: 'Find notes here that relate and propose backlinks',
-		icon: Icon.Link
-	},
-	/**
-	 * From the Connections map: two items the agent keeps reading together with nothing recorded
-	 * between them. The prompt names the pair; the result is a relationship to accept or dismiss.
-	 */
-	relate: {
-		label: 'Suggest a relationship',
-		prompt: 'Read both and suggest how they relate',
 		icon: Icon.Link
 	},
 	/**

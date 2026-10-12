@@ -123,7 +123,7 @@
 
 	const runningIcon: Record<NoteAiAction, typeof Icon.Diagram> = {
 		promises: Icon.Copied,
-		relate: Icon.Reference,
+		relate: Icon.Link,
 		reference: Icon.Reading,
 		diagram: Icon.Diagram
 	};

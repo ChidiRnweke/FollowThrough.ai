@@ -15,14 +15,7 @@
 		{userFacingMessage(connections.error, 'Connections could not be loaded.')}
 	</p>
 {:else if !connections.current}
-	<div class="@container" aria-busy="true">
-		<div class="grid gap-section @4xl:grid-cols-[minmax(0,1fr)_20rem]">
-			<Skeleton class="aspect-[18/13] w-full" />
-			<div class="flex flex-col gap-row">
-				<Skeleton class="h-6 w-48" /><Skeleton class="h-24 w-full" />
-			</div>
-		</div>
-	</div>
+	<Skeleton class="aspect-[18/13] w-full" aria-busy="true" />
 {:else if connections.current.nodes.length === 0}
 	<p class="text-sm text-muted-foreground">
 		The agent hasn't read anything here yet, and nothing here is linked. Ask about this project in a
