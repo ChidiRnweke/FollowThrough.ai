@@ -1,0 +1,94 @@
+---
+title: Agent activity
+description: See how much of a project the agent has read, what to fix so it finds more, which items it reads together, and ask the agent about it.
+---
+
+import Screenshot from '../../../../components/screenshot.astro';
+
+Every project has an **Agent activity** page. It reports what the agent read in that project's
+chats: which notes, files, memory entries and skills, how often, and in what order. Open it from
+the **Agent activity** button on the [project page](/FollowThrough.ai/using/projects/).
+
+The page has two tabs. **Overview** answers how much of the project the agent uses and what to do
+about the rest. **Connections** maps which items the agent reads together.
+
+Nothing on the page is stored separately. It is derived from the chat history, so it updates as
+soon as a chat reads something new.
+
+## How much the agent has read
+
+<Screenshot
+	id="agent-activity"
+	alt="Agent activity for Acme rebrand: 86% of the project read, 12 of 14 notes and memory entries, two things to fix, a weekly reads chart with its conclusion, and the most-read items."
+	caption="The Overview tab leads with one answer: the share of the project the agent has read. What to fix comes next, then how reading changed over time."
+/>
+
+The large figure is the share of the project's notes, files and memory entries that the agent has
+read at least once. A meter and one row per kind break it down. Beside it are the number of things
+to fix, the reads this week compared with last week, and the time of the last read.
+
+**What to do** lists one row per fix:
+
+- **A search that found nothing.** The agent looked for something this project does not have.
+  **Write a note** starts one, and **See the chat** opens the chat that searched.
+- **A file the agent cannot read.** **Fix in Attachments** opens the file so you can replace it.
+- **Items the agent has never read.** **Review** lists them in place. A clear title and the words
+  people search for help the agent find an item; remove what is out of date.
+
+## How reading changed
+
+**What the agent read each week** counts reads per week. One read is one time a chat opened,
+searched or quoted an item, and one item in one call counts once. The line under the chart names
+the busiest week and compares this week with last week. **By kind** splits each bar into notes,
+files, memory and skills.
+
+**Most read** ranks what the agent went back to most often. Project memory is left out, because it
+loads into every chat. **Recent chats** lists five chats per page. Expand a chat to see what it
+read.
+
+## What the agent reads together
+
+<Screenshot
+	id="agent-connections"
+	alt="The Connections tab: a map of notes as circles and skills as diamonds joined by read-together lines, a legend, and a side panel with the items that disagree and questions to ask the agent."
+	caption="Each line joins two items the agent read in the same chats. Thicker lines mean more shared chats. The panel lists where your links and the agent's reading disagree."
+/>
+
+The **Connections** tab draws a map of the items the agent reads in this project. Notes are
+circles, files are squares, and skills are diamonds, sized by how often they are read. An item that
+was never read is an empty circle.
+
+Choose what the lines mean:
+
+- **Together:** the two items were read in the same chats.
+- **In order:** an arrow points from the item read first to the item read next.
+- **Linked:** the links you recorded, such as note relationships and files attached to notes.
+
+The **≥ 1** to **≥ 8** buttons hide pairs read together in fewer chats. On a busy project the map
+starts at a threshold that keeps it readable, and a caption says what is hidden and how to show
+it. A skill that loads into most chats shows its lines only while it is selected. **Table** lists
+the same values without the drawing.
+
+Select an item to see what it is **Read with**, what it **Leads the agent to**, what it is **Read
+after**, and what it is **Linked** to. With nothing selected, the panel shows where your links and
+the agent's reading disagree:
+
+- **Linked, never read together:** a link the agent does not use.
+- **Read together, not linked:** a relationship worth recording. **Suggest a relationship** asks
+  the agent to propose one.
+
+## Ask the agent about the map
+
+**Ask about these connections** hands the map to the agent. Choose a starter question or type
+your own, and the chat opens with the question ready to send and the map attached as a
+**Connections** chip. The agent receives the map as two tables, one of items and one of pairs, so
+it answers from the same data the page draws. Nothing is sent until you send it.
+
+<Screenshot
+	id="connections-ask"
+	alt="The Connections tab beside the chat panel. The composer holds the question 'Which notes are always read together?' with a Connections · Acme rebrand chip attached."
+	caption="A starter question opens the chat with the project's map attached. You review the question, then send it."
+/>
+
+You can attach a map from any chat too. Type `@` in the composer, then the project name or
+"connections", and choose **Connections · _project_**.

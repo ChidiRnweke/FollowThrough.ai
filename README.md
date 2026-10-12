@@ -10,8 +10,8 @@ widgets, and exports documents. What you keep becomes context for the next task.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="static/readme/hero-dark.svg" />
-    <img src="static/readme/hero-light.svg" width="100%" alt="On the left, the agent's context: notes, todos, memory, draw.io diagrams, widgets, skills, and files. On the right, what the agent produces: notes, todos, memory proposals, draw.io diagrams, widgets, skills, and Word or PDF exports. The FollowThrough mark sits between them above an infinity sign labelled reads, plans, acts." />
+    <source media="(prefers-color-scheme: dark)" srcset="static/product-screenshots/hero-dark.svg" />
+    <img src="static/product-screenshots/hero-light.svg" width="100%" alt="On the left, the agent's context: notes, todos, memory, draw.io diagrams, widgets, skills, and files. On the right, what the agent produces: notes, todos, memory proposals, draw.io diagrams, widgets, skills, and Word or PDF exports. The FollowThrough mark sits between them above an infinity sign labelled reads, plans, acts." />
   </picture>
 </p>
 
@@ -22,8 +22,8 @@ One project, start to finish. Every screen below is the real app, working on the
 ### 1. Start with what you already have
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="static/readme/walkthrough/01-context-dark.jpg" />
-  <img src="static/readme/walkthrough/01-context-light.jpg" alt="The Docs site relaunch project page: a planning note, two todos, two memories the agent can use, and one attached file." />
+  <source media="(prefers-color-scheme: dark)" srcset="static/product-screenshots/walkthrough-01-context-dark.jpg" />
+  <img src="static/product-screenshots/walkthrough-01-context-light.jpg" alt="The Docs site relaunch project page: a planning note, two todos, two memories the agent can use, and one attached file." />
 </picture>
 
 A new project holds a planning note, the launch brief as a PDF, two decisions in memory, and the
@@ -35,8 +35,8 @@ first todos. They belong to the project, not to one conversation.
 > launch tasks to the board, and export the release plan as a Word brief for the team.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="static/readme/walkthrough/02-agent-acts-dark.jpg" />
-  <img src="static/readme/walkthrough/02-agent-acts-light.jpg" alt="The new Release plan note open beside the chat. The chat lists each action: the note and seven todos created, a Word export, and a proposed memory." />
+  <source media="(prefers-color-scheme: dark)" srcset="static/product-screenshots/walkthrough-02-agent-acts-dark.jpg" />
+  <img src="static/product-screenshots/walkthrough-02-agent-acts-light.jpg" alt="The new Release plan note open beside the chat. The chat lists each action: the note and seven todos created, a Word export, and a proposed memory." />
 </picture>
 
 From one request, the agent wrote the release plan, added seven todos with owners and dates, and
@@ -45,8 +45,8 @@ exported a Word brief. Every action is listed, including the one that failed bef
 ### 3. Keep working yourself
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="static/readme/walkthrough/03-extract-promise-dark.jpg" />
-  <img src="static/readme/walkthrough/03-extract-promise-light.jpg" alt="A highlighted sentence, 'I will verify every redirect on staging before Thursday', with the selection toolbar above it and a proposed todo below it, due 15 October, with Accept and Dismiss buttons." />
+  <source media="(prefers-color-scheme: dark)" srcset="static/product-screenshots/walkthrough-03-extract-promise-dark.jpg" />
+  <img src="static/product-screenshots/walkthrough-03-extract-promise-light.jpg" alt="A highlighted sentence, 'I will verify every redirect on staging before Thursday', with the selection toolbar above it and a proposed todo below it, due 15 October, with Accept and Dismiss buttons." />
 </picture>
 
 It is your note too. Here QA went from 3 to 5 days by hand, and a new line made a promise.
@@ -60,8 +60,8 @@ worked out, and it stays linked to the sentence it came from.
 > date. Embed it in this note.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="static/readme/walkthrough/04-widget-proposal-dark.jpg" />
-  <img src="static/readme/walkthrough/04-widget-proposal-light.jpg" alt="The chat shows a proposed Critical-Path Simulator widget: the development stream ends on day 16, content on day 9, and sliders hold each stage's duration, with QA at 5 days." />
+  <source media="(prefers-color-scheme: dark)" srcset="static/product-screenshots/walkthrough-04-widget-proposal-dark.jpg" />
+  <img src="static/product-screenshots/walkthrough-04-widget-proposal-light.jpg" alt="The chat shows a proposed Critical-Path Simulator widget: the development stream ends on day 16, content on day 9, and sliders hold each stage's duration, with QA at 5 days." />
 </picture>
 
 The agent used the edited plan: QA is 5 days, so development takes 16 days and sets the date. The
@@ -70,8 +70,8 @@ widget is a proposal. Nothing goes into the note until you approve it.
 ### 5. The work stays
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="static/readme/walkthrough/05-widget-result-dark.jpg" />
-  <img src="static/readme/walkthrough/05-widget-result-light.jpg" alt="The simulator embedded in the Release plan note. Legal review is set to 12 days, the content stream now ends on day 17, and the critical path reads Content stream." />
+  <source media="(prefers-color-scheme: dark)" srcset="static/product-screenshots/walkthrough-05-widget-result-dark.jpg" />
+  <img src="static/product-screenshots/walkthrough-05-widget-result-light.jpg" alt="The simulator embedded in the Release plan note. Legal review is set to 12 days, the content stream now ends on day 17, and the critical path reads Content stream." />
 </picture>
 
 The simulator now lives in the note. Drag Legal review to 12 days and content becomes the critical
@@ -88,8 +88,8 @@ notes, widgets and memory, wait for you to approve them.
 ### Everything you can do, the agent can do
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="static/readme/walkthrough/06-tools-dark.jpg" />
-  <img src="static/readme/walkthrough/06-tools-light.jpg" alt="Settings, Tools: 84 of 85 tools on, filters for changes, proposals, and reading, and a toggle beside each tool, with archive_project turned off." />
+  <source media="(prefers-color-scheme: dark)" srcset="static/product-screenshots/tools-dark.jpg" />
+  <img src="static/product-screenshots/tools-light.jpg" alt="Settings, Tools: 84 of 85 tools on, filters for changes, proposals, and reading, and a toggle beside each tool, with archive_project turned off." />
 </picture>
 
 Every capability in the app is a tool the agent can use: more than eighty, from creating a note to
@@ -99,12 +99,25 @@ project or for all of them, and the agent loses it everywhere.
 ### Any model
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="static/readme/walkthrough/07-models-dark.jpg" />
-  <img src="static/readme/walkthrough/07-models-light.jpg" alt="Settings, Models, with the default chat model picker open: a search box and a list of models, including Amazon Nova and Anthropic Claude models, each with its provider and context size." />
+  <source media="(prefers-color-scheme: dark)" srcset="static/product-screenshots/open-model-access-dark.jpg" />
+  <img src="static/product-screenshots/open-model-access-light.jpg" alt="Settings, Models, with the default chat model picker open: a search box, the app default, the recommended models, and the full model list, each with its provider and context size." />
 </picture>
 
 Pick any model on OpenRouter for one chat, or set defaults for chat, vision, attachment reading
-and inline suggestions. The picker listed 458 models from 55 providers when this was captured.
+and inline suggestions.
+
+### See what the agent reads
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="static/product-screenshots/agent-activity-dark.jpg" />
+  <img src="static/product-screenshots/agent-activity-light.jpg" alt="Agent activity for a project: 86% of it read by the agent, two things to fix, reads per week with the busiest week named, and the most-read items." />
+</picture>
+
+Each project's **Agent activity** page shows how much of the project the agent has read, and what
+to fix so it finds more: a search that found nothing, a file it cannot read, notes it never opens.
+The **Connections** tab maps which items the agent reads together and in what order, against the
+links you recorded. Attach that map to a chat and ask the agent about it.
+See [Agent activity](https://chidirnweke.github.io/FollowThrough.ai/using/agent-activity/).
 
 The [trust model](https://chidirnweke.github.io/FollowThrough.ai/explanation/agents-propose-users-accept/)
 explains what the agent may do on its own and what always waits for you.

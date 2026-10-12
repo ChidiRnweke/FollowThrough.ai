@@ -50,7 +50,7 @@
 			<Shot
 				id="in-editor-chat"
 				label="Editor · agent"
-				alt="A note open in the editor while the agent panel creates a new note from it, every tool call listed"
+				alt="A note open in the editor while the agent panel turns its commitments into todos, each one listed with a link"
 			/>
 		</Reveal>
 	</div>
@@ -115,7 +115,7 @@
 					<Shot
 						id="diagram-render"
 						label="Mermaid · live render"
-						alt="The diagram editor: Mermaid source beside its live render, with Revise with AI"
+						alt="A Mermaid diagram rendered in a note, with its toolbar: convert to draw.io, revise with AI, export, copy, and edit"
 					/>
 				</div>
 			</div>
@@ -139,7 +139,7 @@
 			<Shot
 				id="todo-board"
 				label="Board · todos"
-				alt="A kanban board of commitments while the agent updates cards and summarises what it changed"
+				alt="A kanban board of commitments across Backlog, Open, In progress, and Done, with due dates, priorities, and who is being waited on"
 			/>
 		</Reveal>
 	</div>
@@ -202,7 +202,7 @@
 					<Shot
 						id="open-model-access"
 						label="Settings · agent"
-						alt="Agent settings: a model picker across providers, approval-required versus auto-accept execution"
+						alt="Model settings with the chat model picker open: search, the app default, recommended models, and every model on OpenRouter"
 					/>
 				</div>
 			</div>

@@ -173,7 +173,7 @@
 			<EmptyState
 				scene={Scene.Widget}
 				title="No widgets yet."
-				hint="Type /widget in a note to add one. It is saved here and can be shown in other notes."
+				hint="A widget is a small tool inside a note, such as a checklist, a tracker or a calculator. Type /widget in a note to add one, or ask the agent to build one."
 				size="large"
 				label="Widgets"
 			/>

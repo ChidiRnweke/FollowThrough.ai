@@ -37,7 +37,7 @@ The chat runs in two places, and both show the same conversations:
 
 <Screenshot
 	id="agent-tab"
-	alt="The agent chat panel with its context sentence, recent chats, and composer"
+	alt="The agent panel after one turn: the request, the three todos it created, its answer, and the composer with the note attached"
 />
 
 ## Check what it's reading
@@ -46,7 +46,7 @@ Above an empty thread, a plain-language sentence names the scope ("Before it ans
 
 Behind that sentence, a run starts by reading your workspace context: your projects, the note tree, your skills, and pending work. From there the agent pulls what it needs with read tools: semantic search over notes, documents, and PDFs; user and project memory; todo lists; full note contents. Your preferences and limits freeze onto the run at submission, so retrying a run replays it under the settings it was submitted with, not whatever they've since become.
 
-While you chat you can steer the context directly too. Type `@` to attach a note or skill as a chip, attach up to four images per message (PNG, JPEG, or WebP).
+While you chat you can steer the context directly too. Type `@` to attach a note or skill as a chip, or a project's **Connections** map so the agent can answer from what it reads together (see [Agent activity](/FollowThrough.ai/using/agent-activity/)). Attach up to four images per message (PNG, JPEG, or WebP).
 
 ## Choose a model
 
@@ -55,9 +55,9 @@ The agent is not tied to one model. Select the model button in the composer to p
 To set defaults, open **Settings > Models**. There you choose the default chat model, the vision model that describes images for a chat model that cannot see them, the model that reads attachments, and the small, fast model behind inline writing suggestions. A setting you leave unset follows the deployment's default.
 
 <Screenshot
-	id="models"
-	alt="Settings > Models with the default chat model picker open: a search box and a scrolling list of models, including Amazon Nova and Anthropic Claude models, each with its provider and context size."
-	caption="Any model on OpenRouter is available. The picker listed 458 models from 55 providers when this was captured."
+	id="open-model-access"
+	alt="Settings > Models with the default chat model picker open: a search box, the app default, the recommended models, and the full model list, each with its provider and context size."
+	caption="Any model on OpenRouter is available. Search the full list, or pick one of the recommended models."
 />
 
 ## Choose an execution mode

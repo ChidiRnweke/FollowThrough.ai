@@ -1282,6 +1282,7 @@
 							shift: { padding: 8, boundary: menuBoundary }
 						}}
 						class="z-30 flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-none"
+						data-selection-menu
 					>
 						{#if activeAction}
 							<ActionProgress

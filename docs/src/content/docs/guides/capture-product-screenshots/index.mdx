@@ -1,0 +1,119 @@
+---
+title: Capturing product screenshots
+description: Regenerate every README, docs and landing-page screenshot from a seeded workspace with one command, and add a new screen to the set.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The product screenshots on the README, this site and the landing page are generated, not taken by
+hand. `pnpm docs:screenshots` seeds an invented workspace, opens each screen in a real browser and
+saves it in both themes. Run it after a visible change, and every page that shows that screen is up
+to date.
+
+## Where the images live
+
+Every product image lives once, in `static/product-screenshots/`, as `<id>-light.jpg` and
+`<id>-dark.jpg`:
+
+- the README links to the files by path;
+- the docs `Screenshot` component imports them, and the build fails if an id has no file;
+- the landing page loads them from the app's static root.
+
+The ids are listed in `src/lib/components/marketing/screenshots.ts`. The capture script's scene
+table is keyed by that list, so an id cannot exist without a way to capture it, and a unit spec
+fails if either theme of an id is missing.
+
+The hero illustration and the five `walkthrough-*` images in the same folder are not generated.
+They record a live agent run that builds a widget, so recapture them by hand when that flow
+changes.
+
+## Run it
+
+<Steps>
+
+1. Start the app with your real `.env`. The model picker scene reads the live OpenRouter catalog,
+   so the end-to-end server with its stubbed provider is not enough.
+
+   ```bash
+   pnpm dev
+   ```
+
+2. Capture every screen, or only the ones you changed:
+
+   ```bash
+   pnpm docs:screenshots
+   pnpm docs:screenshots --only agent-activity,agent-connections
+   ```
+
+3. Inspect every image in both themes, edge to edge, before you commit. A capture that ran is not
+   a capture that is right.
+
+</Steps>
+
+| Option       | Default                 | Effect                                                    |
+| ------------ | ----------------------- | --------------------------------------------------------- |
+| `--only`     | every id                | A comma-separated list of ids to capture.                 |
+| `--base-url` | `http://127.0.0.1:5173` | The running app to capture.                               |
+| `--cleanup`  | off                     | Delete the showcase user and its workspace after the run. |
+
+The run signs in as a dedicated showcase user, never as you. It deletes and re-creates that user's
+workspace each time, so every run starts from the same state. `DATABASE_URL` must point at the
+same database as the app.
+
+<Aside type="tip">
+	If your development database is behind the branch's migrations, or you do not want the showcase
+	user in it, create a separate database, run `pnpm db:migrate` against it, and start the app and
+	the script with that `DATABASE_URL`.
+</Aside>
+
+## What the seed contains
+
+The workspace is an invented studio rebranding an invented company. Nothing in it belongs to a
+real person, so the images can be published.
+
+- **Projects and notes.** "Acme rebrand" and "Q4 planning", created through the New project dialog
+  and filled through the Markdown archive import, the paths a user takes.
+- **Todos, project memory, an MCP token and one disabled tool**, so the Today screen, the board,
+  the project page and the settings tabs show real states.
+- **Six weeks of agent reading.** Thirteen finished chats that open notes, search, list memory and
+  load skills, plus three recorded note links. They feed the Agent activity page and its
+  Connections map. Two notes are never read and one search finds nothing, so the page has fixes
+  to suggest.
+- **One agent conversation beside a note**, for the chat screenshots.
+
+Chats are stored as the run writer stores them: an event log, a `running` and a `succeeded` row
+per tool call, and assistant rows keyed by the cursor of the event they began at. No model is
+called. `scripts/capture-screenshots/journal.ts` writes one finished run; reuse it for any new
+chat state.
+
+## Add a screen
+
+<Steps>
+
+1. Add the id to `screenshotIds` in `src/lib/components/marketing/screenshots.ts`.
+
+2. Add its scene to `scripts/capture-screenshots/scenes.ts`. A scene names the route, the
+   viewport, a `ready` step that brings the page into the captured state, and an optional
+   `region` to crop to.
+
+3. If the screen needs data the seed does not have, add it to the seed. Prefer a path the app
+   itself takes, and write anything else in the exact shape production writes. A seed that holds
+   a state production cannot reach teaches the wrong picture to every reader.
+
+4. Run `pnpm docs:screenshots --only <id>`, inspect both themes, and show the image with
+   `<Screenshot id="<id>" alt="…" />` in the docs or a `<picture>` in the README.
+
+</Steps>
+
+## Pitfalls
+
+- **Wait for a state, not for time.** `ready` waits for the text, control or chart that proves
+  the state is on screen. The script then waits for fonts and for running transitions to finish.
+- **Do not emulate reduced motion.** Under `prefers-reduced-motion: reduce`, an inline Mermaid
+  diagram lays out wider than its frame and loses its right edge.
+- **The chat panel docks from 96rem.** Below that it opens as a sheet, so chat scenes use a
+  1600 px viewport.
+- **A prefilled composer is a value, not text.** Wait on the `#chat-composer` value, not on
+  visible text.
+- **Hover states need the pointer to stay.** The script moves the pointer away before each shot.
+  A scene that captures a hover state sets `pointer: 'stay'`.

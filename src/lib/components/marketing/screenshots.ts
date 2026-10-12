@@ -1,20 +1,37 @@
-// Captured screenshots drop into `src/lib/assets/marketing/` named after the
-// slot id. Until one exists the slot renders its placeholder, so the capture
-// pass (see docs/screenshots/CAPTURE_PLAN.md) is a file drop and nothing else.
-const captured = import.meta.glob('$lib/assets/marketing/*.{png,jpg,jpeg,webp}', {
-	eager: true,
-	query: '?url',
-	import: 'default'
-}) as Record<string, string>;
+/**
+ * Every product screenshot, by id. The images live once, in `static/product-screenshots/`, as
+ * `<id>-light.jpg` and `<id>-dark.jpg`. The README links to them by path, the docs site imports
+ * them, and this page serves them from the app's own static root.
+ *
+ * `pnpm docs:screenshots` regenerates all of them from a seeded workspace. Its scene table is
+ * keyed by this list, so an id cannot be added here without a way to capture it.
+ */
+export const screenshotIds = [
+	'today-screen',
+	'todo-board',
+	'note-view',
+	'project-context',
+	'skill-support',
+	'tools',
+	'mcp-settings',
+	'open-model-access',
+	'diagram-render',
+	'in-editor-ai',
+	'in-editor-chat',
+	'agent-tab',
+	'agent-activity',
+	'agent-connections',
+	'connections-ask'
+] as const;
 
-const byId = new Map(
-	Object.entries(captured).map(([path, url]) => [
-		path
-			.split('/')
-			.pop()!
-			.replace(/\.(png|jpe?g|webp)$/, ''),
-		url
-	])
-);
+export type ScreenshotId = (typeof screenshotIds)[number];
 
-export const capturedShot = (id: string): string | undefined => byId.get(id);
+export type ScreenshotTheme = 'light' | 'dark';
+
+export const screenshotThemes: readonly ScreenshotTheme[] = ['light', 'dark'];
+
+export const screenshotFile = (id: ScreenshotId, theme: ScreenshotTheme): string =>
+	`${id}-${theme}.jpg`;
+
+export const screenshotUrl = (id: ScreenshotId, theme: ScreenshotTheme): string =>
+	`/product-screenshots/${screenshotFile(id, theme)}`;

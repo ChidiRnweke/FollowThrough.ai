@@ -3,13 +3,27 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config as loadDotenv } from 'dotenv';
-import postgres from 'postgres';
+import postgres, { type Sql } from 'postgres';
 
 const E2E_USER_FALLBACK = '00000000-0000-4000-8000-000000000001';
 const SESSION_TTL_DAYS = 30;
 const stateFile = fileURLToPath(new URL('.auth/state.json', import.meta.url));
 
 const generateSessionId = () => randomBytes(32).toString('hex');
+
+/**
+ * Insert a session row for an existing user and answer its token, as a completed login would.
+ * The capture script for product screenshots signs its own showcase user in the same way.
+ */
+export const mintSession = async (sql: Sql, userId: string): Promise<string> => {
+	const token = generateSessionId();
+	const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
+	await sql`
+		insert into sessions (id, user_id, expires_at)
+		values (${token}, ${userId}, ${expiresAt})
+	`;
+	return token;
+};
 
 const readCachedToken = (): string | undefined => {
 	try {
@@ -75,13 +89,7 @@ export default async function globalSetup() {
 			}
 		}
 
-		const token = generateSessionId();
-		const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
-		await sql`
-			insert into sessions (id, user_id, expires_at)
-			values (${token}, ${userId}, ${expiresAt})
-		`;
-		writeState(token);
+		writeState(await mintSession(sql, userId));
 		console.log('[e2e auth] Minted fresh session token');
 	} finally {
 		await sql.end();
