@@ -93,7 +93,7 @@
 
 {#snippet rows(list: readonly { key: ItemKey; count?: number; label?: string }[], heading: string)}
 	{#if list.length > 0}
-		<section class="flex flex-col gap-bind">
+		<section class="flex flex-col gap-row">
 			<h3 class="text-sm font-medium">{heading}</h3>
 			<ul class="flex flex-col">
 				{#each list.slice(0, 5) as row (`${row.key}|${row.label ?? ''}`)}
@@ -235,7 +235,7 @@
 					memory ({report.memoryLeftOut}) left out, because it loads into every chat{/if}
 			</p>
 		</header>
-		<section class="flex flex-col gap-bind">
+		<section class="flex flex-col gap-row">
 			<h3 class="text-sm font-medium">Where the two disagree</h3>
 			<ul class="flex flex-col">
 				{#each [{ id: 'linked-never-together', label: 'Linked, never read together', count: report.mismatches.linkedNeverTogether.length }, { id: 'together-not-linked', label: 'Read together, not linked', count: report.mismatches.togetherNotLinked.length }] as const as row (row.id)}
@@ -243,7 +243,7 @@
 						<Button
 							variant="ghost"
 							size="xs"
-							class="h-auto w-full justify-start gap-2 px-3 py-2 text-sm font-normal"
+							class="h-auto w-full justify-start gap-2 px-3 py-1.5 text-sm font-normal"
 							disabled={row.count === 0}
 							onclick={() => onmismatch(row.id)}
 						>

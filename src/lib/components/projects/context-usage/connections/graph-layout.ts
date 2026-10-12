@@ -14,7 +14,7 @@ export const GRAPH_WIDTH = 720;
 export const GRAPH_HEIGHT = 520;
 const MARGIN = 28;
 /** Kept clear at the top for the legend the map draws over its corners. */
-const LEGEND_BAND = 26;
+const LEGEND_BAND = 60;
 
 export interface LayoutNode {
 	readonly key: string;

@@ -101,69 +101,74 @@
 -->
 <div class="@container">
 	<div class="grid items-start gap-section @4xl:grid-cols-[minmax(0,1fr)_20rem]">
-		<div class="flex min-w-0 flex-col gap-row">
+		<div class="flex min-w-0 flex-col gap-group">
 			<!-- Two fixed rows, so switching views never moves the map: what to draw and how, then how much. -->
-			<div class="flex flex-wrap items-center justify-between gap-2">
-				<ToggleGroup.Root
-					type="single"
-					variant="outline"
-					size="sm"
-					value={mode}
-					onValueChange={(value) =>
-						(mode = value === 'order' ? 'order' : value === 'linked' ? 'linked' : 'together')}
-					aria-label="Edges"
-				>
-					<ToggleGroup.Item value="together">Together</ToggleGroup.Item>
-					<ToggleGroup.Item value="order">In order</ToggleGroup.Item>
-					<ToggleGroup.Item value="linked">Linked</ToggleGroup.Item>
-				</ToggleGroup.Root>
-				<ToggleGroup.Root
-					type="single"
-					variant="outline"
-					size="sm"
-					value={show}
-					onValueChange={(value) => (show = value === 'table' ? 'table' : 'map')}
-					aria-label="View"
-				>
-					<ToggleGroup.Item value="map">Map</ToggleGroup.Item>
-					<ToggleGroup.Item value="table">Table</ToggleGroup.Item>
-				</ToggleGroup.Root>
-			</div>
-			<!-- The threshold controls hide in Linked mode; the ask button stays at the row's end. -->
-			<div class="flex flex-wrap items-center justify-between gap-2">
-				<div
-					class={['flex flex-wrap items-center gap-x-4 gap-y-2', mode === 'linked' && 'invisible']}
-				>
+			<div class="flex flex-col gap-row">
+				<div class="flex flex-wrap items-center justify-between gap-2">
 					<ToggleGroup.Root
 						type="single"
 						variant="outline"
 						size="sm"
-						value={String(min)}
-						onValueChange={(value) => (min = Number(value) || min)}
-						aria-label="Fewest shared chats"
+						value={mode}
+						onValueChange={(value) =>
+							(mode = value === 'order' ? 'order' : value === 'linked' ? 'linked' : 'together')}
+						aria-label="Edges"
 					>
-						{#each thresholds as threshold (threshold)}
-							<ToggleGroup.Item value={String(threshold)} aria-label="At least {chats(threshold)}"
-								>≥ {threshold}</ToggleGroup.Item
-							>
-						{/each}
+						<ToggleGroup.Item value="together">Together</ToggleGroup.Item>
+						<ToggleGroup.Item value="order">In order</ToggleGroup.Item>
+						<ToggleGroup.Item value="linked">Linked</ToggleGroup.Item>
 					</ToggleGroup.Root>
-					<div class="flex items-center gap-2">
-						<Checkbox id="show-linked" bind:checked={showLinked} />
-						<Label for="show-linked" class="text-sm font-normal text-muted-foreground"
-							>Show linked</Label
-						>
-					</div>
+					<ToggleGroup.Root
+						type="single"
+						variant="outline"
+						size="sm"
+						value={show}
+						onValueChange={(value) => (show = value === 'table' ? 'table' : 'map')}
+						aria-label="View"
+					>
+						<ToggleGroup.Item value="map">Map</ToggleGroup.Item>
+						<ToggleGroup.Item value="table">Table</ToggleGroup.Item>
+					</ToggleGroup.Root>
 				</div>
-				<!-- Right-aligned even when the row wraps. -->
-				<div class="ml-auto">
-					<ConnectionsAsk
-						{report}
-						{projectId}
-						{projectName}
-						selected={selectedNode}
-						onask={askAgent}
-					/>
+				<!-- The threshold controls hide in Linked mode; the ask button stays at the row's end. -->
+				<div class="flex flex-wrap items-center justify-between gap-2">
+					<div
+						class={[
+							'flex flex-wrap items-center gap-x-4 gap-y-2',
+							mode === 'linked' && 'invisible'
+						]}
+					>
+						<ToggleGroup.Root
+							type="single"
+							variant="outline"
+							size="sm"
+							value={String(min)}
+							onValueChange={(value) => (min = Number(value) || min)}
+							aria-label="Fewest shared chats"
+						>
+							{#each thresholds as threshold (threshold)}
+								<ToggleGroup.Item value={String(threshold)} aria-label="At least {chats(threshold)}"
+									>≥ {threshold}</ToggleGroup.Item
+								>
+							{/each}
+						</ToggleGroup.Root>
+						<div class="flex items-center gap-2">
+							<Checkbox id="show-linked" bind:checked={showLinked} />
+							<Label for="show-linked" class="text-sm font-normal text-muted-foreground"
+								>Show linked</Label
+							>
+						</div>
+					</div>
+					<!-- Right-aligned even when the row wraps. -->
+					<div class="ml-auto">
+						<ConnectionsAsk
+							{report}
+							{projectId}
+							{projectName}
+							selected={selectedNode}
+							onask={askAgent}
+						/>
+					</div>
 				</div>
 			</div>
 
@@ -193,40 +198,49 @@
 						onselect={select}
 					/>
 					<div
-						class="pointer-events-none absolute inset-x-3 top-2 flex items-start justify-between gap-4 text-xs text-muted-foreground"
+						class="pointer-events-none absolute inset-x-4 top-4 flex items-start justify-between gap-4 text-xs text-muted-foreground"
 					>
-						<ul class="flex flex-wrap gap-x-3 gap-y-1" aria-label="Legend">
-							<li class="flex items-center gap-1.5">
-								<span class="size-2.5 rounded-full bg-brand"></span>Note
-							</li>
-							<li class="flex items-center gap-1.5">
-								<span class="size-2.5 rounded-xs bg-chart-2"></span>File
-							</li>
-							<li class="flex items-center gap-1.5">
-								<span class="size-2.5 rotate-45 rounded-xs bg-chart-3"></span>Skill
-							</li>
-							<li class="flex items-center gap-1.5">
-								<span class="size-2.5 rounded-full border-[1.5px] border-muted-foreground"
-								></span>Never read
-							</li>
-							{#if mode !== 'linked'}
+						<div class="flex flex-col gap-1" role="group" aria-label="Legend">
+							<ul class="flex flex-wrap gap-x-3 gap-y-1">
 								<li class="flex items-center gap-1.5">
-									<span class="h-0.5 w-4 bg-brand"></span>{mode === 'order'
-										? 'Read first → read next'
-										: 'Read together'}
+									<span class="size-2.5 rounded-full bg-brand"></span>Note
 								</li>
-							{/if}
-							{#if mode === 'linked' || showLinked}
 								<li class="flex items-center gap-1.5">
-									<span class="h-px w-4 bg-muted-foreground"></span>Linked
+									<span class="size-2.5 rounded-xs bg-chart-2"></span>File
 								</li>
-							{/if}
-						</ul>
-						<ul class="flex shrink-0 items-center" aria-label="Size">
-							<li class="flex items-center gap-1.5">
-								<span class="size-1.5 rounded-full border border-muted-foreground"></span>few
-								<span class="size-3 rounded-full border-[1.5px] border-muted-foreground"></span>many
-								reads
+								<li class="flex items-center gap-1.5">
+									<span class="size-2.5 rotate-45 rounded-xs bg-chart-3"></span>Skill
+								</li>
+							</ul>
+							<ul class="flex flex-wrap gap-x-3 gap-y-1">
+								<li class="flex items-center gap-1.5">
+									<span class="size-2.5 rounded-full border-[1.5px] border-muted-foreground"
+									></span>Never read
+								</li>
+								{#if mode !== 'linked'}
+									<li class="flex items-center gap-1.5">
+										<span class="h-0.5 w-4 bg-brand"></span>{mode === 'order'
+											? 'Read first → read next'
+											: 'Read together'}
+									</li>
+								{/if}
+								{#if mode === 'linked' || showLinked}
+									<li class="flex items-center gap-1.5">
+										<span class="h-px w-4 bg-muted-foreground"></span>Linked
+									</li>
+								{/if}
+							</ul>
+						</div>
+						<!-- Size as the map draws it: filled circles, one above the other, centred in one column. -->
+						<ul
+							class="grid shrink-0 grid-cols-[0.75rem_auto] items-center gap-x-1.5 gap-y-1"
+							aria-label="Size"
+						>
+							<li class="contents">
+								<span class="size-1.5 justify-self-center rounded-full bg-brand"></span>few reads
+							</li>
+							<li class="contents">
+								<span class="size-3 justify-self-center rounded-full bg-brand"></span>many reads
 							</li>
 						</ul>
 					</div>

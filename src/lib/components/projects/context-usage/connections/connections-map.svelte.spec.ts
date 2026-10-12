@@ -53,7 +53,7 @@ it('keys node size in the legend', async () => {
 	});
 	await expect
 		.element(screen.getByRole('list', { name: 'Size' }))
-		.toHaveTextContent(/few\s*many\s*reads/);
+		.toHaveTextContent(/few reads\s*many reads/);
 });
 
 it('names the item read in most chats, whose pairs wait for a selection', async () => {
