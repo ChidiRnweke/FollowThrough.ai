@@ -11,6 +11,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
+	import ConnectionsAsk from './connections-ask.svelte';
 	import ConnectionsGraph from './connections-graph.svelte';
 	import ConnectionsPanel, { type Mismatch } from './connections-panel.svelte';
 	import ConnectionsTable from './connections-table.svelte';
@@ -116,17 +117,26 @@
 					<ToggleGroup.Item value="order">In order</ToggleGroup.Item>
 					<ToggleGroup.Item value="linked">Linked</ToggleGroup.Item>
 				</ToggleGroup.Root>
-				<ToggleGroup.Root
-					type="single"
-					variant="outline"
-					size="sm"
-					value={show}
-					onValueChange={(value) => (show = value === 'table' ? 'table' : 'map')}
-					aria-label="View"
-				>
-					<ToggleGroup.Item value="map">Map</ToggleGroup.Item>
-					<ToggleGroup.Item value="table">Table</ToggleGroup.Item>
-				</ToggleGroup.Root>
+				<div class="ml-auto flex flex-wrap items-center gap-2">
+					<ConnectionsAsk
+						{report}
+						{projectId}
+						{projectName}
+						selected={selectedNode}
+						onask={askAgent}
+					/>
+					<ToggleGroup.Root
+						type="single"
+						variant="outline"
+						size="sm"
+						value={show}
+						onValueChange={(value) => (show = value === 'table' ? 'table' : 'map')}
+						aria-label="View"
+					>
+						<ToggleGroup.Item value="map">Map</ToggleGroup.Item>
+						<ToggleGroup.Item value="table">Table</ToggleGroup.Item>
+					</ToggleGroup.Root>
+				</div>
 			</div>
 			<div
 				class={['flex flex-wrap items-center gap-x-4 gap-y-2', mode === 'linked' && 'invisible']}

@@ -1339,7 +1339,7 @@
 										onmousedown={preserveEditorSelection}
 										onclick={() => runSelectionAction('relate')}
 									>
-										<Icon.Reference class="size-4" />
+										<Icon.Link class="size-4" />
 										Find related
 									</Button>
 								{/snippet}

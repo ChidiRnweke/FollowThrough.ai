@@ -79,37 +79,16 @@
 		name: agentContext.connectionsName({ name: projectName })
 	});
 
-	function ask(prompt: string, trigger: HTMLElement | undefined, starters?: readonly string[]) {
-		onask({ prompt, projectId, chips: [chip], ...(starters ? { starters } : {}) }, trigger);
-	}
-
 	function suggest(a: ItemKey, b: ItemKey, trigger: HTMLElement | undefined) {
-		ask(
-			`The agent keeps reading "${title(a)}" and "${title(b)}" in the same chats. Read both and suggest how they relate.`,
+		onask(
+			{
+				prompt: `The agent keeps reading "${title(a)}" and "${title(b)}" in the same chats. Read both and suggest how they relate.`,
+				projectId,
+				chips: [chip]
+			},
 			trigger
 		);
 	}
-
-	const timesRead = (node: ConnectionNode) => (node.use.kind === 'read' ? node.use.times : 0);
-	const topSkill = $derived(
-		report.nodes
-			.filter((node) => node.item.kind === 'skill')
-			.reduce<ConnectionNode | undefined>(
-				(best, node) => (!best || timesRead(node) > timesRead(best) ? node : best),
-				undefined
-			)
-	);
-	/** The question loaded into the chat; the chat offers the rest as starters. */
-	const loaded = $derived(
-		selected
-			? `What is ${selected.item.title} read with, and why?`
-			: 'Which notes are always read together?'
-	);
-	const others = $derived([
-		...(selected ? ['Which notes are always read together?'] : []),
-		`What does ${topSkill?.item.title ?? 'a skill'} make the agent read next?`,
-		'Which items are only ever read alone?'
-	]);
 </script>
 
 {#snippet rows(list: readonly { key: ItemKey; count?: number; label?: string }[], heading: string)}
@@ -277,11 +256,4 @@
 			</ul>
 		</section>
 	{/if}
-
-	<AgentAction
-		action={agentActions.connectionsAsk}
-		variant="outline"
-		class="w-fit"
-		onclick={(trigger) => ask(loaded, trigger, others)}
-	/>
 </aside>
