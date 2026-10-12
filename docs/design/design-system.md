@@ -322,6 +322,11 @@ including the ones the shadcn-svelte CLI writes into a newly added primitive —
   notes" and "Suggest a relationship". Its moment is the snap: asking the agent to relate two items
   slides the links into each other along the chain and lands the dot (`moment="snap"` on
   `AgentAction`, the `.ft-snap` block in `layout.css`), once per click.
+- **Reading order is a circle and a dot.** The connection map's relations share one vocabulary:
+  the open circle is the item in view, the dot is the other item. `Icon.ReadTogether` overlaps two
+  circles with the dot in the shared ground, for items read in the same chats. `Icon.LeadsTo`
+  sends an arrow from the circle to the dot, for what the item makes the agent read next, and
+  `Icon.ReadAfter` mirrors it, for what the agent read first. A recorded link stays `Icon.Link`.
 - **Widget is a small app, Activity is a monitor.** A widget is a tool you use inside a note, so
   its mark is an app window with a pointer clicking into it, and the dot is where the click lands.
   Agent activity is a monitor with a live trace. Neither reuses the open book, which means

@@ -9,6 +9,7 @@
 	import { formatRelativeTime } from '$lib/components/shared/labels';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import * as Icon from '$lib/components/icons';
 	import ItemLink from '../item-link.svelte';
 	import { kindNoun } from '../kinds';
 	import ConnectionsAsk from './connections-ask.svelte';
@@ -65,10 +66,16 @@
 	});
 </script>
 
-{#snippet rows(list: readonly { key: ItemKey; count?: number; label?: string }[], heading: string)}
+{#snippet rows(
+	list: readonly { key: ItemKey; count?: number; label?: string }[],
+	heading: string,
+	Glyph: typeof Icon.Link
+)}
 	{#if list.length > 0}
 		<section class="flex flex-col gap-row">
-			<h3 class="text-sm font-medium">{heading}</h3>
+			<h3 class="flex items-center gap-2 text-sm font-medium">
+				<Glyph class="size-4 shrink-0 text-muted-foreground" />{heading}
+			</h3>
 			<ul class="flex flex-col">
 				<!-- A partner linked both ways appears once per direction, so the label is part of the key. -->
 				{#each list.slice(0, 5) as row (`${row.key}|${row.label ?? ''}`)}
@@ -95,6 +102,10 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="flex max-h-dvh flex-col gap-group overflow-y-auto sm:max-w-md">
 		<Dialog.Header>
+			<!-- The action leads, as on a note: what you can do with the item, then what it is. -->
+			<div class="-ml-1.5 flex">
+				<ConnectionsAsk {report} {projectId} {projectName} {selected} {onask} />
+			</div>
 			<Dialog.Title class="min-w-0"><ItemLink item={selected.item} {projectId} /></Dialog.Title>
 			<Dialog.Description>
 				{kindNoun[selected.item.kind][0]} ·
@@ -103,15 +114,12 @@
 					: `read ${selected.use.times} ${selected.use.times === 1 ? 'time' : 'times'} in ${chats(selected.chats)} · last ${formatRelativeTime(selected.use.lastAt)}`}
 			</Dialog.Description>
 		</Dialog.Header>
-		{@render rows(detail.with, 'Read with')}
-		{@render rows(detail.leadsTo, 'Leads the agent to')}
-		{@render rows(detail.readAfter, 'Read after')}
-		{@render rows(detail.linked, 'Linked')}
+		{@render rows(detail.with, 'Read with', Icon.ReadTogether)}
+		{@render rows(detail.leadsTo, 'Leads the agent to', Icon.LeadsTo)}
+		{@render rows(detail.readAfter, 'Read after', Icon.ReadAfter)}
+		{@render rows(detail.linked, 'Linked', Icon.Link)}
 		{#if detail.with.length === 0 && detail.linked.length === 0}
 			<p class="text-sm text-muted-foreground">Read on its own so far.</p>
 		{/if}
-		<Dialog.Footer>
-			<ConnectionsAsk {report} {projectId} {projectName} {selected} {onask} />
-		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
