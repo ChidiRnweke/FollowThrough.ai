@@ -31,14 +31,27 @@
 	let allPairs = $state(false);
 
 	const byKey = $derived(new Map(report.nodes.map((node) => [node.key, node])));
+	/** The pairs of the list open in the panel, kept in colour on the map. */
+	const emphasis = $derived.by(() => {
+		if (mismatch === 'linked-never-together')
+			return new Set<string>(
+				report.mismatches.linkedNeverTogether.flatMap((link) => [link.from, link.to])
+			);
+		if (mismatch === 'together-not-linked')
+			return new Set<string>(
+				report.mismatches.togetherNotLinked.flatMap((pair) => [pair.a, pair.b])
+			);
+		return undefined;
+	});
 	const ambient = $derived(report.ambient.flatMap((key) => byKey.get(key) ?? []));
 
 	// The layout ignores the selection and the edge mode, so neither moves the picture.
 	const egoKey = $derived(ego ? selected : undefined);
 	// Laid out once from every pair and link that could be drawn, so switching between Together,
 	// In order and Linked changes the lines, never where the items sit.
+	// "Show every pair" draws more lines on the same picture: the layout keeps the strongest pairs.
 	const resting = $derived(
-		mapView(report, { mode: 'together', min, showLinked: true, ego: egoKey, allPairs })
+		mapView(report, { mode: 'together', min, showLinked: true, ego: egoKey, allPairs: false })
 	);
 	const view = $derived(
 		mapView(report, { mode, min, showLinked, ego: egoKey, selected, allPairs })
@@ -83,7 +96,8 @@
 
 <div class="grid items-start gap-section lg:grid-cols-[minmax(0,1fr)_20rem]">
 	<div class="flex min-w-0 flex-col gap-row">
-		<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+		<!-- Two fixed rows, so switching views never moves the map: what to draw and how, then how much. -->
+		<div class="flex flex-wrap items-center justify-between gap-2">
 			<ToggleGroup.Root
 				type="single"
 				variant="outline"
@@ -97,28 +111,6 @@
 				<ToggleGroup.Item value="order">In order</ToggleGroup.Item>
 				<ToggleGroup.Item value="linked">Linked</ToggleGroup.Item>
 			</ToggleGroup.Root>
-			{#if mode !== 'linked'}
-				<ToggleGroup.Root
-					type="single"
-					variant="outline"
-					size="sm"
-					value={String(min)}
-					onValueChange={(value) => (min = Number(value) || min)}
-					aria-label="Fewest shared chats"
-				>
-					{#each thresholds as threshold (threshold)}
-						<ToggleGroup.Item value={String(threshold)} aria-label="At least {chats(threshold)}"
-							>≥ {threshold}</ToggleGroup.Item
-						>
-					{/each}
-				</ToggleGroup.Root>
-				<div class="flex items-center gap-2">
-					<Checkbox id="show-linked" bind:checked={showLinked} />
-					<Label for="show-linked" class="text-sm font-normal text-muted-foreground"
-						>Show linked</Label
-					>
-				</div>
-			{/if}
 			<ToggleGroup.Root
 				type="single"
 				variant="outline"
@@ -126,22 +118,44 @@
 				value={show}
 				onValueChange={(value) => (show = value === 'table' ? 'table' : 'map')}
 				aria-label="View"
-				class="ml-auto"
 			>
 				<ToggleGroup.Item value="map">Map</ToggleGroup.Item>
 				<ToggleGroup.Item value="table">Table</ToggleGroup.Item>
 			</ToggleGroup.Root>
 		</div>
+		<div class={['flex flex-wrap items-center gap-x-4 gap-y-2', mode === 'linked' && 'invisible']}>
+			<ToggleGroup.Root
+				type="single"
+				variant="outline"
+				size="sm"
+				value={String(min)}
+				onValueChange={(value) => (min = Number(value) || min)}
+				aria-label="Fewest shared chats"
+			>
+				{#each thresholds as threshold (threshold)}
+					<ToggleGroup.Item value={String(threshold)} aria-label="At least {chats(threshold)}"
+						>≥ {threshold}</ToggleGroup.Item
+					>
+				{/each}
+			</ToggleGroup.Root>
+			<div class="flex items-center gap-2">
+				<Checkbox id="show-linked" bind:checked={showLinked} />
+				<Label for="show-linked" class="text-sm font-normal text-muted-foreground"
+					>Show linked</Label
+				>
+			</div>
+		</div>
 
-		{#if mode !== 'linked' && (view.belowThreshold > 0 || view.beyondStrongest > 0 || allPairs)}
-			<p class="text-xs text-muted-foreground">
+		<!-- Room for two caption lines whether or not they show, so the map stays where it is. -->
+		<p class="min-h-8 text-xs text-muted-foreground">
+			{#if mode !== 'linked' && (view.belowThreshold > 0 || view.beyondStrongest > 0 || allPairs)}
 				{#if show === 'map' && view.beyondStrongest > 0}
 					Each item shows its {STRONGEST_PER_ITEM} strongest pairs · {view.beyondStrongest} more
 					{view.beyondStrongest === 1 ? 'pair' : 'pairs'} hidden.
 					<Button
 						variant="link"
 						size="xs"
-						class="h-auto p-0 text-xs"
+						class="h-auto p-0 text-xs text-brand"
 						onclick={() => (allPairs = true)}>Show every pair</Button
 					>
 				{:else if show === 'map' && allPairs}
@@ -149,15 +163,15 @@
 					<Button
 						variant="link"
 						size="xs"
-						class="h-auto p-0 text-xs"
+						class="h-auto p-0 text-xs text-brand"
 						onclick={() => (allPairs = false)}>Only the strongest</Button
 					>
 				{/if}
 				{#if view.belowThreshold > 0}
 					<br />Pairs read together in fewer than {chats(min)} are hidden ({view.belowThreshold}).
 				{/if}
-			</p>
-		{/if}
+			{/if}
+		</p>
 
 		{#if show === 'table'}
 			{#if resting.placed.length > MAP_CEILING}
@@ -178,6 +192,7 @@
 				edges={view.edges}
 				{layout}
 				{selected}
+				{emphasis}
 				onselect={select}
 			/>
 		{/if}
@@ -188,10 +203,10 @@
 					<span class="size-2.5 rounded-full bg-brand"></span>Note
 				</li>
 				<li class="flex items-center gap-1.5">
-					<span class="size-2.5 rounded-full bg-chart-2"></span>File
+					<span class="size-2.5 rounded-xs bg-chart-2"></span>File
 				</li>
 				<li class="flex items-center gap-1.5">
-					<span class="size-2.5 rounded-full bg-chart-3"></span>Skill
+					<span class="size-2.5 rotate-45 rounded-xs bg-chart-3"></span>Skill
 				</li>
 				<li class="flex items-center gap-1.5">
 					<span class="size-2.5 rounded-full border-[1.5px] border-muted-foreground"></span>Never
@@ -209,7 +224,7 @@
 						<span class="h-px w-4 bg-muted-foreground"></span>Linked
 					</li>
 				{/if}
-				<li>Size: times read · line: shared chats</li>
+				<li>Size: times read{mode === 'linked' ? '' : ' · line: shared chats'}</li>
 			</ul>
 			{#each ambient as node (node.key)}
 				<p>
@@ -222,7 +237,7 @@
 					is read in {node.chats} of {report.chats} chats, so its pairs show only when it is selected.
 				</p>
 			{/each}
-			{#if show === 'map' && view.alone.length > 0}
+			{#if show === 'map' && mode !== 'linked' && view.alone.length > 0}
 				<p>
 					Read alone at this threshold · {view.alone.length}:
 					{#each view.alone as node, index (node.key)}<Button

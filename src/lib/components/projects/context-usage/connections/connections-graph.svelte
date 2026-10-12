@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Chart, Circle, Line, Svg, Text } from 'layerchart';
+	import { Chart, Circle, Line, Polygon, Svg, Text } from 'layerchart';
 	import type { ConnectionNode, ItemKey } from '$lib/models/context-usage';
 	import { cn } from '$lib/utils';
 	import { kindNoun } from '../kinds';
@@ -18,6 +18,7 @@
 		edges,
 		layout,
 		selected,
+		emphasis,
 		onselect
 	}: {
 		nodes: readonly ConnectionNode[];
@@ -25,6 +26,8 @@
 		edges: readonly DrawnEdge[];
 		layout: GraphLayout;
 		selected: ItemKey | undefined;
+		/** Items to keep in colour when nothing is focused, such as the pairs of a list in the panel. */
+		emphasis: ReadonlySet<string> | undefined;
 		onselect: (key: ItemKey | undefined) => void;
 	} = $props();
 
@@ -33,7 +36,7 @@
 
 	/** The focused item and everything one drawn edge away keep their colour; the rest recede. */
 	const neighbourhood = $derived.by(() => {
-		if (!focus) return undefined;
+		if (!focus) return emphasis;
 		return new Set<string>([
 			focus,
 			...edges.flatMap((edge) => {
@@ -43,17 +46,15 @@
 		]);
 	});
 
-	// Placed again on focus, so the names of what the reader is looking at always show.
+	// Placed again on focus: the focused item is always named, its neighbours where they fit.
 	const drawn = $derived(new Set<string>(nodes.map((node) => node.key)));
 	const labels = $derived(
-		(focus
-			? placeLabels(
-					layoutNodes.filter((node) => drawn.has(node.key)),
-					layout.nodes,
-					neighbourhood ?? new Set()
-				)
-			: layout.labels
-		).filter((label) => drawn.has(label.key))
+		placeLabels(
+			layoutNodes.filter((node) => drawn.has(node.key)),
+			layout.nodes,
+			neighbourhood ?? new Set(),
+			new Set(focus ? [focus] : [])
+		)
 	);
 
 	const fill = {
@@ -77,13 +78,13 @@
 		const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
 		const ux = (b.x - a.x) / length;
 		const uy = (b.y - a.y) / length;
-		const gap = edge.kind === 'order' ? b.radius + 5 : b.radius;
+		const gap = edge.kind === 'order' ? b.radius + 6 : b.radius;
 		return {
 			x1: a.x + ux * a.radius,
 			y1: a.y + uy * a.radius,
 			x2: b.x - ux * gap,
 			y2: b.y - uy * gap,
-			muted: focus !== undefined && aKey !== focus && bKey !== focus,
+			muted: neighbourhood !== undefined && !(neighbourhood.has(aKey) && neighbourhood.has(bKey)),
 			// A pair across two groups is real but secondary: it stays faint until one end is focused.
 			bridge:
 				edge.kind !== 'linked' &&
@@ -116,95 +117,122 @@
 	);
 </script>
 
-<div class="aspect-[18/13] w-full overflow-hidden rounded-lg border border-border">
-	<Chart>
-		<Svg viewBox="0 0 {GRAPH_WIDTH} {GRAPH_HEIGHT}">
-			<!-- Clicking empty space lets go of the pinned item. -->
-			<rect
-				width={GRAPH_WIDTH}
-				height={GRAPH_HEIGHT}
-				class="fill-transparent"
-				role="presentation"
-				onclick={() => onselect(undefined)}
-			/>
-			{#each ordered as edge, index (index)}
-				{@const line = segment(edge)}
-				{#if line}
-					<g
-						class={['transition-opacity', line.muted ? 'opacity-10' : line.bridge && 'opacity-25']}
-					>
-						<title>{edgeTip(edge)}</title>
-						<Line
-							x1={line.x1}
-							y1={line.y1}
-							x2={line.x2}
-							y2={line.y2}
-							strokeWidth={line.bridge ? 1 : width(edge)}
-							class={edge.kind === 'linked' ? 'stroke-muted-foreground opacity-70' : 'stroke-brand'}
-							stroke-linecap="round"
-							markerEnd={edge.kind === 'order' ? 'arrow' : undefined}
-						/>
-					</g>
-				{/if}
-			{/each}
-			{#each nodes as node (node.key)}
-				{@const at = layout.nodes.get(node.key)}
-				{#if at}
-					{@const muted = neighbourhood !== undefined && !neighbourhood.has(node.key)}
-					<g
-						role="button"
-						tabindex="0"
-						aria-label={nodeTip(node)}
-						aria-pressed={selected === node.key}
-						class="cursor-pointer outline-none [&:focus-visible>circle.mark]:stroke-foreground"
-						onpointerenter={() => (hovered = node.key)}
-						onpointerleave={() => (hovered = undefined)}
-						onfocus={() => (hovered = node.key)}
-						onblur={() => (hovered = undefined)}
-						onclick={() => onselect(selected === node.key ? undefined : node.key)}
-						onkeydown={(event) => {
-							if (event.key === 'Enter' || event.key === ' ') {
-								event.preventDefault();
-								onselect(selected === node.key ? undefined : node.key);
-							}
-							if (event.key === 'Escape') onselect(undefined);
-						}}
-					>
-						<title>{nodeTip(node)}</title>
-						<!-- A hit area of at least 24px, whatever the circle's size. -->
-						<Circle cx={at.x} cy={at.y} r={Math.max(at.radius, 12)} class="fill-transparent" />
-						<Circle
-							cx={at.x}
-							cy={at.y}
-							r={at.radius}
-							strokeWidth={2}
-							class={cn(
-								'mark transition-colors',
-								node.use.kind === 'never'
-									? 'fill-background stroke-muted-foreground'
-									: muted
-										? 'fill-chart-1 stroke-background'
-										: [fill[node.item.kind], 'stroke-background'],
-								selected === node.key && 'stroke-foreground'
-							)}
-						/>
-					</g>
-				{/if}
-			{/each}
-			{#each labels as label (label.key)}
-				{@const muted = neighbourhood !== undefined && !neighbourhood.has(label.key)}
-				<Text
-					x={label.x}
-					y={label.y}
-					value={label.text}
-					textAnchor="middle"
-					class={cn(
-						'pointer-events-none text-xs [paint-order:stroke] stroke-background stroke-[3px]',
-						neighbourhood?.has(label.key) ? 'fill-foreground font-medium' : 'fill-muted-foreground',
-						muted && 'opacity-40'
-					)}
+<!-- Below the width where labels stay legible the map keeps that width and scrolls sideways. -->
+<div class="w-full overflow-x-auto rounded-lg border border-border">
+	<div class="aspect-[18/13] w-full min-w-128">
+		<Chart>
+			<Svg viewBox="0 0 {GRAPH_WIDTH} {GRAPH_HEIGHT}">
+				<!-- Clicking empty space lets go of the pinned item. -->
+				<rect
+					width={GRAPH_WIDTH}
+					height={GRAPH_HEIGHT}
+					class="fill-transparent"
+					role="presentation"
+					onclick={() => onselect(undefined)}
 				/>
-			{/each}
-		</Svg>
-	</Chart>
+				{#each ordered as edge, index (index)}
+					{@const line = segment(edge)}
+					{#if line}
+						<g
+							class={[
+								'transition-opacity',
+								line.muted ? 'opacity-10' : line.bridge && 'opacity-25'
+							]}
+						>
+							<title>{edgeTip(edge)}</title>
+							<Line
+								x1={line.x1}
+								y1={line.y1}
+								x2={line.x2}
+								y2={line.y2}
+								strokeWidth={line.bridge ? 1 : width(edge)}
+								class={edge.kind === 'linked' ? 'stroke-muted-foreground' : 'stroke-brand'}
+								stroke-linecap="round"
+								markerEnd={edge.kind === 'order' ? 'arrow' : undefined}
+							/>
+						</g>
+					{/if}
+				{/each}
+				{#each nodes as node (node.key)}
+					{@const at = layout.nodes.get(node.key)}
+					{#if at}
+						{@const muted = neighbourhood !== undefined && !neighbourhood.has(node.key)}
+						{@const mark = cn(
+							'mark transition-colors',
+							node.use.kind === 'never'
+								? 'fill-background stroke-muted-foreground'
+								: muted
+									? 'fill-chart-1 stroke-background'
+									: [fill[node.item.kind], 'stroke-background'],
+							selected === node.key && 'stroke-foreground'
+						)}
+						<g
+							role="button"
+							tabindex="0"
+							aria-label={nodeTip(node)}
+							aria-pressed={selected === node.key}
+							class="cursor-pointer outline-none [&:focus-visible>.mark]:stroke-foreground"
+							onpointerenter={() => (hovered = node.key)}
+							onpointerleave={() => (hovered = undefined)}
+							onfocus={() => (hovered = node.key)}
+							onblur={() => (hovered = undefined)}
+							onclick={() => onselect(selected === node.key ? undefined : node.key)}
+							onkeydown={(event) => {
+								if (event.key === 'Enter' || event.key === ' ') {
+									event.preventDefault();
+									onselect(selected === node.key ? undefined : node.key);
+								}
+								if (event.key === 'Escape') onselect(undefined);
+							}}
+						>
+							<title>{nodeTip(node)}</title>
+							<!-- A hit area of at least 24px, whatever the circle's size. -->
+							<Circle cx={at.x} cy={at.y} r={Math.max(at.radius, 12)} class="fill-transparent" />
+							<!-- Kind is a shape as well as a shade: a note is a circle, a file a square, a skill a diamond. -->
+							{#if node.item.kind === 'attachment'}
+								<Polygon
+									cx={at.x}
+									cy={at.y}
+									r={at.radius * 1.2}
+									points={4}
+									rotate={45}
+									cornerRadius={2}
+									strokeWidth={2}
+									class={mark}
+								/>
+							{:else if node.item.kind === 'skill'}
+								<Polygon
+									cx={at.x}
+									cy={at.y}
+									r={at.radius * 1.3}
+									points={4}
+									cornerRadius={2}
+									strokeWidth={2}
+									class={mark}
+								/>
+							{:else}
+								<Circle cx={at.x} cy={at.y} r={at.radius} strokeWidth={2} class={mark} />
+							{/if}
+						</g>
+					{/if}
+				{/each}
+				{#each labels as label (label.key)}
+					{@const muted = neighbourhood !== undefined && !neighbourhood.has(label.key)}
+					<Text
+						x={label.x}
+						y={label.y}
+						value={label.text}
+						textAnchor="middle"
+						class={cn(
+							'pointer-events-none text-xs [paint-order:stroke] stroke-background stroke-[3px]',
+							neighbourhood?.has(label.key)
+								? 'fill-foreground font-medium'
+								: 'fill-muted-foreground',
+							muted && 'opacity-40'
+						)}
+					/>
+				{/each}
+			</Svg>
+		</Chart>
+	</div>
 </div>

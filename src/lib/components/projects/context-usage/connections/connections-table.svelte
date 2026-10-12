@@ -60,8 +60,8 @@
 	<Table.Root class="table-fixed">
 		<Table.Header class="sticky top-0 bg-background">
 			<Table.Row>
-				<Table.Head class="w-3/10">Item</Table.Head>
-				<Table.Head class="w-3/10">With</Table.Head>
+				<Table.Head class="w-1/4">Item</Table.Head>
+				<Table.Head class="w-1/4">With</Table.Head>
 				<Table.Head
 					class="w-1/8 text-right"
 					aria-sort={sort === 'together' ? 'descending' : 'none'}
@@ -69,23 +69,24 @@
 					<Button
 						variant="ghost"
 						size="xs"
-						class="-mx-2 gap-1 font-medium"
+						class="-mx-2 gap-1 text-sm font-medium"
 						onclick={() => (sort = 'together')}
 					>
 						Together {#if sort === 'together'}<Icon.ArrowDown class="size-3" />{/if}
 					</Button>
 				</Table.Head>
-				<Table.Head class="w-1/7" aria-sort={sort === 'order' ? 'descending' : 'none'}>
+				<Table.Head class="w-1/8 text-right" aria-sort={sort === 'order' ? 'descending' : 'none'}>
 					<Button
 						variant="ghost"
 						size="xs"
-						class="-mx-2 gap-1 font-medium"
+						class="-mx-2 gap-1 text-sm font-medium"
 						onclick={() => (sort = 'order')}
 					>
-						In order {#if sort === 'order'}<Icon.ArrowDown class="size-3" />{/if}
+						Item first {#if sort === 'order'}<Icon.ArrowDown class="size-3" />{/if}
 					</Button>
 				</Table.Head>
-				<Table.Head class="w-1/8">Linked</Table.Head>
+				<Table.Head class="w-1/8 text-right">With first</Table.Head>
+				<Table.Head>Linked</Table.Head>
 			</Table.Row>
 		</Table.Header>
 		<Table.Body>
@@ -108,9 +109,12 @@
 						>
 					</Table.Cell>
 					<Table.Cell class="text-right tabular-nums">{row.together || '—'}</Table.Cell>
-					<Table.Cell class="text-muted-foreground tabular-nums">
-						{#if row.aFirst || row.bFirst}{row.aFirst} → · {row.bFirst} ←{:else}—{/if}
-					</Table.Cell>
+					<Table.Cell class="text-right text-muted-foreground tabular-nums"
+						>{row.aFirst || '—'}</Table.Cell
+					>
+					<Table.Cell class="text-right text-muted-foreground tabular-nums"
+						>{row.bFirst || '—'}</Table.Cell
+					>
 					<Table.Cell class="truncate text-muted-foreground">{row.linked || '—'}</Table.Cell>
 				</Table.Row>
 			{/each}

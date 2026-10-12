@@ -74,5 +74,5 @@ it('shows what a selected item is read with', async () => {
 it('lists the pairs as a table with the counts the map draws', async () => {
 	const screen = await render(ConnectionsMap, { report, projectId: testProjectId() });
 	(screen.getByRole('radio', { name: 'Table' }).element() as HTMLElement).click();
-	await expect.element(screen.getByRole('cell', { name: '4', exact: true })).toBeVisible();
+	await expect.element(screen.getByRole('row', { name: 'Note 1 Note 2 4 4 — —' })).toBeVisible();
 });

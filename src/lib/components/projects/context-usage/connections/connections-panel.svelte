@@ -217,8 +217,8 @@
 				{read}
 				{read === 1 ? 'item' : 'items'} read across {chats(report.chats)} · {report.together.length}
 				{report.together.length === 1 ? 'pair' : 'pairs'} read together · {report.links.length}
-				{report.links.length === 1 ? 'link' : 'links'} recorded{#if report.memoryLeftOut > 0}
-					· memory ({report.memoryLeftOut}) left out, because it loads into every chat{/if}
+				{report.links.length === 1 ? 'link' : 'links'} recorded {#if report.memoryLeftOut > 0}·
+					memory ({report.memoryLeftOut}) left out, because it loads into every chat{/if}
 			</p>
 		</header>
 		<section class="flex flex-col gap-bind">
@@ -233,7 +233,7 @@
 							disabled={row.count === 0}
 							onclick={() => onmismatch(row.id)}
 						>
-							<span class="flex-1">{row.label}</span>
+							<span class="flex-1 text-left">{row.label}</span>
 							<span class="text-muted-foreground tabular-nums">{row.count}</span>
 							<Icon.ChevronRight class="size-4 text-muted-foreground" />
 						</Button>

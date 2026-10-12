@@ -123,12 +123,16 @@ function seeds(groups: readonly string[][]): Map<string, { x: number; y: number 
 	return placed;
 }
 
-/** Label width at 12px Inter: about 6.5px a character. Only used to avoid collisions. */
-const labelWidth = (text: string) => text.length * 6.5;
+/** Label width at 12px Inter: about 7px a character, rounded up. Only used to avoid collisions. */
+const labelWidth = (text: string) => text.length * 7;
 const LABEL_HEIGHT = 13;
 const LABEL_LIMIT = 24;
+/**
+ * Long titles keep their start and their end: titles in one project often share a prefix
+ * ("Market price log — week 12", "… week 13"), and cutting the end makes them identical.
+ */
 const shorten = (text: string) =>
-	text.length > LABEL_LIMIT ? `${text.slice(0, LABEL_LIMIT - 1)}…` : text;
+	text.length > LABEL_LIMIT ? `${text.slice(0, 13)}…${text.slice(-(LABEL_LIMIT - 14))}` : text;
 
 interface Box {
 	readonly left: number;
@@ -140,14 +144,16 @@ const overlaps = (a: Box, b: Box) =>
 	a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
 /**
- * Greedy label placement: highest rank first, each under its circle, skipped when it would
- * cover another label or a circle. `always` names labels that are placed regardless (the focused
- * neighbourhood), so the reader never loses the names of what they are looking at.
+ * Greedy label placement. The pinned item (the one in focus) is labelled first and always; then
+ * the priority items (its neighbourhood), then the rest by rank. Each label tries below, above,
+ * right and left of its circle, and is skipped when every spot would cover another label or a
+ * circle: a dense neighbourhood shows the names that fit, never a pile of them.
  */
 export function placeLabels(
 	nodes: readonly LayoutNode[],
 	placed: ReadonlyMap<string, PlacedNode>,
-	always: ReadonlySet<string>
+	priority: ReadonlySet<string> = new Set(),
+	pinned: ReadonlySet<string> = new Set()
 ): PlacedLabel[] {
 	const circles: Box[] = [...placed.values()].map((node) => ({
 		left: node.x - node.radius,
@@ -157,30 +163,39 @@ export function placeLabels(
 	}));
 	const taken: Box[] = [];
 	const labels: PlacedLabel[] = [];
-	const ordered = [...nodes].sort(
-		(a, b) => Number(always.has(b.key)) - Number(always.has(a.key)) || a.rank - b.rank
-	);
+	const weight = (key: string) => (pinned.has(key) ? 2 : priority.has(key) ? 1 : 0);
+	const ordered = [...nodes].sort((a, b) => weight(b.key) - weight(a.key) || a.rank - b.rank);
 	for (const node of ordered) {
 		const at = placed.get(node.key);
 		if (!at) continue;
 		const text = shorten(node.label);
 		const width = labelWidth(text);
-		const y = at.y + at.radius + 12;
-		// Kept inside the drawing space: a label at the edge is centred under its circle until it
-		// would cross the border, then it shifts inward.
-		const x = Math.min(Math.max(at.x, width / 2 + 2), GRAPH_WIDTH - width / 2 - 2);
-		const box = {
-			left: x - width / 2,
-			top: y - 10,
-			right: x + width / 2,
-			bottom: y - 10 + LABEL_HEIGHT
-		};
-		const clear =
-			!taken.some((other) => overlaps(box, other)) &&
-			!circles.some((circle) => overlaps(box, circle));
-		if (!clear && !always.has(node.key)) continue;
-		taken.push(box);
-		labels.push({ key: node.key, x, y, text });
+		const gap = at.radius + 4;
+		// Baselines: below, above, right, left of the circle.
+		const spots = [
+			{ x: at.x, y: at.y + gap + 9 },
+			{ x: at.x, y: at.y - gap - 3 },
+			{ x: at.x + gap + width / 2, y: at.y + 4 },
+			{ x: at.x - gap - width / 2, y: at.y + 4 }
+		].map((spot) => {
+			// Kept inside the drawing space: a label at the edge shifts inward rather than clip.
+			const x = Math.min(Math.max(spot.x, width / 2 + 2), GRAPH_WIDTH - width / 2 - 2);
+			const y = Math.min(Math.max(spot.y, LABEL_HEIGHT), GRAPH_HEIGHT - 3);
+			return {
+				x,
+				y,
+				box: { left: x - width / 2, top: y - 10, right: x + width / 2, bottom: y + 3 }
+			};
+		});
+		const free = spots.find(
+			(spot) =>
+				!taken.some((other) => overlaps(spot.box, other)) &&
+				!circles.some((circle) => overlaps(spot.box, circle))
+		);
+		const chosen = free ?? (pinned.has(node.key) ? spots[0] : undefined);
+		if (!chosen) continue;
+		taken.push(chosen.box);
+		labels.push({ key: node.key, x: chosen.x, y: chosen.y, text });
 	}
 	return labels;
 }
@@ -262,5 +277,5 @@ export function layoutGraph(
 			}
 		])
 	);
-	return { nodes: placed, labels: placeLabels(nodes, placed, focus), groupOf };
+	return { nodes: placed, labels: placeLabels(nodes, placed, new Set(), focus), groupOf };
 }
