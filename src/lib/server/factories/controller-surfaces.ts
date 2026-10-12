@@ -246,7 +246,8 @@ export const controllerSurfaces = {
 		submit: true
 	},
 	contextUsage: {
-		forProject: true
+		forProject: true,
+		connectionsFor: true
 	},
 	attachmentProcessing: {
 		process: true

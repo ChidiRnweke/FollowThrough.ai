@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { ContextTouch, EmptySearch, ToolContextLog } from '$lib/models/context-usage';
+import type {
+	AuthoredLinkRecord,
+	ContextTouch,
+	EmptySearch,
+	ToolContextLog
+} from '$lib/models/context-usage';
 import type { DateTime } from '$lib/models/workspace';
 import type { ToolContextLogRepository } from '$lib/server/repositories/context-usage';
 import { attachmentViewBuilder, testAttachmentId } from '$lib/testing/attachments/fixtures/views';
+import { InMemoryProjectLinks } from '$lib/testing/context-usage/fakes/in-memory-project-links';
 import {
 	memoryEntryBuilder,
 	noteBuilder,
@@ -42,17 +48,18 @@ const touch = (
 	kind: 'note' | 'attachment' | 'memory',
 	id: string,
 	minute: number,
-	over: { projectId?: typeof PROJECT; conversationId?: typeof CHAT } = {}
+	over: { projectId?: typeof PROJECT; conversationId?: typeof CHAT; call?: number } = {}
 ): ContextTouch => ({
 	kind,
 	id,
 	projectId: over.projectId ?? PROJECT,
 	conversationId: over.conversationId ?? CHAT,
 	at: at(minute),
-	call: minute
+	// One touch is one call unless a test says two touches came from the same call.
+	call: over.call ?? minute
 });
 
-const summarise = (log: Partial<ToolContextLog>, over: Partial<ProjectHoldings> = {}) => {
+const service = (log: Partial<ToolContextLog>, links: readonly AuthoredLinkRecord[] = []) => {
 	const repository: ToolContextLogRepository = {
 		read: async () => ({
 			touches: [],
@@ -62,10 +69,18 @@ const summarise = (log: Partial<ToolContextLog>, over: Partial<ProjectHoldings> 
 			...log
 		})
 	};
+	const projectLinks = new InMemoryProjectLinks();
+	projectLinks.projects.set(PROJECT, links);
 	// A Wednesday, three weeks after the first fixture touch.
 	const now = () => '2026-10-22T12:00:00.000Z' as DateTime;
-	return new ProjectContextUsageService(repository, now).summarise(PROJECT, holdings(over));
+	return new ProjectContextUsageService(repository, projectLinks, now);
 };
+
+const summarise = (log: Partial<ToolContextLog>, over: Partial<ProjectHoldings> = {}) =>
+	service(log).summarise(PROJECT, holdings(over));
+
+const connect = (log: Partial<ToolContextLog>, links: readonly AuthoredLinkRecord[] = []) =>
+	service(log, links).connect(PROJECT, holdings());
 
 describe('Most-used context', () => {
 	it('ranks items by how many calls drew on them, then by how recently', async () => {
@@ -280,5 +295,122 @@ describe('Chats and searches', () => {
 	it('passes on how many journalled calls could not be read', async () => {
 		const result = await summarise({ unreadableCalls: 3 });
 		expect(result.unreadableCalls).toBe(3);
+	});
+});
+
+describe('Connections', () => {
+	const BRIEF = `note:${brief.id}` as const;
+	const PLAN = `note:${plan.id}` as const;
+
+	it('pairs two items one call read, with no order between them', async () => {
+		const result = await connect({
+			touches: [touch('note', brief.id, 1, { call: 7 }), touch('note', plan.id, 1, { call: 7 })]
+		});
+		expect(result.together).toEqual([{ a: BRIEF, b: PLAN, chats: 1, aFirst: 0, bFirst: 0 }]);
+	});
+
+	it('counts a chat toward the item whose first read came in the earlier call', async () => {
+		const result = await connect({
+			touches: [
+				touch('note', plan.id, 1),
+				touch('note', brief.id, 2),
+				// A later read of the plan does not move its first read.
+				touch('note', plan.id, 3),
+				touch('note', brief.id, 4, { conversationId: OTHER_CHAT }),
+				touch('note', plan.id, 5, { conversationId: OTHER_CHAT })
+			],
+			conversations: [
+				{ id: CHAT, projectId: PROJECT },
+				{ id: OTHER_CHAT, projectId: PROJECT }
+			]
+		});
+		expect(result.together).toEqual([{ a: BRIEF, b: PLAN, chats: 2, aFirst: 1, bFirst: 1 }]);
+	});
+
+	it('keeps memory off the map and counts the entries it leaves out', async () => {
+		const result = await connect({
+			touches: [
+				touch('memory', fact.id, 1),
+				touch('note', brief.id, 1, { call: 1 }),
+				touch('memory', fact.id, 2)
+			]
+		});
+		expect({
+			nodes: result.nodes.map((node) => node.key),
+			together: result.together,
+			memoryLeftOut: result.memoryLeftOut,
+			chats: result.chats
+		}).toEqual({ nodes: [BRIEF], together: [], memoryLeftOut: 1, chats: 1 });
+	});
+
+	it('draws a linked note the agent never read, after every item it read', async () => {
+		const result = await connect({ touches: [touch('note', brief.id, 1)] }, [
+			{
+				kind: 'elaborates',
+				from: { kind: 'note', id: plan.id, title: 'Plan' },
+				to: { kind: 'note', id: brief.id, title: 'Brief' }
+			}
+		]);
+		expect({ nodes: result.nodes, links: result.links }).toEqual({
+			nodes: [
+				{
+					key: BRIEF,
+					item: { kind: 'note', id: brief.id, title: 'Brief' },
+					use: { kind: 'read', times: 1, lastAt: at(1) },
+					chats: 1
+				},
+				{
+					key: PLAN,
+					item: { kind: 'note', id: plan.id, title: 'Plan' },
+					use: { kind: 'never' },
+					chats: 0
+				}
+			],
+			links: [{ from: PLAN, to: BRIEF, kind: 'elaborates' }]
+		});
+	});
+
+	it('counts a skill only in chats opened from this project', async () => {
+		const skill = (conversationId: typeof CHAT, minute: number): ContextTouch => ({
+			kind: 'skill',
+			id: testNoteId(50),
+			title: 'Contract review',
+			conversationId,
+			at: at(minute),
+			call: minute
+		});
+		const result = await connect({
+			touches: [
+				skill(CHAT, 1),
+				touch('note', brief.id, 2),
+				skill(OTHER_CHAT, 3),
+				touch('note', brief.id, 4, { conversationId: OTHER_CHAT })
+			],
+			conversations: [
+				{ id: CHAT, projectId: PROJECT },
+				{ id: OTHER_CHAT, projectId: OTHER_PROJECT }
+			]
+		});
+		expect(
+			result.nodes.map((node) => [node.key, node.use.kind === 'read' && node.use.times, node.chats])
+		).toEqual([
+			[BRIEF, 2, 2],
+			[`skill:${testNoteId(50)}`, 1, 1]
+		]);
+	});
+
+	it("resolves a read of a note's own attachment through the link that names it", async () => {
+		const sketch = testAttachmentId(9);
+		const result = await connect({ touches: [touch('attachment', sketch, 1)] }, [
+			{
+				kind: 'attached_to',
+				from: { kind: 'attachment', id: sketch, title: 'sketch.png' },
+				to: { kind: 'note', id: brief.id, title: 'Brief' }
+			}
+		]);
+		expect(result.nodes.map((node) => [node.key, node.use.kind])).toEqual([
+			[`attachment:${sketch}`, 'read'],
+			[BRIEF, 'never']
+		]);
 	});
 });

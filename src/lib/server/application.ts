@@ -690,6 +690,7 @@ export function createApplication(
 		feedback,
 		contextUsage: {
 			usage: contextUsage.usage,
+			connections: contextUsage.connections,
 			projectTree: projects.catalog,
 			attachments: attachmentCapability.reader,
 			memory: memory.library

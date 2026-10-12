@@ -147,6 +147,99 @@ export interface ProjectContextUsageSummary {
 
 export const projectContextUsageInputSchema = z.object({ projectId: z.uuid() });
 
+// --- Connections: what the agent reads together, and what the user linked ---
+
+/**
+ * One item's identity across kinds. Ids are unique within a kind only in principle, and a
+ * skill is a note, so the kind is part of the key.
+ */
+export type ItemKey = `${ContextItem['kind']}:${string}`;
+
+/** Whether the agent ever read an item; a linked item it never read is still on the map. */
+export type NodeUse =
+	| { readonly kind: 'read'; readonly times: number; readonly lastAt: DateTime }
+	| { readonly kind: 'never' };
+
+export interface ConnectionNode {
+	readonly key: ItemKey;
+	readonly item: ContextItem;
+	readonly use: NodeUse;
+	/** The chats it was read in. */
+	readonly chats: number;
+}
+
+/**
+ * Two items read in the same chats. `a < b` by key. `aFirst` counts the chats where a's first
+ * read came in an earlier call than b's first read; `bFirst` the reverse. Two items first read
+ * by one call have no order, so that chat adds to neither.
+ */
+export interface ReadTogether {
+	readonly a: ItemKey;
+	readonly b: ItemKey;
+	readonly chats: number;
+	readonly aFirst: number;
+	readonly bFirst: number;
+}
+
+export type AuthoredLinkKind =
+	'prior_decision' | 'contradicts' | 'elaborates' | 'mentions' | 'skill_used_in' | 'attached_to';
+
+/** A link the user's records state: a relationship, a skill used in a note, a file on a note. */
+export interface AuthoredLink {
+	readonly from: ItemKey;
+	readonly to: ItemKey;
+	readonly kind: AuthoredLinkKind;
+}
+
+/** What a user can link: memory entries have no relationships, usages or files. */
+export type LinkedItem = Exclude<ContextItem, { readonly kind: 'memory' }>;
+
+/** An authored link as stored, with both endpoints whole, so one never read can be drawn. */
+export interface AuthoredLinkRecord {
+	readonly from: LinkedItem;
+	readonly to: LinkedItem;
+	readonly kind: AuthoredLinkKind;
+}
+
+export interface ProjectConnections {
+	/** Most-read first, then by title; linked items never read come last. */
+	readonly nodes: readonly ConnectionNode[];
+	/** Most shared chats first. */
+	readonly together: readonly ReadTogether[];
+	readonly links: readonly AuthoredLink[];
+	/** This project's chats with at least one read attributed to it. */
+	readonly chats: number;
+	/** Distinct memory entries read. Memory loads into every chat, so its edges say nothing. */
+	readonly memoryLeftOut: number;
+}
+
+/** Where what the user linked and what the agent reads together disagree. */
+export interface ConnectionMismatches {
+	/** Links whose endpoints were never read in one chat. */
+	readonly linkedNeverTogether: readonly AuthoredLink[];
+	/** Pairs read together in two or more chats with no link either way; most chats first. */
+	readonly togetherNotLinked: readonly ReadTogether[];
+}
+
+/** The smallest shared-chat counts the map offers as a minimum edge weight. */
+export type ConnectionThreshold = 1 | 2 | 3 | 5 | 8;
+
+/** The connections with what the shared rules derive from them. */
+export interface ProjectConnectionsReport extends ProjectConnections {
+	readonly mismatches: ConnectionMismatches;
+	/** Items read in so many of the chats that their edges say little. */
+	readonly ambient: readonly ItemKey[];
+	readonly defaultThreshold: ConnectionThreshold;
+}
+
+/** The connections as two CSV tables, for reading outside the app. */
+export interface ConnectionTables {
+	readonly nodes: string;
+	readonly edges: string;
+}
+
+export const projectConnectionsInputSchema = z.object({ projectId: z.uuid() });
+
 // --- The journalled tool-call fragments this reader understands ---
 
 const uuid = z.uuid();
