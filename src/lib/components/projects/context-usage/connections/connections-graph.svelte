@@ -116,7 +116,7 @@
 
 <!-- Below the width where labels stay legible the map keeps that width and scrolls sideways. -->
 <div class="w-full overflow-x-auto rounded-lg border border-border">
-	<div class="aspect-[18/13] w-full min-w-128">
+	<div class="aspect-[18/13] max-h-128 w-full min-w-128">
 		<Chart>
 			<Svg viewBox="0 0 {GRAPH_WIDTH} {GRAPH_HEIGHT}">
 				<!-- Clicking empty space lets go of the pinned item. -->

@@ -88,7 +88,7 @@ export const agentActions: Record<AgentActionKey, AgentActionSpec> = {
 	connectionsAsk: {
 		label: 'Ask about connections',
 		prompt: 'Explain what gets read together here',
-		icon: Icon.Chat
+		icon: Icon.Suggestion
 	},
 	projectDistil: {
 		label: 'Distil memory',

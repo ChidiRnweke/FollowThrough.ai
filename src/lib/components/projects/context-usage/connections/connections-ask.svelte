@@ -44,7 +44,6 @@
 
 <AgentAction
 	action={agentActions.connectionsAsk}
-	variant="outline"
 	onclick={(trigger) =>
 		onask(
 			{

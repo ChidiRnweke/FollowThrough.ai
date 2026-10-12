@@ -15,7 +15,7 @@
 		{userFacingMessage(connections.error, 'Connections could not be loaded.')}
 	</p>
 {:else if !connections.current}
-	<Skeleton class="aspect-[18/13] w-full" aria-busy="true" />
+	<Skeleton class="aspect-[18/13] max-h-128 w-full" aria-busy="true" />
 {:else if connections.current.nodes.length === 0}
 	<p class="text-sm text-muted-foreground">
 		The agent hasn't read anything here yet, and nothing here is linked. Ask about this project in a
