@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.6.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.5.0...v5.6.0) (2026-10-12)
+
+
+### Features
+
+* **widgets:** author widgets through the agent and move json to advanced ([#460](https://github.com/ChidiRnweke/FollowThrough.ai/issues/460)) ([17d7025](https://github.com/ChidiRnweke/FollowThrough.ai/commit/17d7025df5047270ea65aa4cd2320e3ab7e23831))
+
 ## [5.5.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.4.0...v5.5.0) (2026-10-12)
 
 
