@@ -9,6 +9,7 @@
 	import { formatRelativeTime } from '$lib/components/shared/labels';
 	import { Button } from '$lib/components/ui/button';
 	import * as Icon from '$lib/components/icons';
+	import { AgentAction, agentActions } from '$lib/components/agent';
 	import ItemLink from '../item-link.svelte';
 	import { kindNoun } from '../kinds';
 
@@ -64,13 +65,13 @@
 
 	const read = $derived(report.nodes.filter((node) => node.use.kind === 'read').length);
 
-	function suggest(a: ItemKey, b: ItemKey, trigger: EventTarget | null) {
+	function suggest(a: ItemKey, b: ItemKey, trigger: HTMLElement | undefined) {
 		askAgent(
 			{
 				prompt: `The agent keeps reading "${title(a)}" and "${title(b)}" in the same chats. Read both and suggest how they relate.`,
 				projectId
 			},
-			trigger instanceof HTMLElement ? trigger : undefined
+			trigger
 		);
 	}
 </script>
@@ -197,15 +198,13 @@
 						onclick={() => onselect(pair.b)}>{title(pair.b)}</Button
 					>
 					<div class="flex items-center justify-between gap-2">
-						<span class="text-xs text-muted-foreground">Read together in {chats(pair.chats)}</span>
-						<Button
-							size="xs"
-							variant="ghost"
+						<span class="text-xs text-muted-foreground">In {chats(pair.chats)}</span>
+						<AgentAction
+							action={agentActions.relate}
+							moment="snap"
 							class="-mr-2"
-							onclick={(event) => suggest(pair.a, pair.b, event.currentTarget)}
-						>
-							<Icon.Chat /> Suggest a relationship
-						</Button>
+							onclick={(trigger) => suggest(pair.a, pair.b, trigger)}
+						/>
 					</div>
 				</li>
 			{/each}

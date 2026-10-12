@@ -283,6 +283,40 @@
 	}
 }
 
+/* Asking the agent to relate two items snaps the chain shut: the links start apart along the
+   chain and slide into each other, then the dot lands. Keyed on the click, so a page never loads
+   mid-snap. The offset is along the glyph's own 40° axis. */
+.ft-snap {
+	& .ft-link-a,
+	& .ft-link-b {
+		transform-box: view-box;
+	}
+
+	& .ft-link-a {
+		animation: ft-snap-a 420ms var(--ease-land) both;
+	}
+
+	& .ft-link-b {
+		animation: ft-snap-b 420ms var(--ease-land) both;
+	}
+
+	& .ft-accent {
+		animation: ft-land var(--duration-icon-land) 300ms var(--ease-land) both;
+	}
+}
+
+@keyframes ft-snap-a {
+	from {
+		translate: -2.8px 2.3px;
+	}
+}
+
+@keyframes ft-snap-b {
+	from {
+		translate: 2.8px -2.3px;
+	}
+}
+
 /* A new notification swings the bell once and settles, the clapper landing last. One swing,
    never a loop: it reports an arrival, it does not nag. */
 .ft-ring {
@@ -537,6 +571,8 @@
 	.ft-accent,
 	.ft-knob,
 	.ft-ring,
+	.ft-link-a,
+	.ft-link-b,
 	.strike-sweep {
 		animation: none !important;
 		transition: none;

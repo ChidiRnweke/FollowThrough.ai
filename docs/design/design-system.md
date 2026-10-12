@@ -317,6 +317,11 @@ including the ones the shadcn-svelte CLI writes into a newly added primitive —
 - **Preferences is a switch, Settings is a gear.** The switch's knob is its dot and slides across
   when on. A skill is a repeatable workflow, so Skill takes the workflow mark and Diagram has its
   own two-box mark.
+- **A relationship is a woven chain.** `Icon.Link` is two links at the chain emoji's angle, each
+  passing over the other once, the upper one ending in the dot. It marks backlinks, "Connect these
+  notes" and "Suggest a relationship". Its moment is the snap: asking the agent to relate two items
+  slides the links into each other along the chain and lands the dot (`moment="snap"` on
+  `AgentAction`, the `.ft-snap` block in `layout.css`), once per click.
 - **Widget is a small app, Activity is a monitor.** A widget is a tool you use inside a note, so
   its mark is an app window with a pointer clicking into it, and the dot is where the click lands.
   Agent activity is a monitor with a live trace. Neither reuses the open book, which means

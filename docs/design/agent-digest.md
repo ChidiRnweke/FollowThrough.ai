@@ -136,3 +136,4 @@
 - missing token → add token first (src/routes/layout.css + docs/design/design-system.md) → then build
 - check shadcn/edra component exists before creating new
 - src/routes/layout.css=values, docs/design/design-system.md=usage, this file=digest. digest conflicts with source → source wins, update digest
+- Icon.Link = woven chain (two links, chain-emoji angle, upper ends in dot); used for backlinks + relate actions. moment `snap` (AgentAction `moment="snap"`, `.ft-snap`): links slide together, dot lands, once per click.

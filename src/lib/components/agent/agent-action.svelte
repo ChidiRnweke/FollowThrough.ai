@@ -13,6 +13,7 @@
 		subject,
 		variant = 'inline',
 		compact = false,
+		moment,
 		onclick,
 		class: className
 	}: {
@@ -36,17 +37,27 @@
 		variant?: 'inline' | 'row' | 'outline';
 		/** Drop the label for a tooltip, for headers with no room for one more word. */
 		compact?: boolean;
+		/**
+		 * A motion the icon plays once each time the action is clicked (see "Icons and motion"):
+		 * `snap` closes the chain for an action that relates two things.
+		 */
+		moment?: 'snap';
 		/** Overrides the default open-the-chat behaviour. Used by the in-panel starters. */
-		onclick?: () => void;
+		onclick?: (trigger: HTMLElement | undefined) => void;
 		class?: string;
 	} = $props();
 
 	const Glyph = $derived(action.icon);
 	const prompt = $derived(subject ? `${action.prompt}: “${subject}”` : action.prompt);
 
+	/** Clicks so far: the glyph is re-keyed on each, so its moment replays on every ask. */
+	let played = $state(0);
+	const glyphClass = $derived(played > 0 && moment ? `size-3.5 ft-${moment}` : 'size-3.5');
+
 	function invoke(event: MouseEvent): void {
+		played += 1;
 		if (onclick) {
-			onclick();
+			onclick(event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
 			return;
 		}
 		askAgent(
@@ -91,7 +102,7 @@
 			<span
 				class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand transition-colors duration-(--duration-micro) group-hover:bg-brand/20 dark:bg-brand/15"
 			>
-				<Glyph class="size-3.5" />
+				{#key played}<Glyph class={glyphClass} />{/key}
 			</span>
 			<span class="min-w-0 flex-1">{action.label}</span>
 			<!-- Visible at rest: this row is a target, and an arrow you must hover to
@@ -111,7 +122,7 @@
 		class={['text-brand hover:text-brand', className]}
 		onclick={invoke}
 	>
-		<Glyph class="size-3.5" />
+		{#key played}<Glyph class={glyphClass} />{/key}
 		{action.label}
 	</Button>
 {:else}
@@ -132,7 +143,7 @@
 				<span
 					class="flex size-5 shrink-0 items-center justify-center rounded-sm bg-brand/10 text-brand transition-colors duration-(--duration-micro) group-hover/agent:bg-brand/20 dark:bg-brand/15"
 				>
-					<Glyph class="size-3.5" />
+					{#key played}<Glyph class={glyphClass} />{/key}
 				</span>
 				{#if !compact}
 					{action.label}
