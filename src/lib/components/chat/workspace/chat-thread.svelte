@@ -47,6 +47,7 @@
 		anchorSpacer = $bindable(0),
 		showJumpToLatest,
 		onswitchconversation,
+		starters,
 		onstarter,
 		oneditkeydown,
 		onresubmit,
@@ -82,6 +83,8 @@
 		anchorSpacer?: number;
 		showJumpToLatest: boolean;
 		onswitchconversation: (id: Conversation['id']) => void;
+		/** The invocation point's own questions, shown in place of the surface starters. */
+		starters?: readonly string[];
 		onstarter: (text: string) => void;
 		oneditkeydown: (event: KeyboardEvent, entry: ChatEntry) => void;
 		onresubmit: (entry: ChatEntry, text: string) => void;
@@ -203,6 +206,7 @@
 						<ChatStarters
 							hasNote={activeNoteId !== undefined}
 							hasProject={activeProjectId !== undefined}
+							prompts={starters}
 							onpick={onstarter}
 						/>
 						{#if showHistory && sessions.length > 0}

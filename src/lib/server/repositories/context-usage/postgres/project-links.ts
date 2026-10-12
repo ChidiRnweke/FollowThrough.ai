@@ -77,8 +77,10 @@ export class ProjectLinkRecords implements ProjectLinkRepository {
 	private async skillUsages(projectId: ProjectId): Promise<AuthoredLinkRecord[]> {
 		const context = alias(schema.notes, 'context_note');
 		const skillNote = alias(schema.notes, 'skill_note');
+		// `skill_usages` holds one row per use, but a skill used in a note is one statement however
+		// often it ran: repeats would draw the same link twice.
 		const rows = await this.database
-			.select({
+			.selectDistinct({
 				skillId: skillNote.id,
 				// `load_skill` reports the note's title as the skill's name, so both carry one title.
 				skillTitle: skillNote.title,

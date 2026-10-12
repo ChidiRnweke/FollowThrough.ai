@@ -18,8 +18,6 @@ export interface MapOptions {
 	readonly selected?: ItemKey;
 	/** Draw only this item and what it is read with, laid out on their own. */
 	readonly ego?: ItemKey;
-	/** Draw every pair at the threshold, even where the map would be too dense to read. */
-	readonly allPairs: boolean;
 }
 
 export type DrawnEdge =
@@ -50,16 +48,10 @@ export interface MapView {
 		readonly weight: number;
 	}[];
 	readonly edges: readonly DrawnEdge[];
-	/** Read items with no drawn edge at this threshold, listed beneath the map instead of drifting. */
-	readonly alone: readonly ConnectionNode[];
-	/** Pairs read together that the threshold leaves out. */
-	readonly belowThreshold: number;
-	/** Pairs at the threshold left out because each item already shows its strongest pairs. */
-	readonly beyondStrongest: number;
 }
 
 /** How many partners each item keeps on a dense map. */
-export const STRONGEST_PER_ITEM = 3;
+const STRONGEST_PER_ITEM = 3;
 
 /**
  * How much two items belong together, not how often they happen to meet: shared chats over the
@@ -118,7 +110,7 @@ export function mapView(report: ProjectConnectionsReport, options: MapOptions): 
 	const base = strong.filter((pair) => !touchesAmbient(pair));
 	const baseItems = new Set(base.flatMap((pair) => [pair.a, pair.b]));
 	// Dense: more than two lines per item on average, the point at which lines cross into a mesh.
-	const dense = !options.allPairs && base.length > 2 * baseItems.size;
+	const dense = base.length > 2 * baseItems.size;
 	const backbone = dense ? strongest(base, chatsOf) : base;
 	const shown = ego
 		? strong.filter((pair) => involves(pair, ego))
@@ -152,11 +144,6 @@ export function mapView(report: ProjectConnectionsReport, options: MapOptions): 
 	const placed = report.nodes.filter(
 		(node) => drawnKeys.has(node.key) || (!options.ego && ambient.has(node.key))
 	);
-	const alone = options.ego
-		? []
-		: report.nodes.filter(
-				(node) => node.use.kind === 'read' && !drawnKeys.has(node.key) && !ambient.has(node.key)
-			);
 
 	const layoutEdges = edges
 		.filter((edge) => {
@@ -177,10 +164,7 @@ export function mapView(report: ProjectConnectionsReport, options: MapOptions): 
 	return {
 		placed,
 		layoutEdges,
-		edges,
-		alone,
-		belowThreshold: report.together.length - strong.length,
-		beyondStrongest: ego ? 0 : base.length - backbone.length
+		edges
 	};
 }
 

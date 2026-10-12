@@ -123,7 +123,7 @@
 
 	const runningIcon: Record<NoteAiAction, typeof Icon.Diagram> = {
 		promises: Icon.Copied,
-		relate: Icon.Reference,
+		relate: Icon.Link,
 		reference: Icon.Reading,
 		diagram: Icon.Diagram
 	};
@@ -1339,7 +1339,7 @@
 										onmousedown={preserveEditorSelection}
 										onclick={() => runSelectionAction('relate')}
 									>
-										<Icon.Reference class="size-4" />
+										<Icon.Link class="size-4" />
 										Find related
 									</Button>
 								{/snippet}

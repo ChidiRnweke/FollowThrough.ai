@@ -35,7 +35,7 @@ export type AgentActionKey =
 	| 'todosFromNotes'
 	| 'todoSource'
 	| 'projectConnect'
-	| 'relate'
+	| 'connectionsAsk'
 	| 'projectDistil'
 	| 'projectAttachments'
 	| 'artifactsExport'
@@ -82,13 +82,13 @@ export const agentActions: Record<AgentActionKey, AgentActionSpec> = {
 		icon: Icon.Link
 	},
 	/**
-	 * From the Connections map: two items the agent keeps reading together with nothing recorded
-	 * between them. The prompt names the pair; the result is a relationship to accept or dismiss.
+	 * The connection map's one invocation point. The prompt is a placeholder: the map hands the
+	 * chat its own first question and offers the rest as starters.
 	 */
-	relate: {
-		label: 'Suggest a relationship',
-		prompt: 'Read both and suggest how they relate',
-		icon: Icon.Link
+	connectionsAsk: {
+		label: 'Ask about connections',
+		prompt: 'Explain what gets read together here',
+		icon: Icon.Suggestion
 	},
 	projectDistil: {
 		label: 'Distil memory',

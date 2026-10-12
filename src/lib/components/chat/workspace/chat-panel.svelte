@@ -716,6 +716,17 @@
 	}
 
 	function useStarter(text: string): void {
+		// A handed-over question swaps with the loaded one, so its pinned context stays and the
+		// list keeps offering the rest.
+		if (handoff?.starters) {
+			const current = handoff.prompt;
+			prefill({
+				...handoff,
+				prompt: text,
+				starters: [current, ...handoff.starters.filter((starter) => starter !== text)]
+			});
+			return;
+		}
 		replacePrompt(text);
 		saveDraft();
 		textareaRef?.focus();
@@ -782,6 +793,7 @@
 			bind:anchorSpacer
 			{showJumpToLatest}
 			onswitchconversation={(id) => void openConversation(chat.switchToConversation(id, history))}
+			starters={handoff?.starters}
 			onstarter={useStarter}
 			oneditkeydown={handleEditKeydown}
 			onresubmit={(entry, text) => void resubmit(entry, text)}

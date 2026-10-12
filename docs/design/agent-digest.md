@@ -137,3 +137,4 @@
 - check shadcn/edra component exists before creating new
 - src/routes/layout.css=values, docs/design/design-system.md=usage, this file=digest. digest conflicts with source → source wins, update digest
 - Icon.Link = woven chain (two links, chain-emoji angle, upper ends in dot); used for backlinks + relate actions. moment `snap` (AgentAction `moment="snap"`, `.ft-snap`): links slide together, dot lands, once per click.
+- connection relations: open circle = item in view, dot = other item. Icon.ReadTogether = two overlapping circles, dot in overlap (read in same chats). Icon.LeadsTo = circle → arrow → dot (read next). Icon.ReadAfter = dot → arrow → circle (read first). recorded link stays Icon.Link. item dialog empty sections = kanban treatment: heading kept, scene size-16 + one quiet line. Scene.ReadAlone / Scene.Unlinked / Scene.NothingNext / Scene.NothingBefore.
