@@ -97,7 +97,7 @@
 			variant="ghost"
 			type="button"
 			class={[
-				'row-interactive flex min-h-11 w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm',
+				'row-interactive flex h-auto min-h-11 w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm whitespace-normal',
 				className
 			]}
 			onclick={invoke}
