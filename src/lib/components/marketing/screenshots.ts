@@ -18,7 +18,10 @@ export const screenshotIds = [
 	'diagram-render',
 	'in-editor-ai',
 	'in-editor-chat',
-	'agent-tab'
+	'agent-tab',
+	'agent-activity',
+	'agent-connections',
+	'connections-ask'
 ] as const;
 
 export type ScreenshotId = (typeof screenshotIds)[number];

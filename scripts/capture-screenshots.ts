@@ -19,10 +19,10 @@ import { resetShowcase, seedShowcase, SHOWCASE_USER_ID } from './capture-screens
  *     pnpm dev                    # with the real .env: the model picker reads the live catalog
  *     pnpm docs:screenshots       # or: pnpm docs:screenshots --only today-screen,tools --cleanup
  *
- * The run signs in as a dedicated showcase user, never as you. It deletes and re-creates that
- * user's workspace, so reruns start from the same state, and `--cleanup` removes the user when
- * the captures are done. Images land in `static/product-screenshots/`, the one folder the
- * README, the docs site and the marketing page all read from.
+ * The run signs in as a dedicated showcase user, never as you, and rebuilds that user's
+ * workspace each time. Images land in `static/product-screenshots/`, the one folder the README,
+ * the docs site and the marketing page all read from. The guide, including how to add a screen,
+ * is docs/src/content/docs/guides/capture-product-screenshots/index.mdx.
  */
 
 const { values: options } = parseArgs({

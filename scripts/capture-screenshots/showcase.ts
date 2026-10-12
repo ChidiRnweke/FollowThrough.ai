@@ -2,6 +2,8 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import AdmZip from 'adm-zip';
 import type { Page } from '@playwright/test';
 import type { Sql } from 'postgres';
+import { journalRun, type JournalledCall } from './journal.ts';
+import { getNoteOutput, seedReadingHistory } from './reading-history.ts';
 
 /**
  * The workspace every product screenshot is taken in: one invented studio rebranding one
@@ -76,6 +78,12 @@ does for the reader, not how we feel about it.
 - [ ] Homepage and pricing copy
 - [ ] Legal sign-off
 - [ ] Press kit`,
+		'Homepage copy.md': `Draft two of the homepage. The hero says what Acme does in one line, then three
+proof points with numbers, then one call to action.`,
+		'Photography brief.md': `Team shots in the workshop, natural light, no posed handshakes. Twelve portraits
+and six wide shots of people at work.`,
+		'Press kit.md': `Logo files, three product photos, the founder's bio, and a one-page fact sheet.`,
+		'Research/Survey results.md': `Three hundred customers answered. Reliability matters most; price is fourth.`,
 		'Research/Competitor review.md': `Four competitors relaunched in the last two years. Three moved to a single-colour
 wordmark; all four lead with product screenshots rather than illustration.`,
 		'Research/Customer interviews.md': `Twelve interviews in September. Customers describe Acme as "dependable" and "a bit
@@ -352,16 +360,12 @@ const seedToolPreference = async (sql: Sql): Promise<void> => {
 	`;
 };
 
-const callId = (): string => `call_${randomBytes(12).toString('hex')}`;
-
-type Json = string | number | boolean | null | readonly Json[] | { readonly [key: string]: Json };
-type JsonObject = { readonly [key: string]: Json };
-
-interface SeedToolCall {
-	readonly name: string;
-	readonly input: JsonObject;
-	readonly output: JsonObject;
-}
+/** The model a seeded run names: this deployment's default, as a real run would record. */
+export const showcaseModel = (): string => {
+	const model = process.env.OPENROUTER_DEFAULT_MODEL;
+	if (!model) throw new Error('OPENROUTER_DEFAULT_MODEL is required to name the seeded runs.');
+	return model;
+};
 
 const conversationTitle = 'Commitments from the rebrand brief';
 const closingLine =
@@ -374,30 +378,33 @@ const closingLine =
  */
 const seedConversation = async (
 	sql: Sql,
-	ids: { projectId: string; noteId: string; todoIds: readonly string[] }
+	ids: {
+		projectId: string;
+		noteId: string;
+		todoIds: readonly string[];
+		memory: readonly { readonly id: string; readonly content: string }[];
+	}
 ): Promise<void> => {
-	const model = process.env.OPENROUTER_DEFAULT_MODEL ?? 'openai/gpt-5.6';
 	const prompt = 'Pull the commitments out of this brief and put them on the board.';
 	const [created, , , legal, colour] = ids.todoIds;
 	if (!created || !legal || !colour) throw new Error('The seeded todos are missing.');
-	const tools: readonly SeedToolCall[] = [
+	const calls: readonly JournalledCall[] = [
 		{
 			name: 'get_note',
 			input: { noteId: ids.noteId },
-			output: {
-				noteId: ids.noteId,
-				title: 'Rebrand brief',
-				todos: [],
-				diagrams: [],
-				backlinks: [],
-				references: [],
-				pendingSuggestions: []
-			}
+			output: getNoteOutput(ids.projectId, ids.noteId, 'Rebrand brief')
 		},
 		{
 			name: 'list_project_memory',
 			input: { projectId: ids.projectId },
-			output: { entries: [] }
+			output: {
+				entries: ids.memory.map((entry) => ({
+					id: entry.id,
+					content: entry.content,
+					projectId: ids.projectId,
+					createdAt: new Date().toISOString()
+				}))
+			}
 		},
 		{
 			name: 'list_todos',
@@ -443,111 +450,16 @@ const seedConversation = async (
 		closingLine
 	].join('\n');
 
-	const startedAt = new Date(Date.now() - 3 * 60 * 1000);
-	await sql.begin(async (tx) => {
-		const [conversation] = await tx<{ id: string }[]>`
-			insert into conversations (user_id, kind, context_project_id, context_note_id, title)
-			values (${SHOWCASE_USER_ID}, 'chat', ${ids.projectId}, ${ids.noteId}, ${conversationTitle})
-			returning id
-		`;
-		if (!conversation) throw new Error('The conversation was not inserted.');
-		const input = {
-			prompt,
-			conversationId: conversation.id,
-			noteId: ids.noteId,
-			projectId: ids.projectId
-		};
-		const [run] = await tx<{ id: string }[]>`
-			insert into agent_runs (
-				kind, user_id, conversation_id, model, execution_mode, status,
-				started_at, finished_at, input_snapshot, context_snapshot
-			) values (
-				'agent', ${SHOWCASE_USER_ID}, ${conversation.id}, ${model}, 'approval_required',
-				'completed', ${startedAt}, ${new Date(startedAt.getTime() + 60 * 1000)},
-				${tx.json(input)}, ${tx.json({})}
-			)
-			returning id
-		`;
-		if (!run) throw new Error('The agent run was not inserted.');
-		// A transaction answers one `now()`. The transcript is ordered by `created_at`, so each
-		// row is stamped a second after the one before it, as a real run spreads them out.
-		let sequence = 0;
-		const stamp = (): Date => new Date(startedAt.getTime() + (sequence += 1) * 1000);
-		const event = async (body: JsonObject): Promise<string> => {
-			const [row] = await tx<{ cursor: string }[]>`
-				insert into agent_run_events (run_id, attempt, event, created_at)
-				values (${run.id}, 1, ${tx.json(body)}, ${stamp()})
-				returning cursor
-			`;
-			if (!row) throw new Error('An agent run event was not inserted.');
-			return row.cursor;
-		};
-		const message = async (
-			role: 'user' | 'assistant' | 'tool',
-			content: JsonObject,
-			cursor: string | null
-		): Promise<void> => {
-			await tx`
-				insert into messages (
-					conversation_id, run_id, event_cursor, role, content, model, created_at
-				) values (
-					${conversation.id}, ${role === 'user' ? null : run.id}, ${cursor}, ${role},
-					${tx.json(content)}, ${role === 'assistant' ? model : null}, ${stamp()}
-				)
-			`;
-		};
-
-		await message('user', { type: 'text', text: prompt }, null);
-		await event({ type: 'run_queued', runId: run.id, reason: 'submitted', attempt: 1 });
-		await event({ type: 'run_started', runId: run.id, attempt: 1 });
-		const openingCursor = await event({ type: 'text_delta', text: opening });
-		await message('assistant', { type: 'text', text: opening }, openingCursor);
-		const calls = tools.map((tool) => ({ ...tool, callId: callId() }));
-		for (const call of calls) {
-			const cursor = await event({
-				type: 'tool_started',
-				name: call.name,
-				callId: call.callId,
-				arguments: call.input
-			});
-			await message(
-				'tool',
-				{
-					type: 'tool_activity',
-					name: call.name,
-					callId: call.callId,
-					input: call.input,
-					output: null,
-					status: 'running',
-					failure: null
-				},
-				cursor
-			);
-		}
-		for (const call of calls) {
-			const cursor = await event({
-				type: 'tool_succeeded',
-				name: call.name,
-				callId: call.callId,
-				output: call.output
-			});
-			await message(
-				'tool',
-				{
-					type: 'tool_activity',
-					name: call.name,
-					callId: call.callId,
-					input: {},
-					output: call.output,
-					status: 'succeeded',
-					failure: null
-				},
-				cursor
-			);
-		}
-		const answerCursor = await event({ type: 'text_delta', text: answer });
-		await message('assistant', { type: 'text', text: answer }, answerCursor);
-		await event({ type: 'completed', model, runId: run.id, conversationId: conversation.id });
+	await journalRun(sql, {
+		userId: SHOWCASE_USER_ID,
+		projectId: ids.projectId,
+		noteId: ids.noteId,
+		title: conversationTitle,
+		prompt,
+		startedAt: new Date(Date.now() - 3 * 60 * 1000),
+		model: showcaseModel(),
+		speech: { opening, answer },
+		calls
 	});
 };
 
@@ -574,7 +486,20 @@ export const seedShowcase = async (sql: Sql, page: Page, baseUrl: string): Promi
 	await seedMemory(sql, projectId);
 	await seedApiToken(sql);
 	await seedToolPreference(sql);
-	await seedConversation(sql, { projectId, noteId: briefNoteId, todoIds });
+	const memoryEntries = await sql<{ id: string; content: string }[]>`
+		select id, content from memory_entries
+		where user_id = ${SHOWCASE_USER_ID} and project_id = ${projectId}
+		order by created_at
+	`;
+	await seedConversation(sql, { projectId, noteId: briefNoteId, todoIds, memory: memoryEntries });
+	await seedReadingHistory(sql, {
+		userId: SHOWCASE_USER_ID,
+		projectId,
+		model: showcaseModel(),
+		notes: (title) => noteId(sql, title),
+		memory: async () => memoryEntries,
+		skills: (name) => builtInSkillId(sql, name)
+	});
 	return {
 		projectId,
 		briefNoteId,

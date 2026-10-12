@@ -106,6 +106,19 @@ project or for all of them, and the agent loses it everywhere.
 Pick any model on OpenRouter for one chat, or set defaults for chat, vision, attachment reading
 and inline suggestions.
 
+### See what the agent reads
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="static/product-screenshots/agent-activity-dark.jpg" />
+  <img src="static/product-screenshots/agent-activity-light.jpg" alt="Agent activity for a project: 86% of it read by the agent, two things to fix, reads per week with the busiest week named, and the most-read items." />
+</picture>
+
+Each project's **Agent activity** page shows how much of the project the agent has read, and what
+to fix so it finds more: a search that found nothing, a file it cannot read, notes it never opens.
+The **Connections** tab maps which items the agent reads together and in what order, against the
+links you recorded. Attach that map to a chat and ask the agent about it.
+See [Agent activity](https://chidirnweke.github.io/FollowThrough.ai/using/agent-activity/).
+
 The [trust model](https://chidirnweke.github.io/FollowThrough.ai/explanation/agents-propose-users-accept/)
 explains what the agent may do on its own and what always waits for you.
 

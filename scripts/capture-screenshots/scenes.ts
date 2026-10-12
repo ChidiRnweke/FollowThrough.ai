@@ -21,6 +21,9 @@ export interface Scene {
 
 const desktop = { width: 1440, height: 900 } as const;
 
+/** Tall enough for a report page to reach its first chart's conclusion. */
+const tall = { width: 1440, height: 1000 } as const;
+
 /** The right panel docks only at 96rem and wider; narrower, it is a modal sheet. */
 const docked = { width: 1600, height: 1000 } as const;
 
@@ -65,6 +68,18 @@ const openConversation = async (page: Page, ids: ShowcaseIds): Promise<void> => 
 		await panel.getByRole('button', { name: ids.conversationTitle }).first().click();
 	}
 	await closing.waitFor();
+};
+
+/** The Connections tab, once its map has laid out. */
+const openConnections = async (page: Page): Promise<void> => {
+	await page.getByRole('tab', { name: 'Connections' }).click();
+	await page.getByText('Pick an item on the map').waitFor();
+	await settled(
+		page
+			.locator('svg')
+			.filter({ has: page.locator('circle') })
+			.first()
+	);
 };
 
 export const scenes: Readonly<Record<ScreenshotId, Scene>> = {
@@ -161,5 +176,35 @@ export const scenes: Readonly<Record<ScreenshotId, Scene>> = {
 		viewport: docked,
 		ready: openConversation,
 		region: (page) => page.getByRole('complementary', { name: 'Agent' })
+	},
+	'agent-activity': {
+		path: (ids) => `/projects/${ids.projectId}/agent-activity`,
+		viewport: tall,
+		ready: async (page) => {
+			await page.getByRole('heading', { name: 'What to do' }).waitFor();
+			await page.getByText('Busiest week').waitFor();
+		}
+	},
+	'agent-connections': {
+		path: (ids) => `/projects/${ids.projectId}/agent-activity`,
+		viewport: desktop,
+		ready: openConnections
+	},
+	'connections-ask': {
+		path: (ids) => `/projects/${ids.projectId}/agent-activity`,
+		viewport: docked,
+		ready: async (page) => {
+			await openConnections(page);
+			const question = 'Which notes are always read together?';
+			await page.getByRole('button', { name: question }).click();
+			const panel = page.getByRole('complementary', { name: 'Agent' });
+			await panel.getByText('Connections · Acme rebrand').first().waitFor();
+			// The question is prefilled into the composer and waits there; it is never sent.
+			await page.waitForFunction(
+				(text) =>
+					document.querySelector<HTMLTextAreaElement>('#chat-composer')?.value.includes(text),
+				question
+			);
+		}
 	}
 };
