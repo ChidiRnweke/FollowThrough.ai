@@ -102,11 +102,11 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="flex max-h-dvh flex-col gap-group overflow-y-auto sm:max-w-md">
 		<Dialog.Header>
-			<!-- The action leads, as on a note: what you can do with the item, then what it is. -->
-			<div class="-ml-1.5 flex">
+			<!-- The item and what you can ask about it share a row, as on a note's header. -->
+			<div class="flex min-w-0 items-center justify-between gap-2">
+				<Dialog.Title class="min-w-0"><ItemLink item={selected.item} {projectId} /></Dialog.Title>
 				<ConnectionsAsk {report} {projectId} {projectName} {selected} {onask} />
 			</div>
-			<Dialog.Title class="min-w-0"><ItemLink item={selected.item} {projectId} /></Dialog.Title>
 			<Dialog.Description>
 				{kindNoun[selected.item.kind][0]} ·
 				{selected.use.kind === 'never'
