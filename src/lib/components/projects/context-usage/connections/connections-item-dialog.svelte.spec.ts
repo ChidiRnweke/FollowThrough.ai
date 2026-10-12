@@ -51,3 +51,20 @@ it('lists a partner linked both ways once per direction', async () => {
 	});
 	await expect.element(screen.getByText('elaborates (to this)')).toBeVisible();
 });
+
+it('says what is missing in each section an item has nothing in', async () => {
+	const screen = await render(ConnectionsItemDialog, {
+		report,
+		projectId: testProjectId(),
+		projectName: 'Launch',
+		selected: brief,
+		open: true,
+		onselect: () => {},
+		onask: () => {}
+	});
+	await expect
+		.element(screen.getByRole('dialog'))
+		.toHaveTextContent(
+			/Read on its own so far\..*No links recorded yet\..*Nothing read after it yet\..*Nothing read before it yet\./
+		);
+});

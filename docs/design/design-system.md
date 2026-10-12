@@ -366,6 +366,11 @@ drawn size at every scale — the scene is how a large empty state gets presence
 scaled-up glyph. Controls that only operate on content (tabs, filters, sort, bulk toolbars) hide
 while the region is empty; the empty state and its one action are the whole surface.
 
+The connection map's item dialog uses the same treatment per section: an empty section keeps its
+heading and centers its own scene (`size-16`) above one quiet line. Each scene is the empty form of
+the section's mark: `Scene.ReadAlone` (read with), `Scene.Unlinked` (linked), `Scene.NothingNext`
+(leads the agent to) and `Scene.NothingBefore` (read after).
+
 ## Surface pattern rules
 
 - **Version history & conflict review:** a near-full-screen dialog with a two-pane side-by-side
