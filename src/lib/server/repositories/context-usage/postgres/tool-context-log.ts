@@ -40,6 +40,8 @@ const contextTools = [
 /** One call, its rows folded together: the archive writes the input and the output apart. */
 interface Call {
 	readonly conversationId: ConversationId;
+	/** The journal position of the call's first row; touches carry it as their call order. */
+	readonly ordinal: number;
 	readonly name: string;
 	readonly at: DateTime;
 	readonly input?: AgentPayloadObject;
@@ -61,7 +63,8 @@ const fileTouch = (path: string, call: Call): ContextTouch | undefined => {
 		id: match[3],
 		projectId: match[1] as ProjectId,
 		conversationId: call.conversationId,
-		at: call.at
+		at: call.at,
+		call: call.ordinal
 	};
 };
 
@@ -82,7 +85,7 @@ const touches = (list: readonly (ContextTouch | undefined)[]): Reading => {
 
 /** What one settled call read, parsed from the shape its tool produces. */
 function readCall(call: Call): Reading {
-	const of = { conversationId: call.conversationId, at: call.at };
+	const of = { conversationId: call.conversationId, at: call.at, call: call.ordinal };
 	switch (call.name) {
 		case 'search':
 		case 'search_note': {
@@ -174,7 +177,14 @@ export class ToolContextLogRecords implements ToolContextLogRepository {
 					inArray(sql<string>`${schema.messages.content}->>'name'`, [...contextTools])
 				)
 			)
-			.orderBy(asc(schema.messages.createdAt));
+			// Two calls can share a millisecond. The event cursor is one identity sequence across
+			// every run, so it orders them; rows journalled without one fall back to their id,
+			// which is stable but says nothing about which came first.
+			.orderBy(
+				asc(schema.messages.createdAt),
+				sql`${schema.messages.eventCursor} asc nulls last`,
+				asc(schema.messages.id)
+			);
 
 		const conversations = new Map<string, LoggedConversation>();
 		const calls = new Map<string, Call>();
@@ -203,6 +213,7 @@ export class ToolContextLogRecords implements ToolContextLogRepository {
 			const output = content.output ?? earlier?.output;
 			calls.set(key, {
 				conversationId,
+				ordinal: earlier?.ordinal ?? index,
 				name: content.name,
 				at: earlier?.at ?? (row.createdAt.toISOString() as DateTime),
 				// A settled status wins whichever row arrives first: the two rows of one call can

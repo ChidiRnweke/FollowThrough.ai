@@ -27,6 +27,9 @@ export type ContextItem =
 /**
  * One item one call drew on. Project content is attributed to the project its own record
  * names — a search without a project scope still returns hits from exactly one project each.
+ *
+ * `call` is the call's place in the journal's order: touches from one call share it, and a
+ * smaller number is an earlier call. It orders reads; its value means nothing else.
  */
 export type ContextTouch =
 	| {
@@ -35,6 +38,7 @@ export type ContextTouch =
 			readonly projectId: ProjectId;
 			readonly conversationId: ConversationId;
 			readonly at: DateTime;
+			readonly call: number;
 	  }
 	| {
 			readonly kind: 'skill';
@@ -42,6 +46,7 @@ export type ContextTouch =
 			readonly title: string;
 			readonly conversationId: ConversationId;
 			readonly at: DateTime;
+			readonly call: number;
 	  };
 
 /** A search that came back with nothing: a gap in what the project holds. */

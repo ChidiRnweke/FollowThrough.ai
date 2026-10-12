@@ -48,7 +48,8 @@ const touch = (
 	id,
 	projectId: over.projectId ?? PROJECT,
 	conversationId: over.conversationId ?? CHAT,
-	at: at(minute)
+	at: at(minute),
+	call: minute
 });
 
 const summarise = (log: Partial<ToolContextLog>, over: Partial<ProjectHoldings> = {}) => {
@@ -104,9 +105,10 @@ describe('Most-used context', () => {
 			id: testNoteId(50),
 			title: 'Contract review',
 			conversationId: CHAT,
-			at: at(1)
+			at: at(1),
+			call: 1
 		};
-		const elsewhere: ContextTouch = { ...skill, conversationId: OTHER_CHAT, at: at(2) };
+		const elsewhere: ContextTouch = { ...skill, conversationId: OTHER_CHAT, at: at(2), call: 2 };
 		const result = await summarise({
 			touches: [skill, elsewhere],
 			conversations: [
