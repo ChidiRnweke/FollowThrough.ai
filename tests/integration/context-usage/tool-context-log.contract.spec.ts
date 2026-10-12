@@ -1,7 +1,9 @@
 import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
-import type { ConversationId, ToolActivity } from '$lib/models/agent';
+import type { AgentRunId, ConversationId, ToolActivity } from '$lib/models/agent';
 import type { ProjectId } from '$lib/models/projects';
+import { AgentRunEventRecords } from '$lib/server/repositories/agent/postgres/agent-runs';
+import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { ToolContextLogRecords } from '$lib/server/repositories/context-usage/postgres/tool-context-log';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
@@ -24,8 +26,17 @@ const settled = (
 	{ callId, name, input: {}, status: 'succeeded', output }
 ];
 
-/** A chat for `suffix`'s user, every call journalled through the production archive. */
-const journal = async (suffix: string, calls: (project: ProjectId) => ToolActivity[][]) => {
+/**
+ * A chat for `suffix`'s user, every call journalled through the production archive within one
+ * run. The run's events take their cursors in call order, as a live run's would. The archive
+ * writes the calls in `writeOrder` (call order unless given), so a test can make the write
+ * order and the cursor order disagree.
+ */
+const journal = async (
+	suffix: string,
+	calls: (project: ProjectId) => ToolActivity[][],
+	writeOrder?: readonly number[]
+) => {
 	const owner = await seedUser(suffix);
 	const project = await new ProjectRecords(owner, context.db).insert({
 		name: `Context usage ${suffix}`
@@ -40,9 +51,40 @@ const journal = async (suffix: string, calls: (project: ProjectId) => ToolActivi
 		createdAt: now,
 		updatedAt: now
 	});
+	const run = await new AgentRunRecords(owner, context.db).insert({
+		kind: 'agent',
+		id: crypto.randomUUID() as AgentRunId,
+		userId: owner.userId,
+		conversationId: conversation.id,
+		model: 'openai/test-model',
+		executionMode: 'approval_required',
+		status: 'running',
+		requestId: `context-usage-${suffix}`,
+		pendingDecisions: [],
+		inputSnapshot: { conversationId: conversation.id, prompt: 'Context usage contract' },
+		contextSnapshot: { contextNotes: [], contextResources: [], skills: { items: [] } },
+		createdAt: now,
+		updatedAt: now
+	});
+	const events = new AgentRunEventRecords(owner, context.db);
+	const journalled = calls(project.id);
+	const cursors: string[][] = [];
+	for (const rows of journalled) {
+		const callCursors: string[] = [];
+		for (const row of rows)
+			callCursors.push(
+				(await events.append(run.id, 1, { type: 'text_delta', text: row.name })).cursor
+			);
+		cursors.push(callCursors);
+	}
+	// Every row shares the fixed test clock, so only the cursor tells the calls apart.
 	const archive = new ConversationArchive(owner, records, testClock);
-	for (const rows of calls(project.id))
-		for (const row of rows) await archive.recordToolActivity(conversation.id, row);
+	for (const index of writeOrder ?? journalled.keys())
+		for (const [position, row] of journalled[index]!.entries())
+			await archive.recordToolActivity(conversation.id, row, {
+				runId: run.id,
+				eventCursor: cursors[index]![position]!
+			});
 	return { owner, project: project.id, conversation: conversation.id };
 };
 
@@ -122,5 +164,35 @@ describe('The tool context log reads what the conversation archive journals', ()
 		const log = await new ToolContextLogRecords(reversed.owner, context.db).read();
 
 		expect(log.emptySearches.map(({ query }) => query)).toEqual(['pricing tiers']);
+	});
+
+	it('orders two calls of one millisecond by their event cursors, not by when they were written', async () => {
+		const ordered = await journal(
+			'c4',
+			(project) => [
+				settled(
+					'first',
+					'sed',
+					{ path: `/projects/${project}/notes/${NOTE}.md` },
+					{ kind: 'content', path: `/projects/${project}/notes/${NOTE}.md` }
+				),
+				settled(
+					'second',
+					'sed',
+					{ path: `/projects/${project}/attachments/${ATTACHMENT}.txt` },
+					{ kind: 'content', path: `/projects/${project}/attachments/${ATTACHMENT}.txt` }
+				)
+			],
+			[1, 0]
+		);
+
+		const log = await new ToolContextLogRecords(ordered.owner, context.db).read();
+
+		expect(
+			[...log.touches].sort((x, y) => x.call - y.call).map((touch) => [touch.kind, touch.id])
+		).toEqual([
+			['note', NOTE],
+			['attachment', ATTACHMENT]
+		]);
 	});
 });

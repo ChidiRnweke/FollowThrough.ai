@@ -1,11 +1,16 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { Database } from '$lib/server/db';
+import { ProjectLinkRecords } from '$lib/server/repositories/context-usage/postgres/project-links';
 import { ToolContextLogRecords } from '$lib/server/repositories/context-usage/postgres/tool-context-log';
 import {
 	ProjectContextUsageService,
 	type ProjectContextUsage
 } from '$lib/server/services/context-usage/usage';
+import {
+	ConnectionAnalysisService,
+	type ConnectionAnalysis
+} from '$lib/services/context-usage/connections';
 
 export interface ContextUsageCapabilityInput {
 	readonly db: Database;
@@ -14,11 +19,17 @@ export interface ContextUsageCapabilityInput {
 
 export interface ContextUsageCapability {
 	readonly usage: ProjectContextUsage;
+	readonly connections: ConnectionAnalysis;
 }
 
 export const createContextUsageCapability = (
 	actor: ActorContext,
 	input: ContextUsageCapabilityInput
 ): ContextUsageCapability => ({
-	usage: new ProjectContextUsageService(new ToolContextLogRecords(actor, input.db), input.now)
+	usage: new ProjectContextUsageService(
+		new ToolContextLogRecords(actor, input.db),
+		new ProjectLinkRecords(actor, input.db),
+		input.now
+	),
+	connections: new ConnectionAnalysisService()
 });

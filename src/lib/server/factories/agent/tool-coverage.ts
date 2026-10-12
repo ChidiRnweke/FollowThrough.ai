@@ -7,6 +7,7 @@ import type { ToolPreferencesController } from '$lib/server/controllers/agent/to
 import type { TrustPoliciesController } from '$lib/server/controllers/agent/trust-policies/controller';
 import type { ApiTokensController } from '$lib/server/controllers/api-tokens/controller';
 import type { AttachmentsController } from '$lib/server/controllers/attachments/controller';
+import type { ContextUsageController } from '$lib/server/controllers/context-usage/controller';
 import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
 import type { DiagramStudioController } from '$lib/server/controllers/diagram-studio/controller';
 import type { DiagramsController } from '$lib/server/controllers/diagrams/controller';
@@ -43,6 +44,7 @@ interface CoveredAgentControllers {
 	readonly memory: MemoryController;
 	readonly widgets: WidgetsController;
 	readonly retrieval: RetrievalController;
+	readonly contextUsage: ContextUsageController;
 }
 
 export type AgentToolCoverage = AgentToolContractMap<CoveredAgentControllers>;
@@ -562,6 +564,16 @@ export const agentToolCoverage = {
 	},
 	retrieval: {
 		search: { kind: 'read', tools: ['search', 'search_note'] }
+	},
+	contextUsage: {
+		forProject: {
+			kind: 'excluded',
+			reason: "The usage summary is the project page's view of the agent, not context for it."
+		},
+		connectionsFor: {
+			kind: 'excluded',
+			reason: 'Not yet a tool: the project_connections tool that reads it lands separately.'
+		}
 	}
 } as const satisfies AgentToolCoverage;
 
