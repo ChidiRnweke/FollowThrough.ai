@@ -38,6 +38,7 @@
 - NAMED SCALE (layout.css utilities — no raw heading size classes in app code):
   - `page-title` 3xl/500/serif/tight — one per page (page-shell h1 + custom-header pages)
   - `stat-value` 2xl/600/tight/tabular — a dashboard figure, ALWAYS with a caption line beneath, left-aligned
+  - `stat-value-hero` 5xl/600/tight/tabular — the ONE answer a dashboard leads with, over its sentence
   - `section-title` base/600/tight — real content sections (settings groups, skill editor sections)
   - `eyebrow` xs/500/uppercase/wide/muted-fg — labels a GROUP of items below it (list-group labels, table heads, kanban column headers)
   - `provenance-caption` xs/muted-fg — annotates ONE item (timestamps, provenance)
@@ -69,7 +70,7 @@
 - focus ring visible on everything interactive. keyboard-first
 - dark mode: class .dark, first-class. test every component both themes
 - charts: shadcn Chart over LayerChart; helpers in ui/chart (chartConfigOf, layerSeriesOf, seriesColor, remainderColor, valueTick, countTick for count axes)
-- dashboards: plain-language, NO cards/boxes, NO new colours. hierarchy = named scale (stat-value figure over caption, section-title headings w/ inline count) + teal vs gray. teal=agent activity + live dot; warning/destructive never a state. fixes in "Needs attention" tab (teal dot+count, muted check when empty); each item = visual + fixing action. whole everyday words, no coined nouns ("lookups")
+- dashboards: plain-language, NO cards/boxes, NO new colours. hierarchy = one stat-value-hero answer + meter, then stat-value figures over captions, section-title headings w/ inline count + teal vs gray. teal=agent activity; warning/destructive never a state. fixes = "What to do" divided list right under the answer, each row with its fixing action; no attention tab. lists paginate at 5 (shadcn Pagination + "1–5 of 18" provenance-caption). charts: unit in subtitle + computed conclusion sentence beneath; stacked by-kind only as a toggle mode w/ legend; emphasis within one series = --brand current, --chart-2 rest. project name in a sentence = text-brand italic font-medium, no wash (Inter italic, never display face). whole everyday words, no coined nouns ("lookups")
 
 ## ai-provenance (signature — no per-feature variants)
 

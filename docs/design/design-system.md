@@ -35,31 +35,40 @@
   `--chart-2`, `--chart-5`, `--chart-3`, `--chart-1` in that fixed order, so neighbours alternate
   light and dark. Never cycled: widgets cap a chart at five series, exactly that order. The
   remainder of a part-of-whole (what is "not yet") is `--chart-1`. Prefer one series: a stack of
-  shades of one hue asks the reader to tell them apart, so split a breakdown into its own chart.
-  A chart with more than one series always shows its legend, so shade is never the only key.
+  shades of one hue asks the reader to tell them apart, so split a breakdown into its own chart,
+  or offer it as a mode beside the single series (an `All · By kind` toggle), never as the default.
+  Inside one series, emphasis is a step: the value the chart is about (this week) is `--brand`
+  and the rest `--chart-2`. A chart with more than one series always shows its legend, so shade
+  is never the only key. A chart states its unit in its subtitle, in everyday words ("One read is
+  one time a chat opened, searched or quoted…"), and a computed sentence under it says what to
+  take from it ("Busiest week: Sep 28 (185 reads). This week: 122, down 63 from last week.").
   Value-axis ticks are compact (`120K`); a count axis uses `countTick`, which leaves fractional
   ticks blank; a chart with no rows says so in muted text. No status colours (warning,
   destructive) in a chart. The series helpers (`chartConfigOf`, `layerSeriesOf`, `seriesColor`,
   `remainderColor`, `valueTick`, `countTick`) live in `components/ui/chart`.
 - **Dashboards** (the project's Agent activity page) speak to someone who does not know how the
   agent works. **No cards and no boxes**, and no new colours: hierarchy comes from the named type
-  scale and from teal versus gray. A figure is `stat-value` with its caption on the line beneath,
-  both on one left edge, figures side by side in a grid so their tops line up; a number never sits
-  beside a multi-line block. Section headings are `section-title` with any count inline after the
-  title. Teal is the agent's activity (charts, the donut) and the live thing (the attention tab's
-  dot); everything else is neutral ink — warning and destructive never mark a state here. What to
-  fix lives in its own **Needs attention** tab whose trigger carries a teal dot and the count when
-  it has anything, a muted check when not; the overview links to it with an outline button. Every
-  attention item shows itself visually (a bar per missed search, a square per unused item) and
-  offers the action that fixes it ("Write a note", "Fix in Attachments"). Words are everyday and
-  whole: "times the agent read something here", never coined nouns ("lookups") or internal ones
-  ("context", "tool call").
+  scale and from teal versus gray. The page leads with one answer: a `stat-value-hero` figure (one
+  per page) over the sentence that says what it is, then a meter (`Progress`, `--chart-1` track,
+  `--brand` fill). Every other figure is `stat-value` with its caption on the line beneath, both on
+  one left edge, figures side by side in a grid so their tops line up; a number never sits beside a
+  multi-line block. Section headings are `section-title` with any count inline after the title.
+  Teal is the agent's activity (charts, the meter); everything else is neutral ink — warning and
+  destructive never mark a state here. What to fix sits directly under the answer as a divided
+  **What to do** list, one row per thing with the action that fixes it ("Write a note", "Fix in
+  Attachments", "Review"); there is no separate attention tab. Lists paginate at five with the
+  shadcn `Pagination` primitive and a `provenance-caption` range ("1–5 of 18") on the left; they
+  never grow with "show more". Words are everyday and whole: "times the agent read something
+  here", never coined nouns ("lookups") or internal ones ("context", "tool call").
 - **Project identity:** Projects are identified by the brand teal, never per-project hues: the
   sidebar project icon, `Badge variant="brand"`, breadcrumb links, chat origin lines, artifact
   format badges, and overview resource chips use `--brand` text on the shared `bg-brand/10` wash
   (`dark:bg-brand/15`). No new wash tokens — the badge `brand` variant is the canonical recipe.
   On a divided row (a todo, a recent note) the project is plain `text-brand` text with no wash:
   the row is already a unit, and a filled chip on every row is the weight the list rule removes.
+  Inside a sentence the project name is `text-brand italic font-medium` with no wash, so it reads
+  as a name rather than a word. The italic is Inter's; the display face reaches the page only
+  through `page-title`, so a sentence never borrows Newsreader for emphasis.
 - **The workspace tab strip carries the identity wash; its tabs do not.** The strip surface is
   `bg-brand/10` (`dark:bg-brand/15`); resting tabs and run group labels paint nothing at all —
   they are labels on that surface. The only painted tiles are the tabs currently on screen:
@@ -112,7 +121,7 @@
   exceptions, not content captions. `xs` is reserved for eyebrows and provenance captions.
 - **Type scale:** app code uses the named utilities in `layout.css` — `page-title` (one per
   page), `section-title` (content sections), `eyebrow` (uppercase muted label above a group),
-  `provenance-caption` (per-item metadata), `stat-value` (a dashboard figure, always with a caption
+  `provenance-caption` (per-item metadata), `stat-value` / `stat-value-hero` (a dashboard figure, always with a caption
   line beneath it). The ladder is
   2xs → eyebrow/caption → label → body → section-title → page-title. Form labels are small and
   muted so values lead; `Field.Title` stays at body size above its muted description.

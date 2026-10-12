@@ -25,6 +25,6 @@
 				</Breadcrumb.List>
 			</Breadcrumb.Root>
 		{/snippet}
-		<ProjectContextUsage projectId={project.id} />
+		<ProjectContextUsage projectId={project.id} projectName={project.name} />
 	</PageShell>
 {:else}<p>This project is no longer available.</p>{/if}

@@ -1157,6 +1157,11 @@
 	@apply text-2xl font-semibold tracking-tight tabular-nums;
 }
 
+/* The one answer a dashboard leads with: a single figure per page, the sentence beside it. */
+@utility stat-value-hero {
+	@apply text-5xl leading-none font-semibold tracking-tight tabular-nums;
+}
+
 @utility eyebrow {
 	@apply text-xs font-medium tracking-wide text-muted-foreground uppercase;
 }

@@ -7,8 +7,12 @@
 		class: className,
 		max = 100,
 		value,
+		indicatorClass,
 		...restProps
-	}: WithoutChildrenOrChild<ProgressPrimitive.RootProps> = $props();
+	}: WithoutChildrenOrChild<ProgressPrimitive.RootProps> & {
+		/** The filled part's own classes, for a meter whose fill is not the primary colour. */
+		indicatorClass?: string;
+	} = $props();
 </script>
 
 <ProgressPrimitive.Root
@@ -24,7 +28,7 @@
 >
 	<div
 		data-slot="progress-indicator"
-		class="bg-primary size-full flex-1 transition-all"
+		class={cn('bg-primary size-full flex-1 transition-all', indicatorClass)}
 		style="transform: translateX(-{100 - (100 * (value ?? 0)) / (max ?? 1)}%)"
 	></div>
 </ProgressPrimitive.Root>
