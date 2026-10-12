@@ -158,7 +158,7 @@ the line above; the reason is the point.
   tile (`size-16 rounded-lg bg-brand/10`) is the recipe.
 - **Screenshots are captured to fit, never shrunk into place.** Recapture at a smaller
   viewport or crop to a partial view; if in-shot text renders illegibly small, the answer is
-  recapture. Applies to `shot.svelte`/`screenshot-slot.svelte` and `static/product-screenshots/`.
+  recapture. Applies to `shot.svelte` and `static/product-screenshots/`.
 - **User-uploaded images render in fixed, center-cropped containers** — `object-cover` inside
   an `overflow-hidden` frame, separated by an inset hairline, never an outward border that can
   clash with the photo. Lightbox/zoom views (`image-lightbox.svelte`, `image-zoom.svelte`) are

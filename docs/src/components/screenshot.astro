@@ -1,8 +1,12 @@
 ---
 /**
- * A product screenshot with a light/dark pair — the app's screenshot-slot
- * recipe (full width, 2xl radius, hairline ring). The pair swaps with the
- * Starlight theme. Files live in docs/public/screenshots/<id>-{light,dark}.<ext>.
+ * A product screenshot with a light/dark pair — the app's screenshot recipe (full width, 2xl
+ * radius, hairline ring). The pair swaps with the Starlight theme.
+ *
+ * The images live once, in the app's `static/product-screenshots/<id>-{light,dark}.<ext>`, which
+ * the README and the marketing page read too; `pnpm docs:screenshots` regenerates them. An id
+ * with no file fails the build here rather than shipping a broken image.
+ *
  * An SVG carries its own rounded panel, so it renders without the ring.
  */
 interface Props {
@@ -12,12 +16,24 @@ interface Props {
 	ext?: 'jpg' | 'svg';
 }
 
+const files = import.meta.glob<string>('../../../static/product-screenshots/*.{jpg,svg}', {
+	eager: true,
+	query: '?url',
+	import: 'default'
+});
+
 const { id, alt, caption, ext = 'jpg' } = Astro.props;
-const base = `${import.meta.env.BASE_URL}screenshots/${id}`;
+
+const url = (theme: 'light' | 'dark'): string => {
+	const file = `../../../static/product-screenshots/${id}-${theme}.${ext}`;
+	const found = files[file];
+	if (!found) throw new Error(`No ${theme} screenshot "${id}" in static/product-screenshots/.`);
+	return found;
+};
 ---
 
 <figure class:list={['ft-shot', { 'ft-shot-plain': ext === 'svg' }]}>
-	<img class="ft-shot-light" src={`${base}-light.${ext}`} {alt} loading="lazy" decoding="async" />
-	<img class="ft-shot-dark" src={`${base}-dark.${ext}`} alt="" loading="lazy" decoding="async" />
+	<img class="ft-shot-light" src={url('light')} {alt} loading="lazy" decoding="async" />
+	<img class="ft-shot-dark" src={url('dark')} alt="" loading="lazy" decoding="async" />
 	{caption && <figcaption>{caption}</figcaption>}
 </figure>
