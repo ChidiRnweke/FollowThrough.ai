@@ -60,6 +60,17 @@
   shadcn `Pagination` primitive and a `provenance-caption` range ("1–5 of 18") on the left; they
   never grow with "show more". Words are everyday and whole: "times the agent read something
   here", never coined nouns ("lookups") or internal ones ("context", "tool call").
+- **Node-link maps** (the Agent activity **Connections** tab) are drawn with LayerChart's SVG
+  primitives over a force layout run to rest before it is shown: nothing moves on screen. Node
+  fill follows the chart order by kind (note `--brand`, file `--chart-2`, skill `--chart-3`); an
+  item never read is a hollow ring. Read edges are `--brand`, 1–4px by shared chats; authored
+  links are 1px `--muted-foreground` under them. A map must stay readable at any size, so it
+  never draws every pair it has: a threshold (offered as ≥ 1/2/3/5/8 chats, defaulting to the
+  report's), each item's three strongest pairs once lines outnumber items two to one, groups laid
+  out apart with the lines between groups faint, an item read in most chats drawn without its
+  pairs until selected, items with no drawn pair listed beneath, and a table view that opens first
+  past 150 items. Each reduction is stated in a caption with a way to undo it. Focus keeps the
+  neighbourhood in colour and drops the rest to `--chart-1`.
 - **Project identity:** Projects are identified by the brand teal, never per-project hues: the
   sidebar project icon, `Badge variant="brand"`, breadcrumb links, chat origin lines, artifact
   format badges, and overview resource chips use `--brand` text on the shared `bg-brand/10` wash

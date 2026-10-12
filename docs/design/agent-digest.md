@@ -71,6 +71,7 @@
 - dark mode: class .dark, first-class. test every component both themes
 - charts: shadcn Chart over LayerChart; helpers in ui/chart (chartConfigOf, layerSeriesOf, seriesColor, remainderColor, valueTick, countTick for count axes)
 - dashboards: plain-language, NO cards/boxes, NO new colours. hierarchy = one stat-value-hero answer + meter, then stat-value figures over captions, section-title headings w/ inline count + teal vs gray. teal=agent activity; warning/destructive never a state. fixes = "What to do" divided list right under the answer, each row with its fixing action; no attention tab. lists paginate at 5 (shadcn Pagination + "1–5 of 18" provenance-caption). charts: unit in subtitle + computed conclusion sentence beneath; stacked by-kind only as a toggle mode w/ legend; emphasis within one series = --brand current, --chart-2 rest. project name in a sentence = text-brand italic font-medium, no wash (Inter italic, never display face). whole everyday words, no coined nouns ("lookups")
+- node-link maps: LayerChart SVG primitives over a force layout settled before drawing (no motion). fill by kind in chart order, never-read = hollow ring; read edges --brand 1–4px, links 1px muted under. never draw every pair: threshold, top-3 pairs per item when dense, groups apart w/ faint bridges, ambient item's pairs only when selected, edgeless items listed below, table first past 150 items; every reduction captioned + undoable. focus keeps neighbourhood coloured, rest --chart-1
 
 ## ai-provenance (signature — no per-feature variants)
 

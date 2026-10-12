@@ -65,6 +65,17 @@ describe('Where links and reading disagree', () => {
 			togetherNotLinked: [edge(5, 6, 4), edge(3, 4, 2)]
 		});
 	});
+
+	it('does not suggest linking an item read in most chats to what it happens to meet', () => {
+		const result = rules.mismatches(
+			connections({
+				chats: 10,
+				nodes: [node(1, 9), node(2, 4), node(3, 4)],
+				together: [edge(1, 2, 4), edge(2, 3, 3)]
+			})
+		);
+		expect(result.togetherNotLinked).toEqual([edge(2, 3, 3)]);
+	});
 });
 
 describe('Ambient items', () => {

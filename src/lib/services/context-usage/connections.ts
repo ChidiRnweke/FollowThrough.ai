@@ -73,12 +73,20 @@ export class ConnectionAnalysisService implements ConnectionAnalysis {
 	mismatches(connections: ProjectConnections): ConnectionMismatches {
 		const together = new Set(connections.together.map((edge) => pairKey(edge.a, edge.b)));
 		const linked = new Set(connections.links.map((link) => pairKey(link.from, link.to)));
+		// An item read in most chats meets everything; its pairs are not relationships worth recording.
+		const ambient = ambientOf(connections);
 		return {
 			linkedNeverTogether: connections.links.filter(
 				(link) => !together.has(pairKey(link.from, link.to))
 			),
 			togetherNotLinked: connections.together
-				.filter((edge) => edge.chats >= 2 && !linked.has(pairKey(edge.a, edge.b)))
+				.filter(
+					(edge) =>
+						edge.chats >= 2 &&
+						!linked.has(pairKey(edge.a, edge.b)) &&
+						!ambient.has(edge.a) &&
+						!ambient.has(edge.b)
+				)
 				.sort((x, y) => y.chats - x.chats)
 		};
 	}
