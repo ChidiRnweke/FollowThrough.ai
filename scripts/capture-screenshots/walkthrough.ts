@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { PutObjectCommand, GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { Browser, Page } from '@playwright/test';
+import type { Browser } from '@playwright/test';
 import { Document, HeadingLevel, Packer, Paragraph } from 'docx';
 import type { Sql } from 'postgres';
 import { APPLICATION_DEFAULTS } from '../../src/lib/server/config.ts';
