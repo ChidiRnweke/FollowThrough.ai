@@ -1,9 +1,10 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import AdmZip from 'adm-zip';
-import type { Page } from '@playwright/test';
+import type { Browser, Page } from '@playwright/test';
 import type { Sql } from 'postgres';
 import { journalRun, type JournalledCall } from './journal.ts';
 import { getNoteOutput, seedReadingHistory } from './reading-history.ts';
+import { seedWalkthrough, type Walkthrough } from './walkthrough.ts';
 
 /**
  * The workspace every product screenshot is taken in: one invented studio rebranding one
@@ -103,6 +104,8 @@ export interface ShowcaseIds {
 	readonly diagrammingSkillId: string;
 	readonly conversationTitle: string;
 	readonly closingLine: string;
+	/** The README walkthrough project, which advances between its captures. */
+	readonly walkthrough: Walkthrough;
 }
 
 /** Start from an empty workspace. The cascade on `users` clears every row the user owns. */
@@ -451,6 +454,7 @@ const seedConversation = async (
 	].join('\n');
 
 	await journalRun(sql, {
+		runId: randomUUID(),
 		userId: SHOWCASE_USER_ID,
 		projectId: ids.projectId,
 		noteId: ids.noteId,
@@ -458,7 +462,8 @@ const seedConversation = async (
 		prompt,
 		startedAt: new Date(Date.now() - 3 * 60 * 1000),
 		model: showcaseModel(),
-		speech: { opening, answer },
+		opening,
+		ending: { kind: 'answered', answer },
 		calls
 	});
 };
@@ -467,7 +472,12 @@ const seedConversation = async (
  * Seed the showcase workspace. The page must already be signed in as the showcase user and
  * have loaded once, which is what provisions the Inbox and the built-in skills.
  */
-export const seedShowcase = async (sql: Sql, page: Page, baseUrl: string): Promise<ShowcaseIds> => {
+export const seedShowcase = async (
+	sql: Sql,
+	page: Page,
+	baseUrl: string,
+	browser: Browser
+): Promise<ShowcaseIds> => {
 	const projectIds = new Map<string, string>();
 	for (const [name, files] of Object.entries(projects)) {
 		const projectId = await createProject(sql, page, name);
@@ -500,12 +510,22 @@ export const seedShowcase = async (sql: Sql, page: Page, baseUrl: string): Promi
 		memory: async () => memoryEntries,
 		skills: (name) => builtInSkillId(sql, name)
 	});
+	const walkthrough = await seedWalkthrough(sql, {
+		userId: SHOWCASE_USER_ID,
+		model: showcaseModel(),
+		baseUrl,
+		browser,
+		createProject: (name) => createProject(sql, page, name),
+		importNotes: (target, files) => importNotes(page, baseUrl, target, files),
+		noteId: (title) => noteId(sql, title)
+	});
 	return {
 		projectId,
 		briefNoteId,
 		architectureNoteId,
 		diagrammingSkillId: await builtInSkillId(sql, 'Diagramming'),
 		conversationTitle,
-		closingLine
+		closingLine,
+		walkthrough
 	};
 };

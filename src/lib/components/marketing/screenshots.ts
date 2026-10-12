@@ -21,7 +21,12 @@ export const screenshotIds = [
 	'agent-tab',
 	'agent-activity',
 	'agent-connections',
-	'connections-ask'
+	'connections-ask',
+	'walkthrough-01-context',
+	'walkthrough-02-agent-acts',
+	'walkthrough-03-extract-promise',
+	'walkthrough-04-widget-proposal',
+	'walkthrough-05-widget-result'
 ] as const;
 
 export type ScreenshotId = (typeof screenshotIds)[number];

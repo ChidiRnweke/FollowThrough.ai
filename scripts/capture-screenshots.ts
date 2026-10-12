@@ -44,7 +44,8 @@ const selected = (): readonly ScreenshotId[] => {
 	const requested = options.only.split(',').map((value) => value.trim());
 	const unknownIds = requested.filter((value) => !isScreenshotId(value));
 	if (unknownIds.length > 0) throw new Error(`Unknown screenshot ids: ${unknownIds.join(', ')}.`);
-	return requested.filter(isScreenshotId);
+	// In table order, whatever order they were asked for: the walkthrough only moves forward.
+	return screenshotIds.filter((id) => requested.includes(id));
 };
 
 const requestedIds = selected();
@@ -70,6 +71,13 @@ const openContext = async (
 	]);
 	// mode-watcher persists the theme here; set it so no earlier choice can leak in.
 	await context.addInitScript((mode) => localStorage.setItem('mode-watcher-mode', mode), theme);
+	// Spellcheck is the browser's, not the app's: a focused editor would underline every name.
+	// The attribute is inherited, so setting it on the root covers every field on the page.
+	await context.addInitScript(() =>
+		document.addEventListener('DOMContentLoaded', () =>
+			document.documentElement.setAttribute('spellcheck', 'false')
+		)
+	);
 	return context;
 };
 
@@ -84,17 +92,30 @@ try {
 	// The first load provisions the Inbox and the built-in skills.
 	await seedPage.goto(`${baseUrl}/today`);
 	await seedPage.getByRole('heading', { name: 'Today', exact: true }).waitFor();
-	const ids = await seedShowcase(sql, seedPage, baseUrl);
-	await seeding.close();
+	// Kept open: later walkthrough moments create notes through this signed-in page.
+	const ids = await seedShowcase(sql, seedPage, baseUrl, browser);
 
 	await mkdir(output, { recursive: true });
 	for (const id of requestedIds) {
 		const scene = scenes[id];
+		if (scene.moment) await ids.walkthrough.advanceTo(scene.moment);
 		for (const theme of screenshotThemes) {
 			const context = await openContext(browser, token, theme, scene.viewport);
 			const page = await context.newPage();
 			await page.goto(`${baseUrl}${scene.path(ids)}`);
-			await scene.ready(page, ids);
+			try {
+				await scene.ready(page, ids);
+			} catch (error) {
+				// Keep what the page showed when the scene gave up, then fail the run.
+				const failure = new URL(
+					`../artifacts/screenshot-failures/${id}-${theme}.png`,
+					import.meta.url
+				);
+				await page.screenshot({ path: failure.pathname });
+				throw new Error(`The ${id} scene (${theme}) failed. The page is in ${failure.pathname}.`, {
+					cause: error
+				});
+			}
 			await page.evaluate(() => document.fonts.ready);
 			if (scene.pointer !== 'stay') await page.mouse.move(0, scene.viewport.height - 1);
 			// Transitions finish before the shot; an infinite animation (a spinner) never does.
@@ -116,6 +137,7 @@ try {
 		}
 	}
 
+	await seeding.close();
 	if (options.cleanup) await sql`delete from users where id = ${SHOWCASE_USER_ID}`;
 } finally {
 	await browser.close();

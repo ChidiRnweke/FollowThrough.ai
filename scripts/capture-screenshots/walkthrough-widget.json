@@ -1,0 +1,219 @@
+{
+	"title": "Critical-Path Simulator",
+	"catalogVersion": 3,
+	"layout": {
+		"root": "root",
+		"derived": {
+			"schedule": "[{task: \"Design sign-off\", owner: \"Maya\", startDay: 1, endDay: @/designSignoff, dur: @/designSignoff}, {task: \"Build\", owner: \"Tom\", startDay: @/designSignoff + 1, endDay: @/designSignoff + @/build, dur: @/build}, {task: \"QA\", owner: \"Team\", startDay: @/designSignoff + @/build + 1, endDay: @/designSignoff + @/build + @/qa, dur: @/qa}, {task: \"Copywriting\", owner: \"Priya\", startDay: 1, endDay: @/copywriting, dur: @/copywriting}, {task: \"Legal review\", owner: \"Daniel\", startDay: @/copywriting + 1, endDay: @/copywriting + @/legalReview, dur: @/legalReview}]",
+			"totalDays": "if(@/derived/devPathEnd >= @/derived/contentPathEnd, @/derived/devPathEnd, @/derived/contentPathEnd)",
+			"devPathEnd": "@/designSignoff + @/build + @/qa",
+			"criticalPath": "if(@/derived/devPathEnd >= @/derived/contentPathEnd, \"Development stream\", \"Content stream\")",
+			"contentPathEnd": "@/copywriting + @/legalReview"
+		},
+		"elements": {
+			"root": {
+				"type": "Card",
+				"props": {
+					"title": "Critical-Path Simulator",
+					"description": "Adjust each stage's duration with the sliders to see which workstream drives the launch date."
+				},
+				"children": [
+					"metricsGrid",
+					"divider1",
+					"slidersHeading",
+					"slidersGrid",
+					"divider2",
+					"scheduleHeading",
+					"scheduleTable"
+				]
+			},
+			"divider1": {
+				"type": "Divider",
+				"props": {},
+				"children": []
+			},
+			"divider2": {
+				"type": "Divider",
+				"props": {},
+				"children": []
+			},
+			"qaSlider": {
+				"type": "Slider",
+				"props": {
+					"max": 15,
+					"min": 1,
+					"step": 1,
+					"label": "QA",
+					"value": {
+						"$bindState": "/qa"
+					},
+					"suffix": " days"
+				},
+				"children": []
+			},
+			"devMetric": {
+				"type": "Metric",
+				"props": {
+					"label": "Development stream ends",
+					"value": {
+						"$state": "/derived/devPathEnd"
+					},
+					"detail": "working day from {{start}}"
+				},
+				"children": []
+			},
+			"copySlider": {
+				"type": "Slider",
+				"props": {
+					"max": 15,
+					"min": 1,
+					"step": 1,
+					"label": "Copywriting",
+					"value": {
+						"$bindState": "/copywriting"
+					},
+					"suffix": " days"
+				},
+				"children": []
+			},
+			"buildSlider": {
+				"type": "Slider",
+				"props": {
+					"max": 20,
+					"min": 1,
+					"step": 1,
+					"label": "Build",
+					"value": {
+						"$bindState": "/build"
+					},
+					"suffix": " days"
+				},
+				"children": []
+			},
+			"legalSlider": {
+				"type": "Slider",
+				"props": {
+					"max": 15,
+					"min": 1,
+					"step": 1,
+					"label": "Legal review",
+					"value": {
+						"$bindState": "/legalReview"
+					},
+					"suffix": " days"
+				},
+				"children": []
+			},
+			"metricsGrid": {
+				"type": "Grid",
+				"props": {
+					"gap": "sm",
+					"columns": 2
+				},
+				"children": ["devMetric", "contentMetric", "criticalMetric", "totalMetric"]
+			},
+			"slidersGrid": {
+				"type": "Grid",
+				"props": {
+					"gap": "md",
+					"columns": 2
+				},
+				"children": ["designSlider", "buildSlider", "qaSlider", "copySlider", "legalSlider"]
+			},
+			"totalMetric": {
+				"type": "Metric",
+				"props": {
+					"label": "Earliest launch-ready",
+					"value": {
+						"$state": "/derived/totalDays"
+					},
+					"detail": "working day from {{start}}"
+				},
+				"children": []
+			},
+			"designSlider": {
+				"type": "Slider",
+				"props": {
+					"max": 15,
+					"min": 1,
+					"step": 1,
+					"label": "Design sign-off",
+					"value": {
+						"$bindState": "/designSignoff"
+					},
+					"suffix": " days"
+				},
+				"children": []
+			},
+			"contentMetric": {
+				"type": "Metric",
+				"props": {
+					"label": "Content stream ends",
+					"value": {
+						"$state": "/derived/contentPathEnd"
+					},
+					"detail": "working day from {{start}}"
+				},
+				"children": []
+			},
+			"scheduleTable": {
+				"type": "Table",
+				"props": {
+					"rows": {
+						"$state": "/derived/schedule"
+					},
+					"empty": "Adjust the sliders above",
+					"columns": [
+						{
+							"key": "task",
+							"label": "Task"
+						},
+						{
+							"key": "owner",
+							"label": "Owner"
+						},
+						{
+							"key": "startDay",
+							"label": "Start"
+						},
+						{
+							"key": "endDay",
+							"label": "End"
+						},
+						{
+							"key": "dur",
+							"label": "Days"
+						}
+					]
+				},
+				"children": []
+			},
+			"criticalMetric": {
+				"type": "Metric",
+				"props": {
+					"label": "Critical path",
+					"value": {
+						"$state": "/derived/criticalPath"
+					}
+				},
+				"children": []
+			},
+			"slidersHeading": {
+				"type": "Heading",
+				"props": {
+					"text": "Stage durations (days)",
+					"level": 3
+				},
+				"children": []
+			},
+			"scheduleHeading": {
+				"type": "Heading",
+				"props": {
+					"text": "Schedule (working days from {{start}})",
+					"level": 3
+				},
+				"children": []
+			}
+		}
+	}
+}
