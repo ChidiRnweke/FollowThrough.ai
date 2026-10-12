@@ -117,7 +117,46 @@
 					<ToggleGroup.Item value="order">In order</ToggleGroup.Item>
 					<ToggleGroup.Item value="linked">Linked</ToggleGroup.Item>
 				</ToggleGroup.Root>
-				<div class="ml-auto flex flex-wrap items-center gap-2">
+				<ToggleGroup.Root
+					type="single"
+					variant="outline"
+					size="sm"
+					value={show}
+					onValueChange={(value) => (show = value === 'table' ? 'table' : 'map')}
+					aria-label="View"
+				>
+					<ToggleGroup.Item value="map">Map</ToggleGroup.Item>
+					<ToggleGroup.Item value="table">Table</ToggleGroup.Item>
+				</ToggleGroup.Root>
+			</div>
+			<!-- The threshold controls hide in Linked mode; the ask button stays at the row's end. -->
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<div
+					class={['flex flex-wrap items-center gap-x-4 gap-y-2', mode === 'linked' && 'invisible']}
+				>
+					<ToggleGroup.Root
+						type="single"
+						variant="outline"
+						size="sm"
+						value={String(min)}
+						onValueChange={(value) => (min = Number(value) || min)}
+						aria-label="Fewest shared chats"
+					>
+						{#each thresholds as threshold (threshold)}
+							<ToggleGroup.Item value={String(threshold)} aria-label="At least {chats(threshold)}"
+								>≥ {threshold}</ToggleGroup.Item
+							>
+						{/each}
+					</ToggleGroup.Root>
+					<div class="flex items-center gap-2">
+						<Checkbox id="show-linked" bind:checked={showLinked} />
+						<Label for="show-linked" class="text-sm font-normal text-muted-foreground"
+							>Show linked</Label
+						>
+					</div>
+				</div>
+				<!-- Right-aligned even when the row wraps. -->
+				<div class="ml-auto">
 					<ConnectionsAsk
 						{report}
 						{projectId}
@@ -125,41 +164,6 @@
 						selected={selectedNode}
 						onask={askAgent}
 					/>
-					<ToggleGroup.Root
-						type="single"
-						variant="outline"
-						size="sm"
-						value={show}
-						onValueChange={(value) => (show = value === 'table' ? 'table' : 'map')}
-						aria-label="View"
-					>
-						<ToggleGroup.Item value="map">Map</ToggleGroup.Item>
-						<ToggleGroup.Item value="table">Table</ToggleGroup.Item>
-					</ToggleGroup.Root>
-				</div>
-			</div>
-			<div
-				class={['flex flex-wrap items-center gap-x-4 gap-y-2', mode === 'linked' && 'invisible']}
-			>
-				<ToggleGroup.Root
-					type="single"
-					variant="outline"
-					size="sm"
-					value={String(min)}
-					onValueChange={(value) => (min = Number(value) || min)}
-					aria-label="Fewest shared chats"
-				>
-					{#each thresholds as threshold (threshold)}
-						<ToggleGroup.Item value={String(threshold)} aria-label="At least {chats(threshold)}"
-							>≥ {threshold}</ToggleGroup.Item
-						>
-					{/each}
-				</ToggleGroup.Root>
-				<div class="flex items-center gap-2">
-					<Checkbox id="show-linked" bind:checked={showLinked} />
-					<Label for="show-linked" class="text-sm font-normal text-muted-foreground"
-						>Show linked</Label
-					>
 				</div>
 			</div>
 
