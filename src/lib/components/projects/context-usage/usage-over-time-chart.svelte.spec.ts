@@ -19,8 +19,13 @@ it('splits the weeks by kind with a legend naming each kind', async () => {
 	const screen = await render(UsageOverTimeChart, { activity });
 	// Test pages carry no app stylesheet, so the chart has no height and its tooltip layer lies
 	// over the toggle; click the element itself rather than whatever is at its position.
-	(screen.getByRole('radio', { name: 'By kind' }).element() as HTMLElement).click();
-	await expect.element(screen.getByText('Files', { exact: true })).toBeVisible();
+	const byKind = screen.getByRole('radio', { name: 'By kind' });
+	(byKind.element() as HTMLElement).click();
+	await expect.element(byKind).toHaveAttribute('data-state', 'on');
+	// Without the stylesheet the chart, and the legend inside it, has no height, so visibility
+	// says nothing here; the screenshots in the PR show the legend drawn.
+	for (const kind of ['Notes', 'Files', 'Memory', 'Skills'])
+		await expect.element(screen.getByText(kind, { exact: true })).toBeInTheDocument();
 });
 
 it('states what the weeks add up to under the chart', async () => {
