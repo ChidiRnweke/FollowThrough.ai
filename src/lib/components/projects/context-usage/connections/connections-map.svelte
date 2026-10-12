@@ -6,6 +6,7 @@
 		ProjectConnectionsReport
 	} from '$lib/models/context-usage';
 	import type { ProjectId } from '$lib/models/projects';
+	import { askAgent } from '$lib/client/shell/responsive-surfaces';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
@@ -16,7 +17,11 @@
 	import { layoutGraph, type LayoutNode } from './graph-layout';
 	import { MAP_CEILING, STRONGEST_PER_ITEM, mapView, type EdgeMode } from './map-view';
 
-	let { report, projectId }: { report: ProjectConnectionsReport; projectId: ProjectId } = $props();
+	let {
+		report,
+		projectId,
+		projectName
+	}: { report: ProjectConnectionsReport; projectId: ProjectId; projectName: string } = $props();
 
 	const thresholds: readonly ConnectionThreshold[] = [1, 2, 3, 5, 8];
 
@@ -262,6 +267,7 @@
 		<ConnectionsPanel
 			{report}
 			{projectId}
+			{projectName}
 			selected={selectedNode}
 			{mismatch}
 			onselect={select}
@@ -269,6 +275,7 @@
 				mismatch = next;
 				if (next) selected = undefined;
 			}}
+			onask={askAgent}
 		/>
 	</div>
 </div>

@@ -5,6 +5,7 @@ import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import { attachmentViewBuilder } from '$lib/testing/attachments/fixtures/views';
 import {
 	diagramBuilder,
+	projectBuilder,
 	runAgentInputBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { DrawioDiagram } from '$lib/models/diagrams';
@@ -70,6 +71,27 @@ describe('Attached resource context', () => {
 				filePath: '/a.txt',
 				text: { inclusion: 'inline', text: 'The launch moves to March.' }
 			}
+		});
+	});
+
+	it('inlines a connection map as both of its tables', () => {
+		const tables = { nodes: 'key,kind\r\nnote:1,note\r\n', edges: 'item_a,item_b\r\nA,B\r\n' };
+		const resource = formatted({ kind: 'connections', project: projectBuilder(), tables });
+		const body =
+			resource?.kind === 'connections' && resource.text.inclusion === 'inline'
+				? resource.text.text
+				: '';
+		expect({
+			nodes: body.includes(`nodes.csv\n${tables.nodes}`),
+			edges: body.includes(`edges.csv\n${tables.edges}`)
+		}).toEqual({ nodes: true, edges: true });
+	});
+
+	it('withholds a connection map over the token limit', () => {
+		process.env.CONTEXT_NOTE_TOKEN_LIMIT = '1';
+		const tables = { nodes: 'key,kind\r\n', edges: 'item_a,item_b\r\n' };
+		expect(formatted({ kind: 'connections', project: projectBuilder(), tables })).toMatchObject({
+			text: { inclusion: 'too_large' }
 		});
 	});
 

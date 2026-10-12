@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ContextChipsService } from '$lib/services/chat/chips';
 const { contextResourceRefOf, uniqueContextResources } = new ContextChipsService();
 import { testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
-import { testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testNoteId, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 describe('chat chips as run context', () => {
 	it('sends a widget chip as a widget reference', () => {
@@ -22,5 +22,28 @@ describe('chat chips as run context', () => {
 				{ kind: 'widget', id: testWidgetId() }
 			])
 		).toHaveLength(1);
+	});
+
+	it('sends a connections chip as a reference to its project', () => {
+		expect(
+			contextResourceRefOf({
+				kind: 'connections',
+				id: testProjectId(),
+				name: 'Connections · Launch'
+			})
+		).toEqual([{ kind: 'connections', id: testProjectId() }]);
+	});
+
+	it('sends a connection map attached twice once', () => {
+		expect(
+			uniqueContextResources([
+				{ kind: 'connections', id: testProjectId() },
+				{ kind: 'widget', id: testWidgetId() },
+				{ kind: 'connections', id: testProjectId() }
+			])
+		).toEqual([
+			{ kind: 'connections', id: testProjectId() },
+			{ kind: 'widget', id: testWidgetId() }
+		]);
 	});
 });

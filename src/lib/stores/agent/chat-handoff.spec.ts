@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { consumeChatHandoff, stageChatHandoff } from './chat-handoff';
+import { consumeChatHandoff, stageChatHandoff, type ChatHandoff } from './chat-handoff';
+import { testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 class MemoryStorage implements Storage {
 	private readonly values = new Map<string, string>();
@@ -27,6 +28,17 @@ describe('Chat handoff lifecycle', () => {
 	it('retains the complete handoff context', () => {
 		const storage = new MemoryStorage();
 		const handoff = { prompt: 'Review this', requestedSkillNames: ['Reviewer'] };
+		stageChatHandoff(handoff, storage);
+		expect(consumeChatHandoff(storage)).toEqual(handoff);
+	});
+
+	it('carries a pinned connections chip across the navigation', () => {
+		const storage = new MemoryStorage();
+		const handoff: ChatHandoff = {
+			prompt: 'Which notes are always read together?',
+			projectId: testProjectId(),
+			chips: [{ kind: 'connections', id: testProjectId(), name: 'Connections · Launch' }]
+		};
 		stageChatHandoff(handoff, storage);
 		expect(consumeChatHandoff(storage)).toEqual(handoff);
 	});

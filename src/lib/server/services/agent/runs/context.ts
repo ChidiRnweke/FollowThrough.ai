@@ -11,6 +11,7 @@ import type {
 	AppContextSnapshotV1
 } from '$lib/models/agent';
 import type { AttachmentView } from '$lib/models/attachments';
+import type { ConnectionTables } from '$lib/models/context-usage';
 import type { Diagram } from '$lib/models/diagrams';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { Widget } from '$lib/models/widgets';
@@ -24,14 +25,20 @@ export type CurrentContextNote =
 export type ConversationContextProject =
 	{ readonly kind: 'project'; readonly project: Project } | { readonly kind: 'no_origin_project' };
 /**
- * A widget, diagram or file the user attached, as the controller loaded it. Diagrams and
- * files carry the path the agent file namespace mounts them at, so a resource too large to
- * inline still says exactly where to read it.
+ * A widget, diagram, file or connection map the user attached, as the controller loaded it.
+ * Diagrams and files carry the path the agent file namespace mounts them at, so a resource
+ * too large to inline still says exactly where to read it. A connection map carries its
+ * project and its node and edge tables.
  */
 export type AttachedResource =
 	| { readonly kind: 'widget'; readonly widget: Widget }
 	| { readonly kind: 'diagram'; readonly diagram: Diagram; readonly filePath: string }
-	| { readonly kind: 'attachment'; readonly view: AttachmentView; readonly filePath: string };
+	| { readonly kind: 'attachment'; readonly view: AttachmentView; readonly filePath: string }
+	| {
+			readonly kind: 'connections';
+			readonly project: Project;
+			readonly tables: ConnectionTables;
+	  };
 
 export interface AgentContextValues {
 	readonly base: BaseAgentContextData;
@@ -65,10 +72,23 @@ const contextTextOf = (text: string, tokens: TokenCounter, limit: number): Conte
 };
 
 /**
+ * One sentence per table, naming its columns, so the model reads the counts as the
+ * Connections tab means them (ADR 0046).
+ */
+const CONNECTIONS_LEGEND = [
+	'nodes.csv has one row per project item: key identifies it, kind is note, attachment or skill, title names it, times_read counts how often the agent read it, last_read is when it was last read (empty if never), and chats counts the chats that read it.',
+	'edges.csv has one row per pair of items read in the same chat or linked by the user: item_a and item_b are titles (or keys where titles repeat), chats_read_together counts the chats that read both, a_before_b_chats and b_before_a_chats count the chats where one was read first, and linked_kinds lists the links the user recorded between them, separated by semicolons.'
+].join('\n');
+
+const connectionsTextOf = (tables: ConnectionTables): string =>
+	`${CONNECTIONS_LEGEND}\n\nnodes.csv\n${tables.nodes}\n\nedges.csv\n${tables.edges}`;
+
+/**
  * What of each resource the model reads inline. A widget is its whole definition — the
  * read_widget payload — because its layout and data are the widget. A draw.io diagram is its
  * labels: the XML is mostly geometry, and stays one sed call away at its file path. Mermaid
- * source is already the readable form. A file is its extracted text.
+ * source is already the readable form. A file is its extracted text. A connection map is its
+ * node and edge tables, under a legend for their columns.
  */
 const contextResourceOf = (
 	resource: AttachedResource,
@@ -120,6 +140,13 @@ const contextResourceOf = (
 							}
 			};
 		}
+		case 'connections':
+			return {
+				kind: 'connections',
+				projectId: resource.project.id,
+				projectName: resource.project.name,
+				text: contextTextOf(connectionsTextOf(resource.tables), tokens, limit)
+			};
 	}
 };
 

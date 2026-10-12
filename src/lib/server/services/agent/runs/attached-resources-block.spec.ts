@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import { testAttachmentId } from '$lib/testing/attachments/fixtures/views';
-import { testDiagramId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testDiagramId, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 describe('Attached resources prompt block', () => {
 	it('is absent when nothing is attached', () => {
@@ -75,6 +75,30 @@ describe('Attached resources prompt block', () => {
 			identified: block.includes(`attachmentId="${attachmentId}"`),
 			hasPath: block.includes('path=')
 		}).toEqual({ identified: true, hasPath: false });
+	});
+
+	it('tags an attached connection map with its project and carries its tables', () => {
+		const block = prompts.message(
+			{
+				contextResources: [
+					{
+						kind: 'connections',
+						projectId: testProjectId(),
+						projectName: 'R&D',
+						text: { inclusion: 'inline', text: 'nodes.csv\nkey,kind', tokenCount: 4 }
+					}
+				]
+			},
+			'',
+			{ kind: 'none' },
+			[]
+		).text;
+		expect({
+			tagged: block.includes(
+				`<attached_connections projectId="${testProjectId()}" project="R&amp;D">`
+			),
+			tables: block.includes('nodes.csv\nkey,kind')
+		}).toEqual({ tagged: true, tables: true });
 	});
 });
 

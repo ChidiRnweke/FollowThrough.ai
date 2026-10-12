@@ -572,7 +572,8 @@ export const agentToolCoverage = {
 		},
 		connectionsFor: {
 			kind: 'excluded',
-			reason: 'Not yet a tool: the project_connections tool that reads it lands separately.'
+			reason:
+				'Reaches the agent as an attached context resource: a pinned connections chip puts the node and edge tables in the run context.'
 		}
 	}
 } as const satisfies AgentToolCoverage;

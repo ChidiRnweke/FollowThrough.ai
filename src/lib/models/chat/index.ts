@@ -2,7 +2,13 @@ import type { Widget } from '$lib/models/widgets';
 import type { Diagram } from '$lib/models/diagrams';
 import type { AttachmentView } from '$lib/models/attachments';
 import type { NoteId, TextSelection } from '$lib/models/notes';
-import type { AgentRunId, ContextResourceRef } from '$lib/models/agent';
+import { z } from 'zod';
+import {
+	contextResourceRefSchema,
+	type AgentRunId,
+	type ContextResourceRef
+} from '$lib/models/agent';
+import type { Project } from '$lib/models/projects';
 import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import type { NoteChangeReview } from '$lib/models/notes';
@@ -16,7 +22,19 @@ export type ResourceChip =
 			readonly name: string;
 			readonly noteCount: number;
 	  }
-	| (ContextResourceRef & { readonly name: string });
+	| ContextResourceChip;
+
+/** A chip for a resource that travels as a `contextResources` reference, named for the user. */
+export type ContextResourceChip = ContextResourceRef & { readonly name: string };
+
+const [widgetRef, diagramRef, attachmentRef, connectionsRef] = contextResourceRefSchema.options;
+/** A resource chip as browser storage carries it across a navigation. */
+export const contextResourceChipSchema = z.discriminatedUnion('kind', [
+	widgetRef.extend({ name: z.string() }),
+	diagramRef.extend({ name: z.string() }),
+	attachmentRef.extend({ name: z.string() }),
+	connectionsRef.extend({ name: z.string() })
+]) satisfies z.ZodType<ContextResourceChip>;
 
 /** The chip kinds that travel as `contextResources` rather than as note ids. */
 export type ResourceKind = ContextResourceRef['kind'];
@@ -67,6 +85,8 @@ export interface MentionableResources {
 	readonly widgets: readonly Widget[];
 	readonly diagrams: readonly Diagram[];
 	readonly attachments: readonly AttachmentView[];
+	/** Projects whose connection map can be attached. */
+	readonly projects: readonly Project[];
 }
 
 export const createMentionHistory = (text: string): MentionHistory => ({

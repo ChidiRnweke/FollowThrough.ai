@@ -34,7 +34,8 @@
 		skill: { label: 'Skill', icon: Icon.Skill },
 		widget: { label: 'Widget', icon: Icon.Widget },
 		diagram: { label: 'Diagram', icon: Icon.Diagram },
-		attachment: { label: 'File', icon: Icon.Attachment }
+		attachment: { label: 'File', icon: Icon.Attachment },
+		connections: { label: 'Connections', icon: Icon.Activity }
 	};
 
 	let {

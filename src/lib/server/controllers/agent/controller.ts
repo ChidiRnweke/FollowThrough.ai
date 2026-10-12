@@ -60,7 +60,9 @@ import type { AgentFileReferences } from '$lib/server/services/agent-files/virtu
 import type { ConversationHistory } from '$lib/server/services/agent/conversations/history';
 import type { AttachedResource, IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { AttachmentLookup } from '$lib/server/services/attachments/library';
+import type { AttachmentLookup, AttachmentReader } from '$lib/server/services/attachments/library';
+import type { ProjectContextUsage } from '$lib/server/services/context-usage/usage';
+import type { ConnectionAnalysis } from '$lib/services/context-usage/connections';
 import type { DiagramFinder } from '$lib/server/services/diagrams/library';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 import type { TraceContextReader } from '$lib/models/telemetry';
@@ -101,7 +103,7 @@ import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
 import type { AgentHarnessRecords } from '$lib/server/services/agent/runs/records';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
-import type { ProjectReader } from '$lib/server/services/projects/catalog';
+import type { ProjectReader, ProjectTreeReader } from '$lib/server/services/projects/catalog';
 import type {
 	BuiltInSkillProvisioner,
 	BuiltInSkillSelection
@@ -304,6 +306,15 @@ export interface AgentHarnessDependencies {
 
 	readonly contextAttachments: AttachmentLookup;
 	readonly contextFiles: AgentFileReferences;
+
+	/**
+	 * An attached connection map is read along the path the Connections tab takes: the
+	 * project's holdings, then what the agent read together among them, as tables.
+	 */
+	readonly contextProjectTree: ProjectTreeReader;
+	readonly contextProjectAttachments: Pick<AttachmentReader, 'listForProject'>;
+	readonly contextConnections: Pick<ProjectContextUsage, 'connect'>;
+	readonly connectionTables: Pick<ConnectionAnalysis, 'tables'>;
 
 	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'> & BuiltInSkillSelection;
 
@@ -1467,6 +1478,8 @@ export class AgentSdkHarness implements AgentHarness {
 						)
 					};
 				}
+				case 'connections':
+					return await this.loadAttachedConnections(ref.id);
 			}
 		} catch (error) {
 			if (!(error instanceof NotFoundError)) throw error;
@@ -1478,8 +1491,32 @@ export class AgentSdkHarness implements AgentHarness {
 					throw new NotFoundError(`An attached diagram ${retry}`, { diagramId: ref.id });
 				case 'attachment':
 					throw new NotFoundError(`An attached file ${retry}`, { attachmentId: ref.id });
+				case 'connections':
+					throw new NotFoundError(`An attached connection map ${retry}`, { projectId: ref.id });
 			}
 		}
+	}
+
+	/** The project's own reads go first: they refuse a project the actor does not own. */
+	private async loadAttachedConnections(projectId: ProjectId): Promise<AttachedResource> {
+		const [project, notes] = await Promise.all([
+			this.dependencies.contextProjects.get(projectId),
+			this.dependencies.contextProjectTree.readEntries(projectId)
+		]);
+		const [attachments, memory] = await Promise.all([
+			this.dependencies.contextProjectAttachments.listForProject(projectId),
+			this.dependencies.contextMemory.list({ projectId })
+		]);
+		const connections = await this.dependencies.contextConnections.connect(projectId, {
+			notes,
+			attachments,
+			memory
+		});
+		return {
+			kind: 'connections',
+			project,
+			tables: this.dependencies.connectionTables.tables(connections)
+		};
 	}
 
 	/**
