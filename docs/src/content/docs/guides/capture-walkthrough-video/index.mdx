@@ -25,8 +25,9 @@ the same seeded workspace the product screenshots use, and composes the recordin
   requests the recording answers itself, with the receipt of the run it has just stored.
 - **The composition is generated.** `scripts/capture-video/film.ts` writes one scene per beat,
   the camera moves between the places the reader acted, the captions, the narration and the
-  end card from the recording's manifest. Captions and narration are cues on the recording's
-  marks (`sent`, `answered`, `proposed`, …), so they land on the moment they describe. A
+  end card from the recording's manifest. The narration lines are cues on the recording's
+  marks (`sent`, `answered`, `proposed`, …), so they land on the moment they describe, and the
+  subtitles follow the narrator word by word from a forced alignment of the kept audio. A
   narration line has to fit the window before the next one; the generator fails naming the line
   when it does not. Re-recording regenerates it; `--compose-only` rebuilds it from the last
   recording without filming again.
@@ -67,9 +68,10 @@ the real `.env`, because the workspace reads the model catalog on load; no model
 | `--no-audio`     | off                     | Compose without narration, music or effects; no ElevenLabs key. |
 | `--cleanup`      | off                     | Delete the showcase user and its workspace after the recording. |
 
-The recording needs `ffmpeg` on the path. The HyperFrames CLI and the ElevenLabs SDK are
-devDependencies; the film project's own `package.json` pins the same CLI version for anyone who
-opens it on its own.
+The recording needs `ffmpeg` on the path. The ElevenLabs SDK is a devDependency of the
+repository; the HyperFrames CLI is a devDependency of the film project in
+`scripts/capture-video/film/`, which the script installs on first use, so its browser does not
+join every install of the app.
 
 <Aside type="note">
 	The narrator, the music bed and the click and keyboard sounds come from ElevenLabs. Run `npx -y
@@ -81,12 +83,14 @@ opens it on its own.
 
 ## What lands where
 
-| Path                                   | Holds                                                                    |
-| -------------------------------------- | ------------------------------------------------------------------------ |
-| `artifacts/video/<beat>.mp4`           | One 3840×2160 clip per beat, 30 fps.                                     |
-| `artifacts/video/manifest.json`        | Each clip's duration, its marks (sent, answered, …) and the pointer log. |
-| `scripts/capture-video/film/`          | The HyperFrames project; its generated files are ignored by git.         |
-| `artifacts/video/walkthrough-dark.mp4` | The rendered film, 1920×1080.                                            |
+| Path                                          | Holds                                                                                      |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `artifacts/video/<beat>.mp4`                  | One 3840×2160 clip per beat, 30 fps.                                                       |
+| `artifacts/video/manifest.json`               | Each clip's duration, its marks (sent, answered, …) and the pointer log.                   |
+| `scripts/capture-video/film/`                 | The HyperFrames project; its generated files are ignored by git.                           |
+| `artifacts/video/walkthrough-dark.mp4`        | The rendered film, 1920×1080.                                                              |
+| `static/product-video/walkthrough.mp4`        | The published copy (under 10 MB) that the README links to and the docs landing page plays. |
+| `static/product-video/walkthrough-poster.jpg` | The poster for both, the moment the simulator has landed in the note.                      |
 
 ## Changing a beat
 

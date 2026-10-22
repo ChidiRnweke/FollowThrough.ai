@@ -1,0 +1,3 @@
+# The film project installs on its own; hyperframes needs esbuild built.
+allowBuilds:
+  esbuild: true

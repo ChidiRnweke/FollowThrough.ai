@@ -15,6 +15,14 @@ widgets, and exports documents. What you keep becomes context for the next task.
   </picture>
 </p>
 
+<p align="center">
+  <a href="static/product-video/walkthrough.mp4">
+    <img src="static/product-video/walkthrough-poster.jpg" width="100%" alt="A frame of the walkthrough video: the release plan note with the agent's simulator embedded in it, and the agent panel beside it. Click to watch the video." />
+  </a>
+</p>
+
+<p align="center"><em>Watch the walkthrough (77 s, narrated): one project, from the first notes to a simulator the agent built into the plan.</em></p>
+
 ## See it in action
 
 One project, start to finish. Every screen below is the real app, working on the same data.

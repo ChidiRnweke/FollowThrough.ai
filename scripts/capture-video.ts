@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import { chromium } from '@playwright/test';
 import postgres from 'postgres';
@@ -49,8 +49,11 @@ const manifestFile = new URL('manifest.json', output);
 const film = new URL('./capture-video/film/', import.meta.url);
 const mark = new URL('../static/icons/followthrough.svg', import.meta.url);
 const audioOutput = new URL('audio/', output);
-/** The pinned HyperFrames CLI, a devDependency; the film project's own scripts name the same version. */
-const hyperframes = new URL('../node_modules/.bin/hyperframes', import.meta.url).pathname;
+/** The film project's own HyperFrames CLI, a devDependency of `scripts/capture-video/film`. */
+const hyperframes = new URL('node_modules/.bin/hyperframes', film).pathname;
+/** The copy the README and the docs site read, small enough to live in the repository. */
+const published = new URL('../static/product-video/', import.meta.url);
+const PUBLISHED_LIMIT = 10 * 1024 * 1024;
 const viewport = { width: 1920, height: 1080 } as const;
 const scale = 2;
 const fps = 30;
@@ -168,14 +171,83 @@ const compose = async (manifest: FilmManifest): Promise<void> => {
 };
 
 const render = async (): Promise<void> => {
+	try {
+		await access(hyperframes);
+	} catch {
+		await run('pnpm', ['--dir', film.pathname, 'install', '--frozen-lockfile']);
+	}
 	await run(hyperframes, ['check'], film.pathname);
 	const target = new URL('walkthrough-dark.mp4', output).pathname;
 	await run(hyperframes, ['render', '--quality', 'delivery', '--output', target], film.pathname);
 	process.stdout.write(`${target}\n`);
 };
 
+/**
+ * The published copy: a web encode under GitHub's 10 MB video limit, and a poster from the
+ * moment the simulator has landed in the note, which the README and the docs page show.
+ */
+const publish = async (manifest: FilmManifest): Promise<void> => {
+	await mkdir(published, { recursive: true });
+	const source = new URL('walkthrough-dark.mp4', output).pathname;
+	const video = new URL('walkthrough.mp4', published).pathname;
+	await run('ffmpeg', [
+		'-y',
+		'-loglevel',
+		'error',
+		'-i',
+		source,
+		'-c:v',
+		'libx264',
+		'-crf',
+		'24',
+		'-preset',
+		'slow',
+		'-pix_fmt',
+		'yuv420p',
+		'-c:a',
+		'aac',
+		'-b:a',
+		'128k',
+		'-movflags',
+		'+faststart',
+		video
+	]);
+	const { size } = await stat(video);
+	if (size > PUBLISHED_LIMIT)
+		throw new Error(
+			`${video} is ${(size / 1024 / 1024).toFixed(1)} MB, over the 10 MB GitHub shows inline. Raise the CRF by hand.`
+		);
+	let at = 0;
+	for (const clip of manifest.clips) {
+		const embedded = clip.marks.find((mark) => mark.name === 'embedded');
+		if (embedded) {
+			at += embedded.t + 1.2;
+			break;
+		}
+		at += clip.duration;
+	}
+	await run('ffmpeg', [
+		'-y',
+		'-loglevel',
+		'error',
+		'-ss',
+		at.toFixed(3),
+		'-i',
+		source,
+		'-frames:v',
+		'1',
+		'-q:v',
+		'4',
+		new URL('walkthrough-poster.jpg', published).pathname
+	]);
+	process.stdout.write(`${video} (${(size / 1024 / 1024).toFixed(1)} MB)\n`);
+};
+
 const manifest: FilmManifest = options['compose-only']
 	? JSON.parse(await readFile(manifestFile, 'utf8'))
 	: await record();
 await compose(manifest);
-if (!options['skip-render']) await render();
+if (!options['skip-render']) {
+	await render();
+	await publish(manifest);
+}
