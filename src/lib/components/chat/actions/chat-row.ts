@@ -101,7 +101,7 @@ export const CHAT_TEXT_EVIDENCE = 'text-2xs';
  * choosing "about a gap-2" is how the flatness got here in the first place.
  *
  * With the code lines above them and the turn stack below, the full ladder is
- * 2 → 4 → 12 → 20 → 24.
+ * 2 → 4 → 12 → 12 → 24.
  */
 
 /** 4px. A request and the evidence it introduces, plus that evidence's own footer link. */
@@ -111,13 +111,14 @@ export const CHAT_GAP_BOND = 'gap-bind';
 export const CHAT_GAP_PASS = 'gap-row';
 
 /**
- * 20px. Between subjects, failures and the sources row.
+ * 12px. Between subjects, failures and the sources row.
  *
- * 20 rather than 24, and not to be tidied: `chat-thread.svelte` spends 24px separating one turn
- * from the next, and a gap inside a turn must stay under the gap between turns or the turn stops
- * reading as one thing.
+ * It was 20, one rung under the 24px `chat-thread.svelte` spends between turns, and the fold
+ * read as a sparse list beside the steps it replaces: a turn's seven todos took the height of
+ * twelve step lines. At 12 the subjects still sit apart from each other, and a pass inside a
+ * subject is told from the next subject by its indent rather than by a wider gap.
  */
-export const CHAT_GAP_SUBJECT = 'gap-5';
+export const CHAT_GAP_SUBJECT = 'gap-row';
 
 /**
  * What the agent did, against everything on this surface that is not the agent acting.
