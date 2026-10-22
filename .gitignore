@@ -41,3 +41,10 @@ artifacts
 
 # Generated at docs build time from the root CHANGELOG.md.
 docs/src/content/docs/releases.md
+
+# The walkthrough film reads its recorded clips from here; pnpm docs:video regenerates them.
+scripts/capture-video/film/assets/
+scripts/capture-video/film/compositions/
+scripts/capture-video/film/index.html
+scripts/capture-video/film/.hyperframes/
+scripts/capture-video/film/node_modules/
