@@ -1050,16 +1050,13 @@
 		});
 		const generation = shimmerGeneration + 1;
 		shimmerGeneration = generation;
-		editor.view.updateState(
-			editor.state.reconfigure({ plugins: [...editor.state.plugins, plugin] })
-		);
+		// Through the editor, never `view.updateState` on a reconfigured state: the editor
+		// keeps its own state and applies the next transaction from that copy, so a plugin
+		// handed straight to the view was gone on the first keystroke or sync after it.
+		editor.unregisterPlugin(shimmerKey);
+		editor.registerPlugin(plugin);
 		window.setTimeout(() => {
-			if (editor && shimmerGeneration === generation)
-				editor.view.updateState(
-					editor.state.reconfigure({
-						plugins: editor.state.plugins.filter((p) => p.spec.key !== shimmerKey)
-					})
-				);
+			if (editor && shimmerGeneration === generation) editor.unregisterPlugin(shimmerKey);
 		}, SHIMMER_DURATION);
 	}
 
