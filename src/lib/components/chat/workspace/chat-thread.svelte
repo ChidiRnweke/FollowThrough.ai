@@ -111,6 +111,13 @@
 	 * Which activity group carries the turn's log. One sources row per turn, hung off the last group
 	 * so it sits at the end of the work rather than repeating down it.
 	 */
+	/** A turn still being written: its activity shows its steps rather than the fold. */
+	const entryLive = (entry: ChatEntry): boolean =>
+		entry.status === 'queued' ||
+		entry.status === 'waiting' ||
+		entry.status === 'streaming' ||
+		entry.status === 'cancelling';
+
 	const lastActivityIndex = (entry: ChatEntry): number =>
 		groupChatParts(entry.parts).findLastIndex((group) => group.kind === 'activity');
 
@@ -303,6 +310,7 @@
 											tools={group.tools}
 											turnTools={entryTools(entry)}
 											summarise={index === lastActivityIndex(entry)}
+											live={entryLive(entry)}
 											{shell}
 										/>
 									{:else}

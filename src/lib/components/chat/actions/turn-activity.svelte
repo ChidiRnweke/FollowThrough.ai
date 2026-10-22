@@ -29,9 +29,12 @@
 		tools,
 		turnTools,
 		shell,
-		summarise = false
+		summarise = false,
+		live
 	}: {
 		tools: readonly ChatToolActivity[];
+		/** Whether the turn is still being written: queued, streaming, or being cancelled. */
+		live: boolean;
 		/** Every call of the turn, which is what the summary is folded over. */
 		turnTools?: readonly ChatToolActivity[];
 		shell?: ShellContext;
@@ -44,12 +47,15 @@
 	} = $props();
 
 	const everything = $derived(turnTools ?? tools);
-	// A group settles on its own rather than with the turn. Running, its steps arrive one by one
-	// in the order they happened, because the point is watching it work; settled, the whole turn
-	// folds into the subjects it was about, because the point is auditing what it saw.
-	const running = $derived(tools.some((tool) => tool.status === 'running'));
+	// While the turn is being written the group shows its steps, finished ones included, in the
+	// order they happened, because the point is watching it work. Once the turn has ended, the
+	// whole turn folds into the subjects it was about, because the point is auditing what it
+	// saw. The fold waits for the turn, not for the group's own quiet moments: folding whenever
+	// no call was running flipped the block between the two layouts after every call, for as
+	// long as the model took to choose the next one.
+	const inProgress = $derived(live || tools.some((tool) => tool.status === 'running'));
 	const context = $derived(turnContext(everything, shell));
-	const steps = $derived(running ? runningSteps(tools) : []);
+	const steps = $derived(inProgress ? runningSteps(tools) : []);
 
 	/** Everything the reader can see at a glance, so the sources row knows whether it has a job. */
 	const inSourcesRow = $derived(context.read.length + context.barren.length + context.setup.length);
@@ -91,7 +97,7 @@
 	What was only read is the context the answer stands on, and lives in one sources row — nobody
 	needs it to trust an answer that looks right, and everybody needs it the moment one does not.
 -->
-{#if running}
+{#if inProgress}
 	{#if steps.length > 0}
 		<ul class="flex flex-col">
 			{#each steps as step, index (index)}
