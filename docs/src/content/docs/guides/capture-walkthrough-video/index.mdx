@@ -24,8 +24,11 @@ the same seeded workspace the product screenshots use, and composes the recordin
   uses. The calls to `submitAgentRun`, `extractPromises` and `decideAgentRunBatch` are the only
   requests the recording answers itself, with the receipt of the run it has just stored.
 - **The composition is generated.** `scripts/capture-video/film.ts` writes one scene per beat,
-  the camera moves between the places the reader acted, the captions and the end card from the
-  recording's manifest. Re-recording regenerates it; `--compose-only` rebuilds it from the last
+  the camera moves between the places the reader acted, the captions, the narration and the
+  end card from the recording's manifest. Captions and narration are cues on the recording's
+  marks (`sent`, `answered`, `proposed`, …), so they land on the moment they describe. A
+  narration line has to fit the window before the next one; the generator fails naming the line
+  when it does not. Re-recording regenerates it; `--compose-only` rebuilds it from the last
   recording without filming again.
 
 ## Run it
@@ -61,15 +64,19 @@ the real `.env`, because the workspace reads the model catalog on load; no model
 | `--base-url`     | `http://127.0.0.1:5173` | The running app to record.                                      |
 | `--skip-render`  | off                     | Record and compose, but do not run the HyperFrames render.      |
 | `--compose-only` | off                     | Rebuild the composition from `artifacts/video/manifest.json`.   |
+| `--no-audio`     | off                     | Compose without narration, music or effects; no ElevenLabs key. |
 | `--cleanup`      | off                     | Delete the showcase user and its workspace after the recording. |
 
-The recording needs `ffmpeg` on the path and Node 22 or later for the HyperFrames CLI, which the
-film project pins in its own `package.json`.
+The recording needs `ffmpeg` on the path. The HyperFrames CLI and the ElevenLabs SDK are
+devDependencies; the film project's own `package.json` pins the same CLI version for anyone who
+opens it on its own.
 
 <Aside type="note">
-	The film is silent. HyperFrames can place a music bed and sound on the clicks, but its music
-	catalog needs a HeyGen sign-in; add a track to `scripts/capture-video/film/assets/` and an
-	`<audio>` element to the generated `index.html` when one is chosen.
+	The narrator, the music bed and the click and keyboard sounds come from ElevenLabs. Run `npx -y
+	@elevenlabs/cli@latest onboard init` once in the repository: it signs you in and stores
+	`ELEVENLABS_API_KEY` in the ignored `.env.local`, which `pnpm docs:video` loads. Each generated
+	file is cached in `artifacts/video/audio/` by its request, so composing again costs no credits;
+	`--no-audio` composes a silent film without the key.
 </Aside>
 
 ## What lands where

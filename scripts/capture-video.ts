@@ -10,7 +10,8 @@ import {
 	SHOWCASE_USER_ID
 } from './capture-screenshots/showcase.ts';
 import { beatIds, beats, type FilmState } from './capture-video/beats.ts';
-import { writeFilm } from './capture-video/film.ts';
+import { AudioGenerator, type AudioManifest } from './capture-video/audio.ts';
+import { audioScript, filmCues, writeFilm } from './capture-video/film.ts';
 import type { FilmManifest } from './capture-video/manifest.ts';
 import { ClipRecorder, Hand, run, type ClipRecord } from './capture-video/recorder.ts';
 import { RunReplay } from './capture-video/replay.ts';
@@ -36,6 +37,8 @@ const { values: options } = parseArgs({
 		'skip-render': { type: 'boolean', default: false },
 		/** Rebuild the composition from the last recording's manifest instead of recording. */
 		'compose-only': { type: 'boolean', default: false },
+		/** Compose a silent film: no ElevenLabs calls, no narration, music or effects. */
+		'no-audio': { type: 'boolean', default: false },
 		cleanup: { type: 'boolean', default: false }
 	}
 });
@@ -45,11 +48,12 @@ const output = new URL('../artifacts/video/', import.meta.url);
 const manifestFile = new URL('manifest.json', output);
 const film = new URL('./capture-video/film/', import.meta.url);
 const mark = new URL('../static/icons/followthrough.svg', import.meta.url);
+const audioOutput = new URL('audio/', output);
+/** The pinned HyperFrames CLI, a devDependency; the film project's own scripts name the same version. */
+const hyperframes = new URL('../node_modules/.bin/hyperframes', import.meta.url).pathname;
 const viewport = { width: 1920, height: 1080 } as const;
 const scale = 2;
 const fps = 30;
-/** The CLI the film project pins; its own package.json scripts name the same version. */
-const HYPERFRAMES = 'hyperframes@0.8.185';
 
 const record = async (): Promise<FilmManifest> => {
 	const databaseUrl = process.env.DATABASE_URL;
@@ -146,19 +150,27 @@ const record = async (): Promise<FilmManifest> => {
 };
 
 const compose = async (manifest: FilmManifest): Promise<void> => {
-	const assets = new URL('assets/clips/', film);
-	await mkdir(assets, { recursive: true });
+	const clips = new URL('assets/clips/', film);
+	await mkdir(clips, { recursive: true });
 	for (const clip of manifest.clips)
-		await cp(new URL(clip.file, output), new URL(clip.file, assets));
-	await writeFilm(manifest, film, mark);
+		await cp(new URL(clip.file, output), new URL(clip.file, clips));
+	const cues = filmCues(manifest);
+	let audio: AudioManifest | undefined;
+	if (!options['no-audio']) {
+		audio = await new AudioGenerator(audioOutput).generate(audioScript(cues));
+		const sounds = new URL('assets/audio/', film);
+		await mkdir(sounds, { recursive: true });
+		const files = [...Object.values(audio.narration), audio.music, audio.click, audio.typing];
+		for (const clip of files) await cp(new URL(clip.file, audioOutput), new URL(clip.file, sounds));
+	}
+	await writeFilm(manifest, film, mark, cues, audio);
 	process.stdout.write(`${new URL('index.html', film).pathname}\n`);
 };
 
 const render = async (): Promise<void> => {
-	const npx = ['--yes', HYPERFRAMES];
-	await run('npx', [...npx, 'check'], film.pathname);
+	await run(hyperframes, ['check'], film.pathname);
 	const target = new URL('walkthrough-dark.mp4', output).pathname;
-	await run('npx', [...npx, 'render', '--quality', 'delivery', '--output', target], film.pathname);
+	await run(hyperframes, ['render', '--quality', 'delivery', '--output', target], film.pathname);
 	process.stdout.write(`${target}\n`);
 };
 

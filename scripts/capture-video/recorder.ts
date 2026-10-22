@@ -323,6 +323,7 @@ export class Hand {
 
 	/** Type like a person: uneven key delays, a breath after punctuation. */
 	async type(text: string): Promise<void> {
+		this.recorder.mark('typing-start');
 		const characters = [...text];
 		for (const [index, character] of characters.entries()) {
 			await this.page.keyboard.type(character);
@@ -330,5 +331,6 @@ export class Hand {
 			const breath = /[,.]/.test(character) ? 170 : character === ' ' && index % 5 === 0 ? 30 : 0;
 			await sleep(jitter + breath);
 		}
+		this.recorder.mark('typing-end');
 	}
 }

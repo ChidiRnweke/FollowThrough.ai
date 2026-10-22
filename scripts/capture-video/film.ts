@@ -1,22 +1,30 @@
 import { cp, mkdir, writeFile } from 'node:fs/promises';
+import type { AudioManifest, AudioScript, NarrationLine } from './audio.ts';
 import type { ClipMark, CursorSample } from './recorder.ts';
 import type { FilmManifest } from './manifest.ts';
 
 /**
  * Writes the HyperFrames composition for a recording: one scene per clip, the camera moving
- * between the places the reader acted, the pointer drawn from its log, one caption per beat,
- * and the end card. The clips are one continuous session, so the seams between scenes are
- * invisible: each scene starts with the camera where the last one left it.
+ * between the places the reader acted, the pointer drawn from its log, captions and narration
+ * on the recording's marks, a music bed ducked under the voice, clicks on the clicks, and the
+ * end card. The clips are one continuous session, so the seams between scenes are invisible:
+ * each scene starts with the camera where the last one left it. The footage is the clock: a
+ * narration line has to fit the window its cue gives it, and the generator fails if it does
+ * not, naming the line.
  */
 
 const GROUND = '#1a1917';
 const INK = '#f7f7f2';
 const MUTED = '#b8b5ad';
 const ACCENT = '#2ec4b0';
-const CAPTION_HOLD = 3.4;
-const END_CARD = 3.6;
 /** How long a camera move takes, measured against the official launch films: 0.4–0.6 s. */
 const MOVE = 0.55;
+/** A caption holds 0.5 s plus 0.3 s a word, the reading rate the motion guidance measures. */
+const captionHold = (text: string): number => 0.5 + 0.3 * text.split(' ').length;
+/** The music sits here under nobody, and ducks to this under the narrator. */
+const BED = 0.9;
+const BED_UNDER_VOICE = 0.35;
+const DUCK_LEAD = 0.3;
 
 interface CameraState {
 	readonly cx: number;
@@ -49,6 +57,8 @@ const frame = (viewport: FilmManifest['viewport']): CameraState => ({
 	cy: viewport.height / 2,
 	s: 1
 });
+
+// ── Camera ──────────────────────────────────────────────────────────────────────────────
 
 /**
  * Where the camera is through each beat. Pushes land on the control the reader uses, as the
@@ -128,6 +138,196 @@ const translate = (
 	)
 });
 
+// ── Cues ────────────────────────────────────────────────────────────────────────────────
+
+/** A moment in the film with a caption, and a narration line when the narrator speaks there. */
+export interface Cue {
+	readonly id: string;
+	/** Seconds into the film. */
+	readonly at: number;
+	readonly caption: string;
+	readonly narration?: string;
+	/** Where the caption has to be gone: the next cue of the clip, or the clip's end. */
+	readonly until: number;
+}
+
+interface CuePlan {
+	readonly id: string;
+	readonly at: (clip: Clip) => number;
+	readonly caption: string;
+	readonly narration?: string;
+}
+
+/**
+ * What the film says, beat by beat, on the recording's own marks. Captions are short and about
+ * the moment; the narrator says the one thing the picture cannot.
+ */
+const cuePlans: Readonly<Record<string, readonly CuePlan[]>> = {
+	context: [
+		{
+			id: 'project',
+			at: () => 0.4,
+			caption: 'A project the agent can work on.',
+			narration:
+				'A project the agent can actually work on: a planning note, the launch brief, two decisions, and the first todos.'
+		},
+		{
+			id: 'context',
+			at: (clip) => markTime(clip, 'chat-open') + 0.2,
+			caption: 'Notes. A brief. Two decisions.'
+		}
+	],
+	'agent-acts': [
+		{
+			id: 'request',
+			at: (clip) => markTime(clip, 'sent') + 0.2,
+			caption: 'One request. Not a conversation.',
+			narration:
+				'One request. It reads the brief, writes the plan, files seven tasks, and exports the Word brief.'
+		},
+		{
+			id: 'done',
+			at: (clip) => markTime(clip, 'answered') + 0.1,
+			caption: 'Plan written. Seven tasks filed. Brief exported.',
+			narration: 'Every action is listed, with a link to what it made.'
+		}
+	],
+	'extract-promise': [
+		{
+			id: 'yours',
+			at: (clip) => Math.max(0.3, press(clip, 0).t - 1.2),
+			caption: "It's your note too.",
+			narration: 'It is your note too. Highlight a sentence and choose Extract promises.'
+		},
+		{
+			id: 'promise',
+			at: (clip) => markTime(clip, 'proposed') + 0.1,
+			caption: "A sentence became a promise. One click, it's a todo.",
+			narration: 'The todo is proposed in place, with its due date worked out.'
+		}
+	],
+	'widget-proposal': [
+		{
+			id: 'build',
+			at: (clip) => Math.max(0.3, press(clip, 0).t - 0.3),
+			caption: 'Build on what you just changed.',
+			narration: 'Now ask for something built on the plan you just edited.'
+		},
+		{
+			id: 'noticed',
+			at: (clip) => markTime(clip, 'proposed') + 0.1,
+			caption: 'It read the edited plan. QA is 5 days now.'
+		}
+	],
+	'widget-result': [
+		{
+			id: 'approve',
+			at: (clip) => markTime(clip, 'approved') + 0.1,
+			caption: 'Approve, and it lands in the note.',
+			narration: 'Approve it, and the simulator lands in the note.'
+		},
+		{
+			id: 'drag',
+			// Spoken as the drag happens, so the line and the slider move together.
+			at: (clip) => press(clip, 1).t - 0.2,
+			caption: 'Drag Legal to 12 days. Content is the critical path.',
+			narration: 'Drag Legal review to twelve days, and content becomes the critical path.'
+		}
+	]
+};
+
+const END_LINE = "FollowThrough. The agent doesn't just know your project. It can work on it.";
+const END_CARD_MIN = 3.6;
+
+/** Where each clip starts, and where the end card starts. */
+const starts = (manifest: FilmManifest): readonly number[] => {
+	const out: number[] = [];
+	let at = 0;
+	for (const clip of manifest.clips) {
+		out.push(at);
+		at += clip.duration;
+	}
+	out.push(at);
+	return out;
+};
+
+/** Every cue of the film in order, timed into the film, plus the end card's line. */
+export const filmCues = (manifest: FilmManifest): readonly Cue[] => {
+	const clipStarts = starts(manifest);
+	const cues: Cue[] = [];
+	manifest.clips.forEach((clip, index) => {
+		const plans = cuePlans[clip.beat];
+		if (!plans) throw new Error(`No cues for the "${clip.beat}" beat.`);
+		const start = clipStarts[index] ?? 0;
+		const local = plans.map((plan) => ({ plan, at: plan.at(clip) }));
+		local.forEach(({ plan, at }, position) => {
+			const next = local[position + 1]?.at ?? clip.duration;
+			cues.push({
+				id: plan.id,
+				at: start + at,
+				caption: plan.caption,
+				...(plan.narration ? { narration: plan.narration } : {}),
+				until: start + next
+			});
+		});
+	});
+	const endStart = clipStarts[manifest.clips.length] ?? 0;
+	cues.push({
+		id: 'end',
+		at: endStart + 0.3,
+		caption: '',
+		narration: END_LINE,
+		until: endStart + END_CARD_MIN
+	});
+	return cues;
+};
+
+/** What the audio generator makes for the cues. */
+export const audioScript = (cues: readonly Cue[]): AudioScript => ({
+	narration: cues.flatMap((cue): NarrationLine[] =>
+		cue.narration ? [{ id: cue.id, text: cue.narration }] : []
+	),
+	music: {
+		prompt:
+			'Minimal, warm electronic underscore for a product film: a soft pulse around 96 bpm, muted keys, light percussion, no lead melody that competes with a voice; it builds gently and resolves warmly at the end.',
+		lengthMs: 82_000
+	},
+	click: 'A soft, short, dry mouse click on a quiet desk, close to the microphone.',
+	typing: 'Light laptop keyboard typing in a quiet room, steady, no music.'
+});
+
+/** The end card's line starts no earlier than 0.5 s after the footage's last line ends. */
+const withEndLineAfterFootage = (cues: readonly Cue[], audio: AudioManifest): readonly Cue[] => {
+	const spoken = cues.filter((cue) => cue.narration && cue.id !== 'end');
+	const last = spoken[spoken.length - 1];
+	const lastClip = last ? audio.narration[last.id] : undefined;
+	const earliest = last && lastClip ? last.at + lastClip.duration + 0.5 : 0;
+	return cues.map((cue) =>
+		cue.id === 'end' && cue.at < earliest
+			? { ...cue, at: earliest, until: earliest + END_CARD_MIN }
+			: cue
+	);
+};
+
+/**
+ * The window each narration line has: until the next narration starts. A line that does not
+ * fit is a script problem to fix in the cue table, not something to speak over.
+ */
+const narrationFits = (cues: readonly Cue[], audio: AudioManifest, total: number): void => {
+	const spoken = cues.filter((cue) => cue.narration);
+	spoken.forEach((cue, index) => {
+		const clip = audio.narration[cue.id];
+		if (!clip) throw new Error(`The "${cue.id}" line was not generated.`);
+		const window = (spoken[index + 1]?.at ?? total) - cue.at - 0.2;
+		if (clip.duration > window)
+			throw new Error(
+				`The "${cue.id}" narration runs ${clip.duration.toFixed(1)}s but has ${window.toFixed(1)}s before the next line. Shorten it.`
+			);
+	});
+};
+
+// ── Scenes ──────────────────────────────────────────────────────────────────────────────
+
 const CURSOR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 40" width="28" height="40">
   <path d="M3 2 L3 31 L10.5 24 L15.5 36 L21 33.5 L16 22 L26 22 Z" fill="#111" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/>
 </svg>
@@ -198,25 +398,33 @@ const sceneHtml = (
 `;
 };
 
-const captionsHtml = (manifest: FilmManifest, starts: readonly number[]): string => {
+// ── Captions ────────────────────────────────────────────────────────────────────────────
+
+const captionsHtml = (manifest: FilmManifest, cues: readonly Cue[]): string => {
 	const { viewport } = manifest;
-	const items = manifest.clips
-		.map((clip, index) => {
-			const words = clip.caption.split(' ');
-			const hold = Math.min(CAPTION_HOLD, clip.duration - 0.6);
-			return `    <div id="cap${index + 1}" class="clip caption" data-start="${(starts[index] ?? 0) + 0.3}" data-duration="${hold.toFixed(2)}" data-track-index="0">
-      <div class="eyebrow"><span class="num">0${index + 1}</span><span class="rule"></span></div>
-      <div class="line">${words.map((word) => `<span class="w">${word}</span>`).join(' ')}</div>
-    </div>`;
-		})
+	const shown = cues
+		.filter((cue) => cue.caption)
+		.map((cue) => ({
+			id: cue.id,
+			start: cue.at,
+			hold: Math.min(captionHold(cue.caption), cue.until - cue.at - 0.2),
+			words: cue.caption.split(' ')
+		}));
+	const items = shown
+		.map(
+			(
+				cue
+			) => `    <div id="cap-${cue.id}" class="clip caption" data-start="${cue.start.toFixed(3)}" data-duration="${cue.hold.toFixed(2)}" data-track-index="0">
+      <div class="rule"></div>
+      <div class="line">${cue.words.map((word) => `<span class="w">${word}</span>`).join(' ')}</div>
+    </div>`
+		)
 		.join('\n');
 	return `<template>
   <style>
     #root { position: absolute; inset: 0; pointer-events: none; }
     .caption { position: absolute; left: ${Math.round(viewport.width * 0.1)}px; bottom: ${Math.round(viewport.height * 0.1)}px; font-family: Inter, sans-serif; color: ${INK}; }
-    .eyebrow { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
-    .num { font-size: 22px; font-weight: 600; letter-spacing: 0.12em; color: ${ACCENT}; }
-    .rule { display: block; width: 56px; height: 2px; background: ${ACCENT}; transform-origin: 0 50%; }
+    .rule { display: block; width: 56px; height: 3px; margin-bottom: 16px; background: ${ACCENT}; transform-origin: 0 50%; }
     .line { font-size: 54px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; text-shadow: 0 2px 18px rgba(0,0,0,.6); }
     .w { display: inline-block; }
   </style>
@@ -226,15 +434,14 @@ ${items}
   <script>
     (() => {
       const tl = gsap.timeline({ paused: true });
-      const captions = ${JSON.stringify(manifest.clips.map((clip, index) => ({ id: `cap${index + 1}`, start: (starts[index] ?? 0) + 0.3, hold: Math.min(CAPTION_HOLD, clip.duration - 0.6) })))};
+      const captions = ${JSON.stringify(shown.map((cue) => ({ id: cue.id, start: cue.start, hold: cue.hold })))};
       for (const cap of captions) {
-        const words = "#" + cap.id + " .w";
-        tl.fromTo("#" + cap.id + " .num", { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power2.out" }, cap.start);
-        tl.fromTo("#" + cap.id + " .rule", { scaleX: 0 }, { scaleX: 1, duration: 0.35, ease: "expo.out" }, cap.start + 0.05);
+        const words = "#cap-" + cap.id + " .w";
+        tl.fromTo("#cap-" + cap.id + " .rule", { scaleX: 0 }, { scaleX: 1, duration: 0.35, ease: "expo.out" }, cap.start + 0.05);
         tl.fromTo(words, { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.13, ease: "power2.out", stagger: 0.067 }, cap.start + 0.1);
         const out = cap.start + cap.hold - 0.3;
         tl.to(words, { opacity: 0, filter: "blur(6px)", duration: 0.18, ease: "power2.in", stagger: 0.03 }, out);
-        tl.to("#" + cap.id + " .eyebrow", { opacity: 0, duration: 0.18, ease: "power2.in" }, out);
+        tl.to("#cap-" + cap.id + " .rule", { opacity: 0, duration: 0.18, ease: "power2.in" }, out);
       }
       window.__timelines["captions"] = tl;
     })();
@@ -243,7 +450,9 @@ ${items}
 `;
 };
 
-const endHtml = (manifest: FilmManifest): string => {
+// ── End card ────────────────────────────────────────────────────────────────────────────
+
+const endHtml = (manifest: FilmManifest, duration: number): string => {
 	const { viewport } = manifest;
 	return `<template>
   <style>
@@ -257,7 +466,7 @@ const endHtml = (manifest: FilmManifest): string => {
     #end-cta b { color: ${ACCENT}; font-weight: 500; }
   </style>
   <div id="root" data-composition-id="end" data-width="${viewport.width}" data-height="${viewport.height}">
-    <div id="end-card" class="clip" data-start="0" data-duration="${END_CARD}" data-track-index="0">
+    <div id="end-card" class="clip" data-start="0" data-duration="${duration.toFixed(2)}" data-track-index="0">
       <div id="end-lockup">
         <img id="end-mark" src="assets/mark.svg" alt="FollowThrough" />
         <div id="end-word"><span class="w">Follow</span><span class="w">Through</span></div>
@@ -278,15 +487,96 @@ const endHtml = (manifest: FilmManifest): string => {
 `;
 };
 
-const indexHtml = (manifest: FilmManifest, starts: readonly number[], total: number): string => {
+// ── Sound ───────────────────────────────────────────────────────────────────────────────
+
+const attr = (value: string): string => value.replaceAll('"', '&quot;');
+
+/**
+ * The `<audio>` elements of the root: the narrator's lines at their cues, the bed with a
+ * volume lane that ducks under each line, a click on every press, and the keyboard under
+ * every typing span.
+ */
+const audioHtml = (
+	manifest: FilmManifest,
+	cues: readonly Cue[],
+	audio: AudioManifest,
+	total: number
+): string => {
+	const clipStarts = starts(manifest);
+	const lines: string[] = [];
+	const spoken = cues.filter((cue) => cue.narration);
+	for (const cue of spoken) {
+		const clip = audio.narration[cue.id];
+		if (!clip) throw new Error(`The "${cue.id}" line was not generated.`);
+		lines.push(
+			`      <audio id="voice-${cue.id}" class="clip" src="assets/audio/${clip.file}" data-start="${cue.at.toFixed(3)}" data-duration="${clip.duration.toFixed(3)}" data-volume="1" data-audio-group="voiceover" data-track-index="3"></audio>`
+		);
+	}
+	// The bed ducks from just before a line to just after it; a lane holds its last value to
+	// the end, so the level is restated after every line.
+	const points: { t: number; v: number }[] = [{ t: 0, v: BED }];
+	for (const cue of spoken) {
+		const clip = audio.narration[cue.id];
+		if (!clip) continue;
+		points.push({ t: Math.max(0, cue.at - DUCK_LEAD - 0.2), v: BED });
+		points.push({ t: Math.max(0, cue.at - DUCK_LEAD), v: BED_UNDER_VOICE });
+		points.push({ t: cue.at + clip.duration + DUCK_LEAD, v: BED_UNDER_VOICE });
+		points.push({ t: cue.at + clip.duration + DUCK_LEAD + 0.4, v: BED });
+	}
+	const lane = { version: 1, lanes: [{ target: 'volume', points }] };
+	lines.push(
+		`      <audio id="music" class="clip" src="assets/audio/${audio.music.file}" data-start="0" data-duration="${Math.min(total, audio.music.duration).toFixed(3)}" data-fade-in="0.6" data-fade-out="1.5" data-audio-group="music" data-track-index="4" data-automation="${attr(JSON.stringify(lane))}"></audio>`
+	);
+	let clicks = 0;
+	let spans = 0;
+	manifest.clips.forEach((clip, index) => {
+		const start = clipStarts[index] ?? 0;
+		for (const sample of clip.cursor) {
+			if (sample.kind !== 'down') continue;
+			clicks += 1;
+			// Light arrives before sound: the click peaks one frame after the press.
+			lines.push(
+				`      <audio id="click-${clicks}" class="clip" src="assets/audio/${audio.click.file}" data-start="${(start + sample.t + 1 / manifest.fps).toFixed(3)}" data-duration="${audio.click.duration.toFixed(3)}" data-volume="0.5" data-audio-group="sfx" data-track-index="5"></audio>`
+			);
+		}
+		let open: number | undefined;
+		for (const mark of clip.marks) {
+			if (mark.name === 'typing-start') open = mark.t;
+			if (mark.name === 'typing-end' && open !== undefined) {
+				spans += 1;
+				const length = Math.min(mark.t - open, audio.typing.duration);
+				lines.push(
+					`      <audio id="keys-${spans}" class="clip" src="assets/audio/${audio.typing.file}" data-start="${(start + open).toFixed(3)}" data-duration="${length.toFixed(3)}" data-volume="0.25" data-fade-in="0.2" data-fade-out="0.3" data-audio-group="sfx" data-track-index="5"></audio>`
+				);
+				open = undefined;
+			}
+		}
+	});
+	return [
+		'      <hf-audio-group id="voiceover"></hf-audio-group>',
+		'      <hf-audio-group id="music"></hf-audio-group>',
+		'      <hf-audio-group id="sfx"></hf-audio-group>',
+		...lines
+	].join('\n');
+};
+
+// ── Root ────────────────────────────────────────────────────────────────────────────────
+
+const indexHtml = (
+	manifest: FilmManifest,
+	clipStarts: readonly number[],
+	endCard: number,
+	total: number,
+	sound: string
+): string => {
 	const { viewport } = manifest;
 	const hosts = manifest.clips
 		.map((clip, index) => {
 			const id = `beat${index + 1}`;
-			return `      <div id="${id}" data-composition-id="${id}" data-composition-src="compositions/${id}.html" data-start="${(starts[index] ?? 0).toFixed(3)}" data-duration="${clip.duration.toFixed(3)}" data-track-index="1" data-track-kind="graphics" data-width="${viewport.width}" data-height="${viewport.height}"></div>`;
+			return `      <div id="${id}" data-composition-id="${id}" data-composition-src="compositions/${id}.html" data-start="${(clipStarts[index] ?? 0).toFixed(3)}" data-duration="${clip.duration.toFixed(3)}" data-track-index="1" data-track-kind="graphics" data-width="${viewport.width}" data-height="${viewport.height}"></div>`;
 		})
 		.join('\n');
-	const endStart = starts[manifest.clips.length] ?? 0;
+	const endStart = clipStarts[manifest.clips.length] ?? 0;
 	return `<!doctype html>
 <html lang="en" data-resolution="landscape">
   <head>
@@ -305,8 +595,9 @@ const indexHtml = (manifest: FilmManifest, starts: readonly number[], total: num
     <div id="root" data-composition-id="main" data-start="0" data-duration="${total.toFixed(3)}" data-width="${viewport.width}" data-height="${viewport.height}">
       <div id="ground"></div>
 ${hosts}
-      <div id="end" data-composition-id="end" data-composition-src="compositions/end.html" data-start="${endStart.toFixed(3)}" data-duration="${END_CARD}" data-track-index="1" data-track-kind="graphics" data-width="${viewport.width}" data-height="${viewport.height}"></div>
+      <div id="end" data-composition-id="end" data-composition-src="compositions/end.html" data-start="${endStart.toFixed(3)}" data-duration="${endCard.toFixed(2)}" data-track-index="1" data-track-kind="graphics" data-width="${viewport.width}" data-height="${viewport.height}"></div>
       <div id="captions" data-composition-id="captions" data-composition-src="compositions/captions.html" data-start="0" data-duration="${endStart.toFixed(3)}" data-track-index="2" data-track-kind="captions" data-width="${viewport.width}" data-height="${viewport.height}"></div>
+${sound}
     </div>
     <script>
       window.__timelines["main"] = gsap.timeline({ paused: true });
@@ -316,16 +607,27 @@ ${hosts}
 `;
 };
 
-/** Write the composition for a manifest into the film project. */
-export const writeFilm = async (manifest: FilmManifest, film: URL, mark: URL): Promise<void> => {
-	const starts: number[] = [];
-	let at = 0;
-	for (const clip of manifest.clips) {
-		starts.push(at);
-		at += clip.duration;
-	}
-	starts.push(at);
-	const total = at + END_CARD;
+/** Write the composition for a manifest into the film project, with its sound when given. */
+export const writeFilm = async (
+	manifest: FilmManifest,
+	film: URL,
+	mark: URL,
+	cues: readonly Cue[],
+	audio: AudioManifest | undefined
+): Promise<void> => {
+	const clipStarts = starts(manifest);
+	const endStart = clipStarts[manifest.clips.length] ?? 0;
+	// The end card's line waits for the last line of the footage to finish, and the card holds
+	// for as long as the line needs: the footage is the clock, the card is the slack.
+	const timed = audio ? withEndLineAfterFootage(cues, audio) : cues;
+	const endCue = timed.find((cue) => cue.id === 'end');
+	const endLine = audio?.narration['end'];
+	const endCard = Math.max(
+		END_CARD_MIN,
+		endLine && endCue ? endCue.at - endStart + endLine.duration + 0.8 : 0
+	);
+	const total = endStart + endCard;
+	if (audio) narrationFits(timed, audio, total);
 	const compositions = new URL('compositions/', film);
 	await mkdir(compositions, { recursive: true });
 	await mkdir(new URL('assets/', film), { recursive: true });
@@ -340,7 +642,16 @@ export const writeFilm = async (manifest: FilmManifest, film: URL, mark: URL): P
 			)
 		)
 	);
-	await writeFile(new URL('captions.html', compositions), captionsHtml(manifest, starts));
-	await writeFile(new URL('end.html', compositions), endHtml(manifest));
-	await writeFile(new URL('index.html', film), indexHtml(manifest, starts, total));
+	await writeFile(new URL('captions.html', compositions), captionsHtml(manifest, timed));
+	await writeFile(new URL('end.html', compositions), endHtml(manifest, endCard));
+	await writeFile(
+		new URL('index.html', film),
+		indexHtml(
+			manifest,
+			clipStarts,
+			endCard,
+			total,
+			audio ? audioHtml(manifest, timed, audio, total) : ''
+		)
+	);
 };
