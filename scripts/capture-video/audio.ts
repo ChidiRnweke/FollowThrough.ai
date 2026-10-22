@@ -36,8 +36,8 @@ export interface AudioManifest {
 	readonly typing: GeneratedClip;
 }
 
-/** George: a narrative voice. One place to change it. */
-const VOICE = 'JBFqnCBsd6RMkjVDRZzb';
+/** River: relaxed, neutral, conversational. One place to change it. */
+const VOICE = 'SAz9YHcvj6GT2YYXdXww';
 const SPEECH_MODEL = 'eleven_v4';
 const MUSIC_MODEL = 'music_v2_5';
 
@@ -123,7 +123,7 @@ export class AudioGenerator {
 		const spoken = await this.client.textToSpeech.convertWithTimestamps(VOICE, {
 			text: line.text,
 			modelId: SPEECH_MODEL,
-			voiceSettings: { stability: 0.5, similarityBoost: 0.75 }
+			voiceSettings: { stability: 0.45, similarityBoost: 0.75 }
 		});
 		if (!spoken.alignment?.characterEndTimesSeconds?.length)
 			throw new Error(`ElevenLabs returned no timing for the "${line.id}" line.`);

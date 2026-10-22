@@ -22,8 +22,8 @@ const MOVE = 0.55;
 /** A caption holds 0.5 s plus 0.3 s a word, the reading rate the motion guidance measures. */
 const captionHold = (text: string): number => 0.5 + 0.3 * text.split(' ').length;
 /** The music sits here under nobody, and ducks to this under the narrator. */
-const BED = 0.9;
-const BED_UNDER_VOICE = 0.35;
+const BED = 0.7;
+const BED_UNDER_VOICE = 0.28;
 const DUCK_LEAD = 0.3;
 
 interface CameraState {
@@ -167,71 +167,80 @@ const cuePlans: Readonly<Record<string, readonly CuePlan[]>> = {
 		{
 			id: 'project',
 			at: () => 0.4,
-			caption: 'A project the agent can work on.',
+			caption: 'Your notes. Your brief. Your decisions.',
 			narration:
-				'A project the agent can actually work on: a planning note, the launch brief, two decisions, and the first todos.'
+				"Here's a project in FollowThrough. A planning note, the launch brief, two decisions, and the first todos."
 		},
 		{
 			id: 'context',
 			at: (clip) => markTime(clip, 'chat-open') + 0.2,
-			caption: 'Notes. A brief. Two decisions.'
+			caption: 'The agent works from all of it.'
 		}
 	],
 	'agent-acts': [
 		{
+			// Spoken while the request is typed, so the explanation has the room it needs.
 			id: 'request',
-			at: (clip) => markTime(clip, 'sent') + 0.2,
-			caption: 'One request. Not a conversation.',
+			at: (clip) => press(clip, 0).t + 1.5,
+			caption: '',
 			narration:
-				'One request. It reads the brief, writes the plan, files seven tasks, and exports the Word brief.'
+				'Instead of talking it through, I just ask for the work. It reads the brief and the notes, writes the release plan, adds the tasks to the board, and exports a Word brief for the team.'
+		},
+		{
+			id: 'ask',
+			at: (clip) => markTime(clip, 'sent') + 0.2,
+			caption: 'Ask it to do the work.'
 		},
 		{
 			id: 'done',
 			at: (clip) => markTime(clip, 'answered') + 0.1,
-			caption: 'Plan written. Seven tasks filed. Brief exported.',
-			narration: 'Every action is listed, with a link to what it made.'
+			caption: 'Everything it did is listed.',
+			narration: "When it's done, everything it did is listed, with a link to each thing it made."
 		}
 	],
 	'extract-promise': [
 		{
 			id: 'yours',
-			at: (clip) => Math.max(0.3, press(clip, 0).t - 1.2),
-			caption: "It's your note too.",
-			narration: 'It is your note too. Highlight a sentence and choose Extract promises.'
+			at: () => 0.3,
+			caption: "It's still your note.",
+			narration:
+				"It's still my note, so I keep editing it. I highlight a sentence that sounds like a promise, and ask it to extract it."
 		},
 		{
 			id: 'promise',
 			at: (clip) => markTime(clip, 'proposed') + 0.1,
-			caption: "A sentence became a promise. One click, it's a todo.",
-			narration: 'The todo is proposed in place, with its due date worked out.'
+			caption: 'A todo, where the promise was made.',
+			narration: 'It shows up right there, due date worked out. I accept it.'
 		}
 	],
 	'widget-proposal': [
 		{
 			id: 'build',
 			at: (clip) => Math.max(0.3, press(clip, 0).t - 0.3),
-			caption: 'Build on what you just changed.',
-			narration: 'Now ask for something built on the plan you just edited.'
+			caption: 'Build on what changed.',
+			narration:
+				'Now I can ask for something that builds on the plan I just changed. A small simulator for the critical path.'
 		},
 		{
 			id: 'noticed',
 			at: (clip) => markTime(clip, 'proposed') + 0.1,
-			caption: 'It read the edited plan. QA is 5 days now.'
+			caption: 'It noticed QA is five days now.'
 		}
 	],
 	'widget-result': [
 		{
 			id: 'approve',
 			at: (clip) => markTime(clip, 'approved') + 0.1,
-			caption: 'Approve, and it lands in the note.',
-			narration: 'Approve it, and the simulator lands in the note.'
+			caption: "Approve it, and it's part of the note.",
+			narration: 'I approve it, and it goes straight into the note.'
 		},
 		{
 			id: 'drag',
 			// Spoken as the drag happens, so the line and the slider move together.
 			at: (clip) => press(clip, 1).t - 0.2,
-			caption: 'Drag Legal to 12 days. Content is the critical path.',
-			narration: 'Drag Legal review to twelve days, and content becomes the critical path.'
+			caption: 'The work stays with the project.',
+			narration:
+				'Drag legal review out to twelve days, and the content stream becomes the critical path.'
 		}
 	]
 };
@@ -289,7 +298,7 @@ export const audioScript = (cues: readonly Cue[]): AudioScript => ({
 	),
 	music: {
 		prompt:
-			'Minimal, warm electronic underscore for a product film: a soft pulse around 96 bpm, muted keys, light percussion, no lead melody that competes with a voice; it builds gently and resolves warmly at the end.',
+			'Slow, warm, understated underscore for a product film: soft felt piano and sustained pads around 70 bpm, no drums, no bright synths, nothing busy. Unhurried and quietly confident, staying under a speaking voice, settling gently at the end.',
 		lengthMs: 82_000
 	},
 	click: 'A soft, short, dry mouse click on a quiet desk, close to the microphone.',
