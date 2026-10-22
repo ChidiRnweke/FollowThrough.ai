@@ -455,6 +455,41 @@ describe('Agent-updated block shimmer', () => {
 		expect(offset).toBeLessThan(2);
 	});
 
+	it('keeps the shimmer through the transactions that follow the replace', async () => {
+		const before = documentWith(
+			{ type: 'paragraph', content: [{ type: 'text', text: 'kept' }] },
+			{ type: 'paragraph', content: [{ type: 'text', text: 'old' }] }
+		) as ProseMirrorDocument;
+		const after = documentWith(
+			{ type: 'paragraph', content: [{ type: 'text', text: 'kept' }] },
+			{ type: 'paragraph', content: [{ type: 'text', text: 'edited' }] }
+		) as ProseMirrorDocument;
+		const screen = render(NoteEditor, {
+			noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+			projectId: PROJECT_ID,
+			revision: 1,
+			document: before,
+			onreviseMermaid: async (source) => ({ source }),
+			onconvertMermaid: async () => {
+				throw new Error('Not used by this test');
+			},
+			onrejectDrawio: async () => undefined
+		});
+		screen.component.replaceDocument(after, before);
+		// A selection change is the first transaction after any real adoption: the workspace
+		// focuses, a plugin reacts, a sync lands. The decoration has to survive it.
+		screen.component.focusStart();
+		await new Promise((resolve) =>
+			requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))
+		);
+
+		const shimmered = (await untilShimmered(screen.container)).map(
+			(element) => element.textContent
+		);
+
+		expect(shimmered).toEqual(['edited']);
+	});
+
 	it('leaves a replace without a previous document untouched', async () => {
 		const before = documentWith(
 			{ type: 'paragraph', content: [{ type: 'text', text: 'kept' }] },
