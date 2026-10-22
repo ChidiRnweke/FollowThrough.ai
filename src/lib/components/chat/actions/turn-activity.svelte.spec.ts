@@ -47,7 +47,24 @@ const grep = () =>
 
 /** The summary hangs off the turn's last activity group, so only that group is given it. */
 const renderTurn = (tools: ChatToolActivity[]) =>
-	render(TurnActivity, { tools, shell, summarise: true });
+	render(TurnActivity, { tools, shell, summarise: true, live: false });
+
+describe('A turn still being written keeps its steps between calls', () => {
+	it('shows the finished steps, not the fold, while the turn streams', async () => {
+		const screen = render(TurnActivity, {
+			tools: [
+				call({}),
+				call({ name: 'create_note', arguments: { title: 'Infrastructure', projectId: 'proj-1' } }),
+				call({ name: 'save_note' })
+			],
+			shell,
+			summarise: true,
+			live: true
+		});
+		await expect.element(screen.getByText('Created note')).toBeVisible();
+		expect(await screen.getByText('· edited').all()).toHaveLength(0);
+	});
+});
 
 describe('A settled turn reports the things it touched, once each', () => {
 	it('states the touched note once and shows the edit outcome', async () => {
