@@ -1,5 +1,5 @@
 import { cp, mkdir, writeFile } from 'node:fs/promises';
-import type { AudioManifest, AudioScript, NarrationLine } from './audio.ts';
+import type { AudioManifest, AudioScript, NarrationLine, SpokenWord } from './audio.ts';
 import type { ClipMark, CursorSample } from './recorder.ts';
 import type { FilmManifest } from './manifest.ts';
 
@@ -19,8 +19,6 @@ const MUTED = '#b8b5ad';
 const ACCENT = '#2ec4b0';
 /** How long a camera move takes, measured against the official launch films: 0.4–0.6 s. */
 const MOVE = 0.55;
-/** A caption holds 0.5 s plus 0.3 s a word, the reading rate the motion guidance measures. */
-const captionHold = (text: string): number => 0.5 + 0.3 * text.split(' ').length;
 /** The music sits here under nobody, and ducks to this under the narrator. */
 const BED = 0.7;
 const BED_UNDER_VOICE = 0.28;
@@ -107,8 +105,10 @@ const cameraKeys = (manifest: FilmManifest): readonly (readonly CameraKey[])[] =
 			const drag = press(clip, 1);
 			return [
 				{ t: markTime(clip, 'approved') + 0.3, cx: panelX, cy: 520, s: 1.35 },
-				{ t: markTime(clip, 'embedded') + 0.2, cx: noteX, cy: 540, s: 1.25 },
-				{ t: drag.t - 0.5, cx: drag.x + 120, cy: drag.y, s: 1.8 },
+				// The simulator lands with the editor's sweep across it: hold on it while that runs.
+				{ t: markTime(clip, 'embedded') + 0.2, cx: drag.x + 140, cy: drag.y - 200, s: 1.5 },
+				// The slider sits above the subtitle band at this push.
+				{ t: drag.t - 0.5, cx: drag.x + 120, cy: drag.y + 150, s: 1.8 },
 				{ t: markTime(clip, 'legal-12') + 1.2, cx: noteX, cy: 540, s: 1.3 }
 			];
 		}
@@ -140,22 +140,17 @@ const translate = (
 
 // ── Cues ────────────────────────────────────────────────────────────────────────────────
 
-/** A moment in the film with a caption, and a narration line when the narrator speaks there. */
+/** A moment the narrator speaks at, in seconds into the film. */
 export interface Cue {
 	readonly id: string;
-	/** Seconds into the film. */
 	readonly at: number;
-	readonly caption: string;
-	readonly narration?: string;
-	/** Where the caption has to be gone: the next cue of the clip, or the clip's end. */
-	readonly until: number;
+	readonly narration: string;
 }
 
 interface CuePlan {
 	readonly id: string;
 	readonly at: (clip: Clip) => number;
-	readonly caption: string;
-	readonly narration?: string;
+	readonly narration: string;
 }
 
 /**
@@ -167,14 +162,8 @@ const cuePlans: Readonly<Record<string, readonly CuePlan[]>> = {
 		{
 			id: 'project',
 			at: () => 0.4,
-			caption: 'A project with a few notes and some decisions.',
 			narration:
 				"Here's a project in FollowThrough. A planning note, the launch document, two decisions, and a few todos."
-		},
-		{
-			id: 'context',
-			at: (clip) => markTime(clip, 'chat-open') + 0.2,
-			caption: 'The agent can read all of it.'
 		}
 	],
 	'agent-acts': [
@@ -182,19 +171,12 @@ const cuePlans: Readonly<Record<string, readonly CuePlan[]>> = {
 			// Spoken while the request is typed, so the explanation has the room it needs.
 			id: 'request',
 			at: (clip) => press(clip, 0).t + 1.5,
-			caption: '',
 			narration:
 				'Instead of talking it through, I ask it to do the work. It reads the notes and the launch document, writes a release plan, adds the tasks to the board, and makes a Word document for the team.'
 		},
 		{
-			id: 'ask',
-			at: (clip) => markTime(clip, 'sent') + 0.2,
-			caption: 'Ask it to do the work for you.'
-		},
-		{
 			id: 'done',
 			at: (clip) => markTime(clip, 'answered') + 0.1,
-			caption: 'Everything it did is listed, with a link.',
 			narration: "When it's finished, everything it did is listed, with a link to each thing."
 		}
 	],
@@ -202,14 +184,12 @@ const cuePlans: Readonly<Record<string, readonly CuePlan[]>> = {
 		{
 			id: 'yours',
 			at: () => 0.3,
-			caption: 'You keep writing in your own words.',
 			narration:
 				"It's still my note, so I keep editing. When a sentence has a promise in it, I highlight it and ask for a todo."
 		},
 		{
 			id: 'promise',
 			at: (clip) => markTime(clip, 'proposed') + 0.1,
-			caption: 'A promise in the text becomes a todo.',
 			narration: 'The todo appears right there, with the due date worked out. I accept it.'
 		}
 	],
@@ -217,28 +197,20 @@ const cuePlans: Readonly<Record<string, readonly CuePlan[]>> = {
 		{
 			id: 'build',
 			at: (clip) => Math.max(0.3, press(clip, 0).t - 0.3),
-			caption: 'Build on the plan you just changed.',
 			narration:
 				'Now I can ask for something that builds on the plan I just changed. A small tool with sliders, to see what moves the launch date.'
-		},
-		{
-			id: 'noticed',
-			at: (clip) => markTime(clip, 'proposed') + 0.1,
-			caption: 'It noticed that QA takes five days now.'
 		}
 	],
 	'widget-result': [
 		{
 			id: 'approve',
 			at: (clip) => markTime(clip, 'approved') + 0.1,
-			caption: 'Approve it, and it becomes part of the note.',
 			narration: 'I approve it, and it goes straight into the note.'
 		},
 		{
 			id: 'drag',
 			// Spoken as the drag happens, so the line and the slider move together.
 			at: (clip) => press(clip, 1).t - 0.2,
-			caption: 'Move one thing, and see what it changes.',
 			narration:
 				"Give legal review twelve days instead of four, and you can see it's now the thing holding up the launch."
 		}
@@ -268,34 +240,17 @@ export const filmCues = (manifest: FilmManifest): readonly Cue[] => {
 		const plans = cuePlans[clip.beat];
 		if (!plans) throw new Error(`No cues for the "${clip.beat}" beat.`);
 		const start = clipStarts[index] ?? 0;
-		const local = plans.map((plan) => ({ plan, at: plan.at(clip) }));
-		local.forEach(({ plan, at }, position) => {
-			const next = local[position + 1]?.at ?? clip.duration;
-			cues.push({
-				id: plan.id,
-				at: start + at,
-				caption: plan.caption,
-				...(plan.narration ? { narration: plan.narration } : {}),
-				until: start + next
-			});
-		});
+		for (const plan of plans)
+			cues.push({ id: plan.id, at: start + plan.at(clip), narration: plan.narration });
 	});
 	const endStart = clipStarts[manifest.clips.length] ?? 0;
-	cues.push({
-		id: 'end',
-		at: endStart + 0.3,
-		caption: '',
-		narration: END_LINE,
-		until: endStart + END_CARD_MIN
-	});
+	cues.push({ id: 'end', at: endStart + 0.3, narration: END_LINE });
 	return cues;
 };
 
 /** What the audio generator makes for the cues. */
 export const audioScript = (cues: readonly Cue[]): AudioScript => ({
-	narration: cues.flatMap((cue): NarrationLine[] =>
-		cue.narration ? [{ id: cue.id, text: cue.narration }] : []
-	),
+	narration: cues.map((cue): NarrationLine => ({ id: cue.id, text: cue.narration })),
 	music: {
 		prompt:
 			'Slow, warm, understated underscore for a product film: soft felt piano and sustained pads around 70 bpm, no drums, no bright synths, nothing busy. Unhurried and quietly confident, staying under a speaking voice, settling gently at the end.',
@@ -312,9 +267,7 @@ const withEndLineAfterFootage = (cues: readonly Cue[], audio: AudioManifest): re
 	const lastClip = last ? audio.narration[last.id] : undefined;
 	const earliest = last && lastClip ? last.at + lastClip.duration + 0.5 : 0;
 	return cues.map((cue) =>
-		cue.id === 'end' && cue.at < earliest
-			? { ...cue, at: earliest, until: earliest + END_CARD_MIN }
-			: cue
+		cue.id === 'end' && cue.at < earliest ? { ...cue, at: earliest } : cue
 	);
 };
 
@@ -323,7 +276,7 @@ const withEndLineAfterFootage = (cues: readonly Cue[], audio: AudioManifest): re
  * fit is a script problem to fix in the cue table, not something to speak over.
  */
 const narrationFits = (cues: readonly Cue[], audio: AudioManifest, total: number): void => {
-	const spoken = cues.filter((cue) => cue.narration);
+	const spoken = cues;
 	spoken.forEach((cue, index) => {
 		const clip = audio.narration[cue.id];
 		if (!clip) throw new Error(`The "${cue.id}" line was not generated.`);
@@ -407,52 +360,114 @@ const sceneHtml = (
 `;
 };
 
-// ── Captions ────────────────────────────────────────────────────────────────────────────
+// ── Subtitles ───────────────────────────────────────────────────────────────────────────
 
-const captionsHtml = (manifest: FilmManifest, cues: readonly Cue[]): string => {
+interface SubtitleGroup {
+	readonly id: string;
+	readonly text: string;
+	readonly start: number;
+	readonly end: number;
+}
+
+/** Words a subtitle line should not end on: the reader would wait for what follows them. */
+const DANGLING =
+	/^(a|an|the|to|of|and|or|but|in|on|at|for|with|into|from|I|my|your|its|that|this|than|just|has|have|is|are|was|were|be|one|two|three|four|five|six|seven|eight|nine|ten|twelve)$/i;
+const GROUP_MAX = 8;
+
+/**
+ * The narrator's words as subtitle groups. A line follows the sentence: it breaks at
+ * punctuation, and a clause longer than the limit is split as evenly as it can be without
+ * ending a line on an article or a preposition. One group is on screen at a time, opening just
+ * before its first word and closing just after its last; a short gap to the next group is
+ * bridged so the text does not flicker.
+ */
+const subtitleGroups = (cues: readonly Cue[], audio: AudioManifest): readonly SubtitleGroup[] => {
+	const groups: SubtitleGroup[] = [];
+	for (const cue of cues) {
+		const line = audio.narration[cue.id];
+		if (!line) throw new Error(`The "${cue.id}" line was not generated.`);
+		const clauses: SpokenWord[][] = [];
+		let clause: SpokenWord[] = [];
+		for (const word of line.words) {
+			clause.push(word);
+			if (/[.,!?;:]$/.test(word.text)) {
+				clauses.push(clause);
+				clause = [];
+			}
+		}
+		if (clause.length) clauses.push(clause);
+		for (const words of clauses) {
+			const parts = Math.ceil(words.length / GROUP_MAX);
+			const size = Math.ceil(words.length / parts);
+			let from = 0;
+			while (from < words.length) {
+				const ideal = Math.min(from + size, words.length);
+				// The boundary nearest the even split that does not end a line on a dangling word.
+				const to =
+					ideal >= words.length
+						? words.length
+						: ([0, 1, -1, 2, -2]
+								.map((shift) => ideal + shift)
+								.find(
+									(candidate) =>
+										candidate > from + 1 &&
+										candidate < words.length &&
+										!DANGLING.test(words[candidate - 1]?.text ?? '')
+								) ?? ideal);
+				const chunk = words.slice(from, to);
+				const first = chunk[0];
+				const last = chunk[chunk.length - 1];
+				if (first && last)
+					groups.push({
+						id: `${cue.id}-${groups.length + 1}`,
+						text: chunk.map((word) => word.text).join(' '),
+						start: cue.at + first.start - 0.1,
+						end: cue.at + last.end + 0.15
+					});
+				from = to;
+			}
+		}
+	}
+	return groups.map((group, index) => {
+		const previous = groups[index - 1];
+		const next = groups[index + 1];
+		const start = previous ? Math.max(group.start, previous.end) : group.start;
+		// Bridge a gap under 0.35 s to the next group; a longer one is a real pause.
+		const end =
+			next && next.start - group.end < 0.35
+				? Math.max(next.start, start + 0.4)
+				: Math.max(group.end, start + 0.4);
+		return { ...group, start, end };
+	});
+};
+
+const subtitlesHtml = (manifest: FilmManifest, groups: readonly SubtitleGroup[]): string => {
 	const { viewport } = manifest;
-	const shown = cues
-		.filter((cue) => cue.caption)
-		.map((cue) => ({
-			id: cue.id,
-			start: cue.at,
-			hold: Math.min(captionHold(cue.caption), cue.until - cue.at - 0.2),
-			words: cue.caption.split(' ')
-		}));
-	const items = shown
+	const items = groups
 		.map(
-			(
-				cue
-			) => `    <div id="cap-${cue.id}" class="clip caption" data-start="${cue.start.toFixed(3)}" data-duration="${cue.hold.toFixed(2)}" data-track-index="0">
-      <div class="rule"></div>
-      <div class="line">${cue.words.map((word) => `<span class="w">${word}</span>`).join(' ')}</div>
-    </div>`
+			(group) =>
+				`    <div id="sub-${group.id}" class="clip sub" data-start="${group.start.toFixed(3)}" data-duration="${(group.end - group.start).toFixed(3)}" data-track-index="0"><span class="box">${group.text}</span></div>`
 		)
 		.join('\n');
 	return `<template>
   <style>
-    #root { position: absolute; inset: 0; pointer-events: none; }
-    .caption { position: absolute; left: ${Math.round(viewport.width * 0.1)}px; bottom: ${Math.round(viewport.height * 0.1)}px; font-family: Inter, sans-serif; color: ${INK}; }
-    .rule { display: block; width: 56px; height: 3px; margin-bottom: 16px; background: ${ACCENT}; transform-origin: 0 50%; }
-    .line { font-size: 54px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; text-shadow: 0 2px 18px rgba(0,0,0,.6); }
-    .w { display: inline-block; }
+    #root { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+    .sub { position: absolute; left: 0; right: 0; bottom: ${Math.round(viewport.height * 0.093)}px; text-align: center; font-family: Inter, sans-serif; overflow: visible; }
+    .box { display: inline-block; max-width: 1500px; padding: 10px 22px; border-radius: 10px; background: rgba(0, 0, 0, 0.38); color: ${INK}; font-size: 42px; font-weight: 500; line-height: 1.3; letter-spacing: -0.005em; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
   </style>
-  <div id="root" data-composition-id="captions" data-width="${viewport.width}" data-height="${viewport.height}">
+  <div id="root" data-composition-id="subtitles" data-width="${viewport.width}" data-height="${viewport.height}">
 ${items}
   </div>
   <script>
     (() => {
       const tl = gsap.timeline({ paused: true });
-      const captions = ${JSON.stringify(shown.map((cue) => ({ id: cue.id, start: cue.start, hold: cue.hold })))};
-      for (const cap of captions) {
-        const words = "#cap-" + cap.id + " .w";
-        tl.fromTo("#cap-" + cap.id + " .rule", { scaleX: 0 }, { scaleX: 1, duration: 0.35, ease: "expo.out" }, cap.start + 0.05);
-        tl.fromTo(words, { opacity: 0, filter: "blur(6px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.13, ease: "power2.out", stagger: 0.067 }, cap.start + 0.1);
-        const out = cap.start + cap.hold - 0.3;
-        tl.to(words, { opacity: 0, filter: "blur(6px)", duration: 0.18, ease: "power2.in", stagger: 0.03 }, out);
-        tl.to("#cap-" + cap.id + " .rule", { opacity: 0, duration: 0.18, ease: "power2.in" }, out);
+      const groups = ${JSON.stringify(groups.map((group) => ({ id: group.id, start: group.start, end: group.end })))};
+      for (const group of groups) {
+        const box = "#sub-" + group.id + " .box";
+        tl.fromTo(box, { opacity: 0 }, { opacity: 1, duration: 0.12, ease: "power2.out" }, group.start);
+        tl.to(box, { opacity: 0, duration: 0.12, ease: "power2.in" }, group.end - 0.12);
       }
-      window.__timelines["captions"] = tl;
+      window.__timelines["subtitles"] = tl;
     })();
   </script>
 </template>
@@ -555,7 +570,7 @@ const audioHtml = (
 				spans += 1;
 				const length = Math.min(mark.t - open, audio.typing.duration);
 				lines.push(
-					`      <audio id="keys-${spans}" class="clip" src="assets/audio/${audio.typing.file}" data-start="${(start + open).toFixed(3)}" data-duration="${length.toFixed(3)}" data-volume="0.25" data-fade-in="0.2" data-fade-out="0.3" data-audio-group="sfx" data-track-index="5"></audio>`
+					`      <audio id="keys-${spans}" class="clip" src="assets/audio/${audio.typing.file}" data-start="${(start + open).toFixed(3)}" data-duration="${length.toFixed(3)}" data-volume="0.25" data-fade-in="0.2" data-fade-out="0.3" data-audio-group="sfx" data-track-index="6"></audio>`
 				);
 				open = undefined;
 			}
@@ -605,7 +620,7 @@ const indexHtml = (
       <div id="ground"></div>
 ${hosts}
       <div id="end" data-composition-id="end" data-composition-src="compositions/end.html" data-start="${endStart.toFixed(3)}" data-duration="${endCard.toFixed(2)}" data-track-index="1" data-track-kind="graphics" data-width="${viewport.width}" data-height="${viewport.height}"></div>
-      <div id="captions" data-composition-id="captions" data-composition-src="compositions/captions.html" data-start="0" data-duration="${endStart.toFixed(3)}" data-track-index="2" data-track-kind="captions" data-width="${viewport.width}" data-height="${viewport.height}"></div>
+${sound ? `      <div id="subtitles" data-composition-id="subtitles" data-composition-src="compositions/subtitles.html" data-start="0" data-duration="${total.toFixed(3)}" data-track-index="2" data-track-kind="captions" data-width="${viewport.width}" data-height="${viewport.height}"></div>` : ''}
 ${sound}
     </div>
     <script>
@@ -651,7 +666,11 @@ export const writeFilm = async (
 			)
 		)
 	);
-	await writeFile(new URL('captions.html', compositions), captionsHtml(manifest, timed));
+	if (audio)
+		await writeFile(
+			new URL('subtitles.html', compositions),
+			subtitlesHtml(manifest, subtitleGroups(timed, audio))
+		);
 	await writeFile(new URL('end.html', compositions), endHtml(manifest, endCard));
 	await writeFile(
 		new URL('index.html', film),

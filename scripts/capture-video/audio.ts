@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { access, mkdir, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 
@@ -29,8 +30,20 @@ export interface GeneratedClip {
 	readonly duration: number;
 }
 
+/** One spoken word and when it is heard, in seconds from the start of its line. */
+export interface SpokenWord {
+	readonly text: string;
+	readonly start: number;
+	readonly end: number;
+}
+
+/** A narration line with the words the subtitles follow. */
+export interface GeneratedLine extends GeneratedClip {
+	readonly words: readonly SpokenWord[];
+}
+
 export interface AudioManifest {
-	readonly narration: Readonly<Record<string, GeneratedClip>>;
+	readonly narration: Readonly<Record<string, GeneratedLine>>;
 	readonly music: GeneratedClip;
 	readonly click: GeneratedClip;
 	readonly typing: GeneratedClip;
@@ -86,8 +99,11 @@ export class AudioGenerator {
 
 	async generate(script: AudioScript): Promise<AudioManifest> {
 		await mkdir(this.output, { recursive: true });
-		const narration: Record<string, GeneratedClip> = {};
-		for (const line of script.narration) narration[line.id] = await this.speak(line);
+		const narration: Record<string, GeneratedLine> = {};
+		for (const line of script.narration) {
+			const spoken = await this.speak(line);
+			narration[line.id] = { ...spoken, words: await this.align(spoken, line.text) };
+		}
 		return {
 			narration,
 			music: await this.compose(script.music),
@@ -128,6 +144,31 @@ export class AudioGenerator {
 		if (!spoken.alignment?.characterEndTimesSeconds?.length)
 			throw new Error(`ElevenLabs returned no timing for the "${line.id}" line.`);
 		return this.keep(file, Buffer.from(spoken.audioBase64, 'base64'));
+	}
+
+	/**
+	 * When each word of a line is heard, from forced alignment of the file that was kept: the
+	 * audio is never re-synthesised for this, so a line the reader approved stays as it is. The
+	 * words are cached beside the file.
+	 */
+	private async align(clip: GeneratedClip, text: string): Promise<readonly SpokenWord[]> {
+		const sidecar = new URL(`${clip.file}.words.json`, this.output);
+		try {
+			const words: SpokenWord[] = JSON.parse(await readFile(sidecar, 'utf8'));
+			return words;
+		} catch (error) {
+			if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+		}
+		const aligned = await this.client.forcedAlignment.create({
+			file: createReadStream(new URL(clip.file, this.output)),
+			text
+		});
+		const words = aligned.words
+			.filter((word) => word.text.trim() !== '')
+			.map((word) => ({ text: word.text.trim(), start: word.start, end: word.end }));
+		if (words.length === 0) throw new Error(`Forced alignment found no words in ${clip.file}.`);
+		await writeFile(sidecar, `${JSON.stringify(words)}\n`);
+		return words;
 	}
 
 	private async compose(music: AudioScript['music']): Promise<GeneratedClip> {
