@@ -167,14 +167,14 @@ const cuePlans: Readonly<Record<string, readonly CuePlan[]>> = {
 		{
 			id: 'project',
 			at: () => 0.4,
-			caption: 'Your notes. Your brief. Your decisions.',
+			caption: 'A project with a few notes and some decisions.',
 			narration:
-				"Here's a project in FollowThrough. A planning note, the launch brief, two decisions, and the first todos."
+				"Here's a project in FollowThrough. A planning note, the launch document, two decisions, and a few todos."
 		},
 		{
 			id: 'context',
 			at: (clip) => markTime(clip, 'chat-open') + 0.2,
-			caption: 'The agent works from all of it.'
+			caption: 'The agent can read all of it.'
 		}
 	],
 	'agent-acts': [
@@ -184,63 +184,63 @@ const cuePlans: Readonly<Record<string, readonly CuePlan[]>> = {
 			at: (clip) => press(clip, 0).t + 1.5,
 			caption: '',
 			narration:
-				'Instead of talking it through, I just ask for the work. It reads the brief and the notes, writes the release plan, adds the tasks to the board, and exports a Word brief for the team.'
+				'Instead of talking it through, I ask it to do the work. It reads the notes and the launch document, writes a release plan, adds the tasks to the board, and makes a Word document for the team.'
 		},
 		{
 			id: 'ask',
 			at: (clip) => markTime(clip, 'sent') + 0.2,
-			caption: 'Ask it to do the work.'
+			caption: 'Ask it to do the work for you.'
 		},
 		{
 			id: 'done',
 			at: (clip) => markTime(clip, 'answered') + 0.1,
-			caption: 'Everything it did is listed.',
-			narration: "When it's done, everything it did is listed, with a link to each thing it made."
+			caption: 'Everything it did is listed, with a link.',
+			narration: "When it's finished, everything it did is listed, with a link to each thing."
 		}
 	],
 	'extract-promise': [
 		{
 			id: 'yours',
 			at: () => 0.3,
-			caption: "It's still your note.",
+			caption: 'You keep writing in your own words.',
 			narration:
-				"It's still my note, so I keep editing it. I highlight a sentence that sounds like a promise, and ask it to extract it."
+				"It's still my note, so I keep editing. When a sentence has a promise in it, I highlight it and ask for a todo."
 		},
 		{
 			id: 'promise',
 			at: (clip) => markTime(clip, 'proposed') + 0.1,
-			caption: 'A todo, where the promise was made.',
-			narration: 'It shows up right there, due date worked out. I accept it.'
+			caption: 'A promise in the text becomes a todo.',
+			narration: 'The todo appears right there, with the due date worked out. I accept it.'
 		}
 	],
 	'widget-proposal': [
 		{
 			id: 'build',
 			at: (clip) => Math.max(0.3, press(clip, 0).t - 0.3),
-			caption: 'Build on what changed.',
+			caption: 'Build on the plan you just changed.',
 			narration:
-				'Now I can ask for something that builds on the plan I just changed. A small simulator for the critical path.'
+				'Now I can ask for something that builds on the plan I just changed. A small tool with sliders, to see what moves the launch date.'
 		},
 		{
 			id: 'noticed',
 			at: (clip) => markTime(clip, 'proposed') + 0.1,
-			caption: 'It noticed QA is five days now.'
+			caption: 'It noticed that QA takes five days now.'
 		}
 	],
 	'widget-result': [
 		{
 			id: 'approve',
 			at: (clip) => markTime(clip, 'approved') + 0.1,
-			caption: "Approve it, and it's part of the note.",
+			caption: 'Approve it, and it becomes part of the note.',
 			narration: 'I approve it, and it goes straight into the note.'
 		},
 		{
 			id: 'drag',
 			// Spoken as the drag happens, so the line and the slider move together.
 			at: (clip) => press(clip, 1).t - 0.2,
-			caption: 'The work stays with the project.',
+			caption: 'Move one thing, and see what it changes.',
 			narration:
-				'Drag legal review out to twelve days, and the content stream becomes the critical path.'
+				"Give legal review twelve days instead of four, and you can see it's now the thing holding up the launch."
 		}
 	]
 };
