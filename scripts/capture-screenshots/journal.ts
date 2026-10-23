@@ -47,6 +47,39 @@ export interface JournalledIds {
 	readonly runId: string;
 }
 
+/**
+ * One tool call as a script: the arguments the agent sent, and the work that produces its
+ * output. `perform` seeds the rows the real tool would have written, so a scripted turn can be
+ * journalled in one go for a still, or replayed call by call for a recording.
+ */
+export interface ScriptedCall {
+	readonly name: string;
+	/** Read when the call starts: an earlier call's output may name the records it uses. */
+	readonly arguments: () => JsonObject;
+	readonly perform: () => Promise<Json>;
+}
+
+/** A turn whose calls still have to be performed. */
+export interface ScriptedTurn extends Omit<JournalledRun, 'calls'> {
+	readonly calls: readonly ScriptedCall[];
+}
+
+/** Perform the calls in order and return them as the harness journals them. */
+export const performScript = async (
+	calls: readonly ScriptedCall[]
+): Promise<readonly JournalledCall[]> => {
+	const performed: JournalledCall[] = [];
+	for (const call of calls) {
+		const input = call.arguments();
+		performed.push({ name: call.name, input, output: await call.perform() });
+	}
+	return performed;
+};
+
+/** Perform a scripted turn, then store it as one finished turn. */
+export const journalScriptedTurn = async (sql: Sql, turn: ScriptedTurn): Promise<JournalledIds> =>
+	journalRun(sql, { ...turn, calls: await performScript(turn.calls) });
+
 const callId = (): string => `call_${randomBytes(12).toString('hex')}`;
 
 /**

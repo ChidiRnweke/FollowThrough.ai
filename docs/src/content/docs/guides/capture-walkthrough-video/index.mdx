@@ -1,0 +1,101 @@
+---
+title: Recording the walkthrough video
+description: Film the README walkthrough in the real app, with the agent's turns replayed through the live run stream, and compose it with HyperFrames.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The walkthrough video shows the five moments of the README walkthrough as one continuous session
+in the real app: the project, the request that writes the release plan, the promise extracted
+from a sentence, the proposed simulator and the embedded result. `pnpm docs:video` records it from
+the same seeded workspace the product screenshots use, and composes the recording into
+`artifacts/video/walkthrough-dark.mp4` with [HyperFrames](https://github.com/heygen-com/hyperframes).
+
+## How it stays real
+
+- **Every frame is the app.** Playwright drives one 1920×1080 page in dark mode and records it
+  through Chromium's screencast at twice that in device pixels, so a push-in on a control stays
+  sharp. The pointer is drawn by the composition from a log of where the hand moved and clicked,
+  since a headless browser paints none.
+- **The agent streams without a model.** The walkthrough seed already holds each turn as a script:
+  the prompt, what the agent said, every tool call with its arguments and output, and the rows the
+  tool would have written. The recording replays that script into the run's event table one event
+  per commit, and the real chat panel streams it over the same event stream a model-backed run
+  uses. The calls to `submitAgentRun`, `extractPromises` and `decideAgentRunBatch` are the only
+  requests the recording answers itself, with the receipt of the run it has just stored.
+- **The composition is generated.** `scripts/capture-video/film.ts` writes one scene per beat,
+  the camera moves between the places the reader acted, the captions, the narration and the
+  end card from the recording's manifest. The narration lines are cues on the recording's
+  marks (`sent`, `answered`, `proposed`, …), so they land on the moment they describe, and the
+  subtitles follow the narrator word by word from a forced alignment of the kept audio. A
+  narration line has to fit the window before the next one; the generator fails naming the line
+  when it does not. Re-recording regenerates it; `--compose-only` rebuilds it from the last
+  recording without filming again.
+
+## Run it
+
+The database setup is the one in [Capturing product screenshots](/guides/capture-product-screenshots/):
+the run signs in as the showcase user and rebuilds that user's workspace. The app must run with
+the real `.env`, because the workspace reads the model catalog on load; no model is called.
+
+<Steps>
+
+1. Start the app, then record and render:
+
+   ```bash
+   pnpm dev
+   pnpm docs:video
+   ```
+
+2. Iterate on the film without recording again:
+
+   ```bash
+   pnpm docs:video --compose-only --skip-render
+   cd scripts/capture-video/film && npx hyperframes preview
+   ```
+
+3. Watch the rendered file end to end before you publish it. A render that ran is not a render
+   that is right: check that the cursor lands on the control it clicks, that no caption covers
+   what it names, and that the dark theme reaches every edge.
+
+</Steps>
+
+| Option           | Default                 | Effect                                                          |
+| ---------------- | ----------------------- | --------------------------------------------------------------- |
+| `--base-url`     | `http://127.0.0.1:5173` | The running app to record.                                      |
+| `--skip-render`  | off                     | Record and compose, but do not run the HyperFrames render.      |
+| `--compose-only` | off                     | Rebuild the composition from `artifacts/video/manifest.json`.   |
+| `--no-audio`     | off                     | Compose without narration, music or effects; no ElevenLabs key. |
+| `--cleanup`      | off                     | Delete the showcase user and its workspace after the recording. |
+
+The recording needs `ffmpeg` on the path. The ElevenLabs SDK is a devDependency of the
+repository; the HyperFrames CLI is a devDependency of the film project in
+`scripts/capture-video/film/`, which the script installs on first use, so its browser does not
+join every install of the app.
+
+<Aside type="note">
+	The narrator, the music bed and the click and keyboard sounds come from ElevenLabs. Run `npx -y
+	@elevenlabs/cli@latest onboard init` once in the repository: it signs you in and stores
+	`ELEVENLABS_API_KEY` in the ignored `.env.local`, which `pnpm docs:video` loads. Each generated
+	file is cached in `artifacts/video/audio/` by its request, so composing again costs no credits;
+	`--no-audio` composes a silent film without the key.
+</Aside>
+
+## What lands where
+
+| Path                                          | Holds                                                                                      |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `artifacts/video/<beat>.mp4`                  | One 3840×2160 clip per beat, 30 fps.                                                       |
+| `artifacts/video/manifest.json`               | Each clip's duration, its marks (sent, answered, …) and the pointer log.                   |
+| `scripts/capture-video/film/`                 | The HyperFrames project; its generated files are ignored by git.                           |
+| `artifacts/video/walkthrough-dark.mp4`        | The rendered film, 1920×1080.                                                              |
+| `static/product-video/walkthrough.mp4`        | The published copy (under 10 MB) that the README links to and the docs landing page plays. |
+| `static/product-video/walkthrough-poster.jpg` | The poster for both, the moment the simulator has landed in the note.                      |
+
+## Changing a beat
+
+The beats are in `scripts/capture-video/beats.ts`, one per README section, each as the actions a
+reader takes. A beat records between `prepare` and the end of `act`, and names the moments the
+composition cuts or captions on with `recorder.mark`. The camera plan for each beat is in
+`film.ts`, keyed by those marks and by the presses in the pointer log, so a new click in a beat
+moves the camera without a timing change by hand.

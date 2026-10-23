@@ -1,0 +1,49 @@
+---
+/**
+ * The walkthrough video and its poster — the app's screenshot recipe, with a player.
+ *
+ * The files live once, in the app's `static/product-video/`, which the README links to too;
+ * `pnpm docs:video` regenerates them. A missing file fails the build here rather than shipping
+ * a broken player. The subtitles are part of the picture, so the player carries no text track.
+ */
+interface Props {
+	caption: string;
+}
+
+const files = import.meta.glob<string>('../../../static/product-video/*.{mp4,jpg}', {
+	eager: true,
+	query: '?url',
+	import: 'default'
+});
+
+const { caption } = Astro.props;
+
+const url = (name: string): string => {
+	const found = files[`../../../static/product-video/${name}`];
+	if (!found) throw new Error(`No ${name} in static/product-video/.`);
+	return found;
+};
+---
+
+<figure class="ft-video">
+	<video controls preload="none" playsinline poster={url('walkthrough-poster.jpg')} src={url('walkthrough.mp4')}
+	></video>
+	<figcaption>{caption}</figcaption>
+</figure>
+
+<style>
+	.ft-video {
+		margin: 1.5rem 0 2rem;
+	}
+	.ft-video video {
+		display: block;
+		width: 100%;
+		border-radius: 0.5rem;
+		background: #1a1917;
+	}
+	.ft-video figcaption {
+		margin-top: 0.5rem;
+		font-size: 0.875rem;
+		color: var(--sl-color-gray-3);
+	}
+</style>

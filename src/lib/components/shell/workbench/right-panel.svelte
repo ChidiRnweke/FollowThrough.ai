@@ -166,19 +166,24 @@
 				-->
 				<ErrorBoundary label="the {landmarkTitles[renderedMode].toLowerCase()} panel">
 					{#if renderedMode === 'chat'}
-						<ChatPanel
-							chat={chatSession}
-							{shell}
-							{sessions}
-							{activeNoteId}
-							{openResource}
-							{activeProjectId}
-							{agentPreferences}
-							{agentModels}
-							{agentDefaults}
-							{agentAvailable}
-							registerComposerFocus={(focus) => rightPanel.registerChatComposerFocus(focus)}
-						/>
+						<!-- Keyed on the session: "New chat" mints a new session, and the panel that hydrates
+						     it does so on mount. Without the remount the new chat never refreshes the workspace
+						     when its run changes notes or todos. -->
+						{#key chatSession}
+							<ChatPanel
+								chat={chatSession}
+								{shell}
+								{sessions}
+								{activeNoteId}
+								{openResource}
+								{activeProjectId}
+								{agentPreferences}
+								{agentModels}
+								{agentDefaults}
+								{agentAvailable}
+								registerComposerFocus={(focus) => rightPanel.registerChatComposerFocus(focus)}
+							/>
+						{/key}
 					{:else if renderedMode === 'todo-detail'}
 						<!-- The gutter is the scrollbar's: it overlays the viewport's right edge
 						     rather than reserving space, so a full-width field underneath it
@@ -263,19 +268,24 @@
 			>
 				<ErrorBoundary label="the {landmarkTitles[renderedMode].toLowerCase()} panel">
 					{#if renderedMode === 'chat'}
-						<ChatPanel
-							chat={chatSession}
-							{shell}
-							{sessions}
-							{activeNoteId}
-							{openResource}
-							{activeProjectId}
-							{agentPreferences}
-							{agentModels}
-							{agentDefaults}
-							{agentAvailable}
-							registerComposerFocus={(focus) => rightPanel.registerChatComposerFocus(focus)}
-						/>
+						<!-- Keyed on the session: "New chat" mints a new session, and the panel that hydrates
+						     it does so on mount. Without the remount the new chat never refreshes the workspace
+						     when its run changes notes or todos. -->
+						{#key chatSession}
+							<ChatPanel
+								chat={chatSession}
+								{shell}
+								{sessions}
+								{activeNoteId}
+								{openResource}
+								{activeProjectId}
+								{agentPreferences}
+								{agentModels}
+								{agentDefaults}
+								{agentAvailable}
+								registerComposerFocus={(focus) => rightPanel.registerChatComposerFocus(focus)}
+							/>
+						{/key}
 					{:else if renderedMode === 'project-memory'}
 						<MemoryPanel />
 					{:else if renderedMode === 'suggestions'}

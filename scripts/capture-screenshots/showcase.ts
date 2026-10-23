@@ -108,9 +108,18 @@ export interface ShowcaseIds {
 	readonly walkthrough: Walkthrough;
 }
 
-/** Start from an empty workspace. The cascade on `users` clears every row the user owns. */
+/**
+ * Start from an empty workspace. The cascade on `users` clears every row the user owns, but not
+ * the sync log of what was deleted: that is keyed by account and outlives the rows, so every
+ * reset would add thousands of deletions a fresh browser has to page through before the first
+ * screen renders. The account is gone, so its log goes with it.
+ */
 export const resetShowcase = async (sql: Sql): Promise<void> => {
 	await sql`delete from users where id = ${SHOWCASE_USER_ID}`;
+	await sql`delete from workspace_sync_changes where account_id = ${SHOWCASE_USER_ID}`;
+	await sql`delete from workspace_sync_versions where account_id = ${SHOWCASE_USER_ID}`;
+	await sql`delete from workspace_sync_receipts where account_id = ${SHOWCASE_USER_ID}`;
+	await sql`delete from workspace_sync_heads where account_id = ${SHOWCASE_USER_ID}`;
 	await sql`
 		insert into users (id, email, display_name, role)
 		values (${showcaseUser.id}, ${showcaseUser.email}, ${showcaseUser.displayName}, 'USER')

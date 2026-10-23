@@ -6,7 +6,15 @@ import type { Browser } from '@playwright/test';
 import { Document, HeadingLevel, Packer, Paragraph } from 'docx';
 import type { Sql } from 'postgres';
 import { APPLICATION_DEFAULTS } from '../../src/lib/server/config.ts';
-import { journalRun, type JournalledCall, type JournalledIds, type JsonObject } from './journal.ts';
+import {
+	journalRun,
+	journalScriptedTurn,
+	performScript,
+	type JournalledIds,
+	type JsonObject,
+	type ScriptedCall,
+	type ScriptedTurn
+} from './journal.ts';
 
 /**
  * The README walkthrough: one project, "Docs site relaunch", followed through five moments.
@@ -29,6 +37,46 @@ export interface WalkthroughIds {
 	readonly planningNoteId: string;
 	/** The release plan the agent writes. It exists from moment 2. */
 	readonly releasePlanNoteId: () => string;
+}
+
+/** The todo proposal moment 3 seeds, as the extract-promises run would report it. */
+export interface PromiseProposal {
+	readonly suggestionId: string;
+	readonly noteId: string;
+	readonly anchorId: string;
+	readonly provenanceId: string;
+	readonly createdAt: Date;
+	/** The sentence and its place in the note, as the user's selection reported it. */
+	readonly selection: {
+		readonly from: number;
+		readonly to: number;
+		readonly revision: number;
+		readonly text: string;
+	};
+	readonly payload: JsonObject;
+}
+
+/** What `create_widget` reports once the user approves it. A type, not an interface, so it is a `Json` object. */
+export type CreatedWidget = {
+	readonly widgetId: string;
+	readonly title: string;
+	readonly embed: string;
+};
+
+/** How a turn parked on an approval continues once the user approves. */
+export interface ScriptedResume {
+	/** Performs the approved call and returns its output. */
+	readonly approved: { readonly perform: () => Promise<CreatedWidget> };
+	readonly calls: readonly ScriptedCall[];
+	readonly answer: string;
+}
+
+/** The walkthrough's turns and proposals as pieces, for a recording that replays them live. */
+export interface WalkthroughLive {
+	readonly releasePlanTurn: () => ScriptedTurn;
+	readonly proposePromise: () => Promise<PromiseProposal>;
+	readonly widgetProposalTurn: () => Promise<ScriptedTurn>;
+	readonly widgetResume: () => ScriptedResume;
 }
 
 export interface WalkthroughScope {
@@ -321,7 +369,7 @@ const releasePlanDocx = async (plan: Schedule): Promise<Uint8Array> => {
 	return Packer.toBuffer(new Document({ sections: [{ children: paragraphs }] }));
 };
 
-// ── Moments ────────────────────────────────────────────────────────────────────────────────
+// ── Widget ─────────────────────────────────────────────────────────────────────────────────
 
 const widgetTemplate = async (plan: Schedule): Promise<JsonObject> => {
 	const template: { title: string; catalogVersion: number; layout: JsonObject } = JSON.parse(
@@ -397,84 +445,51 @@ export const seedWalkthrough = async (sql: Sql, scope: WalkthroughScope) => {
 		'Read the launch brief and these planning notes. Write a release plan note, add the outstanding launch tasks to the board, and export the release plan as a Word brief for the team.';
 	const widgetPrompt =
 		'Build an interactive critical-path simulator for this launch plan. Use the stages and durations in this note. Let me change each stage with a slider and show which workstream sets the launch date. Embed it in this note.';
+	const needReleasePlan = (): string => {
+		if (!releasePlanNoteId) throw new Error('The release plan exists from moment 2.');
+		return releasePlanNoteId;
+	};
 
-	const moments: Record<Exclude<WalkthroughMoment, 1>, () => Promise<void>> = {
-		// Moment 2: one request, and everything it produced.
-		2: async () => {
-			await scope.importNotes(projectId, { 'Release plan.md': releasePlan(plan, false) });
-			const noteId = await scope.noteId('Release plan');
-			releasePlanNoteId = noteId;
-			const todos = agentTodos(plan);
-			const todoIds: string[] = [];
-			for (const todo of todos) {
-				const [row] = await sql<{ id: string }[]>`
-					insert into todos (
-						user_id, project_id, title, status, responsibility, waiting_on, due_date,
-						linked_note_id
-					) values (
-						${userId}, ${projectId}, ${todo.title}, 'open',
-						${todo.waitingOn ? 'waiting_on' : 'mine'}, ${todo.waitingOn}, ${iso(todo.due)},
-						${noteId}
-					)
-					returning id
-				`;
-				if (!row) throw new Error(`The todo "${todo.title}" was not inserted.`);
-				todoIds.push(row.id);
-			}
-			const docx = await releasePlanDocx(plan);
-			const artifactId = randomUUID();
-			const artifactKey = `artifacts/${userId}/${artifactId}.docx`;
-			await bucket.put(
-				artifactKey,
-				docx,
-				'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-			);
-			const [exportProvenance] = await sql<{ id: string }[]>`
-				insert into provenance (user_id, producer_kind, producer_name)
-				values (${userId}, 'user', 'document-export')
-				returning id
-			`;
-			const [artifact] = await sql<{ id: string; created_at: Date }[]>`
-				insert into artifacts (
-					id, user_id, project_id, title, format, object_key, byte_size, source_note_ids,
-					provenance_id
-				) values (
-					${artifactId}, ${userId}, ${projectId}, 'Release plan — Docs site relaunch', 'docx',
-					${artifactKey}, ${docx.byteLength}, ${sql.json([noteId])}, ${exportProvenance?.id ?? null}
-				)
-				returning id, created_at
-			`;
-			if (!artifact || !exportProvenance) throw new Error('The Word export was not inserted.');
-			const memoryPayload = {
-				scope: 'project',
-				content: memoryProposal(plan),
-				operation: 'add',
-				projectId,
-				justification:
-					'Permanent schedule and launch date derived from the planning notes to inform future conversations.'
-			};
-			const runId = randomUUID();
-			const [memoryProvenance] = await sql<{ id: string }[]>`
-				insert into provenance (user_id, producer_kind, producer_name, pipeline, run_id, model)
-				values (
-					${userId}, 'agent', 'FollowThrough Workbench Agent', 'agent', ${runId}, ${scope.model}
-				)
-				returning id
-			`;
-			if (!memoryProvenance) throw new Error('The memory proposal provenance was not inserted.');
-			const [suggestion] = await sql<{ id: string; created_at: Date }[]>`
-				insert into suggestions (user_id, kind, status, payload, confidence, provenance_id)
-				values (
-					${userId}, 'memory', 'proposed', ${sql.json(memoryPayload)}, 90, ${memoryProvenance.id}
-				)
-				returning id, created_at
-			`;
-			if (!suggestion) throw new Error('The memory proposal was not inserted.');
-			const calls: JournalledCall[] = [
+	// ── Turns ──────────────────────────────────────────────────────────────────────────────
+
+	/**
+	 * Moment 2 as the agent performed it. Each call seeds what the real tool would have written,
+	 * when it is performed, so a replay can show the note and the todos appear call by call.
+	 */
+	const releasePlanTurn = (): ScriptedTurn => {
+		const runId = randomUUID();
+		const todos = agentTodos(plan);
+		const todoIds: string[] = [];
+		const todosRequestId = randomUUID();
+		let noteId: string | undefined;
+		const createdNote = (): string => {
+			if (!noteId) throw new Error('create_note runs before the calls that use the note.');
+			return noteId;
+		};
+		const memoryPayload = {
+			scope: 'project',
+			content: memoryProposal(plan),
+			operation: 'add',
+			projectId,
+			justification:
+				'Permanent schedule and launch date derived from the planning notes to inform future conversations.'
+		};
+		return {
+			runId,
+			userId,
+			projectId,
+			noteId: planningNoteId,
+			title: prompt,
+			prompt,
+			startedAt: startedAt(40),
+			model: scope.model,
+			opening:
+				'I will read the planning notes and the launch brief, then write the plan, add the tasks and export it.',
+			calls: [
 				{
 					name: 'get_note',
-					input: { noteId: planningNoteId },
-					output: {
+					arguments: () => ({ noteId: planningNoteId }),
+					perform: async () => ({
 						noteId: planningNoteId,
 						title: 'Planning notes',
 						etag: `note:${planningNoteId}:r1`,
@@ -491,22 +506,31 @@ export const seedWalkthrough = async (sql: Sql, scope: WalkthroughScope) => {
 						backlinks: [],
 						references: [],
 						pendingSuggestions: []
-					}
+					})
 				},
 				{
 					name: 'create_note',
-					input: { title: 'Release plan', projectId },
-					output: { title: 'Release plan', noteId, currentRevision: 1 }
+					arguments: () => ({ title: 'Release plan', projectId }),
+					perform: async () => {
+						await scope.importNotes(projectId, { 'Release plan.md': releasePlan(plan, false) });
+						noteId = await scope.noteId('Release plan');
+						releasePlanNoteId = noteId;
+						return { title: 'Release plan', noteId, currentRevision: 1 };
+					}
 				},
 				{
 					name: 'save_note',
-					input: { noteId, markdown: releasePlan(plan, true) },
-					output: { title: 'Release plan', noteId, currentRevision: 2 }
+					arguments: () => ({ noteId: createdNote(), markdown: releasePlan(plan, true) }),
+					perform: async () => ({
+						title: 'Release plan',
+						noteId: createdNote(),
+						currentRevision: 2
+					})
 				},
 				{
 					name: 'create_todos',
-					input: {
-						requestId: randomUUID(),
+					arguments: () => ({
+						requestId: todosRequestId,
 						projectId,
 						todos: todos.map((todo) => ({
 							title: todo.title,
@@ -514,249 +538,354 @@ export const seedWalkthrough = async (sql: Sql, scope: WalkthroughScope) => {
 							responsibility: todo.waitingOn ? 'waiting_on' : 'mine',
 							...(todo.waitingOn ? { waitingOn: todo.waitingOn } : {})
 						}))
-					},
-					output: {
-						todos: todos.map((todo, index) => ({
-							title: todo.title,
-							status: 'open',
-							todoId: todoIds[index] ?? ''
-						}))
+					}),
+					perform: async () => {
+						for (const todo of todos) {
+							const [row] = await sql<{ id: string }[]>`
+								insert into todos (
+									user_id, project_id, title, status, responsibility, waiting_on, due_date,
+									linked_note_id
+								) values (
+									${userId}, ${projectId}, ${todo.title}, 'open',
+									${todo.waitingOn ? 'waiting_on' : 'mine'}, ${todo.waitingOn}, ${iso(todo.due)},
+									${createdNote()}
+								)
+								returning id
+							`;
+							if (!row) throw new Error(`The todo "${todo.title}" was not inserted.`);
+							todoIds.push(row.id);
+						}
+						return {
+							todos: todos.map((todo, index) => ({
+								title: todo.title,
+								status: 'open',
+								todoId: todoIds[index] ?? ''
+							}))
+						};
 					}
 				},
 				{
 					name: 'export_document',
-					input: {
+					arguments: () => ({
 						title: 'Release plan — Docs site relaunch',
 						format: 'docx',
-						noteIds: [noteId],
+						noteIds: [createdNote()],
 						projectId
-					},
-					output: {
-						artifact: {
-							id: artifactId,
-							title: 'Release plan — Docs site relaunch',
-							format: 'docx',
-							userId,
-							byteSize: docx.byteLength,
-							createdAt: artifact.created_at.toISOString(),
-							objectKey: artifactKey,
-							projectId,
-							provenanceId: exportProvenance.id,
-							sourceNoteIds: [noteId]
-						},
-						downloadUrl: await bucket.downloadUrl(artifactKey)
+					}),
+					perform: async () => {
+						const docx = await releasePlanDocx(plan);
+						const artifactId = randomUUID();
+						const artifactKey = `artifacts/${userId}/${artifactId}.docx`;
+						await bucket.put(
+							artifactKey,
+							docx,
+							'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+						);
+						const [exportProvenance] = await sql<{ id: string }[]>`
+							insert into provenance (user_id, producer_kind, producer_name)
+							values (${userId}, 'user', 'document-export')
+							returning id
+						`;
+						if (!exportProvenance) throw new Error('The export provenance was not inserted.');
+						const [artifact] = await sql<{ id: string; created_at: Date }[]>`
+							insert into artifacts (
+								id, user_id, project_id, title, format, object_key, byte_size, source_note_ids,
+								provenance_id
+							) values (
+								${artifactId}, ${userId}, ${projectId}, 'Release plan — Docs site relaunch', 'docx',
+								${artifactKey}, ${docx.byteLength}, ${sql.json([createdNote()])}, ${exportProvenance.id}
+							)
+							returning id, created_at
+						`;
+						if (!artifact) throw new Error('The Word export was not inserted.');
+						return {
+							artifact: {
+								id: artifactId,
+								title: 'Release plan — Docs site relaunch',
+								format: 'docx',
+								userId,
+								byteSize: docx.byteLength,
+								createdAt: artifact.created_at.toISOString(),
+								objectKey: artifactKey,
+								projectId,
+								provenanceId: exportProvenance.id,
+								sourceNoteIds: [createdNote()]
+							},
+							downloadUrl: await bucket.downloadUrl(artifactKey)
+						};
 					}
 				},
 				{
 					name: 'propose_memory_change',
-					input: {
+					arguments: () => ({
 						scope: 'project',
 						operation: 'add',
 						projectId,
 						content: memoryProposal(plan),
 						confidence: 90
-					},
-					output: {
-						suggestion: {
-							id: suggestion.id,
-							kind: 'memory',
-							status: 'proposed',
-							userId,
-							payload: memoryPayload,
-							createdAt: suggestion.created_at.toISOString(),
-							updatedAt: suggestion.created_at.toISOString(),
-							confidence: 90,
-							provenanceId: memoryProvenance.id,
-							isAutoAccepted: false
-						}
+					}),
+					perform: async () => {
+						const [memoryProvenance] = await sql<{ id: string }[]>`
+							insert into provenance (user_id, producer_kind, producer_name, pipeline, run_id, model)
+							values (
+								${userId}, 'agent', 'FollowThrough Workbench Agent', 'agent', ${runId}, ${scope.model}
+							)
+							returning id
+						`;
+						if (!memoryProvenance)
+							throw new Error('The memory proposal provenance was not inserted.');
+						const [suggestion] = await sql<{ id: string; created_at: Date }[]>`
+							insert into suggestions (user_id, kind, status, payload, confidence, provenance_id)
+							values (
+								${userId}, 'memory', 'proposed', ${sql.json(memoryPayload)}, 90, ${memoryProvenance.id}
+							)
+							returning id, created_at
+						`;
+						if (!suggestion) throw new Error('The memory proposal was not inserted.');
+						return {
+							suggestion: {
+								id: suggestion.id,
+								kind: 'memory',
+								status: 'proposed',
+								userId,
+								payload: memoryPayload,
+								createdAt: suggestion.created_at.toISOString(),
+								updatedAt: suggestion.created_at.toISOString(),
+								confidence: 90,
+								provenanceId: memoryProvenance.id,
+								isAutoAccepted: false
+							}
+						};
 					}
 				}
-			];
-			await journalRun(sql, {
-				runId,
-				userId,
+			],
+			ending: {
+				kind: 'answered',
+				answer: `Done. The **Release plan** note is written, seven launch tasks are on the board with owners and dates, and the Word brief is exported. I also proposed saving the launch date and schedule to project memory, so later chats start with them.`
+			}
+		};
+	};
+
+	/** Moment 3: the todo Extract promises proposes for the sentence the user typed. */
+	const proposePromise = async (): Promise<PromiseProposal> => {
+		const noteId = needReleasePlan();
+		const [note] = await sql<{ plain_text: string; current_revision: number }[]>`
+			select plain_text, current_revision from notes where id = ${noteId}
+		`;
+		const from = note?.plain_text.indexOf(PROMISE) ?? -1;
+		if (!note || from < 0) throw new Error('The release plan does not contain the promise.');
+		return sql.begin(async (tx) => {
+			const [anchor] = await tx<{ id: string }[]>`
+				insert into source_anchors (note_id, from_offset, to_offset, quote, revision)
+				values (${noteId}, ${from}, ${from + PROMISE.length}, ${PROMISE}, ${note.current_revision})
+				returning id
+			`;
+			if (!anchor) throw new Error('The promise anchor was not inserted.');
+			const [provenance] = await tx<{ id: string }[]>`
+				insert into provenance (user_id, producer_kind, producer_name, pipeline, source_anchor_id)
+				values (${userId}, 'pipeline', 'Extract Promises', 'extract_promises', ${anchor.id})
+				returning id
+			`;
+			if (!provenance) throw new Error('The promise provenance was not inserted.');
+			const payload = {
+				title: 'verify every redirect on staging',
+				dueDate: iso(plan.promiseDue),
 				projectId,
-				noteId: planningNoteId,
-				title: prompt,
-				prompt,
-				startedAt: startedAt(40),
-				model: scope.model,
-				opening:
-					'I will read the planning notes and the launch brief, then write the plan, add the tasks and export it.',
-				calls,
-				ending: {
-					kind: 'answered',
-					answer: `Done. The **Release plan** note is written, seven launch tasks are on the board with owners and dates, and the Word brief is exported. I also proposed saving the launch date and schedule to project memory, so later chats start with them.`
+				provenanceId: provenance.id,
+				responsibility: 'mine',
+				sourceAnchorId: anchor.id,
+				dueDateVerbatim: 'before Thursday',
+				promiseStrength: 'explicit'
+			};
+			const [suggestion] = await tx<{ id: string; created_at: Date }[]>`
+				insert into suggestions (
+					user_id, note_id, kind, status, payload, confidence, provenance_id, source_anchor_id
+				) values (
+					${userId}, ${noteId}, 'todo', 'proposed', ${tx.json(payload)}, 1, ${provenance.id},
+					${anchor.id}
+				)
+				returning id, created_at
+			`;
+			if (!suggestion) throw new Error('The promise proposal was not inserted.');
+			return {
+				suggestionId: suggestion.id,
+				noteId,
+				anchorId: anchor.id,
+				provenanceId: provenance.id,
+				createdAt: suggestion.created_at,
+				selection: {
+					from,
+					to: from + PROMISE.length,
+					revision: note.current_revision,
+					text: PROMISE
+				},
+				payload
+			};
+		});
+	};
+
+	/** The user accepted the proposed todo. */
+	const acceptPromise = async (): Promise<void> => {
+		const noteId = needReleasePlan();
+		const [todo] = await sql<{ id: string }[]>`
+			insert into todos (
+				user_id, project_id, title, status, responsibility, due_date, due_date_verbatim,
+				promise_strength, linked_note_id
+			) values (
+				${userId}, ${projectId}, 'verify every redirect on staging', 'open', 'mine',
+				${iso(plan.promiseDue)}, 'before Thursday', 'explicit', ${noteId}
+			)
+			returning id
+		`;
+		if (!todo) throw new Error('The accepted promise todo was not inserted.');
+		await sql`
+			update suggestions
+			set status = 'accepted', decided_at = now(), applied_artifact_type = 'todo',
+				applied_artifact_id = ${todo.id}, updated_at = now()
+			where user_id = ${userId} and kind = 'todo' and note_id = ${noteId}
+		`;
+	};
+
+	/** Moment 4: the agent proposes the simulator and waits for approval. */
+	const widgetProposalTurn = async (): Promise<ScriptedTurn> => ({
+		runId: randomUUID(),
+		userId,
+		projectId,
+		noteId: needReleasePlan(),
+		title: widgetPrompt,
+		prompt: widgetPrompt,
+		startedAt: startedAt(5),
+		model: scope.model,
+		opening:
+			'I will build the simulator from the stages and durations in this note. QA is now 5 days.',
+		calls: [],
+		ending: {
+			kind: 'awaiting_approval',
+			call: {
+				name: 'create_widget',
+				input: {
+					title: WIDGET_TITLE,
+					projectId,
+					noteId: needReleasePlan(),
+					layout: JSON.stringify(await widgetTemplate(plan)),
+					data: JSON.stringify({
+						designSignoff: 4,
+						build: 7,
+						qa: 5,
+						copywriting: 5,
+						legalReview: 4
+					})
 				}
-			});
+			}
+		}
+	});
+
+	/** Moment 5: the approved call creates the widget, and the agent embeds it before the risks. */
+	const widgetResume = (): ScriptedResume => {
+		const noteId = needReleasePlan();
+		let widgetId: string | undefined;
+		const createdWidgetId = (): string => {
+			if (!widgetId) throw new Error('create_widget runs before edit_note embeds the widget.');
+			return widgetId;
+		};
+		const embed = (): string => `:::widgetNode {widgetId='${createdWidgetId()}'} :::`;
+		return {
+			approved: {
+				perform: async () => {
+					const layout = await widgetTemplate(plan);
+					const [widget] = await sql<{ id: string }[]>`
+						insert into widgets (user_id, project_id, title, catalog_version, layout, data)
+						values (
+							${userId}, ${projectId}, ${WIDGET_TITLE}, 3, ${sql.json(layout)},
+							${sql.json({ designSignoff: 4, build: 7, qa: 5, copywriting: 5, legalReview: 4 })}
+						)
+						returning id
+					`;
+					if (!widget) throw new Error('The widget was not inserted.');
+					widgetId = widget.id;
+					return { embed: embed(), title: WIDGET_TITLE, widgetId: widget.id };
+				}
+			},
+			calls: [
+				{
+					name: 'edit_note',
+					arguments: () => ({
+						noteId,
+						edits: [
+							{
+								oldText: '## Risks',
+								newText: `## Interactive simulator\n\n${embed()}\n\n## Risks`
+							}
+						]
+					}),
+					perform: async () => {
+						const [note] = await sql<{ document: { content: JsonObject[] }; plain_text: string }[]>`
+							select document, plain_text from notes where id = ${noteId}
+						`;
+						if (!note) throw new Error('The release plan note is missing.');
+						const risks = note.document.content.findIndex(
+							(node) => JSON.stringify(node).includes('"Risks"') && node.type === 'heading'
+						);
+						if (risks < 0) throw new Error('The release plan has no Risks heading to embed above.');
+						const content = [
+							...note.document.content.slice(0, risks),
+							{
+								// The same attributes the importer gave the neighbouring level-2 heading.
+								...note.document.content[risks],
+								content: [{ type: 'text', text: 'Interactive simulator' }]
+							},
+							{ type: 'widgetNode', attrs: { widgetId: createdWidgetId() } },
+							...note.document.content.slice(risks)
+						];
+						await sql`
+							update notes
+							set document = ${sql.json({ ...note.document, content })},
+								plain_text = ${note.plain_text.replace('Risks', 'Interactive simulator\n\nRisks')},
+								current_revision = current_revision + 1, updated_at = now()
+							where id = ${noteId}
+						`;
+						return { title: 'Release plan', noteId, appliedEdits: 1, currentRevision: 3 };
+					}
+				}
+			],
+			answer:
+				'The **Critical-Path Simulator** is in the Release plan, under its own heading before the risks. Move a slider and it shows which workstream sets the launch date.'
+		};
+	};
+
+	// ── Moments ────────────────────────────────────────────────────────────────────────────
+
+	const moments: Record<Exclude<WalkthroughMoment, 1>, () => Promise<void>> = {
+		// Moment 2: one request, and everything it produced.
+		2: async () => {
+			await journalScriptedTurn(sql, releasePlanTurn());
 		},
 		// Moment 3: the user's own line, and the todo Extract promises proposes for it.
 		3: async () => {
-			const noteId = releasePlanNoteId;
-			if (!noteId) throw new Error('Moment 3 needs the release plan from moment 2.');
-			const [note] = await sql<{ plain_text: string; current_revision: number }[]>`
-				select plain_text, current_revision from notes where id = ${noteId}
-			`;
-			const from = note?.plain_text.indexOf(PROMISE) ?? -1;
-			if (!note || from < 0) throw new Error('The release plan does not contain the promise.');
-			await sql.begin(async (tx) => {
-				const [anchor] = await tx<{ id: string }[]>`
-					insert into source_anchors (note_id, from_offset, to_offset, quote, revision)
-					values (${noteId}, ${from}, ${from + PROMISE.length}, ${PROMISE}, ${note.current_revision})
-					returning id
-				`;
-				if (!anchor) throw new Error('The promise anchor was not inserted.');
-				const [provenance] = await tx<{ id: string }[]>`
-					insert into provenance (user_id, producer_kind, producer_name, pipeline, source_anchor_id)
-					values (${userId}, 'pipeline', 'Extract Promises', 'extract_promises', ${anchor.id})
-					returning id
-				`;
-				if (!provenance) throw new Error('The promise provenance was not inserted.');
-				await tx`
-					insert into suggestions (
-						user_id, note_id, kind, status, payload, confidence, provenance_id, source_anchor_id
-					) values (
-						${userId}, ${noteId}, 'todo', 'proposed',
-						${tx.json({
-							title: 'verify every redirect on staging',
-							dueDate: iso(plan.promiseDue),
-							projectId,
-							provenanceId: provenance.id,
-							responsibility: 'mine',
-							sourceAnchorId: anchor.id,
-							dueDateVerbatim: 'before Thursday',
-							promiseStrength: 'explicit'
-						})},
-						1, ${provenance.id}, ${anchor.id}
-					)
-				`;
-			});
+			await proposePromise();
 		},
 		// Moment 4: the user accepted the todo; the agent proposes a widget and waits.
 		4: async () => {
-			const noteId = releasePlanNoteId;
-			if (!noteId) throw new Error('Moment 4 needs the release plan from moment 2.');
-			const [todo] = await sql<{ id: string }[]>`
-				insert into todos (
-					user_id, project_id, title, status, responsibility, due_date, due_date_verbatim,
-					promise_strength, linked_note_id
-				) values (
-					${userId}, ${projectId}, 'verify every redirect on staging', 'open', 'mine',
-					${iso(plan.promiseDue)}, 'before Thursday', 'explicit', ${noteId}
-				)
-				returning id
-			`;
-			if (!todo) throw new Error('The accepted promise todo was not inserted.');
-			await sql`
-				update suggestions
-				set status = 'accepted', decided_at = now(), applied_artifact_type = 'todo',
-					applied_artifact_id = ${todo.id}, updated_at = now()
-				where user_id = ${userId} and kind = 'todo' and note_id = ${noteId}
-			`;
-			widgetRun = await journalRun(sql, {
-				runId: randomUUID(),
-				userId,
-				projectId,
-				noteId,
-				title: widgetPrompt,
-				prompt: widgetPrompt,
-				startedAt: startedAt(5),
-				model: scope.model,
-				opening:
-					'I will build the simulator from the stages and durations in this note. QA is now 5 days.',
-				calls: [],
-				ending: {
-					kind: 'awaiting_approval',
-					call: {
-						name: 'create_widget',
-						input: {
-							title: WIDGET_TITLE,
-							projectId,
-							noteId,
-							layout: JSON.stringify(await widgetTemplate(plan)),
-							data: JSON.stringify({
-								designSignoff: 4,
-								build: 7,
-								qa: 5,
-								copywriting: 5,
-								legalReview: 4
-							})
-						}
-					}
-				}
-			});
+			await acceptPromise();
+			widgetRun = await journalScriptedTurn(sql, await widgetProposalTurn());
 		},
 		// Moment 5: approved, embedded, and moved: Legal review at 12 days.
 		5: async () => {
-			const noteId = releasePlanNoteId;
-			if (!noteId || !widgetRun)
-				throw new Error('Moment 5 needs the release plan and the widget proposal from moment 4.');
-			const layout = await widgetTemplate(plan);
-			const [widget] = await sql<{ id: string }[]>`
-				insert into widgets (user_id, project_id, title, catalog_version, layout, data)
-				values (
-					${userId}, ${projectId}, ${WIDGET_TITLE}, 3, ${sql.json(layout)},
-					${sql.json({ designSignoff: 4, build: 7, qa: 5, copywriting: 5, legalReview: 12 })}
-				)
-				returning id
-			`;
-			if (!widget) throw new Error('The widget was not inserted.');
-			// The agent embedded it under its own heading, before the risks, as `edit_note` does.
-			const [note] = await sql<{ document: { content: JsonObject[] }; plain_text: string }[]>`
-				select document, plain_text from notes where id = ${noteId}
-			`;
-			if (!note) throw new Error('The release plan note is missing.');
-			const risks = note.document.content.findIndex(
-				(node) => JSON.stringify(node).includes('"Risks"') && node.type === 'heading'
-			);
-			if (risks < 0) throw new Error('The release plan has no Risks heading to embed above.');
-			const content = [
-				...note.document.content.slice(0, risks),
-				{
-					// The same attributes the importer gave the neighbouring level-2 heading.
-					...note.document.content[risks],
-					content: [{ type: 'text', text: 'Interactive simulator' }]
-				},
-				{ type: 'widgetNode', attrs: { widgetId: widget.id } },
-				...note.document.content.slice(risks)
-			];
+			if (!widgetRun) throw new Error('Moment 5 needs the widget proposal from moment 4.');
+			const resume = widgetResume();
+			const created = await resume.approved.perform();
+			const edits = await performScript(resume.calls);
 			await sql`
-				update notes
-				set document = ${sql.json({ ...note.document, content })},
-					plain_text = ${note.plain_text.replace('Risks', 'Interactive simulator\n\nRisks')},
-					current_revision = current_revision + 1, updated_at = now()
-				where id = ${noteId}
+				update widgets
+				set data = ${sql.json({ designSignoff: 4, build: 7, qa: 5, copywriting: 5, legalReview: 12 })}
+				where id = ${created.widgetId}
 			`;
 			await sql`delete from conversations where id = ${widgetRun.conversationId}`;
-			const embed = `:::widgetNode {widgetId='${widget.id}'} :::`;
+			const proposal = await widgetProposalTurn();
 			await journalRun(sql, {
-				runId: randomUUID(),
-				userId,
-				projectId,
-				noteId,
-				title: widgetPrompt,
-				prompt: widgetPrompt,
-				startedAt: startedAt(5),
-				model: scope.model,
-				opening:
-					'I will build the simulator from the stages and durations in this note. QA is now 5 days.',
-				calls: [
-					{
-						name: 'create_widget',
-						input: {},
-						output: { embed, title: WIDGET_TITLE, widgetId: widget.id }
-					},
-					{
-						name: 'edit_note',
-						input: {},
-						output: { title: 'Release plan', noteId, appliedEdits: 1, currentRevision: 3 }
-					}
-				],
-				ending: {
-					kind: 'answered',
-					answer:
-						'The **Critical-Path Simulator** is in the Release plan, under its own heading before the risks. Move a slider and it shows which workstream sets the launch date.'
-				}
+				...proposal,
+				calls: [{ name: 'create_widget', input: {}, output: created }, ...edits],
+				ending: { kind: 'answered', answer: resume.answer }
 			});
 		}
 	};
@@ -764,13 +893,17 @@ export const seedWalkthrough = async (sql: Sql, scope: WalkthroughScope) => {
 	const ids: WalkthroughIds = {
 		projectId,
 		planningNoteId,
-		releasePlanNoteId: () => {
-			if (!releasePlanNoteId) throw new Error('The release plan exists from moment 2.');
-			return releasePlanNoteId;
-		}
+		releasePlanNoteId: needReleasePlan
+	};
+	const live: WalkthroughLive = {
+		releasePlanTurn,
+		proposePromise,
+		widgetProposalTurn,
+		widgetResume
 	};
 	return {
 		ids,
+		live,
 		advanceTo: async (target: WalkthroughMoment): Promise<void> => {
 			if (target < moment)
 				throw new Error(`The walkthrough is at moment ${moment} and cannot go back to ${target}.`);
