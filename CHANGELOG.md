@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.7.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.6.1...v5.7.0) (2026-10-23)
+
+
+### Features
+
+* **docs:** record the walkthrough video from the real app ([#466](https://github.com/ChidiRnweke/FollowThrough.ai/issues/466)) ([018c1bb](https://github.com/ChidiRnweke/FollowThrough.ai/commit/018c1bbb6dfea04c79fca07e849547fd412bfa30))
+
+
+### Bug Fixes
+
+* **chat:** keep the activity steps until the turn ends, and the edit sweep ([#467](https://github.com/ChidiRnweke/FollowThrough.ai/issues/467)) ([8b427c5](https://github.com/ChidiRnweke/FollowThrough.ai/commit/8b427c52c236c660b1d02a1795aad1f36899d99b))
+
 ## [5.6.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.6.0...v5.6.1) (2026-10-12)
 
 
