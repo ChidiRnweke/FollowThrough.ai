@@ -102,8 +102,15 @@ jobs:
         run: pnpm install --frozen-lockfile
       - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
         run: pnpm test:node
+      # One Chromium page runs the whole browser-full project. On the runner that
+      # page drops its connection to vitest late in the run, around file 84 of 95
+      # and on unrelated branches, and the job fails with no failing test. Two
+      # shards give each half of the suite a fresh browser; the second reuses the
+      # Vite dependency cache the first one warmed.
       - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
-        run: pnpm test:browser:full
+        run: pnpm test:browser:full --shard=1/2
+      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
+        run: pnpm test:browser:full --shard=2/2
 
   contracts:
     runs-on: ubuntu-latest
