@@ -256,11 +256,20 @@
 
 /* Pointing at a control outside the rail replays the same motion, so the icon answers the pointer
    before the click. The dot stays ink: teal still means live. The rail is left out because its
-   icons are destinations whose motion already marks arriving there. */
+   icons are destinations whose motion already marks arriving there. Sidebar rows are left out
+   because the row itself lifts to answer the pointer; a tree of icons tracing as the pointer
+   sweeps down it is noise. Their live state still traces. The match is on `data-sidebar`, not
+   `data-slot`: a row inside a tooltip or context-menu trigger has its slot replaced. */
 :is(a[href], button, [role='button'], [role='menuitem'], [role='tab'], [role='option']):is(
 		:hover,
 		:focus-visible
-	):not(:disabled, [aria-disabled='true'], [data-sidebar='icon-rail'] *) {
+	):not(
+		:disabled,
+		[aria-disabled='true'],
+		[data-sidebar='icon-rail'] *,
+		[data-sidebar='menu-button'],
+		[data-sidebar='menu-sub-button']
+	) {
 	& .ft-stroke {
 		animation: ft-trace var(--duration-icon-trace) var(--ease-standard) both;
 	}

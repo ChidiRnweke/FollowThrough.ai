@@ -2,17 +2,25 @@
 	import { tv, type VariantProps } from 'tailwind-variants';
 
 	export const sidebarMenuButtonVariants = tv({
-		// Rows carry no hover wash: a washed row under the pointer competed with the
-		// active row for "which one am I on?". The active row's own recipe (brand
-		// wash, brand label and icon, edge bar) lives in `layout.css` beside the
+		// Hover is deliberately weaker than the token it used to share with the active
+		// row: at full strength the two states were indistinguishable, so hovering any
+		// row looked exactly as selected as being on it. The active row's own recipe
+		// (brand wash, brand label and icon, edge bar) lives in `layout.css` beside the
 		// accent-discipline rule, so `sidebar-menu-sub-button` can share it.
-		base: 'relative ring-sidebar-ring active:bg-sidebar-accent/60 active:text-sidebar-accent-foreground gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 data-active:font-medium peer/menu-button group/menu-button flex w-full items-center overflow-hidden outline-hidden disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate',
+		//
+		// The row lifts 1px under the pointer, the same cue as `row-interactive`, and its
+		// icon does not replay its trace (see the hover-replay rule in `layout.css`).
+		// `motion-safe:` keeps the lift out of reduced motion: Tailwind's translate
+		// utilities set `translate`, which the `transform: none` guard does not reach.
+		base: 'relative ring-sidebar-ring hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground active:bg-sidebar-accent/60 active:text-sidebar-accent-foreground data-open:hover:bg-sidebar-accent/60 data-open:hover:text-sidebar-accent-foreground gap-2 rounded-lg px-2 py-1.5 text-left text-sm motion-safe:hover:-translate-y-px motion-safe:focus-visible:-translate-y-px active:translate-y-0 transition-[width,height,padding,translate,color,background-color] duration-(--duration-micro) ease-(--ease-standard) group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 data-active:font-medium peer/menu-button group/menu-button flex w-full items-center overflow-hidden outline-hidden disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate',
 		variants: {
 			variant: {
-				// Neither variant may add a hover wash: `tv` appends variant classes after
-				// the base, so one here would win the merge and bring the hover back.
-				default: '',
-				outline: 'bg-background shadow-[0_0_0_1px_var(--sidebar-border)]'
+				// Both repeat the base's hover so they must repeat its weakening too:
+				// `tv` appends variant classes after the base, so a full-strength wash
+				// here would win the merge and undo it.
+				default: 'hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
+				outline:
+					'bg-background hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground shadow-[0_0_0_1px_var(--sidebar-border)] hover:shadow-[0_0_0_1px_var(--sidebar-accent)]'
 			},
 			size: {
 				default: 'h-8 text-sm',
