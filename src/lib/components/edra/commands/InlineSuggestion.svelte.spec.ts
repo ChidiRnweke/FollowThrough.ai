@@ -17,6 +17,15 @@ const offerOf = (text: string): InlineSuggestionResult => ({
 	edit: { kind: 'insert', text }
 });
 
+const replaceOf = (replaceBefore: string, text: string): InlineSuggestionResult => ({
+	kind: 'offer',
+	edit: { kind: 'replace', replaceBefore, replaceAfter: '', text }
+});
+
+const TYPO = '<p>The migration plan should acount</p>';
+const removedText = (element: HTMLElement) =>
+	element.querySelector('.inline-suggestion-removed')?.textContent ?? null;
+
 /**
  * A provider that answers in order, repeating its last answer, and records each
  * request it receives: the external effect the extension is responsible for.
@@ -351,6 +360,70 @@ describe('InlineSuggestion extension', () => {
 		const { editor, element } = mountEditor(provider({ kind: 'none' }).fetch);
 		await typeAtCaret(editor);
 		await vi.advanceTimersByTimeAsync(100);
+		const ghost = ghostText(element);
+		editor.destroy();
+		expect(ghost).toBeNull();
+	});
+
+	it('strikes through the characters a replacement would swap and offers the new text', async () => {
+		const { editor, element } = mountEditor(
+			provider(replaceOf('acount', 'account for the cutover.')).fetch,
+			TYPO
+		);
+		touch(editor);
+		moveCaret(editor);
+		await waitForOffer(editor);
+		const shown = { removed: removedText(element), ghost: ghostText(element) };
+		editor.destroy();
+		expect(shown).toEqual({ removed: 'acount', ghost: 'account for the cutover.' });
+	});
+
+	it('applies the whole replacement on Tab', async () => {
+		const { editor } = mountEditor(
+			provider(replaceOf('acount', 'account for the cutover.'), { kind: 'none' }).fetch,
+			TYPO
+		);
+		touch(editor);
+		moveCaret(editor);
+		await waitForOffer(editor);
+		press(editor, { key: 'Tab' });
+		const text = editor.getText();
+		editor.destroy();
+		expect(text).toBe('The migration plan should account for the cutover.');
+	});
+
+	it('offers nothing when the anchor is not the text before the caret', async () => {
+		const { editor, element } = mountEditor(provider(replaceOf('account', 'accounts')).fetch, TYPO);
+		touch(editor);
+		moveCaret(editor);
+		await vi.advanceTimersByTimeAsync(100);
+		const ghost = ghostText(element);
+		editor.destroy();
+		expect(ghost).toBeNull();
+	});
+
+	it('offers nothing when the anchor would reach into the block before', async () => {
+		const { editor, element } = mountEditor(
+			provider(replaceOf('migration plan should acount', 'account')).fetch,
+			'<p>The migration</p><p>plan should acount</p>'
+		);
+		touch(editor);
+		moveCaret(editor);
+		await vi.advanceTimersByTimeAsync(100);
+		const ghost = ghostText(element);
+		editor.destroy();
+		expect(ghost).toBeNull();
+	});
+
+	it('drops a replacement on the next keystroke rather than typing into it', async () => {
+		const { editor, element } = mountEditor(
+			provider(replaceOf('acount', 'account for')).fetch,
+			TYPO
+		);
+		touch(editor);
+		moveCaret(editor);
+		await waitForOffer(editor);
+		await userEvent.keyboard('a');
 		const ghost = ghostText(element);
 		editor.destroy();
 		expect(ghost).toBeNull();

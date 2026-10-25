@@ -42,10 +42,13 @@ describe('inline completion ownership', () => {
 	});
 	it('publishes the completion with the grounding it used', async () => {
 		const fixture = setup();
-		fixture.generator.text = ' replicas. Then fail over.';
+		fixture.generator.outcome = {
+			kind: 'edit',
+			edit: { kind: 'insert', text: ' replicas. Then fail over.' }
+		};
 		expect(await fixture.controller.suggest(request, new AbortController().signal)).toEqual({
 			outcome: 'suggested',
-			text: ' replicas. Then fail over.',
+			edit: { kind: 'insert', text: ' replicas. Then fail over.' },
 			grounding: {
 				currentNote: true,
 				userMemoryCount: 0,
@@ -56,10 +59,40 @@ describe('inline completion ownership', () => {
 	});
 	it('reports an empty completion as no suggestion', async () => {
 		const fixture = setup();
-		fixture.generator.text = '';
+		fixture.generator.outcome = { kind: 'empty' };
 		expect(await fixture.controller.suggest(request, new AbortController().signal)).toEqual({
 			outcome: 'no_suggestion',
 			reason: 'empty_model'
+		});
+	});
+	it('publishes a replacement edit as the model anchored it', async () => {
+		const fixture = setup();
+		const edit = {
+			kind: 'replace' as const,
+			replaceBefore: 'mroe',
+			replaceAfter: '',
+			text: 'more replicas'
+		};
+		fixture.generator.outcome = { kind: 'edit', edit };
+		expect(await fixture.controller.suggest(request, new AbortController().signal)).toMatchObject({
+			outcome: 'suggested',
+			edit
+		});
+	});
+	it('declines when the answer was not the edit asked for', async () => {
+		const fixture = setup();
+		fixture.generator.outcome = { kind: 'failure', reason: 'unparseable' };
+		expect(await fixture.controller.suggest(request, new AbortController().signal)).toEqual({
+			outcome: 'no_suggestion',
+			reason: 'unparseable_model'
+		});
+	});
+	it('declines an edit the model anchored on text that is not at the caret', async () => {
+		const fixture = setup();
+		fixture.generator.outcome = { kind: 'failure', reason: 'unanchored' };
+		expect(await fixture.controller.suggest(request, new AbortController().signal)).toEqual({
+			outcome: 'no_suggestion',
+			reason: 'unanchored_edit'
 		});
 	});
 	it('propagates a completion failure', async () => {

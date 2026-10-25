@@ -64,7 +64,7 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 				.controllers.inlineSuggestions()
 				.suggest(requestFor(projectId, noteId, prefix), new AbortController().signal);
 
-			const text = suggestion.outcome === 'suggested' ? suggestion.text : '';
+			const text = suggestion.outcome === 'suggested' ? suggestion.edit.text : '';
 			const lower = text.trim().toLowerCase();
 			const hasSuggestion = suggestion.outcome === 'suggested';
 			const hasText = lower.length > 0;
@@ -116,7 +116,7 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 				.controllers.inlineSuggestions()
 				.suggest(requestFor(projectId, noteId, prefix), new AbortController().signal);
 
-			const text = suggestion.outcome === 'suggested' ? suggestion.text.trim() : '';
+			const text = suggestion.outcome === 'suggested' ? suggestion.edit.text.trim() : '';
 			px.logOutput({ prefix, outcome: suggestion.outcome, suggestion: text });
 			px.logAnnotation({
 				name: ARCHETYPES.inlineSuggestionShape,
@@ -130,6 +130,48 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 				`the deployed model offered nothing: ${JSON.stringify(suggestion)}`
 			).toBe('suggested');
 			expect(text.length, 'the deployed model returned an empty continuation').toBeGreaterThan(0);
+		}
+	},
+	{
+		id: 'inline-suggestion-edit',
+		name: 'fixes the misspelt word before the caret as an anchored replacement',
+		splits: [ARCHETYPES.inlineSuggestionShape],
+		input: { prefix: 'The migration plan should acount' },
+		expected: { kind: 'replace', replaces: 'acount' },
+		metadata: {
+			layer: 'inline',
+			note: 'The typo is the word just typed, immediately before the caret, which is the only place the contract lets an edit anchor. Measures how reliably the model answers with the JSON edit contract and anchors the fix there.'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, inlineSuggestionWorkspace);
+			await useSubjectModel(lab, workspace.actor);
+			const projectId = workspace.projectIds.get('Platform')!;
+			const noteId = workspace.noteIds.get('Migration plan|Platform')!;
+			const prefix = this.input.prefix as string;
+
+			const suggestion = await lab
+				.forActor(workspace.actor)
+				.controllers.inlineSuggestions()
+				.suggest(requestFor(projectId, noteId, prefix), new AbortController().signal);
+
+			const edit = suggestion.outcome === 'suggested' ? suggestion.edit : undefined;
+			const replacesTypo = edit?.kind === 'replace' && edit.replaceBefore.includes('acount');
+			const corrected = edit !== undefined && edit.text.toLowerCase().includes('account');
+			px.logOutput({ prefix, outcome: suggestion.outcome, edit });
+			px.logAnnotation({
+				name: ARCHETYPES.inlineSuggestionShape,
+				score: replacesTypo && corrected ? 1 : corrected ? 0.5 : 0,
+				label: replacesTypo && corrected ? 'anchored_fix' : corrected ? 'unanchored_fix' : 'missed',
+				explanation: `outcome=${suggestion.outcome} kind=${edit?.kind ?? 'none'} replaces=${edit?.kind === 'replace' ? edit.replaceBefore : ''}`
+			});
+
+			expect(suggestion.outcome, `no edit was offered: ${JSON.stringify(suggestion)}`).toBe(
+				'suggested'
+			);
+			expect(replacesTypo, `the fix was not anchored on the typo: ${JSON.stringify(edit)}`).toBe(
+				true
+			);
+			expect(corrected, `the text did not correct the word: ${JSON.stringify(edit)}`).toBe(true);
 		}
 	},
 	{
@@ -153,7 +195,7 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 
 			const suggestion = await controller.suggest(request, new AbortController().signal);
 
-			const text = suggestion.outcome === 'suggested' ? suggestion.text : '';
+			const text = suggestion.outcome === 'suggested' ? suggestion.edit.text : '';
 			const hasProjectContext =
 				suggestion.outcome === 'suggested' && suggestion.grounding.projectPassageCount > 0;
 			const mentionsOwner = text.toLowerCase().includes('ana');

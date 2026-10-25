@@ -6,9 +6,17 @@ const chatRequestSchema = z.looseObject({
 	messages: z.array(z.object({ role: z.string(), content: z.string() }))
 });
 
-/** An OpenAI-compatible chat-completions endpoint served in memory over `fetch`. */
+/**
+ * An OpenAI-compatible chat-completions endpoint served in memory over `fetch`.
+ * `content` is what the model answers; the inline completion asks for a JSON edit,
+ * so its default is one.
+ */
 export class InMemoryChatCompletions {
-	content: string | null = ' window.';
+	content: string | null = JSON.stringify({
+		replaceBefore: '',
+		replaceAfter: '',
+		text: ' window.'
+	});
 	failure?: Error;
 	readonly requests: z.infer<typeof chatRequestSchema>[] = [];
 

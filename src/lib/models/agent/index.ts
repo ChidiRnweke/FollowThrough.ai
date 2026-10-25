@@ -823,6 +823,47 @@ export interface InlineCompletionPassage {
 	readonly content: string;
 }
 
+/**
+ * What the inline model answers with: text for the caret, and the characters
+ * on either side of the caret that the text replaces. Both anchors empty is a
+ * plain continuation. Parsed from the provider's JSON by the completion service.
+ */
+export interface InlineEditProposal {
+	readonly replaceBefore: string;
+	readonly replaceAfter: string;
+	readonly text: string;
+}
+
+export const inlineEditProposalSchema = z
+	.object({ replaceBefore: z.string(), replaceAfter: z.string(), text: z.string() })
+	.strict() satisfies z.ZodType<InlineEditProposal>;
+
+/**
+ * What a suggestion asks the editor to do. An insert appends at the caret. A
+ * replace swaps the anchored characters before and after the caret for the
+ * text; the server has verified the anchors against the request's window.
+ */
+export type InlineEdit =
+	| { readonly kind: 'insert'; readonly text: string }
+	| {
+			readonly kind: 'replace';
+			readonly replaceBefore: string;
+			readonly replaceAfter: string;
+			readonly text: string;
+	  };
+
+export const inlineEditSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('insert'), text: z.string().min(1) }).strict(),
+	z
+		.object({
+			kind: z.literal('replace'),
+			replaceBefore: z.string(),
+			replaceAfter: z.string(),
+			text: z.string()
+		})
+		.strict()
+]) satisfies z.ZodType<InlineEdit>;
+
 export const inlineCompletionPassageSchema = z
 	.object({
 		sourceTitle: z.string(),
@@ -871,20 +912,28 @@ export interface InlineSuggestionGrounding {
 	readonly source: InlineGroundingSource;
 }
 
+export type InlineSuggestionDecline =
+	| 'ineligible'
+	| 'empty_model'
+	/** The model's answer was not the JSON edit it was asked for. */
+	| 'unparseable_model'
+	/** The model named anchors that are not the characters around the caret. */
+	| 'unanchored_edit';
+
 export type InlineSuggestion =
 	| {
 			readonly outcome: 'suggested';
-			readonly text: string;
+			readonly edit: InlineEdit;
 			readonly grounding: InlineSuggestionGrounding;
 	  }
-	| { readonly outcome: 'no_suggestion'; readonly reason: 'ineligible' | 'empty_model' }
+	| { readonly outcome: 'no_suggestion'; readonly reason: InlineSuggestionDecline }
 	| { readonly outcome: 'rate_limited'; readonly retryAfterMs: number };
 
 export const inlineSuggestionSchema = z.discriminatedUnion('outcome', [
 	z
 		.object({
 			outcome: z.literal('suggested'),
-			text: z.string(),
+			edit: inlineEditSchema,
 			grounding: z
 				.object({
 					currentNote: z.literal(true),
@@ -898,7 +947,7 @@ export const inlineSuggestionSchema = z.discriminatedUnion('outcome', [
 	z
 		.object({
 			outcome: z.literal('no_suggestion'),
-			reason: z.enum(['ineligible', 'empty_model'])
+			reason: z.enum(['ineligible', 'empty_model', 'unparseable_model', 'unanchored_edit'])
 		})
 		.strict(),
 	z

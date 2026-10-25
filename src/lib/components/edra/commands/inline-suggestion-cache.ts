@@ -2,7 +2,7 @@ import type { CaretText } from './inline-suggestion-trigger';
 import type { InlineSuggestionEdit } from './InlineSuggestion';
 
 interface Remembered extends CaretText {
-	readonly edit: InlineSuggestionEdit;
+	readonly edit: Extract<InlineSuggestionEdit, { kind: 'insert' }>;
 }
 
 /**
@@ -18,7 +18,7 @@ interface Remembered extends CaretText {
 export class InlineSuggestionCache {
 	private remembered: readonly Remembered[] = [];
 
-	remember(at: CaretText, edit: InlineSuggestionEdit): void {
+	remember(at: CaretText, edit: Extract<InlineSuggestionEdit, { kind: 'insert' }>): void {
 		this.remembered = [
 			...this.remembered.filter((entry) => entry.before !== at.before || entry.after !== at.after),
 			{ ...at, edit }

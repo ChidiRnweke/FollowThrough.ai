@@ -88,7 +88,7 @@ export class InlineSuggestions implements InlineSuggestionsController {
 					this.dependencies.now()
 				);
 				if (!budget.allowed) return { outcome: budget.reason, retryAfterMs: budget.retryAfterMs };
-				const text = await this.dependencies.completion.complete(
+				const completed = await this.dependencies.completion.complete(
 					authoritativeRequest,
 					context,
 					preferences.inlineModel === undefined
@@ -96,10 +96,15 @@ export class InlineSuggestions implements InlineSuggestionsController {
 						: normalizeLanguageModelId(preferences.inlineModel),
 					signal
 				);
-				if (!text) return { outcome: 'no_suggestion', reason: 'empty_model' };
+				if (completed.kind === 'empty') return { outcome: 'no_suggestion', reason: 'empty_model' };
+				if (completed.kind === 'failure')
+					return {
+						outcome: 'no_suggestion',
+						reason: completed.reason === 'unparseable' ? 'unparseable_model' : 'unanchored_edit'
+					};
 				return {
 					outcome: 'suggested',
-					text,
+					edit: completed.edit,
 					grounding: {
 						currentNote: true,
 						userMemoryCount: context.userMemory.length,

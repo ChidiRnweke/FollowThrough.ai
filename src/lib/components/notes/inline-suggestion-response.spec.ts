@@ -17,12 +17,29 @@ const grounding = {
 describe('readInlineSuggestionResponse', () => {
 	it('offers the suggested text', async () => {
 		const result = await readInlineSuggestionResponse(
-			json({ outcome: 'suggested', text: ' to avoid data loss.', grounding })
+			json({
+				outcome: 'suggested',
+				edit: { kind: 'insert', text: ' to avoid data loss.' },
+				grounding
+			})
 		);
 		expect(result).toEqual({
 			kind: 'offer',
 			edit: { kind: 'insert', text: ' to avoid data loss.' }
 		});
+	});
+
+	it('offers a replacement as the server anchored it', async () => {
+		const edit = {
+			kind: 'replace',
+			replaceBefore: 'acount',
+			replaceAfter: '',
+			text: 'account for'
+		};
+		const result = await readInlineSuggestionResponse(
+			json({ outcome: 'suggested', edit, grounding })
+		);
+		expect(result).toEqual({ kind: 'offer', edit });
 	});
 
 	it('reads a declined suggestion as none', async () => {

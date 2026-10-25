@@ -4,7 +4,7 @@ import type { InlineSuggestionResult } from '$lib/components/edra/commands/Inlin
 const resultOf = (suggestion: InlineSuggestion): InlineSuggestionResult => {
 	switch (suggestion.outcome) {
 		case 'suggested':
-			return { kind: 'offer', edit: { kind: 'insert', text: suggestion.text } };
+			return { kind: 'offer', edit: suggestion.edit };
 		case 'no_suggestion':
 			return { kind: 'none' };
 		case 'rate_limited':
