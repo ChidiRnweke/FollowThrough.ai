@@ -32,7 +32,11 @@ import TableOfContents, {
 	type TableOfContentData
 } from '@tiptap/extension-table-of-contents';
 import { DiagramDeletion } from './DiagramDeletion.js';
-import { InlineSuggestion, type InlineSuggestionRequestInput } from './InlineSuggestion.js';
+import {
+	InlineSuggestion,
+	type InlineSuggestionRequestInput,
+	type InlineSuggestionResult
+} from './InlineSuggestion.js';
 import { Proofread, type ProofreadIssueReport } from './Proofread.js';
 import {
 	armLiteralPaste,
@@ -95,7 +99,7 @@ export interface EdraEditorProps {
 	getInlineSuggestion?: (
 		input: InlineSuggestionRequestInput,
 		signal: AbortSignal
-	) => Promise<{ readonly text: string }>;
+	) => Promise<InlineSuggestionResult>;
 	/**
 	 * Notes offered when the author types `@`. Injected, like every other capability
 	 * here, so the editor never reaches for a store or a transport of its own. Omitting

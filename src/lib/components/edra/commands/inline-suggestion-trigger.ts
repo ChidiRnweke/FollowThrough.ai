@@ -32,6 +32,8 @@ export interface CaretContext {
 	readonly characterBefore: string;
 	readonly characterAfter: string;
 	readonly meaningfulPrefixLength: number;
+	/** The caret's block holds nothing yet: the paragraph Enter just opened. */
+	readonly emptyBlock: boolean;
 	readonly suppressed: boolean;
 }
 
@@ -50,8 +52,10 @@ export const shouldTrigger = (caret: CaretContext): boolean => {
 		return false;
 	if (caret.parentNames.some((name) => EXCLUDED_PARENTS.has(name))) return false;
 	if (caret.markNames.some((name) => EXCLUDED_MARKS.has(name))) return false;
-	// A caret at the very start of a block has nothing to continue from.
-	if (!caret.characterBefore) return false;
+	// An empty block is where the next thought goes, so a continuation is welcome
+	// there. At the start of a block that already has text, or right after an
+	// inline atom, ghost text would glue itself to whatever follows.
+	if (!caret.characterBefore && !caret.emptyBlock) return false;
 	// Mid-word: ghost text would render inside the word being typed.
 	if (WORD_CHARACTER.test(caret.characterBefore) && WORD_CHARACTER.test(caret.characterAfter))
 		return false;
@@ -74,8 +78,20 @@ export const caretContextOf = (state: EditorState, suppressed: boolean): CaretCo
 			Math.min(state.doc.content.size, $from.pos + 1)
 		),
 		meaningfulPrefixLength: state.doc.textBetween(0, $from.pos, '\n', ' ').trim().length,
+		emptyBlock: $from.parent.content.size === 0,
 		suppressed
 	};
+};
+
+/**
+ * Whether a caret that only moved — no edit — has settled where a continuation
+ * is wanted: the end of its block, which includes an empty one. Elsewhere in a
+ * block the writer is reading or about to revise, and an unasked offer there is
+ * noise and spend.
+ */
+export const caretRestsForSuggestion = (state: EditorState): boolean => {
+	const { $from, empty } = state.selection;
+	return empty && $from.parent.isTextblock && $from.parentOffset === $from.parent.content.size;
 };
 
 /**
@@ -94,6 +110,20 @@ export const joinedSuggestion = (characterBefore: string, suggestion: string): s
 	return WORD_CHARACTER.test(suggestion[0]) ? ` ${suggestion}` : suggestion;
 };
 
+/** The whole document as plain text, split at the caret. */
+export interface CaretText {
+	readonly before: string;
+	readonly after: string;
+}
+
+export const caretTextOf = (state: EditorState): CaretText => {
+	const position = state.selection.$from.pos;
+	return {
+		before: state.doc.textBetween(0, position, '\n', ' '),
+		after: state.doc.textBetween(position, state.doc.content.size, '\n', ' ')
+	};
+};
+
 /** The plain-text window the completion sees around the caret. */
 export interface CaretWindow {
 	readonly prefix: string;
@@ -109,17 +139,13 @@ const SUFFIX_LIMIT = 1000;
 const SECTION_LIMIT = 8000;
 
 export const caretWindowOf = (state: EditorState): CaretWindow => {
-	const position = state.selection.$from.pos;
-	const prefix = state.doc.textBetween(0, position, '\n', ' ').slice(-PREFIX_LIMIT);
-	const suffix = state.doc
-		.textBetween(position, state.doc.content.size, '\n', ' ')
-		.slice(0, SUFFIX_LIMIT);
+	const { before, after } = caretTextOf(state);
 	const headingPath = headingsAbove(state);
 	const heading = headingPath.at(-1);
 	const currentSection = sectionAroundCaret(state);
 	return {
-		prefix,
-		suffix,
+		prefix: before.slice(-PREFIX_LIMIT),
+		suffix: after.slice(0, SUFFIX_LIMIT),
 		headingPath,
 		blockType: state.selection.$from.parent.type.name,
 		currentSection,

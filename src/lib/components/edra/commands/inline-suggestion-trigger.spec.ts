@@ -9,6 +9,7 @@ const caret = (overrides: Partial<CaretContext> = {}): CaretContext => ({
 	characterBefore: ' ',
 	characterAfter: '',
 	meaningfulPrefixLength: 200,
+	emptyBlock: false,
 	suppressed: false,
 	...overrides
 });
@@ -46,8 +47,12 @@ describe('shouldTrigger', () => {
 		expect(shouldTrigger(caret({ parentNames: ['paragraph', 'tableCell', 'table'] }))).toBe(false);
 	});
 
-	it('stays silent at the start of an empty block', () => {
+	it('stays silent at the start of a block that already has text', () => {
 		expect(shouldTrigger(caret({ characterBefore: '' }))).toBe(false);
+	});
+
+	it('suggests in the empty block Enter just opened', () => {
+		expect(shouldTrigger(caret({ characterBefore: '', emptyBlock: true }))).toBe(true);
 	});
 
 	it('stays silent mid-word', () => {
