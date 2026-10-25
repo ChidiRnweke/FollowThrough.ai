@@ -7,7 +7,7 @@ import {
 	OpenInferenceSpanKind,
 	SemanticConventions as S
 } from '@arizeai/openinference-semantic-conventions';
-import { InlineCompletion } from './completion';
+import { InlineCompletion, type InlineCompletionOutcome } from './completion';
 
 const completionOver = (
 	chat: InMemoryChatCompletions,
@@ -39,16 +39,29 @@ const context: InlineCompletionContext = {
 	]
 };
 
-/** The completion the service publishes when the model answers `raw` after `prefix`. */
-const sanitized = (prefix: string, raw: string) => {
+/** The model's JSON answer: a continuation, or a replacement of the anchored characters. */
+const answer = (text: string, replaceBefore = '', replaceAfter = '') =>
+	JSON.stringify({ replaceBefore, replaceAfter, text });
+
+/** What the service makes of the model's answer `content` for a request. */
+const completed = (
+	content: string,
+	overrides: Partial<InlineSuggestionRequest> = {}
+): Promise<InlineCompletionOutcome> => {
 	const chat = new InMemoryChatCompletions();
-	chat.content = raw;
+	chat.content = content;
 	return completionOver(chat).complete(
-		{ ...request, prefix },
+		{ ...request, ...overrides },
 		context,
 		'test/model',
 		new AbortController().signal
 	);
+};
+
+/** The ghost text the service publishes when the model continues with `raw` after `prefix`. */
+const sanitized = async (prefix: string, raw: string): Promise<string> => {
+	const outcome = await completed(answer(raw), { prefix });
+	return outcome.kind === 'edit' ? outcome.edit.text : '';
 };
 
 /** The system and user messages the model receives for a request. */
@@ -197,6 +210,97 @@ describe('completion bounds', () => {
 	});
 });
 
+describe('anchored edits', () => {
+	const typo = 'The migration plan should acount';
+
+	it('offers a replacement anchored on the characters before the caret', async () => {
+		expect(await completed(answer('account for the cutover', 'acount'), { prefix: typo })).toEqual({
+			kind: 'edit',
+			edit: {
+				kind: 'replace',
+				replaceBefore: 'acount',
+				replaceAfter: '',
+				text: 'account for the cutover'
+			}
+		});
+	});
+
+	it('offers a replacement that reaches past the caret', async () => {
+		expect(
+			await completed(answer('account for', 'acou', 'nt'), {
+				prefix: 'should acou',
+				suffix: 'nt the rest'
+			})
+		).toEqual({
+			kind: 'edit',
+			edit: { kind: 'replace', replaceBefore: 'acou', replaceAfter: 'nt', text: 'account for' }
+		});
+	});
+
+	it('refuses a replacement whose anchor is not the text before the caret', async () => {
+		expect(await completed(answer('account', 'acount'), { prefix: 'should account' })).toEqual({
+			kind: 'failure',
+			reason: 'unanchored'
+		});
+	});
+
+	it('refuses a replacement whose anchor is not the text after the caret', async () => {
+		expect(
+			await completed(answer('account', 'acount', 'ing'), { prefix: typo, suffix: '' })
+		).toEqual({
+			kind: 'failure',
+			reason: 'unanchored'
+		});
+	});
+
+	it('refuses an anchor that crosses a line break', async () => {
+		expect(
+			await completed(answer('Plan. Account', 'Plan.\nacount'), { prefix: 'The Plan.\nacount' })
+		).toEqual({ kind: 'failure', reason: 'unanchored' });
+	});
+
+	it('treats a replacement that changes nothing as no suggestion', async () => {
+		expect(await completed(answer('acount', 'acount'), { prefix: typo })).toEqual({
+			kind: 'empty'
+		});
+	});
+
+	it('keeps a corrected word that restates the anchor', async () => {
+		expect(await completed(answer('the window', 'teh'), { prefix: 'The cutover teh' })).toEqual({
+			kind: 'edit',
+			edit: { kind: 'replace', replaceBefore: 'teh', replaceAfter: '', text: 'the window' }
+		});
+	});
+
+	it('reports an answer that is not JSON', async () => {
+		expect(await completed(' plain continuation')).toEqual({
+			kind: 'failure',
+			reason: 'unparseable'
+		});
+	});
+
+	it('reports a JSON answer that misses a key', async () => {
+		expect(await completed(JSON.stringify({ text: 'x' }))).toEqual({
+			kind: 'failure',
+			reason: 'unparseable'
+		});
+	});
+
+	it('asks the model for the edit schema', async () => {
+		const chat = new InMemoryChatCompletions();
+		await completionOver(chat).complete(
+			request,
+			context,
+			'test/model',
+			new AbortController().signal
+		);
+		expect(chat.requests[0]?.response_format).toMatchObject({
+			type: 'json_schema',
+			json_schema: { name: 'inline_edit', strict: true }
+		});
+	});
+});
+
 describe('provider protocol', () => {
 	it('normalizes a provider failure into an inline completion error', async () => {
 		const chat = new InMemoryChatCompletions();
@@ -230,9 +334,9 @@ describe('provider protocol', () => {
 		expect(outcome).not.toBe('completed');
 	});
 
-	it('records raw provider attributes and the sanitized output on the generation span', async () => {
+	it('records raw provider attributes and the anchored outcome on the generation span', async () => {
 		const chat = new InMemoryChatCompletions();
-		chat.content = '" replicas."';
+		chat.content = answer('" replicas."');
 		const observer = new InMemoryOperationObserver();
 		await completionOver(chat, observer).complete(
 			{ ...request, prefix: 'The migration needs more' },
@@ -243,7 +347,7 @@ describe('provider protocol', () => {
 		expect(observer.operations.filter((event) => event.name === 'inline.generate')).toMatchObject([
 			{
 				kind: 'completed',
-				output: ' replicas.',
+				output: JSON.stringify({ kind: 'edit', edit: { kind: 'insert', text: ' replicas.' } }),
 				context: {
 					kind: OpenInferenceSpanKind.LLM,
 					metadata: { model: 'default-inline-model' },
@@ -251,7 +355,7 @@ describe('provider protocol', () => {
 				},
 				attributes: {
 					[S.LLM_MODEL_NAME]: 'test-model',
-					'llm.output_messages.0.message.content': '" replicas."'
+					'llm.output_messages.0.message.content': answer('" replicas."')
 				}
 			}
 		]);

@@ -53,7 +53,9 @@ worktree changes.
 - **Old inline-image repair paths remain.** The current product does not need this compatibility
   layer.
 - **Old anchored-edit fallback comments remain.** They do not match the current failure rule.
-- **Inline suggestions are incomplete.** Do not record their current behavior as intended design.
+- **Inline suggestions are decided.** ADR 0047 records how a section's grounding is reused and ADR
+  0048 how a suggestion may replace the text around the caret; the trigger policy lives with the
+  editor extension. Earlier behavior is not intended design.
 - **Accepted context can be truncated.** Limits can silently discard context the user supplied.
 - **The in-app agent adapter erases thrown typed failures.** It reduces a thrown domain error to one
   failure string. Read-plane failures avoid that adapter path by returning typed result unions.

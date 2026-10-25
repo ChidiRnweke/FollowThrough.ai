@@ -52,7 +52,14 @@ it('parents one generation span under the suggestion and preserves raw and rende
 	const provider = await inlineCompletionProvider(
 		JSON.stringify({
 			model: 'provider-model',
-			choices: [{ message: { content: '" replicas."' }, finish_reason: 'stop' }]
+			choices: [
+				{
+					message: {
+						content: JSON.stringify({ replaceBefore: '', replaceAfter: '', text: '" replicas."' })
+					},
+					finish_reason: 'stop'
+				}
+			]
 		})
 	);
 	try {
@@ -77,8 +84,15 @@ it('parents one generation span under the suggestion and preserves raw and rende
 				attributes: {
 					[S.OPENINFERENCE_SPAN_KIND]: 'LLM',
 					[S.LLM_MODEL_NAME]: 'provider-model',
-					'output.value': ' replicas.',
-					'llm.output_messages.0.message.content': '" replicas."'
+					'output.value': JSON.stringify({
+						kind: 'edit',
+						edit: { kind: 'insert', text: ' replicas.' }
+					}),
+					'llm.output_messages.0.message.content': JSON.stringify({
+						replaceBefore: '',
+						replaceAfter: '',
+						text: '" replicas."'
+					})
 				}
 			}
 		]);

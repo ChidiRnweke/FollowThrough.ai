@@ -858,6 +858,24 @@
 	opacity: 0.9;
 }
 
+/* The characters a proposed edit would replace: the version-compare "removed" wash,
+   struck through, and still the writer's own text until Tab or a click applies the
+   edit. The proofreader may underline the same characters; the strike wins there. */
+.tiptap .inline-suggestion-removed,
+.tiptap .inline-suggestion-removed.proofread-issue {
+	background-color: color-mix(in oklab, var(--color-destructive) 8%, transparent);
+	color: var(--muted-foreground);
+	text-decoration-line: line-through;
+	text-decoration-style: solid;
+	text-decoration-thickness: 1px;
+	text-decoration-color: var(--destructive);
+}
+
+.dark .tiptap .inline-suggestion-removed,
+.dark .tiptap .inline-suggestion-removed.proofread-issue {
+	background-color: color-mix(in oklab, var(--color-destructive) 12%, transparent);
+}
+
 @media (prefers-reduced-motion: no-preference) {
 	/* A new offer fades in. One the writer is typing into is re-rendered one
 	   character shorter on every keystroke, and must not flash each time. */

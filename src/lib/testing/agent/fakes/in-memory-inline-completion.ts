@@ -4,7 +4,10 @@ import type {
 	InlineCompletionContext,
 	InlineSuggestionRequest
 } from '$lib/models/agent';
-import type { InlineCompletionService } from '$lib/server/services/inline-suggestions/completion';
+import type {
+	InlineCompletionOutcome,
+	InlineCompletionService
+} from '$lib/server/services/inline-suggestions/completion';
 import type { AgentPreferencesRepository } from '$lib/server/repositories/agent';
 
 export class InMemoryAgentPreferencesRepository implements AgentPreferencesRepository {
@@ -40,16 +43,16 @@ export class InMemoryInlineCompletion implements InlineCompletionService {
 		readonly model: string;
 		readonly signal: AbortSignal;
 	}[] = [];
-	text = ' window.';
+	outcome: InlineCompletionOutcome = { kind: 'edit', edit: { kind: 'insert', text: ' window.' } };
 	failure?: Error;
 	async complete(
 		request: InlineSuggestionRequest,
 		context: InlineCompletionContext,
 		model: string,
 		signal: AbortSignal
-	): Promise<string> {
+	): Promise<InlineCompletionOutcome> {
 		this.requests.push({ request, context, model, signal });
 		if (this.failure) throw this.failure;
-		return this.text;
+		return this.outcome;
 	}
 }

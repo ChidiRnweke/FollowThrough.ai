@@ -26,8 +26,20 @@ import {
  * stub.
  */
 
-/** What a suggestion asks the editor to do at the caret. */
-export type InlineSuggestionEdit = { readonly kind: 'insert'; readonly text: string };
+/**
+ * What a suggestion asks the editor to do at the caret: append text, or swap
+ * the anchored characters on either side of the caret for it. The server has
+ * verified a replacement's anchors against the text it was sent; the editor
+ * verifies them again against the document before it offers anything.
+ */
+export type InlineSuggestionEdit =
+	| { readonly kind: 'insert'; readonly text: string }
+	| {
+			readonly kind: 'replace';
+			readonly replaceBefore: string;
+			readonly replaceAfter: string;
+			readonly text: string;
+	  };
 
 /** Why the editor is asking: the caret came to rest, or the writer pressed the shortcut. */
 export type InlineSuggestionTrigger = 'idle' | 'explicit';
@@ -72,12 +84,16 @@ declare module '@tiptap/core' {
 	}
 }
 
-/** An offer placed in the document: where it sits and what accepting it inserts. */
-export interface InlineSuggestionOffer {
-	readonly kind: 'insert';
-	readonly from: number;
-	readonly text: string;
-}
+/** An offer placed in the document: where it sits and what accepting it does. */
+export type InlineSuggestionOffer =
+	| { readonly kind: 'insert'; readonly from: number; readonly text: string }
+	| {
+			/** `from..to` is struck through and replaced by `text`; the caret sits inside it. */
+			readonly kind: 'replace';
+			readonly from: number;
+			readonly to: number;
+			readonly text: string;
+	  };
 
 export interface InlineSuggestionState {
 	readonly offer: InlineSuggestionOffer;
@@ -97,14 +113,41 @@ type InlineSuggestionMeta = InlineSuggestionState | null;
 
 const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta']);
 const AVAILABLE = 'Writing suggestion available. Tab accepts; Escape dismisses.';
+const EDIT_AVAILABLE = 'Writing edit available. Tab applies; Escape dismisses.';
 const UNAVAILABLE = 'Writing suggestion unavailable.';
+
+/**
+ * Places an edit in the document, or refuses it. A replacement's anchors must
+ * be exactly the characters on either side of the caret within its own block:
+ * inside one textblock a character is one position, so the lengths map, and the
+ * text comparison catches an inline atom or a stale answer. Anything else is
+ * refused rather than guessed, because a replacement on the wrong characters
+ * would destroy the writer's text.
+ */
+const offerOf = (
+	state: EditorState,
+	edit: InlineSuggestionEdit,
+	origin: number
+): InlineSuggestionOffer | undefined => {
+	if (edit.kind === 'insert') return { kind: 'insert', from: origin, text: edit.text };
+	const $origin = state.doc.resolve(origin);
+	const from = origin - edit.replaceBefore.length;
+	const to = origin + edit.replaceAfter.length;
+	if (from < $origin.start() || to > $origin.end()) return undefined;
+	if (state.doc.textBetween(from, origin) !== edit.replaceBefore) return undefined;
+	if (state.doc.textBetween(origin, to) !== edit.replaceAfter) return undefined;
+	return { kind: 'replace', from, to, text: edit.text };
+};
 
 /**
  * The text a transaction typed straight into an offer, when it is exactly that:
  * one insertion at the offer's position whose characters open the offer. Input
  * rules, pasted slices and composition are shaped differently and fall through.
  */
-const typedInto = (transaction: Transaction, offer: InlineSuggestionOffer): string | undefined => {
+const typedInto = (
+	transaction: Transaction,
+	offer: Extract<InlineSuggestionOffer, { kind: 'insert' }>
+): string | undefined => {
 	if (transaction.steps.length !== 1) return undefined;
 	const [step] = transaction.steps;
 	if (!(step instanceof ReplaceStep) || step.from !== offer.from || step.to !== offer.from)
@@ -116,8 +159,9 @@ const typedInto = (transaction: Transaction, offer: InlineSuggestionOffer): stri
 	return typed && offer.text.startsWith(typed) ? typed : undefined;
 };
 
-/** A printable key continues an offer when it is the offer's next character. */
+/** A printable key continues an appended offer when it is the offer's next character. */
 const continuesOffer = (event: KeyboardEvent, offer: InlineSuggestionOffer): boolean =>
+	offer.kind === 'insert' &&
 	event.key.length === 1 &&
 	!event.ctrlKey &&
 	!event.metaKey &&
@@ -195,9 +239,11 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 		};
 
 		const offer = (view: EditorView, edit: InlineSuggestionEdit, origin: number) => {
+			const placed = offerOf(view.state, edit, origin);
+			if (!placed) return;
 			view.dispatch(
 				view.state.tr.setMeta(inlineSuggestionKey, {
-					offer: { kind: 'insert', from: origin, text: edit.text },
+					offer: placed,
 					// Shown on every suggestion, not just the first: without a
 					// persistent affordance a re-triggered suggestion reads as
 					// plain grey text and is easy to miss.
@@ -205,7 +251,7 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 					arrival: 'new'
 				} satisfies InlineSuggestionMeta)
 			);
-			announce(AVAILABLE);
+			announce(placed.kind === 'replace' ? EDIT_AVAILABLE : AVAILABLE);
 		};
 
 		const settle = (
@@ -217,7 +263,9 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 		) => {
 			switch (result.kind) {
 				case 'offer':
-					cache.remember(at, result.edit);
+					// A replacement is tied to the exact characters it replaces, which the
+					// next keystroke changes; only an appended offer is worth remembering.
+					if (result.edit.kind === 'insert') cache.remember(at, result.edit);
 					offer(view, result.edit, origin);
 					return;
 				case 'none':
@@ -300,11 +348,12 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 			const current = inlineSuggestionKey.getState(view.state);
 			if (!current) return false;
 			const { from, text } = current.offer;
+			const to = current.offer.kind === 'replace' ? current.offer.to : from;
 			const characterBefore = view.state.doc.textBetween(Math.max(0, from - 1), from);
 			cancel();
 			view.dispatch(
 				view.state.tr
-					.insertText(joinedSuggestion(characterBefore, text), from)
+					.insertText(joinedSuggestion(characterBefore, text), from, to)
 					.setMeta(inlineSuggestionKey, null as InlineSuggestionMeta)
 			);
 			acceptedThisSession = true;
@@ -374,7 +423,8 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 							InlineSuggestionMeta | undefined;
 						if (meta !== undefined) return meta;
 						if (transaction.docChanged) {
-							const typed = current && typedInto(transaction, current.offer);
+							const typed =
+								current && current.offer.kind === 'insert' && typedInto(transaction, current.offer);
 							if (current && typed) {
 								const rest = current.offer.text.slice(typed.length);
 								if (rest)
@@ -412,15 +462,16 @@ export const InlineSuggestion = Extension.create<InlineSuggestionOptions, Inline
 						const current = inlineSuggestionKey.getState(state);
 						if (!current) return null;
 						const { offer } = current;
+						const ghostAt = offer.kind === 'replace' ? offer.to : offer.from;
+						// A stable key keeps the rendered span across unrelated
+						// transactions (autosave, proofreading); without one every
+						// redraw rebuilds it and replays the fade.
+						const key = `${offer.kind}:${offer.from}:${ghostAt}:${offer.text}:${current.showHint}:${current.arrival}`;
 						return DecorationSet.create(state.doc, [
-							Decoration.widget(offer.from, () => ghostOf(current), {
-								side: 1,
-								marks: [],
-								// A stable key keeps the rendered span across unrelated
-								// transactions (autosave, proofreading); without one every
-								// redraw rebuilds it and replays the fade.
-								key: `${offer.from}:${offer.text}:${current.showHint}:${current.arrival}`
-							})
+							...(offer.kind === 'replace'
+								? [Decoration.inline(offer.from, offer.to, { class: 'inline-suggestion-removed' })]
+								: []),
+							Decoration.widget(ghostAt, () => ghostOf(current), { side: 1, marks: [], key })
 						]);
 					},
 

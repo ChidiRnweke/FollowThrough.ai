@@ -41,7 +41,7 @@ describe('direct inline completion', () => {
 	it('returns completion text when project retrieval is empty', async () => {
 		expect(await setup().controller.suggest(request(), signal())).toEqual({
 			outcome: 'suggested',
-			text: ' window.',
+			edit: { kind: 'insert', text: ' window.' },
 			grounding: {
 				currentNote: true,
 				userMemoryCount: 0,
