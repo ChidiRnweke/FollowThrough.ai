@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.8.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.8.0...v5.8.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **sidebar:** lift rows on hover instead of replaying icon motion ([#478](https://github.com/ChidiRnweke/FollowThrough.ai/issues/478)) ([afd052b](https://github.com/ChidiRnweke/FollowThrough.ai/commit/afd052b2df2a4d706711c5a8f7c8ac468bb86e31))
+
 ## [5.8.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.7.0...v5.8.0) (2026-10-25)
 
 
