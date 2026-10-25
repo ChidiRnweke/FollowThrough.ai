@@ -7,6 +7,11 @@ const reasoningRequestSchema = z.looseObject({ reasoning: z.json().optional() })
 const requestUrl = (input: string | URL | Request): URL =>
 	new URL(input instanceof Request ? input.url : input.toString());
 
+/** OpenRouter's switch for a model's thinking: on for the agent, off for autocomplete. */
+export interface ReasoningSetting {
+	readonly enabled: boolean;
+}
+
 /**
  * What OpenRouter needs before it will stream a model's thinking.
  *
@@ -17,23 +22,27 @@ const requestUrl = (input: string | URL | Request): URL =>
  * finishes. With tools that is once per tool round, which is why reasoning
  * arrived in lumps and never typed itself out.
  */
-const REASONING = { enabled: true } as const;
+const REASONING_STREAMED: ReasoningSetting = { enabled: true };
 
-const withReasoningRequested = (body: string): string => {
+const withReasoningRequested = (body: string, reasoning: ReasoningSetting): string => {
 	const request = reasoningRequestSchema.parse(JSON.parse(body));
 	// A caller that already asked for reasoning has said what it wants — an effort
-	// level, or off — and this must not overwrite it with a blanket "on".
+	// level, or off — and this must not overwrite it.
 	if (request.reasoning !== undefined) return body;
-	return JSON.stringify({ ...request, reasoning: REASONING });
+	return JSON.stringify({ ...request, reasoning });
 };
 
 /**
- * Asks OpenRouter to stream reasoning, at the HTTP boundary.
+ * Sets OpenRouter's reasoning switch on every generation, at the HTTP boundary.
  *
  * Here rather than on the `Agent`, because the agents SDK has no field for it:
  * `reasoning` is OpenRouter's own extension to the chat-completions body, and
  * the sibling `withWebResearch` already establishes that this is where such
- * fields go in.
+ * fields go in. The default streams reasoning, which is what the agent wants;
+ * the inline completion passes `enabled: false`, because a model that thinks
+ * first spends its whole output budget doing so — measured on
+ * `deepseek/deepseek-v4-flash`: 256 of 256 completion tokens were reasoning,
+ * the content was empty, and every ghost-text request came back with nothing.
  *
  * Sent to every model rather than only to those advertising the capability.
  * That is measured, not assumed: `openai/gpt-4o-mini`, which does not support
@@ -44,10 +53,10 @@ const withReasoningRequested = (body: string): string => {
  * against.
  */
 export const withReasoning =
-	(delegate: Fetch = globalThis.fetch): Fetch =>
+	(delegate: Fetch = globalThis.fetch, reasoning: ReasoningSetting = REASONING_STREAMED): Fetch =>
 	async (input, init) => {
 		const pathname = requestUrl(input).pathname;
 		if (!pathname.endsWith('/chat/completions') || typeof init?.body !== 'string')
 			return delegate(input, init);
-		return delegate(input, { ...init, body: withReasoningRequested(init.body) });
+		return delegate(input, { ...init, body: withReasoningRequested(init.body, reasoning) });
 	};
