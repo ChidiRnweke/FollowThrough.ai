@@ -1,5 +1,30 @@
 # Changelog
 
+## [5.8.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.7.0...v5.8.0) (2026-10-25)
+
+
+### Features
+
+* **inline-suggestions:** propose anchored inline edits ([#474](https://github.com/ChidiRnweke/FollowThrough.ai/issues/474)) ([2a255b1](https://github.com/ChidiRnweke/FollowThrough.ai/commit/2a255b119132cdd3c8fcdb96d15f6588b819475a))
+* **notes:** fire inline suggestions on caret rest, type-through and explicit trigger ([#471](https://github.com/ChidiRnweke/FollowThrough.ai/issues/471)) ([20595df](https://github.com/ChidiRnweke/FollowThrough.ai/commit/20595df636d5500d17ac0092d7a67ae5b88d42bd))
+
+
+### Bug Fixes
+
+* **inline-suggestions:** turn model reasoning off so completions return text ([#472](https://github.com/ChidiRnweke/FollowThrough.ai/issues/472)) ([00e8f5b](https://github.com/ChidiRnweke/FollowThrough.ai/commit/00e8f5b615f65eee8967c6e1bd2f387df6125956))
+* **sidebar:** remove the row hover wash ([#469](https://github.com/ChidiRnweke/FollowThrough.ai/issues/469)) ([00879cb](https://github.com/ChidiRnweke/FollowThrough.ai/commit/00879cbb64e7ba140bc545eae4505ffc71dd01ee))
+* **sync:** replay edits onto a superseded receipt instead of reviewing them ([#470](https://github.com/ChidiRnweke/FollowThrough.ai/issues/470)) ([3245f38](https://github.com/ChidiRnweke/FollowThrough.ai/commit/3245f38c0d89b9ed28f34b2134c17534bacd33ed))
+
+
+### Performance Improvements
+
+* **inline-suggestions:** reuse a section's grounding until its knowledge changes ([#477](https://github.com/ChidiRnweke/FollowThrough.ai/issues/477)) ([f1a1433](https://github.com/ChidiRnweke/FollowThrough.ai/commit/f1a1433f3dce1c8bbf4ef9e6ceecb3ea297b9892))
+
+
+### Continuous Integration
+
+* **unit:** run the browser-full project in two shards ([#475](https://github.com/ChidiRnweke/FollowThrough.ai/issues/475)) ([307778d](https://github.com/ChidiRnweke/FollowThrough.ai/commit/307778d58acb8889f66b284b1e5f22c8dc7a9fb9))
+
 ## [5.7.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.6.1...v5.7.0) (2026-10-23)
 
 
