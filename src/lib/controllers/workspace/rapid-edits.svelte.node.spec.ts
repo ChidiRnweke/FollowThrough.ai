@@ -76,6 +76,25 @@ describe('quick successive edits to one resource', () => {
 	});
 });
 
+describe('a long-lived editor beside quick actions', () => {
+	it('keeps saving after a quick action superseded its acknowledged write', async () => {
+		const { todo, server, settle, key, resources, edit } = await setup();
+		const field = resources.draft({ type: 'todos', id: [todo.id] });
+		await field.read();
+		await field.stage({ kind: 'updateTodo', todoId: todo.id, title: 'Renamed in the panel' });
+		await settle();
+		await edit({ status: 'done' });
+		await settle();
+		await field.stage({ kind: 'updateTodo', todoId: todo.id, title: 'Renamed again' });
+		await settle();
+		const stored = server.records.get(key)?.value;
+		expect({
+			pending: resources.pending.length,
+			server: stored?.type === 'todos' && [stored.value.title, stored.value.status]
+		}).toEqual({ pending: 0, server: ['Renamed again', 'done'] });
+	});
+});
+
 describe('a server version changed elsewhere', () => {
 	it('resends an edit whose fields the other change did not touch', async () => {
 		const { edit, server, settle, key, todo } = await setup();

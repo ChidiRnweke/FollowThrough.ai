@@ -16,6 +16,7 @@ const draft = (command: string): WriteDraft<string, string> => ({
 	base: null,
 	basedOn: null,
 	local: command,
+	observed: null,
 	coalesce: null,
 	references: []
 });

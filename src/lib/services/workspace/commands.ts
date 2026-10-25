@@ -84,10 +84,12 @@ const assertWorkspaceWriteIdentity = (
 ): void => {
 	if (workspaceResourceKey(mutationResource(draft.command)) !== draft.key)
 		throw new Error('The command belongs to a different resource');
-	for (const record of [draft.local, draft.base?.value]) {
+	for (const record of [draft.local, draft.base?.value, draft.observed]) {
 		if (record && workspaceResourceKey(workspaceRecordIdentity(record)) !== draft.key)
 			throw new Error('The edit body belongs to a different resource');
 	}
+	if (draft.observed === null && (draft.base !== null || draft.basedOn !== null))
+		throw new Error('An edit must carry the version it observed');
 };
 
 /** Pending publication commands determine the local view until authoritative revisions arrive. */

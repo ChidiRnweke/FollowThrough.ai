@@ -14,6 +14,7 @@ const draft: WriteDraft<string, string> = {
 	base: null,
 	basedOn: null,
 	local: 'Offline note',
+	observed: null,
 	coalesce: null,
 	references: []
 };

@@ -109,8 +109,9 @@ const appendWrite = <C, T>(
 			})
 		)
 	];
-	const { references, ...intent } = draft;
+	const { references, observed: observedValue, ...intent } = draft;
 	void references;
+	void observedValue;
 	if (
 		(previous?.delivery.kind === 'queued' || previous?.delivery.kind === 'rejected') &&
 		draft.basedOn === previous.intent.operationId &&

@@ -263,6 +263,39 @@ describe('a mounted editor after acknowledgement', () => {
 			}
 		});
 	});
+	it('rebases later typing onto a rename made elsewhere after its own receipt was superseded', async () => {
+		const { note, key, store, server, resources } = await setup();
+		await store.read();
+		await store.stage(noteCommand({ ...note, plainText: 'First edit' }));
+		resources.setOnline(true);
+		await resources.synchronize();
+		const other = resources.draft({ type: 'notes', id: [note.id] });
+		await other.read();
+		await other.stage({ kind: 'renameNote', noteId: note.id, title: 'Renamed elsewhere' });
+		await resources.synchronize();
+		await store.stage(noteCommand({ ...note, plainText: 'My later typing' }));
+		await resources.synchronize();
+		const stored = server.records.get(key)?.value;
+		expect({
+			status: store.status,
+			server: stored?.type === 'notes' && [stored.value.title, stored.value.plainText]
+		}).toEqual({ status: 'synced', server: ['Renamed elsewhere', 'My later typing'] });
+	});
+	it('reports a rename made elsewhere as newer once its own receipt is superseded', async () => {
+		const { note, store, resources } = await setup();
+		await store.read();
+		await store.stage(noteCommand({ ...note, plainText: 'First edit' }));
+		resources.setOnline(true);
+		await resources.synchronize();
+		const other = resources.draft({ type: 'notes', id: [note.id] });
+		await other.read();
+		await other.stage({ kind: 'renameNote', noteId: note.id, title: 'Renamed elsewhere' });
+		await resources.synchronize();
+		expect({ status: store.status, newer: store.newer?.title }).toEqual({
+			status: 'synced',
+			newer: 'Renamed elsewhere'
+		});
+	});
 	it('never automatically resurrects an edit discarded by another surface', async () => {
 		const { note, store, resources, server, key } = await setup();
 		await store.read();
@@ -404,6 +437,18 @@ it('creates an offline note and waits for its locally created project', async ()
 		title: created.type === 'notes' ? created.value.title : null,
 		dependencies: entries[1]?.intent.dependencies
 	}).toEqual({ title: 'Captured offline', dependencies: [entries[0]?.intent.operationId] });
+});
+
+it('sends only the fields a document save changed, not the metadata the editor echoes', async () => {
+	const { note, store, resources } = await setup();
+	await store.read();
+	await store.stage(noteCommand({ ...note, plainText: 'Typed' }));
+	expect(resources.pending[0]?.intent.command).toEqual({
+		kind: 'saveNote',
+		noteId: note.id,
+		document: note.document,
+		plainText: 'Typed'
+	});
 });
 
 describe('an open editor and versions made elsewhere', () => {
