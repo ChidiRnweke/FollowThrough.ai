@@ -95,6 +95,43 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 		}
 	},
 	{
+		id: 'inline-suggestion-default-model',
+		name: 'the deployed inline model offers a continuation',
+		splits: [ARCHETYPES.inlineSuggestionShape],
+		input: { prefix: 'The migration plan should account for the read-replica cutover' },
+		expected: { outcome: 'suggested' },
+		metadata: {
+			layer: 'inline',
+			note: 'Runs the inline model the deployment configures, not the eval subject model. A reasoning model once spent the whole output budget thinking and every ghost-text request came back empty; the pinned cases could not see it.'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, inlineSuggestionWorkspace);
+			const projectId = workspace.projectIds.get('Platform')!;
+			const noteId = workspace.noteIds.get('Migration plan|Platform')!;
+			const prefix = this.input.prefix as string;
+
+			const suggestion = await lab
+				.forActor(workspace.actor)
+				.controllers.inlineSuggestions()
+				.suggest(requestFor(projectId, noteId, prefix), new AbortController().signal);
+
+			const text = suggestion.outcome === 'suggested' ? suggestion.text.trim() : '';
+			px.logOutput({ prefix, outcome: suggestion.outcome, suggestion: text });
+			px.logAnnotation({
+				name: ARCHETYPES.inlineSuggestionShape,
+				score: text.length > 0 ? 1 : 0,
+				label: text.length > 0 ? 'offered' : 'empty',
+				explanation: `outcome=${suggestion.outcome} length=${text.length}`
+			});
+
+			expect(
+				suggestion.outcome,
+				`the deployed model offered nothing: ${JSON.stringify(suggestion)}`
+			).toBe('suggested');
+			expect(text.length, 'the deployed model returned an empty continuation').toBeGreaterThan(0);
+		}
+	},
+	{
 		id: 'inline-suggestion-grounding',
 		name: 'grounds the continuation in project memory the passage never states',
 		splits: [ARCHETYPES.inlineGrounding],

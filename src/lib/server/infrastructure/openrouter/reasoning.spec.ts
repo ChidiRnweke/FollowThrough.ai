@@ -10,9 +10,12 @@ class RecordingFetch {
 	};
 }
 
-const send = async (url: string, body: unknown) => {
+const send = async (url: string, body: unknown, reasoning?: { enabled: boolean }) => {
 	const recorder = new RecordingFetch();
-	await withReasoning(recorder.fetch)(url, { method: 'POST', body: JSON.stringify(body) });
+	await withReasoning(recorder.fetch, reasoning)(url, {
+		method: 'POST',
+		body: JSON.stringify(body)
+	});
 	return recorder.body as Record<string, unknown>;
 };
 
@@ -38,6 +41,13 @@ describe('Asking OpenRouter to stream reasoning', () => {
 
 	it('keeps a caller decision to turn reasoning off', async () => {
 		const body = await send(COMPLETIONS, { model: 'x', reasoning: { enabled: false } });
+		expect(body.reasoning).toEqual({ enabled: false });
+	});
+
+	// Autocomplete has a budget for text alone; a model that thinks first returns
+	// nothing within it.
+	it('turns reasoning off for a client whose budget is for text', async () => {
+		const body = await send(COMPLETIONS, { model: 'x' }, { enabled: false });
 		expect(body.reasoning).toEqual({ enabled: false });
 	});
 
