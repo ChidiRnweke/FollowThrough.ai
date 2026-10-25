@@ -14,7 +14,7 @@
 	} from '@tiptap/pm/state';
 	import { Decoration, DecorationSet } from '@tiptap/pm/view';
 	import type { Diagram, DiagramId } from '$lib/models/diagrams';
-	import { inlineSuggestionSchema, type AgentRunId } from '$lib/models/agent';
+	import type { AgentRunId } from '$lib/models/agent';
 	import {
 		proseMirrorDocumentSchema,
 		type NoteId,
@@ -33,7 +33,11 @@
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
 	import { completePendingConversion } from '$lib/components/edra/commands/diagram-references.js';
 	import { rankNoteLinkTargets } from '$lib/components/edra/commands/NoteLinkSuggestion.js';
-	import type { InlineSuggestionRequestInput } from '$lib/components/edra/commands/InlineSuggestion.js';
+	import type {
+		InlineSuggestionRequestInput,
+		InlineSuggestionResult
+	} from '$lib/components/edra/commands/InlineSuggestion.js';
+	import { readInlineSuggestionResponse } from './inline-suggestion-response';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
 	import { WidgetInserter, WidgetNode } from '$lib/components/edra/commands/BuiltinExtensions.js';
 	import { WidgetNodeView, WidgetPicker, type WidgetPick } from '$lib/components/widgets';
@@ -272,14 +276,14 @@
 		wait(frames);
 	}
 	/**
-	 * Fetches proactive ghost text. Failures — including the abort the extension
-	 * issues on the next keystroke — resolve to no suggestion rather than
-	 * surfacing: an autocomplete that cannot answer should stay quiet.
+	 * Fetches proactive ghost text. The abort the extension issues on the next
+	 * keystroke is not a failure, just a request nobody is waiting for any more;
+	 * a network failure is reported as one, and the editor decides how quietly.
 	 */
 	async function requestInlineSuggestion(
 		input: InlineSuggestionRequestInput,
 		signal: AbortSignal
-	): Promise<{ readonly text: string }> {
+	): Promise<InlineSuggestionResult> {
 		try {
 			const response = await fetch('/api/inline-suggestions', {
 				method: 'POST',
@@ -292,12 +296,13 @@
 				}),
 				signal
 			});
-			if (!response.ok) throw new Error(`Writing suggestion failed with status ${response.status}`);
-			const result = inlineSuggestionSchema.parse(await response.json());
-			return result.outcome === 'suggested' ? { text: result.text } : { text: '' };
+			return await readInlineSuggestionResponse(response);
 		} catch (error) {
-			if (signal.aborted) return { text: '' };
-			throw error;
+			if (signal.aborted) return { kind: 'none' };
+			return {
+				kind: 'failure',
+				message: error instanceof Error ? error.message : String(error)
+			};
 		}
 	}
 

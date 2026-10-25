@@ -859,7 +859,9 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-	.tiptap .inline-suggestion {
+	/* A new offer fades in. One the writer is typing into is re-rendered one
+	   character shorter on every keystroke, and must not flash each time. */
+	.tiptap .inline-suggestion:not(.inline-suggestion-continued) {
 		animation: inline-suggestion-fade 120ms ease-out;
 	}
 }
