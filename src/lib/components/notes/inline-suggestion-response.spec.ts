@@ -7,7 +7,12 @@ const json = (body: object, status = 200) =>
 		headers: { 'content-type': 'application/json' }
 	});
 
-const grounding = { currentNote: true, userMemoryCount: 0, projectPassageCount: 2 };
+const grounding = {
+	currentNote: true,
+	userMemoryCount: 0,
+	projectPassageCount: 2,
+	source: 'retrieval'
+};
 
 describe('readInlineSuggestionResponse', () => {
 	it('offers the suggested text', async () => {
