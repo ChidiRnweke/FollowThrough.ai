@@ -689,6 +689,7 @@ export function createApplication(
 			// Controllers are constructed per request, so the process-wide spend
 			// guard is wired once here.
 			admission: finalizedKnowledgeSearch.admission,
+			grounding: finalizedKnowledgeSearch.grounding,
 			now: Date.now
 		},
 		feedback,

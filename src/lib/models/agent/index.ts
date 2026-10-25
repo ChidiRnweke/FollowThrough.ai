@@ -809,6 +809,11 @@ export interface InlineSuggestionRequest {
 	readonly prefix: string;
 	readonly suffix: string;
 	readonly heading?: string;
+	/**
+	 * Whether the section's stored grounding may serve this request. A caret
+	 * rest reuses it; an explicit ask from the writer rebuilds it.
+	 */
+	readonly grounding: 'reuse' | 'rebuild';
 }
 
 export interface InlineCompletionPassage {
@@ -818,6 +823,36 @@ export interface InlineCompletionPassage {
 	readonly content: string;
 }
 
+export const inlineCompletionPassageSchema = z
+	.object({
+		sourceTitle: z.string(),
+		sourceType: z.enum(['note', 'attachment', 'diagram', 'widget', 'project-memory']),
+		sectionPath: z.string().optional(),
+		content: z.string()
+	})
+	.strict() satisfies z.ZodType<InlineCompletionPassage>;
+
+/**
+ * The grounding one caret rest retrieved for a section of a note, stamped with
+ * fingerprints of the corpus it was retrieved from, so a later rest in the
+ * section can tell whether that corpus has changed since.
+ */
+export interface InlineGroundingSnapshot {
+	readonly projectPassages: readonly InlineCompletionPassage[];
+	readonly userMemory: readonly string[];
+	readonly knowledgeMarker: string;
+	readonly memoryMarker: string;
+}
+
+export const inlineGroundingSnapshotSchema = z
+	.object({
+		projectPassages: z.array(inlineCompletionPassageSchema),
+		userMemory: z.array(z.string()),
+		knowledgeMarker: z.string(),
+		memoryMarker: z.string()
+	})
+	.strict() satisfies z.ZodType<InlineGroundingSnapshot>;
+
 /** Raw workspace context assembled deterministically for one caret completion. */
 export interface InlineCompletionContext {
 	readonly noteTitle: string;
@@ -826,10 +861,14 @@ export interface InlineCompletionContext {
 	readonly projectPassages: readonly InlineCompletionPassage[];
 }
 
+/** Where a suggestion's passages and memory came from: fresh retrieval, or the section's stored grounding. */
+export type InlineGroundingSource = 'retrieval' | 'snapshot';
+
 export interface InlineSuggestionGrounding {
 	readonly currentNote: true;
 	readonly userMemoryCount: number;
 	readonly projectPassageCount: number;
+	readonly source: InlineGroundingSource;
 }
 
 export type InlineSuggestion =
@@ -850,7 +889,8 @@ export const inlineSuggestionSchema = z.discriminatedUnion('outcome', [
 				.object({
 					currentNote: z.literal(true),
 					userMemoryCount: z.number().int().nonnegative(),
-					projectPassageCount: z.number().int().nonnegative()
+					projectPassageCount: z.number().int().nonnegative(),
+					source: z.enum(['retrieval', 'snapshot'])
 				})
 				.strict()
 		})

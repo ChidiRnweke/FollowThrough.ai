@@ -47,6 +47,11 @@ import {
 	type InlineAdmission
 } from '$lib/server/services/inline-suggestions/inline-admission';
 import { InlineAttemptRecords } from '$lib/server/repositories/inline-suggestions/postgres/attempts';
+import { InlineGroundingRecords } from '$lib/server/repositories/inline-suggestions/postgres/grounding';
+import {
+	InlineGroundingService,
+	type InlineGrounding
+} from '$lib/server/services/inline-suggestions/inline-grounding';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
@@ -87,6 +92,7 @@ export interface KnowledgeSearchFinalized {
 	readonly observer: OperationObserver;
 	readonly workflow: WorkflowObserver;
 	readonly admission: InlineAdmission;
+	readonly grounding: InlineGrounding;
 }
 
 export const createKnowledgeSearchCapability = (
@@ -146,7 +152,8 @@ export const createKnowledgeSearchCapability = (
 			),
 			observer: operationObserver,
 			workflow: workflowObserver,
-			admission: new InlineAdmissionService(new InlineAttemptRecords(input.db))
+			admission: new InlineAdmissionService(new InlineAttemptRecords(input.db)),
+			grounding: new InlineGroundingService(new InlineGroundingRecords(actor, input.db))
 		}),
 		indexing: new KnowledgeIndexing(knowledge, input.transactionRunner)
 	};

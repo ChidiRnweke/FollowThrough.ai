@@ -24,7 +24,9 @@ const requestSchema = z.object({
 	currentSection: z.string().max(8000),
 	prefix: z.string().max(4000),
 	suffix: z.string().max(1000),
-	heading: z.string().max(300).optional()
+	heading: z.string().max(300).optional(),
+	// A client built before the field existed sends none; it never asks explicitly.
+	trigger: z.enum(['idle', 'explicit']).default('idle')
 });
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -40,7 +42,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		currentSection: input.currentSection,
 		prefix: input.prefix,
 		suffix: input.suffix,
-		...(input.heading ? { heading: input.heading } : {})
+		...(input.heading ? { heading: input.heading } : {}),
+		// An explicit ask is the writer saying the offer so far was not it; start again.
+		grounding: input.trigger === 'explicit' ? ('rebuild' as const) : ('reuse' as const)
 	};
 	try {
 		const suggestion = await controller.suggest(inlineRequest, request.signal);

@@ -8,7 +8,9 @@ import {
 	type InlineSuggestionsDependencies
 } from '$lib/server/controllers/inline-suggestions/controller';
 import { InlineAdmissionService } from '$lib/server/services/inline-suggestions/inline-admission';
+import { InlineGroundingService } from '$lib/server/services/inline-suggestions/inline-grounding';
 import { InMemoryInlineAttempts } from '$lib/testing/inline-suggestions/fakes/inline-attempts';
+import { InMemoryInlineGrounding } from '$lib/testing/inline-suggestions/fakes/inline-grounding';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { createTestContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryRetrievalProvider } from '$lib/testing/knowledge-search/fakes/in-memory-retrieval-provider';
@@ -36,6 +38,7 @@ export const inlineSuggestionFixture = (
 		testClock
 	);
 	const attempts = new InMemoryInlineAttempts();
+	const snapshots = new InMemoryInlineGrounding();
 	const controller = new InlineSuggestions(
 		viewer,
 		capabilityDependencies<InlineSuggestionsDependencies>({
@@ -46,6 +49,7 @@ export const inlineSuggestionFixture = (
 			completion: generator,
 			defaultCompletionModel: 'default-inline-model',
 			admission: new InlineAdmissionService(attempts),
+			grounding: new InlineGroundingService(snapshots),
 			now: () => 0,
 			preferences,
 			observer: { run: (_name, _context, body) => body() },
@@ -61,6 +65,7 @@ export const inlineSuggestionFixture = (
 		provider,
 		generator,
 		preferences,
-		attempts
+		attempts,
+		snapshots
 	};
 };
