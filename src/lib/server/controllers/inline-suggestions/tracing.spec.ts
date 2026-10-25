@@ -28,6 +28,7 @@ const request: InlineSuggestionRequest = {
 	requestId: '00000000-0000-4000-8000-000000000001',
 	noteId: testNoteId(),
 	revision: 1,
+	grounding: 'reuse',
 	blockType: 'paragraph',
 	headingPath: [],
 	currentSection: 'The migration needs more',
