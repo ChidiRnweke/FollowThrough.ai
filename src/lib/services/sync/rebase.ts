@@ -40,6 +40,8 @@ const rebaseFields = <V extends object>(
 };
 
 export interface FieldReplay {
+	/** Structural equality over stored JSON values: key order and absent-versus-undefined do not count. */
+	sameValue<V>(left: V, right: V): boolean;
 	rebaseFields<V extends object>(
 		observed: V,
 		local: V,
@@ -48,6 +50,9 @@ export interface FieldReplay {
 	): { value: V; overlaps: boolean };
 }
 export class FieldReplayService implements FieldReplay {
+	sameValue<V>(left: V, right: V): boolean {
+		return sameValue(left, right);
+	}
 	rebaseFields<V extends object>(
 		observed: V,
 		local: V,

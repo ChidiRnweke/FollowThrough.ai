@@ -57,6 +57,12 @@ export interface WriteDraft<C, T> {
 	/** The pending local version this edit was made against, separate from queue order. */
 	readonly basedOn: string | null;
 	readonly local: T | null;
+	/**
+	 * The value `local` was computed from, as the editor rendered it. `null` only for a creation
+	 * (`base` and `basedOn` are null). The queue reads it once, to replay the edit's changed fields
+	 * onto a newer version at append, and drops it from the stored intent.
+	 */
+	readonly observed: T | null;
 	readonly coalesce: string | null;
 	readonly references: readonly string[];
 }
@@ -72,7 +78,7 @@ export type WriteRebase<T> = (
 	onto: T
 ) => { readonly value: T; readonly overlaps: boolean } | null;
 
-export type WriteIntent<C, T> = Omit<WriteDraft<C, T>, 'references'> & {
+export type WriteIntent<C, T> = Omit<WriteDraft<C, T>, 'references' | 'observed'> & {
 	readonly dependencies: readonly string[];
 };
 export type Delivery<T> =

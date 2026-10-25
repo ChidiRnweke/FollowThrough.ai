@@ -9,7 +9,7 @@ import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { WidgetPatchService } from '$lib/services/widgets/patches';
 import type { WorkspaceController } from './workspace';
 import { workspaceFixture } from '$lib/testing/workspace/fixtures/workspace';
-import { todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testNow, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 
 const { workspaceResourceKey } = new WorkspaceCommandRulesService();
@@ -124,6 +124,45 @@ describe('ancestry chosen by the stored queue', () => {
 			base: ctx.resources.pending[0]?.intent.base?.etag
 		}).toEqual({ queued: [{ title: 'Renamed', status: 'done' }], base: syncEtag(10n) });
 	});
+	it('asks for a decision when another surface changed the same field after this device’s acknowledged write', async () => {
+		const ctx = await setup();
+		const first = await ctx.editor();
+		ctx.transport.sendWrite = async (input) => ctx.applied(input);
+		ctx.online();
+		await first.edit({ title: 'Mine' });
+		await ctx.resources.synchronize();
+		await ctx.drained();
+		await (await ctx.editor()).edit({ title: 'Theirs' });
+		await ctx.resources.synchronize();
+		await ctx.drained();
+		ctx.resources.setOnline(false);
+		await first.edit({ title: 'Mine again' });
+		expect(ctx.resources.pending.map((entry) => entry.delivery.kind)).toEqual(['conflict']);
+	});
+});
+
+describe('a dependent of a proven write', () => {
+	it('is resent once the proof’s server version is read and no field collides', async () => {
+		const ctx = await setup();
+		const editor = await ctx.editor();
+		await editor.edit({ status: 'done' });
+		await editor.edit({ title: 'Mine' });
+		ctx.transport.reads.records.set(
+			todoKey,
+			stored({ ...todo, status: 'done', completedAt: testNow }, 2n).entry.snapshot
+		);
+		ctx.transport.sendWrite = async (input) =>
+			ctx.transport.sent.length === 1
+				? {
+						kind: 'proven',
+						proof: { operationId: input.operationId, etag: syncEtag(2n), resourceKind: 'found' }
+					}
+				: ctx.applied(input);
+		ctx.online();
+		await ctx.resources.synchronize();
+		await ctx.drained();
+		expect(ctx.current()).toEqual({ title: 'Mine', status: 'done' });
+	});
 });
 
 describe('automatic rebase of a server conflict', () => {
@@ -182,6 +221,35 @@ describe('automatic rebase of a server conflict', () => {
 		await vi.waitFor(() => {
 			if (ctx.transport.sent.length < 2) throw new Error('The rebased edit was not resent');
 		});
+		const replayed = ctx.queued();
+		release.resolve();
+		await flushing;
+		expect(replayed).toEqual([
+			{ title: 'Renamed', status: 'done' },
+			{ title: 'Renamed', status: 'open' }
+		]);
+	});
+	it('replays an edit from a second editor onto the parent a server conflict rebased', async () => {
+		const ctx = await setup();
+		const first = await ctx.editor();
+		await first.edit({ status: 'done' });
+		const second = await ctx.editor();
+		const release = Promise.withResolvers<void>();
+		ctx.transport.sendWrite = async (input) => {
+			if (ctx.transport.sent.length === 1)
+				return {
+					kind: 'conflict',
+					remote: { kind: 'found', snapshot: stored(renamedElsewhere, 2n).entry.snapshot }
+				};
+			await release.promise;
+			return ctx.applied(input);
+		};
+		ctx.online();
+		const flushing = ctx.resources.synchronize();
+		await vi.waitFor(() => {
+			if (ctx.transport.sent.length < 2) throw new Error('The rebased edit was not resent');
+		});
+		await second.edit({ status: 'open' });
 		const replayed = ctx.queued();
 		release.resolve();
 		await flushing;

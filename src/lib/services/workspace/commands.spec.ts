@@ -20,9 +20,20 @@ const input: WriteDraft<WorkspaceCommand, WorkspaceRecord> = {
 	base: { etag: syncEtag(1n), value: { type: 'projects', value: project } },
 	basedOn: null,
 	local: { type: 'projects', value: { ...project, name: 'Renamed' } },
+	observed: { type: 'projects', value: project },
 	coalesce: null,
 	references: []
 };
+it('rejects an observed version belonging to another object of the same type', () => {
+	expect(() =>
+		assertWorkspaceWriteIdentity({ ...input, observed: { type: 'projects', value: different } })
+	).toThrow('edit body belongs to a different resource');
+});
+it('rejects an edit of an existing object that lacks the version it observed', () => {
+	expect(() => assertWorkspaceWriteIdentity({ ...input, observed: null })).toThrow(
+		'must carry the version it observed'
+	);
+});
 it('rejects a local representation belonging to another object of the same type', () => {
 	expect(() =>
 		assertWorkspaceWriteIdentity({ ...input, local: { type: 'projects', value: different } })
@@ -52,6 +63,7 @@ it('allows a correctly identified local deletion', () => {
 			key: workspaceResourceKey({ type: 'todos', id: [note.id] }),
 			command: { kind: 'deleteTodo', todoId: note.id },
 			base: { etag: syncEtag(1n), value: { type: 'todos', value: note } },
+			observed: { type: 'todos', value: note },
 			local: null
 		})
 	).not.toThrow();

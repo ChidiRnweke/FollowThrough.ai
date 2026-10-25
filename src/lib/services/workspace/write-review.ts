@@ -12,8 +12,9 @@ const writeTitle = (entry: Entry): string => {
 	if ('name' in record.value) return record.value.name;
 	return writeAction[entry.intent.command.kind];
 };
+/** A `retry` resends on its own; only a conflict or a rejection asks the user for a decision. */
 const writeGroup = (entry: Entry): 'decision' | 'waiting' | 'sending' =>
-	entry.delivery.kind === 'queued'
+	entry.delivery.kind === 'queued' || entry.delivery.kind === 'retry'
 		? 'waiting'
 		: entry.delivery.kind === 'sending'
 			? 'sending'

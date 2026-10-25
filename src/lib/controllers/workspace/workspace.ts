@@ -850,7 +850,10 @@ interface AccountCommands {
 interface WorkspaceEditorCoordinator extends WorkspaceResourcesController {
 	editBase(identity: WorkspaceResourceIdentity): WorkspaceEditContext;
 	acknowledgedVersion(key: string, operationId: string): SyncEtag | null;
-	uncertainWrite(key: string, operationId: string | null): boolean;
+	uncertainWrite(
+		key: string,
+		context: Pick<WorkspaceEditContext, 'base' | 'basedOn'> | null
+	): boolean;
 	prepareCommand(
 		command: PreparedWorkspaceCommand,
 		observed: WorkspaceRecord | null,
@@ -1142,8 +1145,11 @@ class AccountReplica implements AccountWorkspace, WorkspaceEditorCoordinator {
 		const entry = this.cached.get(this.rules.commands.workspaceResourceKey(identity));
 		return entry?.kind === 'present' ? this.rules.sync.cachedSnapshot(entry) : null;
 	}
-	refreshConflict(operationId: string): Promise<void> {
-		return this.writes.refreshConflict(operationId).then(() => this.readLocal());
+	/** A refreshed server copy may let the queue resend the edit; send it without a user action. */
+	async refreshConflict(operationId: string): Promise<void> {
+		await this.writes.refreshConflict(operationId);
+		await this.readLocal();
+		void this.synchronize();
 	}
 	async keepLocal(operationId: string): Promise<string> {
 		const replacement = await this.writes.keepLocal(operationId);
@@ -1159,12 +1165,24 @@ class AccountReplica implements AccountWorkspace, WorkspaceEditorCoordinator {
 			? receipt.resource.snapshot.etag
 			: receipt.resource.etag;
 	}
-	uncertainWrite(key: string, operationId: string | null): boolean {
+	/**
+	 * The editor's last write left no trace: it is neither pending nor acknowledged, and no newer
+	 * write to the resource has landed since the editor's base. A newer found receipt means
+	 * another surface's write superseded it: `newer` offers that version and the next save rebases.
+	 */
+	uncertainWrite(
+		key: string,
+		context: Pick<WorkspaceEditContext, 'base' | 'basedOn'> | null
+	): boolean {
 		void this.revision;
-		return (
-			operationId !== null &&
-			!this.pending.some((entry) => entry.intent.operationId === operationId) &&
-			this.local?.writes.receipts.get(key)?.operationId !== operationId
+		if (!context || context.basedOn === null) return false;
+		if (this.pending.some((entry) => entry.intent.operationId === context.basedOn)) return false;
+		const receipt = this.local?.writes.receipts.get(key);
+		if (receipt?.operationId === context.basedOn) return false;
+		return !(
+			receipt?.resource.kind === 'found' &&
+			context.base !== null &&
+			this.rules.sync.compareSyncEtags(receipt.resource.snapshot.etag, context.base.etag) > 0
 		);
 	}
 	async discard(operationIds: readonly string[]): Promise<void> {
@@ -1191,7 +1209,8 @@ class AccountReplica implements AccountWorkspace, WorkspaceEditorCoordinator {
 			operationId: this.environment.operationId(),
 			key: this.rules.commands.workspaceResourceKey(this.rules.commands.mutationResource(input)),
 			base: null,
-			basedOn: null
+			basedOn: null,
+			observed: null
 		});
 		return content.local;
 	}
@@ -1369,10 +1388,14 @@ class WorkspaceDraft<K extends WorkspaceResourceType> implements WorkspaceDraftC
 		const current = this.current;
 		const snapshot = this.resources.snapshot(this.identity);
 		if (!current || !snapshot || this.entries.length) return null;
+		// A receipt superseded by another surface's write no longer names `basedOn`; the chain's
+		// server base still tells whether the cached version is one this editor has not seen.
 		const observed =
 			current.basedOn === null
 				? (current.base?.etag ?? null)
-				: this.resources.acknowledgedVersion(this.key, current.basedOn);
+				: (this.resources.acknowledgedVersion(this.key, current.basedOn) ??
+					current.base?.etag ??
+					null);
 		return observed !== null && this.rules.sync.compareSyncEtags(snapshot.etag, observed) > 0
 			? this.valueOf(snapshot.value)
 			: null;
@@ -1408,8 +1431,7 @@ class WorkspaceDraft<K extends WorkspaceResourceType> implements WorkspaceDraftC
 		return record ? this.valueOf(record) : null;
 	}
 	get status(): DraftStatus {
-		if (this.error || this.resources.uncertainWrite(this.key, this.current?.basedOn ?? null))
-			return 'error';
+		if (this.error || this.resources.uncertainWrite(this.key, this.current)) return 'error';
 		if (!this.current) return 'loading';
 		if (this.savingLocal) return 'saving';
 		if (this.entries.some((entry) => entry.delivery.kind === 'conflict')) return 'conflict';
@@ -1423,7 +1445,7 @@ class WorkspaceDraft<K extends WorkspaceResourceType> implements WorkspaceDraftC
 		return this.entries.length ? 'pending' : 'synced';
 	}
 	get lastError(): string | undefined {
-		if (this.resources.uncertainWrite(this.key, this.current?.basedOn ?? null))
+		if (this.resources.uncertainWrite(this.key, this.current))
 			return 'This item changed elsewhere. Save your edits to review the versions.';
 		if (this.error) return this.error;
 		const failed = this.entries.find(
@@ -1571,7 +1593,8 @@ class WorkspaceDraft<K extends WorkspaceResourceType> implements WorkspaceDraftC
 				operationId: this.environment.operationId(),
 				key: this.key,
 				base: context.base,
-				basedOn: context.basedOn
+				basedOn: context.basedOn,
+				observed: context.local
 			});
 			if (!this.active) return { kind: 'failure', message: 'This workspace account has stopped' };
 			this.current = { ...staged, local: staged.local ?? context.local };
@@ -2281,6 +2304,8 @@ class ReplicaSubmission implements AccountSubmission {
 					if ((outcome.kind === 'applied' || outcome.kind === 'proven') && !this.stopped)
 						this.execution.committed();
 					await this.reload();
+					if (outcome.kind === 'proven')
+						failure = await this.refreshProvenDependents(sent.intent.operationId, failure);
 				}
 				return this.stopped ? { kind: 'stopped' } : { kind: 'offline' };
 			}
@@ -2313,6 +2338,36 @@ class ReplicaSubmission implements AccountSubmission {
 				accountChanged: error instanceof OutboxAccountChangedError
 			};
 		}
+	}
+
+	/**
+	 * A proof carries no body, so the edits stacked on the proven write wait for review with the
+	 * server copy unavailable. One read per proof fetches that copy; the queue resends a dependent
+	 * whose fields did not collide. A failed read leaves the entry for review and reports why.
+	 */
+	private async refreshProvenDependents(
+		operationId: string,
+		failure: SubmissionResult
+	): Promise<SubmissionResult> {
+		const orphans = this.state
+			.read()
+			.entries.filter(
+				(entry) =>
+					entry.intent.basedOn === operationId &&
+					entry.delivery.kind === 'conflict' &&
+					entry.delivery.remote.kind === 'unavailable'
+			);
+		for (const orphan of orphans) {
+			try {
+				await this.refreshConflict(orphan.intent.operationId);
+			} catch (error) {
+				return {
+					kind: 'failure',
+					message: error instanceof Error ? error.message : 'The server version could not be read'
+				};
+			}
+		}
+		return failure;
 	}
 
 	/** The server answered for this operation and this resource, not another. */
@@ -2417,10 +2472,9 @@ class ReplicaOutbox implements AccountOutbox {
 			const original = entries.find((entry) => entry.intent.operationId === operationId);
 			if (original && resolution.remote.kind !== 'unavailable')
 				await this.receive(original.intent.key, resolution.remote, tx);
-			return {
-				entries: this.rules.outboxEditing.resolveBase(entries, operationId, resolution),
-				result: undefined
-			};
+			// The refreshed server copy may show that no field collided; then the edit is resent.
+			const resolved = this.rules.outboxEditing.resolveBase(entries, operationId, resolution);
+			return { entries: this.conflicted(resolved, operationId), result: undefined };
 		});
 	}
 	async keepLocal(operationId: string, replacementId: string): Promise<void> {
@@ -2545,11 +2599,14 @@ class ReplicaOutbox implements AccountOutbox {
 
 	/**
 	 * The durable queue, not the caller's in-memory copy, decides what a new edit is based on.
-	 * A caller may have computed its edit from a version that an earlier local edit to the same
+	 * A caller may have computed its edit from a version that a later local edit to the same
 	 * resource has already superseded, for example when two quick edits start before the first is
-	 * visible to the second. Those edits are this device's own history and precede the new edit, so
-	 * the new edit's changed fields are replayed onto the latest local version and the edit is
-	 * stacked on it. It then inherits that version's server base once the earlier edit is applied.
+	 * visible to the second, or when another surface's write was acknowledged after this editor's
+	 * own. The edit's changed fields, read against the value the editor observed, are replayed onto
+	 * the newest local version. Pending edits are this device's own history and precede the new
+	 * edit, so its fields win there. An acknowledged receipt from another operation came from
+	 * another surface: the edit is replayed onto it only when no field collides, and otherwise
+	 * waits for review, as two surfaces changed one field (ADR 0010).
 	 */
 	private ancestry(
 		entries: readonly Entry[],
@@ -2557,31 +2614,36 @@ class ReplicaOutbox implements AccountOutbox {
 		receipt: WriteReceipt<WorkspaceRecord> | null
 	): Draft {
 		const latest = entries.findLast((entry) => entry.intent.key === draft.key);
-		if (latest?.intent.operationId === draft.basedOn) return draft;
+		if (
+			latest?.intent.operationId === draft.basedOn &&
+			draft.observed !== null &&
+			this.rules.fields.sameValue(latest.intent.local, draft.observed)
+		)
+			return draft;
 		const onto = latest
-			? { base: latest.intent.base, basedOn: latest.intent.operationId, value: latest.intent.local }
+			? {
+					base: latest.intent.base,
+					basedOn: latest.intent.operationId,
+					value: latest.intent.local,
+					review: false
+				}
 			: receipt?.resource.kind === 'found' &&
-				  draft.basedOn === null &&
+				  receipt.operationId !== draft.basedOn &&
 				  draft.base !== null &&
 				  this.rules.sync.compareSyncEtags(receipt.resource.snapshot.etag, draft.base.etag) > 0
-				? { base: receipt.resource.snapshot, basedOn: null, value: receipt.resource.snapshot.value }
+				? {
+						base: receipt.resource.snapshot,
+						basedOn: null,
+						value: receipt.resource.snapshot.value,
+						review: true
+					}
 				: null;
 		if (!onto) return draft;
 		if (draft.local === null) return { ...draft, base: onto.base, basedOn: onto.basedOn };
-		const parent = entries.find((entry) => entry.intent.operationId === draft.basedOn);
-		const observed =
-			draft.basedOn === null
-				? (draft.base?.value ?? null)
-				: parent
-					? parent.intent.local
-					: receipt?.operationId === draft.basedOn && receipt.resource.kind === 'found'
-						? receipt.resource.snapshot.value
-						: null;
-		if (observed === null || onto.value === null) return draft;
-		const rebased = this.rebase(observed, draft.local, onto.value);
-		return rebased
-			? { ...draft, base: onto.base, basedOn: onto.basedOn, local: rebased.value }
-			: draft;
+		if (draft.observed === null || onto.value === null) return draft;
+		const rebased = this.rebase(draft.observed, draft.local, onto.value);
+		if (!rebased || (onto.review && rebased.overlaps)) return draft;
+		return { ...draft, base: onto.base, basedOn: onto.basedOn, local: rebased.value };
 	}
 	/**
 	 * A version conflict is a question only when the server changed a field this edit also changed.
@@ -2983,14 +3045,20 @@ class ReplicaCommands implements AccountCommands {
 				});
 			case 'saveNote': {
 				const note = value('notes');
-				return content(
-					{
-						type: 'notes',
-						value: this.rules.noteEditing.edit(note, command, now)
-					},
-					[],
-					'document'
-				);
+				const { title, isPinned, ...body } = command;
+				// Metadata the editor only echoes must not travel: a rebased resend would reapply it over
+				// a rename or a pin made elsewhere that this edit never touched.
+				const sent: Extract<WorkspaceCommand, { kind: 'saveNote' }> = {
+					...body,
+					...(title !== undefined && title.trim() !== note.title ? { title } : {}),
+					...(isPinned !== undefined && isPinned !== note.isPinned ? { isPinned } : {})
+				};
+				return {
+					command: sent,
+					local: { type: 'notes', value: this.rules.noteEditing.edit(note, sent, now) },
+					references: [],
+					coalesce: 'document'
+				};
 			}
 			case 'publishNote': {
 				const note = value('notes');

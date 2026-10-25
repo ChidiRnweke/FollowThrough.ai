@@ -8,6 +8,9 @@ description: Ask the user about a sync conflict only when two edits changed the 
 Accepted. This decision amends the sections "Durable commands and editor buffers" and "Permanent
 server proofs" in ADR 0040. The server version guard does not change.
 
+Amended on 2026-10-25: a draft whose predecessor is neither pending nor the resource's current
+receipt is no longer reviewed by default. See "Superseded ancestry".
+
 ## Context
 
 ADR 0040 guards each write with the exact server version that the edit observed. Before this
@@ -43,12 +46,18 @@ replay. Scalar test values use a whole-value replay.
 
 ### The durable queue decides ancestry
 
-The append transaction reads the pending entries and the receipt for the resource. If the draft
-was made from a version that an earlier local edit already superseded, the queue stacks the draft
-on the latest local edit. It replays the draft's changed fields onto that edit's value. Those earlier
-edits are this device's own history, and they come before the new edit. For that reason the local
-fields always win at append, and an overlap does not cause review. The same rule applies when an
-acknowledged receipt of this device is newer than the draft's base.
+The append transaction reads the pending entries and the receipt for the resource. Each draft
+carries the value the editor observed when it computed the edit. The queue reads it once, to find
+the fields the edit changed, and does not store it. If the draft was made from a version that an
+earlier local edit already superseded, the queue stacks the draft on the latest local edit. It
+replays the draft's changed fields onto that edit's value. Those earlier edits are this device's own
+history, and they come before the new edit. For that reason the local fields always win at append,
+and an overlap does not cause review.
+
+When no local edit is pending and the resource's receipt is newer than the draft's base but names
+another operation, the receipt came from another surface: another editor, another tab, or a quick
+action. The queue replays the draft onto the receipt and queues it when no field collides. A
+collision stays for review, because two surfaces changed one field (ADR 0010).
 
 The editor adopts the ancestry and value that the queue stored, not its own copy. A late or
 out-of-order projection can no longer give a write a stale base.
@@ -73,13 +82,29 @@ Explicit "keep" after review still uses a new identity, as ADR 0040 requires.
 
 Review remains for these cases: a field changed on both sides to different values, a remote
 deletion, a conflict on creation, an unavailable remote version, and a missing local ancestry. The
-sync indicator counts only conflicts and rejections as decisions. A `retry` entry resends
-automatically and shows as saving.
+sync indicator and the review list count only conflicts and rejections as decisions. A `retry`
+entry resends automatically; it is listed with the waiting writes and shows as saving.
+
+### Superseded ancestry
+
+A draft whose predecessor is neither pending nor the resource's current receipt has lost its exact
+ancestry. Before this amendment it always waited for review. Now the queue replays it onto this
+device's newer receipt, as described above, and reviews it only when a field collides. The editor
+supplies the observed value for that replay. Two cases still need a decision: a predecessor that
+another surface discarded, which leaves no newer receipt, and a receipt that records a deletion.
+
+An unavailable remote version is read from the server once the device is online, by review or by
+the queue after a proof. The refreshed copy runs the same replay, so a dependent of a proven write
+is resent when no field collides. That replay reads the dependent's stored base, which is the
+version its proven parent was made from. A field the parent changed and another device changed
+again is therefore reviewed, not merged. The result is never lossy.
 
 ## Consequences
 
 - Quick successive edits to one resource are sent as one chain against the versions they produce.
 - A change on another device to a different field no longer interrupts a local edit.
+- A write acknowledged after another surface's write to the same resource no longer interrupts the
+  first editor. Only a field changed by both surfaces reaches the user.
 - Same-field collisions and deletions still reach the user.
 - Every synchronized value type needs a replay function and a list of its bookkeeping fields. A
   field that is added to a record joins the replay automatically.

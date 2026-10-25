@@ -19,25 +19,30 @@ export class InMemoryNoteWrites
 		command: WorkspaceCommand;
 	}): Promise<WriteOutcome<WorkspaceRecord>> {
 		const command = input.command;
-		if (command.kind !== 'saveNote') throw new Error('This fake supports document saves');
+		if (command.kind !== 'saveNote' && command.kind !== 'renameNote')
+			throw new Error('This fake supports document saves and renames');
 		const key = workspaceResourceKey({ type: 'notes', id: [command.noteId] });
 		const current = this.records.get(key);
 		if (!current) return { kind: 'conflict', remote: { kind: 'unavailable' } };
 		if (current.etag !== input.baseEtag)
 			return { kind: 'conflict', remote: { kind: 'found', snapshot: current } };
 		if (current.value.type !== 'notes') throw new Error('Invalid note fixture');
+		const note = current.value.value;
 		const snapshot = {
 			etag: syncEtag(BigInt(current.etag.slice(8)) + 1n),
 			value: {
 				type: 'notes' as const,
-				value: {
-					...current.value.value,
-					document: command.document,
-					plainText: command.plainText,
-					title: command.title ?? current.value.value.title,
-					isPinned: command.isPinned ?? current.value.value.isPinned,
-					currentRevision: current.value.value.currentRevision + 1
-				}
+				value:
+					command.kind === 'renameNote'
+						? { ...note, title: command.title.trim(), currentRevision: note.currentRevision + 1 }
+						: {
+								...note,
+								document: command.document,
+								plainText: command.plainText,
+								title: command.title ?? note.title,
+								isPinned: command.isPinned ?? note.isPinned,
+								currentRevision: note.currentRevision + 1
+							}
 			}
 		};
 		this.records.set(key, snapshot);

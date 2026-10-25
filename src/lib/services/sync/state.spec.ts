@@ -20,6 +20,7 @@ const draft = (
 	base,
 	basedOn,
 	local,
+	observed: basedOn === null ? base.value : 'First edit',
 	coalesce: 'document',
 	references: []
 });

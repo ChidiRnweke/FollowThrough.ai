@@ -19,6 +19,7 @@ const draft = (): WriteDraft<string, string> => ({
 	base: original,
 	basedOn: firstId,
 	local: 'Later typing',
+	observed: 'Earlier typing',
 	coalesce: null,
 	references: []
 });
