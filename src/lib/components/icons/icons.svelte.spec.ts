@@ -139,4 +139,12 @@ describe('icon motion on pointing', () => {
 		await userEvent.hover(container);
 		expect(motion(container)).toEqual({ stroke: 'none', dotIsInk: true });
 	});
+
+	it('keeps a sidebar row icon still when the row is hovered', async () => {
+		const { container } = await render(Icon.Folder, { class: 'text-foreground' });
+		container.setAttribute('role', 'button');
+		container.dataset.sidebar = 'menu-sub-button';
+		await userEvent.hover(container);
+		expect(motion(container)).toEqual({ stroke: 'none', dotIsInk: true });
+	});
 });

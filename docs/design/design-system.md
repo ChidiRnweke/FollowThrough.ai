@@ -301,9 +301,11 @@ including the ones the shadcn-svelte CLI writes into a newly added primitive —
   reduced motion turns the animations off and every state still reads by colour and position.
 - **Live state needs a live attribute.** A control that styles itself active must also set
   `aria-current` or `aria-pressed`, or its icon never animates. Styling alone is not the contract.
-- **Pointing replays the motion, outside the rail.** Hovering or keyboard-focusing a link, button,
-  menu item, tab or option replays the trace and the landing with the dot still ink. Rail icons
-  move only when they become live.
+- **Pointing replays the motion, outside the rail and the sidebar rows.** Hovering or
+  keyboard-focusing a link, button, menu item, tab or option replays the trace and the landing with
+  the dot still ink. Rail icons move only when they become live. Sidebar rows (nav, project and tree
+  rows) answer the pointer with the hover wash and a 1px lift instead, so their icons stay still; a
+  tree of icons tracing as the pointer sweeps down it is noise.
 - **Moments answer an action, never a load.** A few moments carry their own motion, each played
   once: ticking a box draws its check, completing a todo sweeps a line through its title, a copy
   button's tick draws in once the text is on the clipboard, a new memory suggestion swings the bell,
