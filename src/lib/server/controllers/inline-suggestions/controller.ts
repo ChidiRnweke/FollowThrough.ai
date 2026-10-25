@@ -1,6 +1,7 @@
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import { type ActorContext } from '$lib/models/identity';
 import {
+	type InlineGroundingSource,
 	type InlineSuggestion,
 	type InlineSuggestionRequest,
 	type InlineCompletionContext
@@ -15,6 +16,7 @@ import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { KnowledgeSearch } from '$lib/server/services/knowledge-search/retrieval';
 import type { IInlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
 import type { InlineAdmission } from '$lib/server/services/inline-suggestions/inline-admission';
+import type { InlineGrounding } from '$lib/server/services/inline-suggestions/inline-grounding';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 
 const INELIGIBLE: InlineSuggestion = { outcome: 'no_suggestion', reason: 'ineligible' };
@@ -39,6 +41,7 @@ export interface InlineSuggestionsDependencies {
 	observer: OperationObserver;
 	workflow: WorkflowObserver;
 	admission: InlineAdmission;
+	grounding: InlineGrounding;
 	now: () => number;
 	noteReader: NoteReader;
 	preferences: AgentPreferencesStore;
@@ -79,7 +82,7 @@ export class InlineSuggestions implements InlineSuggestionsController {
 				tags: ['inline', 'suggestion']
 			},
 			async () => {
-				const context = await this.buildContext(authoritativeRequest, note, signal);
+				const { context, source } = await this.buildContext(authoritativeRequest, note, signal);
 				const budget = await this.dependencies.admission.consume(
 					this.actor.userId,
 					this.dependencies.now()
@@ -100,7 +103,8 @@ export class InlineSuggestions implements InlineSuggestionsController {
 					grounding: {
 						currentNote: true,
 						userMemoryCount: context.userMemory.length,
-						projectPassageCount: context.projectPassages.length
+						projectPassageCount: context.projectPassages.length,
+						source
 					}
 				};
 			},
@@ -108,16 +112,42 @@ export class InlineSuggestions implements InlineSuggestionsController {
 		);
 	}
 
+	/**
+	 * Retrieval is an embedding call, a vector search and a rerank call before the
+	 * model can start; a rest in a section whose grounding is already stored, and
+	 * whose corpus has not changed since, skips all three.
+	 */
 	private async buildContext(
 		request: InlineSuggestionRequest,
 		note: Note,
 		signal: AbortSignal
-	): Promise<InlineCompletionContext> {
+	): Promise<{ context: InlineCompletionContext; source: InlineGroundingSource }> {
 		const query = this.dependencies.context.retrievalQuery(request);
-		const { observer, memory, knowledge } = this.dependencies;
+		const { observer, memory, knowledge, grounding } = this.dependencies;
+		const scope = { noteId: note.id, projectId: note.projectId, headingPath: request.headingPath };
+		const decision = await grounding.decide(scope, request.grounding);
+		if (decision.kind === 'reuse')
+			return observer.run(
+				'inline.context',
+				{ input: query, outputMimeType: MimeType.JSON, metadata: { grounding: 'snapshot' } },
+				async () => ({
+					context: {
+						noteTitle: note.title,
+						noteText: note.plainText,
+						userMemory: decision.grounding.userMemory,
+						projectPassages: decision.grounding.projectPassages
+					},
+					source: 'snapshot' as const
+				}),
+				({ context }) => this.dependencies.context.inlineContextTraceOutput(context)
+			);
 		return observer.run(
 			'inline.context',
-			{ input: query, outputMimeType: MimeType.JSON },
+			{
+				input: query,
+				outputMimeType: MimeType.JSON,
+				metadata: { grounding: 'retrieval', reason: decision.reason }
+			},
 			async () => {
 				signal.throwIfAborted();
 				const [matches, entries] = await Promise.all([
@@ -158,14 +188,14 @@ export class InlineSuggestions implements InlineSuggestionsController {
 								.then((matches) => this.dependencies.context.inlineRankedMemory(matches))
 				]);
 				signal.throwIfAborted();
+				const projectPassages = this.dependencies.context.inlineProjectPassages(projectMatches);
+				await grounding.keep(scope, { projectPassages, userMemory }, decision.markers);
 				return {
-					noteTitle: note.title,
-					noteText: note.plainText,
-					userMemory,
-					projectPassages: this.dependencies.context.inlineProjectPassages(projectMatches)
+					context: { noteTitle: note.title, noteText: note.plainText, userMemory, projectPassages },
+					source: 'retrieval' as const
 				};
 			},
-			(context) => this.dependencies.context.inlineContextTraceOutput(context)
+			({ context }) => this.dependencies.context.inlineContextTraceOutput(context)
 		);
 	}
 

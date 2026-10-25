@@ -463,6 +463,13 @@
       "when": 1791716481393,
       "tag": "0065_agent_run_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792936385194,
+      "tag": "0066_inline_grounding_snapshots",
+      "breakpoints": true
     }
   ]
 }

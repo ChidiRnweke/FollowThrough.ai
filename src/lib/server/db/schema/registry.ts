@@ -20,7 +20,7 @@ import {
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { ProjectTemplateStyles } from '$lib/models/projects';
 import type { Suggestion as DomainSuggestion } from '$lib/models/suggestions';
-import type { AgentEvent, PendingAgentDecision } from '$lib/models/agent';
+import type { AgentEvent, InlineCompletionPassage, PendingAgentDecision } from '$lib/models/agent';
 import type { StoredSessionItem } from '$lib/models/agent';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ProseMirrorDocument } from '$lib/models/notes';
@@ -1356,4 +1356,31 @@ export const inlineCompletionAttempts = pgTable(
 		attemptedAt: timestamp('attempted_at', { withTimezone: true }).notNull()
 	},
 	(table) => [index('inline_completion_attempts_user_time_idx').on(table.userId, table.attemptedAt)]
+);
+
+/**
+ * The grounding one caret rest retrieved for a section of a note, kept so the
+ * next rest in that section can skip retrieval. Stamped with fingerprints of
+ * the corpus it came from; a rest whose corpus has moved on rebuilds the row.
+ * One row per section, replaced in place; the note's deletion removes them.
+ */
+export const inlineGroundingSnapshots = pgTable(
+	'inline_grounding_snapshots',
+	{
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		noteId: uuid('note_id')
+			.notNull()
+			.references(() => notes.id, { onDelete: 'cascade' }),
+		sectionKey: text('section_key').notNull(),
+		projectPassages: jsonb('project_passages')
+			.$type<readonly InlineCompletionPassage[]>()
+			.notNull(),
+		userMemory: jsonb('user_memory').$type<readonly string[]>().notNull(),
+		knowledgeMarker: text('knowledge_marker').notNull(),
+		memoryMarker: text('memory_marker').notNull(),
+		builtAt: timestamp('built_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [primaryKey({ columns: [table.userId, table.noteId, table.sectionKey] })]
 );

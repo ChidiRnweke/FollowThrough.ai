@@ -16,6 +16,7 @@ const request: InlineSuggestionRequest = {
 	noteId: testNoteId(),
 	projectId: testProjectId(2),
 	revision: 2,
+	grounding: 'reuse',
 	blockType: 'paragraph',
 	headingPath: ['Migration'],
 	currentSection: 'The migration plan accounts for the cutover',

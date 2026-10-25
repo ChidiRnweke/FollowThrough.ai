@@ -25,6 +25,7 @@ const request: InlineSuggestionRequest = {
 	noteId: note.id,
 	projectId: note.projectId,
 	revision: 2,
+	grounding: 'reuse',
 	blockType: 'paragraph',
 	headingPath: [],
 	currentSection: 'There is a totally unrelated document about',
@@ -74,6 +75,24 @@ const build = async (
 };
 const passages = (context: InlineCompletionContext) =>
 	context.projectPassages.map((passage) => passage.content);
+
+/** A fixture whose section already holds grounding from an earlier rest, built against the corpus as it is now. */
+const storedGrounding = async () => {
+	const fixture = inlineSuggestionFixture();
+	fixture.notes.notes = [note];
+	const stored = 'stored passage';
+	const section = request.headingPath.join('\u001f');
+	await fixture.snapshots.put(
+		{ noteId: note.id, sectionKey: section },
+		{
+			projectPassages: [{ sourceType: 'note', sourceTitle: 'Earlier rest', content: stored }],
+			userMemory: [],
+			knowledgeMarker: fixture.snapshots.markers.knowledge,
+			memoryMarker: fixture.snapshots.markers.memory
+		}
+	);
+	return { fixture, section, stored };
+};
 
 const userMemory = (index: number, content = `memory ${index}`): MemoryEntry =>
 	memoryEntryBuilder({
@@ -159,6 +178,91 @@ describe('inline completion context', () => {
 			'memory 4',
 			'memory 5',
 			'memory 6'
+		]);
+	});
+
+	it('reuses the grounding stored for the section instead of retrieving', async () => {
+		const { fixture, section, stored } = await storedGrounding();
+		fixture.search.documents = [
+			{
+				userId: actor.userId,
+				document: {
+					...match('fresh passage').document,
+					embedding: [1, 0, 0],
+					embeddingModel: 'fake'
+				}
+			}
+		];
+		const result = await fixture.controller.suggest(request, new AbortController().signal);
+		expect({
+			passages: passages(fixture.generator.requests[0]!.context),
+			source: result.outcome === 'suggested' ? result.grounding.source : result.outcome,
+			section
+		}).toEqual({ passages: [stored], source: 'snapshot', section: '' });
+	});
+
+	it('retrieves again when the project knowledge changed since the grounding was stored', async () => {
+		const { fixture } = await storedGrounding();
+		fixture.snapshots.markers = { knowledge: 'knowledge-2', memory: 'memory-1' };
+		fixture.search.documents = [
+			{
+				userId: actor.userId,
+				document: {
+					...match('fresh passage').document,
+					embedding: [1, 0, 0],
+					embeddingModel: 'fake'
+				}
+			}
+		];
+		await fixture.controller.suggest(request, new AbortController().signal);
+		expect(passages(fixture.generator.requests[0]!.context)).toEqual(['fresh passage']);
+	});
+
+	it('retrieves again when the writer asks explicitly', async () => {
+		const { fixture } = await storedGrounding();
+		fixture.search.documents = [
+			{
+				userId: actor.userId,
+				document: {
+					...match('fresh passage').document,
+					embedding: [1, 0, 0],
+					embeddingModel: 'fake'
+				}
+			}
+		];
+		const result = await fixture.controller.suggest(
+			{ ...request, grounding: 'rebuild' },
+			new AbortController().signal
+		);
+		expect({
+			passages: passages(fixture.generator.requests[0]!.context),
+			source: result.outcome === 'suggested' ? result.grounding.source : result.outcome
+		}).toEqual({ passages: ['fresh passage'], source: 'retrieval' });
+	});
+
+	it('keeps what it retrieved for the next rest in the section', async () => {
+		const fixture = inlineSuggestionFixture();
+		fixture.notes.notes = [note];
+		fixture.search.documents = [
+			{
+				userId: actor.userId,
+				document: {
+					...match('Greek epic content').document,
+					embedding: [1, 0, 0],
+					embeddingModel: 'fake'
+				}
+			}
+		];
+		await fixture.controller.suggest(request, new AbortController().signal);
+		expect([...fixture.snapshots.rows.values()]).toEqual([
+			{
+				projectPassages: [
+					{ sourceType: 'note', sourceTitle: 'The Odyssey', content: 'Greek epic content' }
+				],
+				userMemory: [],
+				knowledgeMarker: 'knowledge-1',
+				memoryMarker: 'memory-1'
+			}
 		]);
 	});
 

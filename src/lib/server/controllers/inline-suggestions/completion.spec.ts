@@ -8,6 +8,7 @@ const request: InlineSuggestionRequest = {
 	requestId: '00000000-0000-4000-8000-000000000001',
 	noteId: testNoteId(),
 	revision: 1,
+	grounding: 'reuse',
 	blockType: 'paragraph',
 	headingPath: [],
 	currentSection: 'The migration needs more',
@@ -45,7 +46,12 @@ describe('inline completion ownership', () => {
 		expect(await fixture.controller.suggest(request, new AbortController().signal)).toEqual({
 			outcome: 'suggested',
 			text: ' replicas. Then fail over.',
-			grounding: { currentNote: true, userMemoryCount: 0, projectPassageCount: 0 }
+			grounding: {
+				currentNote: true,
+				userMemoryCount: 0,
+				projectPassageCount: 0,
+				source: 'retrieval'
+			}
 		});
 	});
 	it('reports an empty completion as no suggestion', async () => {

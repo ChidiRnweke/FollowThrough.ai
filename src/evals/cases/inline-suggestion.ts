@@ -28,6 +28,7 @@ const requestFor = (
 	projectId,
 	noteId,
 	revision: 1,
+	grounding: 'reuse',
 	blockType: 'paragraph',
 	headingPath: ['Migration plan'],
 	currentSection: prefix,

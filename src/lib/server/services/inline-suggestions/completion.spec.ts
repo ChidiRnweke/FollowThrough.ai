@@ -18,6 +18,7 @@ const request: InlineSuggestionRequest = {
 	requestId: '00000000-0000-4000-8000-000000000001',
 	noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
 	revision: 1,
+	grounding: 'reuse',
 	headingPath: [],
 	blockType: 'paragraph',
 	currentSection: 'There is a totally unrelated document about',

@@ -16,6 +16,7 @@ const request = (overrides: Partial<InlineSuggestionRequest> = {}): InlineSugges
 	noteId: testNoteId(),
 	projectId: testProjectId(2),
 	revision: 2,
+	grounding: 'reuse',
 	blockType: 'paragraph',
 	headingPath: ['Migration'],
 	currentSection: 'The migration plan accounts for the cutover',
@@ -41,7 +42,12 @@ describe('direct inline completion', () => {
 		expect(await setup().controller.suggest(request(), signal())).toEqual({
 			outcome: 'suggested',
 			text: ' window.',
-			grounding: { currentNote: true, userMemoryCount: 0, projectPassageCount: 0 }
+			grounding: {
+				currentNote: true,
+				userMemoryCount: 0,
+				projectPassageCount: 0,
+				source: 'retrieval'
+			}
 		});
 	});
 	it('reports retrieved project passages in the result', async () => {
@@ -53,7 +59,7 @@ describe('direct inline completion', () => {
 			}
 		];
 		expect(await fixture.controller.suggest(request(), signal())).toMatchObject({
-			grounding: { projectPassageCount: 1 }
+			grounding: { projectPassageCount: 1, source: 'retrieval' }
 		});
 	});
 	it('uses the authoritative note project rather than the request project', async () => {

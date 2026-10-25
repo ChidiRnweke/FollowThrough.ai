@@ -1,1 +1,1 @@
-export { inlineCompletionAttempts } from './registry';
+export { inlineCompletionAttempts, inlineGroundingSnapshots } from './registry';
