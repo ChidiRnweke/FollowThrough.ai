@@ -16,7 +16,8 @@ import { bindToolArguments, toolOutput } from './arguments';
 import { describeTools } from './catalog';
 
 export interface McpToolConnection {
-	open(): Server;
+	/** Serve the session; `origin` is where this deployment is reached, which its icons live under. */
+	open(origin: string): Server;
 }
 
 const searchParameters = z
@@ -29,6 +30,26 @@ const SEARCH_DESCRIPTION =
  * The same tools the in-app agent calls, served over MCP for one request. An MCP host makes
  * its own approval decisions, so calls run as soon as they are authorized.
  */
+/**
+ * Who this server is, as an MCP host shows it. The icons are the app's own: without them a host
+ * falls back to a favicon lookup, and the root of a subdomain deployment answers that with the
+ * parent domain's icon.
+ */
+const serverIdentity = (origin: string) => ({
+	name: 'followthrough',
+	title: 'FollowThrough',
+	version: '1.0.0',
+	websiteUrl: origin,
+	icons: [
+		{ src: new URL('/icons/followthrough.svg', origin).href, mimeType: 'image/svg+xml' },
+		{
+			src: new URL('/icons/followthrough-512.png', origin).href,
+			mimeType: 'image/png',
+			sizes: ['512x512']
+		}
+	]
+});
+
 const ready = (action: PreparedAction): ToolPreparation => ({ kind: 'ready', action });
 
 /** An MCP host approves its own calls, so a reviewed change is applied as soon as it is prepared. */
@@ -40,7 +61,7 @@ const prepareCall = async (entry: AgentTool, input: AgentPayload): Promise<ToolP
 };
 
 export const createMcpServer = (session: McpToolSession): McpToolConnection => ({
-	open: () => {
+	open: (origin) => {
 		const discovered = new Set<ToolName>();
 		const permitted = [...session.plan.initial, ...session.plan.discoverable].flatMap((name) => {
 			const entry = session.tools.find((candidate) => candidate.name === name);
@@ -50,14 +71,11 @@ export const createMcpServer = (session: McpToolSession): McpToolConnection => (
 			permitted.filter(
 				(entry) => session.plan.initial.includes(entry.name) || discovered.has(entry.name)
 			);
-		const server = new Server(
-			{ name: 'followthrough', version: '1.0.0' },
-			{
-				capabilities: { tools: { listChanged: true } },
-				instructions:
-					'Ground yourself with search or get_workspace_context before acting. Use search_tools to discover other tools, then call their exact names with flat arguments matching input_schema.'
-			}
-		);
+		const server = new Server(serverIdentity(origin), {
+			capabilities: { tools: { listChanged: true } },
+			instructions:
+				'Ground yourself with search or get_workspace_context before acting. Use search_tools to discover other tools, then call their exact names with flat arguments matching input_schema.'
+		});
 		server.setRequestHandler(ListToolsRequestSchema, async () => ({
 			tools: [
 				...offered().map((entry) => ({

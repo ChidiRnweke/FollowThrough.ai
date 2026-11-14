@@ -40,7 +40,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 	const session = await AppFactory.forActor(authenticated.actor)
 		.agentHarness()
 		.openMcpTools(authenticated.scope, authenticated.provenanceId);
-	const server = AppFactory.mcpSurface(session).open();
+	const server = AppFactory.mcpSurface(session).open(url.origin);
 
 	// Stateless: no session to keep alive between requests, so this survives
 	// process restarts and multiple instances without sticky routing.
