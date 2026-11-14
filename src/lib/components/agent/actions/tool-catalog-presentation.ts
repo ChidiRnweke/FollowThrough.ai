@@ -93,8 +93,8 @@ const catalog: Record<AgentToolName, { readonly family: ToolFamily; readonly kin
 	update_agent_preferences: { family: 'record', kind: 'setting' },
 	list_trust_policies: { family: 'collection', kind: 'setting' },
 	update_trust_policy: { family: 'record', kind: 'setting' },
-	list_api_tokens: { family: 'collection', kind: 'plain' },
-	revoke_api_token: { family: 'lifecycle', kind: 'setting' }
+	list_mcp_connections: { family: 'collection', kind: 'plain' },
+	revoke_mcp_connection: { family: 'lifecycle', kind: 'setting' }
 };
 
 export const toolPresentationKind = (name: string) =>

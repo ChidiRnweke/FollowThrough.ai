@@ -1,37 +1,47 @@
 ---
 title: Connect an MCP client
-description: Mint a token and point Claude Desktop, Cursor, or any MCP client at your workspace.
+description: Add your workspace's MCP endpoint to Claude Code, Claude Desktop, Cursor, or any MCP client, then approve it in the browser.
 ---
 
 import Screenshot from '../../../../components/screenshot.astro';
 
-Open **Settings → MCP access** to run your workspace headless from an external MCP client. The same tool catalog the in-app agent uses (every controller-backed capability, classified as a read, a proposal, or a mutation) is reachable from the client you connect, gated by whichever tools you've left enabled and the scope of the token you mint.
+Open **Settings → MCP access** to run your workspace headless from an external MCP client. The same tool catalog the in-app agent uses (every controller-backed capability, classified as a read, a proposal, or a mutation) is reachable from the client you connect, gated by whichever tools you've left enabled and the scope you approve.
 
 <Screenshot
 	id="mcp-settings"
-	alt="The Settings > MCP access tab, showing the endpoint field and the new-token form."
+	alt="The Settings > MCP access tab, showing the endpoint field and the list of connected apps."
 />
 
-## Mint a token
+## Add the endpoint to your client
 
-1. In **Settings → MCP access**, name the token after the client you're about to paste it into (`Claude Desktop`, for example), so you know what you're revoking later.
-2. Choose a scope: **Read only** restricts the client to read tools (search, list todos, read memory) and nothing else; **Full access** allows proposals and mutations too, gated the same way the in-app agent's execution mode gates them.
-3. Choose **Create token**. The plaintext token is shown exactly once, in a banner that says so; copy it now. It's stored as a hash, so if you lose it, revoke it and mint another rather than trying to recover it.
+Copy the **Endpoint** field (`/mcp` on your workspace's address) and add it to your client as a remote MCP server. There is no token to copy. In Claude Code, for example:
 
-## Point your client at the endpoint
+```bash
+claude mcp add --transport http followthrough https://<your-workspace>/mcp
+```
 
-Copy the **Endpoint** field on the same page (`/mcp`) and add it to your client's MCP server configuration along with the token as a Bearer credential. In Claude Desktop, for example, this goes in the server's connection settings as an `Authorization: Bearer <token>` header. The connection is stateless JSON-RPC, so there's no separate session to establish beyond that header.
+Then run `/mcp` in Claude Code and choose the server to authenticate. Other clients start the same flow when they first connect.
+
+## Approve it in the browser
+
+The client opens your browser at FollowThrough's consent page. If you are not signed in, you sign in first and return to the page. The page names the client:
+
+- A client that identifies with a metadata document (Claude Code does) is shown with the host that publishes the document.
+- A client that registered itself is marked as unverified, because it chose its own name. Approve it only if you just added FollowThrough to it.
+
+Choose a scope: **Read only** restricts the client to read tools (search, list todos, read memory) and nothing else; **Full access** allows proposals and mutations too, gated the same way the in-app agent's execution mode gates them. Choose **Connect**. (**Cancel** asks you to confirm before it refuses the client.) The browser returns to the client, which receives a one-hour access token and a refresh token it renews on its own.
 
 ## What the client can do
 
-Once connected, the client sees the first-class tools immediately. Call `search_tools` for anything else; every match becomes a real top-level tool with the returned flat input schema. A read-scoped token never sees proposal or mutation tools, and a full-access token still respects your workspace tool selection.
+Once connected, the client sees the first-class tools immediately. Call `search_tools` for anything else; every match becomes a real top-level tool with the returned flat input schema. A read-only connection never sees proposal or mutation tools, and a full-access connection still respects your workspace tool selection.
 
-## Revoke access
+## Disconnect a client
 
-Open **Settings → MCP access** and choose **Revoke** on any token's row. Revocation is immediate: the next request with that token fails with a `401`, and there's no grace period.
+Open **Settings → MCP access** and choose **Disconnect** on the client's row. It takes effect at once: the next request with its access token fails with a `401`, and its refresh token stops working. To use the client again, approve it again.
 
 ## Related reading
 
 - [The agent, in depth](/FollowThrough.ai/subsystems/agent/): how the tool catalog, first-class tools, and MCP auth fit together.
+- [ADR 0050](/FollowThrough.ai/decisions/0050-authorize-mcp-clients-with-oauth-served-by-followthrough/): why FollowThrough serves the OAuth flow instead of Authentik.
 - [Architecture](/FollowThrough.ai/explanation/architecture/): where MCP sits next to OAuth2 web sign-in in the infrastructure.
 - [Tool calling](/FollowThrough.ai/explanation/tool-calling/): why the same catalog can serve two protocols without a second, privileged path.

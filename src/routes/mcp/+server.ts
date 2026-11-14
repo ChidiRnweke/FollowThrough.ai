@@ -3,27 +3,37 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import type { RequestHandler } from './$types';
 import { AppFactory } from '$lib/server/factories/app-factory';
 
-const unauthorized = (detail: string): Response =>
-	new Response(JSON.stringify({ error: 'unauthorized', detail }), {
-		status: 401,
-		headers: {
-			'content-type': 'application/json',
-			'www-authenticate': 'Bearer realm="followthrough"'
+/**
+ * RFC 9728 §5.1: the challenge names the protected resource metadata, which is how a client
+ * finds the authorization server with nothing but this URL.
+ */
+const unauthorized = (url: URL): Response =>
+	new Response(
+		JSON.stringify({
+			error: 'invalid_token',
+			error_description: 'Connect this client through OAuth to get an access token.'
+		}),
+		{
+			status: 401,
+			headers: {
+				'content-type': 'application/json',
+				'www-authenticate': `Bearer resource_metadata="${new URL('/.well-known/oauth-protected-resource/mcp', url.origin).href}"`
+			}
 		}
-	});
+	);
 
-/** Every MCP request requires an API token; its account and scope define access. */
-const authenticate = async (request: Request) => {
+/** Every MCP request requires an access token issued for this endpoint; its account and scope define access. */
+const authenticate = async (request: Request, url: URL) => {
 	const verified = await AppFactory.authentication().verifyBearer(
-		request.headers.get('authorization')
+		request.headers.get('authorization'),
+		new URL('/mcp', url.origin).href
 	);
 	return verified ? AppFactory.access(verified.actor).attributeMcp(verified.scope) : null;
 };
 
-export const POST: RequestHandler = async ({ request }) => {
-	const authenticated = await authenticate(request);
-	if (!authenticated)
-		return unauthorized('Provide a FollowThrough API token as a Bearer credential.');
+export const POST: RequestHandler = async ({ request, url }) => {
+	const authenticated = await authenticate(request, url);
+	if (!authenticated) return unauthorized(url);
 
 	// An MCP client has no ambient project, so the user's workspace-wide tool
 	// selection is the whole story here; project overrides apply in-app only.

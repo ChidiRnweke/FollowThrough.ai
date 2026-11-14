@@ -3,7 +3,7 @@ import type { ArtifactId } from '$lib/models/deliverables';
 import { exportSettingsSchema } from '$lib/models/deliverables';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { MERMAID_PALETTE_KEYS } from '$lib/models/diagrams/mermaid-theme';
-import type { ApiTokenId } from '$lib/models/identity';
+import type { McpConnectionId } from '$lib/models/identity';
 import type { MemoryChangePayload, MemoryEntryId } from '$lib/models/memory';
 import type { NoteEtag, NoteId, NoteRevisionId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
@@ -100,10 +100,10 @@ const noteEtag = z
 	.string()
 	.min(1)
 	.transform((value) => value as NoteEtag);
-const apiTokenId = z
+const mcpConnectionId = z
 	.string()
 	.uuid()
-	.transform((value) => value as ApiTokenId);
+	.transform((value) => value as McpConnectionId);
 const memoryEntryId = z
 	.string()
 	.uuid()
@@ -269,8 +269,8 @@ export const agentToolInputSchemas = {
 		isEnabled: z.boolean().optional()
 	}),
 	set_skill_pinned: z.object({ noteId: noteId, projectId: projectId, pinned: z.boolean() }),
-	list_api_tokens: temporal({}),
-	revoke_api_token: z.object({ tokenId: apiTokenId }),
+	list_mcp_connections: temporal({}),
+	revoke_mcp_connection: z.object({ connectionId: mcpConnectionId }),
 	list_attachments: temporal({ noteId: noteId }),
 	list_project_memory: temporal({ projectId: projectId }),
 	list_user_memory: temporal({}),

@@ -137,7 +137,7 @@ export const todoStatus = pgEnum('todo_status', [
 	'done',
 	'cancelled'
 ]);
-export const apiTokenScope = pgEnum('api_token_scope', ['read', 'full']);
+export const mcpScope = pgEnum('mcp_scope', ['read', 'full']);
 export const todoResponsibility = pgEnum('todo_responsibility', ['mine', 'waiting_on']);
 export const todoPriority = pgEnum('todo_priority', ['low', 'medium', 'high']);
 export const memoryEntryType = pgEnum('memory_entry_type', [
@@ -236,28 +236,64 @@ export const sessions = pgTable('sessions', {
 });
 
 /**
- * Bearer credentials for the MCP endpoint. Only the sha256 of the token is
- * stored; the plaintext is shown to the user once at mint time. `scope`
- * decides which tool classifications the token can reach.
+ * MCP clients that registered anonymously (RFC 7591). Clients that identify with a
+ * metadata document URL are fetched per authorization and never stored.
  */
-export const apiTokens = pgTable(
-	'api_tokens',
+export const mcpClients = pgTable('mcp_clients', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	clientName: text('client_name').notNull(),
+	redirectUris: text('redirect_uris').array().notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+/**
+ * Single-use authorization codes. Only the sha256 of the code is stored, beside everything
+ * the token request must match: client, redirect URI, PKCE challenge and resource.
+ */
+export const mcpAuthorizationCodes = pgTable('mcp_authorization_codes', {
+	codeHash: text('code_hash').primaryKey(),
+	userId: uuid('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	clientId: text('client_id').notNull(),
+	clientName: text('client_name').notNull(),
+	redirectUri: text('redirect_uri').notNull(),
+	codeChallenge: text('code_challenge').notNull(),
+	scope: mcpScope('scope').notNull(),
+	resource: text('resource').notNull(),
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+/**
+ * One row per authorization of an MCP client. It holds the hashes of the current access and
+ * refresh tokens; each refresh replaces both. The previous refresh hash is kept so that a
+ * replayed refresh token is recognised and revokes the connection.
+ */
+export const mcpConnections = pgTable(
+	'mcp_connections',
 	{
 		id: uuid('id').primaryKey().defaultRandom(),
 		userId: uuid('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		name: text('name').notNull(),
-		tokenHash: text('token_hash').notNull(),
-		scope: apiTokenScope('scope').notNull().default('read'),
+		clientId: text('client_id').notNull(),
+		clientName: text('client_name').notNull(),
+		scope: mcpScope('scope').notNull(),
+		resource: text('resource').notNull(),
+		accessTokenHash: text('access_token_hash').notNull(),
+		accessExpiresAt: timestamp('access_expires_at', { withTimezone: true }).notNull(),
+		refreshTokenHash: text('refresh_token_hash').notNull(),
+		previousRefreshTokenHash: text('previous_refresh_token_hash'),
 		lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
-		expiresAt: timestamp('expires_at', { withTimezone: true }),
 		revokedAt: timestamp('revoked_at', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
-		uniqueIndex('api_tokens_token_hash_unique').on(table.tokenHash),
-		index('api_tokens_user_created_idx').on(table.userId, table.createdAt)
+		uniqueIndex('mcp_connections_access_token_hash_unique').on(table.accessTokenHash),
+		uniqueIndex('mcp_connections_refresh_token_hash_unique').on(table.refreshTokenHash),
+		index('mcp_connections_previous_refresh_token_hash_idx').on(table.previousRefreshTokenHash),
+		index('mcp_connections_user_created_idx').on(table.userId, table.createdAt)
 	]
 );
 

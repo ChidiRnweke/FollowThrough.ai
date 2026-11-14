@@ -151,7 +151,7 @@ export const scenes: Readonly<Record<ScreenshotId, Scene>> = {
 		viewport: desktop,
 		ready: async (page) => {
 			await openSettingsTab('MCP access')(page);
-			await page.getByText('Claude Desktop').first().waitFor();
+			await page.getByText('Claude Code').first().waitFor();
 		}
 	},
 	'open-model-access': {

@@ -1,5 +1,5 @@
 import { suggestionSchema } from '$lib/models/suggestions';
-import type { ApiToken, Session, User } from '$lib/models/identity';
+import type { McpConnection, Session, User } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { Diagram, DiagramRevision } from '$lib/models/diagrams';
 import type { ExternalReference, Url } from '$lib/models/references';
@@ -47,15 +47,14 @@ export const toSession = (row: typeof schema.sessions.$inferSelect): Session =>
 		createdAt: instant(row.createdAt)
 	});
 
-export const toApiToken = (row: typeof schema.apiTokens.$inferSelect): ApiToken =>
-	domain<ApiToken>({
+export const toMcpConnection = (row: typeof schema.mcpConnections.$inferSelect): McpConnection =>
+	domain<McpConnection>({
 		id: row.id,
 		userId: row.userId,
-		name: row.name,
+		clientId: row.clientId,
+		clientName: row.clientName,
 		scope: row.scope,
 		lastUsedAt: row.lastUsedAt ? instant(row.lastUsedAt) : undefined,
-		expiresAt: row.expiresAt ? instant(row.expiresAt) : undefined,
-		revokedAt: row.revokedAt ? instant(row.revokedAt) : undefined,
 		createdAt: instant(row.createdAt)
 	});
 

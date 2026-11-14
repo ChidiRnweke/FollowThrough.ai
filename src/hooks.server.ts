@@ -81,10 +81,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Served from the secrets backend's TTL cache, so this is a no-op between refreshes.
 	await hydrateEnvironment();
 
-	// The MCP endpoint authenticates with a bearer token and speaks JSON-RPC.
-	// It must never see the 303 to /auth/login below, which an MCP client
-	// cannot interpret — the route answers 401 itself.
-	if (event.url.pathname.startsWith('/mcp')) return resolve(event);
+	// The MCP endpoint and the OAuth endpoints a client calls without a browser
+	// authenticate on their own terms. They must never see the 303 to /auth/login
+	// below, which an MCP client cannot interpret — each route answers itself.
+	if (
+		event.url.pathname.startsWith('/mcp') ||
+		event.url.pathname.startsWith('/.well-known/oauth-') ||
+		event.url.pathname === '/oauth/token' ||
+		event.url.pathname === '/oauth/register'
+	)
+		return resolve(event);
 
 	const sessionId = getSessionCookie(event.cookies);
 
@@ -113,8 +119,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 		return resolve(event);
 	}
 
-	// Redirect unauthenticated users to login
+	// Redirect unauthenticated users to login. An MCP client's consent request
+	// resumes after sign-in, because the client is waiting for its answer.
 	if (!user) {
+		if (path === '/oauth/authorize')
+			throw redirect(
+				303,
+				`/auth/login?${new URLSearchParams({ returnTo: path + event.url.search })}`
+			);
 		throw redirect(303, '/auth/login');
 	}
 

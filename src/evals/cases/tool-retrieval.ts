@@ -338,14 +338,14 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 
 	// API access and tool availability
 	{
-		id: 'api-tokens-list',
-		goal: 'show me the MCP access tokens for this workspace',
-		expected: 'list_api_tokens'
+		id: 'mcp-connections-list',
+		goal: 'show me the MCP clients connected to this workspace',
+		expected: 'list_mcp_connections'
 	},
 	{
-		id: 'api-token-revoke',
-		goal: 'revoke an MCP access token so its client loses access',
-		expected: 'revoke_api_token'
+		id: 'mcp-connection-revoke',
+		goal: 'disconnect an MCP client so it loses access',
+		expected: 'revoke_mcp_connection'
 	},
 	{
 		id: 'tool-preferences-list',

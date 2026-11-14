@@ -508,8 +508,8 @@ export function createApplication(
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner
 		},
-		apiTokens: {
-			tokens: identity.apiTokens
+		mcpConnections: {
+			connections: identity.mcpConnections
 		},
 		toolPreferences: {
 			preferences: toolPreferences,

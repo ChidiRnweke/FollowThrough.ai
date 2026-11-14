@@ -1,4 +1,4 @@
 export * from './users';
 export * from './sessions';
-export * from './api-tokens';
+export * from './mcp-authorization';
 export * from './user-preferences';

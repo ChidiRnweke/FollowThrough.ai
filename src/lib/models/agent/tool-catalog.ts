@@ -363,16 +363,16 @@ export const TOOL_DESCRIPTIONS = [
 		description: 'Pin or unpin a skill for a project. Pinned skills lead the advertised catalogue.'
 	},
 	{
-		name: 'list_api_tokens',
+		name: 'list_mcp_connections',
 		classification: 'read',
 		description:
-			'List the MCP access tokens for this workspace. Plaintext is never retrievable; only names, scopes, and timestamps.'
+			'List the MCP clients the user connected to this workspace through OAuth: client name, scope, and timestamps. Tokens are never retrievable.'
 	},
 	{
-		name: 'revoke_api_token',
+		name: 'revoke_mcp_connection',
 		classification: 'mutation',
 		description:
-			'Revoke an MCP access token. Any client still using it stops working immediately. New tokens are created only in Settings.'
+			'Revoke an MCP client connection. The client stops working immediately and must ask the user to approve it again. Clients connect only through the browser consent screen.'
 	},
 	{
 		name: 'list_attachments',

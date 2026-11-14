@@ -355,12 +355,15 @@ const seedMemory = async (sql: Sql, projectId: string): Promise<void> => {
 		`;
 };
 
-/** An MCP client the user has connected, so the MCP tab shows a token rather than nothing. */
-const seedApiToken = async (sql: Sql): Promise<void> => {
-	const hash = createHash('sha256').update(randomBytes(32)).digest('hex');
+/** An MCP client the user has connected, so the MCP tab shows a connection rather than nothing. */
+const seedMcpConnection = async (sql: Sql): Promise<void> => {
+	const hash = () => createHash('sha256').update(randomBytes(32)).digest('hex');
 	await sql`
-		insert into api_tokens (user_id, name, token_hash, scope, last_used_at)
-		values (${SHOWCASE_USER_ID}, 'Claude Desktop', ${hash}, 'read', now() - interval '2 hours')
+		insert into mcp_connections (user_id, client_id, client_name, scope, resource,
+			access_token_hash, access_expires_at, refresh_token_hash, last_used_at)
+		values (${SHOWCASE_USER_ID}, 'https://claude.ai/oauth/claude-code-client-metadata',
+			'Claude Code', 'read', 'http://localhost:5173/mcp', ${hash()}, now() + interval '1 hour',
+			${hash()}, now() - interval '2 hours')
 	`;
 };
 
@@ -503,7 +506,7 @@ export const seedShowcase = async (
 	`;
 	const todoIds = await seedTodos(sql, projectId, briefNoteId);
 	await seedMemory(sql, projectId);
-	await seedApiToken(sql);
+	await seedMcpConnection(sql);
 	await seedToolPreference(sql);
 	const memoryEntries = await sql<{ id: string; content: string }[]>`
 		select id, content from memory_entries

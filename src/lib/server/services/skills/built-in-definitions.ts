@@ -225,7 +225,7 @@ Four tools are locked on and cannot be turned off: "get_workspace_context" and "
 
 ## MCP access tab
 
-FollowThrough exposes an MCP endpoint at "/mcp" for external clients such as Claude Desktop. Clients authenticate with a bearer token that begins with "ftm_" and acts as the user.
+FollowThrough exposes an MCP endpoint at "/mcp" for external clients such as Claude Code and Claude Desktop. A client connects through OAuth: the user adds the endpoint to it, signs in through the browser and approves it with a scope. The connection acts as the user until it is disconnected.
 
 - **read** scope exposes only read tools. It cannot change anything, even by name.
 - **full** scope exposes the same tools the in-app agent has.
@@ -252,7 +252,7 @@ None of these tools are offered up front. Call search_tools with the setting you
 - List selectable models: list_agent_models. Check "supportsTools" before proposing a chat model and "supportsVision" before proposing a vision or attachment model.
 - Read tool selection: list_tool_preferences. Change one: set_tool_enabled, optionally scoped to a project.
 - Read trust policies: list_trust_policies. Change one: update_trust_policy, with minimumConfidence as 0–100.
-- List MCP tokens: list_api_tokens. Revoke one: revoke_api_token. There is no tool that creates one — send the user to "/settings?tab=mcp".
+- List connected MCP clients: list_mcp_connections. Disconnect one: revoke_mcp_connection. There is no tool that connects one — a client connects when the user adds the endpoint from "/settings?tab=mcp" to it and approves it in the browser.
 - Read project export defaults: get_export_settings. Change them: update_export_settings.
 - Turn a skill on or off, or rename its summary: update_skill. Pin or unpin a skill for a project: set_skill_pinned. Pinned skills lead the catalogue the agent sees.
 
@@ -278,7 +278,7 @@ Values out of range are rejected rather than clamped, so report the error rather
 		'max turns',
 		'tool selection',
 		'MCP',
-		'API token',
+		'connected app',
 		'export defaults'
 	],
 	allowImplicitInvocation: true,
@@ -304,7 +304,7 @@ A single conversation can override the model from the agent settings popover in 
 
 ## MCP access tab
 
-FollowThrough exposes an MCP endpoint at "/mcp" for external clients such as Claude Desktop. Clients authenticate with a bearer token that begins with "ftm_" and acts as the user.
+FollowThrough exposes an MCP endpoint at "/mcp" for external clients such as Claude Code and Claude Desktop. A client connects through OAuth: the user adds the endpoint to it, signs in through the browser and approves it with a scope. The connection acts as the user until it is disconnected.
 
 - **read** scope exposes only read tools. It cannot change anything, even by name.
 - **full** scope exposes the same tools the in-app agent has.
@@ -330,7 +330,7 @@ None of these tools are offered up front. Call search_tools with the setting you
 - Read agent defaults: get_agent_preferences. Change them: update_agent_preferences — send only the fields you are changing; omitted fields keep their current value.
 - List selectable models: list_agent_models.
 - Read trust policies: list_trust_policies. Change one: update_trust_policy, with minimumConfidence as 0–100.
-- List MCP tokens: list_api_tokens. Revoke one: revoke_api_token. There is no tool that creates one — send the user to "/settings?tab=mcp".
+- List connected MCP clients: list_mcp_connections. Disconnect one: revoke_mcp_connection. There is no tool that connects one — a client connects when the user adds the endpoint from "/settings?tab=mcp" to it and approves it in the browser.
 - Read project export defaults: get_export_settings. Change them: update_export_settings.
 - Turn a skill on or off, or rename its summary: update_skill. Pin or unpin a skill for a project: set_skill_pinned. Pinned skills lead the catalogue the agent sees.
 
@@ -345,7 +345,7 @@ Every one of these is a mutation, so under "approval_required" the user approves
 		'trust policy',
 		'inline suggestions',
 		'MCP',
-		'API token',
+		'connected app',
 		'export defaults'
 	],
 	allowImplicitInvocation: true,

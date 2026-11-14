@@ -22,7 +22,10 @@ import {
 	TrustPolicies,
 	type TrustPoliciesDependencies
 } from '../controllers/agent/trust-policies/controller';
-import { ApiTokens, type ApiTokensDependencies } from '../controllers/api-tokens/controller';
+import {
+	McpConnections,
+	type McpConnectionsDependencies
+} from '../controllers/mcp-connections/controller';
 import { Attachments, type AttachmentsDependencies } from '../controllers/attachments/controller';
 import {
 	Deliverables,
@@ -79,7 +82,7 @@ export interface ProductionControllerDependencies {
 	agentHarness: AgentHarnessDependencies;
 	agentSettings: AgentSettingsDependencies;
 	userSettings: UserSettingsDependencies;
-	apiTokens: ApiTokensDependencies;
+	mcpConnections: McpConnectionsDependencies;
 	toolPreferences: ToolPreferencesDependencies;
 	attachments: AttachmentsDependencies;
 	deliverables: DeliverablesDependencies;
@@ -227,11 +230,11 @@ export class ProductionControllerFactory implements ControllerFactory {
 			controllerSurfaces.userSettings
 		);
 	}
-	apiTokens(): ReturnType<ControllerFactory['apiTokens']> {
+	mcpConnections(): ReturnType<ControllerFactory['mcpConnections']> {
 		return instrumentedController(
-			'apiTokens',
-			new ApiTokens(this.dependencies.apiTokens),
-			controllerSurfaces.apiTokens
+			'mcpConnections',
+			new McpConnections(this.dependencies.mcpConnections),
+			controllerSurfaces.mcpConnections
 		);
 	}
 	toolPreferences(): ReturnType<ControllerFactory['toolPreferences']> {

@@ -5,7 +5,7 @@ import type { AgentFilesController } from '../controllers/agent-files/controller
 import type { AgentSettingsController } from '../controllers/agent/settings/controller';
 import type { ToolPreferencesController } from '../controllers/agent/tool-preferences/controller';
 import type { TrustPoliciesController } from '../controllers/agent/trust-policies/controller';
-import type { ApiTokensController } from '../controllers/api-tokens/controller';
+import type { McpConnectionsController } from '../controllers/mcp-connections/controller';
 import type { AttachmentsController } from '../controllers/attachments/controller';
 import type { DeliverablesController } from '../controllers/deliverables/controller';
 import type { DiagramsController } from '../controllers/diagrams/controller';
@@ -42,7 +42,7 @@ export interface ControllerFactory {
 	agentHarness(): AgentHarness;
 	agentSettings(): AgentSettingsController;
 	userSettings(): UserSettingsController;
-	apiTokens(): ApiTokensController;
+	mcpConnections(): McpConnectionsController;
 	toolPreferences(): ToolPreferencesController;
 	attachments(): AttachmentsController;
 	deliverables(): DeliverablesController;

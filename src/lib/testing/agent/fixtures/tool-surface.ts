@@ -9,7 +9,7 @@ import type {
 } from '$lib/models/agent-tool-protocol';
 import type { AgentPayload } from '$lib/models/agent/payload';
 import { FIRST_CLASS_TOOL_NAMES, type ToolName } from '$lib/models/agent/tool-catalog';
-import type { ApiTokenScope } from '$lib/models/identity';
+import type { McpScope } from '$lib/models/identity';
 import type { TokenCounter } from '$lib/models/tokenization';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { createAgentTools, createMcpTools } from '$lib/server/factories/agent/tools/definitions';
@@ -183,7 +183,7 @@ export const createMcpToolDefinitions = (
 	retriever: ToolRanking
 ) => {
 	const tools = createMcpTools(controllers, context);
-	const open = (scope: ApiTokenScope): McpToolSession => {
+	const open = (scope: McpScope): McpToolSession => {
 		const permitted = permittedTools(tools, access, scope === 'read' ? ['read'] : undefined);
 		return {
 			tools,

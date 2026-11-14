@@ -29,7 +29,7 @@ const collections: Readonly<Record<string, readonly string[]>> = {
 	list_templates: ['templates'],
 	search_icons: ['icons'],
 	list_agent_models: ['models'],
-	list_api_tokens: ['tokens'],
+	list_mcp_connections: [],
 	list_tool_preferences: [],
 	list_trust_policies: ['policies'],
 	list_project_memory: ['entries'],
@@ -122,10 +122,10 @@ export function toolCollection(
 						label: 'Open trust policies'
 					}
 				};
-			if (tool.name === 'list_api_tokens')
+			if (tool.name === 'list_mcp_connections')
 				return {
 					...entity,
-					destination: { kind: 'page', href: '/settings?tab=mcp', label: 'Open access tokens' }
+					destination: { kind: 'page', href: '/settings?tab=mcp', label: 'Open connected apps' }
 				};
 			return tool.name === 'search_tools'
 				? { ...entity, title: friendlyToolLabel(entity.title) }

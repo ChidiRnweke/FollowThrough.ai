@@ -75,10 +75,16 @@ export const logLevelEnabled = (
  */
 const BASE64_DATA_URL = /data:[a-z0-9.+-]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/gi;
 const MAX_SUMMARY_CHARS = 500;
+/**
+ * MCP authorization codes and tokens (`ftc_`, `fta_`, `ftr_`) are credentials. Controller
+ * results carry them — an approval redirect holds a code, a token exchange holds both
+ * tokens — and a log record must never hold one.
+ */
+const MCP_CREDENTIAL = /\b(ftc|fta|ftr)_[A-Za-z0-9_-]+/g;
 
 /**
  * One-line rendering of an argument or result for a log record: JSON, capped,
- * base64 elided. Summaries, never raw payloads — privacy and record size.
+ * base64 elided, credentials redacted. Summaries, never raw payloads — privacy and record size.
  */
 export const summarize = (value: unknown, maxChars: number = MAX_SUMMARY_CHARS): string => {
 	let rendered: string;
@@ -91,10 +97,12 @@ export const summarize = (value: unknown, maxChars: number = MAX_SUMMARY_CHARS):
 			return '[unserializable]';
 		}
 	}
-	rendered = rendered.replace(
-		BASE64_DATA_URL,
-		(match) => `${match.slice(0, 64)}…<base64 elided, ${match.length} chars>`
-	);
+	rendered = rendered
+		.replace(
+			BASE64_DATA_URL,
+			(match) => `${match.slice(0, 64)}…<base64 elided, ${match.length} chars>`
+		)
+		.replace(MCP_CREDENTIAL, '$1_<redacted>');
 	if (rendered.length > maxChars)
 		return `${rendered.slice(0, maxChars)}…<truncated, ${rendered.length} chars>`;
 	return rendered;

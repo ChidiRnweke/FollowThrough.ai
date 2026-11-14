@@ -1,5 +1,9 @@
 import { instrumentedController } from './controller-instrumentation';
-import { accessSurface, authenticationSurface } from './controller-surfaces';
+import {
+	accessSurface,
+	authenticationSurface,
+	mcpAuthorizationSurface
+} from './controller-surfaces';
 import { Access, type AccessController } from '../controllers/identity/access';
 import { createMcpToolSurface, type McpSurfaceFactory } from './agent/mcp-tool-factory';
 import type { ActorContext } from '$lib/models/identity';
@@ -11,11 +15,18 @@ import {
 } from '../controllers/identity/authentication';
 import { createProductionComposition } from './production-factory';
 import { SessionRegistry } from '$lib/server/services/identity/sessions';
-import { AccessTokens, TokenVerification } from '$lib/server/services/identity/api-tokens';
+import { McpCredentials, McpGrants } from '$lib/server/services/identity/mcp-grants';
+import { McpClientDirectory } from '$lib/server/services/identity/mcp-clients';
 import {
-	ApiTokenCredentialRecords,
-	ApiTokenRecords
-} from '../repositories/identity/postgres/api-tokens';
+	McpAuthorization,
+	type McpAuthorizationController
+} from '../controllers/identity/mcp-authorization';
+import {
+	McpClientRecords,
+	McpCredentialRecords,
+	McpGrantRecords
+} from '../repositories/identity/postgres/mcp-authorization';
+import { ClientMetadataDocuments } from '../repositories/identity/client-metadata-documents';
 import { SignIn, type ISignIn } from '$lib/server/controllers/identity/controller';
 import { OAuthAuthorization } from '$lib/server/services/identity/oauth-authorization';
 import { ProviderAccounts } from '$lib/server/services/identity/provider-accounts';
@@ -37,14 +48,26 @@ class DeferredValue<T> {
 
 const composition = new DeferredValue(createProductionComposition);
 const sessions = new DeferredValue(() => new SessionRegistry(new SessionRecords(db)));
+const mcpClients = new DeferredValue(
+	() =>
+		new McpClientDirectory({
+			clients: new McpClientRecords(db),
+			documents: new ClientMetadataDocuments()
+		})
+);
+const mcpCredentials = new DeferredValue(() => new McpCredentials(new McpCredentialRecords(db)));
 const authentication = new DeferredValue(() =>
 	instrumentedController(
 		'authentication',
-		new Authentication({
-			sessions: sessions.get(),
-			tokens: new TokenVerification(new ApiTokenCredentialRecords(db))
-		}),
+		new Authentication({ sessions: sessions.get(), tokens: mcpCredentials.get() }),
 		authenticationSurface
+	)
+);
+const mcpAuthorization = new DeferredValue(() =>
+	instrumentedController(
+		'mcpAuthorization',
+		new McpAuthorization({ clients: mcpClients.get(), credentials: mcpCredentials.get() }),
+		mcpAuthorizationSurface
 	)
 );
 const signIn = new DeferredValue(() => {
@@ -80,11 +103,17 @@ export class AppFactory {
 		return authentication.get();
 	}
 
+	/** The OAuth authorization server for `/mcp`, before any user is known. */
+	static mcpAuthorization(): McpAuthorizationController {
+		return mcpAuthorization.get();
+	}
+
 	static access(actor: ActorContext): AccessController {
 		return instrumentedController(
 			'access',
 			new Access(actor, {
-				tokens: new AccessTokens(new ApiTokenRecords(actor, db)),
+				clients: mcpClients.get(),
+				grants: new McpGrants(new McpGrantRecords(actor, db)),
 				provenance: composition.get().forActor(actor).provenance
 			}),
 			accessSurface

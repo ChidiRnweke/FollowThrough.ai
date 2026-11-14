@@ -1,61 +1,31 @@
 <script lang="ts">
-	import type { ApiToken, ApiTokenScope } from '$lib/models/identity';
+	import type { McpConnection, McpScope } from '$lib/models/identity';
 	import { toast } from 'svelte-sonner';
-	import {
-		createApiToken,
-		listApiTokens,
-		revokeApiToken
-	} from '$lib/remote/settings/settings.remote';
+	import { listMcpConnections, revokeMcpConnection } from '$lib/remote/settings/settings.remote';
 	import { Button } from '$lib/components/ui/button';
 	import * as Field from '$lib/components/ui/field';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
-	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import * as Scene from '$lib/components/icons/scenes';
 
 	let { endpoint }: { endpoint: string } = $props();
 
-	let name = $state('');
-	let scope = $state<ApiTokenScope>('read');
 	let busy = $state(false);
-	/** Shown once after minting — the server cannot return it again. */
-	let plaintext = $state<string | null>(null);
 
-	const scopeLabels: Record<ApiTokenScope, string> = {
+	const scopeLabels: Record<McpScope, string> = {
 		read: 'Read only',
 		full: 'Full access'
 	};
 
-	function selectScope(next: string | string[]): void {
-		if (next !== 'read' && next !== 'full') return;
-		scope = next;
-	}
-
-	async function mint(): Promise<void> {
-		if (name.trim().length === 0) return;
+	async function revoke(connection: McpConnection): Promise<void> {
 		busy = true;
 		try {
-			const minted = await createApiToken({ name: name.trim(), scope });
-			plaintext = minted.plaintext;
-			name = '';
-			toast.success('Token created. Copy it now — it will not be shown again.');
-			// chisel-ignore fail-loudly:silent-catch -- token creation failure is reported and no credential is presented as created.
+			await revokeMcpConnection(connection.id);
+			toast.success(`Disconnected ${connection.clientName}`);
+			// chisel-ignore fail-loudly:silent-catch -- revocation failure is reported and the connection remains listed.
 		} catch {
-			toast.error('Could not create the token. Try again.');
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function revoke(token: ApiToken): Promise<void> {
-		busy = true;
-		try {
-			await revokeApiToken(token.id);
-			toast.success(`Revoked ${token.name}`);
-			// chisel-ignore fail-loudly:silent-catch -- revocation failure is reported and the token remains listed.
-		} catch {
-			toast.error('Could not revoke the token. Try again.');
+			toast.error('Could not disconnect the app. Try again.');
 		} finally {
 			busy = false;
 		}
@@ -65,7 +35,7 @@
 		try {
 			await navigator.clipboard.writeText(value);
 			toast.success('Copied to clipboard');
-			// chisel-ignore fail-loudly:silent-catch -- the token remains selected and the toast gives the manual-copy recovery.
+			// chisel-ignore fail-loudly:silent-catch -- the endpoint remains selectable and the toast gives the manual-copy recovery.
 		} catch {
 			toast.error('Could not copy. Select the text and copy manually.');
 		}
@@ -73,24 +43,27 @@
 
 	const formatted = (value?: string): string =>
 		value ? new Date(value).toLocaleDateString() : 'Never';
+
+	/** A metadata document URL names the client's host; a registration id names nothing. */
+	const origin = (clientId: string): string =>
+		clientId.startsWith('https://') ? new URL(clientId).host : 'Registered client';
 </script>
 
-<!-- The panel runs a step looser than the other tabs (32px between blocks): three
-     control-heavy blocks at 24px read as one crowd. The preamble keeps the shared
-     32px step to the first block, and the token area — data under controls, a
-     different kind of thing — takes a further step. Empty tokens get the shared
-     centered empty state. -->
+<!-- The endpoint is the only setup step: a client that is given it signs in through the
+     browser and asks for consent, so there is nothing to create here. Connections — data
+     under a control — take a further step, as the token list did. -->
 <section class="flex max-w-3xl flex-col gap-section">
 	<p class="text-sm text-muted-foreground">
-		Run this workspace headless from Claude Desktop or any MCP client. Tokens authenticate as you; a
-		read-only token cannot change anything.
+		Run this workspace headless from Claude, Cursor or any MCP client. Add the endpoint to the
+		client; it opens your browser to sign in and asks you to approve it. A read-only connection
+		cannot change anything.
 	</p>
 
 	<Field.Group>
 		<Field.Field orientation="responsive">
 			<Field.Content>
 				<Field.Title>Endpoint</Field.Title>
-				<Field.Description>Point your MCP client at this URL.</Field.Description>
+				<Field.Description>Add this URL to your MCP client as a remote server.</Field.Description>
 			</Field.Content>
 			<div class="flex items-center gap-2">
 				<!-- chisel-ignore design-system:no-raw-font-family -- The MCP endpoint is a copy-paste machine literal. -->
@@ -100,83 +73,38 @@
 		</Field.Field>
 	</Field.Group>
 
-	<!-- New token reads as its own block: the title row carries the scope and the
-	     action, and the name input sits underneath at full width — the responsive
-	     field cramming all three controls beside the text was unreadable. -->
-	<div class="flex flex-col gap-group">
-		<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-			<Field.Content>
-				<Field.Title>New token</Field.Title>
-				<Field.Description>
-					Name it after the client you will paste it into, so you know what you are revoking later.
-				</Field.Description>
-			</Field.Content>
-			<div class="flex items-center gap-2">
-				<ToggleGroup.Root
-					type="single"
-					variant="outline"
-					value={scope}
-					disabled={busy}
-					onValueChange={selectScope}
-					aria-label="Token scope"
-				>
-					<ToggleGroup.Item value="read">Read only</ToggleGroup.Item>
-					<ToggleGroup.Item value="full">Full access</ToggleGroup.Item>
-				</ToggleGroup.Root>
-				<Button onclick={() => void mint()} disabled={busy || name.trim().length === 0}>
-					Create token
-				</Button>
-			</div>
-		</div>
-		<Input bind:value={name} placeholder="Claude Desktop" aria-label="Token name" disabled={busy} />
-	</div>
-
-	{#if plaintext}
-		<div class="space-y-item rounded-md border border-brand/40 bg-brand/10 p-4 dark:bg-brand/15">
-			<p class="text-sm font-medium">Copy this token now</p>
-			<p class="text-sm text-brand-muted-foreground">
-				It is stored hashed and cannot be shown again. If you lose it, revoke it and create another.
-			</p>
-			<div class="flex items-center gap-2">
-				<!-- chisel-ignore design-system:no-raw-font-family -- The one-time token is a copy-paste machine literal. -->
-				<Input readonly value={plaintext} class="font-mono text-sm" />
-				<Button variant="outline" onclick={() => void copy(plaintext!)}>Copy</Button>
-				<Button variant="ghost" onclick={() => (plaintext = null)}>Done</Button>
-			</div>
-		</div>
-	{/if}
-
 	<div class="pt-2">
 		<svelte:boundary>
 			{#snippet pending()}
-				<p class="text-sm text-muted-foreground">Loading tokens…</p>
+				<p class="text-sm text-muted-foreground">Loading connected apps…</p>
 			{/snippet}
-			{@const tokens = await listApiTokens()}
-			{#if tokens.length === 0}
+			{@const connections = await listMcpConnections()}
+			{#if connections.length === 0}
 				<EmptyState
 					scene={Scene.Key}
-					title="No tokens yet."
-					hint="Create one above to connect a client."
+					title="No connected apps yet."
+					hint="Add the endpoint to a client to connect it."
 					size="large"
 				/>
 			{:else}
 				<div class="flex flex-col gap-bind">
-					<h3 class="eyebrow">Tokens</h3>
+					<h3 class="eyebrow">Connected apps</h3>
 					<ul class="divide-y divide-border border-t border-border">
-						{#each tokens as token (token.id)}
+						{#each connections as connection (connection.id)}
 							<li class="row-interactive flex items-center justify-between gap-4 py-3">
 								<div class="min-w-0">
-									<p class="truncate text-sm font-medium">{token.name}</p>
+									<p class="truncate text-sm font-medium">{connection.clientName}</p>
 									<p class="provenance-caption">
-										Created {formatted(token.createdAt)} · Last used {formatted(token.lastUsedAt)}
+										{origin(connection.clientId)} · Connected {formatted(connection.createdAt)} · Last
+										used {formatted(connection.lastUsedAt)}
 									</p>
 								</div>
 								<div class="flex shrink-0 items-center gap-2">
-									<Badge variant={token.scope === 'full' ? 'brand' : 'secondary'}>
-										{scopeLabels[token.scope]}
+									<Badge variant={connection.scope === 'full' ? 'brand' : 'secondary'}>
+										{scopeLabels[connection.scope]}
 									</Badge>
-									<Button variant="ghost" disabled={busy} onclick={() => void revoke(token)}>
-										Revoke
+									<Button variant="ghost" disabled={busy} onclick={() => void revoke(connection)}>
+										Disconnect
 									</Button>
 								</div>
 							</li>
@@ -190,12 +118,12 @@
 					role="alert"
 					class="flex flex-col items-start gap-row rounded-md border border-destructive/30 bg-destructive/5 p-4"
 				>
-					<p class="text-sm text-destructive">Could not load tokens.</p>
+					<p class="text-sm text-destructive">Could not load connected apps.</p>
 					<!-- Refresh the query before resetting. A repeated failure returns to this notice. -->
 					<Button
 						variant="outline"
 						size="sm"
-						onclick={() => void listApiTokens().refresh().then(reset, reset)}
+						onclick={() => void listMcpConnections().refresh().then(reset, reset)}
 					>
 						Try again
 					</Button>

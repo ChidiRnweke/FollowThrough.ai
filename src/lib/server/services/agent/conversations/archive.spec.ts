@@ -149,7 +149,7 @@ describe('journaling tool outcomes', () => {
 		await journal.recordToolActivity(conversation.id, {
 			callId: 'call-1',
 			source: 'catalog' as const,
-			name: 'revoke_api_token',
+			name: 'revoke_mcp_connection',
 			input: {},
 			status: 'succeeded'
 		});
