@@ -98,8 +98,9 @@ directly.
 ## Observability
 
 One trace id spans a user operation end to end. `ProductionControllerFactory` wraps every
-controller method through `instrumentedController` (a `domain.method` operation span plus
-info-before / debug-after logs, warn on domain errors, error otherwise), and agent runs are
+controller method through `instrumentedController` (a `domain.method` operation span plus one
+completion line per call: info, or warn for a returned failure or a domain error, error
+otherwise), and agent runs are
 seeded at submit/retry time with the requesting span's W3C traceparent, so `agent.turn` and
 its LLM/tool spans join the request's trace instead of opening a detached one. Spans composed
 through `traceWorkflow`/`traceOperation` nest under the active workflow; only the bare
@@ -110,7 +111,9 @@ Logging stays plain `console.*` at call sites. The preload bridge in
 trace and span ids attached, and `scripts/log-record.js` lifts tags, exception chains and
 domain-error codes into queryable attributes. Debug records are gated by the `LOG_LEVEL`
 platform key (never a secret): debug in dev, info in prod. Boundary logging lives in the
-factory wrapper alone — controllers and routes must not hand-place their own.
+factory wrapper alone — controllers and routes must not hand-place their own, except a route
+that refuses a request before any controller runs. [Observability](observability.md) has the
+levels, redaction rules and how to read production logs.
 
 ## Verification
 

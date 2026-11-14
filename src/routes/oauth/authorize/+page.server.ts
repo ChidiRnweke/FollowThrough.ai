@@ -39,7 +39,11 @@ const mcpResource = (url: URL): string => new URL('/mcp', url.origin).href;
 
 export const load: PageServerLoad = async ({ url }) => {
 	const request = parseRequest(url.searchParams);
-	if ('kind' in request) return { outcome: request };
+	if ('kind' in request) {
+		// Refused before any controller runs, so the boundary never logs it.
+		console.warn('[oauth] authorization request refused', { description: request.description });
+		return { outcome: request };
+	}
 	const reviewed = await AppFactory.mcpAuthorization().review(request, mcpResource(url));
 	if (reviewed.kind === 'failure') return { outcome: reviewed };
 	// A metadata document URL is vouched for by its host; a registered client named itself.

@@ -191,10 +191,15 @@ A new controller method needs all of these, or `svelte-check` / the audits fail:
    execution and to leave internal helpers untouched.
 
 Boundary logging and tracing are automatic (`instrumentedController` wraps every controller):
-one `domain.method` span, info before / debug after / warn on `DomainError` / error otherwise,
-carrying the span's trace id. Do not add boundary logs at call sites; log at `debug` inside
-services for detail. `LOG_LEVEL` (platform key, never a secret) gates debug records — debug in
-dev, info in prod.
+one `domain.method` span and one canonical log line per call, carrying the span's trace id. The
+line is written on completion — info with the user, the arguments, the outcome and the duration;
+warn for a returned `{ kind: 'failure' }` value (with its reason fields) or a `DomainError`; error
+otherwise. The start is logged at debug. Mark a method `'redacted'` in `controller-surfaces.ts`
+when its arguments or result carry a credential; its failure reason is still logged. Do not add
+boundary logs at call sites. An entry point logs a warning only for a request it refuses before
+any controller runs. Log at `debug` inside services for detail. `LOG_LEVEL` (platform key, never a
+secret) gates debug records — debug in dev, info in prod. `docs/architecture/observability.md`
+has the full policy.
 
 ## Service contracts and state ownership (ADR 0007)
 

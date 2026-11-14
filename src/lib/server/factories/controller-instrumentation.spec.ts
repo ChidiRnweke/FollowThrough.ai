@@ -4,14 +4,15 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { SemanticConventions } from '@arizeai/openinference-semantic-conventions';
 import { ValidationError } from '$lib/errors';
+import type { UserId } from '$lib/models/identity';
 import { instrumentedController } from '$lib/server/factories/controller-instrumentation';
-import type { ControllerSurface } from '$lib/models/controller-boundary';
+import type { BoundaryScope, ControllerSurface } from '$lib/models/controller-boundary';
 import { traceOperation } from '$lib/server/infrastructure/telemetry/tracing';
 
 type RecordedEntry = { readonly level: string; readonly args: readonly unknown[] };
 
 interface FakeControllerContract {
-	get(actor: { readonly userId: string }, id: string): Promise<{ readonly id: string }>;
+	get(id: string): Promise<{ readonly id: string }>;
 	domainFailure(): Promise<never>;
 	bug(): Promise<never>;
 	_helper(): Promise<string>;
@@ -23,13 +24,17 @@ class FakeController implements FakeControllerContract {
 		private readonly enter: () => void = () => {}
 	) {}
 
-	async get(actor: { readonly userId: string }, id: string): Promise<{ readonly id: string }> {
+	async get(id: string): Promise<{ readonly id: string }> {
 		this.enter();
 		return { id: `${this.greeting}:${id}` };
 	}
 
+	async list(): Promise<readonly string[]> {
+		return ['a', 'b', 'c'];
+	}
+
 	async nested(): Promise<{ readonly id: string }> {
-		return this.get({ userId: 'u1' }, 'n1');
+		return this.get('n1');
 	}
 
 	declaredAsyncFailure(): Promise<never> {
@@ -62,13 +67,21 @@ class FakeController implements FakeControllerContract {
 		throw new ValidationError('sync domain failure');
 	}
 
-	async exchange(code: string): Promise<{ readonly accessToken: string }> {
-		return { accessToken: `token-for-${code}` };
+	async exchange(code: string): Promise<{ readonly kind: 'issued'; readonly accessToken: string }> {
+		return { kind: 'issued', accessToken: `token-for-${code}` };
+	}
+
+	/** Mirrors an OAuth refusal: an expected failure returned as a value, not thrown. */
+	async refuse(
+		code: string
+	): Promise<{ readonly kind: 'failure'; readonly error: string; readonly description: string }> {
+		return { kind: 'failure', error: 'invalid_grant', description: `No code like ${code.length}.` };
 	}
 }
 
 const fakeSurface = {
 	get: true,
+	list: true,
 	domainFailure: true,
 	bug: true,
 	_helper: false,
@@ -76,8 +89,12 @@ const fakeSurface = {
 	syncThrower: false,
 	nested: true,
 	declaredAsyncFailure: true,
-	exchange: 'redacted'
+	exchange: 'redacted',
+	refuse: 'redacted'
 } satisfies ControllerSurface<FakeController>;
+
+const user: BoundaryScope = { kind: 'actor', userId: 'user-1' as UserId };
+const system: BoundaryScope = { kind: 'system' };
 
 const recordingLogger = (entries: RecordedEntry[]) => ({
 	info: (...args: unknown[]) => {
@@ -94,6 +111,24 @@ const recordingLogger = (entries: RecordedEntry[]) => ({
 	}
 });
 
+/** Wraps a fresh FakeController and returns it with the log it writes. */
+const wrap = (scope: BoundaryScope = user, controller = new FakeController('hello')) => {
+	const entries: RecordedEntry[] = [];
+	return {
+		entries,
+		wrapped: instrumentedController(
+			'fake',
+			controller,
+			fakeSurface,
+			scope,
+			recordingLogger(entries)
+		)
+	};
+};
+
+const lines = (entries: readonly RecordedEntry[], level: string) =>
+	entries.filter((entry) => entry.level === level).map((entry) => entry.args.map(String).join(' '));
+
 describe('instrumentedController', () => {
 	let savedLogLevel: string | undefined;
 
@@ -107,131 +142,144 @@ describe('instrumentedController', () => {
 		else process.env.LOG_LEVEL = savedLogLevel;
 	});
 
-	test('logs info before the method body runs', async () => {
-		const sequence: string[] = [];
-		const controller = new FakeController('hello', () => {
-			sequence.push('body');
-		});
-		const wrapped = instrumentedController('fake', controller, fakeSurface, {
-			...recordingLogger([]),
-			info: () => {
-				sequence.push('info');
-			},
-			debug: () => undefined
-		});
+	test('writes one info line on completion with the user, every argument, the outcome and the duration', async () => {
+		const { wrapped, entries } = wrap();
 
-		await wrapped.get({ userId: 'u1' }, 'n1').then(() => sequence.push('after'));
+		await wrapped.get('n1');
 
-		expect(sequence).toEqual(['info', 'body', 'after']);
+		const [line] = lines(entries, 'info');
+		expect({
+			count: lines(entries, 'info').length,
+			message: line.split(' {')[0],
+			context: JSON.parse(line.slice(line.indexOf('{')))
+		}).toEqual({
+			count: 1,
+			message: expect.stringMatching(/^\[fake\] get completed in \d+ms$/),
+			context: { userId: 'user-1', args: ['n1'], outcome: 'value' }
+		});
 	});
 
-	test('traces a redacted method without logging its arguments or its result', async () => {
-		const entries: RecordedEntry[] = [];
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger(entries)
-		);
+	test('names no user for a controller that acts for nobody', async () => {
+		const { wrapped, entries } = wrap(system);
+
+		await wrapped.list();
+
+		expect(lines(entries, 'info')).toEqual([
+			expect.stringMatching(/completed in \d+ms \{"args":\[\],"outcome":"3 items"\}$/)
+		]);
+	});
+
+	test('logs the start at debug, before the method body runs', async () => {
+		const sequence: string[] = [];
+		const controller = new FakeController('hello', () => sequence.push('body'));
+		const wrapped = instrumentedController('fake', controller, fakeSurface, user, {
+			...recordingLogger([]),
+			debug: (message: string) => {
+				if (message.endsWith('started')) sequence.push('started');
+			},
+			info: () => {
+				sequence.push('completed');
+			}
+		});
+
+		await wrapped.get('n1');
+
+		expect(sequence).toEqual(['started', 'body', 'completed']);
+	});
+
+	test('logs a returned failure as a warning with its reason, even when the call is redacted', async () => {
+		const { wrapped, entries } = wrap();
+
+		await wrapped.refuse('secret-refresh-token');
+
+		expect({
+			info: lines(entries, 'info'),
+			warn: lines(entries, 'warn').map((line) => JSON.parse(line.slice(line.indexOf('{')))),
+			leaksArgument: JSON.stringify(entries).includes('secret-refresh-token')
+		}).toEqual({
+			info: [],
+			warn: [
+				{
+					userId: 'user-1',
+					args: '[redacted]',
+					failure: { error: 'invalid_grant', description: 'No code like 20.' }
+				}
+			],
+			leaksArgument: false
+		});
+	});
+
+	test('logs a redacted call without its arguments or its result', async () => {
+		const { wrapped, entries } = wrap();
 
 		await wrapped.exchange('authorization-code-123');
 
 		const logged = JSON.stringify(entries.map((entry) => entry.args.map(String)));
 		expect({
 			levels: entries.map((entry) => entry.level),
+			outcome: lines(entries, 'info')[0].endsWith('"outcome":"issued"}'),
 			leaksCode: logged.includes('authorization-code-123'),
 			leaksToken: logged.includes('token-for-')
-		}).toEqual({ levels: ['info', 'debug'], leaksCode: false, leaksToken: false });
+		}).toEqual({ levels: ['debug', 'info'], outcome: true, leaksCode: false, leaksToken: false });
 	});
 
-	test('logs debug with a duration on success', async () => {
-		const entries: RecordedEntry[] = [];
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger(entries)
-		);
+	test('keeps the full result at debug for a call that is not redacted', async () => {
+		const { wrapped, entries } = wrap();
 
-		await wrapped.get({ userId: 'u1' }, 'n1');
+		await wrapped.get('n1');
 
-		expect(String(entries.find((entry) => entry.level === 'debug')?.args[0])).toMatch(
-			/\[fake\] get completed in \d+ms/
-		);
+		expect(lines(entries, 'debug')).toContain('[fake] get result {"id":"hello:n1"}');
 	});
 
 	test('does not add another boundary for an internal public-method call', async () => {
-		const entries: RecordedEntry[] = [];
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger(entries)
-		);
+		const { wrapped, entries } = wrap();
+
 		await wrapped.nested();
-		expect(entries.filter((entry) => entry.level === 'info').map((entry) => entry.args[0])).toEqual(
-			['[fake] nested']
-		);
+
+		expect(lines(entries, 'info').map((line) => line.split(' completed')[0])).toEqual([
+			'[fake] nested'
+		]);
 	});
 
 	test('logs a synchronous throw from a declared asynchronous capability', async () => {
-		const entries: RecordedEntry[] = [];
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger(entries)
-		);
+		const { wrapped, entries } = wrap();
+
 		await wrapped.declaredAsyncFailure().catch(() => undefined);
-		expect(entries.map((entry) => entry.level)).toEqual(['info', 'warn']);
+
+		expect(entries.map((entry) => entry.level)).toEqual(['debug', 'warn']);
 	});
 
 	test('keeps the instance binding so methods see constructor state', async () => {
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger([])
-		);
+		const { wrapped } = wrap();
 
-		const result = await wrapped.get({ userId: 'u1' }, 'n1');
-
-		expect(result).toEqual({ id: 'hello:n1' });
+		expect(await wrapped.get('n1')).toEqual({ id: 'hello:n1' });
 	});
 
 	test('rethrows domain failures', async () => {
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger([])
-		);
+		const { wrapped } = wrap();
 
 		await expect(wrapped.domainFailure()).rejects.toBeInstanceOf(ValidationError);
 	});
 
-	test('logs domain failures as warnings, not errors', async () => {
-		const entries: RecordedEntry[] = [];
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger(entries)
-		);
+	test('logs domain failures as warnings with the call, not errors', async () => {
+		const { wrapped, entries } = wrap();
 
 		await wrapped.domainFailure().catch(() => undefined);
 
-		expect(entries.some((entry) => entry.level === 'warn')).toBe(true);
+		expect(entries.filter((entry) => entry.level !== 'debug')).toEqual([
+			{
+				level: 'warn',
+				args: [
+					expect.stringMatching(/^\[fake\] domainFailure failed in \d+ms$/),
+					expect.any(ValidationError),
+					'{"userId":"user-1","args":[]}'
+				]
+			}
+		]);
 	});
 
 	test('logs unexpected failures as errors', async () => {
-		const entries: RecordedEntry[] = [];
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger(entries)
-		);
+		const { wrapped, entries } = wrap();
 
 		await wrapped.bug().catch(() => undefined);
 
@@ -241,13 +289,7 @@ describe('instrumentedController', () => {
 	});
 
 	test('does not wrap underscore-prefixed helpers', async () => {
-		const entries: RecordedEntry[] = [];
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger(entries)
-		);
+		const { wrapped, entries } = wrap();
 
 		await wrapped._helper();
 
@@ -255,13 +297,7 @@ describe('instrumentedController', () => {
 	});
 
 	test('passes synchronous methods through without logging or changing their contract', () => {
-		const entries: RecordedEntry[] = [];
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger(entries)
-		);
+		const { wrapped, entries } = wrap();
 
 		const result = (wrapped as unknown as { freezeLike(input: string): string }).freezeLike('note');
 
@@ -269,23 +305,13 @@ describe('instrumentedController', () => {
 	});
 
 	test('keeps a synchronous throw synchronous instead of becoming a rejection', () => {
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger([])
-		);
+		const { wrapped } = wrap();
 
 		expect(() => wrapped.syncThrower()).toThrow(ValidationError);
 	});
 
 	test('lets a public method use its synchronous helpers, as submit does freezeInput', async () => {
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger([])
-		);
+		const { wrapped } = wrap();
 
 		expect(await wrapped.submitLike('note')).toBe('frozen:note');
 	});
@@ -317,14 +343,9 @@ describe('controller-boundary span routing', () => {
 	});
 
 	test('does not stamp openinference.span.kind on controller-boundary spans', async () => {
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger([])
-		);
+		const { wrapped } = wrap();
 
-		await wrapped.get({ userId: 'u1' }, 'n1');
+		await wrapped.get('n1');
 
 		const span = exporter.getFinishedSpans().find((candidate) => candidate.name === 'fake.get');
 		expect(span?.attributes[SemanticConventions.OPENINFERENCE_SPAN_KIND]).toBeUndefined();
@@ -341,8 +362,8 @@ describe('controller-boundary span routing', () => {
 		const controller = new FakeController('hello', () => {
 			trace.getTracer('test').startSpan('before-await').end();
 		});
-		const wrapped = instrumentedController('fake', controller, fakeSurface, recordingLogger([]));
-		await wrapped.get({ userId: 'u1' }, 'n1');
+		const { wrapped } = wrap(user, controller);
+		await wrapped.get('n1');
 		const spans = exporter.getFinishedSpans();
 		const boundary = spans.find((span) => span.name === 'fake.get');
 		const child = spans.find((span) => span.name === 'before-await');
