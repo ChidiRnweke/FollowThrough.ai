@@ -5,7 +5,9 @@ description: Let users connect remote MCP servers, and give the agent their tool
 
 ## Status
 
-Accepted. This decision amends ADR 0044 for the logos of third-party services.
+Accepted. This decision amends ADR 0044 for the logos of third-party services. ADR 0051 amends
+it: the catalog is recorded by a script, vendors that need the operator's client are hidden until
+configured, and logos may be icons that vendors publish.
 
 ## Context
 

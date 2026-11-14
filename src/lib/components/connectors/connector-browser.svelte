@@ -1,11 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
-	import {
-		connectRequestSchema,
-		type CatalogEntryView,
-		type ConnectRequest
-	} from '$lib/models/connectors';
+	import { connectRequestSchema, type ConnectRequest } from '$lib/models/connectors';
 	import { connectConnector, connectorCatalog } from '$lib/remote/connectors/connectors.remote';
 	import * as Alert from '$lib/components/ui/alert';
 	import { Button } from '$lib/components/ui/button';
@@ -17,7 +13,7 @@
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import * as Icon from '$lib/components/icons';
-	import ConnectorLogo from './connector-logo.svelte';
+	import ConnectorCatalog from './connector-catalog.svelte';
 	import { refusalMessage } from './refusal';
 
 	let { open = $bindable(false) }: { open: boolean } = $props();
@@ -70,39 +66,7 @@
 			connecting = undefined;
 		}
 	}
-
-	/** A ghost button stretched into a tile, as in the widget picker. */
-	const tileClass =
-		'flex h-auto w-full items-start justify-start gap-3 p-3 text-left font-normal whitespace-normal';
-
-	const caption = (view: CatalogEntryView): string => {
-		if (view.availability.kind === 'connected') return 'Connected';
-		if (view.availability.kind === 'unconfigured') return 'Not available on this server';
-		return view.entry.authentication.kind === 'none'
-			? 'No sign-in needed'
-			: `Sign in with ${view.entry.title}`;
-	};
 </script>
-
-{#snippet tile(view: CatalogEntryView)}
-	<ConnectorLogo logo={{ kind: 'catalog', catalogId: view.entry.id }} title={view.entry.title} />
-	<span class="flex min-w-0 flex-1 flex-col gap-bind">
-		<span class="text-sm font-medium">{view.entry.title}</span>
-		<span class="text-sm text-muted-foreground">{view.entry.description}</span>
-		<span class="provenance-caption">
-			{#if connecting === view.entry.id}
-				Opening {view.entry.title}…
-			{:else}
-				{caption(view)}
-			{/if}
-		</span>
-	</span>
-	{#if connecting === view.entry.id}
-		<Spinner class="shrink-0" />
-	{:else if view.availability.kind === 'connected'}
-		<Icon.Check class="size-4 shrink-0 text-muted-foreground" />
-	{/if}
-{/snippet}
 
 <Dialog.Root bind:open>
 	<Dialog.Content class="sm:max-w-3xl" data-connector-browser>
@@ -130,40 +94,17 @@
 					{#snippet pending()}
 						<p class="py-6 text-sm text-muted-foreground">Loading the catalog…</p>
 					{/snippet}
-					{@const catalog = await connectorCatalog()}
-					<!-- Tiles rest flat and take the hover wash, like the widget picker: the logos
-					     already give the grid its structure. -->
-					<ul class="grid max-h-112 grid-cols-1 gap-item overflow-y-auto pr-3 sm:grid-cols-2">
-						{#each catalog as view (view.entry.id)}
-							<li>
-								{#if view.availability.kind === 'connected'}
-									<Button
-										variant="ghost"
-										class={tileClass}
-										href="/settings?tab=connectors&connector={view.availability.connectorId}"
-										onclick={() => (open = false)}
-									>
-										{@render tile(view)}
-									</Button>
-								{:else}
-									<Button
-										variant="ghost"
-										class={tileClass}
-										disabled={view.availability.kind === 'unconfigured' || connecting !== undefined}
-										aria-label="Connect {view.entry.title}"
-										onclick={() =>
-											void connect(
-												{ kind: 'catalog', catalogId: view.entry.id },
-												view.entry.id,
-												view.entry.title
-											)}
-									>
-										{@render tile(view)}
-									</Button>
-								{/if}
-							</li>
-						{/each}
-					</ul>
+					<ConnectorCatalog
+						catalog={await connectorCatalog()}
+						{connecting}
+						onconnect={(view) =>
+							void connect(
+								{ kind: 'catalog', catalogId: view.entry.id },
+								view.entry.id,
+								view.entry.title
+							)}
+						onopen={() => (open = false)}
+					/>
 
 					{#snippet failed(_error, reset)}
 						<div role="alert" class="flex flex-col items-start gap-row py-6">

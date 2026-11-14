@@ -119,27 +119,29 @@ const connected = (connectorId: ConnectorId): ConnectStart => ({ kind: 'connecte
 export class Connectors implements ConnectorsController {
 	constructor(private readonly dependencies: ConnectorsDependencies) {}
 
+	/**
+	 * The catalog entries this user can connect, or has. An entry whose server
+	 * needs a client the operator has not configured is left out, not listed as
+	 * unavailable: there is nothing the user can do about it (ADR 0051).
+	 */
 	async catalog(): Promise<readonly CatalogEntryView[]> {
 		const setup = this.dependencies.setup;
-		const connected =
-			setup.kind === 'configured'
-				? new Map(
-						(await setup.registry.list()).flatMap((connector) =>
-							connector.source.kind === 'catalog'
-								? [[connector.source.catalogId, connector.id] as const]
-								: []
-						)
-					)
-				: new Map<CatalogConnectorId, ConnectorId>();
-		return CONNECTOR_CATALOG.map((entry): CatalogEntryView => {
+		if (setup.kind === 'unconfigured') return [];
+		const connected = new Map(
+			(await setup.registry.list()).flatMap((connector) =>
+				connector.source.kind === 'catalog'
+					? [[connector.source.catalogId, connector.id] as const]
+					: []
+			)
+		);
+		return CONNECTOR_CATALOG.flatMap((entry): CatalogEntryView[] => {
 			const connectorId = connected.get(entry.id);
-			if (connectorId) return { entry, availability: { kind: 'connected', connectorId } };
-			const unavailable =
-				setup.kind === 'unconfigured' ||
-				(entry.authentication.kind === 'oauth' &&
-					entry.authentication.registration === 'preregistered' &&
-					!setup.preregistered.has(entry.id));
-			return { entry, availability: { kind: unavailable ? 'unconfigured' : 'available' } };
+			if (connectorId) return [{ entry, availability: { kind: 'connected', connectorId } }];
+			const needsClient =
+				entry.authentication.kind === 'oauth' &&
+				entry.authentication.registration === 'preregistered' &&
+				!setup.preregistered.has(entry.id);
+			return needsClient ? [] : [{ entry, availability: { kind: 'available' } }];
 		});
 	}
 

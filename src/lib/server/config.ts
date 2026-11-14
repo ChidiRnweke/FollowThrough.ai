@@ -140,11 +140,34 @@ export const APPLICATION_DEFAULTS = Object.freeze({
  * turns a capability on; its absence is a state the capability reports, not a
  * default (connectors without CONNECTOR_SECRET_KEYS say they are not set up).
  */
-export const OPTIONAL_APPLICATION_KEYS = [
-	'CONNECTOR_SECRET_KEYS',
-	'CONNECTOR_GITHUB_CLIENT_ID',
-	'CONNECTOR_GITHUB_CLIENT_SECRET'
+/** The keys holding the client a deployment registered with a catalog vendor that offers no self-registration. */
+export const connectorClientKeys = (id: string) => {
+	const prefix = `CONNECTOR_${id.toUpperCase()}`;
+	return { clientId: `${prefix}_CLIENT_ID`, clientSecret: `${prefix}_CLIENT_SECRET` } as const;
+};
+
+/**
+ * The catalog vendors that need the operator's own client (ADR 0051). Spelled
+ * out because `vite.config.ts` loads this module before `$lib` resolves; the
+ * config spec holds it equal to the catalog's preregistered entries.
+ */
+export const PREREGISTERED_CONNECTORS = [
+	'asana',
+	'box',
+	'github',
+	'hubspot',
+	'pagerduty',
+	'render',
+	'slack'
 ] as const;
+
+export const OPTIONAL_APPLICATION_KEYS: readonly string[] = [
+	'CONNECTOR_SECRET_KEYS',
+	...PREREGISTERED_CONNECTORS.flatMap((id) => {
+		const keys = connectorClientKeys(id);
+		return [keys.clientId, keys.clientSecret];
+	})
+];
 
 export const APPLICATION_KEYS: string[] = [
 	...REQUIRED_APPLICATION_KEYS,

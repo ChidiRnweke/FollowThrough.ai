@@ -1,17 +1,19 @@
 ---
 title: Connectors
-description: Connect Linear, Notion, GitHub and other services through their MCP servers, so the agent can read and act there under the same approval rules it follows in FollowThrough.
+description: Connect Linear, Notion, Stripe, Figma and about sixty other services through their own MCP servers, so the agent can read and act there under the same approval rules it follows in FollowThrough.
 ---
 
 The agent works on what is in FollowThrough. A **connector** lets it reach a service where you keep other work, such as Linear issues or Notion pages. Each connector is the service's own remote MCP server: FollowThrough signs in to it as you, reads the list of tools it offers, and gives those tools to the agent. Manage connectors in **Settings > Connectors**.
 
 ## Connect a service from the catalog
 
-1. Choose **Add connector**. The **Catalog** tab lists the services FollowThrough knows: Linear, Notion, GitHub, Sentry, Atlassian, Vercel, Todoist, monday.com, Supabase and Cloudflare Docs.
+1. Choose **Add connector**. The **Catalog** tab lists about sixty services that host their own MCP server, grouped by what they are for: work and projects, documents and design, engineering, monitoring, sales and support, payments, automation, and search. Type in **Find a service** to narrow the list.
 2. Choose a service. Most services send you to their own sign-in page. Approve the access there, and you come back to the connector's page in Settings.
 3. A service that needs no sign-in, such as Cloudflare Docs, connects at once.
 
-FollowThrough stores the sign-in encrypted and renews it when it expires. It never shows a token again. A tile that says **Not available on this server** needs a setting from whoever runs your FollowThrough server; see [Self-hosting](/FollowThrough.ai/self-hosting/#connectors).
+FollowThrough stores the sign-in encrypted and renews it when it expires. It never shows a token again.
+
+Some services, such as GitHub and Slack, appear only after whoever runs your FollowThrough server registers an app with them; see [Self-hosting](/FollowThrough.ai/self-hosting/#connectors). Every service in the catalog was checked when it was added: its server is hosted by the service itself, and it signs in the way FollowThrough expects. A service the catalog does not list can still be added as a custom server.
 
 ## Connect your own server
 

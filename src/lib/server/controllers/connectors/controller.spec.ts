@@ -351,6 +351,18 @@ describe('Connectors', () => {
 		});
 	});
 
+	it("lists a vendor that needs the operator's client only once the deployment configures it", async () => {
+		const ids = async (fixture: ReturnType<typeof connectorsFixture>) =>
+			(await fixture.controller.catalog()).map((view) => view.entry.id);
+		const without = await ids(connectorsFixture());
+		const withGitHub = await ids(connectorsFixture({ preregistered: ['github'] }));
+		expect({
+			github: [without.includes('github'), withGitHub.includes('github')],
+			slack: withGitHub.includes('slack'),
+			linear: without.includes('linear')
+		}).toEqual({ github: [false, true], slack: false, linear: true });
+	});
+
 	it('says connectors are not set up when the deployment has no keys', async () => {
 		const controller = new Connectors({
 			policy: new ConnectorToolPolicyRules(),
@@ -359,9 +371,9 @@ describe('Connectors', () => {
 		await expect(controller.connect({ kind: 'catalog', catalogId: 'linear' })).rejects.toThrow(
 			'CONNECTOR_SECRET_KEYS'
 		);
-		expect({
-			list: await controller.list(),
-			catalog: new Set((await controller.catalog()).map((view) => view.availability.kind))
-		}).toEqual({ list: { kind: 'unconfigured' }, catalog: new Set(['unconfigured']) });
+		expect({ list: await controller.list(), catalog: await controller.catalog() }).toEqual({
+			list: { kind: 'unconfigured' },
+			catalog: []
+		});
 	});
 });

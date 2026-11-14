@@ -45,12 +45,60 @@ export const variables = defineEnvVars({
 			'Keys that encrypt connector credentials, newest first: <keyId>:<base64 32-byte key>, comma-separated. Without it, connectors are off.',
 		schema: optionalString
 	},
+	CONNECTOR_ASANA_CLIENT_ID: {
+		description: 'OAuth client ID registered with Asana, which turns on its connector.',
+		schema: optionalString
+	},
+	CONNECTOR_ASANA_CLIENT_SECRET: {
+		description: 'OAuth client secret registered with Asana, beside its client ID.',
+		schema: optionalString
+	},
+	CONNECTOR_BOX_CLIENT_ID: {
+		description: 'OAuth client ID registered with Box, which turns on its connector.',
+		schema: optionalString
+	},
+	CONNECTOR_BOX_CLIENT_SECRET: {
+		description: 'OAuth client secret registered with Box, beside its client ID.',
+		schema: optionalString
+	},
 	CONNECTOR_GITHUB_CLIENT_ID: {
-		description: 'OAuth app client ID for the GitHub connector.',
+		description: 'OAuth client ID registered with GitHub, which turns on its connector.',
 		schema: optionalString
 	},
 	CONNECTOR_GITHUB_CLIENT_SECRET: {
-		description: 'OAuth app client secret for the GitHub connector.',
+		description: 'OAuth client secret registered with GitHub, beside its client ID.',
+		schema: optionalString
+	},
+	CONNECTOR_HUBSPOT_CLIENT_ID: {
+		description: 'OAuth client ID registered with HubSpot, which turns on its connector.',
+		schema: optionalString
+	},
+	CONNECTOR_HUBSPOT_CLIENT_SECRET: {
+		description: 'OAuth client secret registered with HubSpot, beside its client ID.',
+		schema: optionalString
+	},
+	CONNECTOR_PAGERDUTY_CLIENT_ID: {
+		description: 'OAuth client ID registered with PagerDuty, which turns on its connector.',
+		schema: optionalString
+	},
+	CONNECTOR_PAGERDUTY_CLIENT_SECRET: {
+		description: 'OAuth client secret registered with PagerDuty, beside its client ID.',
+		schema: optionalString
+	},
+	CONNECTOR_RENDER_CLIENT_ID: {
+		description: 'OAuth client ID registered with Render, which turns on its connector.',
+		schema: optionalString
+	},
+	CONNECTOR_RENDER_CLIENT_SECRET: {
+		description: 'OAuth client secret registered with Render, beside its client ID.',
+		schema: optionalString
+	},
+	CONNECTOR_SLACK_CLIENT_ID: {
+		description: 'OAuth client ID registered with Slack, which turns on its connector.',
+		schema: optionalString
+	},
+	CONNECTOR_SLACK_CLIENT_SECRET: {
+		description: 'OAuth client secret registered with Slack, beside its client ID.',
 		schema: optionalString
 	},
 	BODY_SIZE_LIMIT: {

@@ -1,3 +1,4 @@
+import type { CatalogConnectorId } from '$lib/models/connectors';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { DateTime } from '$lib/models/workspace';
 import {
@@ -51,7 +52,14 @@ export const writeTool = (name: string): Tool => ({
  * Docs needs no sign-in. Both answer through one fake network, so the real
  * connector services, SDK client and tool search run end to end.
  */
-export const connectorsFixture = (options: { readonly origin?: string } = {}) => {
+export const connectorsFixture = (
+	options: {
+		readonly origin?: string;
+		/** Catalog vendors whose client the deployment registered and configured. */
+		readonly preregistered?: readonly CatalogConnectorId[];
+	} = {}
+) => {
+	const preregistered = options.preregistered ?? [];
 	const clock = new TestClock(new Date('2026-11-14T10:00:00Z'));
 	const authorizationServer = new FakeAuthorizationServer('https://auth.linear.example', {
 		metadataDocuments: true,
@@ -96,13 +104,18 @@ export const connectorsFixture = (options: { readonly origin?: string } = {}) =>
 			authorizer: new ConnectorAuthorization({
 				fetch: network.fetch,
 				origin: options.origin ?? 'https://followthrough.example',
-				preregistered: new Map(),
+				preregistered: new Map(
+					preregistered.map((id) => [
+						id,
+						{ clientId: `${id}-client`, clientSecret: `${id}-secret` }
+					])
+				),
 				now: clock.now
 			}),
 			servers: new ConnectorServers(network.fetch),
 			icons: new ConnectorIcons(network.fetch),
 			embeddings: toolSearchFixture(new InMemoryToolEmbeddingRepository(), embeddings),
-			preregistered: new Set(),
+			preregistered: new Set(preregistered),
 			transactionRunner: new InMemoryTransactionRunner([records]),
 			now: clock.now
 		}

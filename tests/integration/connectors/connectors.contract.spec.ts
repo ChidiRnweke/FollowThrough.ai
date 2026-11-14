@@ -144,6 +144,41 @@ describe('connector records', () => {
 		});
 	});
 
+	it('offers each tool to a run with the label of the connector it belongs to', async () => {
+		const { owner, records, connector } = await seedConnector('61030');
+		await records.replaceTools(
+			connector.id,
+			[entry(listed('list_issues', true))],
+			new Date('2026-11-14T10:00:00Z')
+		);
+		const custom = await records.insert(
+			{
+				id: connectorId('61031'),
+				slug: 'stripe' as ConnectorSlug,
+				source: { kind: 'custom' },
+				title: 'Billing proxy',
+				serverUrl: 'https://billing.acme.example/mcp',
+				credential: { kind: 'none' }
+			},
+			new Date('2026-11-14T10:00:00Z')
+		);
+		await records.replaceTools(
+			custom.id,
+			[
+				{
+					...entry(listed('list_charges', true)),
+					modelName: 'stripe__list_charges' as ConnectorToolName
+				}
+			],
+			new Date('2026-11-14T10:00:00Z')
+		);
+		const offered = await new ConnectorRecords(owner, context.db, box).runTools();
+		expect(offered.map(({ tool, connector }) => [tool.modelName, connector])).toEqual([
+			['linear__list_issues', { kind: 'catalog', catalogId: 'linear', title: 'Linear' }],
+			['stripe__list_charges', { kind: 'custom', title: 'Billing proxy' }]
+		]);
+	});
+
 	it('reports a credential sealed under a retired key as unreadable instead of failing', async () => {
 		const { owner, connector } = await seedConnector('61003');
 		const rotated = new ConnectorRecords(owner, context.db, SecretBox.fromKeyring(`v2:${key(8)}`));
