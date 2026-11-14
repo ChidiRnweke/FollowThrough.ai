@@ -38,3 +38,14 @@ export interface ToolEmbeddingSeedSummary {
 	readonly unchanged: number;
 	readonly removed: number;
 }
+
+/** A query embedded for ranking stored tool vectors, with the model that embedded it. */
+export interface QueryVector {
+	readonly model: string;
+	readonly vector: readonly number[];
+}
+
+export interface ToolDistance {
+	readonly name: string;
+	readonly distance: number;
+}

@@ -203,6 +203,72 @@ describe('Connectors', () => {
 		expect(await fixture.controller.list()).toEqual({ kind: 'ready', connectors: [] });
 	});
 
+	describe('calling a connector tool', () => {
+		const connected = async () => {
+			const fixture = connectorsFixture();
+			const id = await signIn(
+				fixture,
+				await fixture.controller.connect({ kind: 'catalog', catalogId: 'linear' })
+			);
+			const tool = (await fixture.controller.get(id)).tools.find(
+				(entry) => entry.serverName === 'create_issue'
+			)!;
+			const call = (checksum = tool.checksum) =>
+				fixture.controller.callTool(
+					{
+						connectorId: id,
+						serverName: 'create_issue',
+						checksum,
+						arguments: { title: 'Ship it' },
+						callId: 'call-1'
+					},
+					new AbortController().signal
+				);
+			return { fixture, id, call };
+		};
+
+		it('renews an expired token before it calls the tool', async () => {
+			const { fixture, call } = await connected();
+			fixture.clock.advance(2 * 60 * 60 * 1000);
+			const outcome = await call();
+			expect({
+				kind: outcome.kind,
+				received: fixture.linear.received,
+				renewals: fixture.authorizationServer.tokenRequests.filter(
+					(form) => form.get('grant_type') === 'refresh_token'
+				).length
+			}).toEqual({
+				kind: 'returned',
+				received: [{ name: 'create_issue', arguments: { title: 'Ship it' } }],
+				renewals: 1
+			});
+		});
+
+		it('reports a revoked sign-in as an outcome and marks the connector for reconnection', async () => {
+			const { fixture, id, call } = await connected();
+			fixture.authorizationServer.revokeAll();
+			const outcome = await call();
+			expect({
+				outcome,
+				status: (await fixture.controller.get(id)).connector.status.kind,
+				received: fixture.linear.received
+			}).toEqual({
+				outcome: { kind: 'reauthorization_required', connectorTitle: 'Linear' },
+				status: 'reauthorization_required',
+				received: []
+			});
+		});
+
+		it('sends nothing for a call offered from a snapshot the tool no longer matches', async () => {
+			const { fixture, call } = await connected();
+			const outcome = await call('stale-checksum');
+			expect({ kind: outcome.kind, received: fixture.linear.received }).toEqual({
+				kind: 'withdrawn',
+				received: []
+			});
+		});
+	});
+
 	it('says connectors are not set up when the deployment has no keys', async () => {
 		const controller = new Connectors({
 			policy: new ConnectorToolPolicyRules(),

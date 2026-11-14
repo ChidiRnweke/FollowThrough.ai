@@ -64,6 +64,7 @@ const run = (status: WorkspaceValues['agent_runs']['status']): WorkspaceValues['
 		status === 'awaiting_approval'
 			? [
 					{
+						source: 'catalog',
 						callId: 'c9',
 						toolName: 'update_agent_preferences',
 						arguments: { defaultModel: 'example/model' }

@@ -68,7 +68,12 @@ describe('Run settlement', () => {
 			...run,
 			serializedState: 'resumed-checkpoint',
 			pendingDecisions: [
-				{ callId: 'reviewed-call', toolName: 'create_note', arguments: { title: 'Draft' } }
+				{
+					source: 'catalog',
+					callId: 'reviewed-call',
+					toolName: 'create_note',
+					arguments: { title: 'Draft' }
+				}
 			]
 		};
 		const claim = await service.claim(run.id, completed);

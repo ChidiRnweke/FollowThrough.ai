@@ -16,6 +16,9 @@ import {
 	type ConnectRequest,
 	type ConnectStart,
 	type AuthorizationChallenge,
+	type ConnectorCallOutcome,
+	type ConnectorToolCall,
+	type ConnectorToolResult,
 	type ListedConnectorTool,
 	type NamedSnapshotEntry,
 	type ServerAccess,
@@ -31,7 +34,10 @@ import type {
 	ConnectorAuthorizationAttempts,
 	ConnectorRegistry
 } from '$lib/server/services/connectors/directory';
-import type { ConnectorToolListing } from '$lib/server/services/connectors/servers';
+import type {
+	ConnectorToolCalling,
+	ConnectorToolListing
+} from '$lib/server/services/connectors/servers';
 import type { ConnectorToolPolicyRule } from '$lib/services/connectors/policy';
 
 /**
@@ -51,6 +57,12 @@ export interface ConnectorsController {
 	refreshTools(id: ConnectorId): Promise<ConnectorDetail>;
 	setToolPolicy(input: SetConnectorToolPolicy): Promise<ConnectorTool>;
 	disconnect(id: ConnectorId): Promise<void>;
+	/**
+	 * Calls one connector tool for the agent. The tool must still match the
+	 * snapshot the run was offered, and the connector must still accept its
+	 * sign-in; otherwise nothing is sent and the outcome says why.
+	 */
+	callTool(call: ConnectorToolCall, signal: AbortSignal): Promise<ConnectorCallOutcome>;
 }
 
 /** Connectors are on only where the deployment can seal credentials. */
@@ -61,7 +73,7 @@ export type ConnectorsSetup =
 			readonly registry: ConnectorRegistry;
 			readonly attempts: ConnectorAuthorizationAttempts;
 			readonly authorizer: ConnectorAuthorizer;
-			readonly servers: ConnectorToolListing;
+			readonly servers: ConnectorToolListing & ConnectorToolCalling;
 			readonly embeddings: ConnectorToolEmbedding;
 			/** Catalog entries whose preregistered client credentials this deployment configures. */
 			readonly preregistered: ReadonlySet<CatalogConnectorId>;
@@ -299,6 +311,44 @@ export class Connectors implements ConnectorsController {
 		return this.configured().registry.remove(id);
 	}
 
+	async callTool(call: ConnectorToolCall, signal: AbortSignal): Promise<ConnectorCallOutcome> {
+		const setup = this.configured();
+		const connector = await setup.registry.get(call.connectorId);
+		const tool = (
+			await setup.registry.tools({ kind: 'connector', connectorId: connector.id })
+		).find((candidate) => candidate.serverName === call.serverName);
+		if (!tool || tool.checksum !== call.checksum)
+			return {
+				kind: 'withdrawn',
+				reason: `${connector.title} changed this tool after the run was offered it, so nothing ran.`
+			};
+		if (this.dependencies.policy.effective(tool.policy, tool.hints) === 'off')
+			return {
+				kind: 'withdrawn',
+				reason: `This ${connector.title} tool is turned off, so nothing ran.`
+			};
+		if (connector.status.kind !== 'connected')
+			return { kind: 'reauthorization_required', connectorTitle: connector.title };
+		const calling = await this.withAccess(
+			setup,
+			connector,
+			async (access): Promise<Attempt<ConnectorToolResult>> => {
+				const answer = await setup.servers.callTool(
+					connector.serverUrl,
+					access,
+					{ serverName: call.serverName, arguments: call.arguments, callId: call.callId },
+					signal
+				);
+				return answer.kind === 'returned'
+					? { kind: 'answered', value: answer.result }
+					: { kind: 'unauthorized' };
+			}
+		);
+		if (calling.kind === 'refused')
+			return { kind: 'reauthorization_required', connectorTitle: connector.title };
+		return { kind: 'returned', connectorTitle: connector.title, result: calling.value };
+	}
+
 	private configured(): Configured {
 		const setup = this.dependencies.setup;
 		if (setup.kind === 'unconfigured')
@@ -377,46 +427,69 @@ export class Connectors implements ConnectorsController {
 		});
 	}
 
-	/**
-	 * Lists the server's tools with the stored credential: a token about to
-	 * expire is renewed first, and a 401 renews once more. A connector whose
-	 * server still refuses needs the user to sign in again.
-	 */
+	/** Lists the server's tools with the stored credential; a refused sign-in fails the refresh. */
 	private async listWithCredential(
 		setup: Configured,
 		connector: Connector
 	): Promise<readonly ListedConnectorTool[]> {
+		const listing = await this.withAccess(
+			setup,
+			connector,
+			async (access): Promise<Attempt<readonly ListedConnectorTool[]>> => {
+				const answer = await setup.servers.listTools(connector.serverUrl, access);
+				return answer.kind === 'listed'
+					? { kind: 'answered', value: answer.tools }
+					: { kind: 'unauthorized' };
+			}
+		);
+		if (listing.kind === 'answered') return listing.value;
+		throw new ExternalServiceError(refusal(connector));
+	}
+
+	/**
+	 * Runs `attempt` with the stored credential. A token about to expire is
+	 * renewed first, and a 401 renews once more. When the service still refuses,
+	 * the connector moves to `reauthorization_required` and the answer is
+	 * `refused`, so the caller decides how to report it.
+	 */
+	private async withAccess<Value>(
+		setup: Configured,
+		connector: Connector,
+		attempt: (access: ServerAccess) => Promise<Attempt<Value>>
+	): Promise<Access<Value>> {
 		const read = await setup.registry.credential(connector.id);
-		if (read.kind === 'unreadable')
-			throw new ValidationError(
-				`${connector.title}'s sign-in was stored under a key this server no longer has. Disconnect it and connect it again.`
-			);
+		if (read.kind === 'unreadable') return this.refused(setup, connector);
 		if (read.kind === 'none') {
-			const listing = await setup.servers.listTools(connector.serverUrl, { kind: 'anonymous' });
-			if (listing.kind === 'listed') return listing.tools;
-			return this.refused(setup, connector);
+			const answer = await attempt({ kind: 'anonymous' });
+			return answer.kind === 'unauthorized' ? this.refused(setup, connector) : answer;
 		}
 		let credential = read.credential;
 		if (
 			credential.kind === 'oauth' &&
 			credential.tokens.expiry.kind === 'at' &&
 			Date.parse(credential.tokens.expiry.at) - Date.parse(setup.now()) < EXPIRY_MARGIN_MS
-		)
-			credential = await this.renew(setup, connector, credential);
-		const first = await setup.servers.listTools(connector.serverUrl, access(credential));
-		if (first.kind === 'listed') return first.tools;
+		) {
+			const renewed = await this.renew(setup, connector, credential);
+			if (renewed.kind === 'refused') return renewed;
+			credential = renewed.credential;
+		}
+		const first = await attempt(access(credential));
+		if (first.kind === 'answered') return first;
 		if (credential.kind === 'bearer') return this.refused(setup, connector);
 		const renewed = await this.renew(setup, connector, credential);
-		const second = await setup.servers.listTools(connector.serverUrl, access(renewed));
-		if (second.kind === 'listed') return second.tools;
-		return this.refused(setup, connector);
+		if (renewed.kind === 'refused') return renewed;
+		const second = await attempt(access(renewed.credential));
+		return second.kind === 'answered' ? second : this.refused(setup, connector);
 	}
 
 	private async renew(
 		setup: Configured,
 		connector: Connector,
 		credential: Extract<ConnectorCredential, { kind: 'oauth' }>
-	): Promise<ConnectorCredential> {
+	): Promise<
+		| { readonly kind: 'renewed'; readonly credential: ConnectorCredential }
+		| { readonly kind: 'refused' }
+	> {
 		if (credential.tokens.refresh.kind === 'unavailable') return this.refused(setup, connector);
 		const renewal = await setup.authorizer.refresh(
 			credential.grant,
@@ -425,21 +498,33 @@ export class Connectors implements ConnectorsController {
 		if (renewal.kind === 'rejected') return this.refused(setup, connector);
 		const renewed: ConnectorCredential = { ...credential, tokens: renewal.tokens };
 		await setup.registry.storeCredential(connector.id, renewed);
-		return renewed;
+		return { kind: 'renewed', credential: renewed };
 	}
 
-	private async refused(setup: Configured, connector: Connector): Promise<never> {
+	private async refused(
+		setup: Configured,
+		connector: Connector
+	): Promise<{ readonly kind: 'refused' }> {
 		await setup.registry.requireReauthorization(
 			connector.id,
 			`${connector.title} no longer accepts FollowThrough's sign-in.`
 		);
-		throw new ExternalServiceError(
-			connector.authentication === 'oauth'
-				? `${connector.title} needs you to sign in again. Reconnect it in Settings → Connectors.`
-				: `${connector.title} no longer accepts its access token. Disconnect it in Settings → Connectors and connect it again.`
-		);
+		return { kind: 'refused' };
 	}
 }
+
+/** One request with a credential: the service answered, or it refused the credential. */
+type Attempt<Value> =
+	{ readonly kind: 'answered'; readonly value: Value } | { readonly kind: 'unauthorized' };
+
+/** After renewal: the service answered, or the user has to sign in again. */
+type Access<Value> =
+	{ readonly kind: 'answered'; readonly value: Value } | { readonly kind: 'refused' };
+
+const refusal = (connector: Connector): string =>
+	connector.authentication === 'oauth'
+		? `${connector.title} needs you to sign in again. Reconnect it in Settings → Connectors.`
+		: `${connector.title} no longer accepts its access token. Disconnect it in Settings → Connectors and connect it again.`;
 
 const access = (credential: ConnectorCredential): ServerAccess =>
 	credential.kind === 'bearer'

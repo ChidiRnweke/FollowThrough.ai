@@ -1,4 +1,10 @@
-import type { AgentEvent, ToolOutcomeEvent, ToolActivity } from '$lib/models/agent';
+import type { AgentEvent, ToolOutcomeEvent, ToolActivity, ToolSubject } from '$lib/models/agent';
+
+/** The subject of an event, as one value: its `source` and `name` stay paired. */
+const subjectOf = (event: ToolSubject): ToolSubject =>
+	event.source === 'catalog'
+		? { source: 'catalog', name: event.name }
+		: { source: 'connector', name: event.name };
 
 /**
  * The outcome an event settles, or nothing when it settles none.
@@ -17,11 +23,11 @@ const toolOutcomeEvent = (event: AgentEvent): ToolOutcomeEvent | undefined =>
 /** Project a resolved tool event into the journal activity shared by chat and diagrams. */
 const toolActivityFromEvent = (event: AgentEvent): ToolActivity | undefined => {
 	if (event.type === 'tool_started')
-		return { callId: event.callId, name: event.name, input: event.arguments, status: 'running' };
+		return { callId: event.callId, ...subjectOf(event), input: event.arguments, status: 'running' };
 	if (event.type === 'approval_required')
 		return {
 			callId: event.callId,
-			name: event.name,
+			...subjectOf(event),
 			input: event.arguments,
 			...(event.review ? { review: event.review } : {}),
 			status: 'approval_required'
@@ -39,7 +45,7 @@ const toolActivityFromEvent = (event: AgentEvent): ToolActivity | undefined => {
 			failure: outcome.failure,
 			status: 'failed'
 		};
-	const settled = { ...callId, name: outcome.name, input: {} };
+	const settled = { ...callId, ...subjectOf(outcome), input: {} };
 	return outcome.type === 'tool_succeeded'
 		? {
 				...settled,

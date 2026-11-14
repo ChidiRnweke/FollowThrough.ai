@@ -29,6 +29,7 @@ const pendingCall = (
 	args: AgentPayloadObject
 ): Extract<ChatToolActivity, { status: 'approval_required' }> => ({
 	callId: '00000000-0000-4000-8000-0000000000aa',
+	source: 'catalog' as const,
 	name,
 	arguments: args,
 	status: 'approval_required'

@@ -15,9 +15,11 @@ import {
 	type NamedSnapshotEntry,
 	type NewConnector,
 	type PendingAuthorization,
+	type RunConnectorTool,
 	type ToolScope
 } from '$lib/models/connectors';
 import type { DateTime } from '$lib/models/workspace';
+import type { QueryVector, ToolDistance } from '$lib/models/agent/tool-index';
 import type {
 	ConnectorAuthorizationRepository,
 	ConnectorRepository
@@ -52,6 +54,17 @@ export interface ConnectorRegistry {
 		serverName: string,
 		policy: ConnectorToolPolicy
 	): Promise<ConnectorTool>;
+}
+
+/** What the agent harness reads to offer connector tools and rank them (ADR 0049). */
+export interface ConnectorToolSource {
+	runTools(): Promise<readonly RunConnectorTool[]>;
+	/**
+	 * Distances from the query for the named tools. A tool without a vector from
+	 * the query's model cannot be ranked, and search says which connector to
+	 * refresh instead of leaving the tool out.
+	 */
+	distances(names: readonly string[], query: QueryVector): Promise<readonly ToolDistance[]>;
 }
 
 /** OAuth attempts between the redirect and the callback. */
@@ -90,7 +103,9 @@ const modelToolName = (slug: ConnectorSlug, serverName: string): ConnectorToolNa
 	return `${slug}__${part}` as ConnectorToolName;
 };
 
-export class ConnectorDirectory implements ConnectorRegistry, ConnectorAuthorizationAttempts {
+export class ConnectorDirectory
+	implements ConnectorRegistry, ConnectorAuthorizationAttempts, ConnectorToolSource
+{
 	constructor(private readonly dependencies: ConnectorDirectoryDependencies) {}
 
 	private clock(): Date {
@@ -175,6 +190,25 @@ export class ConnectorDirectory implements ConnectorRegistry, ConnectorAuthoriza
 		const tool = await this.dependencies.connectors.setToolPolicy(id, serverName, policy);
 		if (!tool) throw new NotFoundError('Connector tool not found');
 		return tool;
+	}
+
+	runTools(): Promise<readonly RunConnectorTool[]> {
+		return this.dependencies.connectors.runTools();
+	}
+
+	async distances(names: readonly string[], query: QueryVector): Promise<readonly ToolDistance[]> {
+		const found = await this.dependencies.connectors.toolDistances(
+			query.vector,
+			names,
+			query.model
+		);
+		const ranked = new Set(found.map((entry) => entry.name));
+		const missing = names.filter((name) => !ranked.has(name));
+		if (missing.length > 0)
+			throw new ValidationError(
+				`Tool search has no current index for ${missing.join(', ')}. Ask the user to refresh those connectors in Settings → Connectors.`
+			);
+		return found;
 	}
 
 	remember(state: string, pending: PendingAuthorization): Promise<void> {

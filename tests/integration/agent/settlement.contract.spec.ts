@@ -125,7 +125,12 @@ describe('atomic execution settlement', () => {
 			type: 'approval_checkpoint',
 			serializedState: 'provider-checkpoint',
 			pendingDecisions: [
-				{ callId: 'create-1', toolName: 'create_note', arguments: { title: 'Draft' } }
+				{
+					source: 'catalog',
+					callId: 'create-1',
+					toolName: 'create_note',
+					arguments: { title: 'Draft' }
+				}
 			],
 			sessionItems: []
 		};
@@ -169,7 +174,12 @@ describe('atomic execution settlement', () => {
 			type: 'approval_checkpoint',
 			serializedState: 'provider-checkpoint',
 			pendingDecisions: [
-				{ callId: 'create-1', toolName: 'create_note', arguments: { title: 'Draft' } }
+				{
+					source: 'catalog',
+					callId: 'create-1',
+					toolName: 'create_note',
+					arguments: { title: 'Draft' }
+				}
 			],
 			sessionItems: [{ type: 'user_message', content: 'Must not be saved' }]
 		};
@@ -210,7 +220,12 @@ describe('atomic execution settlement', () => {
 			type: 'approval_checkpoint',
 			serializedState: 'provider-checkpoint',
 			pendingDecisions: [
-				{ callId: 'create-1', toolName: 'create_note', arguments: { title: 'Draft' } }
+				{
+					source: 'catalog',
+					callId: 'create-1',
+					toolName: 'create_note',
+					arguments: { title: 'Draft' }
+				}
 			],
 			sessionItems: [{ type: 'user_message', content: 'Must roll back' }]
 		};

@@ -44,6 +44,7 @@ const setup = (kind: 'skill' | 'note' = 'skill', operation: 'replace' | 'patch' 
 			pending
 		);
 	const call: PendingAgentDecision = {
+		source: 'catalog',
 		callId: 'skill-change-1',
 		toolName: operation === 'replace' ? 'save_skill' : 'edit_skill',
 		arguments:

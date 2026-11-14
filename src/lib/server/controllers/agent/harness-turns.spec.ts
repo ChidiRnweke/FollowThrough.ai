@@ -51,7 +51,7 @@ describe('Agent harness turns', () => {
 
 	it('keeps the long-tail tool a parked run is about to answer for offered', async () => {
 		const report = await missingToolReport([
-			{ callId: 'call-approval', toolName: 'archive_note', arguments: {} }
+			{ source: 'catalog', callId: 'call-approval', toolName: 'archive_note', arguments: {} }
 		]);
 		expect(report).not.toContain('has not been surfaced');
 	});

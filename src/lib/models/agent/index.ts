@@ -8,6 +8,7 @@ import {
 	type AgentPayload,
 	type AgentPayloadObject
 } from './payload';
+import { connectorToolNameSchema, type ConnectorToolName } from '$lib/models/connectors';
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
@@ -79,7 +80,9 @@ export type AgentToolContractBinding =
 			readonly kind: ToolClassification;
 			readonly tools: readonly ToolName[];
 	  }
-	| { readonly kind: 'excluded'; readonly reason: string };
+	| { readonly kind: 'excluded'; readonly reason: string }
+	/** The operation behind every connector tool; the snapshot, not the catalog, names them. */
+	| { readonly kind: 'connector_tools'; readonly reason: string };
 
 export type AgentToolContractMap<Controllers> = {
 	readonly [Controller in keyof Controllers]: {
@@ -177,6 +180,18 @@ export type StoredMessage = Omit<Message, 'content'> &
 	);
 
 /** What every tool call carries, whatever became of it. */
+/**
+ * Which tool a call names: one of FollowThrough's own, or one on a user's
+ * connector (ADR 0049). Rows written before connectors existed have no `source`
+ * and read as `catalog`.
+ */
+export type ToolSubject =
+	| { readonly source: 'catalog'; readonly name: AgentToolName }
+	| { readonly source: 'connector'; readonly name: ConnectorToolName };
+
+/** A name a run can call: a catalog tool, `search_tools`, or a connector tool. */
+export type RunToolName = AgentToolName | ConnectorToolName;
+
 interface ToolActivityBase {
 	/**
 	 * Absent on an outcome the provider reported without an identifier that the
@@ -184,7 +199,6 @@ interface ToolActivityBase {
 	 * recency, which it can only do if the absence survives the journal.
 	 */
 	readonly callId?: string;
-	readonly name: AgentToolName;
 	readonly input: AgentPayloadObject;
 }
 
@@ -215,15 +229,18 @@ interface ToolActivityBase {
  * `archive` faithfully persisted its `null` on every row.
  */
 export type ToolActivity =
-	| (ToolActivityBase & { readonly status: 'running' })
-	| (ToolActivityBase & { readonly status: 'approval_required'; readonly review?: AgentReview })
-	| (ToolActivityBase & { readonly status: 'succeeded'; readonly output?: AgentPayload })
+	| (ToolActivityBase & ToolSubject & { readonly status: 'running' })
+	| (ToolActivityBase &
+			ToolSubject & { readonly status: 'approval_required'; readonly review?: AgentReview })
+	| (ToolActivityBase &
+			ToolSubject & { readonly status: 'succeeded'; readonly output?: AgentPayload })
+	| (ToolActivityBase &
+			ToolSubject & {
+				readonly status: 'reported_failure';
+				readonly failure: string;
+				readonly output: AgentPayload;
+			})
 	| (ToolActivityBase & {
-			readonly status: 'reported_failure';
-			readonly failure: string;
-			readonly output: AgentPayload;
-	  })
-	| (Omit<ToolActivityBase, 'name'> & {
 			readonly name: string;
 			readonly status: 'failed';
 			readonly failure: string;
@@ -359,12 +376,25 @@ export type AgentReview = z.infer<typeof agentReviewSchema>;
  * stored row. `search_tools` is deliberately not admitted here; it is a read
  * and never parks.
  */
-export interface PendingAgentDecision {
-	readonly review?: AgentReview;
-	readonly callId: string;
-	readonly toolName: ToolName;
-	readonly arguments: AgentPayloadObject;
-}
+export type PendingAgentDecision =
+	| {
+			readonly source: 'catalog';
+			readonly review?: AgentReview;
+			readonly callId: string;
+			readonly toolName: ToolName;
+			readonly arguments: AgentPayloadObject;
+	  }
+	/**
+	 * A connector tool's call, bound to the snapshot the user approved: a resume
+	 * whose tool no longer has this checksum runs nothing (ADR 0049).
+	 */
+	| {
+			readonly source: 'connector';
+			readonly callId: string;
+			readonly toolName: ConnectorToolName;
+			readonly checksum: string;
+			readonly arguments: AgentPayloadObject;
+	  };
 
 /** Context available before retrieval-backed grounding is assembled. */
 export interface BaseAgentContextData {
@@ -1007,12 +1037,11 @@ export type AgentEvent =
 	| { readonly type: 'run_started'; readonly runId: AgentRunId; readonly attempt: number }
 	| { readonly type: 'text_delta'; readonly text: string }
 	| { readonly type: 'reasoning_delta'; readonly text: string }
-	| {
+	| ({
 			readonly type: 'tool_started';
 			readonly callId: string;
-			readonly name: AgentToolName;
 			readonly arguments: AgentPayloadObject;
-	  }
+	  } & ToolSubject)
 	/**
 	 * The three tool outcomes. `callId` is optional on all of them and absent when
 	 * the provider reported the outcome without an identifier and the run could
@@ -1029,12 +1058,11 @@ export type AgentEvent =
 	 * left it. It was `unknown`, so the journal, the replay and every client
 	 * surface narrowed the same JSON again for itself.
 	 */
-	| {
+	| ({
 			readonly type: 'tool_succeeded';
 			readonly callId?: string;
-			readonly name: AgentToolName;
 			readonly output?: AgentPayload;
-	  }
+	  } & ToolSubject)
 	/**
 	 * The call ran, returned, and the value it returned says it failed.
 	 *
@@ -1047,13 +1075,12 @@ export type AgentEvent =
 	 * made both consumers drop the detail on the floor. 30 of the 147 stored
 	 * `tool_completed` rows are this case.
 	 */
-	| {
+	| ({
 			readonly type: 'tool_reported_failure';
 			readonly callId?: string;
-			readonly name: AgentToolName;
 			readonly failure: string;
 			readonly output: AgentPayload;
-	  }
+	  } & ToolSubject)
 	/** The call did not produce a usable result: it threw, or its result was unreadable. */
 	| {
 			readonly type: 'tool_failed';
@@ -1061,14 +1088,13 @@ export type AgentEvent =
 			readonly name: string;
 			readonly failure: string;
 	  }
-	| {
+	| ({
 			readonly type: 'approval_required';
 			readonly review?: AgentReview;
 			readonly runId: AgentRunId;
 			readonly callId: string;
-			readonly name: AgentToolName;
 			readonly arguments: AgentPayloadObject;
-	  }
+	  } & ToolSubject)
 	/**
 	 * The whole outcome of a note action, carried in the event log so a client
 	 * that reconnects after a refresh finishes the action from the replay alone.
@@ -1198,26 +1224,58 @@ export type StoredPendingDecisions =
 			readonly dropped: readonly [];
 	  };
 
-export const pendingAgentDecisionSchema = z
-	.object({
-		callId: z.string().min(1),
-		review: agentReviewSchema.optional(),
-		toolName: toolNameSchema,
-		arguments: eventPayloadObjectSchema
-	})
-	.strict() satisfies z.ZodType<PendingAgentDecision>;
+/** A row written before connectors existed has no `source`; it names a catalog tool. */
+const catalogSource = z
+	.literal('catalog')
+	.optional()
+	.transform((): 'catalog' => 'catalog');
+
+export const pendingAgentDecisionSchema = z.discriminatedUnion('source', [
+	z
+		.object({
+			source: catalogSource,
+			callId: z.string().min(1),
+			review: agentReviewSchema.optional(),
+			toolName: toolNameSchema,
+			arguments: eventPayloadObjectSchema
+		})
+		.strict(),
+	z
+		.object({
+			source: z.literal('connector'),
+			callId: z.string().min(1),
+			toolName: connectorToolNameSchema,
+			checksum: z.string().min(1),
+			arguments: eventPayloadObjectSchema
+		})
+		.strict()
+]) satisfies z.ZodType<PendingAgentDecision>;
+
+/**
+ * The subject of a journalled tool row. A row written before connectors existed
+ * has no `source` and names a catalog tool.
+ */
+export const toolSubjectSchema: z.ZodType<ToolSubject> = z.discriminatedUnion('source', [
+	z.object({ source: catalogSource, name: agentToolNameSchema }),
+	z.object({ source: z.literal('connector'), name: connectorToolNameSchema })
+]);
+
+/** One tool event shape for each source, so the name is a catalog name or a connector name. */
+const subjectArms = <Shape extends z.core.$ZodLooseShape>(shape: Shape) =>
+	z.discriminatedUnion('source', [
+		z.object({ ...shape, source: catalogSource, name: agentToolNameSchema }),
+		z.object({ ...shape, source: z.literal('connector'), name: connectorToolNameSchema })
+	]);
 
 const toolOutcomeSchemas = [
-	z.object({
+	subjectArms({
 		type: z.literal('tool_succeeded'),
 		callId: z.string().optional(),
-		name: agentToolNameSchema,
 		output: eventPayloadSchema.optional()
 	}),
-	z.object({
+	subjectArms({
 		type: z.literal('tool_reported_failure'),
 		callId: z.string().optional(),
-		name: agentToolNameSchema,
 		failure: z.string(),
 		output: eventPayloadSchema
 	}),
@@ -1239,19 +1297,17 @@ export const agentEventSchema = z.discriminatedUnion('type', [
 	z.object({ type: z.literal('run_started'), runId: runIdSchema, attempt: z.number().int() }),
 	z.object({ type: z.literal('text_delta'), text: z.string() }),
 	z.object({ type: z.literal('reasoning_delta'), text: z.string() }),
-	z.object({
+	subjectArms({
 		type: z.literal('tool_started'),
 		callId: z.string(),
-		name: agentToolNameSchema,
 		arguments: eventPayloadObjectSchema
 	}),
 	...toolOutcomeSchemas,
-	z.object({
+	subjectArms({
 		type: z.literal('approval_required'),
 		review: agentReviewSchema.optional(),
 		runId: runIdSchema,
 		callId: z.string(),
-		name: agentToolNameSchema,
 		arguments: eventPayloadObjectSchema
 	}),
 	z.object({

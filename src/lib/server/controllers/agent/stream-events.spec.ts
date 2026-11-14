@@ -25,6 +25,7 @@ describe('Agent tool event invariants', () => {
 		);
 		expect(event).toEqual({
 			type: 'tool_started',
+			source: 'catalog',
 			callId: 'call-1',
 			name: 'relate_selection',
 			arguments: {}
@@ -78,6 +79,7 @@ describe('Agent tool event invariants', () => {
 		const event = await eventSequence().map(toolCalled({ callId: 'call-1', name: 'search_tools' }));
 		expect(event).toEqual({
 			type: 'tool_started',
+			source: 'catalog',
 			callId: 'call-1',
 			name: 'search_tools',
 			arguments: {}
@@ -88,7 +90,12 @@ describe('Agent tool event invariants', () => {
 		const mapper = eventSequence();
 		await mapper.map(toolCalled({ callId: 'call-1', name: 'find_references' }));
 		const event = await mapper.map(toolOutput({ callId: 'call-1' }));
-		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-1', name: 'find_references' });
+		expect(event).toEqual({
+			type: 'tool_succeeded',
+			source: 'catalog',
+			callId: 'call-1',
+			name: 'find_references'
+		});
 	});
 
 	/**
@@ -107,6 +114,7 @@ describe('Agent tool event invariants', () => {
 		);
 		expect(event).toEqual({
 			type: 'tool_reported_failure',
+			source: 'catalog',
 			callId: 'call-2',
 			name: 'create_note',
 			failure: 'Denied',
@@ -144,11 +152,17 @@ describe('Agent tool event invariants', () => {
 		expect({ started, succeeded }).toEqual({
 			started: {
 				type: 'tool_started',
+				source: 'catalog',
 				callId: 'call-3',
 				name: 'create_note',
 				arguments: { title: 'Decision log' }
 			},
-			succeeded: { type: 'tool_succeeded', callId: 'call-3', name: 'create_note' }
+			succeeded: {
+				type: 'tool_succeeded',
+				source: 'catalog',
+				callId: 'call-3',
+				name: 'create_note'
+			}
 		});
 	});
 
@@ -156,7 +170,12 @@ describe('Agent tool event invariants', () => {
 		const mapper = eventSequence();
 		await mapper.map(toolCalled({ callId: 'call-5', name: 'search' }));
 		const event = await mapper.map(toolOutput({ name: 'search' }));
-		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-5', name: 'search' });
+		expect(event).toEqual({
+			type: 'tool_succeeded',
+			source: 'catalog',
+			callId: 'call-5',
+			name: 'search'
+		});
 	});
 
 	it('reports no call id when an outcome without one meets several calls in flight', async () => {
@@ -164,19 +183,24 @@ describe('Agent tool event invariants', () => {
 		await mapper.map(toolCalled({ callId: 'call-6', name: 'search' }));
 		await mapper.map(toolCalled({ callId: 'call-7', name: 'get_note' }));
 		const event = await mapper.map(toolOutput({ name: 'get_note' }));
-		expect(event).toEqual({ type: 'tool_succeeded', name: 'get_note' });
+		expect(event).toEqual({ type: 'tool_succeeded', source: 'catalog', name: 'get_note' });
 	});
 
 	it('reports no call id when an outcome without one meets no call in flight', async () => {
 		const event = await eventSequence().map(toolOutput({ name: 'get_note' }));
-		expect(event).toEqual({ type: 'tool_succeeded', name: 'get_note' });
+		expect(event).toEqual({ type: 'tool_succeeded', source: 'catalog', name: 'get_note' });
 	});
 
 	it('does not settle a second call onto the first when the outcome names its own', async () => {
 		const mapper = eventSequence();
 		await mapper.map(toolCalled({ callId: 'call-8', name: 'search' }));
 		const event = await mapper.map(toolOutput({ callId: 'call-unknown', name: 'get_note' }));
-		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-unknown', name: 'get_note' });
+		expect(event).toEqual({
+			type: 'tool_succeeded',
+			source: 'catalog',
+			callId: 'call-unknown',
+			name: 'get_note'
+		});
 	});
 });
 describe('Agent reasoning event invariants', () => {
@@ -272,10 +296,10 @@ it('delivers the complete tool, reasoning and text sequence in provider order', 
 		{ type: 'text_delta', text: 'Done' }
 	]);
 	expect(await fixture.collect()).toEqual([
-		{ type: 'tool_started', callId: 'a', name: 'search', arguments: {} },
+		{ type: 'tool_started', source: 'catalog', callId: 'a', name: 'search', arguments: {} },
 		{ type: 'reasoning_delta', text: 'Look up context' },
 		{ type: 'text_delta', text: 'Searching' },
-		{ type: 'tool_succeeded', callId: 'a', name: 'search' },
+		{ type: 'tool_succeeded', source: 'catalog', callId: 'a', name: 'search' },
 		{ type: 'reasoning_delta', text: 'Now answer' },
 		{ type: 'text_delta', text: 'Done' }
 	]);
@@ -293,8 +317,10 @@ it('keeps one execution’s open calls out of the next execution', async () => {
 		right,
 		closed: fixture.turns.closed
 	}).toEqual({
-		left: [{ type: 'tool_started', callId: 'left', name: 'search', arguments: {} }],
-		right: [{ type: 'tool_succeeded', name: 'get_note' }],
+		left: [
+			{ type: 'tool_started', source: 'catalog', callId: 'left', name: 'search', arguments: {} }
+		],
+		right: [{ type: 'tool_succeeded', source: 'catalog', name: 'get_note' }],
 		closed: [true, true]
 	});
 });

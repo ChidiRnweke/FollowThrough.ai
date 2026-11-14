@@ -186,8 +186,20 @@ class UnconfirmedCancelTransport extends StoppableTransport {
 
 const streamedEvents: AgentEvent[] = [
 	{ type: 'text_delta', text: 'Let me check. ' },
-	{ type: 'tool_started', callId: 'call-1', name: 'find_references', arguments: { query: 'x' } },
-	{ type: 'tool_succeeded', callId: 'call-1', name: 'find_references', output: { count: 2 } },
+	{
+		type: 'tool_started',
+		source: 'catalog',
+		callId: 'call-1',
+		name: 'find_references',
+		arguments: { query: 'x' }
+	},
+	{
+		type: 'tool_succeeded',
+		source: 'catalog',
+		callId: 'call-1',
+		name: 'find_references',
+		output: { count: 2 }
+	},
 	{ type: 'text_delta', text: 'Found two.' }
 ];
 
@@ -248,8 +260,20 @@ describe('chat event projection', () => {
 		const { reply } = await sendWith([
 			{ type: 'reasoning_delta', text: 'Let me search. ' },
 			{ type: 'reasoning_delta', text: 'Broadly first.' },
-			{ type: 'tool_started', callId: 'call-1', name: 'search', arguments: { query: '*' } },
-			{ type: 'tool_succeeded', callId: 'call-1', name: 'search', output: { count: 1 } },
+			{
+				type: 'tool_started',
+				source: 'catalog',
+				callId: 'call-1',
+				name: 'search',
+				arguments: { query: '*' }
+			},
+			{
+				type: 'tool_succeeded',
+				source: 'catalog',
+				callId: 'call-1',
+				name: 'search',
+				output: { count: 1 }
+			},
 			{ type: 'text_delta', text: 'Found one.' }
 		]);
 		expect({
@@ -273,9 +297,16 @@ describe('chat event projection', () => {
 	 */
 	it('settles a reported failure into its own arm, keeping the detail', async () => {
 		const { reply } = await sendWith([
-			{ type: 'tool_started', callId: 'call-9', name: 'edit_note', arguments: { noteId: 'n1' } },
+			{
+				type: 'tool_started',
+				source: 'catalog',
+				callId: 'call-9',
+				name: 'edit_note',
+				arguments: { noteId: 'n1' }
+			},
 			{
 				type: 'tool_reported_failure',
+				source: 'catalog',
 				callId: 'call-9',
 				name: 'edit_note',
 				failure: 'No edits were applied.',
@@ -301,6 +332,7 @@ describe('chat event projection', () => {
 					recovery: 'Correct the problems below and submit a new tool call.',
 					details: { problems: ['oldText was not found.'] }
 				},
+				source: 'catalog',
 				status: 'reported_failure'
 			}
 		]);
@@ -308,7 +340,13 @@ describe('chat event projection', () => {
 
 	it('settles a failed call onto the row its call opened', async () => {
 		const { reply } = await sendWith([
-			{ type: 'tool_started', callId: 'call-3', name: 'save_note', arguments: { title: 'A' } },
+			{
+				type: 'tool_started',
+				source: 'catalog',
+				callId: 'call-3',
+				name: 'save_note',
+				arguments: { title: 'A' }
+			},
 			{ type: 'tool_failed', callId: 'call-3', name: 'save_note', failure: 'Denied' }
 		]);
 		expect(entryTools(reply)).toEqual([
@@ -327,6 +365,7 @@ describe('chat event projection', () => {
 		const { reply } = await sendWith([
 			{
 				type: 'approval_required',
+				source: 'catalog',
 				runId,
 				callId: 'reviewed-note',
 				name: 'save_note',
@@ -345,6 +384,7 @@ describe('chat event projection', () => {
 				[
 					{
 						type: 'approval_required',
+						source: 'catalog',
 						runId,
 						callId: 'call-a',
 						name: 'create_todo',
@@ -352,6 +392,7 @@ describe('chat event projection', () => {
 					},
 					{
 						type: 'approval_required',
+						source: 'catalog',
 						runId,
 						callId: 'call-b',
 						name: 'archive_note',
@@ -379,8 +420,22 @@ describe('chat event projection', () => {
 		const store = testChat(
 			'test-session',
 			new FailingTransport([
-				{ type: 'approval_required', runId, callId: 'call-a', name: 'create_todo', arguments: {} },
-				{ type: 'approval_required', runId, callId: 'call-b', name: 'archive_note', arguments: {} }
+				{
+					type: 'approval_required',
+					source: 'catalog',
+					runId,
+					callId: 'call-a',
+					name: 'create_todo',
+					arguments: {}
+				},
+				{
+					type: 'approval_required',
+					source: 'catalog',
+					runId,
+					callId: 'call-b',
+					name: 'archive_note',
+					arguments: {}
+				}
 			]),
 			new MemoryStorage()
 		);

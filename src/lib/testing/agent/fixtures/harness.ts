@@ -23,6 +23,8 @@ export const harnessTurnDependencies = (
 	| 'agentAvailable'
 	| 'tools'
 	| 'mcpTools'
+	| 'connectorTools'
+	| 'connectors'
 	| 'toolset'
 	| 'toolPreferences'
 	| 'toolCatalog'
@@ -38,6 +40,8 @@ export const harnessTurnDependencies = (
 	agentAvailable: true,
 	tools: () => tools,
 	mcpTools: () => tools,
+	connectorTools: () => [],
+	connectors: { kind: 'off' },
 	toolset: createAgentToolset,
 	toolPreferences: { view: async () => [] },
 	toolCatalog: new AgentToolCatalogService(),

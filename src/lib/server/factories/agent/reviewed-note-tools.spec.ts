@@ -65,6 +65,7 @@ const setup = () => {
 			pending
 		);
 	const call: PendingAgentDecision = {
+		source: 'catalog',
 		callId: 'note-edit-1',
 		toolName: 'edit_note',
 		arguments: { noteId: note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] }
@@ -204,6 +205,7 @@ describe('Revision-bound note tool approvals', () => {
 		const fixture = setup();
 		const tools = fixture.registry();
 		const call: PendingAgentDecision = {
+			source: 'catalog',
 			callId: 'note-save',
 			toolName: 'save_note',
 			arguments: { noteId: fixture.note.id, markdown: 'Launch Tuesday.' }

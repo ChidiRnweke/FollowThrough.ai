@@ -186,7 +186,7 @@ describe('A turn that parks on an approval', () => {
 		});
 		expect(outcome).toMatchObject({
 			kind: 'approval',
-			pending: [{ callId: 'call-approval', toolName: 'save_note', arguments: { noteId: 'n' } }]
+			pending: [{ callId: 'call-approval', name: 'save_note', arguments: { noteId: 'n' } }]
 		});
 	});
 

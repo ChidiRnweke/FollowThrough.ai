@@ -11,7 +11,8 @@ import type {
 	StoredAgentRunEventRecord,
 	StoredMessage,
 	AgentRunReceipt,
-	SubmitAgentRunInput
+	SubmitAgentRunInput,
+	ToolSubject
 } from '$lib/models/agent';
 
 import type { WorkspaceValues } from '$lib/models/workspace-records';
@@ -272,9 +273,9 @@ const applyToolActivity = (parts: ChatPart[], incoming: ChatToolActivity): void 
 };
 
 /** What a row keeps across a change of state: which call it is, and what it was asked. */
-const toolIdentity = (tool: ChatToolActivityBase) => ({
+const toolIdentity = (tool: ChatToolActivityBase & ToolSubject) => ({
 	callId: tool.callId,
-	name: tool.name,
+	...subjectOf(tool),
 	arguments: tool.arguments,
 	...(tool.runId ? { runId: tool.runId } : {})
 });
@@ -963,9 +964,14 @@ export class Chat implements ChatSession {
 			for (const pending of snapshot.pendingDecisions)
 				applyToolActivity(reply.parts, {
 					callId: pending.callId,
-					name: pending.toolName,
+					...(pending.source === 'catalog'
+						? {
+								source: 'catalog' as const,
+								name: pending.toolName,
+								...(pending.review ? { noteReview: readNoteReview(pending.review) } : {})
+							}
+						: { source: 'connector' as const, name: pending.toolName }),
 					arguments: toolArguments(pending.arguments),
-					...(pending.review ? { noteReview: readNoteReview(pending.review) } : {}),
 					runId: snapshot.run.id,
 					status: 'approval_required'
 				});
@@ -1007,14 +1013,14 @@ export class Chat implements ChatSession {
 			reply.status = 'streaming';
 			applyToolActivity(reply.parts, {
 				callId: event.callId,
-				name: event.name,
+				...subjectOf(event),
 				arguments: toolArguments(event.arguments),
 				status: 'running'
 			});
 		} else if (event.type === 'tool_succeeded') {
 			applyToolActivity(reply.parts, {
 				callId: event.callId,
-				name: event.name,
+				...subjectOf(event),
 				arguments: {},
 				...(event.output === undefined ? {} : { output: event.output }),
 				status: 'succeeded'
@@ -1022,7 +1028,7 @@ export class Chat implements ChatSession {
 		} else if (event.type === 'tool_reported_failure') {
 			applyToolActivity(reply.parts, {
 				callId: event.callId,
-				name: event.name,
+				...subjectOf(event),
 				arguments: {},
 				failure: event.failure,
 				output: event.output,
@@ -1041,7 +1047,7 @@ export class Chat implements ChatSession {
 			reply.status = 'awaiting_approval';
 			applyToolActivity(reply.parts, {
 				callId: event.callId,
-				name: event.name,
+				...subjectOf(event),
 				arguments: toolArguments(event.arguments),
 				...(event.review ? { noteReview: readNoteReview(event.review) } : {}),
 				runId: event.runId,
@@ -1064,3 +1070,9 @@ export class Chat implements ChatSession {
 		}
 	}
 }
+
+/** An event's subject as one value, so its `source` and `name` stay paired. */
+const subjectOf = (event: ToolSubject): ToolSubject =>
+	event.source === 'catalog'
+		? { source: 'catalog', name: event.name }
+		: { source: 'connector', name: event.name };

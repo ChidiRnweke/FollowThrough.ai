@@ -64,6 +64,7 @@ describe('time-awareness assertions', () => {
 						event: {
 							type: 'tool_started' as const,
 							callId: call.callId,
+							source: 'catalog' as const,
 							name,
 							arguments: call.arguments
 						}
@@ -73,7 +74,12 @@ describe('time-awareness assertions', () => {
 						runId,
 						attempt: 1,
 						createdAt: new Date(end),
-						event: { type: 'tool_succeeded' as const, callId: call.callId, name }
+						event: {
+							type: 'tool_succeeded' as const,
+							callId: call.callId,
+							source: 'catalog' as const,
+							name
+						}
 					}
 				];
 			});

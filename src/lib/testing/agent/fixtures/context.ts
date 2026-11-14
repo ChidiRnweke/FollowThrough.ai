@@ -104,7 +104,8 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 			input: RunAgentInput,
 			origin: { provenanceId: ProvenanceId },
 			parked: AgentRun['pendingDecisions'] = [],
-			signal: AbortSignal = new AbortController().signal
+			signal: AbortSignal = new AbortController().signal,
+			executionMode: AgentRun['executionMode'] = 'approval_required'
 		) {
 			if (!(await conversations.findById(input.conversationId))) {
 				const conversation = await journal.createWorkflow({ title: 'Context preparation' });
@@ -119,7 +120,7 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 				userId: actor.userId,
 				conversationId: input.conversationId,
 				model: 'test/model',
-				executionMode: 'approval_required',
+				executionMode,
 				status: 'queued',
 				requestId: crypto.randomUUID(),
 				pendingDecisions: parked,

@@ -1,15 +1,21 @@
-import { ValidationError } from '$lib/errors';
+import { AgentProviderFailure, ValidationError } from '$lib/errors';
+import { agentToolNameSchema, toolNameSchema } from '$lib/models/agent';
 import type {
 	AgentTool,
 	AgentToolPolicy,
 	AgentToolset,
+	ConnectorAgentTool,
 	PreparedAction,
 	ToolPreparation
 } from '$lib/models/agent-tool-protocol';
 import { agentPayloadResultSchema, type AgentPayload } from '$lib/models/agent/payload';
 import type { Tool } from '@openai/agents';
 import { z } from 'zod';
-import { sdkTool, withToolFeedback } from '$lib/server/infrastructure/agents/sdk-tool';
+import {
+	sdkConnectorTool,
+	sdkTool,
+	withToolFeedback
+} from '$lib/server/infrastructure/agents/sdk-tool';
 import { bindToolArguments, toolOutput } from './arguments';
 import { describeTools } from './catalog';
 
@@ -35,12 +41,17 @@ export const searchToolsParameters = z
  */
 export const createAgentToolset = (
 	tools: readonly AgentTool[],
+	connectorTools: readonly ConnectorAgentTool[],
 	policy: AgentToolPolicy
 ): AgentToolset => {
-	const byName = new Map(tools.map((entry) => [entry.name, entry]));
+	const byName = new Map<string, AgentTool>(tools.map((entry) => [entry.name, entry]));
+	const connectorsByName = new Map<string, ConnectorAgentTool>(
+		connectorTools.map((entry) => [entry.name, entry])
+	);
 	const reviews = new Map<string, string>();
 	const preparations = new Map<string, { input: string; preparation: Promise<ToolPreparation> }>();
 	for (const decision of policy.parked) {
+		if (decision.source !== 'catalog') continue;
 		const entry = byName.get(decision.toolName);
 		if (entry?.kind !== 'reviewed') continue;
 		if (!decision.review) throw new Error('A saved note approval is missing its prepared review');
@@ -96,7 +107,7 @@ export const createAgentToolset = (
 	/** Run a prepared action. Its errors reach the model through the tool's feedback boundary. */
 	const run = async (action: PreparedAction): Promise<AgentPayload> => {
 		policy.signal.throwIfAborted();
-		return toolOutput(await action.execute());
+		return toolOutput(await action.execute(policy.signal));
 	};
 
 	const build = (entry: AgentTool, gated: boolean): Tool<unknown> =>
@@ -123,6 +134,40 @@ export const createAgentToolset = (
 			}
 		});
 
+	/**
+	 * A connector tool parses its own arguments against the server's schema, so its
+	 * preparation is the tool's; approval comes from the harness's decision for this run.
+	 */
+	const buildConnector = (entry: ConnectorAgentTool): Tool<unknown> => {
+		const prepareConnector = async (
+			input: unknown,
+			callId: string | undefined
+		): Promise<ToolPreparation> =>
+			withToolFeedback(policy.signal, () =>
+				prepare(
+					async (payload) => ({ kind: entry.approval, action: entry.prepare(payload, callId) }),
+					readPayload(input),
+					callId
+				)
+			);
+		return sdkConnectorTool({
+			name: entry.name,
+			description: entry.description,
+			inputSchema: entry.inputSchema,
+			signal: policy.signal,
+			isEnabled: () => policy.isDiscovered(entry.name),
+			needsApproval: async (input, callId) =>
+				(await prepareConnector(input, callId)).kind === 'approval_required',
+			execute: async (input, callId) => {
+				const prepared = await prepareConnector(input, callId);
+				if (prepared.kind === 'failure') return prepared;
+				return withToolFeedback(policy.signal, async () =>
+					policy.spill(callId, await run(prepared.action))
+				);
+			}
+		});
+	};
+
 	const permitted = [...policy.plan.initial, ...policy.plan.discoverable].flatMap((name) => {
 		const entry = byName.get(name);
 		return entry ? [entry] : [];
@@ -137,7 +182,7 @@ export const createAgentToolset = (
 				async (payload) => ({
 					kind: 'ready',
 					action: bindToolArguments(searchToolsParameters, payload, async ({ query, limit }) =>
-						describeTools(permitted, await policy.discover(query, limit ?? 5))
+						describeTools(permitted, connectorTools, await policy.discover(query, limit ?? 5))
 					)
 				}),
 				input,
@@ -156,16 +201,61 @@ export const createAgentToolset = (
 				const entry = byName.get(name);
 				return entry ? [build(entry, true)] : [];
 			}),
+			...connectorTools.map(buildConnector),
 			searchTools
 		],
-		checkpoint(pending) {
-			const entry = byName.get(pending.toolName);
-			if (entry?.kind !== 'reviewed') return pending;
-			const content = reviews.get(pending.callId);
-			if (content === undefined) throw new Error('A note approval has no prepared review');
-			return { ...pending, review: { kind: entry.review.kind, content } };
+		checkpoint(parked) {
+			const entry = byName.get(parked.name);
+			if (entry) {
+				const decision = {
+					source: 'catalog' as const,
+					callId: parked.callId,
+					toolName: entry.name,
+					arguments: parked.arguments
+				};
+				if (entry.kind !== 'reviewed') return decision;
+				const content = reviews.get(parked.callId);
+				if (content === undefined) throw new Error('A note approval has no prepared review');
+				return { ...decision, review: { kind: entry.review.kind, content } };
+			}
+			const connector = connectorsByName.get(parked.name);
+			if (connector)
+				return {
+					source: 'connector',
+					callId: parked.callId,
+					toolName: connector.name,
+					checksum: connector.checksum,
+					arguments: parked.arguments
+				};
+			// A catalog tool this run did not build parks as itself, as before connectors (ADR 0049).
+			const catalogName = toolNameSchema.safeParse(parked.name);
+			if (catalogName.success)
+				return {
+					source: 'catalog',
+					callId: parked.callId,
+					toolName: catalogName.data,
+					arguments: parked.arguments
+				};
+			throw new AgentProviderFailure(
+				`The provider parked a run on "${parked.name}", which is not a tool this agent offers`,
+				'UNKNOWN_PARKED_CALL',
+				false
+			);
+		},
+		subject(name) {
+			const connector = connectorsByName.get(name);
+			if (connector) return { source: 'connector', name: connector.name };
+			const catalog = agentToolNameSchema.safeParse(name);
+			return catalog.success ? { source: 'catalog', name: catalog.data } : undefined;
 		}
 	};
+};
+
+/** The model's arguments as JSON; anything else is a call the model can correct. */
+const readPayload = (input: unknown): AgentPayload => {
+	const payload = agentPayloadResultSchema.parse(input);
+	if (payload.kind === 'corrupt') throw new ValidationError(payload.message);
+	return payload.value;
 };
 
 interface SdkToolOptions {

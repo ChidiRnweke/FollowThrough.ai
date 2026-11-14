@@ -1,6 +1,7 @@
 import type { CatalogConnectorId } from '$lib/models/connectors';
 import type { ActorContext } from '$lib/models/identity';
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
+import type { HarnessConnectors } from '$lib/server/controllers/agent/controller';
 import type { ConnectorsDependencies } from '$lib/server/controllers/connectors/controller';
 import type { Database } from '$lib/server/db';
 import type { SecretSealing } from '$lib/server/infrastructure/crypto/secret-box';
@@ -40,35 +41,45 @@ export interface ConnectorsCapabilityInput {
 	readonly embeddings: ConnectorToolEmbedding;
 }
 
+export interface ConnectorsCapability {
+	readonly controller: ConnectorsDependencies;
+	/** What the agent harness reads to offer connector tools. */
+	readonly harness: HarnessConnectors;
+}
+
 export const createConnectorsCapability = (
 	actor: ActorContext,
 	input: ConnectorsCapabilityInput
-): ConnectorsDependencies => {
+): ConnectorsCapability => {
 	const policy = new ConnectorToolPolicyRules();
 	const configuration = input.configuration;
-	if (configuration.kind === 'unconfigured') return { policy, setup: { kind: 'unconfigured' } };
+	if (configuration.kind === 'unconfigured')
+		return { controller: { policy, setup: { kind: 'unconfigured' } }, harness: { kind: 'off' } };
 	const directory = new ConnectorDirectory({
 		connectors: new ConnectorRecords(actor, input.db, configuration.secrets),
 		authorizations: new ConnectorAuthorizationRecords(actor, input.db, configuration.secrets),
 		now: input.now
 	});
 	return {
-		policy,
-		setup: {
-			kind: 'configured',
-			registry: directory,
-			attempts: directory,
-			authorizer: new ConnectorAuthorization({
-				fetch: configuration.fetch,
-				origin: configuration.origin,
-				preregistered: configuration.preregistered,
+		controller: {
+			policy,
+			setup: {
+				kind: 'configured',
+				registry: directory,
+				attempts: directory,
+				authorizer: new ConnectorAuthorization({
+					fetch: configuration.fetch,
+					origin: configuration.origin,
+					preregistered: configuration.preregistered,
+					now: input.now
+				}),
+				servers: new ConnectorServers(configuration.fetch),
+				embeddings: input.embeddings,
+				preregistered: new Set(configuration.preregistered.keys()),
+				transactionRunner: input.transactionRunner,
 				now: input.now
-			}),
-			servers: new ConnectorServers(configuration.fetch),
-			embeddings: input.embeddings,
-			preregistered: new Set(configuration.preregistered.keys()),
-			transactionRunner: input.transactionRunner,
-			now: input.now
-		}
+			}
+		},
+		harness: { kind: 'on', source: directory, policy }
 	};
 };

@@ -1,14 +1,18 @@
 import { AgentProviderFailure } from '$lib/errors';
 import type { ProviderToolCall } from '$lib/models/agent';
 import type { OutputSegment, StoredAgentRunEventRecord } from '$lib/models/agent';
-import type { AgentEvent, AgentToolOutcome, ProviderStreamEvent } from '$lib/models/agent';
-import type { AgentToolName } from '$lib/models/agent/tool-catalog';
+import type {
+	AgentEvent,
+	AgentToolOutcome,
+	ProviderStreamEvent,
+	ToolSubject
+} from '$lib/models/agent';
 export interface AgentStreamPresentation {
 	start(call: ProviderToolCall): ProviderToolCall & { readonly callId: string };
 	/** A call the SDK opened, as a running row; absent when it never runs (see {@link settled}). */
 	started(
 		call: ProviderToolCall & { readonly callId: string },
-		name: AgentToolName | undefined
+		subject: ToolSubject | undefined
 	): AgentEvent | undefined;
 	completed(call: ProviderToolCall, active: ReadonlyMap<string, ProviderToolCall>): CompletedCall;
 
@@ -16,7 +20,7 @@ export interface AgentStreamPresentation {
 	/** How a finished call settles in the journal. */
 	settled(
 		call: CompletedCall,
-		name: AgentToolName | undefined,
+		subject: ToolSubject | undefined,
 		output: AgentToolOutcome
 	): AgentEvent;
 	reasoning(
@@ -54,10 +58,10 @@ export class AgentStreamPresentationService implements AgentStreamPresentation {
 	}
 	started(
 		call: ProviderToolCall & { readonly callId: string },
-		name: AgentToolName | undefined
+		subject: ToolSubject | undefined
 	): AgentEvent | undefined {
-		return name !== undefined && call.arguments.kind === 'value'
-			? { type: 'tool_started', callId: call.callId, name, arguments: call.arguments.value }
+		return subject !== undefined && call.arguments.kind === 'value'
+			? { type: 'tool_started', callId: call.callId, arguments: call.arguments.value, ...subject }
 			: undefined;
 	}
 
@@ -74,11 +78,11 @@ export class AgentStreamPresentationService implements AgentStreamPresentation {
 
 	settled(
 		call: CompletedCall,
-		name: AgentToolName | undefined,
+		subject: ToolSubject | undefined,
 		output: AgentToolOutcome
 	): AgentEvent {
 		const id = call.callId === undefined ? {} : { callId: call.callId };
-		if (name === undefined)
+		if (subject === undefined)
 			return {
 				type: 'tool_failed',
 				...id,
@@ -93,23 +97,25 @@ export class AgentStreamPresentationService implements AgentStreamPresentation {
 			return {
 				type: 'tool_failed',
 				...id,
-				name,
+				name: subject.name,
 				failure: 'The tool arguments were not valid JSON, so the tool did not run.'
 			};
-		const identity = { ...id, name };
+		const identity = { ...id, ...subject };
 		switch (output.kind) {
 			case 'none':
 				return { type: 'tool_succeeded', ...identity };
 			case 'corrupt':
 				return {
 					type: 'tool_failed',
-					...identity,
+					...id,
+					name: subject.name,
 					failure: `The tool result could not be read. ${output.message}`
 				};
 			case 'unreadable_failure':
 				return {
 					type: 'tool_failed',
-					...identity,
+					...id,
+					name: subject.name,
 					failure: `The tool reported a failure that could not be read. ${output.message}`
 				};
 			case 'succeeded':

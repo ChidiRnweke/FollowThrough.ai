@@ -83,7 +83,9 @@ it.each(requests)(
 	async ({ name, action, input }) => {
 		const tool = toolsFor(true).find((tool) => tool.name === name);
 		if (!tool) throw new Error(`Missing ${name}`);
-		await expect(directTool(tool).prepare(input).execute()).rejects.toThrow(
+		await expect(
+			directTool(tool).prepare(input).execute(new AbortController().signal)
+		).rejects.toThrow(
 			`projectId is required to ${action}. Retry naming one of these projects: Renamed inbox (${testProjectId()}).`
 		);
 	}
@@ -93,7 +95,9 @@ it.each(requests)(
 	async ({ name, action, input }) => {
 		const tool = toolsFor(false).find((tool) => tool.name === name);
 		if (!tool) throw new Error(`Missing ${name}`);
-		await expect(directTool(tool).prepare(input).execute()).rejects.toThrow(
+		await expect(
+			directTool(tool).prepare(input).execute(new AbortController().signal)
+		).rejects.toThrow(
 			`projectId is required to ${action}, and this workspace has no projects yet. Call create_project first, then retry with its id.`
 		);
 	}

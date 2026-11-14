@@ -105,5 +105,15 @@ export const connectorsFixture = (options: { readonly origin?: string } = {}) =>
 			now: clock.now
 		}
 	});
-	return { clock, authorizationServer, linear, docs, network, records, embeddings, controller };
+	return {
+		clock,
+		authorizationServer,
+		linear,
+		docs,
+		network,
+		records,
+		directory,
+		embeddings,
+		controller
+	};
 };

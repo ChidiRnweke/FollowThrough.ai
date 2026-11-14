@@ -263,7 +263,12 @@ describe('Postgres agent settings repository invariants', () => {
 			requestId: 'repository-contract-paused-1',
 			serializedState: 'serialized-state',
 			pendingDecisions: [
-				{ callId: 'call-1', toolName: 'create_note', arguments: { title: 'Draft' } }
+				{
+					source: 'catalog' as const,
+					callId: 'call-1',
+					toolName: 'create_note',
+					arguments: { title: 'Draft' }
+				}
 			],
 			inputSnapshot: { conversationId: conversation.id, prompt: 'Pause here' },
 			createdAt: now,
@@ -295,7 +300,12 @@ describe('Postgres agent settings repository invariants', () => {
 			requestId: 'repository-contract-paused-2',
 			serializedState: 'serialized-state',
 			pendingDecisions: [
-				{ callId: 'call-2', toolName: 'archive_note', arguments: { noteId: 'note-1' } }
+				{
+					source: 'catalog' as const,
+					callId: 'call-2',
+					toolName: 'archive_note',
+					arguments: { noteId: 'note-1' }
+				}
 			],
 			inputSnapshot: { conversationId: conversation.id, prompt: 'Pause here' },
 			createdAt: now,
@@ -303,7 +313,14 @@ describe('Postgres agent settings repository invariants', () => {
 		});
 		expect({ state: run.serializedState, pending: run.pendingDecisions }).toEqual({
 			state: 'serialized-state',
-			pending: [{ callId: 'call-2', toolName: 'archive_note', arguments: { noteId: 'note-1' } }]
+			pending: [
+				{
+					source: 'catalog' as const,
+					callId: 'call-2',
+					toolName: 'archive_note',
+					arguments: { noteId: 'note-1' }
+				}
+			]
 		});
 	});
 });
@@ -443,6 +460,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		const owner = actor('97106');
 		const review = { kind: 'note_change' as const, content: JSON.stringify(noteReviewBuilder()) };
 		const pending = {
+			source: 'catalog' as const,
 			callId: 'reviewed-save',
 			toolName: 'save_note' as const,
 			arguments: { noteId: noteReviewBuilder().change.noteId, markdown: 'Tuesday' },
@@ -462,6 +480,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		const events = new AgentRunEventRecords(owner, context.db);
 		await events.append(run.id, 1, {
 			type: 'approval_required',
+			source: 'catalog' as const,
 			runId: run.id,
 			callId: pending.callId,
 			name: pending.toolName,
@@ -509,6 +528,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		const events = new AgentRunEventRecords(actor('95'), context.db);
 		await events.append(run.id, 1, {
 			type: 'tool_reported_failure',
+			source: 'catalog' as const,
 			callId: 'call-95',
 			name: 'edit_note',
 			failure: 'No edits were applied.',
@@ -517,6 +537,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		const [replayed] = await events.replay(run.id, '0');
 		expect(replayed?.kind === 'readable' && replayed.event).toEqual({
 			type: 'tool_reported_failure',
+			source: 'catalog' as const,
 			callId: 'call-95',
 			name: 'edit_note',
 			failure: 'No edits were applied.',
@@ -534,6 +555,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		const run = await seedQueuedRun('103');
 		const runs = new AgentRunRecords(actor('103'), context.db);
 		const parked = {
+			source: 'catalog' as const,
 			callId: 'call-103',
 			toolName: 'archive_note' as const,
 			arguments: { noteId: '40000000-0000-4000-8000-000000000103' }
@@ -567,12 +589,14 @@ describe('Postgres durable agent run repository invariants', () => {
 		const events = new AgentRunEventRecords(actor('96'), context.db);
 		await events.append(run.id, 1, {
 			type: 'tool_succeeded',
+			source: 'catalog' as const,
 			callId: 'call-96',
 			name: 'save_note'
 		});
 		const [replayed] = await events.replay(run.id, '0');
 		expect(replayed?.kind === 'readable' && replayed.event).toEqual({
 			type: 'tool_succeeded',
+			source: 'catalog' as const,
 			callId: 'call-96',
 			name: 'save_note'
 		});

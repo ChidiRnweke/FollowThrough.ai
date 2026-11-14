@@ -48,6 +48,7 @@ describe('Resuming reviewed tool calls', () => {
 			'authored'
 		);
 		const pending: PendingAgentDecision = {
+			source: 'catalog',
 			callId: 'reviewed-edit',
 			toolName: 'edit_note',
 			arguments: { noteId: fixture.note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] },
@@ -72,6 +73,7 @@ describe('Resuming reviewed tool calls', () => {
 			fixture
 				.open([
 					{
+						source: 'catalog',
 						callId: 'missing-review',
 						toolName: 'edit_note',
 						arguments: {

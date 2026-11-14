@@ -8,7 +8,7 @@ import type { ProjectId } from '$lib/models/projects';
 import { describe, expect, it } from 'vitest';
 
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
-import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
+import { chatToolActivity, type ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
 import { passLabelText, sourcesRowLabel, runningSteps, turnContext } from './turn-context';
 
 const ATLAS = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
@@ -22,13 +22,15 @@ const shell = shellContextBuilder({
 	]
 });
 
-const call = (over: ToolActivityOverrides): ChatToolActivity => ({
-	callId: '00000000-0000-4000-8000-0000000000aa',
-	name: 'get_note',
-	arguments: { noteId: ATLAS },
-	status: 'succeeded',
-	...over
-});
+const call = (over: ToolActivityOverrides): ChatToolActivity =>
+	chatToolActivity(
+		{
+			callId: '00000000-0000-4000-8000-0000000000aa',
+			name: 'get_note',
+			arguments: { noteId: ATLAS }
+		},
+		over
+	);
 
 const notePath = (id: string) => `/projects/proj-1/notes/${id}.md`;
 

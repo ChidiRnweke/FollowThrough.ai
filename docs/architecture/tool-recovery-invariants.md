@@ -44,6 +44,10 @@ repeated by the boundary.
 every `execute` in `withToolFeedback`, and owns the SDK error handler, which turns only the SDK's
 own rejection of the model's input into feedback. Chisel's `agent:tool-boundary` rule allows the SDK's
 `tool()` nowhere else, so the policy cannot be skipped. MCP handlers use the same wrapper.
+`sdkConnectorTool`, in the same adapter, builds connector tools (ADR 0049): it applies the same
+feedback policy and publishes the server's schema non-strict, because strict mode would rewrite
+what the server accepts. A connector tool checks the model's arguments against that schema itself,
+inside the wrapper and before `needsApproval`, so invalid arguments neither run nor ask either.
 
 `bindToolArguments` validates once and binds the typed arguments to an action. Chat preparation has
 three outcomes: ready, approval required, or the failure envelope itself. It runs inside the

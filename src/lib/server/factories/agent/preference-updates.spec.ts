@@ -95,7 +95,9 @@ const settingsTool = (controller: AgentSettings) => {
 };
 it('returns the previous preferences alongside the saved settings', async () => {
 	const { controller, repository } = setup();
-	const result = await settingsTool(controller).prepare({ executionMode: 'auto_accept' }).execute();
+	const result = await settingsTool(controller)
+		.prepare({ executionMode: 'auto_accept' })
+		.execute(new AbortController().signal);
 	expect({ result, saved: repository.entries.get(testActor().userId) }).toEqual({
 		result: {
 			userId: testActor().userId,
@@ -124,7 +126,7 @@ it('propagates a rejected update and preserves the stored preferences', async ()
 	const { controller, repository } = setup();
 	const result = await settingsTool(controller)
 		.prepare({ defaultModel: 'vendor/missing' })
-		.execute()
+		.execute(new AbortController().signal)
 		.then(
 			(value) => ({ kind: 'unexpected-success', value }),
 			(error) => ({ kind: 'failure', error })

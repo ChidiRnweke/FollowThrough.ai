@@ -1,5 +1,5 @@
 import { NotFoundError } from '$lib/errors';
-import type { ToolDescriptor } from '$lib/models/agent/tool-index';
+import type { QueryVector, ToolDescriptor, ToolDistance } from '$lib/models/agent/tool-index';
 import type { Note, NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { ProvenanceId } from '$lib/models/provenance';
@@ -11,9 +11,24 @@ import type { SkillFinder, SkillUsageRecorder } from '$lib/server/services/skill
 
 export class InMemoryToolRetriever implements ToolRetriever, ToolRanking {
 	names: string[] = [];
+	/** The embedding model its query vectors claim, which stored vectors must match. */
+	constructor(private readonly model = 'in-memory') {}
 
 	async rank(_names: readonly string[], _query: string, _limit: number): Promise<string[]> {
 		return this.names;
+	}
+
+	async queryVector(_query: string): Promise<QueryVector> {
+		void _query;
+		return { model: this.model, vector: [] };
+	}
+
+	/** The scripted order as distances, so a merged ranking keeps it. */
+	async distances(names: readonly string[], _query: QueryVector): Promise<readonly ToolDistance[]> {
+		void _query;
+		return this.names.flatMap((name, index) =>
+			names.includes(name) ? [{ name, distance: index }] : []
+		);
 	}
 
 	async retrieve(

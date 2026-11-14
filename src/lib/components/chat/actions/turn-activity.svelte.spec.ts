@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
-import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
+import { chatToolActivity, type ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
 import TurnActivity from './turn-activity.svelte';
 
 const NOTE_ID = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
@@ -21,13 +21,11 @@ const shell = shellContextBuilder({
 });
 
 let nextCall = 0;
-const call = (over: ToolActivityOverrides): ChatToolActivity => ({
-	callId: `call-${++nextCall}`,
-	name: 'get_note',
-	arguments: { noteId: NOTE_ID },
-	status: 'succeeded',
-	...over
-});
+const call = (over: ToolActivityOverrides): ChatToolActivity =>
+	chatToolActivity(
+		{ callId: `call-${++nextCall}`, name: 'get_note', arguments: { noteId: NOTE_ID } },
+		over
+	);
 
 const grep = () =>
 	call({
@@ -258,7 +256,11 @@ describe('A turn still running is watched, not audited', () => {
 	// Folding mid-stream would reorder the list under the reader as calls settled.
 	it('names the step in flight in the present tense', async () => {
 		const screen = await renderTurn([
-			call({ name: 'grep', status: 'running', arguments: { pattern: 'rollout' } })
+			call({
+				name: 'grep',
+				status: 'running',
+				arguments: { pattern: 'rollout' }
+			})
 		]);
 		await expect.element(screen.getByText(/Searching for/)).toBeVisible();
 	});

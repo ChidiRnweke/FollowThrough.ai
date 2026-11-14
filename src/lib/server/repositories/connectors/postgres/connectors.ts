@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, inArray, lte, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, cosineDistance, eq, inArray, lte, ne, notInArray, sql } from 'drizzle-orm';
+import type { ToolDistance } from '$lib/models/agent/tool-index';
 import { NotFoundError } from '$lib/errors';
 import { agentPayloadObjectSchema } from '$lib/models/agent/payload';
 import {
@@ -21,6 +22,7 @@ import {
 	type NamedSnapshotEntry,
 	type NewConnector,
 	type PendingAuthorization,
+	type RunConnectorTool,
 	type ToolScope
 } from '$lib/models/connectors';
 import type { ActorContext } from '$lib/models/identity';
@@ -265,6 +267,37 @@ export class ConnectorRecords implements ConnectorRepository {
 			)
 			.returning(toolColumns);
 		return row ? toTool(row) : undefined;
+	}
+
+	async runTools(): Promise<readonly RunConnectorTool[]> {
+		const rows = await this.database
+			.select({ ...toolColumns, connectorTitle: schema.connectors.title })
+			.from(schema.connectorTools)
+			.innerJoin(schema.connectors, eq(schema.connectors.id, schema.connectorTools.connectorId))
+			.where(eq(schema.connectors.userId, this.actor.userId))
+			.orderBy(asc(schema.connectorTools.modelName));
+		return rows.map(({ connectorTitle, ...row }) => ({ tool: toTool(row), connectorTitle }));
+	}
+
+	async toolDistances(
+		vector: readonly number[],
+		names: readonly string[],
+		model: string
+	): Promise<readonly ToolDistance[]> {
+		if (names.length === 0) return [];
+		const distance = cosineDistance(schema.connectorTools.embedding, [...vector]);
+		const rows = await this.database
+			.select({ name: schema.connectorTools.modelName, distance })
+			.from(schema.connectorTools)
+			.innerJoin(schema.connectors, eq(schema.connectors.id, schema.connectorTools.connectorId))
+			.where(
+				and(
+					eq(schema.connectors.userId, this.actor.userId),
+					inArray(schema.connectorTools.modelName, [...names]),
+					eq(schema.connectorTools.embeddingModel, model)
+				)
+			);
+		return rows.map((row) => ({ name: row.name, distance: Number(row.distance) }));
 	}
 
 	private owned(id: ConnectorId) {

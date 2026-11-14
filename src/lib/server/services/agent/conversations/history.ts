@@ -15,6 +15,7 @@ import type { TokenCounter } from '$lib/models/tokenization';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 import { createHash } from 'node:crypto';
+import type { AgentPayload } from '$lib/models/agent/payload';
 const INLINE_IMAGE_PLACEHOLDER = '[image omitted from history; ask the user to re-attach it]';
 
 const isInlineImage = (value: string): boolean =>
@@ -83,6 +84,16 @@ export interface ConversationHistory {
 		conversationId: ConversationId,
 		items: readonly PersistedSessionItem[]
 	): Promise<readonly PersistedSessionItem[]>;
+	/**
+	 * A tool output as the current turn should read it: every string over the
+	 * replay threshold moves into an agent file now, not when the turn is stored,
+	 * because a connector's output has no size this app can vouch for.
+	 */
+	spill(
+		conversationId: ConversationId,
+		callId: string | undefined,
+		output: AgentPayload
+	): Promise<AgentPayload>;
 }
 /** Stored agent conversation history, kept small enough to replay to the provider. */
 export class ConversationHistoryService implements ConversationHistory {
@@ -108,6 +119,19 @@ export class ConversationHistoryService implements ConversationHistory {
 		return Promise.all(
 			items.map(withoutInlineImages).map((item) => this.virtualize(conversationId, item))
 		);
+	}
+
+	spill(
+		conversationId: ConversationId,
+		callId: string | undefined,
+		output: AgentPayload
+	): Promise<AgentPayload> {
+		// A call without an id is stored under its content's hash, as a message is.
+		const segment =
+			callId === undefined
+				? createHash('sha256').update(JSON.stringify(output)).digest('hex').slice(0, 16)
+				: safeSegment(callId);
+		return this.walk(conversationId, output, segment, 'output');
 	}
 
 	private virtualize(

@@ -95,3 +95,49 @@ export class InMemoryToolBatchModel implements Model {
 		};
 	}
 }
+
+/** Calls its tools one after another, each once its predecessor's result is back, then answers. */
+export class InMemoryToolSequenceModel implements Model {
+	readonly requests: ModelRequest[] = [];
+	constructor(
+		private readonly calls: readonly { name: string; callId: string; arguments: string }[]
+	) {}
+	async getResponse(): Promise<ModelResponse> {
+		throw new Error('This model requires streaming');
+	}
+	async *getStreamedResponse(request: ModelRequest): AsyncIterable<StreamEvent> {
+		this.requests.push(request);
+		const settled =
+			typeof request.input === 'string'
+				? 0
+				: request.input.filter((item) => item.type === 'function_call_result').length;
+		const next = this.calls[settled];
+		const output: Extract<StreamEvent, { type: 'response_done' }>['response']['output'] = next
+			? [
+					{
+						type: 'function_call',
+						name: next.name,
+						callId: next.callId,
+						status: 'completed',
+						arguments: next.arguments
+					}
+				]
+			: [
+					{
+						type: 'message',
+						role: 'assistant',
+						status: 'completed',
+						content: [{ type: 'output_text', text: 'Done' }]
+					}
+				];
+		yield { type: 'response_started' };
+		yield {
+			type: 'response_done',
+			response: {
+				id: crypto.randomUUID(),
+				usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+				output
+			}
+		};
+	}
+}

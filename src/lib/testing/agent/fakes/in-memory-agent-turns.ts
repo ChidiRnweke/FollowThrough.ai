@@ -1,14 +1,12 @@
 import { AgentProviderFailure } from '$lib/errors';
-import {
-	agentToolNameSchema,
-	type AgentExecutionUpdate,
-	type AgentToolOutcome,
-	type PersistedSessionItem,
-	type ProviderStreamEvent,
-	type ProviderToolOutput,
-	type WebResearchSettings
+import type {
+	AgentExecutionUpdate,
+	AgentToolOutcome,
+	PersistedSessionItem,
+	ProviderStreamEvent,
+	ProviderToolOutput,
+	WebResearchSettings
 } from '$lib/models/agent';
-import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import { readToolOutput } from '$lib/server/repositories/agent/tool-failure';
 import type {
 	AgentProviderTurn,
@@ -39,10 +37,6 @@ export class InMemoryAgentTurns implements AgentTurns {
 
 	calledTools(history: readonly PersistedSessionItem[]): readonly string[] {
 		return history.flatMap((item) => (item.type === 'function_call' ? [item.name] : []));
-	}
-
-	toolName(name: string): AgentToolName | undefined {
-		return agentToolNameSchema.safeParse(name).data;
 	}
 
 	toolOutcome(output: ProviderToolOutput): AgentToolOutcome {
@@ -100,7 +94,12 @@ export class InMemoryAgentTurns implements AgentTurns {
 					: {
 							kind: 'approval',
 							serialize: () => outcome.serializedState,
-							pending: outcome.pendingDecisions,
+							// The provider parks raw calls; the run's tool set names them.
+							pending: outcome.pendingDecisions.map((decision) => ({
+								callId: decision.callId,
+								name: decision.toolName,
+								arguments: decision.arguments
+							})),
 							sessionItems: outcome.sessionItems
 						}
 		};

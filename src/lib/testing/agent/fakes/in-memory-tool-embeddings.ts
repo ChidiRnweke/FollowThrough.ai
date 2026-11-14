@@ -1,4 +1,8 @@
-import type { StoredToolEmbedding, ToolEmbeddingWrite } from '$lib/models/agent/tool-index';
+import type {
+	StoredToolEmbedding,
+	ToolDistance,
+	ToolEmbeddingWrite
+} from '$lib/models/agent/tool-index';
 import type { ToolEmbeddingRepository } from '$lib/server/repositories/agent/tool-embeddings';
 import OpenAI from 'openai';
 import { z } from 'zod';
@@ -87,6 +91,16 @@ export class InMemoryToolEmbeddingRepository
 			.sort((a, b) => b.score - a.score)
 			.slice(0, limit)
 			.map((row) => row.name);
+	}
+	async distances(
+		query: readonly number[],
+		names: readonly string[],
+		model: string
+	): Promise<readonly ToolDistance[]> {
+		const wanted = new Set(names);
+		return [...this.rows.values()]
+			.filter((row) => wanted.has(row.name) && row.embeddingModel === model)
+			.map((row) => ({ name: row.name, distance: 1 - cosine(query, row.embedding) }));
 	}
 }
 

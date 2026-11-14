@@ -2,7 +2,7 @@ import { noteBuilder, shellContextBuilder } from '$lib/testing/workspace/fixture
 import type { NoteId } from '$lib/models/notes';
 import { describe, expect, it } from 'vitest';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
-import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
+import { chatToolActivity, type ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
 
 import { opensInPlace, toolDisclosure } from './tool-disclosure';
 
@@ -13,13 +13,11 @@ const shell = shellContextBuilder({
 	noteTree: [noteBuilder({ id: NOTE_ID as NoteId, title: 'Infrastructure' })]
 });
 
-const call = (over: ToolActivityOverrides): ChatToolActivity => ({
-	callId: '00000000-0000-4000-8000-0000000000aa',
-	name: 'get_note',
-	arguments: {},
-	status: 'succeeded',
-	...over
-});
+const call = (over: ToolActivityOverrides): ChatToolActivity =>
+	chatToolActivity(
+		{ callId: '00000000-0000-4000-8000-0000000000aa', name: 'get_note', arguments: {} },
+		over
+	);
 
 const familyOf = (over: ToolActivityOverrides): string => toolDisclosure(call(over), shell).kind;
 
@@ -210,7 +208,11 @@ describe('A look inside the virtual files shows what came back', () => {
 
 	it('earns no chevron while the call is still running', () => {
 		expect(
-			familyOf({ name: 'grep', arguments: { pattern: 'x', path: '/' }, status: 'running' })
+			familyOf({
+				name: 'grep',
+				arguments: { pattern: 'x', path: '/' },
+				status: 'running'
+			})
 		).toBe('none');
 	});
 });

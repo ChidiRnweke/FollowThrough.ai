@@ -540,3 +540,67 @@ export interface AuthorizationChallenge {
 /** How a request to a connector's server authenticates. */
 export type ServerAccess =
 	{ readonly kind: 'anonymous' } | { readonly kind: 'bearer'; readonly token: string };
+
+// --- Calls ------------------------------------------------------------------
+
+/** A connector tool the agent can be offered this run, with the connector it belongs to. */
+export interface RunConnectorTool {
+	readonly tool: ConnectorTool;
+	readonly connectorTitle: string;
+}
+
+/** One block of what a server returned, parsed at the boundary (ADR 0037). */
+export type ConnectorContent =
+	| { readonly kind: 'text'; readonly text: string }
+	/** Chat Completions accepts only text tool output, so the model reads what was omitted. */
+	| {
+			readonly kind: 'binary';
+			readonly media: 'image' | 'audio';
+			readonly mimeType: string;
+			readonly byteSize: number;
+	  }
+	| {
+			readonly kind: 'resource_link';
+			readonly uri: string;
+			readonly name: string;
+			readonly mimeType: string | undefined;
+	  }
+	| {
+			readonly kind: 'resource';
+			readonly uri: string;
+			readonly mimeType: string | undefined;
+			readonly body:
+				| { readonly kind: 'text'; readonly text: string }
+				| { readonly kind: 'blob'; readonly byteSize: number };
+	  };
+
+export type StructuredContent =
+	{ readonly kind: 'present'; readonly value: AgentPayloadObject } | { readonly kind: 'absent' };
+
+export interface ConnectorToolResult {
+	readonly content: readonly ConnectorContent[];
+	readonly structured: StructuredContent;
+	/** The server ran the tool and says it failed; the content says why. */
+	readonly isError: boolean;
+}
+
+export interface ConnectorToolCall {
+	readonly connectorId: ConnectorId;
+	readonly serverName: string;
+	/** The snapshot the tool was offered from; a changed tool runs nothing. */
+	readonly checksum: string;
+	readonly arguments: AgentPayloadObject;
+	/** The model's call id, sent to the server in `_meta`. */
+	readonly callId: string | undefined;
+}
+
+export type ConnectorCallOutcome =
+	| {
+			readonly kind: 'returned';
+			readonly connectorTitle: string;
+			readonly result: ConnectorToolResult;
+	  }
+	/** The service refused the stored sign-in, and only the user can renew it. */
+	| { readonly kind: 'reauthorization_required'; readonly connectorTitle: string }
+	/** The tool changed, disappeared or was turned off after the run was offered it. */
+	| { readonly kind: 'withdrawn'; readonly reason: string };

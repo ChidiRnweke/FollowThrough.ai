@@ -20,6 +20,7 @@ const tool = <Status extends 'succeeded' | 'rejected' | 'running'>(
 	status: Status
 ) => ({
 	callId: 'call-1',
+	source: 'catalog' as const,
 	name,
 	arguments: {},
 	status
