@@ -108,7 +108,7 @@ it.each(['user', 'project'] as const)(
 		const { tool, shared, projectId } = setup(scope);
 		const result = await directTool(tool)
 			.prepare(projectId ? { projectId } : {})
-			.execute();
+			.execute(new AbortController().signal);
 		expect(result).toEqual({
 			entries: [
 				{
@@ -124,7 +124,7 @@ it.each(['user', 'project'] as const)(
 it('refuses an archived project through the agent memory tool', async () => {
 	const { tool, projects } = setup('project');
 	await projects.archive(testProjectId());
-	await expect(directTool(tool).prepare({ projectId: testProjectId() }).execute()).rejects.toThrow(
-		'Memory project was not found'
-	);
+	await expect(
+		directTool(tool).prepare({ projectId: testProjectId() }).execute(new AbortController().signal)
+	).rejects.toThrow('Memory project was not found');
 });

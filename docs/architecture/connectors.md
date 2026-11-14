@@ -73,14 +73,24 @@ authorization server rejects the refresh token, or the server still refuses, the
 `reauthorization_required` with the reason, and the operation fails with a message that tells the
 user to reconnect it.
 
+## Agent calls
+
+The agent offers connector tools through the harness ([agent harness](agent-harness.md#connector-tools)).
+`connectors.callTool` is the one operation behind every connector tool. It checks that the tool
+still matches the snapshot the run was offered and is not turned off, and that the connector is
+connected; otherwise it sends nothing and answers `withdrawn` or `reauthorization_required`. It
+calls the server with the run's abort signal and the model's call id in `_meta`, renews the token
+as listing does, and parses the result into text, binary, resource-link and resource blocks. The
+model reads binary content as a description of what was omitted.
+
 ## Boundaries
 
 - `connect`, `reconnect` and `completeAuthorization` use the `'redacted'` boundary surface. They
   are traced and logged without their arguments or results, which carry tokens and codes.
 - Connector tables are never synced to the browser.
 - No session, client or cache outlives an operation.
-- No connector operation is an agent tool: connecting and choosing what a tool may do are the
-  user's decisions.
+- Connecting and choosing what a tool may do are the user's decisions, so the only connector
+  operation the agent reaches is `callTool`, behind each connector tool.
 
 ## Testing
 

@@ -8,6 +8,7 @@ describe('Turning an event into the journal row it calls for', () => {
 		expect(
 			toolActivity.activity({
 				type: 'tool_reported_failure',
+				source: 'catalog',
 				callId: 'call-9',
 				name: 'edit_note',
 				failure: 'No edits were applied.',
@@ -15,6 +16,7 @@ describe('Turning an event into the journal row it calls for', () => {
 			})
 		).toEqual({
 			callId: 'call-9',
+			source: 'catalog',
 			name: 'edit_note',
 			input: {},
 			failure: 'No edits were applied.',

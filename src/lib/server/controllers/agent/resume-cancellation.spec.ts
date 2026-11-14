@@ -10,8 +10,8 @@ it('still aborts the resumed provider after separate decisions reach the queued 
 		serializedState: 'provider-checkpoint',
 		sessionItems: [],
 		pendingDecisions: [
-			{ callId: 'call-a', toolName: 'create_todo', arguments: {} },
-			{ callId: 'call-b', toolName: 'archive_note', arguments: {} }
+			{ source: 'catalog', callId: 'call-a', toolName: 'create_todo', arguments: {} },
+			{ source: 'catalog', callId: 'call-b', toolName: 'archive_note', arguments: {} }
 		]
 	};
 	const receipt = await fixture.controller.submit({

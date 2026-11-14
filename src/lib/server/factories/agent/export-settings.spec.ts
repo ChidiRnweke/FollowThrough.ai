@@ -41,7 +41,7 @@ describe('agent export settings', () => {
 		};
 		await directTool(tool)
 			.prepare({ projectId: testProjectId(), ...settings })
-			.execute();
+			.execute(new AbortController().signal);
 		expect(await service.getExportSettings(testProjectId())).toEqual(settings);
 	});
 });

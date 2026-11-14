@@ -38,7 +38,9 @@ export const agentSubmissionFixture = (
 			type: 'approval_checkpoint',
 			serializedState: 'provider-checkpoint',
 			sessionItems: [],
-			pendingDecisions: [{ callId: 'call-1', toolName: 'archive_note', arguments: {} }]
+			pendingDecisions: [
+				{ source: 'catalog', callId: 'call-1', toolName: 'archive_note', arguments: {} }
+			]
 		};
 	}
 	const conversations = new InMemoryConversationRepository(testActor(), (runId) =>

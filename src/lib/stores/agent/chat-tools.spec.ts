@@ -14,6 +14,7 @@ import {
 
 const runningTool = (callId = 'call-1'): Extract<ChatToolActivity, { status: 'running' }> => ({
 	callId,
+	source: 'catalog' as const,
 	name: 'find_references',
 	arguments: { query: 'agent skills' },
 	status: 'running'
@@ -21,6 +22,7 @@ const runningTool = (callId = 'call-1'): Extract<ChatToolActivity, { status: 'ru
 
 const completed = (callId: string, output: AgentPayload): ChatToolActivity => ({
 	callId,
+	source: 'catalog' as const,
 	name: 'find_references',
 	arguments: {},
 	output,
@@ -42,6 +44,7 @@ describe('Matching a tool event to the row it settles', () => {
 		const parked: ChatToolActivity = { ...runningTool('call-1'), status: 'approval_required' };
 		const second: ChatToolActivity = {
 			callId: 'call-2',
+			source: 'catalog' as const,
 			name: 'archive_note',
 			arguments: {},
 			status: 'approval_required'
@@ -59,6 +62,7 @@ describe('Merging a tool event into its row', () => {
 	it('takes the outcome from the event', () => {
 		expect(mergeToolActivity(runningTool(), completed('call-1', { count: 2 }))).toEqual({
 			callId: 'call-1',
+			source: 'catalog' as const,
 			name: 'find_references',
 			arguments: { query: 'agent skills' },
 			output: { count: 2 },
@@ -100,6 +104,7 @@ describe('Merging a tool event into its row', () => {
 describe('A failure a tool returned as a value is still a failure', () => {
 	const noOpEdit: ChatToolActivity = {
 		callId: 'call-9',
+		source: 'catalog' as const,
 		name: 'edit_note',
 		arguments: { noteId: 'note-1' },
 		status: 'reported_failure',
@@ -140,6 +145,7 @@ describe('Reading a journalled tool row back into the transcript', () => {
 			row({
 				type: 'tool_activity',
 				callId: 'call-1',
+				source: 'catalog' as const,
 				name: 'save_note',
 				input: { noteId: 'note-1' },
 				output: { noteId: 'note-1' },
@@ -150,6 +156,7 @@ describe('Reading a journalled tool row back into the transcript', () => {
 			kind: 'readable',
 			tool: {
 				callId: 'call-1',
+				source: 'catalog' as const,
 				name: 'save_note',
 				arguments: { noteId: 'note-1' },
 				runId: 'run-1',
@@ -164,6 +171,7 @@ describe('Reading a journalled tool row back into the transcript', () => {
 			row({
 				type: 'tool_activity',
 				callId: 'call-9',
+				source: 'catalog' as const,
 				name: 'edit_note',
 				input: {},
 				output: {
@@ -180,6 +188,7 @@ describe('Reading a journalled tool row back into the transcript', () => {
 			kind: 'readable',
 			tool: {
 				callId: 'call-9',
+				source: 'catalog' as const,
 				name: 'edit_note',
 				arguments: {},
 				runId: 'run-1',
@@ -205,6 +214,7 @@ describe('Reading a journalled tool row back into the transcript', () => {
 		const read = row({
 			type: 'tool_activity',
 			callId: null,
+			source: 'catalog' as const,
 			name: 'search',
 			input: {},
 			output: null,
@@ -243,6 +253,7 @@ describe('Reading saved note reviews', () => {
 		const noteReview = noteReviewBuilder();
 		const parsed = readJournalledTool(
 			{
+				source: 'catalog' as const,
 				name: 'save_note',
 				callId: 'review-1',
 				status: 'approval_required',

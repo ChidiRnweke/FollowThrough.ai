@@ -2,7 +2,8 @@ import { RunPreparationCancelled } from '$lib/errors';
 import {
 	CHAT_WEB_SEARCH_DEFAULTS,
 	DEFAULT_AGENT_MAX_TURNS,
-	type WebResearchOptions
+	type WebResearchOptions,
+	type RunToolName
 } from '$lib/models/agent';
 import type { AgentImagePreparation } from '$lib/server/services/agent/runs/images';
 import type { RunTransitionStore } from '$lib/server/services/agent/runs/transitions';
@@ -85,8 +86,13 @@ import type {
 	AgentToolCompletion,
 	AgentToolPlan,
 	AgentToolPolicy,
-	AgentToolset
+	AgentToolset,
+	ConnectorAgentTool,
+	ConnectorToolBuild
 } from '$lib/models/agent-tool-protocol';
+import type { ConnectorToolName } from '$lib/models/connectors';
+import type { ConnectorToolSource } from '$lib/server/services/connectors/directory';
+import type { ConnectorToolPolicyRule } from '$lib/services/connectors/policy';
 import type { AgentToolContext, McpToolContext } from '$lib/models/agent-tool-context';
 import type { AgentPayload } from '$lib/models/agent/payload';
 import { FIRST_CLASS_TOOL_NAMES, type ToolName } from '$lib/models/agent/tool-catalog';
@@ -252,6 +258,15 @@ export interface AgentHarness {
 	deleteSession(conversationId: ConversationId): Promise<void>;
 }
 
+/** Connectors are off where the deployment cannot seal their credentials. */
+export type HarnessConnectors =
+	| { readonly kind: 'off' }
+	| {
+			readonly kind: 'on';
+			readonly source: ConnectorToolSource;
+			readonly policy: ConnectorToolPolicyRule;
+	  };
+
 /**
  * Everything the {@link AgentHarness} needs to do its work, injected so the
  * controller can be built and tested with repository and provider fakes.
@@ -334,11 +349,19 @@ export interface AgentHarnessDependencies {
 	readonly tools: (context: AgentToolContext) => readonly AgentTool[];
 	/** Every tool an MCP client may call. */
 	readonly mcpTools: (context: McpToolContext) => readonly AgentTool[];
+	/** The connector tools a run offers, built from their stored snapshots (ADR 0049). */
+	readonly connectorTools: (builds: readonly ConnectorToolBuild[]) => readonly ConnectorAgentTool[];
 	/** Turns a run's tools and the harness's policy into the tools the SDK calls. */
-	readonly toolset: (tools: readonly AgentTool[], policy: AgentToolPolicy) => AgentToolset;
+	readonly toolset: (
+		tools: readonly AgentTool[],
+		connectorTools: readonly ConnectorAgentTool[],
+		policy: AgentToolPolicy
+	) => AgentToolset;
+	/** The user's connector tools, when this deployment can hold connectors at all. */
+	readonly connectors: HarnessConnectors;
 	readonly toolPreferences: Pick<ToolPreferenceCapability, 'view'>;
 	readonly toolCatalog: AgentToolCatalog;
-	readonly toolApproval: Pick<AgentToolApprovalPolicy, 'requirement'>;
+	readonly toolApproval: Pick<AgentToolApprovalPolicy, 'requirement' | 'connectorRequirement'>;
 	readonly toolSearch: ToolRanking;
 	/** Wraps each model turn in its trace. */
 	readonly observeTurn: AgentTurnObserver;
@@ -958,14 +981,25 @@ export class AgentSdkHarness implements AgentHarness {
 								new Date(this.dependencies.now())
 							);
 						for (const pending of update.pendingDecisions) {
-							const event: AgentEvent = {
-								type: 'approval_required',
-								runId: run.id,
-								callId: pending.callId,
-								name: pending.toolName,
-								arguments: pending.arguments,
-								...(pending.review ? { review: pending.review } : {})
-							};
+							const event: AgentEvent =
+								pending.source === 'catalog'
+									? {
+											type: 'approval_required',
+											runId: run.id,
+											callId: pending.callId,
+											source: 'catalog',
+											name: pending.toolName,
+											arguments: pending.arguments,
+											...(pending.review ? { review: pending.review } : {})
+										}
+									: {
+											type: 'approval_required',
+											runId: run.id,
+											callId: pending.callId,
+											source: 'connector',
+											name: pending.toolName,
+											arguments: pending.arguments
+										};
 							const record = await this.dependencies.records.append(run.id, 1, event);
 							const activity = this.dependencies.toolActivity.activity(event);
 							if (activity)
@@ -1015,13 +1049,16 @@ export class AgentSdkHarness implements AgentHarness {
 		return {
 			tools,
 			plan,
-			discover: (query, limit) =>
-				this.rankTools(
-					permitted,
-					permitted.map((tool) => tool.name),
+			discover: async (query, limit) => {
+				const ranked = await this.dependencies.toolSearch.rank(
+					permitted
+						.map((tool) => tool.name)
+						.filter((name) => !this.dependencies.toolCatalog.isFirstClass(name)),
 					query,
 					limit
-				),
+				);
+				return ranked.flatMap((name) => permitted.find((tool) => tool.name === name)?.name ?? []);
+			},
 			failed: (value) =>
 				this.dependencies.turns.toolOutcome({ kind: 'value', value }).kind !== 'succeeded'
 		};
@@ -1070,36 +1107,47 @@ export class AgentSdkHarness implements AgentHarness {
 					: [];
 			const permitted = this.permittedTools(tools, disabled);
 			const catalog = this.discoveryCatalog(disabled);
+			const connectorBuilds = await this.connectorBuilds(run);
+			signal.throwIfAborted();
+			const connectorTools = this.dependencies.connectorTools(connectorBuilds.builds);
+			const connectorNames = connectorTools.map((tool) => tool.name);
+			// Connector tools are always the long tail: found through search_tools (ADR 0022).
+			const discoverable = [...catalog, ...connectorNames];
 			const promoted = this.dependencies.toolRecovery.promoted(
 				this.dependencies.turns.calledTools(history),
 				run.pendingDecisions.map((decision) => decision.toolName),
-				catalog
+				discoverable
 			);
 			// `promoted` re-enables tools an earlier turn of the conversation discovered. Without
 			// it the model's own transcript shows it calling a tool the run no longer offers, so it
 			// repeats the call and gets `Tool not found`.
 			const discovered = new Set<string>(promoted);
 			const plan = this.toolPlan(permitted, this.approvalRequired(run.executionMode));
-			const toolset = this.dependencies.toolset(tools, {
+			const toolset = this.dependencies.toolset(tools, connectorTools, {
 				plan,
 				isDiscovered: (name) => discovered.has(name),
 				discover: async (query, limit) => {
-					const found = await this.rankTools(permitted, catalog, query, limit);
+					const found = await this.rankTools(permitted, catalog, connectorNames, query, limit);
 					for (const name of found) discovered.add(name);
 					return found;
 				},
 				completed: input.completed,
 				parked: run.pendingDecisions,
+				spill: (callId, output) =>
+					this.dependencies.conversationHistory.spill(run.conversationId, callId, output),
 				signal
 			});
 			// Only the tools the model can actually see this generation: the long tail is
 			// registered but gated, so naming it here would report an undiscovered tool as callable.
-			const offered = permitted
-				.map((tool) => tool.name)
-				.filter(
-					(name) => this.dependencies.toolCatalog.isFirstClass(name) || promoted.includes(name)
-				);
-			const recovery = this.dependencies.toolRecovery.configuration(offered, catalog);
+			const offered = [
+				...permitted
+					.map((tool) => tool.name)
+					.filter(
+						(name) => this.dependencies.toolCatalog.isFirstClass(name) || promoted.includes(name)
+					),
+				...connectorNames.filter((name) => promoted.includes(name))
+			];
+			const recovery = this.dependencies.toolRecovery.configuration(offered, discoverable);
 			let outputText = '';
 			// Captured by the turn observer before the first update is yielded, so the
 			// checkpoint below can hand the next resume the trace this run belongs to.
@@ -1107,7 +1155,9 @@ export class AgentSdkHarness implements AgentHarness {
 			const { skills: instructionSkills, ...instructionContext } = context;
 			const instructions = this.dependencies.prompts.instructions(
 				instructionContext,
-				instructionSkills
+				instructionSkills,
+				undefined,
+				connectorBuilds.services
 			);
 			const prompt = this.dependencies.prompts.message(
 				context,
@@ -1140,7 +1190,7 @@ export class AgentSdkHarness implements AgentHarness {
 						activeCalls.set(call.callId, call);
 						const started = dependencies.streamPresentation.started(
 							call,
-							dependencies.turns.toolName(call.name)
+							toolset.subject(call.name)
 						);
 						if (started) yield { type: 'event', event: started };
 					}
@@ -1151,7 +1201,7 @@ export class AgentSdkHarness implements AgentHarness {
 							type: 'event',
 							event: dependencies.streamPresentation.settled(
 								resolved,
-								dependencies.turns.toolName(resolved.name),
+								toolset.subject(resolved.name),
 								dependencies.turns.toolOutcome(event.call.output)
 							)
 						};
@@ -1263,16 +1313,91 @@ export class AgentSdkHarness implements AgentHarness {
 			.map((entry) => entry.name);
 	}
 
+	/**
+	 * One query vector ranks catalog and connector tools on one scale, so a
+	 * connector tool competes for the same `limit` places as a catalog tool.
+	 */
 	private async rankTools(
 		permitted: readonly { readonly name: ToolName }[],
 		catalog: readonly string[],
+		connectorNames: readonly ConnectorToolName[],
 		query: string,
 		limit: number
-	): Promise<readonly ToolName[]> {
+	): Promise<readonly RunToolName[]> {
 		const candidates = catalog.filter((name) => !this.dependencies.toolCatalog.isFirstClass(name));
-		if (!candidates.length) return [];
-		const ranked = await this.dependencies.toolSearch.rank(candidates, query, limit);
-		return ranked.flatMap((name) => permitted.find((tool) => tool.name === name)?.name ?? []);
+		if (!candidates.length && !connectorNames.length) return [];
+		const connectors = this.dependencies.connectors;
+		if (!connectorNames.length || connectors.kind === 'off') {
+			const ranked = await this.dependencies.toolSearch.rank(candidates, query, limit);
+			return ranked.flatMap((name) => permitted.find((tool) => tool.name === name)?.name ?? []);
+		}
+		const vector = await this.dependencies.toolSearch.queryVector(query);
+		const [catalogDistances, connectorDistances] = await Promise.all([
+			this.dependencies.toolSearch.distances(candidates, vector),
+			connectors.source.distances(connectorNames, vector)
+		]);
+		const names = new Map<string, RunToolName>([
+			...permitted.map((tool) => [tool.name, tool.name] as const),
+			...connectorNames.map((name) => [name, name] as const)
+		]);
+		return [...catalogDistances, ...connectorDistances]
+			.sort((left, right) => left.distance - right.distance || left.name.localeCompare(right.name))
+			.flatMap((entry) => names.get(entry.name) ?? [])
+			.slice(0, limit);
+	}
+
+	/**
+	 * The connector tools this run offers. A tool turned off or with an unusable
+	 * schema is not built. A parked call whose tool is gone, changed checksum or
+	 * was turned off gets a withdrawn tool of its name, so the saved run still
+	 * resumes and the call runs nothing (ADR 0049).
+	 */
+	private async connectorBuilds(run: ResolvedAgentRun): Promise<{
+		readonly builds: readonly ConnectorToolBuild[];
+		readonly services: readonly string[];
+	}> {
+		const connectors = this.dependencies.connectors;
+		if (connectors.kind === 'off') return { builds: [], services: [] };
+		const entries = await connectors.source.runTools();
+		const available = entries.flatMap((entry): ConnectorToolBuild[] => {
+			const { tool } = entry;
+			const choice = connectors.policy.effective(tool.policy, tool.hints);
+			if (choice === 'off' || tool.schema.kind !== 'usable') return [];
+			return [
+				{
+					kind: 'available',
+					tool,
+					connectorTitle: entry.connectorTitle,
+					inputSchema: tool.schema.inputSchema,
+					approval: this.dependencies.toolApproval.connectorRequirement(choice, run.executionMode)
+				}
+			];
+		});
+		const byName = new Map(
+			available.flatMap((build) =>
+				build.kind === 'available' ? [[build.tool.modelName, build]] : []
+			)
+		);
+		const withdrawn = run.pendingDecisions.flatMap((decision): ConnectorToolBuild[] => {
+			if (decision.source !== 'connector') return [];
+			const current = byName.get(decision.toolName);
+			if (current?.kind === 'available' && current.tool.checksum === decision.checksum) return [];
+			byName.delete(decision.toolName);
+			return [
+				{
+					kind: 'withdrawn',
+					name: decision.toolName,
+					checksum: decision.checksum,
+					reason: current
+						? 'This tool changed after you approved the call, so nothing ran.'
+						: 'This tool is no longer available on its connector, so nothing ran.'
+				}
+			];
+		});
+		return {
+			builds: [...byName.values(), ...withdrawn],
+			services: [...new Set(entries.map((entry) => entry.connectorTitle))]
+		};
 	}
 
 	/**

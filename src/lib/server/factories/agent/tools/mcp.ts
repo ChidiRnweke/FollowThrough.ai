@@ -97,7 +97,7 @@ export const createMcpServer = (session: McpToolSession): McpToolConnection => (
 						bindToolArguments(searchParameters, payload.value, async ({ query, limit }) => {
 							const found = await session.discover(query, limit ?? 5);
 							for (const discoveredName of found) discovered.add(discoveredName);
-							return describeTools(permitted, found);
+							return describeTools(permitted, [], found);
 						})
 					);
 				return prepareCall(entry, payload.value);
@@ -105,7 +105,7 @@ export const createMcpServer = (session: McpToolSession): McpToolConnection => (
 			if (prepared.kind === 'failure') return result(prepared);
 			const { action } = prepared;
 			const value = await withToolFeedback(extra.signal, async () =>
-				toolOutput(await action.execute())
+				toolOutput(await action.execute(extra.signal))
 			);
 			if (name === 'search_tools' && !session.failed(value)) await server.sendToolListChanged();
 			return result(value);

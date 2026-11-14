@@ -170,7 +170,7 @@ describe('Reviewed tool recovery and terminal boundaries', () => {
 		const approveAndRun = async (
 			registry: ReturnType<typeof fixture.createRegistry>,
 			previous: Awaited<ReturnType<typeof run>>,
-			pending: PendingAgentDecision
+			pending: Extract<PendingAgentDecision, { readonly source: 'catalog' }>
 		) => {
 			const next = fixture.createRegistry([registry.reviewDecision(pending)]);
 			const agent = new Agent({ name: 'Fresh review', model, tools: next.tools() });
@@ -185,11 +185,13 @@ describe('Reviewed tool recovery and terminal boundaries', () => {
 			{ ...fixture.note, ...noteMarkdown.read('Launch Friday.'), currentRevision: 2 }
 		];
 		const stale = await approveAndRun(fixture.registry, first, {
+			source: 'catalog',
 			callId: 'call-invalid',
 			toolName: 'edit_note',
 			arguments: edit('Monday', 'Tuesday')
 		});
 		await approveAndRun(stale.registry, stale.result, {
+			source: 'catalog',
 			callId: 'call-corrected',
 			toolName: 'edit_note',
 			arguments: edit('Friday', 'Wednesday')

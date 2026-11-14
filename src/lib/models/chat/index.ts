@@ -10,7 +10,7 @@ import {
 } from '$lib/models/agent';
 import type { Project } from '$lib/models/projects';
 import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
-import type { AgentToolName } from '$lib/models/agent/tool-catalog';
+import type { ToolSubject } from '$lib/models/agent';
 import type { NoteChangeReview } from '$lib/models/notes';
 import type { SuggestionView } from '$lib/models/suggestions';
 
@@ -105,7 +105,6 @@ export type ChatToolStatus =
 export interface ChatToolActivityBase {
 	/** Absent when the provider reported the outcome without one; see `matchToolActivity`. */
 	readonly callId?: string;
-	readonly name: AgentToolName;
 	readonly arguments: AgentPayloadObject;
 	/** The run that produced it. Restored rows from before a run existed have none. */
 	readonly runId?: string;
@@ -126,24 +125,27 @@ export interface ChatToolActivityBase {
  * that settles replaces its row rather than being edited in place.
  */
 export type ChatToolActivity =
-	| (ChatToolActivityBase & { readonly status: 'running' })
-	| (ChatToolActivityBase & {
-			readonly status: 'approval_required';
-			readonly noteReview?: NoteChangeReview;
-	  })
-	| (ChatToolActivityBase & { readonly status: 'succeeded'; readonly output?: AgentPayload })
+	| (ChatToolActivityBase & ToolSubject & { readonly status: 'running' })
+	| (ChatToolActivityBase &
+			ToolSubject & {
+				readonly status: 'approval_required';
+				readonly noteReview?: NoteChangeReview;
+			})
+	| (ChatToolActivityBase &
+			ToolSubject & { readonly status: 'succeeded'; readonly output?: AgentPayload })
 	/** The tool returned, and what it returned says it failed (ADR 0035). */
+	| (ChatToolActivityBase &
+			ToolSubject & {
+				readonly status: 'reported_failure';
+				readonly failure: string;
+				readonly output: AgentPayload;
+			})
 	| (ChatToolActivityBase & {
-			readonly status: 'reported_failure';
-			readonly failure: string;
-			readonly output: AgentPayload;
-	  })
-	| (Omit<ChatToolActivityBase, 'name'> & {
 			readonly name: string;
 			readonly status: 'failed';
 			readonly failure: string;
 	  })
-	| (ChatToolActivityBase & { readonly status: 'rejected' });
+	| (ChatToolActivityBase & ToolSubject & { readonly status: 'rejected' });
 
 export type ChatPart =
 	| { kind: 'text'; text: string }

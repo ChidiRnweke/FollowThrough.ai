@@ -8,9 +8,11 @@ import type {
 	NamedSnapshotEntry,
 	NewConnector,
 	PendingAuthorization,
+	RunConnectorTool,
 	StoredCredential,
 	ToolScope
 } from '$lib/models/connectors';
+import type { ToolDistance } from '$lib/models/agent/tool-index';
 import type {
 	ConnectorAuthorizationRepository,
 	ConnectorRepository,
@@ -34,13 +36,19 @@ interface StoredConnector {
 export class InMemoryConnectorRecords implements ConnectorRepository, SnapshotParticipant {
 	private connectors = new Map<ConnectorId, StoredConnector>();
 	private toolRows = new Map<ConnectorId, ConnectorTool[]>();
+	private vectors = new Map<
+		string,
+		{ readonly vector: readonly number[]; readonly model: string }
+	>();
 
 	snapshot(): RestoreSnapshot {
 		const connectors = new Map(this.connectors);
 		const tools = new Map([...this.toolRows].map(([id, list]) => [id, [...list]]));
+		const vectors = new Map(this.vectors);
 		return () => {
 			this.connectors = connectors;
 			this.toolRows = tools;
+			this.vectors = vectors;
 		};
 	}
 
@@ -135,6 +143,10 @@ export class InMemoryConnectorRecords implements ConnectorRepository, SnapshotPa
 	): Promise<void> {
 		const stored = this.require(id);
 		const previous = new Map((this.toolRows.get(id) ?? []).map((tool) => [tool.serverName, tool]));
+		for (const entry of entries)
+			if (entry.kind === 'usable')
+				this.vectors.set(entry.modelName, { vector: entry.embedding, model: entry.embeddingModel });
+			else this.vectors.delete(entry.modelName);
 		this.toolRows.set(
 			id,
 			entries
@@ -163,6 +175,26 @@ export class InMemoryConnectorRecords implements ConnectorRepository, SnapshotPa
 		const updated = { ...tools[index]!, policy };
 		tools[index] = updated;
 		return updated;
+	}
+
+	async runTools(): Promise<readonly RunConnectorTool[]> {
+		return [...this.toolRows].flatMap(([id, tools]) => {
+			const title = this.require(id).connector.title;
+			return tools.map((tool) => ({ tool, connectorTitle: title }));
+		});
+	}
+
+	async toolDistances(
+		vector: readonly number[],
+		names: readonly string[],
+		model: string
+	): Promise<readonly ToolDistance[]> {
+		return names.flatMap((name) => {
+			const stored = this.vectors.get(name);
+			return stored && stored.model === model
+				? [{ name, distance: 1 - cosine(vector, stored.vector) }]
+				: [];
+		});
 	}
 
 	private view(stored: StoredConnector): Connector {
@@ -194,3 +226,11 @@ export class InMemoryConnectorAuthorizations implements ConnectorAuthorizationRe
 		return { kind: 'found', request: attempt.request };
 	}
 }
+
+const cosine = (left: readonly number[], right: readonly number[]): number => {
+	const dot = left.reduce((sum, value, index) => sum + value * (right[index] ?? 0), 0);
+	const norm =
+		Math.sqrt(left.reduce((sum, value) => sum + value * value, 0)) *
+		Math.sqrt(right.reduce((sum, value) => sum + value * value, 0));
+	return norm === 0 ? 0 : dot / norm;
+};

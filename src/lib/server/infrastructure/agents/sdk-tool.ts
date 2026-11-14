@@ -2,7 +2,7 @@ import { ModelBehaviorError, tool, type Tool } from '@openai/agents';
 import { trace } from '@opentelemetry/api';
 import { z } from 'zod';
 import { DOMAIN_ERROR_ADVICE, DomainError, failureReport } from '$lib/errors';
-import type { AgentPayload } from '$lib/models/agent/payload';
+import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import { toolFailure, type ToolFailure } from '$lib/models/agent/tool-failure';
 
 /**
@@ -125,6 +125,71 @@ export const sdkTool = (definition: SdkToolDefinition): Tool<unknown> => {
 		execute: async (input, _context, details) => {
 			// The same policy as {@link withToolFeedback}, applied inline: this call runs the
 			// definition's own work, which is never the work a factory passes to the wrapper.
+			definition.signal.throwIfAborted();
+			try {
+				return await definition.execute(input, details?.toolCall?.callId);
+				// chisel-ignore fail-loudly:silent-catch -- the failure is the tool's result: the model reads it as feedback and the chat records the call as failed.
+			} catch (error) {
+				definition.signal.throwIfAborted();
+				return feedback(error);
+			}
+		}
+	});
+};
+
+export interface SdkConnectorToolDefinition {
+	readonly name: string;
+	readonly description: string;
+	/** The connector server's JSON Schema, kept as it wrote it (ADR 0049). */
+	readonly inputSchema: AgentPayloadObject;
+	readonly signal: AbortSignal;
+	readonly isEnabled?: () => boolean;
+	readonly needsApproval: (input: unknown, callId: string | undefined) => Promise<boolean>;
+	readonly execute: (input: unknown, callId: string | undefined) => Promise<AgentPayload>;
+}
+
+/**
+ * The Agents SDK tool for a connector tool: the same feedback policy as
+ * {@link sdkTool}, with the server's schema published non-strict. Strict mode
+ * would rewrite the schema (every key required, open maps closed), which
+ * changes what the server accepts; the tool checks the arguments against the
+ * server's schema itself before anything runs.
+ */
+export const sdkConnectorTool = (definition: SdkConnectorToolDefinition): Tool<unknown> => {
+	// chisel-ignore narrowing:no-record-unknown -- JSON Schema property nodes are an open dialect by specification and are passed verbatim to the SDK protocol.
+	const properties: Record<string, Record<string, unknown>> = {};
+	const declared = definition.inputSchema.properties;
+	if (declared !== null && typeof declared === 'object' && !Array.isArray(declared))
+		for (const [name, property] of Object.entries(declared))
+			if (property !== null && typeof property === 'object' && !Array.isArray(property))
+				properties[name] = { ...property };
+	const required = Array.isArray(definition.inputSchema.required)
+		? definition.inputSchema.required.filter((name): name is string => typeof name === 'string')
+		: [];
+	return tool({
+		name: definition.name,
+		description: definition.description,
+		// The SDK's non-strict type admits only `additionalProperties: true`; the
+		// tool's own check still applies the server's value.
+		parameters: {
+			...definition.inputSchema,
+			type: 'object',
+			properties,
+			required,
+			additionalProperties: true
+		},
+		strict: false,
+		...(definition.isEnabled ? { isEnabled: definition.isEnabled } : {}),
+		needsApproval: (_context, input, callId) => definition.needsApproval(input, callId),
+		errorFunction: (_context, error) => {
+			definition.signal.throwIfAborted();
+			if (error instanceof ModelBehaviorError && error.name === 'InvalidToolInputError')
+				return JSON.stringify(
+					toolFailure('VALIDATION', error.message, DOMAIN_ERROR_ADVICE.VALIDATION)
+				);
+			throw error;
+		},
+		execute: async (input, _context, details) => {
 			definition.signal.throwIfAborted();
 			try {
 				return await definition.execute(input, details?.toolCall?.callId);

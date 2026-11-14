@@ -25,6 +25,7 @@ const text = (value: string): AgentEvent => ({ type: 'text_delta', text: value }
 const thinking = (value: string): AgentEvent => ({ type: 'reasoning_delta', text: value });
 const toolStarted = (): AgentEvent => ({
 	type: 'tool_started',
+	source: 'catalog',
 	callId: 'c1',
 	name: 'get_note',
 	arguments: {}
@@ -80,13 +81,18 @@ describe('A turn is folded into the runs of output it was', () => {
 it('keeps reported failure details in the tool result instead of losing its output', () => {
 	const output = { kind: 'failure', code: 'STALE_REVIEW', message: 'Read the note again' };
 	expect(
-		presentation.settled({ callId: 'call-1', name: 'save_note', readable: true }, 'save_note', {
-			kind: 'reported_failure',
-			value: output,
-			failure: 'Read the note again'
-		})
+		presentation.settled(
+			{ callId: 'call-1', name: 'save_note', readable: true },
+			{ source: 'catalog', name: 'save_note' },
+			{
+				kind: 'reported_failure',
+				value: output,
+				failure: 'Read the note again'
+			}
+		)
 	).toEqual({
 		type: 'tool_reported_failure',
+		source: 'catalog',
 		callId: 'call-1',
 		name: 'save_note',
 		output,

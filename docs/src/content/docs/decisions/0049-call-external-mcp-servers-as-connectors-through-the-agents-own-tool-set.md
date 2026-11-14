@@ -107,7 +107,8 @@ Connector tools are never in the direct tool set. The model finds them with `sea
 ADR 0022 decides for the long tail, with their real names and schemas. Each tool's vector is
 computed when its snapshot is stored, in the same transaction. Search ranks catalog and connector
 tools together, at the existing limit. A missing vector fails the search with the fix: refresh the
-connector. A worker task re-embeds connector tools after the embedding model changes (ADR 0021).
+connector. Refreshing a connector re-embeds its tools, so after the embedding model changes, a
+connector's tools rank again once the user refreshes it; until then search names the connector.
 
 ### Approval
 

@@ -246,7 +246,7 @@ describe('Accepting a suggestion on the user\u2019s behalf', () => {
 			.find((tool) => tool.name === 'accept_suggestion');
 		const outcome = await directTool(tool)
 			.prepare({ suggestionId: input.suggestionId })
-			.execute()
+			.execute(new AbortController().signal)
 			.then(
 				() => 'unexpected success',
 				(error: Error) => error.message
@@ -281,7 +281,9 @@ describe('Accepting a suggestion on the user\u2019s behalf', () => {
 const boundToolNames = (): string[] =>
 	Object.values(agentToolCoverage)
 		.flatMap((controller) => Object.values(controller) as AgentToolContractBinding[])
-		.flatMap((binding) => (binding.kind === 'excluded' ? [] : binding.tools));
+		.flatMap((binding) =>
+			binding.kind === 'excluded' || binding.kind === 'connector_tools' ? [] : binding.tools
+		);
 
 /**
  * Strict function calling answers a schema keyword it does not permit with an HTTP 400 for the
@@ -520,7 +522,9 @@ describe('Agent tool coverage invariants', () => {
 			.definitions()
 			.find((tool) => tool.name === 'search_note');
 		expect(
-			await directTool(tool).prepare({ noteId: testNoteId(), query: 'messaging' }).execute()
+			await directTool(tool)
+				.prepare({ noteId: testNoteId(), query: 'messaging' })
+				.execute(new AbortController().signal)
 		).toMatchObject([{ noteId: testNoteId() }]);
 	});
 
@@ -551,7 +555,7 @@ describe('Agent tool coverage invariants', () => {
 		})
 			.definitions()
 			.find((tool) => tool.name === 'read_canvas_diagram');
-		expect(await directTool(tool).prepare({}).execute()).toEqual({
+		expect(await directTool(tool).prepare({}).execute(new AbortController().signal)).toEqual({
 			kind: 'present',
 			diagramId: diagram.id,
 			source: diagram.source,
@@ -657,7 +661,9 @@ describe('Agent tool coverage invariants', () => {
 		const tool = registry('auto_accept', { factory })
 			.definitions()
 			.find((tool) => tool.name === 'get_note');
-		expect(await directTool(tool).prepare({ noteId: note.id }).execute()).toEqual({
+		expect(
+			await directTool(tool).prepare({ noteId: note.id }).execute(new AbortController().signal)
+		).toEqual({
 			noteId: note.id,
 			title: note.title,
 			etag: noteEtag(note.id, note.currentRevision),
@@ -700,7 +706,7 @@ describe('Agent tool coverage invariants', () => {
 		const loaded = await fixture
 			.skillTool('load_skill')
 			.prepare({ noteId: fixture.noteId })
-			.execute();
+			.execute(new AbortController().signal);
 		expect(loaded).toMatchObject({
 			instructions: expect.stringContaining('Number every finding.'),
 			name: 'Compliance format',
@@ -917,7 +923,9 @@ describe('Agent tool coverage invariants', () => {
 			.definitions()
 			.find((definition) => definition.name === 'create_todos');
 		if (!mcp) throw new Error('Missing task batch tool');
-		const externalRetry = await directTool(mcp).prepare(payload).execute();
+		const externalRetry = await directTool(mcp)
+			.prepare(payload)
+			.execute(new AbortController().signal);
 		expect({ first, retry, externalRetry, titles: todos.todos.map((todo) => todo.title) }).toEqual({
 			first: {
 				todos: todos.todos.map((todo) => ({
@@ -1380,7 +1388,7 @@ describe('Explicit mutation receipts', () => {
 			.definitions()
 			.find((tool) => tool.name === 'set_skill_pinned');
 		const input = { noteId: note.id, projectId: note.projectId, pinned: true };
-		const receipt = await directTool(tool).prepare(input).execute();
+		const receipt = await directTool(tool).prepare(input).execute(new AbortController().signal);
 		expect({ receipt, pins: skills.pins }).toEqual({
 			receipt: input,
 			pins: [{ skillNoteId: note.id, projectId: note.projectId }]
@@ -1398,7 +1406,9 @@ describe('Explicit mutation receipts', () => {
 		const tool = registry('auto_accept', { factory })
 			.definitions()
 			.find((tool) => tool.name === 'revoke_api_token');
-		const receipt = await directTool(tool).prepare({ tokenId: minted.token.id }).execute();
+		const receipt = await directTool(tool)
+			.prepare({ tokenId: minted.token.id })
+			.execute(new AbortController().signal);
 		expect({
 			receipt,
 			verified: await new TokenVerification(credentials).verify(`Bearer ${minted.plaintext}`)
@@ -1421,7 +1431,9 @@ describe('Explicit mutation receipts', () => {
 		const tool = registry('auto_accept', { factory })
 			.definitions()
 			.find((tool) => tool.name === 'delete_artifact');
-		const receipt = await directTool(tool).prepare({ artifactId: artifact.id }).execute();
+		const receipt = await directTool(tool)
+			.prepare({ artifactId: artifact.id })
+			.execute(new AbortController().signal);
 		expect({ receipt, artifacts: artifacts.artifacts }).toEqual({
 			receipt: { artifactId: artifact.id, title: 'Report', deleted: true },
 			artifacts: []
@@ -1435,7 +1447,9 @@ describe('Explicit mutation receipts', () => {
 			.definitions()
 			.find((tool) => tool.name === 'get_artifact');
 		await expect(
-			directTool(tool).prepare({ artifactId: '5b7e8904-6a3c-4d25-9f48-4a88e6f0c235' }).execute()
+			directTool(tool)
+				.prepare({ artifactId: '5b7e8904-6a3c-4d25-9f48-4a88e6f0c235' })
+				.execute(new AbortController().signal)
 		).rejects.toThrow('Artifact not found');
 	});
 });

@@ -16,9 +16,24 @@ import { readPendingDecisions } from './stored-values';
 describe('Reading the pending decisions off a run row', () => {
 	const decision = { callId: 'call-1', toolName: 'archive_note', arguments: { noteId: 'note-1' } };
 
-	it('reads a stored decision back as itself', () => {
+	it('reads a decision stored before connectors as a catalog decision', () => {
 		const result = readPendingDecisions([decision]);
-		expect(result).toEqual({ kind: 'readable', decisions: [decision], dropped: [] });
+		expect(result).toEqual({
+			kind: 'readable',
+			decisions: [{ ...decision, source: 'catalog' }],
+			dropped: []
+		});
+	});
+
+	it('reads a connector decision with the checksum it was approved against', () => {
+		const connector = {
+			source: 'connector',
+			callId: 'call-2',
+			toolName: 'linear__create_issue',
+			checksum: 'abc123',
+			arguments: { title: 'Ship it' }
+		};
+		expect(readPendingDecisions([connector]).decisions).toEqual([connector]);
 	});
 
 	it('drops a decision naming a tool the catalog no longer has', () => {
@@ -32,7 +47,7 @@ describe('Reading the pending decisions off a run row', () => {
 	it('keeps the readable decisions beside a dropped one', () => {
 		expect(
 			readPendingDecisions([{ ...decision, toolName: 'archive_notes' }, decision]).decisions
-		).toEqual([decision]);
+		).toEqual([{ ...decision, source: 'catalog' }]);
 	});
 
 	it('drops a decision with no call id at all, which nothing could answer', () => {
@@ -64,7 +79,7 @@ describe('Stored domain review transport', () => {
 			review: { kind: 'note_change', content: JSON.stringify(noteReview) }
 		};
 		expect(readPendingDecisions(JSON.parse(JSON.stringify([decision]))).decisions).toEqual([
-			decision
+			{ ...decision, source: 'catalog' }
 		]);
 	});
 	it('keeps legacy note approvals readable so they remain rejectable', () => {
@@ -73,6 +88,8 @@ describe('Stored domain review transport', () => {
 			toolName: 'save_note',
 			arguments: { noteId: noteReviewBuilder().change.noteId, markdown: 'Tuesday' }
 		};
-		expect(readPendingDecisions([decision]).decisions).toEqual([decision]);
+		expect(readPendingDecisions([decision]).decisions).toEqual([
+			{ ...decision, source: 'catalog' }
+		]);
 	});
 });

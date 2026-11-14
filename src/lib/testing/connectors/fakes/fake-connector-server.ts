@@ -7,6 +7,13 @@ import {
 	type CallToolResult,
 	type Tool
 } from '@modelcontextprotocol/sdk/types.js';
+import { agentPayloadObjectSchema, type AgentPayloadObject } from '$lib/models/agent/payload';
+
+/** A `tools/call` the server received. */
+export interface ReceivedCall {
+	readonly name: string;
+	readonly arguments: AgentPayloadObject;
+}
 
 export type ServerAuthorization =
 	| { readonly kind: 'none' }
@@ -24,7 +31,7 @@ export interface FakeConnectorServerOptions {
 	readonly tools: readonly Tool[];
 	/** Tools per `tools/list` page; every tool on one page when absent. */
 	readonly pageSize?: number;
-	readonly call?: (name: string) => CallToolResult;
+	readonly call?: (name: string, args: AgentPayloadObject) => CallToolResult;
 }
 
 /**
@@ -33,12 +40,17 @@ export interface FakeConnectorServerOptions {
  */
 export class FakeConnectorServer {
 	tools: readonly Tool[];
+	readonly received: ReceivedCall[] = [];
+	/** How the server answers `tools/call`; each call names its tool by default. */
+	respond: (name: string, args: AgentPayloadObject) => CallToolResult;
 
 	constructor(
 		readonly origin: string,
 		private readonly options: FakeConnectorServerOptions
 	) {
 		this.tools = options.tools;
+		this.respond =
+			options.call ?? ((name) => ({ content: [{ type: 'text', text: `${name} ran` }] }));
 	}
 
 	get url(): string {
@@ -87,11 +99,11 @@ export class FakeConnectorServer {
 				...(end < this.tools.length ? { nextCursor: String(end) } : {})
 			};
 		});
-		server.setRequestHandler(CallToolRequestSchema, async (call) =>
-			this.options.call
-				? this.options.call(call.params.name)
-				: { content: [{ type: 'text', text: `${call.params.name} ran` }] }
-		);
+		server.setRequestHandler(CallToolRequestSchema, async (call) => {
+			const args = agentPayloadObjectSchema.parse(call.params.arguments ?? {});
+			this.received.push({ name: call.params.name, arguments: args });
+			return this.respond(call.params.name, args);
+		});
 		const transport = new WebStandardStreamableHTTPServerTransport({
 			sessionIdGenerator: undefined,
 			enableJsonResponse: true

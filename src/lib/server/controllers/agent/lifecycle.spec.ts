@@ -2,6 +2,7 @@ import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
 import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { z } from 'zod';
+import { createAgentToolset } from '$lib/server/factories/agent/tools/toolset';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
@@ -110,6 +111,7 @@ const setup = <T extends InMemoryAgentTurns | AgentTurnService>(
 		readonly contextMemory?: InMemoryMemoryEntryRepository;
 		readonly pendingDecisions?: AgentRun['pendingDecisions'];
 		readonly tools?: readonly AgentTool[];
+		readonly toolset?: AgentHarnessDependencies['toolset'];
 	}
 ) => {
 	const runs = new InMemoryAgentRunPersistence(testActor());
@@ -183,7 +185,8 @@ const setup = <T extends InMemoryAgentTurns | AgentTurnService>(
 					testTokenizer
 				),
 				options?.tools ?? []
-			)
+			),
+			...(options?.toolset ? { toolset: options.toolset } : {})
 		})
 	);
 	return { lifecycle, runs, runner, journalled, toolRows };
@@ -273,7 +276,11 @@ describe('a cancellation that races the end of a run', () => {
 						? {
 								kind: 'approval',
 								serialize: () => final.serializedState,
-								pending: final.pendingDecisions,
+								pending: final.pendingDecisions.map((decision) => ({
+									callId: decision.callId,
+									name: decision.toolName,
+									arguments: decision.arguments
+								})),
 								sessionItems: final.sessionItems
 							}
 						: { kind: 'completed', sessionItems: [] }
@@ -470,7 +477,12 @@ describe('settling a run whose execution threw', () => {
 		const error = new Error('Provider exploded');
 		const context = setup(throwingRunner(error), {
 			pendingDecisions: [
-				{ callId: 'call-parked', toolName: 'update_agent_preferences', arguments: {} }
+				{
+					source: 'catalog',
+					callId: 'call-parked',
+					toolName: 'update_agent_preferences',
+					arguments: {}
+				}
 			]
 		});
 		await new RunTransitions(context.runs).claim(testRunId, testTime);
@@ -602,11 +614,13 @@ describe('what a finished turn leaves behind to be reopened', () => {
 describe('Durable note approval publication', () => {
 	const prepared = noteReviewBuilder();
 	const pending = {
+		source: 'catalog' as const,
 		callId: 'review-1',
 		toolName: 'save_note' as const,
 		arguments: { noteId: prepared.change.noteId, markdown: 'Tuesday' },
 		review: { kind: 'note_change' as const, content: JSON.stringify(prepared) }
 	};
+	// The tool set attaches the review its approval prepared; this one answers with it directly.
 	const checkpoint = () =>
 		setup(
 			new ScriptedAgentTurns({
@@ -614,10 +628,18 @@ describe('Durable note approval publication', () => {
 				outcome: async () => ({
 					kind: 'approval',
 					serialize: () => 'provider-checkpoint',
-					pending: [pending],
+					pending: [
+						{ callId: pending.callId, name: pending.toolName, arguments: pending.arguments }
+					],
 					sessionItems: []
 				})
-			})
+			}),
+			{
+				toolset: (tools, connectorTools, policy) => ({
+					...createAgentToolset(tools, connectorTools, policy),
+					checkpoint: () => pending
+				})
+			}
 		);
 	it('publishes the durable review to the run, event, and replayable tool row', async () => {
 		const { lifecycle, runs, toolRows } = checkpoint();

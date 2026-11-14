@@ -95,7 +95,7 @@ export const createAgentToolSurface = (
 		plan: AgentToolPlan,
 		discovered: Set<string>
 	) =>
-		createAgentToolset(tools, {
+		createAgentToolset(tools, [], {
 			plan,
 			isDiscovered: (name) => discovered.has(name),
 			discover: async (query, limit) => {
@@ -105,6 +105,7 @@ export const createAgentToolSurface = (
 			},
 			completed: (call, output) => recorder.completed(call, output),
 			parked,
+			spill: async (_callId, output) => output,
 			signal
 		});
 	const permittedAll = permittedTools(tools, access);
@@ -152,19 +153,26 @@ export const createAgentToolSurface = (
 			return discoveryCatalog.map((name) => ({ name }));
 		},
 		/** The parked call with the review its approval prepared, as the checkpoint records it. */
-		reviewDecision(pending: PendingAgentDecision): PendingAgentDecision {
+		reviewDecision(
+			parked: Pick<CatalogDecision, 'callId' | 'toolName' | 'arguments'>
+		): CatalogDecision {
+			const call = { callId: parked.callId, name: parked.toolName, arguments: parked.arguments };
 			for (const set of built) {
 				try {
-					return set.checkpoint(pending);
+					const decision = set.checkpoint(call);
+					if (decision.source !== 'catalog') throw new Error(`${call.name} is not a catalog tool`);
+					return decision;
 				} catch (error) {
 					if (set === built.at(-1)) throw error;
 				}
 			}
-			return pending;
+			throw new Error('The tool surface has no tool set to checkpoint with');
 		}
 	};
 };
 export type AgentToolSurface = ReturnType<typeof createAgentToolSurface>;
+
+type CatalogDecision = Extract<PendingAgentDecision, { readonly source: 'catalog' }>;
 
 /** The tools an MCP request reaches, built the way the agent harness opens them. */
 export const createMcpToolDefinitions = (

@@ -148,6 +148,7 @@ describe('journaling tool outcomes', () => {
 		const conversation = await journal.getOrCreate({ prompt: 'Hello' });
 		await journal.recordToolActivity(conversation.id, {
 			callId: 'call-1',
+			source: 'catalog' as const,
 			name: 'revoke_api_token',
 			input: {},
 			status: 'succeeded'
@@ -171,6 +172,7 @@ describe('journaling tool outcomes', () => {
 		const conversation = await journal.getOrCreate({ prompt: 'Hello' });
 		await journal.recordToolActivity(conversation.id, {
 			callId: 'call-1',
+			source: 'catalog' as const,
 			name: 'get_note',
 			input: {},
 			status: 'succeeded',
@@ -193,6 +195,7 @@ describe('Journalled note review', () => {
 		const review = { kind: 'note_change' as const, content: JSON.stringify(noteReview) };
 		await journal.recordToolActivity(conversation.id, {
 			callId: 'review-1',
+			source: 'catalog' as const,
 			name: 'save_note',
 			input: { noteId: noteReview.change.noteId, markdown: 'Tuesday' },
 			status: 'approval_required',

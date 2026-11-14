@@ -7,16 +7,16 @@ parts connect. ADR 0007 records the decision; the tool failure contract is in
 
 ## Parts
 
-| Part             | Location                                         | Role                                                                                                     |
-| ---------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| Harness          | `server/controllers/agent/controller.ts`         | `AgentHarness`, implemented by `AgentSdkHarness`. Owns run lifecycle, tool policy and persistence.       |
-| Turn service     | `server/services/agent/runs/turns.ts`            | Owns the model provider. Runs one SDK turn, parses its events and classifies provider failures.          |
-| History service  | `server/services/agent/conversations/history.ts` | Loads, rewinds and snapshots the conversation items that the SDK replays.                                |
-| Tool definitions | `server/factories/agent/tools/definitions.ts`    | Builds one `AgentTool` per controller operation for chat and for MCP.                                    |
-| Tool set         | `server/factories/agent/tools/toolset.ts`        | Turns `AgentTool`s and a policy into SDK tools: direct, discoverable, `search_tools` and approval gates. |
-| MCP server       | `server/factories/agent/tools/mcp.ts`            | Turns an `McpToolSession` into an MCP server for one request.                                            |
-| Tool protocol    | `models/agent-tool-protocol/`                    | The types that connect the parts: `AgentTool`, `AgentToolPolicy`, `AgentToolset`, `McpToolSession`.      |
-| Provider factory | `server/factories/agent/agent-providers.ts`      | Builds the OpenRouter model and image providers that the turn service owns.                              |
+| Part             | Location                                         | Role                                                                                                                      |
+| ---------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Harness          | `server/controllers/agent/controller.ts`         | `AgentHarness`, implemented by `AgentSdkHarness`. Owns run lifecycle, tool policy and persistence.                        |
+| Turn service     | `server/services/agent/runs/turns.ts`            | Owns the model provider. Runs one SDK turn, parses its events and classifies provider failures.                           |
+| History service  | `server/services/agent/conversations/history.ts` | Loads, rewinds and snapshots the conversation items that the SDK replays.                                                 |
+| Tool definitions | `server/factories/agent/tools/definitions.ts`    | Builds one `AgentTool` per controller operation for chat and for MCP.                                                     |
+| Tool set         | `server/factories/agent/tools/toolset.ts`        | Turns `AgentTool`s, connector tools and a policy into SDK tools: direct, discoverable, `search_tools` and approval gates. |
+| MCP server       | `server/factories/agent/tools/mcp.ts`            | Turns an `McpToolSession` into an MCP server for one request.                                                             |
+| Tool protocol    | `models/agent-tool-protocol/`                    | The types that connect the parts: `AgentTool`, `AgentToolPolicy`, `AgentToolset`, `McpToolSession`.                       |
+| Provider factory | `server/factories/agent/agent-providers.ts`      | Builds the OpenRouter model and image providers that the turn service owns.                                               |
 
 The capability factory connects these parts. The harness receives the tool constructors, not the
 tools, because each run builds its tools for its own provenance and request. The constructors take
@@ -98,6 +98,31 @@ with the token's scope and provenance. The harness applies the same tool prefere
 token to `read` tools. The MCP server factory turns the resulting `McpToolSession` into a server
 for that request. MCP has no approval park: the MCP host makes its own approval decisions, so a
 call runs as soon as the token authorizes it.
+
+## Connector tools
+
+A connector tool is a tool on a user's remote MCP server ([connectors](connectors.md), ADR 0049).
+The harness reads the connector snapshot through `ConnectorToolSource`, never through the
+connectors controller, and offers each tool whose schema is usable and whose policy is not `off`.
+The tool factory builds it as a `ConnectorAgentTool`, which is not an `AgentTool`, so the MCP server
+for other hosts never receives one.
+
+- **Names.** A connector tool is `<slug>__<tool>`. Events, journal rows and parked decisions carry a
+  `source` (`catalog` or `connector`) beside the name; a row without one is a catalog row. The
+  toolset resolves a provider's name to that subject, because only the run knows its connector
+  tools.
+- **Discovery.** Connector tools are always the long tail. `search_tools` embeds the query once
+  and ranks catalog and connector tools by distance together, within the same limit.
+- **Approval.** The policy rule turns hints and the user's choice into `allow` or `ask`, and `ask`
+  follows the execution mode exactly as a mutation does. A parked connector call records the
+  tool's checksum. On resume, a call whose tool changed, disappeared or was turned off gets a
+  withdrawn tool of its name: the saved run resumes, and the call runs nothing.
+- **Execution.** A tool validates its arguments against the server's schema, then calls
+  `connectors.callTool` with the run's signal. A server's error result, a sign-in the service
+  refused, and a withdrawn tool all come back as failure values the model reads. Output above
+  the replay threshold moves into an agent file before the model reads it.
+- **Instructions.** The run's instructions name the connected services, so the model knows to
+  search for their tools.
 
 ## Testing
 

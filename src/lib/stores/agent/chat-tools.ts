@@ -16,7 +16,12 @@ import {
 	type AgentPayload,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
-import { agentReviewSchema, type AgentReview, agentToolNameSchema } from '$lib/models/agent';
+import {
+	agentReviewSchema,
+	toolSubjectSchema,
+	type AgentReview,
+	type ToolSubject
+} from '$lib/models/agent';
 
 export type { ChatToolStatus, ChatToolActivityBase, ChatToolActivity } from '$lib/models/chat';
 import type { ChatPart, ChatToolActivity, ChatToolActivityBase } from '$lib/models/chat';
@@ -75,6 +80,7 @@ const journalledToolSchema = z.object({
 	// have. Every other row names a catalog tool, checked below; one that does
 	// not becomes an `unreadable` transcript part rather than a row nothing can
 	// label. `tests/unit/corpus.spec.ts` holds that at zero.
+	source: z.string().optional(),
 	name: z.string(),
 	input: z.custom<AgentPayload>(() => true).optional(),
 	output: z.custom<AgentPayload>(() => true).optional(),
@@ -102,9 +108,9 @@ export const readJournalledTool = (
 		return failure === undefined
 			? { kind: 'unreadable', reason: 'a failed row carries no failure' }
 			: { kind: 'readable', tool: { ...identity, name: row.name, failure, status: 'failed' } };
-	const name = agentToolNameSchema.safeParse(row.name);
-	if (!name.success) return { kind: 'unreadable', reason: z.prettifyError(name.error) };
-	const base: ChatToolActivityBase = { ...identity, name: name.data };
+	const subject = toolSubjectSchema.safeParse({ source: row.source, name: row.name });
+	if (!subject.success) return { kind: 'unreadable', reason: z.prettifyError(subject.error) };
+	const base: ChatToolActivityBase & ToolSubject = { ...identity, ...subject.data };
 	if (row.status === 'running') return { kind: 'readable', tool: { ...base, status: 'running' } };
 	if (row.status === 'approval_required')
 		return {

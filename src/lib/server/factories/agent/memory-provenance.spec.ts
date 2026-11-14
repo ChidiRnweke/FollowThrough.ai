@@ -116,7 +116,7 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 	const propose = () =>
 		directTool(tool)
 			.prepare({ scope: 'user', operation: 'add', content: 'Prefer concise answers.' })
-			.execute();
+			.execute(new AbortController().signal);
 	return { propose, tool: directTool(tool), origin, provenance, suggestions, entries };
 };
 it.each(['agent', 'mcp'] as const)(
@@ -145,6 +145,6 @@ it('rejects a model-supplied source identifier', async () => {
 				content: 'Prefer concise answers.',
 				provenanceId: testProvenanceId(2)
 			})
-			.execute()
+			.execute(new AbortController().signal)
 	).toThrow('provenanceId');
 });

@@ -4,6 +4,7 @@ import type {
 	ToolEmbeddingRepository,
 	ToolEmbeddingWrite
 } from '$lib/server/repositories/agent/tool-embeddings';
+import type { ToolDistance } from '$lib/models/agent/tool-index';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/agent';
 
@@ -76,5 +77,24 @@ export class ToolEmbeddingRecords implements ToolEmbeddingRepository {
 			.orderBy(asc(distance))
 			.limit(limit);
 		return rows.map((row) => row.name);
+	}
+
+	async distances(
+		queryVector: readonly number[],
+		names: readonly string[],
+		model: string
+	): Promise<readonly ToolDistance[]> {
+		if (names.length === 0) return [];
+		const distance = cosineDistance(schema.toolEmbeddings.embedding, [...queryVector]);
+		const rows = await this.database
+			.select({ name: schema.toolEmbeddings.name, distance })
+			.from(schema.toolEmbeddings)
+			.where(
+				and(
+					inArray(schema.toolEmbeddings.name, [...names]),
+					eq(schema.toolEmbeddings.embeddingModel, model)
+				)
+			);
+		return rows.map((row) => ({ name: row.name, distance: Number(row.distance) }));
 	}
 }

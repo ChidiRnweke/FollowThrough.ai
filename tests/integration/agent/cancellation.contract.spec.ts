@@ -171,6 +171,7 @@ it.each(['awaiting_approval', 'queued'] as const)(
 					serializedState: 'provider-checkpoint',
 					pendingDecisions: [
 						{
+							source: 'catalog',
 							callId: 'call-cleared',
 							toolName: 'archive_note',
 							arguments: { noteId: '40000000-0000-4000-8000-000000017601' }

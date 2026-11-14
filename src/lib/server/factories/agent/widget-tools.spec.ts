@@ -89,7 +89,7 @@ describe('agent widget tools', () => {
 		const { repository, tool } = setup();
 		await tool('edit_widget_data')
 			.prepare({ widgetId: testWidgetId(), expectedDataRevision: 1, patch: tickFirst })
-			.execute();
+			.execute(new AbortController().signal);
 		expect(repository.widgets[0]?.data.items).toEqual([
 			{ id: 'first', label: 'First step', done: true },
 			{ id: 'second', label: 'Second step', done: false },
@@ -105,7 +105,7 @@ describe('agent widget tools', () => {
 					expectedLayoutRevision: 1,
 					patch: JSON.stringify([{ op: 'replace', path: '/elements/item/type', value: 'Iframe' }])
 				})
-				.execute()
+				.execute(new AbortController().signal)
 		).rejects.toThrow('Iframe is not in the widget catalog');
 	});
 	it('refuse a stale data revision, telling the model to read again', async () => {
@@ -113,7 +113,7 @@ describe('agent widget tools', () => {
 		await expect(
 			tool('edit_widget_data')
 				.prepare({ widgetId: testWidgetId(), expectedDataRevision: 4, patch: tickFirst })
-				.execute()
+				.execute(new AbortController().signal)
 		).rejects.toThrow('Read it again and retry');
 	});
 	it('refuse a patch that is not JSON', async () => {
@@ -121,7 +121,7 @@ describe('agent widget tools', () => {
 		await expect(
 			tool('edit_widget_data')
 				.prepare({ widgetId: testWidgetId(), expectedDataRevision: 1, patch: '[{op:' })
-				.execute()
+				.execute(new AbortController().signal)
 		).rejects.toThrow('patch is not valid JSON');
 	});
 	it('publish strict JSON Schema parameters, which a string patch makes possible', () => {
@@ -137,7 +137,7 @@ describe('agent widget tools', () => {
 				layout: JSON.stringify(widgetTemplates.checklist.layout),
 				data: JSON.stringify(widgetTemplates.checklist.data)
 			})
-			.execute();
+			.execute(new AbortController().signal);
 		const read = agentPayloadObjectResultSchema.parse(output);
 		const embed = read.kind === 'valid' ? read.value.embed : null;
 		return {
@@ -169,12 +169,14 @@ describe('agent widget tools', () => {
 					}),
 					data: '{}'
 				})
-				.execute()
+				.execute(new AbortController().signal)
 		).rejects.toThrow('Iframe is not in the widget catalog');
 	});
 	it('give the agent the catalog it must write to', async () => {
 		const { tool } = setup();
-		const output = await tool('read_widget_catalog').prepare({}).execute();
+		const output = await tool('read_widget_catalog')
+			.prepare({})
+			.execute(new AbortController().signal);
 		expect(JSON.stringify(output)).toContain('### Checkbox');
 	});
 	it('publish strict JSON Schema parameters for creation', () => {

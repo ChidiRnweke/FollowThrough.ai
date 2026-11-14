@@ -1,9 +1,7 @@
 import {
-	agentToolNameSchema,
 	persistedSessionItemSchema,
 	sessionJsonObjectSchema,
 	storedSessionItemSchema,
-	toolNameSchema,
 	type FunctionCallResultSessionItem,
 	type AgentToolOutcome,
 	type PersistedSessionItem,
@@ -11,12 +9,7 @@ import {
 	type SessionJsonObject
 } from '$lib/models/agent';
 import { readToolOutput } from '$lib/server/repositories/agent/tool-failure';
-import {
-	DIAGRAM_WRITE_TOOLS,
-	type AgentToolName,
-	type ToolName
-} from '$lib/models/agent/tool-catalog';
-import type { AgentPayloadObject } from '$lib/models/agent/payload';
+import { DIAGRAM_WRITE_TOOLS } from '$lib/models/agent/tool-catalog';
 import {
 	parseProviderToolCall,
 	parseProviderStreamEvent,
@@ -37,10 +30,10 @@ import type OpenAI from 'openai';
 import type {
 	AgentRunDecisionRecord,
 	ConversationImageInput,
-	PendingAgentDecision,
 	ProviderStreamEvent,
 	WebResearchSettings
 } from '$lib/models/agent';
+import type { ParkedCall } from '$lib/models/agent-tool-protocol';
 import { AgentProviderFailure, ValidationError } from '$lib/errors';
 
 /** One model turn in progress: its parsed events, then whether it completed or parked on approvals. */
@@ -51,7 +44,7 @@ export interface AgentProviderTurn {
 		| {
 				readonly kind: 'approval';
 				serialize(): string;
-				readonly pending: readonly PendingAgentDecision[];
+				readonly pending: readonly ParkedCall[];
 				readonly sessionItems: readonly PersistedSessionItem[];
 		  }
 	>;
@@ -80,8 +73,6 @@ export interface AgentTurns {
 	/** The tool names the model has called so far in this conversation. */
 	calledTools(history: readonly PersistedSessionItem[]): readonly string[];
 	turn(input: AgentProviderTurnInput): Promise<AgentProviderTurn>;
-	/** The agent tool a provider event names, or absent for a name this agent does not offer. */
-	toolName(name: string): AgentToolName | undefined;
 	/** Whether a provider-reported tool output succeeded or carries the tool's own failure. */
 	toolOutcome(output: ProviderToolOutput): AgentToolOutcome;
 	describeImages(
@@ -134,10 +125,6 @@ export class AgentTurnService implements AgentTurns {
 				return description;
 			})
 		);
-	}
-
-	toolName(name: string): AgentToolName | undefined {
-		return agentToolNameSchema.safeParse(name).data;
 	}
 
 	toolOutcome(output: ProviderToolOutput): AgentToolOutcome {
@@ -231,10 +218,7 @@ export class AgentTurnService implements AgentTurns {
 				if (stream.interruptions.length > 0) {
 					// The resume starts a new agent span; end the parked one before publishing its checkpoint.
 					stream.state._currentAgentSpan?.end();
-					const pending = stream.interruptions.map((item) => {
-						const call = parkedCall(item);
-						return { callId: call.callId, toolName: call.name, arguments: call.arguments };
-					});
+					const pending = stream.interruptions.map(parkedCall);
 					return {
 						kind: 'approval',
 						serialize: () => stream.state.toString(),
@@ -270,13 +254,8 @@ const unidentifiedCall = (name: string) =>
 		'UNIDENTIFIED_TOOL_CALL',
 		false
 	);
-const parkedCall = (
-	item: RunToolApprovalItem
-): {
-	readonly callId: string;
-	readonly name: ToolName;
-	readonly arguments: AgentPayloadObject;
-} => {
+/** The run's tool set names the call; here it only has to be readable and identified. */
+const parkedCall = (item: RunToolApprovalItem): ParkedCall => {
 	const call = parseProviderToolCall(item);
 	if (!call)
 		throw new AgentProviderFailure(
@@ -286,14 +265,7 @@ const parkedCall = (
 		);
 	const { callId } = call;
 	if (callId === undefined) throw unidentifiedCall(call.name);
-	const name = toolNameSchema.safeParse(call.name).data;
-	if (name === undefined)
-		throw new AgentProviderFailure(
-			`The provider parked a run on "${call.name}", which is not a tool this agent offers`,
-			'UNKNOWN_PARKED_CALL',
-			false
-		);
-	return { callId, name, arguments: call.arguments.value };
+	return { callId, name: call.name, arguments: call.arguments.value };
 };
 
 const DIAGRAM_SOURCE_PLACEHOLDER =

@@ -22,8 +22,8 @@ const settled = (
 	input: ToolActivity['input'],
 	output: Extract<ToolActivity, { status: 'succeeded' }>['output']
 ): ToolActivity[] => [
-	{ callId, name, input, status: 'running' },
-	{ callId, name, input: {}, status: 'succeeded', output }
+	{ callId, source: 'catalog' as const, name, input, status: 'running' },
+	{ callId, source: 'catalog' as const, name, input: {}, status: 'succeeded', output }
 ];
 
 /**
@@ -115,7 +115,13 @@ describe('The tool context log reads what the conversation archive journals', ()
 			settled('skill', 'load_skill', { noteId: SKILL }, { noteId: SKILL, name: 'Contract review' }),
 			settled('odd', 'sed', { path: '/x' }, { kind: 'something-new' }),
 			[
-				{ callId: 'failed', name: 'search', input: { query: 'x' }, status: 'running' },
+				{
+					callId: 'failed',
+					source: 'catalog' as const,
+					name: 'search',
+					input: { query: 'x' },
+					status: 'running'
+				},
 				{ callId: 'failed', name: 'search', input: {}, status: 'failed', failure: 'boom' }
 			]
 		]);
@@ -151,9 +157,17 @@ describe('The tool context log reads what the conversation archive journals', ()
 	it('settles a call whose rows are read in the opposite order', async () => {
 		const reversed = await journal('c3', (project): ToolActivity[][] => [
 			[
-				{ callId: 'late', name: 'search', input: {}, status: 'succeeded', output: [] },
 				{
 					callId: 'late',
+					source: 'catalog' as const,
+					name: 'search',
+					input: {},
+					status: 'succeeded',
+					output: []
+				},
+				{
+					callId: 'late',
+					source: 'catalog' as const,
 					name: 'search',
 					input: { query: 'pricing tiers', projectId: project },
 					status: 'running'

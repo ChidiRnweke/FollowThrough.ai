@@ -112,7 +112,7 @@ it('records newly built context for an unprepared run', () => {
 });
 
 const pendingDecisions: readonly PendingAgentDecision[] = [
-	{ callId: 'call-a', toolName: 'archive_note', arguments: {} }
+	{ source: 'catalog', callId: 'call-a', toolName: 'archive_note', arguments: {} }
 ];
 
 it('requeues a reviewed checkpoint at the decision timestamp', () => {

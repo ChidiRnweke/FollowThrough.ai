@@ -8,8 +8,10 @@ import type {
 	NamedSnapshotEntry,
 	NewConnector,
 	PendingAuthorization,
+	RunConnectorTool,
 	ToolScope
 } from '$lib/models/connectors';
+import type { ToolDistance } from '$lib/models/agent/tool-index';
 
 /** The bound user's connectors. Credentials are sealed here and nowhere else. */
 export interface ConnectorRepository {
@@ -37,6 +39,14 @@ export interface ConnectorRepository {
 		serverName: string,
 		policy: ConnectorToolPolicy
 	): Promise<ConnectorTool | undefined>;
+	/** Every stored tool with its connector's title. */
+	runTools(): Promise<readonly RunConnectorTool[]>;
+	/** Cosine distances for the named tools whose vector `model` produced; others are absent. */
+	toolDistances(
+		vector: readonly number[],
+		names: readonly string[],
+		model: string
+	): Promise<readonly ToolDistance[]>;
 }
 
 export type TakenAuthorization =

@@ -6,6 +6,7 @@ import { canvasDiagramId } from './canvas-subject';
 
 const call = (name: AgentToolName, output: AgentPayload, index = 0): ChatToolActivity => ({
 	callId: `call-${name}-${index}`,
+	source: 'catalog' as const,
 	name,
 	arguments: {},
 	output,

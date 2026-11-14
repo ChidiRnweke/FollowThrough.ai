@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
 import type {
+	QueryVector,
 	ToolDescriptor,
+	ToolDistance,
 	ToolEmbeddingSeedSummary,
 	ToolSeed
 } from '$lib/models/agent/tool-index';
@@ -49,6 +51,10 @@ export interface ConnectorToolEmbedding {
 export interface ToolRanking {
 	/** The `limit` tools among `names` closest to `query`. */
 	rank(names: readonly string[], query: string, limit: number): Promise<string[]>;
+	/** A query embedded once, so catalog and connector tools rank against the same vector. */
+	queryVector(query: string): Promise<QueryVector>;
+	/** Distances from the query for catalog tools; a tool without a current vector fails as `rank` does. */
+	distances(names: readonly string[], query: QueryVector): Promise<readonly ToolDistance[]>;
 }
 
 /** Semantic search over the agent's tool catalog. The embedding provider belongs to it. */
@@ -139,6 +145,27 @@ export class ToolSearch implements ToolSeeding, ToolRanking, ConnectorToolEmbedd
 				{ cause: 'Missing current-model vectors for: ' + missing.join(', ') }
 			);
 		return ranked.slice(0, limit);
+	}
+
+	async queryVector(query: string): Promise<QueryVector> {
+		const vectors = await this.embed([query]);
+		const vector = vectors[0];
+		if (vectors.length !== 1 || !vector)
+			throw new InvalidGeneratedContentError('Tool search requires one query embedding');
+		return { model: this.dependencies.model, vector };
+	}
+
+	async distances(names: readonly string[], query: QueryVector): Promise<readonly ToolDistance[]> {
+		if (!names.length) return [];
+		const found = await this.dependencies.repository.distances(query.vector, names, query.model);
+		const available = new Set(found.map((entry) => entry.name));
+		const missing = names.filter((name) => !available.has(name));
+		if (missing.length)
+			throw new Error(
+				'Tool search index is incomplete. Run the tool-embedding seed (pnpm db:seed:tools).',
+				{ cause: 'Missing current-model vectors for: ' + missing.join(', ') }
+			);
+		return found;
 	}
 
 	/** Ordered provider requests within the batch budget; no input is discarded or split. */

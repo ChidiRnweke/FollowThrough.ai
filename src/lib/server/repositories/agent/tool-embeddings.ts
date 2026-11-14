@@ -1,4 +1,8 @@
-import type { StoredToolEmbedding, ToolEmbeddingWrite } from '$lib/models/agent/tool-index';
+import type {
+	StoredToolEmbedding,
+	ToolDistance,
+	ToolEmbeddingWrite
+} from '$lib/models/agent/tool-index';
 export type { StoredToolEmbedding, ToolEmbeddingWrite } from '$lib/models/agent/tool-index';
 
 export interface ToolEmbeddingRepository {
@@ -18,4 +22,10 @@ export interface ToolEmbeddingRepository {
 		limit: number,
 		model: string
 	): Promise<string[]>;
+	/** Cosine distances for the named tools whose vector `model` produced; others are absent. */
+	distances(
+		queryVector: readonly number[],
+		names: readonly string[],
+		model: string
+	): Promise<readonly ToolDistance[]>;
 }

@@ -358,7 +358,12 @@ describe('durable agent lifecycle commands', () => {
 
 	it('returns no pending approval cards after cancelling a parked run', async () => {
 		const { controller, receipt } = await awaitingApproval([
-			{ callId: 'call-cleared', toolName: 'archive_note', arguments: { noteId: testNoteId() } }
+			{
+				source: 'catalog',
+				callId: 'call-cleared',
+				toolName: 'archive_note',
+				arguments: { noteId: testNoteId() }
+			}
 		]);
 		const snapshot = await controller.cancel(receipt.runId);
 		expect({ run: snapshot.run.pendingDecisions, cards: snapshot.pendingDecisions }).toEqual({
@@ -369,7 +374,12 @@ describe('durable agent lifecycle commands', () => {
 
 	it('clears pending calls when a reviewed run is cancelled before it resumes', async () => {
 		const { controller, receipt } = await awaitingApproval([
-			{ callId: 'call-reviewed', toolName: 'archive_note', arguments: { noteId: testNoteId() } }
+			{
+				source: 'catalog',
+				callId: 'call-reviewed',
+				toolName: 'archive_note',
+				arguments: { noteId: testNoteId() }
+			}
 		]);
 		await controller.decide({
 			runId: receipt.runId,
@@ -425,7 +435,7 @@ describe('durable agent lifecycle commands', () => {
 
 	it('requeues an approval decision on the same run', async () => {
 		const { controller, receipt } = await awaitingApproval([
-			{ callId: 'call-1', toolName: 'archive_note', arguments: {} }
+			{ source: 'catalog', callId: 'call-1', toolName: 'archive_note', arguments: {} }
 		]);
 		const snapshot = await controller.decide({
 			runId: receipt.runId,
@@ -437,8 +447,8 @@ describe('durable agent lifecycle commands', () => {
 
 	it('records every call in a batch decision against one requeue', async () => {
 		const { controller, runs, receipt } = await awaitingApproval([
-			{ callId: 'call-a', toolName: 'create_todo', arguments: {} },
-			{ callId: 'call-b', toolName: 'archive_note', arguments: {} }
+			{ source: 'catalog', callId: 'call-a', toolName: 'create_todo', arguments: {} },
+			{ source: 'catalog', callId: 'call-b', toolName: 'archive_note', arguments: {} }
 		]);
 		await controller.decideMany({
 			runId: receipt.runId,
@@ -450,8 +460,8 @@ describe('durable agent lifecycle commands', () => {
 
 	it('records one queue event for separate decisions before execution resumes', async () => {
 		const { controller, runs, receipt } = await awaitingApproval([
-			{ callId: 'call-a', toolName: 'create_todo', arguments: {} },
-			{ callId: 'call-b', toolName: 'archive_note', arguments: {} }
+			{ source: 'catalog', callId: 'call-a', toolName: 'create_todo', arguments: {} },
+			{ source: 'catalog', callId: 'call-b', toolName: 'archive_note', arguments: {} }
 		]);
 		await controller.decide({
 			runId: receipt.runId,
@@ -472,7 +482,7 @@ describe('durable agent lifecycle commands', () => {
 
 	it('rolls back the decision and requeue if the queue event cannot be stored', async () => {
 		const { controller, runs, receipt } = await awaitingApproval([
-			{ callId: 'call-a', toolName: 'create_todo', arguments: {} }
+			{ source: 'catalog', callId: 'call-a', toolName: 'create_todo', arguments: {} }
 		]);
 		runs.failedEvent = 'run_queued';
 		try {
@@ -494,7 +504,7 @@ describe('durable agent lifecycle commands', () => {
 
 	it('leaves the awaiting run and pending call unchanged when a batch includes an unknown call', async () => {
 		const pending = [
-			{ callId: 'call-a', toolName: 'create_todo', arguments: {} }
+			{ source: 'catalog', callId: 'call-a', toolName: 'create_todo', arguments: {} }
 		] satisfies PendingAgentDecision[];
 		const { controller, runs, receipt } = await awaitingApproval(pending);
 		const failure = await controller
@@ -530,7 +540,7 @@ describe('durable agent lifecycle commands', () => {
 
 	it('rejects a contradictory duplicate decision', async () => {
 		const { controller, receipt } = await awaitingApproval([
-			{ callId: 'call-2', toolName: 'archive_note', arguments: {} }
+			{ source: 'catalog', callId: 'call-2', toolName: 'archive_note', arguments: {} }
 		]);
 		await controller.decide({
 			runId: receipt.runId,

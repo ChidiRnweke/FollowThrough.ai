@@ -207,6 +207,13 @@ export function createApplication(
 		deferEmbedding
 	});
 	const knowledge = knowledgeSearch.knowledge;
+	const connectorCapability = createConnectorsCapability(actor, {
+		db,
+		transactionRunner,
+		now,
+		configuration: config.connectors,
+		embeddings: knowledgeSearch.connectorToolEmbedding
+	});
 	const noteIndexer = knowledge;
 	const diagramIndexer = knowledge;
 	const memoryIndexer = knowledge;
@@ -459,6 +466,7 @@ export function createApplication(
 			toolCatalog: agentCapability.toolCatalog,
 			toolApproval: agentCapability.toolApproval,
 			toolSearch: knowledgeSearch.toolDiscovery,
+			connectors: connectorCapability.harness,
 			observeTurn: agentCapability.observeTurn,
 			settlements: runSettlements,
 			runSignals,
@@ -712,13 +720,7 @@ export function createApplication(
 		},
 		attachmentProcessing: attachmentCapability.processing,
 		knowledgeIndexing: knowledgeSearch.indexing,
-		connectors: createConnectorsCapability(actor, {
-			db,
-			transactionRunner,
-			now,
-			configuration: config.connectors,
-			embeddings: knowledgeSearch.connectorToolEmbedding
-		})
+		connectors: connectorCapability.controller
 	};
 	const controllerFactory = new ProductionControllerFactory(actor, dependencies);
 	return {

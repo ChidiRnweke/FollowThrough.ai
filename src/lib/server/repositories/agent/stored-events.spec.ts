@@ -27,7 +27,12 @@ describe('Reading a stored run event', () => {
 
 	it('refuses a tool result that is not JSON the wire can carry', () => {
 		expect(
-			read({ type: 'tool_succeeded', name: 'save_note', output: { writtenAt: new Date() } }).kind
+			read({
+				type: 'tool_succeeded',
+				source: 'catalog',
+				name: 'save_note',
+				output: { writtenAt: new Date() }
+			}).kind
 		).toBe('unreadable');
 	});
 });
@@ -42,6 +47,7 @@ describe('The three ways a call settles', () => {
 	it('keeps a result on the succeeded arm', () => {
 		const event: AgentEvent = {
 			type: 'tool_succeeded',
+			source: 'catalog',
 			callId: 'call-1',
 			name: 'find_references',
 			output: { count: 2 }
@@ -52,6 +58,7 @@ describe('The three ways a call settles', () => {
 	it('keeps both the message and its detail on the reported-failure arm', () => {
 		const event: AgentEvent = {
 			type: 'tool_reported_failure',
+			source: 'catalog',
 			callId: 'call-9',
 			name: 'edit_note',
 			failure: 'No edits were applied.',
@@ -68,7 +75,12 @@ describe('The three ways a call settles', () => {
 
 	it('refuses a reported failure with no value to have read it out of', () => {
 		expect(
-			read({ type: 'tool_reported_failure', name: 'edit_note', failure: 'No edits.' }).kind
+			read({
+				type: 'tool_reported_failure',
+				source: 'catalog',
+				name: 'edit_note',
+				failure: 'No edits.'
+			}).kind
 		).toBe('unreadable');
 	});
 
@@ -82,7 +94,7 @@ describe('The three ways a call settles', () => {
 	 * than spelling it `''`.
 	 */
 	it('keeps a missing call id missing', () => {
-		const result = read({ type: 'tool_succeeded', name: 'read_note' });
+		const result = read({ type: 'tool_succeeded', source: 'catalog', name: 'read_note' });
 		expect(result.kind === 'readable' && 'callId' in result.event).toBe(false);
 	});
 });

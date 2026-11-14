@@ -264,7 +264,8 @@ export const controllerSurfaces = {
 		completeAuthorization: 'redacted',
 		refreshTools: true,
 		setToolPolicy: true,
-		disconnect: true
+		disconnect: true,
+		callTool: 'redacted'
 	}
 } satisfies {
 	[K in keyof ControllerFactory]: ControllerSurface<ReturnType<ControllerFactory[K]>>;

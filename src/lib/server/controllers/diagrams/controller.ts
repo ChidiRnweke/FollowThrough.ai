@@ -46,7 +46,8 @@ import type { NoteReader } from '$lib/server/services/notes/catalog';
 import type { SkillFinder } from '$lib/server/services/skills/library';
 
 import { UnsupportedDiagramOperationError, ValidationError } from '$lib/errors';
-import type { AgentRunReceipt } from '$lib/models/agent';
+import type { AgentRunReceipt, ToolSubject } from '$lib/models/agent';
+import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import type {
 	ConvertInlineMermaidInput,
 	ConvertInlineMermaidOutput,
@@ -790,7 +791,7 @@ export class Diagrams implements DiagramsController {
 		if (event.type === 'tool_called') {
 			const call = presentation.start(event.call);
 			activeCalls.set(call.callId, call);
-			return presentation.started(call, generator.toolName(call.name));
+			return presentation.started(call, catalogSubject(generator.toolName(call.name)));
 		}
 		if (event.type !== 'tool_output') return undefined;
 		const { call } = event;
@@ -798,7 +799,7 @@ export class Diagrams implements DiagramsController {
 		if (resolved.callId !== undefined) activeCalls.delete(resolved.callId);
 		return presentation.settled(
 			resolved,
-			generator.toolName(resolved.name),
+			catalogSubject(generator.toolName(resolved.name)),
 			generator.toolOutcome(call.output)
 		);
 	}
@@ -814,3 +815,7 @@ export class Diagrams implements DiagramsController {
 		return { kind: 'accepted', draft };
 	}
 }
+
+/** The Diagram Agent offers only catalog tools. */
+const catalogSubject = (name: AgentToolName | undefined): ToolSubject | undefined =>
+	name === undefined ? undefined : { source: 'catalog', name };

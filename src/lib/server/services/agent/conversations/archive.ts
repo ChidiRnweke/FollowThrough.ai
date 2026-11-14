@@ -286,6 +286,7 @@ export class ConversationArchive implements ConversationSessions, ConversationMe
 		const content: AgentPayloadObject = {
 			type: 'tool_activity',
 			callId: activity.callId ?? null,
+			...(activity.status === 'failed' ? {} : { source: activity.source }),
 			name: activity.name,
 			input: activity.input,
 			...(activity.status === 'approval_required' && activity.review
