@@ -39,7 +39,14 @@ const readRegistration = async (
 /** RFC 7591 registration, anonymous and for public clients only. */
 export const POST: RequestHandler = async ({ request }) => {
 	const read = await readRegistration(request);
-	if (read.kind === 'failure') return refuse(read);
+	if (read.kind === 'failure') {
+		// Refused before any controller runs, so the boundary never logs it.
+		console.warn('[oauth] registration refused', {
+			error: read.error,
+			description: read.description
+		});
+		return refuse(read);
+	}
 
 	const client = await AppFactory.mcpAuthorization().registerClient(read.request);
 	if ('kind' in client) return refuse(client);

@@ -60,14 +60,16 @@ const authentication = new DeferredValue(() =>
 	instrumentedController(
 		'authentication',
 		new Authentication({ sessions: sessions.get(), tokens: mcpCredentials.get() }),
-		authenticationSurface
+		authenticationSurface,
+		{ kind: 'system' }
 	)
 );
 const mcpAuthorization = new DeferredValue(() =>
 	instrumentedController(
 		'mcpAuthorization',
 		new McpAuthorization({ clients: mcpClients.get(), credentials: mcpCredentials.get() }),
-		mcpAuthorizationSurface
+		mcpAuthorizationSurface,
+		{ kind: 'system' }
 	)
 );
 const signIn = new DeferredValue(() => {
@@ -116,7 +118,8 @@ export class AppFactory {
 				grants: new McpGrants(new McpGrantRecords(actor, db)),
 				provenance: composition.get().forActor(actor).provenance
 			}),
-			accessSurface
+			accessSurface,
+			{ kind: 'actor', userId: actor.userId }
 		);
 	}
 

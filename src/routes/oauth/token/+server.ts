@@ -39,7 +39,15 @@ const readTokenRequest = async (
 
 export const POST: RequestHandler = async ({ request, url }) => {
 	const read = await readTokenRequest(request);
-	if (read.kind === 'failure') return refuse(read);
+	if (read.kind === 'failure') {
+		// Refused before any controller runs, so the boundary never logs it. The body is not
+		// logged: a well-formed part of it may be a code or a refresh token.
+		console.warn('[oauth] token request refused', {
+			error: read.error,
+			description: read.description
+		});
+		return refuse(read);
+	}
 
 	const result = await AppFactory.mcpAuthorization().exchangeToken(
 		read.request,

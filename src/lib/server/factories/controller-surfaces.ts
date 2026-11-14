@@ -274,10 +274,11 @@ export const controllerSurfaces = {
 export const localIdentitySurface = { initializeLocal: true } satisfies ControllerSurface<
 	import('../controllers/identity/local').LocalIdentityController
 >;
+// Session ids and the bearer header are credentials; only the outcome is logged.
 export const authenticationSurface = {
-	resumeSession: true,
-	endSession: true,
-	verifyBearer: true
+	resumeSession: 'redacted',
+	endSession: 'redacted',
+	verifyBearer: 'redacted'
 } satisfies ControllerSurface<
 	import('../controllers/identity/authentication').AuthenticationController
 >;
@@ -285,7 +286,8 @@ export const mcpAuthorizationSurface = {
 	registerClient: true,
 	review: true,
 	deny: true,
-	exchangeToken: true
+	// The request carries a code or a refresh token, and the result carries both tokens.
+	exchangeToken: 'redacted'
 } satisfies ControllerSurface<
 	import('../controllers/identity/mcp-authorization').McpAuthorizationController
 >;

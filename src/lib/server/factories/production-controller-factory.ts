@@ -66,6 +66,7 @@ import { Workspace, type WorkspaceDependencies } from '../controllers/workspace/
 import { Connectors, type ConnectorsDependencies } from '../controllers/connectors/controller';
 import type { ControllerFactory } from './controller-factory';
 import { instrumentedController } from './controller-instrumentation';
+import type { ControllerSurface } from '$lib/models/controller-boundary';
 
 export interface ProductionControllerDependencies {
 	agentFiles: AgentFilesDependencies;
@@ -103,31 +104,41 @@ export class ProductionControllerFactory implements ControllerFactory {
 		private readonly actor: ActorContext,
 		private readonly dependencies: ProductionControllerDependencies
 	) {}
-	// Every controller is wrapped at construction: one `domain.method` span plus
-	// info/debug/error logs per call, covering UI, MCP and agent-tool callers.
+	// Every controller is wrapped at construction: one `domain.method` span and one completion
+	// log line per call, naming this factory's user, for UI, MCP and agent-tool callers.
+	private instrument<T extends object>(
+		domain: string,
+		controller: T,
+		surface: ControllerSurface<T>
+	): T {
+		return instrumentedController(domain, controller, surface, {
+			kind: 'actor',
+			userId: this.actor.userId
+		});
+	}
 	agentFiles(): ReturnType<ControllerFactory['agentFiles']> {
-		return instrumentedController(
+		return this.instrument(
 			'agentFiles',
 			new AgentFiles(this.dependencies.agentFiles),
 			controllerSurfaces.agentFiles
 		);
 	}
 	workspace(): ReturnType<ControllerFactory['workspace']> {
-		return instrumentedController(
+		return this.instrument(
 			'workspace',
 			new Workspace(new TodayPresentationService(), this.dependencies.workspace),
 			controllerSurfaces.workspace
 		);
 	}
 	projects(): ReturnType<ControllerFactory['projects']> {
-		return instrumentedController(
+		return this.instrument(
 			'projects',
 			new Projects(new WorkspaceCommandRulesService(), this.dependencies.projects),
 			controllerSurfaces.projects
 		);
 	}
 	notes(): ReturnType<ControllerFactory['notes']> {
-		return instrumentedController(
+		return this.instrument(
 			'notes',
 			new Notes(
 				this.actor,
@@ -141,35 +152,35 @@ export class ProductionControllerFactory implements ControllerFactory {
 		);
 	}
 	todos(): ReturnType<ControllerFactory['todos']> {
-		return instrumentedController(
+		return this.instrument(
 			'todos',
 			new Todos(this.actor, new WorkspaceCommandRulesService(), this.dependencies.todos),
 			controllerSurfaces.todos
 		);
 	}
 	relationships(): ReturnType<ControllerFactory['relationships']> {
-		return instrumentedController(
+		return this.instrument(
 			'relationships',
 			new Relationships(new RelationshipCandidatesService(), this.dependencies.relationships),
 			controllerSurfaces.relationships
 		);
 	}
 	references(): ReturnType<ControllerFactory['references']> {
-		return instrumentedController(
+		return this.instrument(
 			'references',
 			new References(this.dependencies.references),
 			controllerSurfaces.references
 		);
 	}
 	diagrams(): ReturnType<ControllerFactory['diagrams']> {
-		return instrumentedController(
+		return this.instrument(
 			'diagrams',
 			new Diagrams(this.actor, this.dependencies.diagrams),
 			controllerSurfaces.diagrams
 		);
 	}
 	diagramStudio(): ReturnType<ControllerFactory['diagramStudio']> {
-		return instrumentedController(
+		return this.instrument(
 			'diagramStudio',
 			new DiagramStudio(
 				this.actor,
@@ -180,7 +191,7 @@ export class ProductionControllerFactory implements ControllerFactory {
 		);
 	}
 	suggestions(): ReturnType<ControllerFactory['suggestions']> {
-		return instrumentedController(
+		return this.instrument(
 			'suggestions',
 			new Suggestions(
 				this.actor,
@@ -191,14 +202,14 @@ export class ProductionControllerFactory implements ControllerFactory {
 		);
 	}
 	skills(): ReturnType<ControllerFactory['skills']> {
-		return instrumentedController(
+		return this.instrument(
 			'skills',
 			new Skills(new WorkspaceCommandRulesService(), this.dependencies.skills),
 			controllerSurfaces.skills
 		);
 	}
 	agentHarness(): ReturnType<ControllerFactory['agentHarness']> {
-		return instrumentedController(
+		return this.instrument(
 			'agentHarness',
 			new AgentSdkHarness(
 				this.actor,
@@ -209,7 +220,7 @@ export class ProductionControllerFactory implements ControllerFactory {
 		);
 	}
 	agentSettings(): ReturnType<ControllerFactory['agentSettings']> {
-		return instrumentedController(
+		return this.instrument(
 			'agentSettings',
 			new AgentSettings(
 				this.actor,
@@ -220,7 +231,7 @@ export class ProductionControllerFactory implements ControllerFactory {
 		);
 	}
 	userSettings(): ReturnType<ControllerFactory['userSettings']> {
-		return instrumentedController(
+		return this.instrument(
 			'userSettings',
 			new UserSettings(
 				this.actor,
@@ -231,14 +242,14 @@ export class ProductionControllerFactory implements ControllerFactory {
 		);
 	}
 	mcpConnections(): ReturnType<ControllerFactory['mcpConnections']> {
-		return instrumentedController(
+		return this.instrument(
 			'mcpConnections',
 			new McpConnections(this.dependencies.mcpConnections),
 			controllerSurfaces.mcpConnections
 		);
 	}
 	toolPreferences(): ReturnType<ControllerFactory['toolPreferences']> {
-		return instrumentedController(
+		return this.instrument(
 			'toolPreferences',
 			new ToolPreferences(
 				this.actor,
@@ -249,14 +260,14 @@ export class ProductionControllerFactory implements ControllerFactory {
 		);
 	}
 	attachments(): ReturnType<ControllerFactory['attachments']> {
-		return instrumentedController(
+		return this.instrument(
 			'attachments',
 			new Attachments(this.dependencies.attachments),
 			controllerSurfaces.attachments
 		);
 	}
 	deliverables(): ReturnType<ControllerFactory['deliverables']> {
-		return instrumentedController(
+		return this.instrument(
 			'deliverables',
 			new Deliverables(
 				this.actor,
@@ -267,7 +278,7 @@ export class ProductionControllerFactory implements ControllerFactory {
 		);
 	}
 	trustPolicies(): ReturnType<ControllerFactory['trustPolicies']> {
-		return instrumentedController(
+		return this.instrument(
 			'trustPolicies',
 			new TrustPolicies(
 				this.actor,
@@ -278,63 +289,63 @@ export class ProductionControllerFactory implements ControllerFactory {
 		);
 	}
 	memory(): ReturnType<ControllerFactory['memory']> {
-		return instrumentedController(
+		return this.instrument(
 			'memory',
 			new Memory(this.actor, new WorkspaceCommandRulesService(), this.dependencies.memory),
 			controllerSurfaces.memory
 		);
 	}
 	widgets(): ReturnType<ControllerFactory['widgets']> {
-		return instrumentedController(
+		return this.instrument(
 			'widgets',
 			new Widgets(this.actor, new WorkspaceCommandRulesService(), this.dependencies.widgets),
 			controllerSurfaces.widgets
 		);
 	}
 	retrieval(): ReturnType<ControllerFactory['retrieval']> {
-		return instrumentedController(
+		return this.instrument(
 			'retrieval',
 			new Retrieval(this.dependencies.retrieval),
 			controllerSurfaces.retrieval
 		);
 	}
 	inlineSuggestions(): ReturnType<ControllerFactory['inlineSuggestions']> {
-		return instrumentedController(
+		return this.instrument(
 			'inlineSuggestions',
 			new InlineSuggestions(this.actor, this.dependencies.inlineSuggestions),
 			controllerSurfaces.inlineSuggestions
 		);
 	}
 	feedback(): ReturnType<ControllerFactory['feedback']> {
-		return instrumentedController(
+		return this.instrument(
 			'feedback',
 			new Feedback(this.dependencies.feedback),
 			controllerSurfaces.feedback
 		);
 	}
 	contextUsage(): ReturnType<ControllerFactory['contextUsage']> {
-		return instrumentedController(
+		return this.instrument(
 			'contextUsage',
 			new ContextUsage(this.dependencies.contextUsage),
 			controllerSurfaces.contextUsage
 		);
 	}
 	attachmentProcessing(): ReturnType<ControllerFactory['attachmentProcessing']> {
-		return instrumentedController(
+		return this.instrument(
 			'attachmentProcessing',
 			this.dependencies.attachmentProcessing,
 			controllerSurfaces.attachmentProcessing
 		);
 	}
 	knowledgeIndexing(): ReturnType<ControllerFactory['knowledgeIndexing']> {
-		return instrumentedController(
+		return this.instrument(
 			'knowledgeIndexing',
 			this.dependencies.knowledgeIndexing,
 			controllerSurfaces.knowledgeIndexing
 		);
 	}
 	connectors(): ReturnType<ControllerFactory['connectors']> {
-		return instrumentedController(
+		return this.instrument(
 			'connectors',
 			new Connectors(this.dependencies.connectors),
 			controllerSurfaces.connectors
