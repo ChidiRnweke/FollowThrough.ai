@@ -254,6 +254,17 @@ export const controllerSurfaces = {
 	},
 	knowledgeIndexing: {
 		backfill: true
+	},
+	connectors: {
+		catalog: true,
+		list: true,
+		get: true,
+		connect: 'redacted',
+		reconnect: 'redacted',
+		completeAuthorization: 'redacted',
+		refreshTools: true,
+		setToolPolicy: true,
+		disconnect: true
 	}
 } satisfies {
 	[K in keyof ControllerFactory]: ControllerSurface<ReturnType<ControllerFactory[K]>>;

@@ -21,6 +21,11 @@ import {
 	type ProductionApplication
 } from '../application';
 import { systemClock } from './system-clock';
+import type { ConnectorConfiguration } from './capabilities/connectors-capability-factory';
+import { SecretBox } from '$lib/server/infrastructure/crypto/secret-box';
+import { OutboundGuard, publicAddressFetch } from '$lib/server/infrastructure/network/outbound';
+import type { CatalogConnectorId } from '$lib/models/connectors';
+import type { ClientCredentials } from '$lib/server/services/connectors/authorization';
 import { createSystemApplication, type SystemApplication } from './system-factory';
 
 export type { ProductionApplication } from '../application';
@@ -77,6 +82,7 @@ function productionConfig(): ApplicationConfig {
 			.split(',')
 			.map((model) => model.trim())
 			.filter(Boolean),
+		connectors: connectorConfiguration(),
 		s3: {
 			endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:9000',
 			region: process.env.S3_REGION ?? 'us-east-1',
@@ -85,5 +91,31 @@ function productionConfig(): ApplicationConfig {
 			bucket: process.env.S3_BUCKET ?? 'followthrough-attachments',
 			forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false'
 		}
+	};
+}
+
+/**
+ * Connectors turn on with CONNECTOR_SECRET_KEYS. A keyring that does not parse
+ * fails the composition rather than turning connectors off, and a preregistered
+ * client needs both of its keys.
+ */
+function connectorConfiguration(): ConnectorConfiguration {
+	const keyring = process.env.CONNECTOR_SECRET_KEYS;
+	if (!keyring) return { kind: 'unconfigured' };
+	const preregistered = new Map<CatalogConnectorId, ClientCredentials>();
+	const clientId = process.env.CONNECTOR_GITHUB_CLIENT_ID;
+	const clientSecret = process.env.CONNECTOR_GITHUB_CLIENT_SECRET;
+	if ((clientId === undefined) !== (clientSecret === undefined))
+		throw new Error(
+			'Set both CONNECTOR_GITHUB_CLIENT_ID and CONNECTOR_GITHUB_CLIENT_SECRET, or neither.'
+		);
+	if (clientId !== undefined && clientSecret !== undefined)
+		preregistered.set('github', { clientId, clientSecret });
+	return {
+		kind: 'configured',
+		secrets: SecretBox.fromKeyring(keyring),
+		origin: requiredEnvironmentValue('ORIGIN'),
+		preregistered,
+		fetch: new OutboundGuard(publicAddressFetch()).fetch
 	};
 }

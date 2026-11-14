@@ -33,13 +33,26 @@ export interface ToolSeeding {
 	prepareSeed(catalog: readonly ToolDescriptor[]): Promise<ToolSeed>;
 	completeSeed(seed: ToolSeed): Promise<ToolEmbeddingSeedSummary>;
 }
+/** Vectors for one connector's tools, in order, and the model that produced them. */
+export interface ConnectorToolVectors {
+	readonly model: string;
+	readonly vectors: readonly (readonly number[])[];
+}
+export interface ConnectorToolEmbedding {
+	/**
+	 * Embeds connector tools the way the catalog is embedded, so both rank on
+	 * one scale (ADR 0049). No write: the caller stores the vectors with the
+	 * snapshot they describe.
+	 */
+	embedConnectorTools(tools: readonly ToolDescriptor[]): Promise<ConnectorToolVectors>;
+}
 export interface ToolRanking {
 	/** The `limit` tools among `names` closest to `query`. */
 	rank(names: readonly string[], query: string, limit: number): Promise<string[]>;
 }
 
 /** Semantic search over the agent's tool catalog. The embedding provider belongs to it. */
-export class ToolSearch implements ToolSeeding, ToolRanking {
+export class ToolSearch implements ToolSeeding, ToolRanking, ConnectorToolEmbedding {
 	constructor(private readonly dependencies: ToolSearchDependencies) {}
 
 	async prepareSeed(catalog: readonly ToolDescriptor[]): Promise<ToolSeed> {
@@ -92,6 +105,15 @@ export class ToolSearch implements ToolSeeding, ToolRanking {
 			unchanged: plan.names.length - plan.pending.length,
 			removed: plan.removed
 		};
+	}
+
+	async embedConnectorTools(tools: readonly ToolDescriptor[]): Promise<ConnectorToolVectors> {
+		const vectors = await this.embed(tools.map(toolEmbeddingText));
+		if (vectors.length !== tools.length)
+			throw new InvalidGeneratedContentError(
+				'Connector tool embedding results did not match the listed tools'
+			);
+		return { model: this.dependencies.model, vectors };
 	}
 
 	async rank(names: readonly string[], query: string, limit: number): Promise<string[]> {

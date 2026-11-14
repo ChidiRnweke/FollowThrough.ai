@@ -61,6 +61,10 @@ class FakeController implements FakeControllerContract {
 	syncThrower(): string {
 		throw new ValidationError('sync domain failure');
 	}
+
+	async exchange(code: string): Promise<{ readonly accessToken: string }> {
+		return { accessToken: `token-for-${code}` };
+	}
 }
 
 const fakeSurface = {
@@ -71,7 +75,8 @@ const fakeSurface = {
 	submitLike: true,
 	syncThrower: false,
 	nested: true,
-	declaredAsyncFailure: true
+	declaredAsyncFailure: true,
+	exchange: 'redacted'
 } satisfies ControllerSurface<FakeController>;
 
 const recordingLogger = (entries: RecordedEntry[]) => ({
@@ -118,6 +123,25 @@ describe('instrumentedController', () => {
 		await wrapped.get({ userId: 'u1' }, 'n1').then(() => sequence.push('after'));
 
 		expect(sequence).toEqual(['info', 'body', 'after']);
+	});
+
+	test('traces a redacted method without logging its arguments or its result', async () => {
+		const entries: RecordedEntry[] = [];
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger(entries)
+		);
+
+		await wrapped.exchange('authorization-code-123');
+
+		const logged = JSON.stringify(entries.map((entry) => entry.args.map(String)));
+		expect({
+			levels: entries.map((entry) => entry.level),
+			leaksCode: logged.includes('authorization-code-123'),
+			leaksToken: logged.includes('token-for-')
+		}).toEqual({ levels: ['info', 'debug'], leaksCode: false, leaksToken: false });
 	});
 
 	test('logs debug with a duration on success', async () => {

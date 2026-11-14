@@ -240,6 +240,27 @@ describe('environment hydration', () => {
 		});
 	});
 
+	test('reads the optional connector keys from the backend and leaves them unset when absent', async () => {
+		const configured: Record<string, string | undefined> = { CONNECTOR_SECRET_KEYS: 'stale' };
+		await hydrateEnvironment({
+			environment: configured,
+			reader: new SecretsReader(
+				infisicalBackend(
+					new FakeSecretsClient({ ...applicationSecrets(), CONNECTOR_SECRET_KEYS: 'v1:key' })
+				)
+			)
+		});
+		const unconfigured: Record<string, string | undefined> = { CONNECTOR_SECRET_KEYS: 'stale' };
+		await hydrateEnvironment({
+			environment: unconfigured,
+			reader: new SecretsReader(infisicalBackend(new FakeSecretsClient(applicationSecrets())))
+		});
+		expect({
+			configured: configured.CONNECTOR_SECRET_KEYS,
+			unconfigured: 'CONNECTOR_SECRET_KEYS' in unconfigured
+		}).toEqual({ configured: 'v1:key', unconfigured: false });
+	});
+
 	test('a missing required secret fails hard', async () => {
 		const client = new FakeSecretsClient({ OPENROUTER_API_KEY: 'router-key' });
 		await expect(

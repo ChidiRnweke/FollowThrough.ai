@@ -470,6 +470,13 @@
       "when": 1792936385194,
       "tag": "0066_inline_grounding_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1794673888332,
+      "tag": "0067_connectors",
+      "breakpoints": true
     }
   ]
 }

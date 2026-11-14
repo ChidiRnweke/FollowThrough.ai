@@ -135,9 +135,21 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	EVAL_GATE: '0'
 });
 
+/**
+ * Read from the secrets backend when present and left unset otherwise. Each one
+ * turns a capability on; its absence is a state the capability reports, not a
+ * default (connectors without CONNECTOR_SECRET_KEYS say they are not set up).
+ */
+export const OPTIONAL_APPLICATION_KEYS = [
+	'CONNECTOR_SECRET_KEYS',
+	'CONNECTOR_GITHUB_CLIENT_ID',
+	'CONNECTOR_GITHUB_CLIENT_SECRET'
+] as const;
+
 export const APPLICATION_KEYS: string[] = [
 	...REQUIRED_APPLICATION_KEYS,
-	...Object.keys(APPLICATION_DEFAULTS)
+	...Object.keys(APPLICATION_DEFAULTS),
+	...OPTIONAL_APPLICATION_KEYS
 ];
 
 export const BOOTSTRAP_KEYS = [
