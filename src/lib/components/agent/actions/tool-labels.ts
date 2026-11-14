@@ -1,5 +1,6 @@
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
-import { connectorToolLabel } from './connector-tool-labels';
+import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { connectorNameLabel, connectorToolLabel } from './connector-tool-labels';
 
 const labels: Record<AgentToolName, string> = {
 	get_project: 'Read project',
@@ -202,24 +203,33 @@ export const isCatalogTool = (name: string): name is AgentToolName => name in la
  */
 export const friendlyToolLabel = (name: string): string => {
 	if (isCatalogTool(name)) return labels[name];
-	const connector = connectorToolLabel(name);
-	if (connector) return `${connector.service} · ${connector.action}`;
+	const connector = connectorNameLabel(name);
+	if (connector) return connector;
 	return name
 		.split('_')
 		.map((part, index) => (index === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part))
 		.join(' ');
 };
 
+export const completedToolLabel = (name: string): string =>
+	isCatalogTool(name) ? completedLabels[name] : `${friendlyToolLabel(name)} completed`;
+
 /**
- * A connector tool keeps its present-tense label once it has run: the server
- * names an action, and "Create issue completed" says nothing the row's own
- * finished state does not.
+ * The reader's name for one call. A connector call names its service by the
+ * label frozen when it was made, "Linear · Create issue", and keeps that
+ * present-tense label once it has run: the server names an action, and
+ * "Create issue completed" says nothing the row's finished state does not.
  */
-export const completedToolLabel = (name: string): string => {
-	if (isCatalogTool(name)) return completedLabels[name];
-	if (connectorToolLabel(name)) return friendlyToolLabel(name);
-	return `${friendlyToolLabel(name)} completed`;
+export const activityLabel = (tool: ChatToolActivity): string => {
+	if (tool.status === 'failed' || tool.source === 'catalog') return friendlyToolLabel(tool.name);
+	const { service, action } = connectorToolLabel(tool);
+	return `${service} · ${action}`;
 };
+
+export const completedActivityLabel = (tool: ChatToolActivity): string =>
+	tool.status !== 'failed' && tool.source === 'connector'
+		? activityLabel(tool)
+		: completedToolLabel(tool.name);
 
 /**
  * The verb a call performed on the one thing it was about, for the row that already names it.

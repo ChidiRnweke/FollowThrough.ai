@@ -1,12 +1,8 @@
-import {
-	CONNECTOR_CATALOG,
-	CONNECTOR_TOOL_NAME_PATTERN,
-	type ConnectorLogo
-} from '$lib/models/connectors';
+import type { ToolSubject } from '$lib/models/agent';
+import { CONNECTOR_TOOL_NAME_PATTERN, type ConnectorLogo } from '$lib/models/connectors';
 
-/** How a call to a connected service reads in chat. */
+/** How a call into a connected service reads in chat. */
 export interface ConnectorToolLabel {
-	/** The catalog title, or the custom server's slug: server-sent text never names the service. */
 	readonly service: string;
 	readonly action: string;
 	readonly logo: ConnectorLogo;
@@ -23,20 +19,30 @@ const sentence = (toolName: string): string => {
 	return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
+const actionOf = (name: string): string => sentence(name.slice(name.indexOf('__') + 2));
+
 /**
- * Reads a connector tool's model name, `<slug>__<tool>`, back into its parts
- * (ADR 0049). The name is all a journalled call keeps, so this still reads
- * after the connector is disconnected. A custom server can never take a catalog
- * id as its slug, so only a catalog connector shows a vendor's mark.
+ * A connector call as the user reads it: the service from the label frozen
+ * when the call was made (ADR 0049), the action from the server's tool name.
+ * Only a catalog label shows a vendor's mark; a custom server shows its
+ * monogram even when its slug matches a catalog id (ADR 0051).
  */
-export const connectorToolLabel = (name: string): ConnectorToolLabel | undefined => {
-	if (!CONNECTOR_TOOL_NAME_PATTERN.test(name)) return undefined;
-	const split = name.indexOf('__');
-	const slug = name.slice(0, split);
-	const entry = CONNECTOR_CATALOG.find((candidate) => candidate.id === slug);
-	return {
-		service: entry?.title ?? slug,
-		action: sentence(name.slice(split + 2)),
-		logo: entry ? { kind: 'catalog', catalogId: entry.id } : { kind: 'monogram' }
-	};
-};
+export const connectorToolLabel = (
+	subject: Extract<ToolSubject, { readonly source: 'connector' }>
+): ConnectorToolLabel => ({
+	service: subject.connector.title,
+	action: actionOf(subject.name),
+	logo:
+		subject.connector.kind === 'catalog'
+			? { kind: 'catalog', catalogId: subject.connector.catalogId }
+			: { kind: 'monogram' }
+});
+
+/**
+ * A call that failed before it ran keeps only the name the model asked for, so
+ * it reads by its slug and action and never claims a vendor.
+ */
+export const connectorNameLabel = (name: string): string | undefined =>
+	CONNECTOR_TOOL_NAME_PATTERN.test(name)
+		? `${name.slice(0, name.indexOf('__'))} · ${actionOf(name)}`
+		: undefined;

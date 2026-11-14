@@ -316,12 +316,28 @@ export class ConnectorRecords implements ConnectorRepository {
 
 	async runTools(): Promise<readonly RunConnectorTool[]> {
 		const rows = await this.database
-			.select({ ...toolColumns, connectorTitle: schema.connectors.title })
+			.select({
+				...toolColumns,
+				connectorTitle: schema.connectors.title,
+				sourceKind: schema.connectors.sourceKind,
+				catalogId: schema.connectors.catalogId
+			})
 			.from(schema.connectorTools)
 			.innerJoin(schema.connectors, eq(schema.connectors.id, schema.connectorTools.connectorId))
 			.where(eq(schema.connectors.userId, this.actor.userId))
 			.orderBy(asc(schema.connectorTools.modelName));
-		return rows.map(({ connectorTitle, ...row }) => ({ tool: toTool(row), connectorTitle }));
+		return rows.map(({ connectorTitle, sourceKind, catalogId, ...row }) => {
+			const source = connectorSourceSchema.parse(
+				sourceKind === 'catalog' ? { kind: 'catalog', catalogId } : { kind: sourceKind }
+			);
+			return {
+				tool: toTool(row),
+				connector:
+					source.kind === 'catalog'
+						? { kind: 'catalog', catalogId: source.catalogId, title: connectorTitle }
+						: { kind: 'custom', title: connectorTitle }
+			};
+		});
 	}
 
 	async toolDistances(

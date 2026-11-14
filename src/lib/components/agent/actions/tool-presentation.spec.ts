@@ -207,11 +207,11 @@ describe('Tool disclosure detail', () => {
 
 describe('Approval consequences are stated only where they bite', () => {
 	it('warns that archiving hides a note', () => {
-		expect(approvalConsequence('archive_note')).toContain('restore it later');
+		expect(approvalConsequence(tool('archive_note', 'running'))).toContain('restore it later');
 	});
 
 	it('says nothing extra about an ordinary create', () => {
-		expect(approvalConsequence('create_note')).toBeUndefined();
+		expect(approvalConsequence(tool('create_note', 'running'))).toBeUndefined();
 	});
 });
 

@@ -30,13 +30,15 @@ const available = (
 	controllers: ControllerFactory,
 	build: Extract<ConnectorToolBuild, { kind: 'available' }>
 ): ConnectorAgentTool => {
-	const { tool, connectorTitle } = build;
+	const { tool, connector } = build;
+	const connectorTitle = connector.title;
 	const compiled = compileJsonSchema(build.inputSchema);
 	// The snapshot keeps a schema only when this compiler accepted it (ADR 0049).
 	if (compiled.kind === 'failure')
 		throw new Error(`Stored connector tool ${tool.modelName} has a schema that does not compile`);
 	return {
 		name: tool.modelName,
+		connector,
 		description: `[${connectorTitle}] ${tool.title}. ${tool.description}`.trim(),
 		checksum: tool.checksum,
 		inputSchema: build.inputSchema,
@@ -73,6 +75,7 @@ const withdrawn = (
 	build: Extract<ConnectorToolBuild, { kind: 'withdrawn' }>
 ): ConnectorAgentTool => ({
 	name: build.name,
+	connector: build.connector,
 	description: 'This connector tool is no longer available.',
 	checksum: build.checksum,
 	inputSchema: ANY_OBJECT,

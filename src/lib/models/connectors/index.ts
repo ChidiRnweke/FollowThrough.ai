@@ -589,10 +589,36 @@ export type ServerAccess =
 
 // --- Calls ------------------------------------------------------------------
 
+/**
+ * How a call names its connector, frozen when the call is made (ADR 0049). A
+ * transcript keeps naming the service after the connector is renamed or
+ * removed, and a custom server never borrows a vendor's mark because its slug
+ * later became a catalog id (ADR 0051).
+ */
+export type ConnectorCallLabel =
+	| { readonly kind: 'catalog'; readonly catalogId: CatalogConnectorId; readonly title: string }
+	| { readonly kind: 'custom'; readonly title: string };
+
+/**
+ * Reads a stored label. A catalog id the catalog no longer lists has no recorded
+ * mark, so it reads as custom: the title stays, the vendor's logo does not.
+ */
+export const connectorCallLabelSchema: z.ZodType<ConnectorCallLabel> = z.union([
+	z
+		.object({ kind: z.literal('catalog'), catalogId: z.string(), title: z.string().min(1) })
+		.transform((label): ConnectorCallLabel => {
+			const catalogId = catalogConnectorIdSchema.safeParse(label.catalogId);
+			return catalogId.success
+				? { kind: 'catalog', catalogId: catalogId.data, title: label.title }
+				: { kind: 'custom', title: label.title };
+		}),
+	z.object({ kind: z.literal('custom'), title: z.string().min(1) })
+]);
+
 /** A connector tool the agent can be offered this run, with the connector it belongs to. */
 export interface RunConnectorTool {
 	readonly tool: ConnectorTool;
-	readonly connectorTitle: string;
+	readonly connector: ConnectorCallLabel;
 }
 
 /** One block of what a server returned, parsed at the boundary (ADR 0037). */

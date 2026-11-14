@@ -94,6 +94,15 @@ const SLUG_LENGTH = 16;
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
+/** The base itself when free, else the base shortened to fit the first free numeric suffix. */
+const freeSlug = (base: string, taken: ReadonlySet<string>): ConnectorSlug => {
+	if (!taken.has(base)) return base as ConnectorSlug;
+	for (let suffix = 2; ; suffix++) {
+		const candidate = `${base.slice(0, SLUG_LENGTH - String(suffix).length)}${suffix}`;
+		if (!taken.has(candidate)) return candidate as ConnectorSlug;
+	}
+};
+
 /**
  * The provider grammar allows letters, digits, `_` and `-` in 64 characters.
  * A server name that fits is kept as it is; any other is cleaned, shortened and
@@ -138,26 +147,26 @@ export class ConnectorDirectory
 
 	async allocateSlug(source: ConnectorSource, title: string): Promise<ConnectorSlug> {
 		const existing = await this.dependencies.connectors.list();
+		const used = new Set<string>(existing.map((connector) => connector.slug));
 		if (source.kind === 'catalog') {
-			if (existing.some((connector) => connector.slug === source.catalogId))
+			if (
+				existing.some(
+					(connector) =>
+						connector.source.kind === 'catalog' && connector.source.catalogId === source.catalogId
+				)
+			)
 				throw new ConflictError(`${title} is already connected.`);
-			return source.catalogId as ConnectorSlug;
+			// A custom server may hold this id as its slug from before the catalog listed the
+			// vendor. Calls carry their own label (ADR 0051), so the slug need not be the id.
+			return freeSlug(source.catalogId, used);
 		}
-		const taken = new Set<string>([
-			...CONNECTOR_CATALOG.map((entry) => entry.id),
-			...existing.map((connector) => connector.slug)
-		]);
 		const base =
 			title
 				.toLowerCase()
 				.replace(/[^a-z0-9]/g, '')
 				.replace(/^[0-9]+/, '')
 				.slice(0, SLUG_LENGTH) || 'server';
-		if (!taken.has(base)) return base as ConnectorSlug;
-		for (let suffix = 2; ; suffix++) {
-			const candidate = `${base.slice(0, SLUG_LENGTH - String(suffix).length)}${suffix}`;
-			if (!taken.has(candidate)) return candidate as ConnectorSlug;
-		}
+		return freeSlug(base, new Set([...used, ...CONNECTOR_CATALOG.map((entry) => entry.id)]));
 	}
 
 	name(slug: ConnectorSlug, tools: readonly ListedConnectorTool[]): readonly NamedTool[] {

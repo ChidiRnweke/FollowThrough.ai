@@ -970,7 +970,11 @@ export class Chat implements ChatSession {
 								name: pending.toolName,
 								...(pending.review ? { noteReview: readNoteReview(pending.review) } : {})
 							}
-						: { source: 'connector' as const, name: pending.toolName }),
+						: {
+								source: 'connector' as const,
+								name: pending.toolName,
+								connector: pending.connector
+							}),
 					arguments: toolArguments(pending.arguments),
 					runId: snapshot.run.id,
 					status: 'approval_required'
@@ -1075,4 +1079,4 @@ export class Chat implements ChatSession {
 const subjectOf = (event: ToolSubject): ToolSubject =>
 	event.source === 'catalog'
 		? { source: 'catalog', name: event.name }
-		: { source: 'connector', name: event.name };
+		: { source: 'connector', name: event.name, connector: event.connector };

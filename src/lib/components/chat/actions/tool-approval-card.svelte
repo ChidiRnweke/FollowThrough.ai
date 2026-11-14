@@ -16,9 +16,9 @@
 	import ChatMarkdown from '../chat-markdown.svelte';
 	import RecordFields from './disclosure/record-fields.svelte';
 	import {
+		activityLabel,
 		approvalConsequence,
-		connectorToolLabel,
-		friendlyToolLabel
+		connectorToolLabel
 	} from '../../agent/actions/tool-presentation';
 	import { ConnectorLogo } from '$lib/components/connectors';
 	import { approvalPreview, isNoteBodyTool, type ApprovalBaseline } from './tool-approval-preview';
@@ -166,9 +166,11 @@
 			? preview.change.kind === 'prepared'
 			: preview.kind === 'arguments' && (fields.items?.length ?? 0) > COMPACT_ITEM_CAP
 	);
-	const consequence = $derived(approvalConsequence(tool.name));
+	const consequence = $derived(approvalConsequence(tool));
 	/** A call into a connected service carries that service's mark, so whose data it touches reads first. */
-	const connector = $derived(connectorToolLabel(tool.name));
+	const connector = $derived(
+		tool.status !== 'failed' && tool.source === 'connector' ? connectorToolLabel(tool) : undefined
+	);
 
 	/**
 	 * With a subject to lead on, the tool's own name becomes the subtitle; without one there
@@ -179,10 +181,8 @@
 	 * that happened to be mentioned; together they say what is about to happen to which
 	 * thing, which is the whole question being asked.
 	 */
-	const heading = $derived(
-		subject ? `${friendlyToolLabel(tool.name)} · ${subject}` : friendlyToolLabel(tool.name)
-	);
-	const action = $derived(subject ? friendlyToolLabel(tool.name) : undefined);
+	const heading = $derived(subject ? `${activityLabel(tool)} · ${subject}` : activityLabel(tool));
+	const action = $derived(subject ? activityLabel(tool) : undefined);
 
 	/**
 	 * A second line only where it adds something. The consequence of an archive or a version

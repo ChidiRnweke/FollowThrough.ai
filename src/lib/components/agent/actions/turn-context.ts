@@ -8,7 +8,12 @@ const { isAgentPayloadObject } = agentPayloadOperations;
 
 import { toolFailure, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import { mechanismTools, type MechanismTool } from './rendered-tools';
-import { completedToolLabel, friendlyToolLabel, subjectVerb } from './tool-labels';
+import {
+	activityLabel,
+	completedActivityLabel,
+	friendlyToolLabel,
+	subjectVerb
+} from './tool-labels';
 import { explainToolFailure } from './tool-result';
 import { fileEntity, toolEntity } from './tool-entities';
 import { toolDisclosure, type FieldChange, type FileOutputLine } from './tool-disclosure';
@@ -324,8 +329,7 @@ function passRequest(tool: ChatToolActivity): { label: string; query?: string } 
 	}
 	// Only a call that worked is named in the past tense; a failed one never "completed".
 	return {
-		label:
-			tool.status === 'succeeded' ? completedToolLabel(tool.name) : friendlyToolLabel(tool.name)
+		label: tool.status === 'succeeded' ? completedActivityLabel(tool) : activityLabel(tool)
 	};
 }
 

@@ -126,6 +126,7 @@ describe('connector tools in an agent run', () => {
 				type: 'tool_succeeded',
 				source: 'connector',
 				name: 'linear__list_issues',
+				connector: { kind: 'catalog', catalogId: 'linear', title: 'Linear' },
 				output: {
 					kind: 'connector_result',
 					connector: 'Linear',
@@ -156,6 +157,7 @@ describe('connector tools in an agent run', () => {
 					source: 'connector',
 					callId: 'call-issue',
 					toolName: 'linear__create_issue',
+					connector: { kind: 'catalog', catalogId: 'linear', title: 'Linear' },
 					checksum: (await tool('create_issue')).checksum,
 					arguments: { title: 'Ship connectors' }
 				}

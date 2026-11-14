@@ -73,6 +73,24 @@ describe('ConnectorDirectory', () => {
 		expect({ linear, custom }).toEqual({ linear: 'linear', custom: 'linearselfhosted' });
 	});
 
+	it('connects a catalog vendor under a suffixed slug when a custom server already holds its id', async () => {
+		const connectors = directory();
+		// A custom server named before the catalog listed Todoist kept the slug `todoist`.
+		await connectors.create(
+			{
+				slug: 'todoist' as ConnectorSlug,
+				source: { kind: 'custom' },
+				title: 'Todoist',
+				serverUrl: 'https://todoist.example.org/mcp',
+				credential: { kind: 'none' }
+			},
+			[]
+		);
+		expect(
+			await connectors.allocateSlug({ kind: 'catalog', catalogId: 'todoist' }, 'Todoist')
+		).toBe('todoist2');
+	});
+
 	it('takes a sign-in attempt once and refuses it after it expires', async () => {
 		let clock = '2026-11-14T10:00:00.000Z' as DateTime;
 		const connectors = directory(() => clock);

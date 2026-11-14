@@ -8,7 +8,12 @@ import {
 	type AgentPayload,
 	type AgentPayloadObject
 } from './payload';
-import { connectorToolNameSchema, type ConnectorToolName } from '$lib/models/connectors';
+import {
+	connectorCallLabelSchema,
+	connectorToolNameSchema,
+	type ConnectorCallLabel,
+	type ConnectorToolName
+} from '$lib/models/connectors';
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
@@ -182,12 +187,16 @@ export type StoredMessage = Omit<Message, 'content'> &
 /** What every tool call carries, whatever became of it. */
 /**
  * Which tool a call names: one of FollowThrough's own, or one on a user's
- * connector (ADR 0049). Rows written before connectors existed have no `source`
- * and read as `catalog`.
+ * connector (ADR 0049), with the connector's label frozen at call time. Rows
+ * written before connectors existed have no `source` and read as `catalog`.
  */
 export type ToolSubject =
 	| { readonly source: 'catalog'; readonly name: AgentToolName }
-	| { readonly source: 'connector'; readonly name: ConnectorToolName };
+	| {
+			readonly source: 'connector';
+			readonly name: ConnectorToolName;
+			readonly connector: ConnectorCallLabel;
+	  };
 
 /** A name a run can call: a catalog tool, `search_tools`, or a connector tool. */
 export type RunToolName = AgentToolName | ConnectorToolName;
@@ -392,6 +401,7 @@ export type PendingAgentDecision =
 			readonly source: 'connector';
 			readonly callId: string;
 			readonly toolName: ConnectorToolName;
+			readonly connector: ConnectorCallLabel;
 			readonly checksum: string;
 			readonly arguments: AgentPayloadObject;
 	  };
@@ -1230,6 +1240,16 @@ const catalogSource = z
 	.optional()
 	.transform((): 'catalog' => 'catalog');
 
+/**
+ * A connector row journalled before calls carried their label names its
+ * connector by the slug in the tool name, and never as a catalog vendor: the
+ * slug alone cannot say whether a vendor's mark belongs to it (ADR 0051).
+ */
+const legacyLabelSchema = connectorToolNameSchema.transform((name): ConnectorCallLabel => ({
+	kind: 'custom',
+	title: name.slice(0, name.indexOf('__'))
+}));
+
 export const pendingAgentDecisionSchema = z.discriminatedUnion('source', [
 	z
 		.object({
@@ -1245,10 +1265,15 @@ export const pendingAgentDecisionSchema = z.discriminatedUnion('source', [
 			source: z.literal('connector'),
 			callId: z.string().min(1),
 			toolName: connectorToolNameSchema,
+			connector: connectorCallLabelSchema.optional(),
 			checksum: z.string().min(1),
 			arguments: eventPayloadObjectSchema
 		})
 		.strict()
+		.transform(({ connector, ...decision }) => ({
+			...decision,
+			connector: connector ?? legacyLabelSchema.parse(decision.toolName)
+		}))
 ]) satisfies z.ZodType<PendingAgentDecision>;
 
 /**
@@ -1257,14 +1282,29 @@ export const pendingAgentDecisionSchema = z.discriminatedUnion('source', [
  */
 export const toolSubjectSchema: z.ZodType<ToolSubject> = z.discriminatedUnion('source', [
 	z.object({ source: catalogSource, name: agentToolNameSchema }),
-	z.object({ source: z.literal('connector'), name: connectorToolNameSchema })
+	z
+		.object({
+			source: z.literal('connector'),
+			name: connectorToolNameSchema,
+			connector: connectorCallLabelSchema.optional()
+		})
+		.transform(({ connector, ...subject }) => ({
+			...subject,
+			connector: connector ?? legacyLabelSchema.parse(subject.name)
+		}))
 ]);
 
 /** One tool event shape for each source, so the name is a catalog name or a connector name. */
 const subjectArms = <Shape extends z.core.$ZodLooseShape>(shape: Shape) =>
 	z.discriminatedUnion('source', [
 		z.object({ ...shape, source: catalogSource, name: agentToolNameSchema }),
-		z.object({ ...shape, source: z.literal('connector'), name: connectorToolNameSchema })
+		z.object({
+			...shape,
+			source: z.literal('connector'),
+			name: connectorToolNameSchema,
+			// Absent on rows journalled before calls carried a label; `labelled` settles it.
+			connector: connectorCallLabelSchema.optional()
+		})
 	]);
 
 const toolOutcomeSchemas = [
@@ -1287,7 +1327,7 @@ const toolOutcomeSchemas = [
 	})
 ] as const;
 
-export const agentEventSchema = z.discriminatedUnion('type', [
+const eventArms = z.discriminatedUnion('type', [
 	z.object({
 		type: z.literal('run_queued'),
 		runId: runIdSchema,
@@ -1330,7 +1370,14 @@ export const agentEventSchema = z.discriminatedUnion('type', [
 		model: z.string().optional()
 	}),
 	z.object({ type: z.literal('resources_stale'), resources: z.array(z.string()) })
-]) satisfies z.ZodType<AgentEvent>;
+]);
+
+/** A connector event journalled before calls carried a label takes its slug's custom label. */
+export const agentEventSchema = eventArms.transform((event): AgentEvent =>
+	!('source' in event) || event.source !== 'connector'
+		? event
+		: { ...event, connector: event.connector ?? legacyLabelSchema.parse(event.name) }
+) satisfies z.ZodType<AgentEvent>;
 
 /** The three events that settle a call, for readers that treat them alike. */
 export type ToolOutcomeEvent = Extract<

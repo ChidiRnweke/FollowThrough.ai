@@ -8,9 +8,8 @@ const { isAgentPayloadObject } = agentPayloadOperations;
 
 import { argumentLabel, isIdentifierArgument } from '../../chat/actions/tool-approval-fields';
 import { mechanismTools, quietTools, type RenderedTool } from './rendered-tools';
-import { friendlyToolLabel, completedToolLabel, isCatalogTool } from './tool-labels';
-import { connectorToolLabel } from './connector-tool-labels';
-export { friendlyToolLabel } from './tool-labels';
+import { activityLabel, completedActivityLabel, isCatalogTool } from './tool-labels';
+export { activityLabel, friendlyToolLabel } from './tool-labels';
 export { connectorToolLabel } from './connector-tool-labels';
 import { toolEntity, fileEntity } from './tool-entities';
 
@@ -74,13 +73,11 @@ export function toolStatusParts(tool: ChatToolActivity, shell?: ShellContext): T
 
 	if (tool.status === 'rejected')
 		return parts(
-			noteBodyTools.has(tool.name)
-				? 'Note change rejected'
-				: `${friendlyToolLabel(tool.name)} rejected`
+			noteBodyTools.has(tool.name) ? 'Note change rejected' : `${activityLabel(tool)} rejected`
 		);
 	if (failure !== undefined)
 		return parts(
-			noteBodyTools.has(tool.name) ? 'Note was not saved' : `${friendlyToolLabel(tool.name)} failed`
+			noteBodyTools.has(tool.name) ? 'Note was not saved' : `${activityLabel(tool)} failed`
 		);
 	if (tool.status === 'succeeded') {
 		const output = toolOutput(tool);
@@ -91,9 +88,9 @@ export function toolStatusParts(tool: ChatToolActivity, shell?: ShellContext): T
 			isAgentPayloadObject(output.appliedEntry)
 		)
 			return parts('Updated memory');
-		return parts(completedToolLabel(tool.name));
+		return parts(completedActivityLabel(tool));
 	}
-	return parts(friendlyToolLabel(tool.name));
+	return parts(activityLabel(tool));
 }
 
 /** The same thing as one string, for the places that cannot render the subject apart. */
@@ -152,12 +149,10 @@ const consequences: Partial<Record<AgentToolName, string>> = {
  * does not claim the call changes data, because a user can set a read-only
  * tool to ask as well.
  */
-export const approvalConsequence = (name: string): string | undefined => {
-	if (isCatalogTool(name)) return consequences[name];
-	const connector = connectorToolLabel(name);
-	return connector
-		? `This runs in ${connector.service}. FollowThrough cannot undo what it does there.`
-		: undefined;
+export const approvalConsequence = (tool: ChatToolActivity): string | undefined => {
+	if (tool.status !== 'failed' && tool.source === 'connector')
+		return `This runs in ${tool.connector.title}. FollowThrough cannot undo what it does there.`;
+	return isCatalogTool(tool.name) ? consequences[tool.name] : undefined;
 };
 
 /**
