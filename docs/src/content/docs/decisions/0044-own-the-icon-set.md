@@ -7,6 +7,9 @@ description: Draw every icon in-house, with the state motion built into the set,
 
 Accepted.
 
+ADR 0049 amends this decision for the logos of third-party services. A connector surface shows
+the service's own logo as content. Every application icon still comes from the icon set.
+
 ## Context
 
 The application used two icon sources. A set of 63 custom `Ft*` icons covered the app chrome, and
