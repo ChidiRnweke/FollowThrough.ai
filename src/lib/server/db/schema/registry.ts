@@ -27,6 +27,7 @@ import type { ProseMirrorDocument } from '$lib/models/notes';
 import type { Provenance } from '$lib/models/provenance';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
 import type { WidgetData, WidgetLayout } from '$lib/models/widgets';
+import type { ConnectorToolHints } from '$lib/models/connectors';
 
 export const workspaceSyncVersionSequence = pgSequence('workspace_sync_version_sequence');
 
@@ -1383,4 +1384,123 @@ export const inlineGroundingSnapshots = pgTable(
 		builtAt: timestamp('built_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [primaryKey({ columns: [table.userId, table.noteId, table.sectionKey] })]
+);
+
+/**
+ * A user's connection to a remote MCP server (ADR 0049). Never synced to the
+ * browser: the credential is sealed with CONNECTOR_SECRET_KEYS, and associated
+ * data binds it to this row and user, so the id is chosen before the insert.
+ * The check constraints spell the domain unions: a catalog id exactly when the
+ * source is the catalog, a credential exactly when authentication needs one, a
+ * reason exactly when the status is not `connected`.
+ */
+export const connectors = pgTable(
+	'connectors',
+	{
+		id: uuid('id').primaryKey(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		slug: text('slug').notNull(),
+		sourceKind: text('source_kind').notNull(),
+		catalogId: text('catalog_id'),
+		title: text('title').notNull(),
+		serverUrl: text('server_url').notNull(),
+		authKind: text('auth_kind').notNull(),
+		sealedCredential: text('sealed_credential'),
+		status: text('status').notNull(),
+		statusReason: text('status_reason'),
+		statusChangedAt: timestamp('status_changed_at', { withTimezone: true }).notNull().defaultNow(),
+		toolsRefreshedAt: timestamp('tools_refreshed_at', { withTimezone: true }).notNull(),
+		...timestamps
+	},
+	(table) => [
+		uniqueIndex('connectors_user_slug_unique').on(table.userId, table.slug),
+		uniqueIndex('connectors_user_catalog_unique').on(table.userId, table.catalogId),
+		check('connectors_source_kind_check', sql`${table.sourceKind} in ('catalog', 'custom')`),
+		check(
+			'connectors_catalog_id_check',
+			sql`(${table.sourceKind} = 'catalog') = (${table.catalogId} is not null)`
+		),
+		check('connectors_auth_kind_check', sql`${table.authKind} in ('none', 'bearer', 'oauth')`),
+		check(
+			'connectors_credential_check',
+			sql`(${table.authKind} = 'none') = (${table.sealedCredential} is null)`
+		),
+		check(
+			'connectors_status_check',
+			sql`${table.status} in ('connected', 'reauthorization_required')`
+		),
+		check(
+			'connectors_status_reason_check',
+			sql`(${table.status} = 'connected') = (${table.statusReason} is null)`
+		)
+	]
+);
+
+/**
+ * The last tool list a connector's server returned. The agent builds connector
+ * tools from these rows, not from a live list, so a run that resumes after an
+ * approval sees the tools the user approved. A usable tool has a schema and a
+ * vector; an unusable one has the reason instead. `policy` is null while the
+ * tool follows its hints.
+ */
+export const connectorTools = pgTable(
+	'connector_tools',
+	{
+		connectorId: uuid('connector_id')
+			.notNull()
+			.references(() => connectors.id, { onDelete: 'cascade' }),
+		serverName: text('server_name').notNull(),
+		modelName: text('model_name').notNull(),
+		title: text('title').notNull(),
+		description: text('description').notNull(),
+		inputSchema: jsonb('input_schema').$type<AgentPayloadObject>(),
+		unusableReason: text('unusable_reason'),
+		hints: jsonb('hints').$type<ConnectorToolHints>().notNull(),
+		checksum: text('checksum').notNull(),
+		policy: text('policy'),
+		embedding: halfvec('embedding', { dimensions: 3072 }),
+		embeddingModel: text('embedding_model'),
+		...timestamps
+	},
+	(table) => [
+		primaryKey({ columns: [table.connectorId, table.serverName] }),
+		uniqueIndex('connector_tools_model_name_unique').on(table.connectorId, table.modelName),
+		check(
+			'connector_tools_schema_check',
+			sql`(${table.inputSchema} is null) <> (${table.unusableReason} is null)`
+		),
+		check(
+			'connector_tools_policy_check',
+			sql`${table.policy} is null or ${table.policy} in ('allow', 'ask', 'off')`
+		),
+		check(
+			'connector_tools_embedding_check',
+			sql`(${table.inputSchema} is null) = (${table.embedding} is null) and (${table.embedding} is null) = (${table.embeddingModel} is null)`
+		)
+	]
+);
+
+/**
+ * One OAuth attempt, from the redirect to the authorization server until its
+ * callback. The state is stored as a hash and the rest is sealed, so a database
+ * read alone can neither replay the callback nor learn the PKCE verifier.
+ */
+export const connectorAuthorizations = pgTable(
+	'connector_authorizations',
+	{
+		id: uuid('id').primaryKey(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		stateHash: text('state_hash').notNull(),
+		sealedRequest: text('sealed_request').notNull(),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('connector_authorizations_state_hash_unique').on(table.stateHash),
+		index('connector_authorizations_user_idx').on(table.userId)
+	]
 );

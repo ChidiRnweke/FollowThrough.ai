@@ -2,7 +2,11 @@ import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import type { TokenCodec } from '$lib/models/tokenization';
 import type { RetrievalProvider } from './factories/retrieval-providers';
-import type { ToolRanking, ToolSeeding } from './services/agent/tools/tool-search';
+import type {
+	ConnectorToolEmbedding,
+	ToolRanking,
+	ToolSeeding
+} from './services/agent/tools/tool-search';
 import type { WebReferenceClient } from '$lib/server/services/references/web-research';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import {
@@ -24,6 +28,10 @@ import { createDeliverablesCapability } from './factories/capabilities/deliverab
 import { createDiagramsCapability } from './factories/capabilities/diagrams-capability-factory';
 import { createFeedbackCapability } from './factories/capabilities/feedback-capability-factory';
 import { createContextUsageCapability } from './factories/capabilities/context-usage-capability-factory';
+import {
+	createConnectorsCapability,
+	type ConnectorConfiguration
+} from './factories/capabilities/connectors-capability-factory';
 import { createIdentityCapability } from './factories/capabilities/identity-capability-factory';
 import { createKnowledgeSearchCapability } from './factories/capabilities/knowledge-search-capability-factory';
 import { createMemoryCapability } from './factories/capabilities/memory-capability-factory';
@@ -53,7 +61,7 @@ import type { NotificationChannel } from './db';
  */
 export interface ApplicationOverrides {
 	readonly retrievalProvider?: RetrievalProvider;
-	readonly toolSearch?: ToolSeeding & ToolRanking;
+	readonly toolSearch?: ToolSeeding & ToolRanking & ConnectorToolEmbedding;
 	readonly attachmentStorage?: IAttachmentStorage;
 	readonly referenceClient?: WebReferenceClient;
 	readonly modelCatalog?: AgentModelCatalog;
@@ -80,6 +88,8 @@ export interface ApplicationConfig {
 	readonly ocrModel?: string;
 	readonly recommendedModels?: readonly string[];
 	readonly s3?: ObjectStorageConfig;
+	/** Whether this deployment can seal connector credentials, and how connectors reach out. */
+	readonly connectors: ConnectorConfiguration;
 	readonly overrides?: ApplicationOverrides;
 	/**
 	 * Stage chunks without vectors and let the background worker embed them,
@@ -701,7 +711,14 @@ export function createApplication(
 			memory: memory.library
 		},
 		attachmentProcessing: attachmentCapability.processing,
-		knowledgeIndexing: knowledgeSearch.indexing
+		knowledgeIndexing: knowledgeSearch.indexing,
+		connectors: createConnectorsCapability(actor, {
+			db,
+			transactionRunner,
+			now,
+			configuration: config.connectors,
+			embeddings: knowledgeSearch.connectorToolEmbedding
+		})
 	};
 	const controllerFactory = new ProductionControllerFactory(actor, dependencies);
 	return {

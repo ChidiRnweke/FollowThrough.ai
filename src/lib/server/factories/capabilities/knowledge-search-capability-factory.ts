@@ -24,6 +24,7 @@ import {
 } from '$lib/server/services/knowledge-search/retrieval';
 import {
 	ToolSearch,
+	type ConnectorToolEmbedding,
 	type ToolRanking,
 	type ToolSeeding
 } from '$lib/server/services/agent/tools/tool-search';
@@ -67,7 +68,7 @@ export interface KnowledgeSearchCapabilityInput {
 	readonly appURL: string;
 	/** Replaces the provider client, e.g. with one that replays recorded responses. */
 	readonly retrievalProvider?: RetrievalProvider;
-	readonly toolSearch?: ToolSeeding & ToolRanking;
+	readonly toolSearch?: ToolSeeding & ToolRanking & ConnectorToolEmbedding;
 	readonly deferEmbedding: boolean;
 }
 
@@ -77,6 +78,8 @@ export interface KnowledgeSearchCapability {
 	readonly knowledge: KnowledgeRetrievalCapabilities;
 	readonly indexing: KnowledgeIndexingController;
 	readonly toolDiscovery: ToolRanking;
+	/** The same embedding provider and model, for connector tool snapshots (ADR 0049). */
+	readonly connectorToolEmbedding: ConnectorToolEmbedding;
 	readonly finalize: (input: KnowledgeSearchFinalizeInput) => KnowledgeSearchFinalized;
 }
 
@@ -134,6 +137,7 @@ export const createKnowledgeSearchCapability = (
 		tokenizer,
 		knowledge,
 		toolDiscovery: toolSearch,
+		connectorToolEmbedding: toolSearch,
 		finalize: ({ preferences }) => ({
 			inlineContext: new InlineContextService(tokenizer),
 			preferences,
@@ -174,7 +178,7 @@ export const createToolDiscovery = (input: {
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
-	readonly toolSearch?: ToolSeeding & ToolRanking;
+	readonly toolSearch?: ToolSeeding & ToolRanking & ConnectorToolEmbedding;
 }): ToolDiscoveryController =>
 	new ToolDiscovery(
 		input.toolSearch ??

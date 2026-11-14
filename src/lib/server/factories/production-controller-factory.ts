@@ -60,6 +60,7 @@ import {
 	type UserSettingsDependencies
 } from '../controllers/user-settings/controller';
 import { Workspace, type WorkspaceDependencies } from '../controllers/workspace/controller';
+import { Connectors, type ConnectorsDependencies } from '../controllers/connectors/controller';
 import type { ControllerFactory } from './controller-factory';
 import { instrumentedController } from './controller-instrumentation';
 
@@ -91,6 +92,7 @@ export interface ProductionControllerDependencies {
 	contextUsage: ContextUsageDependencies;
 	attachmentProcessing: AttachmentProcessingController;
 	knowledgeIndexing: KnowledgeIndexingController;
+	connectors: ConnectorsDependencies;
 }
 
 export class ProductionControllerFactory implements ControllerFactory {
@@ -326,6 +328,13 @@ export class ProductionControllerFactory implements ControllerFactory {
 			'knowledgeIndexing',
 			this.dependencies.knowledgeIndexing,
 			controllerSurfaces.knowledgeIndexing
+		);
+	}
+	connectors(): ReturnType<ControllerFactory['connectors']> {
+		return instrumentedController(
+			'connectors',
+			new Connectors(this.dependencies.connectors),
+			controllerSurfaces.connectors
 		);
 	}
 }

@@ -22,7 +22,9 @@ export class ControllerBoundary<T extends object> {
 				if (typeof value !== 'function') return value;
 				const cached = methods.get(name);
 				if (cached) return cached;
-				if (!Object.hasOwn(surface, name) || !surface[name as keyof T]) return value.bind(target);
+				const exposure = Object.hasOwn(surface, name) ? surface[name as keyof T] : false;
+				if (!exposure) return value.bind(target);
+				const redacted = exposure === 'redacted';
 				const wrapped = (...args: unknown[]): Promise<unknown> =>
 					traceOperation(`${domain}.${String(name)}`, { kind: null }, async () => {
 						const [actor, ...rest] = args;
@@ -33,7 +35,10 @@ export class ControllerBoundary<T extends object> {
 						if (logLevelEnabled('info'))
 							logger.info(
 								`[${domain}] ${String(name)}`,
-								summarize({ ...(userId !== undefined ? { userId } : {}), args: rest })
+								summarize({
+									...(userId !== undefined ? { userId } : {}),
+									args: redacted ? '[redacted]' : rest
+								})
 							);
 						const startedAt = performance.now();
 						try {
@@ -41,7 +46,7 @@ export class ControllerBoundary<T extends object> {
 							if (logLevelEnabled('debug'))
 								logger.debug(
 									`[${domain}] ${String(name)} completed in ${Math.round(performance.now() - startedAt)}ms`,
-									summarize(result)
+									redacted ? '[redacted]' : summarize(result)
 								);
 							return result;
 						} catch (error) {

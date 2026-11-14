@@ -124,6 +124,8 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		openRouterBaseURL: baseURL,
 		appURL,
 		defaultAgentModel: model,
+		// No eval case connects a service yet, so the lab runs the configuration without keys.
+		connectors: { kind: 'unconfigured' },
 		overrides: {
 			retrievalProvider: provider,
 			toolSearch,

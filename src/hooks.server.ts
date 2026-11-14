@@ -107,8 +107,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	else clearWorkspaceAccountCookie(event.cookies);
 	const path = event.url.pathname;
 
-	// Public surface: the auth flow, and the landing page at the root.
-	if (path.startsWith('/auth/') || path === '/') {
+	// Public surface: the auth flow, the landing page at the root, and the OAuth
+	// client metadata document that authorization servers fetch for connectors.
+	if (path.startsWith('/auth/') || path === '/' || path === '/oauth/client-metadata.json') {
 		return resolve(event);
 	}
 

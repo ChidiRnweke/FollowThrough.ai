@@ -40,6 +40,19 @@ export const variables = defineEnvVars({
 		schema: optionalString
 	},
 	ORIGIN: { description: 'Canonical public application origin.', schema: optionalString },
+	CONNECTOR_SECRET_KEYS: {
+		description:
+			'Keys that encrypt connector credentials, newest first: <keyId>:<base64 32-byte key>, comma-separated. Without it, connectors are off.',
+		schema: optionalString
+	},
+	CONNECTOR_GITHUB_CLIENT_ID: {
+		description: 'OAuth app client ID for the GitHub connector.',
+		schema: optionalString
+	},
+	CONNECTOR_GITHUB_CLIENT_SECRET: {
+		description: 'OAuth app client secret for the GitHub connector.',
+		schema: optionalString
+	},
 	BODY_SIZE_LIMIT: {
 		description:
 			'Adapter-node request body size limit in bytes. A platform key: the adapter reads it ' +

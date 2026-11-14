@@ -21,6 +21,7 @@ it('initializes a fresh evaluation account before opening its provisioned shell'
 				attachmentClaims: new InMemoryAttachmentClaims(),
 				openRouterApiKey: 'unused-local-test',
 				mistralApiKey: 'unused-local-test',
+				connectors: { kind: 'unconfigured' },
 				overrides: {
 					attachmentStorage: new InMemoryAttachmentStorage(),
 					modelCatalog: new StubModelCatalog()

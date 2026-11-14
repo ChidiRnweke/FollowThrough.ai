@@ -7,6 +7,7 @@ import type { ToolPreferencesController } from '$lib/server/controllers/agent/to
 import type { TrustPoliciesController } from '$lib/server/controllers/agent/trust-policies/controller';
 import type { ApiTokensController } from '$lib/server/controllers/api-tokens/controller';
 import type { AttachmentsController } from '$lib/server/controllers/attachments/controller';
+import type { ConnectorsController } from '$lib/server/controllers/connectors/controller';
 import type { ContextUsageController } from '$lib/server/controllers/context-usage/controller';
 import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
 import type { DiagramStudioController } from '$lib/server/controllers/diagram-studio/controller';
@@ -45,6 +46,7 @@ interface CoveredAgentControllers {
 	readonly widgets: WidgetsController;
 	readonly retrieval: RetrievalController;
 	readonly contextUsage: ContextUsageController;
+	readonly connectors: ConnectorsController;
 }
 
 export type AgentToolCoverage = AgentToolContractMap<CoveredAgentControllers>;
@@ -55,6 +57,14 @@ export type AgentToolCoverage = AgentToolContractMap<CoveredAgentControllers>;
  */
 const STUDIO_GESTURE =
 	'Keeping a diagram is the user saying it is worth keeping; the studio owns that gate.';
+
+/**
+ * Why connector management is not an agent tool: connecting signs the user in
+ * to another service, and the user decides what the agent may do there
+ * (ADR 0049).
+ */
+const CONNECTOR_GESTURE =
+	"Connecting a service, signing in to it and choosing what its tools may do are the user's decisions in Settings.";
 
 /** Why a widget's trash is not an agent tool: removing one is the user saying what the project keeps. */
 const WIDGET_GESTURE =
@@ -575,6 +585,17 @@ export const agentToolCoverage = {
 			reason:
 				'Reaches the agent as an attached context resource: a pinned connections chip puts the node and edge tables in the run context.'
 		}
+	},
+	connectors: {
+		catalog: { kind: 'excluded', reason: CONNECTOR_GESTURE },
+		list: { kind: 'excluded', reason: CONNECTOR_GESTURE },
+		get: { kind: 'excluded', reason: CONNECTOR_GESTURE },
+		connect: { kind: 'excluded', reason: CONNECTOR_GESTURE },
+		reconnect: { kind: 'excluded', reason: CONNECTOR_GESTURE },
+		completeAuthorization: { kind: 'excluded', reason: CONNECTOR_GESTURE },
+		refreshTools: { kind: 'excluded', reason: CONNECTOR_GESTURE },
+		setToolPolicy: { kind: 'excluded', reason: CONNECTOR_GESTURE },
+		disconnect: { kind: 'excluded', reason: CONNECTOR_GESTURE }
 	}
 } as const satisfies AgentToolCoverage;
 
