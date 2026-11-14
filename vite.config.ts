@@ -71,6 +71,10 @@ export default defineConfig({
 				experimental: { async: true }
 			},
 			adapter: applicationAdapter(),
+			// Kit's form-origin check runs before `handle` and cannot exempt the OAuth token
+			// endpoint, which clients post to without an Origin. `hooks.server.ts` applies the
+			// same rule with that one exemption (`src/lib/server/infrastructure/http/request-origin.ts`).
+			csrf: { trustedOrigins: ['*'] },
 			experimental: {
 				remoteFunctions: true,
 				handleRenderingErrors: true

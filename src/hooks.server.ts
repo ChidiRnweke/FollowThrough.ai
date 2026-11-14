@@ -11,6 +11,7 @@ import {
 } from '$lib/server/config';
 
 import { redirect, type Handle } from '@sveltejs/kit';
+import { isForbiddenCrossSiteForm } from '$lib/server/infrastructure/http/request-origin';
 import { DOMAIN_ERROR_STATUS, DomainError } from '$lib/errors';
 
 export const init: ServerInit = async () => {
@@ -77,6 +78,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Prerendering and the generated browser shell have no request session.
 	// The public offline page contains no account data at runtime either.
 	if (building || event.url.pathname === '/offline') return resolve(event);
+
+	// Kit's own check is off (see vite.config.ts); this is the same rule, minus the token endpoint.
+	if (isForbiddenCrossSiteForm(event.request, event.url)) {
+		console.warn('[csrf] cross-site form submission refused', {
+			path: event.url.pathname,
+			origin: event.request.headers.get('origin'),
+			self: event.url.origin
+		});
+		return new Response(`Cross-site ${event.request.method} form submissions are forbidden`, {
+			// chisel-ignore error-flow:raw-http-status -- this replaces SvelteKit's CSRF refusal, which answers 403 before any handler or error mapping runs.
+			status: 403
+		});
+	}
 
 	// Served from the secrets backend's TTL cache, so this is a no-op between refreshes.
 	await hydrateEnvironment();
