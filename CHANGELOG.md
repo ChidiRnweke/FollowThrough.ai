@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.2.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.1.0...v6.2.0) (2026-11-14)
+
+
+### Features
+
+* **telemetry:** trace each service call under its controller span ([#489](https://github.com/ChidiRnweke/FollowThrough.ai/issues/489)) ([c4050dc](https://github.com/ChidiRnweke/FollowThrough.ai/commit/c4050dc2f3ad5fdcfd33998e1faaab0e2a8f397a))
+
 ## [6.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.0.0...v6.1.0) (2026-11-14)
 
 
