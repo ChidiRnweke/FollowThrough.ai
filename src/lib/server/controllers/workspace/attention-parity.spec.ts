@@ -25,6 +25,7 @@ import {
 	testProjectId,
 	testSuggestionId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { expect, it } from 'vitest';
 import { Workspace, type WorkspaceDependencies } from './controller';
 
@@ -85,6 +86,7 @@ it('shows the same profile and visible-project memory attention from server and 
 			userReader: new UserDirectory(users),
 			projectLister: projects,
 			noteTreeReader: new InMemoryNoteContent(actor),
+			memoryLister: new InMemoryMemoryEntryRepository(actor),
 			suggestionLister: suggestions,
 			suggestionExpirer: suggestions,
 			skillFinder: createSkillServices(

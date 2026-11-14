@@ -11,6 +11,7 @@ import {
 import type { AttachmentId } from '$lib/models/attachments';
 import type { Diagram } from '$lib/models/diagrams';
 import type { Note } from '$lib/models/notes';
+import type { KnowledgeSearchSource } from '$lib/models/knowledge-search';
 import type { ProjectId } from '$lib/models/projects';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments/attachments';
@@ -23,7 +24,9 @@ import type {
 	AgentFileId,
 	AgentFileNextAction,
 	AgentGrepResult,
+	AgentFileWindow,
 	AgentLsResult,
+	AgentPassage,
 	AgentPathMetadata,
 	AgentSedRange,
 	AgentSedResult
@@ -105,11 +108,131 @@ const parentOf = (path: string): string => {
 	return index <= 0 ? '/' : path.slice(0, index);
 };
 
+/**
+ * How much of a note body `get_note` returns. Measured on 2026-11-14 against a real workspace
+ * over MCP: the descriptor-only reply was about 220 tokens, and ten sampled note bodies were 9,
+ * 24, 43, 308, 395, 649, 660, 1013, 1176 and 6840 tokens. At 1,000 tokens seven of the ten come
+ * back whole in the call that already pays for the descriptor; the rest arrive as a first page
+ * with the `sed` call that continues them, instead of costing a second round trip to start.
+ */
+export const NOTE_BODY_TOKEN_BUDGET = 1000;
+
+/**
+ * How much of one retrieved chunk `search` returns. Measured on 2026-11-14: one query returned
+ * 8 hits totalling about 15,000 tokens, and five were attachment chunks close to the 2,400-token
+ * chunk target, so a single search could fill a fifth of a context window. 600 tokens keeps the
+ * leading paragraphs a hit is judged on and bounds eight hits near 5,000 tokens; the rest of a
+ * cut passage stays one `sed` call away at the path and lines the hit names.
+ */
+export const SEARCH_PASSAGE_TOKEN_BUDGET = 600;
+
+/** How many whole leading lines fit in `budget` tokens, counting the newline that joins them. */
+const leadingLines = (tokens: TokenCounter, lines: readonly string[], budget: number): number => {
+	let used = 0;
+	for (let index = 0; index < lines.length; index += 1) {
+		used += tokens.count(lines[index]) + (index === 0 ? 0 : 1);
+		if (used > budget) return index;
+	}
+	return lines.length;
+};
+
+/** The longest prefix of one over-budget line that fits, found by bisecting its length. */
+const leadingCharacters = (tokens: TokenCounter, line: string, budget: number): string => {
+	let fits = 0;
+	let over = line.length;
+	while (over - fits > 1) {
+		const middle = Math.floor((fits + over) / 2);
+		if (tokens.count(line.slice(0, middle)) <= budget) fits = middle;
+		else over = middle;
+	}
+	return line.slice(0, fits);
+};
+
+/** A file read from its first line up to `budget` tokens, cut on whole lines. */
+const fileWindow = (tokens: TokenCounter, file: AgentFile, budget: number): AgentFileWindow => {
+	if (file.metadata.tokenCount <= budget)
+		return { kind: 'inline', file: file.metadata, content: file.content };
+	const lines = file.content.split('\n');
+	const endLine = leadingLines(tokens, lines, budget);
+	const continueAt = (startLine: number): AgentFileNextAction => ({
+		reason: `Continue at the next unread line; ${file.metadata.lineCount - startLine + 1} lines remain.`,
+		tool: 'sed',
+		arguments: { path: file.metadata.path, range: { kind: 'to_end', startLine } }
+	});
+	if (endLine === 0) return { kind: 'file', file: file.metadata, nextActions: [continueAt(1)] };
+	return {
+		kind: 'paged',
+		file: file.metadata,
+		startLine: 1,
+		endLine,
+		content: lines.slice(0, endLine).join('\n'),
+		nextActions: [continueAt(endLine + 1)]
+	};
+};
+
+/** A passage cut to `budget` tokens on whole lines, or inside its first line when that alone is over. */
+const passageExcerpt = (
+	tokens: TokenCounter,
+	content: string,
+	budget: number
+): { readonly content: string; readonly cut: boolean } => {
+	if (tokens.count(content) <= budget) return { content, cut: false };
+	const lines = content.split('\n');
+	const kept = leadingLines(tokens, lines, budget);
+	return {
+		content:
+			kept === 0 ? leadingCharacters(tokens, lines[0], budget) : lines.slice(0, kept).join('\n'),
+		cut: true
+	};
+};
+
+/**
+ * Letters and digits only. Indexed text is derived (a note is chunked from its plain text, not
+ * its Markdown), so markup, punctuation and spacing differ between a chunk and the file it came
+ * from while the words do not. Link targets and HTML entities are Markdown that the plain text
+ * never had, so they go before the comparison rather than counting as words.
+ */
+const comparable = (line: string): string =>
+	line
+		.replace(/\]\([^)]*\)/g, '')
+		.replace(/&(?:[a-z]+|#\d+);/gi, '')
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}]+/gu, '');
+
+/**
+ * The inclusive line range a passage occupies in a file: every non-blank passage line must match
+ * the next non-blank file line in order. The ends are compared by containment because a chunk
+ * can begin or end inside a line; inner lines by containment either way, because Markdown can
+ * add or drop a list marker or emphasis around the same words.
+ */
+const passageLines = (
+	fileContent: string,
+	passage: string
+): { readonly startLine: number; readonly endLine: number } | undefined => {
+	const wanted = passage.split('\n').map(comparable).filter(Boolean);
+	if (wanted.length === 0) return undefined;
+	const lines = fileContent
+		.split('\n')
+		.map((line, index) => ({ text: comparable(line), number: index + 1 }))
+		.filter((line) => line.text.length > 0);
+	for (let start = 0; start + wanted.length <= lines.length; start += 1) {
+		if (!lines[start].text.includes(wanted[0])) continue;
+		const matches = wanted.every((text, offset) => {
+			const line = lines[start + offset].text;
+			return offset === 0 || line.includes(text) || text.includes(line);
+		});
+		if (matches)
+			return { startLine: lines[start].number, endLine: lines[start + wanted.length - 1].number };
+	}
+	return undefined;
+};
+
 /** Where agent-readable resources are mounted, and how a mounted file is described. */
 export interface AgentFileReferences {
 	attachmentPath(projectId: ProjectId, attachmentId: AttachmentId): string;
 	diagramPath(diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string;
-	noteMetadata(note: Pick<Note, 'projectId' | 'id'>, markdown: string): AgentFile['metadata'];
+	/** A note's Markdown as a file, returned whole or as its first page within the body budget. */
+	noteBody(note: Pick<Note, 'projectId' | 'id'>, markdown: string): AgentFileWindow;
 }
 
 export class AgentFileReferenceService implements AgentFileReferences {
@@ -123,9 +246,18 @@ export class AgentFileReferenceService implements AgentFileReferences {
 		return diagramFilePath(diagram);
 	}
 
-	noteMetadata(note: Pick<Note, 'projectId' | 'id'>, markdown: string): AgentFile['metadata'] {
-		return agentFileOf(this.tokens, noteFilePath(note), 'text/markdown', markdown).metadata;
+	noteBody(note: Pick<Note, 'projectId' | 'id'>, markdown: string): AgentFileWindow {
+		return fileWindow(
+			this.tokens,
+			agentFileOf(this.tokens, noteFilePath(note), 'text/markdown', markdown),
+			NOTE_BODY_TOKEN_BUDGET
+		);
 	}
+}
+
+/** Places retrieved passages in the virtual filesystem so a hit leads straight into `sed`. */
+export interface AgentPassageLocator {
+	passage(source: KnowledgeSearchSource, content: string): Promise<AgentPassage>;
 }
 
 export interface AgentFileReader {
@@ -139,7 +271,7 @@ export interface AgentFileReader {
 	sed(path: string, range: AgentSedRange): Promise<AgentSedResult>;
 }
 
-export class AgentVirtualFiles implements AgentFileReader {
+export class AgentVirtualFiles implements AgentFileReader, AgentPassageLocator {
 	constructor(private readonly dependencies: AgentVirtualFilesDependencies) {}
 
 	private async exactFile(path: string): Promise<AgentFile | undefined> {
@@ -373,6 +505,62 @@ export class AgentVirtualFiles implements AgentFileReader {
 			nextActions: [
 				lsAction(path, 'Inspect the searched scope before choosing a different pattern.')
 			]
+		};
+	}
+
+	private async sourcePath(source: KnowledgeSearchSource): Promise<string | undefined> {
+		switch (source.kind) {
+			case 'note':
+				return noteFilePath({ projectId: source.projectId, id: source.id });
+			case 'attachment':
+				return attachmentFilePath(source.projectId, source.id);
+			case 'diagram': {
+				const diagram = await this.dependencies.diagrams.findById(source.id);
+				return diagram ? diagramFilePath(diagram) : undefined;
+			}
+			case 'memory':
+			case 'widget':
+			case 'unavailable':
+				return undefined;
+		}
+	}
+
+	async passage(source: KnowledgeSearchSource, content: string): Promise<AgentPassage> {
+		const path = await this.sourcePath(source);
+		const file = path === undefined ? undefined : await this.exactFile(path);
+		if (file === undefined) return { kind: 'detached', content };
+		const excerpt = passageExcerpt(this.dependencies.tokens, content, SEARCH_PASSAGE_TOKEN_BUDGET);
+		const located = passageLines(file.content, content);
+		if (located === undefined)
+			return {
+				kind: 'file',
+				path: file.metadata.path,
+				content: excerpt.content,
+				nextActions: excerpt.cut
+					? [
+							{
+								reason:
+									'The excerpt was cut and could not be matched to lines; read the source file.',
+								tool: 'sed',
+								arguments: { path: file.metadata.path, range: { kind: 'to_end', startLine: 1 } }
+							}
+						]
+					: []
+			};
+		return {
+			kind: 'lines',
+			path: file.metadata.path,
+			...located,
+			content: excerpt.content,
+			nextActions: excerpt.cut
+				? [
+						{
+							reason: 'The excerpt was cut; read the whole passage.',
+							tool: 'sed',
+							arguments: { path: file.metadata.path, range: { kind: 'lines', ...located } }
+						}
+					]
+				: []
 		};
 	}
 

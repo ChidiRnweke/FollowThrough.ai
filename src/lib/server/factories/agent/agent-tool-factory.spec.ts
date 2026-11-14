@@ -658,7 +658,7 @@ describe('Agent tool coverage invariants', () => {
 		expect(editNote?.description).toContain('one atomic call');
 	});
 
-	it('returns note content and related context without leaking storage fields', async () => {
+	it('returns a short note body inline with related context, without leaking storage fields', async () => {
 		const note = noteBuilder({ ...noteMarkdown.read('Hello world.') });
 		const { controller } = noteViewFixture(note);
 		const factory = capabilityDependencies<ControllerFactory>({ notes: () => controller });
@@ -677,7 +677,7 @@ describe('Agent tool coverage invariants', () => {
 			todos: [],
 			pendingSuggestions: [],
 			body: {
-				kind: 'file',
+				kind: 'inline',
 				file: {
 					kind: 'file',
 					id: expect.any(String),
@@ -687,7 +687,8 @@ describe('Agent tool coverage invariants', () => {
 					byteSize: expect.any(Number),
 					lineCount: expect.any(Number),
 					tokenCount: expect.any(Number)
-				}
+				},
+				content: 'Hello world.'
 			}
 		});
 	});

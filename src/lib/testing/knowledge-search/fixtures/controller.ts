@@ -4,6 +4,7 @@ import {
 	Retrieval,
 	type RetrievalDependencies
 } from '$lib/server/controllers/knowledge-search/controller';
+import { agentVirtualFilesFixture } from '$lib/testing/agent/fixtures/files';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import {
@@ -36,6 +37,7 @@ export const searchControllerFixture = <
 		capabilityDependencies<RetrievalDependencies>({
 			...agentToolResultsFixture(),
 			knowledge,
+			passages: agentVirtualFilesFixture(),
 			...overrides
 		})
 	);

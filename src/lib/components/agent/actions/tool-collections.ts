@@ -47,6 +47,16 @@ const itemsAt = (
 		.filter((group) => group !== undefined);
 	return groups.length ? groups.flat() : undefined;
 };
+/** A note tree's entries, each folder before its children. */
+const treeEntries = (nodes: readonly AgentPayload[]): readonly AgentPayload[] =>
+	nodes.flatMap((node) =>
+		isAgentPayloadObject(node) ? [node, ...treeEntries(agentPayloadItems(node.children) ?? [])] : []
+	);
+/** Every note and folder of the projects `get_workspace_context` lists. */
+const projectNotes = (projects: readonly AgentPayload[]): readonly AgentPayload[] =>
+	projects.flatMap((project) =>
+		isAgentPayloadObject(project) ? treeEntries(agentPayloadItems(project.notes) ?? []) : []
+	);
 const searchEntity = (item: AgentPayload, shell?: ShellContext): EntityRef => {
 	if (!isAgentPayloadObject(item)) return entityFrom(item, 'plain', shell);
 	const source = item.source;
@@ -74,7 +84,6 @@ export function toolCollection(
 			tool.name === 'get_workspace_context'
 				? [
 						['projects', 'project'],
-						['noteTree', 'note'],
 						['skills', 'skill']
 					]
 				: [
@@ -84,9 +93,19 @@ export function toolCollection(
 						['pinnedNotes', 'note'],
 						['recentNotes', 'note']
 					];
-		entities = groups.flatMap(([key, groupKind]) =>
+		const grouped = groups.map(([key, groupKind]) =>
 			(itemsAt(output, [key]) ?? []).map((item) => entityFrom(item, groupKind, shell))
 		);
+		entities =
+			tool.name === 'get_workspace_context'
+				? [
+						...(grouped[0] ?? []),
+						...projectNotes(itemsAt(output, ['projects']) ?? []).map((item) =>
+							entityFrom(item, 'note', shell)
+						),
+						...(grouped[1] ?? [])
+					]
+				: grouped.flat();
 		if (typeof output.pendingSuggestionCount === 'number' && output.pendingSuggestionCount > 0)
 			entities = [
 				...entities,

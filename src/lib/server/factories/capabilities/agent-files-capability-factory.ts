@@ -13,6 +13,7 @@ import {
 	AgentFileReferenceService,
 	AgentVirtualFiles,
 	type AgentFileReader,
+	type AgentPassageLocator,
 	type AgentFileReferences
 } from '$lib/server/services/agent-files/virtual-files';
 
@@ -24,7 +25,7 @@ export interface AgentFilesCapabilityInput {
 }
 
 export interface AgentFilesCapability {
-	readonly reader: AgentFileReader;
+	readonly reader: AgentFileReader & AgentPassageLocator;
 	readonly references: AgentFileReferences;
 	readonly repository: AgentFileRepository;
 }

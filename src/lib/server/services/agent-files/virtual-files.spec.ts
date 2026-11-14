@@ -10,6 +10,7 @@ import {
 	noteRevisionBuilder,
 	projectBuilder,
 	testActor,
+	testMemoryEntryId,
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -240,5 +241,95 @@ it.each(['/', '.'])('searches every file beneath root %s', async (path) => {
 	expect(result).toMatchObject({
 		kind: 'matches',
 		matches: [{ path: notePath, lineNumber: 1, line: 'root needle' }]
+	});
+});
+
+describe('AgentVirtualFiles passage', () => {
+	const note = { kind: 'note', id: noteId, projectId } as const;
+	const markdown = [
+		'# Intro',
+		'',
+		"Achim's point: **listen** to the business.",
+		'',
+		'- Personal agents: track sharing',
+		'- Omar: tiering',
+		'',
+		'End.'
+	].join('\n');
+
+	it('places a plain-text chunk at the Markdown lines it was indexed from', async () => {
+		const passage = await reader(markdown).passage(
+			note,
+			"Achim's point: listen to the business.\n\nPersonal agents: track sharing\nOmar: tiering"
+		);
+		expect(passage).toEqual({
+			kind: 'lines',
+			path: notePath,
+			startLine: 3,
+			endLine: 6,
+			content:
+				"Achim's point: listen to the business.\n\nPersonal agents: track sharing\nOmar: tiering",
+			nextActions: []
+		});
+	});
+
+	it('matches a line whose Markdown carries link targets and entities the plain text lacks', async () => {
+		const linked = [
+			'Intro',
+			'',
+			'A use case ([Edge](https://wiki.example.test/edge)) and a spike ([Ops &amp; Quality](https://wiki.example.test/ops)).',
+			'2. Can EDP reach the AI gateway?'
+		].join('\n');
+		const passage = await reader(linked).passage(
+			note,
+			'A use case (Edge) and a spike (Ops & Quality).\n\nCan EDP reach the AI gateway?'
+		);
+		expect(passage.kind === 'lines' ? [passage.startLine, passage.endLine] : passage).toEqual([
+			3, 4
+		]);
+	});
+
+	it('names the file without guessing lines when the words do not match', async () => {
+		const passage = await reader(markdown).passage(note, 'Nothing here appears in the note.');
+		expect(passage).toEqual({
+			kind: 'file',
+			path: notePath,
+			content: 'Nothing here appears in the note.',
+			nextActions: []
+		});
+	});
+
+	it('cuts a passage over the excerpt budget and points sed at the whole located range', async () => {
+		// 400 lines of 50 tokens each: about 20,000 tokens, far over the 600-token excerpt budget.
+		const long = Array.from({ length: 400 }, () => ' word'.repeat(50)).join('\n');
+		const passage = await reader(long).passage(note, long);
+		expect(
+			passage.kind === 'lines'
+				? {
+						lines: [passage.startLine, passage.endLine],
+						withinBudget: testTokenizer.count(passage.content) <= 600,
+						next: passage.nextActions
+					}
+				: passage
+		).toEqual({
+			lines: [1, 400],
+			withinBudget: true,
+			next: [
+				{
+					reason: 'The excerpt was cut; read the whole passage.',
+					tool: 'sed',
+					arguments: { path: notePath, range: { kind: 'lines', startLine: 1, endLine: 400 } }
+				}
+			]
+		});
+	});
+
+	it('carries a remembered fact whole, because it has no file to continue in', async () => {
+		const fact = ' word'.repeat(1000);
+		const passage = await reader().passage(
+			{ kind: 'memory', id: testMemoryEntryId(), projectId, title: fact },
+			fact
+		);
+		expect(passage).toEqual({ kind: 'detached', content: fact });
 	});
 });

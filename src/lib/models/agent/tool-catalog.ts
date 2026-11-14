@@ -94,7 +94,7 @@ export const TOOL_DESCRIPTIONS = [
 		name: 'search',
 		classification: 'read',
 		description:
-			"Search the knowledge base — the user's notes, uploaded documents and PDFs, diagrams, and indexed remembered facts — for content relevant to a query. Use it when knowledge-base evidence could improve the answer, and search again with a more focused query when the first results reveal useful leads or gaps. Pass projectId to restrict results to one project."
+			"Search the knowledge base — the user's notes, uploaded documents and PDFs, diagrams, and indexed remembered facts — for content relevant to a query. Use it when knowledge-base evidence could improve the answer, and search again with a more focused query when the first results reveal useful leads or gaps. Pass projectId to restrict results to one project. Each hit's passage names the file path and line range it came from; when its nextActions is not empty the excerpt was cut, so continue with sed there."
 	},
 	{
 		name: 'search_note',
@@ -105,7 +105,8 @@ export const TOOL_DESCRIPTIONS = [
 	{
 		name: 'get_workspace_context',
 		classification: 'read',
-		description: 'Read projects, notes, skills, and pending work.'
+		description:
+			'Read the user, projects, skills, and pending work in one call. Each project lists its notes as a nested tree in visible order (folders carry children) and a memoryCount. A userMemoryCount or memoryCount of 0 means list_user_memory or list_project_memory would return nothing.'
 	},
 	{
 		name: 'get_today_view',
@@ -152,7 +153,7 @@ export const TOOL_DESCRIPTIONS = [
 		name: 'get_note',
 		classification: 'read',
 		description:
-			'Read a note with backlinks, references, diagrams, todos, proposals, and the authoritative Markdown file descriptor. Call this before your first edit_note or save_note, then use sed or grep on body.file.path; that exact text is what edits anchor against.'
+			'Read a note: its metadata (backlinks, references, diagrams, todos, proposals, etag) and its authoritative Markdown body. body.kind says how much body came back: "inline" is the whole Markdown in body.content; "paged" is lines 1 to body.endLine, and body.nextActions holds the sed call for the rest; "file" is the descriptor only, so read body.file.path with sed or grep. Call this before your first edit_note or save_note; that exact Markdown is what edits anchor against.'
 	},
 	{
 		name: 'create_note',

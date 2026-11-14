@@ -76,7 +76,7 @@ const directRetrievalCases: readonly EvalCase[] = directQueries.map((entry) => (
 			.controllers.retrieval()
 			.search({ query: entry.query, limit: 1 });
 
-		const top = matches[0]?.content ?? '';
+		const top = matches[0]?.passage.content ?? '';
 		px.logOutput({
 			topResult: top.slice(0, 200),
 			resultCount: matches.length,

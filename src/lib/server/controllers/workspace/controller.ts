@@ -3,7 +3,7 @@ import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { WorkspaceSyncReader } from '$lib/server/services/workspace/sync-reads';
 import type { User } from '$lib/models/identity';
 import type { NoteSummary } from '$lib/models/notes';
-import type { Project } from '$lib/models/projects';
+import type { Project, ProjectId } from '$lib/models/projects';
 import type { SkillSummary } from '$lib/models/skills';
 import type { SyncCursor, SyncEtag, SyncObjectRead, SyncPage } from '$lib/models/sync';
 import type { TodoView } from '$lib/models/todos';
@@ -27,6 +27,7 @@ import type { NoteTreeReader } from '$lib/server/services/notes/catalog';
 
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { UserReader } from '$lib/server/services/identity/users';
+import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
 import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
 import type { SkillFinder } from '$lib/server/services/skills/library';
@@ -49,8 +50,8 @@ export interface WorkspaceController {
 		identity: WorkspaceResourceIdentity,
 		etag: SyncEtag | null
 	): Promise<SyncObjectRead<WorkspaceRecord>>;
-	/** Load the shell context for the signed-in user. */
-	getShellContext(): Promise<ShellContext>;
+	/** Load the shell context for the signed-in user, with how many memories each scope holds. */
+	getShellContext(): Promise<WorkspaceShell>;
 	/** Assemble the today view: overdue/due-today todos, waiting-on items, pending suggestion count, and notes. */
 	getTodayView(input: GetTodayViewInput): Promise<TodayView>;
 }
@@ -64,6 +65,7 @@ export interface WorkspaceDependencies {
 	resourceKeys: WorkspaceCommandRules;
 	userReader: UserReader;
 	noteTreeReader: NoteTreeReader;
+	memoryLister: MemoryEntryLister;
 	projectLister: ProjectLister;
 	skillFinder: SkillFinder;
 	suggestionLister: SuggestionLister;
@@ -109,16 +111,26 @@ export class Workspace implements WorkspaceController {
 	readResource(identity: WorkspaceResourceIdentity, etag: SyncEtag | null) {
 		return this.dependencies.syncReads.read(identity, etag);
 	}
-	async getShellContext(): Promise<ShellContext> {
+	async getShellContext(): Promise<WorkspaceShell> {
 		await this.dependencies.transactionRunner.run(() => this.dependencies.builtInSkills.ensure());
 		await this.dependencies.suggestionExpirer.expire();
-		const [user, projects, noteTree, skills, pendingSuggestions] = await Promise.all([
+		const [user, projects, noteTree, skills, pendingSuggestions, userMemories] = await Promise.all([
 			this.dependencies.userReader.get(),
 			this.dependencies.projectLister.list(),
 			this.dependencies.noteTreeReader.list(),
 			this.dependencies.skillFinder.listEnabled(),
-			this.dependencies.suggestionLister.listByStatus('proposed')
+			this.dependencies.suggestionLister.listByStatus('proposed'),
+			this.dependencies.memoryLister.list({})
 		]);
+		const projectMemories = await Promise.all(
+			projects.map(
+				async (project) =>
+					[
+						project.id,
+						(await this.dependencies.memoryLister.list({ projectId: project.id })).length
+					] as const
+			)
+		);
 		return {
 			user,
 			projects,
@@ -128,7 +140,8 @@ export class Workspace implements WorkspaceController {
 			pendingMemoryNotifications: this.dependencies.memoryPresentation.pendingNotifications(
 				projects,
 				pendingSuggestions
-			)
+			),
+			memory: { user: userMemories.length, projects: new Map(projectMemories) }
 		};
 	}
 	async getTodayView(input: GetTodayViewInput): Promise<TodayView> {
@@ -157,4 +170,15 @@ export class Workspace implements WorkspaceController {
 }
 
 type ShellContext = AggregateShellContext<User, Project, NoteSummary, SkillSummary>;
+
+/** How many live memories the user profile and each listed project hold. */
+export interface WorkspaceMemoryCounts {
+	readonly user: number;
+	readonly projects: ReadonlyMap<ProjectId, number>;
+}
+
+/** The shell context with the memory counts that tell a reader which memory lists are empty. */
+export interface WorkspaceShell extends ShellContext {
+	readonly memory: WorkspaceMemoryCounts;
+}
 type TodayView = AggregateTodayView<TodoView, NoteSummary>;

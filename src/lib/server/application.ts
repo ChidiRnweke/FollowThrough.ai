@@ -593,6 +593,7 @@ export function createApplication(
 			userReader: identity.userReader,
 			projectLister: projects.catalog,
 			noteTreeReader: notes.library,
+			memoryLister: memory.library,
 			skillFinder: skills.finder,
 			builtInSkills: skillCapability.builtIns,
 			transactionRunner,
@@ -692,7 +693,8 @@ export function createApplication(
 		},
 		retrieval: {
 			knowledge,
-			conversations: conversationMessages
+			conversations: conversationMessages,
+			passages: agentFilesCapability.reader
 		},
 		inlineSuggestions: {
 			context: finalizedKnowledgeSearch.inlineContext,

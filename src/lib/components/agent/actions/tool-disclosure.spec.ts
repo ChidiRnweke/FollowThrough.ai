@@ -354,6 +354,41 @@ describe('Grouped and heterogeneous results preserve their targets', () => {
 			'2 pending suggestions'
 		]);
 	});
+	it("lists the workspace's projects, every nested note and folder, then its skills", () => {
+		const result = toolDisclosure(
+			call({
+				name: 'get_workspace_context',
+				output: {
+					userMemoryCount: 0,
+					projects: [
+						{
+							id: TODO_ID,
+							name: 'Atlas',
+							memoryCount: 0,
+							notes: [
+								{ kind: 'note', id: NOTE_ID, title: 'Intro' },
+								{
+									kind: 'folder',
+									title: 'Meetings',
+									children: [{ kind: 'note', title: 'Kickoff' }]
+								}
+							]
+						}
+					],
+					skills: [{ name: 'Diagramming' }],
+					pendingSuggestionCount: 0
+				}
+			}),
+			shell
+		);
+		expect(result.kind === 'collection' && result.entities.map((entity) => entity.title)).toEqual([
+			'Atlas',
+			'Intro',
+			'Meetings',
+			'Kickoff',
+			'Diagramming'
+		]);
+	});
 	it('uses the actual source kind in mixed search results', () => {
 		const result = toolDisclosure(
 			call({

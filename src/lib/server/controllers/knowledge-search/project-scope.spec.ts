@@ -17,6 +17,6 @@ describe('project-scoped knowledge search', () => {
 			{ userId, document: searchDocumentBuilder({ projectId: second, content: 'second project' }) }
 		];
 		const results = await controller.search({ query: 'project', projectId: second });
-		expect(results.map((match) => match.content)).toEqual(['second project']);
+		expect(results.map((match) => match.passage.content)).toEqual(['second project']);
 	});
 });

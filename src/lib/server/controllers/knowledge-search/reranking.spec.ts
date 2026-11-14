@@ -17,7 +17,7 @@ describe('controller-owned search ranking', () => {
 		const fixture = setup(60);
 		fixture.provider.rerankOrder = 'reverse';
 		const results = await fixture.controller.search({ query: 'query', limit: 10 });
-		expect(results.map((match) => match.content)).toEqual(
+		expect(results.map((match) => match.passage.content)).toEqual(
 			Array.from({ length: 10 }, (_, index) => 'candidate ' + (49 - index))
 		);
 	});
@@ -31,15 +31,17 @@ describe('controller-owned search ranking', () => {
 	it('honors ranking when the candidate set is already within the limit', async () => {
 		const fixture = setup(2);
 		fixture.provider.rerankOrder = 'reverse';
-		expect((await fixture.controller.search({ query: 'query', limit: 10 }))[0]?.content).toBe(
-			'candidate 1'
-		);
+		expect(
+			(await fixture.controller.search({ query: 'query', limit: 10 }))[0]?.passage.content
+		).toBe('candidate 1');
 	});
 	it('retains vector order when reranking is unavailable', async () => {
 		const fixture = setup(3);
 		fixture.provider.rerankFailure = new Error('reranker unavailable');
 		expect(
-			(await fixture.controller.search({ query: 'query', limit: 2 })).map((match) => match.content)
+			(await fixture.controller.search({ query: 'query', limit: 2 })).map(
+				(match) => match.passage.content
+			)
 		).toEqual(['candidate 0', 'candidate 1']);
 	});
 	it('rejects malformed embedding output instead of running an empty search', async () => {
