@@ -1,5 +1,18 @@
 # Changelog
 
+## [6.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.8.1...v6.0.0) (2026-11-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **mcp:** existing API tokens stop working; reconnect MCP clients through OAuth.
+
+### Features
+
+* **agent:** call connector tools under the approval contract ([#483](https://github.com/ChidiRnweke/FollowThrough.ai/issues/483)) ([93c1134](https://github.com/ChidiRnweke/FollowThrough.ai/commit/93c1134ef1ec4954205355f863303597b66d0d53))
+* **connectors:** connect remote MCP servers and store their tools ([#481](https://github.com/ChidiRnweke/FollowThrough.ai/issues/481)) ([f3e4205](https://github.com/ChidiRnweke/FollowThrough.ai/commit/f3e42059659d4f5587dc6916038f50c9e201f478))
+* **mcp:** authorize mcp clients with oauth and remove api tokens ([#482](https://github.com/ChidiRnweke/FollowThrough.ai/issues/482)) ([da06496](https://github.com/ChidiRnweke/FollowThrough.ai/commit/da064962ad33de696caf267ec7c4e26d6c891d10))
+
 ## [5.8.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.8.0...v5.8.1) (2026-10-25)
 
 
