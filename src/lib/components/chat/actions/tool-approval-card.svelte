@@ -15,7 +15,12 @@
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import ChatMarkdown from '../chat-markdown.svelte';
 	import RecordFields from './disclosure/record-fields.svelte';
-	import { approvalConsequence, friendlyToolLabel } from '../../agent/actions/tool-presentation';
+	import {
+		approvalConsequence,
+		connectorToolLabel,
+		friendlyToolLabel
+	} from '../../agent/actions/tool-presentation';
+	import { ConnectorLogo } from '$lib/components/connectors';
 	import { approvalPreview, isNoteBodyTool, type ApprovalBaseline } from './tool-approval-preview';
 	import { approvalFields, argumentLabel } from './tool-approval-fields';
 	import { WidgetView } from '$lib/components/widgets';
@@ -162,6 +167,8 @@
 			: preview.kind === 'arguments' && (fields.items?.length ?? 0) > COMPACT_ITEM_CAP
 	);
 	const consequence = $derived(approvalConsequence(tool.name));
+	/** A call into a connected service carries that service's mark, so whose data it touches reads first. */
+	const connector = $derived(connectorToolLabel(tool.name));
 
 	/**
 	 * With a subject to lead on, the tool's own name becomes the subtitle; without one there
@@ -345,6 +352,14 @@
 -->
 <div class="flex flex-col gap-item {framed ? 'my-2 border-y border-brand/40 py-4' : ''}">
 	<div class="flex min-w-0 items-baseline gap-2">
+		{#if connector}
+			<ConnectorLogo
+				logo={connector.logo}
+				title={connector.service}
+				size="sm"
+				class="self-center"
+			/>
+		{/if}
 		<p class="min-w-0 flex-1 truncate text-sm font-medium">{heading}</p>
 		{#if expandable}
 			<Tip text="Review in full">

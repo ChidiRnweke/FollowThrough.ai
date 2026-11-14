@@ -334,6 +334,28 @@ including the ones the shadcn-svelte CLI writes into a newly added primitive —
   Agent activity is a monitor with a live trace. Neither reuses the open book, which means
   reading and references.
 
+### Connector logos
+
+A connected service shows its own logo, because the logo is how a user recognises whose data a
+tool touches (ADR 0049, which amends ADR 0044 for this one case). Third-party logos are content,
+not icons: they never enter app chrome, never take `currentColor`, and never animate.
+
+- **One component.** `ConnectorLogo` (`components/connectors/`) is the only place a logo is
+  drawn. It is a shadcn `Avatar` squared to `rounded-md`, in three sizes: `sm` (24px) beside a
+  chat heading, `default` (36px) on a list row or catalog tile, `lg` (48px) on a connector's
+  page.
+- **The plate.** Every logo sits on `--logo-plate`, a near-white tile in both themes with a
+  `--logo-plate-ring` hairline. Vendor marks are drawn for a light ground, and a plate keeps
+  them legible in dark mode without recolouring anyone's brand.
+- **Sources, in order.** A catalog entry uses the vendor's full-colour mark, recorded from SVG
+  Logos (CC0) into `static/connector-logos/` by `scripts/record-connector-logos.ts`; the browser
+  never fetches a third-party origin. A custom server uses the icon it publishes, after the
+  server checks its bytes, served from our origin under a sandboxing CSP. Anything else is a
+  monogram: the title's first letter in `--logo-plate-foreground` on the same plate.
+- **Chat reads the name.** A journalled call keeps only `<slug>__<tool>`, so the chat derives
+  the logo from the slug: a catalog slug shows its mark, a custom slug its monogram. A custom
+  slug can never equal a catalog id, so a custom server never borrows a vendor's mark.
+
 ## Voice & tone
 
 Calm, dry, second person, present tense. One sentence, period included, no exclamation marks. The

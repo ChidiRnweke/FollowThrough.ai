@@ -116,6 +116,12 @@ export class ConnectorAuthorization implements ConnectorAuthorizer {
 		// MCP authorization: a server that does not advertise S256 does not support PKCE.
 		if (!metadata.code_challenge_methods_supported?.includes('S256'))
 			throw new ExternalServiceError(`${host}'s authorization server does not support PKCE.`);
+		// The user's browser goes to this page next. The SDK refuses script schemes only, and
+		// OAuth 2.1 requires TLS for the authorization endpoint.
+		if (new URL(metadata.authorization_endpoint).protocol !== 'https:')
+			throw new ExternalServiceError(
+				`${host}'s sign-in page is not served over HTTPS, so FollowThrough will not send you to it.`
+			);
 		const resource = this.resource(input.serverUrl, info.resourceMetadata?.resource);
 		const scopes = (
 			input.challenge?.scope ??

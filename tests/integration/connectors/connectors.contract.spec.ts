@@ -103,6 +103,47 @@ describe('connector records', () => {
 		});
 	});
 
+	it("shows a custom server's stored icon as its logo, to its owner only, until it is dropped", async () => {
+		const owner = await seedUser('61020');
+		const records = new ConnectorRecords(owner, context.db, box);
+		const custom = await records.insert(
+			{
+				id: connectorId('61020'),
+				slug: 'acme' as ConnectorSlug,
+				source: { kind: 'custom' },
+				title: 'Acme',
+				serverUrl: 'https://tools.acme.example/mcp',
+				credential: { kind: 'none' }
+			},
+			new Date('2026-11-14T10:00:00Z')
+		);
+		const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+		await records.storeIcon(custom.id, {
+			kind: 'icon',
+			icon: { mediaType: 'image/png', bytes: png, checksum: 'icon-v1' }
+		});
+		const stored = {
+			logo: (await records.find(custom.id))!.logo,
+			icon: await records.icon(custom.id)
+		};
+		const stranger = await new ConnectorRecords(await seedUser('61021'), context.db, box).icon(
+			custom.id
+		);
+		await records.storeIcon(custom.id, { kind: 'none' });
+		expect({
+			stored,
+			stranger,
+			dropped: { logo: (await records.find(custom.id))!.logo, icon: await records.icon(custom.id) }
+		}).toEqual({
+			stored: {
+				logo: { kind: 'server_icon', connectorId: custom.id, checksum: 'icon-v1' },
+				icon: { mediaType: 'image/png', bytes: png, checksum: 'icon-v1' }
+			},
+			stranger: undefined,
+			dropped: { logo: { kind: 'monogram' }, icon: undefined }
+		});
+	});
+
 	it('reports a credential sealed under a retired key as unreadable instead of failing', async () => {
 		const { owner, connector } = await seedConnector('61003');
 		const rotated = new ConnectorRecords(owner, context.db, SecretBox.fromKeyring(`v2:${key(8)}`));

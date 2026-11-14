@@ -1,1 +1,1 @@
-export { connectorAuthorizations, connectorTools, connectors } from './registry';
+export { connectorAuthorizations, connectorIcons, connectorTools, connectors } from './registry';

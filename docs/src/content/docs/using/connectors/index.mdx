@@ -1,0 +1,51 @@
+---
+title: Connectors
+description: Connect Linear, Notion, GitHub and other services through their MCP servers, so the agent can read and act there under the same approval rules it follows in FollowThrough.
+---
+
+The agent works on what is in FollowThrough. A **connector** lets it reach a service where you keep other work, such as Linear issues or Notion pages. Each connector is the service's own remote MCP server: FollowThrough signs in to it as you, reads the list of tools it offers, and gives those tools to the agent. Manage connectors in **Settings > Connectors**.
+
+## Connect a service from the catalog
+
+1. Choose **Add connector**. The **Catalog** tab lists the services FollowThrough knows: Linear, Notion, GitHub, Sentry, Atlassian, Vercel, Todoist, monday.com, Supabase and Cloudflare Docs.
+2. Choose a service. Most services send you to their own sign-in page. Approve the access there, and you come back to the connector's page in Settings.
+3. A service that needs no sign-in, such as Cloudflare Docs, connects at once.
+
+FollowThrough stores the sign-in encrypted and renews it when it expires. It never shows a token again. A tile that says **Not available on this server** needs a setting from whoever runs your FollowThrough server; see [Self-hosting](/FollowThrough.ai/self-hosting/#connectors).
+
+## Connect your own server
+
+Use the **Custom server** tab for an MCP server that is not in the catalog. Enter its URL and a name, and choose how it signs you in:
+
+- **Ask the server**: a server that needs a sign-in sends you to its own sign-in page; a server that needs none connects at once.
+- **Access token**: paste a token that the service issued. FollowThrough sends it with every call and cannot renew it.
+
+The server must use the Streamable HTTP transport over HTTPS and be reachable on the public internet. FollowThrough never connects to an address on a private network, and it never starts a local process.
+
+## Decide what the agent may do
+
+Open a connector to see its tools. Each tool has one of three settings:
+
+- **Always allow**: the agent calls the tool without asking.
+- **Ask**: each call waits for your approval in the chat, with the service's logo and the line "FollowThrough cannot undo what it does there."
+- **Off**: the agent never sees the tool.
+
+By default, a tool that its server labels read-only is set to **Always allow**, and every other tool is set to **Ask**. FollowThrough trusts these labels on every server, custom servers included, so connect only servers you trust. Change a setting with the toggle on its row; **Use default** hands the tool back to its label.
+
+In auto-accept mode, a tool set to **Ask** runs without pausing, the same as FollowThrough's own changes. Set a tool to **Off** if it must never run unattended. See [execution modes](/FollowThrough.ai/using/the-agent/#choose-an-execution-mode).
+
+## Keep the tools current
+
+Choose **Refresh tools** to read the server's list again. A tool that keeps its name keeps your setting. An approval is for the tool as you saw it: if the server changes a tool after you approve a call and before the call runs, nothing runs, and the agent is told why.
+
+## Sign in again, or disconnect
+
+When a service stops accepting the sign-in, the connector shows **Sign in again** and the agent cannot use its tools. Open the connector and choose **Sign in to** the service. Its tools and your settings stay as they were. A connector that uses an access token cannot sign in again: disconnect it, then connect it with a new token.
+
+**Disconnect** deletes the stored sign-in and the connector's tools. Nothing in the service itself changes, and past chats still show the calls the agent made.
+
+## Next
+
+- [The agent](/FollowThrough.ai/using/the-agent/): the chat that calls connector tools.
+- [Self-hosting](/FollowThrough.ai/self-hosting/#connectors): the keys a server needs before connectors work.
+- [ADR 0049](/FollowThrough.ai/decisions/0049-call-external-mcp-servers-as-connectors-through-the-agents-own-tool-set/): why connectors work this way.

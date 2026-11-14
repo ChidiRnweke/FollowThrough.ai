@@ -62,6 +62,30 @@ describe('Connectors', () => {
 		});
 	});
 
+	it('shows what each tool does when called: its hints decide until the user chooses', async () => {
+		const fixture = connectorsFixture();
+		fixture.linear.tools = [
+			writeTool('create_issue'),
+			readTool('list_issues'),
+			writeTool('delete_issue')
+		];
+		const id = await signIn(
+			fixture,
+			await fixture.controller.connect({ kind: 'catalog', catalogId: 'linear' })
+		);
+		await fixture.controller.setToolPolicy({
+			connectorId: id,
+			serverName: 'delete_issue',
+			policy: 'off'
+		});
+		const detail = await fixture.controller.get(id);
+		expect(detail.tools.map(({ tool, effective }) => [tool.serverName, effective])).toEqual([
+			['create_issue', 'ask'],
+			['delete_issue', 'off'],
+			['list_issues', 'allow']
+		]);
+	});
+
 	it('connects a catalog server that needs no sign-in at once, with embedded tools', async () => {
 		const fixture = connectorsFixture();
 		const start = await fixture.controller.connect({ kind: 'catalog', catalogId: 'cloudflare' });
@@ -69,12 +93,70 @@ describe('Connectors', () => {
 			start.kind === 'connected' ? await fixture.controller.get(start.connectorId) : undefined;
 		expect({
 			kind: start.kind,
-			tools: detail?.tools.map((tool) => tool.modelName),
+			tools: detail?.tools.map(({ tool }) => tool.modelName),
 			embedded: fixture.embeddings.requests
 		}).toEqual({
 			kind: 'connected',
 			tools: ['cloudflare__search_docs'],
 			embedded: [['cloudflare__search_docs: [Cloudflare Docs] search_docs. Reads search_docs.']]
+		});
+	});
+
+	it('counts a tool the agent cannot use as unusable, and never as asking first', async () => {
+		const fixture = connectorsFixture();
+		const server = new FakeConnectorServer('https://tools.acme.example', {
+			path: '/mcp',
+			authorization: { kind: 'none' },
+			tools: [
+				readTool('search'),
+				{
+					...writeTool('upload'),
+					inputSchema: { $schema: 'https://json-schema.org/draft/2019-09/schema', type: 'object' }
+				}
+			]
+		});
+		fixture.network.route(server.origin, server.handle);
+		await fixture.controller.connect({
+			kind: 'custom',
+			serverUrl: server.url,
+			title: 'Acme docs',
+			authentication: { kind: 'discover' }
+		});
+		const overview = await fixture.controller.list();
+		expect(overview.kind === 'ready' ? overview.connectors[0]?.tools : overview).toEqual({
+			total: 2,
+			unusable: 1,
+			asking: 0,
+			off: 0
+		});
+	});
+
+	it('shows a custom server with the icon it publishes, and a catalog server with its mark', async () => {
+		const fixture = connectorsFixture();
+		const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>';
+		const server = new FakeConnectorServer('https://tools.acme.example', {
+			path: '/mcp',
+			authorization: { kind: 'none' },
+			tools: [readTool('status')],
+			icons: [{ src: 'https://tools.acme.example/icon.svg' }]
+		});
+		fixture.network.route(server.origin, async (request) =>
+			new URL(request.url).pathname === '/icon.svg' ? new Response(svg) : server.handle(request)
+		);
+		const custom = await fixture.controller.connect({
+			kind: 'custom',
+			serverUrl: server.url,
+			title: 'Acme status',
+			authentication: { kind: 'discover' }
+		});
+		const docs = await fixture.controller.connect({ kind: 'catalog', catalogId: 'cloudflare' });
+		const logo = async (start: typeof custom) =>
+			start.kind === 'connected'
+				? (await fixture.controller.get(start.connectorId)).connector.logo.kind
+				: start.kind;
+		expect({ custom: await logo(custom), catalog: await logo(docs) }).toEqual({
+			custom: 'server_icon',
+			catalog: 'catalog'
 		});
 	});
 
@@ -107,7 +189,7 @@ describe('Connectors', () => {
 		expect({
 			slug: detail?.connector.slug,
 			authentication: detail?.connector.authentication,
-			tools: detail?.tools.map((tool) => tool.modelName)
+			tools: detail?.tools.map(({ tool }) => tool.modelName)
 		}).toEqual({ slug: 'acmetools', authentication: 'bearer', tools: ['acmetools__deploy'] });
 	});
 
@@ -130,7 +212,7 @@ describe('Connectors', () => {
 		);
 		expect({
 			renewed: refreshGrants.length,
-			tools: detail.tools.map((tool) => [tool.serverName, tool.policy])
+			tools: detail.tools.map(({ tool }) => [tool.serverName, tool.policy])
 		}).toEqual({
 			renewed: 1,
 			tools: [
@@ -160,7 +242,7 @@ describe('Connectors', () => {
 			needing,
 			sameConnector: reconnected === id,
 			status: after.connector.status,
-			kept: after.tools.find((tool) => tool.serverName === 'list_issues')?.policy
+			kept: after.tools.find(({ tool }) => tool.serverName === 'list_issues')?.tool.policy
 		}).toEqual({
 			needing: 'reauthorization_required',
 			sameConnector: true,
@@ -211,8 +293,8 @@ describe('Connectors', () => {
 				await fixture.controller.connect({ kind: 'catalog', catalogId: 'linear' })
 			);
 			const tool = (await fixture.controller.get(id)).tools.find(
-				(entry) => entry.serverName === 'create_issue'
-			)!;
+				(entry) => entry.tool.serverName === 'create_issue'
+			)!.tool;
 			const call = (checksum = tool.checksum) =>
 				fixture.controller.callTool(
 					{

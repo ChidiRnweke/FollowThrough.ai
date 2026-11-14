@@ -18,6 +18,8 @@ export interface FakeAuthorizationServerOptions {
 	readonly preregistered?: { readonly clientId: string; readonly clientSecret: string };
 	/** Registers dynamic clients as confidential, with a secret. */
 	readonly confidentialRegistration?: boolean;
+	/** Publishes this sign-in page instead of the issuer's own `/authorize`. */
+	readonly authorizationEndpoint?: string;
 	readonly now: () => Date;
 }
 
@@ -102,7 +104,7 @@ export class FakeAuthorizationServer {
 	private metadata() {
 		return {
 			issuer: this.issuer,
-			authorization_endpoint: `${this.issuer}/authorize`,
+			authorization_endpoint: this.options.authorizationEndpoint ?? `${this.issuer}/authorize`,
 			token_endpoint: `${this.issuer}/token`,
 			response_types_supported: ['code'],
 			grant_types_supported: ['authorization_code', 'refresh_token'],

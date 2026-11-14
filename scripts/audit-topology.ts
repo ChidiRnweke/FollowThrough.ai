@@ -17,6 +17,7 @@ const componentCapabilities = new Set([
 	'artifacts',
 	'attachments',
 	'chat',
+	'connectors',
 	'diagrams',
 	'feedback',
 	'memory',

@@ -5,7 +5,9 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import {
+		ConnectorDetail,
 		SettingsAgents,
+		SettingsConnectors,
 		SettingsDocuments,
 		SettingsMcp,
 		SettingsModels,
@@ -21,6 +23,10 @@
 	function selectTab(tab: string): void {
 		const params = new SvelteURLSearchParams(page.url.searchParams);
 		params.set('tab', tab);
+		// A tab opens on its own landing view: the connector shown and the last sign-in's
+		// failure belong to the visit that produced them.
+		params.delete('connector');
+		params.delete('connectorError');
 		void goto(`/settings?${params.toString()}`, { keepFocus: true, noScroll: true });
 	}
 
@@ -38,7 +44,7 @@
 
 <PageShell
 	title="Settings"
-	description="Agent defaults, document defaults, the tools it may use, MCP access, and per-pipeline trust policies."
+	description="Agent defaults, connected services, document defaults, the tools it may use, MCP access, and per-pipeline trust policies."
 >
 	{#snippet actions()}
 		<AgentAction action={agentActions.settings} />
@@ -47,6 +53,7 @@
 		<Tabs.List variant="line">
 			<Tabs.Trigger value="models">Models</Tabs.Trigger>
 			<Tabs.Trigger value="agents">Agents</Tabs.Trigger>
+			<Tabs.Trigger value="connectors">Connectors</Tabs.Trigger>
 			<Tabs.Trigger value="documents">Documents</Tabs.Trigger>
 			<Tabs.Trigger value="tools">Tools</Tabs.Trigger>
 			<Tabs.Trigger value="mcp">MCP access</Tabs.Trigger>
@@ -64,6 +71,18 @@
 		<Tabs.Content value="agents" class="pt-6">
 			{#if data.tab === 'agents'}
 				<SettingsAgents defaults={data.session.bootstrap.numericDefaults} />
+			{/if}
+		</Tabs.Content>
+		<Tabs.Content value="connectors" class="pt-6">
+			{#if data.tab === 'connectors'}
+				{#if data.connectors.kind === 'detail'}
+					<!-- Keyed, so moving from one connector to another starts its own query. -->
+					{#key data.connectors.connectorId}
+						<ConnectorDetail connectorId={data.connectors.connectorId} />
+					{/key}
+				{:else}
+					<SettingsConnectors failure={data.connectors.failure} />
+				{/if}
 			{/if}
 		</Tabs.Content>
 		<Tabs.Content value="documents" class="pt-6">

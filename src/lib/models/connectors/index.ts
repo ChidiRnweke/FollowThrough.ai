@@ -141,7 +141,10 @@ export const CONNECTOR_CATALOG = [
 	}
 ] as const satisfies readonly CatalogConnector[];
 
-export type CatalogConnectorId = (typeof CONNECTOR_CATALOG)[number]['id'];
+/** One catalog entry, with its id narrowed to the catalog's own. */
+export type CatalogEntry = (typeof CONNECTOR_CATALOG)[number];
+
+export type CatalogConnectorId = CatalogEntry['id'];
 
 export const catalogConnectorIdSchema = z.enum(
 	CONNECTOR_CATALOG.map((entry) => entry.id) as [CatalogConnectorId, ...CatalogConnectorId[]]
@@ -165,6 +168,21 @@ export type ConnectorStatus =
 	/** Its credential was sealed under a key this deployment no longer holds. */
 	| { readonly kind: 'unreadable' };
 
+/**
+ * Which logo a connector shows. A catalog entry shows the vendor's mark from
+ * the recorded static files; a custom server shows the icon it published, once
+ * fetched and checked; otherwise a monogram of its title (ADR 0049).
+ */
+export type ConnectorLogo =
+	| { readonly kind: 'catalog'; readonly catalogId: CatalogConnectorId }
+	| {
+			readonly kind: 'server_icon';
+			/** The connector whose stored icon this is; the checksum versions its URL. */
+			readonly connectorId: ConnectorId;
+			readonly checksum: string;
+	  }
+	| { readonly kind: 'monogram' };
+
 /** A stored connector, without its credential. */
 export interface Connector {
 	readonly id: ConnectorId;
@@ -174,9 +192,31 @@ export interface Connector {
 	readonly serverUrl: string;
 	readonly authentication: ConnectorAuthenticationKind;
 	readonly status: ConnectorStatus;
+	readonly logo: ConnectorLogo;
 	readonly toolsRefreshedAt: DateTime;
 	readonly createdAt: DateTime;
 }
+
+/** An icon a server listed in its `serverInfo` (MCP 2025-11-25), not yet fetched or trusted. */
+export interface ServerIcon {
+	readonly src: string;
+	readonly mimeType: string | undefined;
+	readonly theme: 'light' | 'dark' | undefined;
+}
+
+/** A server icon after it was fetched and its bytes identified. */
+export interface ConnectorIcon {
+	readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/svg+xml';
+	readonly bytes: Uint8Array;
+	readonly checksum: string;
+}
+
+export const connectorIconMediaTypeSchema = z.enum([
+	'image/png',
+	'image/jpeg',
+	'image/webp',
+	'image/svg+xml'
+]);
 
 // --- Credentials (sealed at rest) -------------------------------------------
 
@@ -467,9 +507,15 @@ export type ConnectorsOverview =
 	| { readonly kind: 'unconfigured' }
 	| { readonly kind: 'ready'; readonly connectors: readonly ConnectorSummary[] };
 
+/** A stored tool beside what it does when the agent calls it, after the policy rule. */
+export interface ConnectorToolView {
+	readonly tool: ConnectorTool;
+	readonly effective: ConnectorToolPolicyChoice;
+}
+
 export interface ConnectorDetail {
 	readonly connector: Connector;
-	readonly tools: readonly ConnectorTool[];
+	readonly tools: readonly ConnectorToolView[];
 }
 
 export type CatalogAvailability =
@@ -479,7 +525,7 @@ export type CatalogAvailability =
 	| { readonly kind: 'connected'; readonly connectorId: ConnectorId };
 
 export interface CatalogEntryView {
-	readonly entry: CatalogConnector;
+	readonly entry: CatalogEntry;
 	readonly availability: CatalogAvailability;
 }
 

@@ -265,7 +265,8 @@ export const controllerSurfaces = {
 		refreshTools: true,
 		setToolPolicy: true,
 		disconnect: true,
-		callTool: 'redacted'
+		callTool: 'redacted',
+		icon: 'redacted'
 	}
 } satisfies {
 	[K in keyof ControllerFactory]: ControllerSurface<ReturnType<ControllerFactory[K]>>;

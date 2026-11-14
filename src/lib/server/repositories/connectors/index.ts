@@ -2,6 +2,7 @@ import type {
 	Connector,
 	ConnectorCredential,
 	ConnectorCredentialRead,
+	ConnectorIcon,
 	ConnectorId,
 	ConnectorTool,
 	ConnectorToolPolicy,
@@ -39,6 +40,12 @@ export interface ConnectorRepository {
 		serverName: string,
 		policy: ConnectorToolPolicy
 	): Promise<ConnectorTool | undefined>;
+	/** Replaces the connector's server icon; `none` removes it. */
+	storeIcon(
+		id: ConnectorId,
+		icon: { readonly kind: 'icon'; readonly icon: ConnectorIcon } | { readonly kind: 'none' }
+	): Promise<void>;
+	icon(id: ConnectorId): Promise<ConnectorIcon | undefined>;
 	/** Every stored tool with its connector's title. */
 	runTools(): Promise<readonly RunConnectorTool[]>;
 	/** Cosine distances for the named tools whose vector `model` produced; others are absent. */

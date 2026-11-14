@@ -6,6 +6,7 @@ import { agentPayloadObjectSchema } from '$lib/models/agent/payload';
 import {
 	connectorAuthenticationKindSchema,
 	connectorCredentialSchema,
+	connectorIconMediaTypeSchema,
 	connectorSlugSchema,
 	connectorSourceSchema,
 	connectorToolHintsSchema,
@@ -15,7 +16,9 @@ import {
 	type Connector,
 	type ConnectorCredential,
 	type ConnectorCredentialRead,
+	type ConnectorIcon,
 	type ConnectorId,
+	type ConnectorLogo,
 	type ConnectorStatus,
 	type ConnectorTool,
 	type ConnectorToolPolicy,
@@ -92,16 +95,58 @@ export class ConnectorRecords implements ConnectorRepository {
 
 	async list(): Promise<readonly Connector[]> {
 		const rows = await this.database
-			.select()
+			.select({ connector: schema.connectors, iconChecksum: schema.connectorIcons.checksum })
 			.from(schema.connectors)
+			.leftJoin(schema.connectorIcons, eq(schema.connectorIcons.connectorId, schema.connectors.id))
 			.where(eq(schema.connectors.userId, this.actor.userId))
 			.orderBy(asc(schema.connectors.createdAt));
-		return rows.map((row) => this.toConnector(row));
+		return rows.map((row) => this.toConnector(row.connector, row.iconChecksum));
 	}
 
 	async find(id: ConnectorId): Promise<Connector | undefined> {
-		const row = await this.row(id);
-		return row ? this.toConnector(row) : undefined;
+		const [row] = await this.database
+			.select({ connector: schema.connectors, iconChecksum: schema.connectorIcons.checksum })
+			.from(schema.connectors)
+			.leftJoin(schema.connectorIcons, eq(schema.connectorIcons.connectorId, schema.connectors.id))
+			.where(this.owned(id));
+		return row ? this.toConnector(row.connector, row.iconChecksum) : undefined;
+	}
+
+	async storeIcon(
+		id: ConnectorId,
+		icon: { readonly kind: 'icon'; readonly icon: ConnectorIcon } | { readonly kind: 'none' }
+	): Promise<void> {
+		if (!(await this.row(id))) throw new NotFoundError('Connector not found');
+		if (icon.kind === 'none') {
+			await this.database
+				.delete(schema.connectorIcons)
+				.where(eq(schema.connectorIcons.connectorId, id));
+			return;
+		}
+		const values = {
+			mediaType: icon.icon.mediaType,
+			content: Buffer.from(icon.icon.bytes).toString('base64'),
+			checksum: icon.icon.checksum
+		};
+		await this.database
+			.insert(schema.connectorIcons)
+			.values({ connectorId: id, ...values })
+			.onConflictDoUpdate({ target: schema.connectorIcons.connectorId, set: values });
+	}
+
+	async icon(id: ConnectorId): Promise<ConnectorIcon | undefined> {
+		if (!(await this.row(id))) return undefined;
+		const [row] = await this.database
+			.select()
+			.from(schema.connectorIcons)
+			.where(eq(schema.connectorIcons.connectorId, id));
+		return row
+			? {
+					mediaType: connectorIconMediaTypeSchema.parse(row.mediaType),
+					bytes: new Uint8Array(Buffer.from(row.content, 'base64')),
+					checksum: row.checksum
+				}
+			: undefined;
 	}
 
 	async insert(connector: NewConnector, refreshedAt: Date): Promise<Connector> {
@@ -124,7 +169,7 @@ export class ConnectorRecords implements ConnectorRepository {
 				toolsRefreshedAt: refreshedAt
 			})
 			.returning();
-		return this.toConnector(row!);
+		return this.toConnector(row!, null);
 	}
 
 	async credential(id: ConnectorId): Promise<ConnectorCredentialRead> {
@@ -313,16 +358,24 @@ export class ConnectorRecords implements ConnectorRepository {
 		return this.secrets.seal(JSON.stringify(credential), credentialContext(id, this.actor.userId));
 	}
 
-	private toConnector(row: ConnectorRow): Connector {
+	private toConnector(row: ConnectorRow, iconChecksum: string | null): Connector {
 		const id = row.id as ConnectorId;
+		const source = connectorSourceSchema.parse(
+			row.sourceKind === 'catalog'
+				? { kind: 'catalog', catalogId: row.catalogId }
+				: { kind: row.sourceKind }
+		);
+		const logo: ConnectorLogo =
+			source.kind === 'catalog'
+				? { kind: 'catalog', catalogId: source.catalogId }
+				: iconChecksum !== null
+					? { kind: 'server_icon', connectorId: id, checksum: iconChecksum }
+					: { kind: 'monogram' };
 		return {
 			id,
 			slug: connectorSlugSchema.parse(row.slug),
-			source: connectorSourceSchema.parse(
-				row.sourceKind === 'catalog'
-					? { kind: 'catalog', catalogId: row.catalogId }
-					: { kind: row.sourceKind }
-			),
+			source,
+			logo,
 			title: row.title,
 			serverUrl: row.serverUrl,
 			authentication: connectorAuthenticationKindSchema.parse(row.authKind),
