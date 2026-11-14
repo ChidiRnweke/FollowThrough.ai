@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.3.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.2.0...v6.3.0) (2026-11-14)
+
+
+### Features
+
+* **connectors:** add the connectors settings tab, service logos and chat labels ([#485](https://github.com/ChidiRnweke/FollowThrough.ai/issues/485)) ([69fa039](https://github.com/ChidiRnweke/FollowThrough.ai/commit/69fa03909f646e6a1ad8b2b8490e9583b30d2932))
+* **connectors:** grow the catalog to the vendors that host mcp servers ([#491](https://github.com/ChidiRnweke/FollowThrough.ai/issues/491)) ([bf24b36](https://github.com/ChidiRnweke/FollowThrough.ai/commit/bf24b36e5fa6bf963565f3129189e4b2b9ff7726))
+
 ## [6.2.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.1.0...v6.2.0) (2026-11-14)
 
 
