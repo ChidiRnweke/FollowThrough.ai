@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.5.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.4.0...v6.5.0) (2026-11-14)
+
+
+### Features
+
+* **settings:** add save and undo to settings forms ([#497](https://github.com/ChidiRnweke/FollowThrough.ai/issues/497)) ([6f23645](https://github.com/ChidiRnweke/FollowThrough.ai/commit/6f236459d6e5e8f372f78ed73bd0d527d7b73f46))
+
 ## [6.4.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.3.0...v6.4.0) (2026-11-14)
 
 
