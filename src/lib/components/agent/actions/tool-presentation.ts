@@ -9,7 +9,9 @@ const { isAgentPayloadObject } = agentPayloadOperations;
 import { argumentLabel, isIdentifierArgument } from '../../chat/actions/tool-approval-fields';
 import { mechanismTools, quietTools, type RenderedTool } from './rendered-tools';
 import { friendlyToolLabel, completedToolLabel, isCatalogTool } from './tool-labels';
+import { connectorToolLabel } from './connector-tool-labels';
 export { friendlyToolLabel } from './tool-labels';
+export { connectorToolLabel } from './connector-tool-labels';
 import { toolEntity, fileEntity } from './tool-entities';
 
 /** Tools that write the note body, and so speak about the note rather than themselves. */
@@ -144,8 +146,19 @@ const consequences: Partial<Record<AgentToolName, string>> = {
 	regenerate_artifact: 'This replaces the current artifact.'
 };
 
-export const approvalConsequence = (name: string): string | undefined =>
-	isCatalogTool(name) ? consequences[name] : undefined;
+/**
+ * A connector call is the one write FollowThrough cannot take back: it runs in
+ * the other service, outside the journal and the version history. The line
+ * does not claim the call changes data, because a user can set a read-only
+ * tool to ask as well.
+ */
+export const approvalConsequence = (name: string): string | undefined => {
+	if (isCatalogTool(name)) return consequences[name];
+	const connector = connectorToolLabel(name);
+	return connector
+		? `This runs in ${connector.service}. FollowThrough cannot undo what it does there.`
+		: undefined;
+};
 
 /**
  * What to show when a tool row is expanded. The disclosure used to repeat its own

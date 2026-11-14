@@ -7,6 +7,7 @@ import {
 import { ConnectorAuthorization } from '$lib/server/services/connectors/authorization';
 import { ConnectorDirectory } from '$lib/server/services/connectors/directory';
 import { ConnectorServers } from '$lib/server/services/connectors/servers';
+import { ConnectorIcons } from '$lib/server/services/connectors/icons';
 import { ConnectorToolPolicyRules } from '$lib/services/connectors/policy';
 import {
 	InMemoryToolEmbeddingRepository,
@@ -99,6 +100,7 @@ export const connectorsFixture = (options: { readonly origin?: string } = {}) =>
 				now: clock.now
 			}),
 			servers: new ConnectorServers(network.fetch),
+			icons: new ConnectorIcons(network.fetch),
 			embeddings: toolSearchFixture(new InMemoryToolEmbeddingRepository(), embeddings),
 			preregistered: new Set(),
 			transactionRunner: new InMemoryTransactionRunner([records]),

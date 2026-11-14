@@ -100,10 +100,10 @@ const scenario = async (calls: readonly Call[]) => {
 	};
 	const tool = async (serverName: string) => {
 		const found = (await connectors.controller.get(connectorId)).tools.find(
-			(entry) => entry.serverName === serverName
+			(entry) => entry.tool.serverName === serverName
 		);
 		if (!found) throw new Error(`Linear has no ${serverName} tool`);
-		return found;
+		return found.tool;
 	};
 	return { connectors, connectorId, run, events, outcome, approve, tool };
 };

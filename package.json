@@ -41,6 +41,7 @@
 		"test:evals:gate": "EVAL_PROFILE=gate EVAL_GATE=1 EVAL_REPETITIONS=3 EVAL_RECORD=1 NODE_OPTIONS='--max-old-space-size=1024' vitest run --project evals --reporter=default --reporter=@arizeai/phoenix-client/vitest/reporter",
 		"test:evals:cache": "node --experimental-strip-types scripts/verify-eval-cache.ts",
 		"test:diagram-icons": "node --experimental-strip-types scripts/record-diagram-icons.ts",
+		"test:connector-logos": "node --experimental-strip-types scripts/record-connector-logos.ts",
 		"test:topology": "node --experimental-strip-types scripts/audit-topology.ts",
 		"corpus:capture": "node --experimental-strip-types --env-file=.env scripts/capture-corpus.ts",
 		"test:chisel": "chisel-js check .",

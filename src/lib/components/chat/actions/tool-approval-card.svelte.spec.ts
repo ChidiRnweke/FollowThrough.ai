@@ -10,6 +10,7 @@ import type { ProjectId } from '$lib/models/projects';
 import ToolApprovalGroup from './tool-approval-group.svelte';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
+import type { ConnectorToolName } from '$lib/models/connectors';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
@@ -264,5 +265,30 @@ describe('The review card focuses a note change on what changed', () => {
 		const screen = await renderLong();
 		await screen.getByRole('button', { name: 'Review in full' }).click();
 		await expect.element(screen.getByText('Section 12', { exact: true }).first()).toBeVisible();
+	});
+});
+
+describe('The review card for a call into a connected service', () => {
+	const createIssue: ChatToolActivity = {
+		callId: '00000000-0000-4000-8000-0000000000cc',
+		source: 'connector',
+		name: 'linear__create_issue' as ConnectorToolName,
+		arguments: { title: 'Ship connectors', teamId: 'ENG' },
+		status: 'approval_required'
+	};
+
+	it('names the service and its action, shows its mark, and says the call cannot be undone', async () => {
+		const screen = await renderCard(createIssue);
+		await expect
+			.element(screen.getByText('Linear · Create issue · Ship connectors', { exact: true }))
+			.toBeVisible();
+		await expect
+			.element(
+				screen.getByText('This runs in Linear. FollowThrough cannot undo what it does there.')
+			)
+			.toBeVisible();
+		await expect
+			.element(screen.container.querySelector<HTMLImageElement>('[data-slot="connector-logo"] img'))
+			.toHaveAttribute('src', '/connector-logos/linear.svg');
 	});
 });

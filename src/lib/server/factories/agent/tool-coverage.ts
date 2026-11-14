@@ -596,6 +596,7 @@ export const agentToolCoverage = {
 		refreshTools: { kind: 'excluded', reason: CONNECTOR_GESTURE },
 		setToolPolicy: { kind: 'excluded', reason: CONNECTOR_GESTURE },
 		disconnect: { kind: 'excluded', reason: CONNECTOR_GESTURE },
+		icon: { kind: 'excluded', reason: CONNECTOR_GESTURE },
 		callTool: {
 			kind: 'connector_tools',
 			reason: 'Each connector tool in a run calls this operation with its own server tool name.'

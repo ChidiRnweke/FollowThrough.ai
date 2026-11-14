@@ -98,6 +98,7 @@ export default defineConfig({
 						   own, the agent first, then what it reads, then what it produces. */
 						{ label: 'The agent', link: '/using/the-agent/' },
 						{ label: 'Agent activity', link: '/using/agent-activity/' },
+						{ label: 'Connectors', link: '/using/connectors/' },
 						{
 							label: 'Agent context',
 							items: [

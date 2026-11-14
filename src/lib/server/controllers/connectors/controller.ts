@@ -1,4 +1,4 @@
-import { ExternalServiceError, ValidationError } from '$lib/errors';
+import { ExternalServiceError, NotFoundError, ValidationError } from '$lib/errors';
 import {
 	CONNECTOR_CATALOG,
 	type AuthorizationCallback,
@@ -17,6 +17,7 @@ import {
 	type ConnectStart,
 	type AuthorizationChallenge,
 	type ConnectorCallOutcome,
+	type ConnectorIcon,
 	type ConnectorToolCall,
 	type ConnectorToolResult,
 	type ListedConnectorTool,
@@ -36,8 +37,10 @@ import type {
 } from '$lib/server/services/connectors/directory';
 import type {
 	ConnectorToolCalling,
-	ConnectorToolListing
+	ConnectorToolListing,
+	ToolListing
 } from '$lib/server/services/connectors/servers';
+import type { ConnectorIconFetching } from '$lib/server/services/connectors/icons';
 import type { ConnectorToolPolicyRule } from '$lib/services/connectors/policy';
 
 /**
@@ -63,6 +66,8 @@ export interface ConnectorsController {
 	 * sign-in; otherwise nothing is sent and the outcome says why.
 	 */
 	callTool(call: ConnectorToolCall, signal: AbortSignal): Promise<ConnectorCallOutcome>;
+	/** A custom connector's stored server icon, served from this origin. */
+	icon(id: ConnectorId): Promise<ConnectorIcon>;
 }
 
 /** Connectors are on only where the deployment can seal credentials. */
@@ -74,6 +79,7 @@ export type ConnectorsSetup =
 			readonly attempts: ConnectorAuthorizationAttempts;
 			readonly authorizer: ConnectorAuthorizer;
 			readonly servers: ConnectorToolListing & ConnectorToolCalling;
+			readonly icons: ConnectorIconFetching;
 			readonly embeddings: ConnectorToolEmbedding;
 			/** Catalog entries whose preregistered client credentials this deployment configures. */
 			readonly preregistered: ReadonlySet<CatalogConnectorId>;
@@ -148,9 +154,10 @@ export class Connectors implements ConnectorsController {
 			kind: 'ready',
 			connectors: connectors.map((connector) => {
 				const own = tools.filter((tool) => tool.connectorId === connector.id);
-				const effective = own.map((tool) =>
-					this.dependencies.policy.effective(tool.policy, tool.hints)
-				);
+				// An unusable tool is never offered, so it neither asks nor is off: it counts once.
+				const effective = own
+					.filter((tool) => tool.schema.kind === 'usable')
+					.map((tool) => this.dependencies.policy.effective(tool.policy, tool.hints));
 				return {
 					connector,
 					tools: {
@@ -167,7 +174,14 @@ export class Connectors implements ConnectorsController {
 	async get(id: ConnectorId): Promise<ConnectorDetail> {
 		const { registry } = this.configured();
 		const connector = await registry.get(id);
-		return { connector, tools: await registry.tools({ kind: 'connector', connectorId: id }) };
+		const tools = await registry.tools({ kind: 'connector', connectorId: id });
+		return {
+			connector,
+			tools: tools.map((tool) => ({
+				tool,
+				effective: this.dependencies.policy.effective(tool.policy, tool.hints)
+			}))
+		};
 	}
 
 	async connect(request: ConnectRequest): Promise<ConnectStart> {
@@ -182,14 +196,7 @@ export class Connectors implements ConnectorsController {
 						`${entry.title} now asks for a sign-in FollowThrough does not know.`
 					);
 				return connected(
-					await this.create(
-						setup,
-						source,
-						entry.title,
-						entry.serverUrl,
-						{ kind: 'none' },
-						listing.tools
-					)
+					await this.create(setup, source, entry.title, entry.serverUrl, { kind: 'none' }, listing)
 				);
 			}
 			// Fails before the redirect when the entry is already connected.
@@ -215,7 +222,7 @@ export class Connectors implements ConnectorsController {
 					request.title,
 					request.serverUrl,
 					{ kind: 'bearer', token },
-					listing.tools
+					listing
 				)
 			);
 		}
@@ -228,7 +235,7 @@ export class Connectors implements ConnectorsController {
 					request.title,
 					request.serverUrl,
 					{ kind: 'none' },
-					listing.tools
+					listing
 				)
 			);
 		return this.authorize(
@@ -278,7 +285,7 @@ export class Connectors implements ConnectorsController {
 				pending.target.title,
 				pending.serverUrl,
 				credential,
-				listing.tools
+				listing
 			);
 		}
 		const connector = await setup.registry.get(pending.target.connectorId);
@@ -287,15 +294,23 @@ export class Connectors implements ConnectorsController {
 			await setup.registry.storeCredential(connector.id, credential);
 			await setup.registry.replaceSnapshot(connector.id, snapshot);
 		});
+		await this.refreshIcon(
+			setup,
+			connector.id,
+			connector.source,
+			connector.serverUrl,
+			listing.icons
+		);
 		return connector.id;
 	}
 
 	async refreshTools(id: ConnectorId): Promise<ConnectorDetail> {
 		const setup = this.configured();
 		const connector = await setup.registry.get(id);
-		const tools = await this.listWithCredential(setup, connector);
-		const snapshot = await this.snapshot(setup, connector, tools);
+		const listing = await this.listWithCredential(setup, connector);
+		const snapshot = await this.snapshot(setup, connector, listing.tools);
 		await setup.transactionRunner.run(() => setup.registry.replaceSnapshot(id, snapshot));
+		await this.refreshIcon(setup, id, connector.source, connector.serverUrl, listing.icons);
 		return this.get(id);
 	}
 
@@ -309,6 +324,12 @@ export class Connectors implements ConnectorsController {
 
 	disconnect(id: ConnectorId): Promise<void> {
 		return this.configured().registry.remove(id);
+	}
+
+	async icon(id: ConnectorId): Promise<ConnectorIcon> {
+		const icon = await this.configured().registry.icon(id);
+		if (!icon) throw new NotFoundError('This connector has no stored icon');
+		return icon;
 	}
 
 	async callTool(call: ConnectorToolCall, signal: AbortSignal): Promise<ConnectorCallOutcome> {
@@ -364,14 +385,32 @@ export class Connectors implements ConnectorsController {
 		title: string,
 		serverUrl: string,
 		credential: { readonly kind: 'none' } | ConnectorCredential,
-		tools: readonly ListedConnectorTool[]
+		listing: ServerListing
 	): Promise<ConnectorId> {
 		const slug = await setup.registry.allocateSlug(source, title);
-		const snapshot = await this.snapshot(setup, { slug, title }, tools);
+		const snapshot = await this.snapshot(setup, { slug, title }, listing.tools);
 		const connector = await setup.transactionRunner.run(() =>
 			setup.registry.create({ slug, source, title, serverUrl, credential }, snapshot)
 		);
+		await this.refreshIcon(setup, connector.id, source, serverUrl, listing.icons);
 		return connector.id;
+	}
+
+	/**
+	 * A custom server's own icon, fetched after its connector is stored. A catalog
+	 * connector shows its recorded mark instead, and a server whose icons are all
+	 * refused shows a monogram: the icon is the connector's face, not its function.
+	 */
+	private async refreshIcon(
+		setup: Configured,
+		id: ConnectorId,
+		source: ConnectorSource,
+		serverUrl: string,
+		icons: ServerListing['icons']
+	): Promise<void> {
+		if (source.kind === 'catalog') return;
+		const fetched = await setup.icons.fetch(serverUrl, icons);
+		await setup.registry.storeIcon(id, fetched.kind === 'icon' ? fetched : { kind: 'none' });
 	}
 
 	private async authorize(
@@ -431,14 +470,14 @@ export class Connectors implements ConnectorsController {
 	private async listWithCredential(
 		setup: Configured,
 		connector: Connector
-	): Promise<readonly ListedConnectorTool[]> {
+	): Promise<ServerListing> {
 		const listing = await this.withAccess(
 			setup,
 			connector,
-			async (access): Promise<Attempt<readonly ListedConnectorTool[]>> => {
+			async (access): Promise<Attempt<ServerListing>> => {
 				const answer = await setup.servers.listTools(connector.serverUrl, access);
 				return answer.kind === 'listed'
-					? { kind: 'answered', value: answer.tools }
+					? { kind: 'answered', value: { tools: answer.tools, icons: answer.icons } }
 					: { kind: 'unauthorized' };
 			}
 		);
@@ -512,6 +551,9 @@ export class Connectors implements ConnectorsController {
 		return { kind: 'refused' };
 	}
 }
+
+/** What a server listed: its tools and the icons it published. */
+type ServerListing = Omit<Extract<ToolListing, { kind: 'listed' }>, 'kind'>;
 
 /** One request with a credential: the service answered, or it refused the credential. */
 type Attempt<Value> =

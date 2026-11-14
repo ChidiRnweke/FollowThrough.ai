@@ -32,6 +32,8 @@ export interface FakeConnectorServerOptions {
 	/** Tools per `tools/list` page; every tool on one page when absent. */
 	readonly pageSize?: number;
 	readonly call?: (name: string, args: AgentPayloadObject) => CallToolResult;
+	/** Icons the server lists in its `serverInfo`. */
+	readonly icons?: readonly { readonly src: string }[];
 }
 
 /**
@@ -87,7 +89,7 @@ export class FakeConnectorServer {
 				});
 		}
 		const server = new Server(
-			{ name: 'fake-connector', version: '1.0.0' },
+			{ name: 'fake-connector', version: '1.0.0', icons: [...(this.options.icons ?? [])] },
 			{ capabilities: { tools: {} } }
 		);
 		server.setRequestHandler(ListToolsRequestSchema, async (list) => {

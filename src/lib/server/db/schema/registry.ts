@@ -1540,3 +1540,28 @@ export const connectorAuthorizations = pgTable(
 		index('connector_authorizations_user_idx').on(table.userId)
 	]
 );
+
+/**
+ * The icon a custom connector's server published, fetched once and identified
+ * by its bytes (ADR 0049). It is served back from this origin, never hotlinked,
+ * so the browser never asks the third party for it.
+ */
+export const connectorIcons = pgTable(
+	'connector_icons',
+	{
+		connectorId: uuid('connector_id')
+			.primaryKey()
+			.references(() => connectors.id, { onDelete: 'cascade' }),
+		mediaType: text('media_type').notNull(),
+		/** Base64 of the icon bytes. */
+		content: text('content').notNull(),
+		checksum: text('checksum').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		check(
+			'connector_icons_media_type_check',
+			sql`${table.mediaType} in ('image/png', 'image/jpeg', 'image/webp', 'image/svg+xml')`
+		)
+	]
+);

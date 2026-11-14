@@ -295,7 +295,8 @@
 					<Field.Title>Default execution mode</Field.Title>
 					<Field.Description
 						>Approval required pauses durable changes for review. Auto-accept applies agent changes
-						immediately.</Field.Description
+						immediately, and runs connector tools set to Ask without pausing; FollowThrough cannot
+						undo what they do in the connected service.</Field.Description
 					>
 				</Field.Content>
 				<div class={controlClass}>

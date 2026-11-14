@@ -17,6 +17,7 @@ import {
 	type ClientCredentials
 } from '$lib/server/services/connectors/authorization';
 import { ConnectorDirectory } from '$lib/server/services/connectors/directory';
+import { ConnectorIcons } from '$lib/server/services/connectors/icons';
 import { ConnectorServers } from '$lib/server/services/connectors/servers';
 import { ConnectorToolPolicyRules } from '$lib/services/connectors/policy';
 
@@ -81,6 +82,7 @@ export const createConnectorsCapability = (
 					})
 				),
 				servers: tracedService('ConnectorServers', new ConnectorServers(configuration.fetch)),
+				icons: tracedService('ConnectorIcons', new ConnectorIcons(configuration.fetch)),
 				embeddings: input.embeddings,
 				preregistered: new Set(configuration.preregistered.keys()),
 				transactionRunner: input.transactionRunner,

@@ -21,13 +21,19 @@ import type {
 	ConnectorToolSchema,
 	ListedConnectorTool,
 	ServerAccess,
+	ServerIcon,
 	StructuredContent
 } from '$lib/models/connectors';
 import { compileJsonSchema } from '$lib/server/infrastructure/json-schema/compile';
 import type { FetchLike } from '$lib/server/infrastructure/network/outbound';
 
 export type ToolListing =
-	| { readonly kind: 'listed'; readonly tools: readonly ListedConnectorTool[] }
+	| {
+			readonly kind: 'listed';
+			readonly tools: readonly ListedConnectorTool[];
+			/** The icons the server published in `serverInfo`, untrusted until fetched and checked. */
+			readonly icons: readonly ServerIcon[];
+	  }
 	| { readonly kind: 'unauthorized'; readonly challenge: AuthorizationChallenge };
 
 export type ToolCalling =
@@ -73,10 +79,15 @@ export class ConnectorServers implements ConnectorToolListing, ConnectorToolCall
 	constructor(private readonly fetch: FetchLike) {}
 
 	async listTools(serverUrl: string, access: ServerAccess): Promise<ToolListing> {
-		const session = await this.session(serverUrl, access, (client) =>
-			this.everyTool(client, serverUrl)
-		);
-		return session.kind === 'done' ? { kind: 'listed', tools: session.value } : session;
+		const session = await this.session(serverUrl, access, async (client) => ({
+			tools: await this.everyTool(client, serverUrl),
+			icons: (client.getServerVersion()?.icons ?? []).map((icon): ServerIcon => ({
+				src: icon.src,
+				mimeType: icon.mimeType,
+				theme: icon.theme
+			}))
+		}));
+		return session.kind === 'done' ? { kind: 'listed', ...session.value } : session;
 	}
 
 	async callTool(

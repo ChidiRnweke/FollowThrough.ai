@@ -2,6 +2,7 @@ import type {
 	Connector,
 	ConnectorCredential,
 	ConnectorCredentialRead,
+	ConnectorIcon,
 	ConnectorId,
 	ConnectorTool,
 	ConnectorToolPolicy,
@@ -40,6 +41,7 @@ export class InMemoryConnectorRecords implements ConnectorRepository, SnapshotPa
 		string,
 		{ readonly vector: readonly number[]; readonly model: string }
 	>();
+	private icons = new Map<ConnectorId, ConnectorIcon>();
 
 	snapshot(): RestoreSnapshot {
 		const connectors = new Map(this.connectors);
@@ -80,6 +82,10 @@ export class InMemoryConnectorRecords implements ConnectorRepository, SnapshotPa
 			serverUrl: connector.serverUrl,
 			authentication: connector.credential.kind,
 			status: { kind: 'connected' },
+			logo:
+				connector.source.kind === 'catalog'
+					? { kind: 'catalog', catalogId: connector.source.catalogId }
+					: { kind: 'monogram' },
 			toolsRefreshedAt: refreshedAt.toISOString() as DateTime,
 			createdAt: refreshedAt.toISOString() as DateTime
 		};
@@ -175,6 +181,30 @@ export class InMemoryConnectorRecords implements ConnectorRepository, SnapshotPa
 		const updated = { ...tools[index]!, policy };
 		tools[index] = updated;
 		return updated;
+	}
+
+	async storeIcon(
+		id: ConnectorId,
+		icon: { readonly kind: 'icon'; readonly icon: ConnectorIcon } | { readonly kind: 'none' }
+	): Promise<void> {
+		const stored = this.require(id);
+		if (icon.kind === 'icon') this.icons.set(id, icon.icon);
+		else this.icons.delete(id);
+		if (stored.connector.source.kind === 'catalog') return;
+		this.connectors.set(id, {
+			...stored,
+			connector: {
+				...stored.connector,
+				logo:
+					icon.kind === 'icon'
+						? { kind: 'server_icon', connectorId: id, checksum: icon.icon.checksum }
+						: { kind: 'monogram' }
+			}
+		});
+	}
+
+	async icon(id: ConnectorId): Promise<ConnectorIcon | undefined> {
+		return this.icons.get(id);
 	}
 
 	async runTools(): Promise<readonly RunConnectorTool[]> {

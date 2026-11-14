@@ -1,4 +1,6 @@
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
+import { connectorToolLabel } from './connector-tool-labels';
+
 const labels: Record<AgentToolName, string> = {
 	get_project: 'Read project',
 	create_project: 'Create project',
@@ -198,16 +200,26 @@ export const isCatalogTool = (name: string): name is AgentToolName => name in la
  * never seen — an MCP tool from another host. It is no longer how the app's own
  * catalogue renders, which is what it had quietly become.
  */
-export const friendlyToolLabel = (name: string): string =>
-	isCatalogTool(name)
-		? labels[name]
-		: name
-				.split('_')
-				.map((part, index) => (index === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part))
-				.join(' ');
+export const friendlyToolLabel = (name: string): string => {
+	if (isCatalogTool(name)) return labels[name];
+	const connector = connectorToolLabel(name);
+	if (connector) return `${connector.service} · ${connector.action}`;
+	return name
+		.split('_')
+		.map((part, index) => (index === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+		.join(' ');
+};
 
-export const completedToolLabel = (name: string): string =>
-	isCatalogTool(name) ? completedLabels[name] : `${friendlyToolLabel(name)} completed`;
+/**
+ * A connector tool keeps its present-tense label once it has run: the server
+ * names an action, and "Create issue completed" says nothing the row's own
+ * finished state does not.
+ */
+export const completedToolLabel = (name: string): string => {
+	if (isCatalogTool(name)) return completedLabels[name];
+	if (connectorToolLabel(name)) return friendlyToolLabel(name);
+	return `${friendlyToolLabel(name)} completed`;
+};
 
 /**
  * The verb a call performed on the one thing it was about, for the row that already names it.

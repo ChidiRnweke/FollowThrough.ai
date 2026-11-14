@@ -164,6 +164,17 @@ describe('ConnectorAuthorization', () => {
 		).rejects.toThrow('does not support PKCE');
 	});
 
+	it('refuses to send the browser to a sign-in page that is not on HTTPS', async () => {
+		const plain = setup({ authorizationEndpoint: 'http://auth.example.com/authorize' });
+		await expect(
+			plain.authorization.begin({
+				serverUrl: plain.server.url,
+				registration: { kind: 'discovered' },
+				challenge: undefined
+			})
+		).rejects.toThrow('not served over HTTPS');
+	});
+
 	it('rejects an answer from another issuer, and one without the issuer the server promised', async () => {
 		const { authorization, authorizationServer, server } = setup({ issuerInResponse: true });
 		const start = await authorization.begin({

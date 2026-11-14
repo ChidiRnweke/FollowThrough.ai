@@ -135,11 +135,14 @@ id goes to the server in `_meta`, but a server may still repeat a write that a r
 ### Logos
 
 The connector surfaces show each service's own full-colour logo. Catalog logos are SVG files copied
-from the SVG Logos collection (CC0) by a recorder script and committed. A custom server's logo comes
-from the `icons` in its `serverInfo`. The service accepts only an HTTPS or `data:` icon from the
-server's origin, fetches it without credentials, checks its bytes and sanitises SVG. A server
-without an icon gets a monogram. Logos sit on a light plate in both themes, so dark marks stay
-visible.
+from the SVG Logos collection (CC0) by a recorder script and committed, so the browser never asks a
+third-party origin for one. A custom server's logo comes from the `icons` in its `serverInfo`. The
+service accepts only an HTTPS or `data:` icon from the server's origin, fetches it without
+credentials, and keeps it only when its bytes are a PNG, JPEG, WebP or SVG image. FollowThrough
+serves the stored icon from its own origin under a sandboxing content security policy with
+`nosniff`. An SVG shown as an image cannot run script, and the policy keeps it inert when opened
+directly. A server without an icon gets a monogram. Logos sit on a light plate in both themes, so
+dark marks stay visible.
 
 This amends ADR 0044. A third-party logo is content that identifies another service, not an
 application icon. It appears only where a connector is named, never in the application chrome, and
@@ -184,3 +187,6 @@ it is never animated. Every application icon still comes from the icon set.
   twenty vendors checked. The SVG Logos collection on Iconify (`logos:`, CC0-1.0) has a mark for
   nearly every catalog candidate.
 - MCP specification 2025-11-25, "Authorization" and the `icons` section of "Overview".
+- `scripts/record-connector-logos.ts --record` on 2026-11-14 recorded a `logos:` mark for every
+  catalog entry into `static/connector-logos/`. Linear's published server icon was a 16,055-byte
+  PNG, which sets the scale for the 256 KiB cap on a fetched icon.

@@ -5,6 +5,7 @@ import {
 	type Connector,
 	type ConnectorCredential,
 	type ConnectorCredentialRead,
+	type ConnectorIcon,
 	type ConnectorId,
 	type ConnectorSlug,
 	type ConnectorSource,
@@ -54,6 +55,11 @@ export interface ConnectorRegistry {
 		serverName: string,
 		policy: ConnectorToolPolicy
 	): Promise<ConnectorTool>;
+	storeIcon(
+		id: ConnectorId,
+		icon: { readonly kind: 'icon'; readonly icon: ConnectorIcon } | { readonly kind: 'none' }
+	): Promise<void>;
+	icon(id: ConnectorId): Promise<ConnectorIcon | undefined>;
 }
 
 /** What the agent harness reads to offer connector tools and rank them (ADR 0049). */
@@ -209,6 +215,17 @@ export class ConnectorDirectory
 				`Tool search has no current index for ${missing.join(', ')}. Ask the user to refresh those connectors in Settings → Connectors.`
 			);
 		return found;
+	}
+
+	storeIcon(
+		id: ConnectorId,
+		icon: { readonly kind: 'icon'; readonly icon: ConnectorIcon } | { readonly kind: 'none' }
+	): Promise<void> {
+		return this.dependencies.connectors.storeIcon(id, icon);
+	}
+
+	icon(id: ConnectorId): Promise<ConnectorIcon | undefined> {
+		return this.dependencies.connectors.icon(id);
 	}
 
 	remember(state: string, pending: PendingAuthorization): Promise<void> {
