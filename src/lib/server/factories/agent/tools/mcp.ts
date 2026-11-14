@@ -6,7 +6,6 @@ import type {
 	ToolPreparation
 } from '$lib/models/agent-tool-protocol';
 import { agentPayloadResultSchema, type AgentPayload } from '$lib/models/agent/payload';
-import type { ToolName } from '$lib/models/agent/tool-catalog';
 import { toolFailure } from '$lib/models/agent/tool-failure';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -24,7 +23,7 @@ const searchParameters = z
 	.object({ query: z.string().min(1), limit: z.number().int().min(1).max(15).optional() })
 	.strict();
 const SEARCH_DESCRIPTION =
-	'Find more FollowThrough tools. Every match becomes a top-level tool; call its exact name with flat arguments matching input_schema.';
+	'Find the FollowThrough tool for an intent. Every tool is already listed; call the match by its exact name with flat arguments matching input_schema.';
 
 /**
  * The same tools the in-app agent calls, served over MCP for one request. An MCP host makes
@@ -62,23 +61,21 @@ const prepareCall = async (entry: AgentTool, input: AgentPayload): Promise<ToolP
 
 export const createMcpServer = (session: McpToolSession): McpToolConnection => ({
 	open: (origin) => {
-		const discovered = new Set<ToolName>();
+		// Every permitted tool is listed. The endpoint is stateless, so a tool promoted during one
+		// request would be gone by the next, and a host that reads `tools/list` once at session
+		// start would never see it anyway (ADR 0051).
 		const permitted = [...session.plan.initial, ...session.plan.discoverable].flatMap((name) => {
 			const entry = session.tools.find((candidate) => candidate.name === name);
 			return entry ? [entry] : [];
 		});
-		const offered = (): readonly AgentTool[] =>
-			permitted.filter(
-				(entry) => session.plan.initial.includes(entry.name) || discovered.has(entry.name)
-			);
 		const server = new Server(serverIdentity(origin), {
-			capabilities: { tools: { listChanged: true } },
+			capabilities: { tools: {} },
 			instructions:
-				'Ground yourself with search or get_workspace_context before acting. Use search_tools to discover other tools, then call their exact names with flat arguments matching input_schema.'
+				'Ground yourself with search or get_workspace_context before acting. Every FollowThrough tool is listed; use search_tools to find the right one for an intent, then call it by its exact name with flat arguments matching input_schema.'
 		});
 		server.setRequestHandler(ListToolsRequestSchema, async () => ({
 			tools: [
-				...offered().map((entry) => ({
+				...permitted.map((entry) => ({
 					name: entry.name,
 					description: entry.description,
 					inputSchema: jsonObjectSchema(entry.parameters),
@@ -97,14 +94,14 @@ export const createMcpServer = (session: McpToolSession): McpToolConnection => (
 		}));
 		server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
 			const { name, arguments: input = {} } = request.params;
-			// Every offered name has a permitted entry; `search_tools` has none.
-			const entry = offered().find((candidate) => candidate.name === name);
+			// Every listed name has a permitted entry; `search_tools` has none.
+			const entry = permitted.find((candidate) => candidate.name === name);
 			if (name !== 'search_tools' && entry === undefined)
 				return result(
 					toolFailure(
 						'TOOL_NOT_AVAILABLE',
 						`Tool "${name}" is not available.`,
-						'Use search_tools to discover an available capability.'
+						'Use search_tools to find an available capability.'
 					)
 				);
 			const prepared = await withToolFeedback(extra.signal, async (): Promise<ToolPreparation> => {
@@ -113,9 +110,7 @@ export const createMcpServer = (session: McpToolSession): McpToolConnection => (
 				if (entry === undefined)
 					return ready(
 						bindToolArguments(searchParameters, payload.value, async ({ query, limit }) => {
-							const found = await session.discover(query, limit ?? 5);
-							for (const discoveredName of found) discovered.add(discoveredName);
-							return describeTools(permitted, [], found);
+							return describeTools(permitted, [], await session.discover(query, limit ?? 5));
 						})
 					);
 				return prepareCall(entry, payload.value);
@@ -125,7 +120,6 @@ export const createMcpServer = (session: McpToolSession): McpToolConnection => (
 			const value = await withToolFeedback(extra.signal, async () =>
 				toolOutput(await action.execute(extra.signal))
 			);
-			if (name === 'search_tools' && !session.failed(value)) await server.sendToolListChanged();
 			return result(value);
 		});
 		return server;

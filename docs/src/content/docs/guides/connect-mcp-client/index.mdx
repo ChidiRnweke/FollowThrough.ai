@@ -33,7 +33,7 @@ Choose a scope: **Read only** restricts the client to read tools (search, list t
 
 ## What the client can do
 
-Once connected, the client sees the first-class tools immediately. Call `search_tools` for anything else; every match becomes a real top-level tool with the returned flat input schema. A read-only connection never sees proposal or mutation tools, and a full-access connection still respects your workspace tool selection.
+Once connected, the client sees every tool your token and tool selection permit, each under its real name and flat input schema. Call `search_tools` to find the right tool for an intent. A read-only connection never sees proposal or mutation tools, and a full-access connection still respects your workspace tool selection.
 
 ## Disconnect a client
 
