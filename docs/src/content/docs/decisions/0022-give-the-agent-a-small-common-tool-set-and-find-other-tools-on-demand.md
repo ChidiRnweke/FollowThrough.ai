@@ -5,7 +5,8 @@ description: Keep tool schemas out of the prompt until the agent needs them.
 
 ## Status
 
-Accepted.
+Accepted. [ADR 0051](../0051-list-every-tool-to-mcp-hosts/) narrows this decision to the in-app
+agent: MCP hosts receive every permitted tool.
 
 ## Context
 

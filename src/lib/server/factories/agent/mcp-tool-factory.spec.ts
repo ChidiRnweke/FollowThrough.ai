@@ -12,7 +12,14 @@ import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-facto
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { createMcpToolDefinitions } from '$lib/testing/agent/fixtures/tool-surface';
-import { noteBuilder, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
+import {
+	noteBuilder,
+	testNoteId,
+	testNow,
+	testProjectId,
+	testProvenanceId
+} from '$lib/testing/workspace/fixtures/domain-builders';
+import type { NotesController } from '$lib/server/controllers/notes/controller';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
@@ -61,24 +68,39 @@ describe('MCP tool surface', () => {
 		});
 	});
 
-	it('advertises the first-class tools plus the two meta-tools', async () => {
-		expect(await toolNames('full')).toEqual([
-			'edit_note',
-			'get_note',
-			'get_workspace_context',
-			'grep',
-			'list_project_memory',
-			'list_todos',
-			'list_user_memory',
-			'load_skill',
-			'ls',
-			'propose_memory_change',
-			'save_note',
-			'search',
-			'search_note',
-			'search_tools',
-			'sed'
-		]);
+	it('lists the long-tail tools a host could otherwise reach only through discovery', async () => {
+		const names = await toolNames('full');
+		expect(
+			[
+				'archive_note',
+				'restore_note',
+				'rename_note',
+				'create_todo',
+				'search_tools',
+				'get_note'
+			].filter((name) => !names.includes(name))
+		).toEqual([]);
+	});
+
+	it('archives a note on a fresh connection that never called search_tools', async () => {
+		const archived: string[] = [];
+		const notes = capabilityDependencies<NotesController>({
+			archive: async (input) => {
+				archived.push(input.noteId);
+				return { note: noteBuilder({ id: input.noteId, archivedAt: testNow }) };
+			}
+		});
+		const client = await connect('full', {
+			factory: capabilityDependencies<ControllerFactory>({ notes: () => notes })
+		});
+		const result = await client.callTool({
+			name: 'archive_note',
+			arguments: { noteId: testNoteId(4) }
+		});
+		expect({ isError: result.isError ?? false, archived }).toEqual({
+			isError: false,
+			archived: [testNoteId(4)]
+		});
 	});
 
 	it('withholds the proposal tool from a read-scoped token', async () => {
@@ -97,15 +119,11 @@ describe('MCP tool surface', () => {
 		expect(note?.inputSchema.required).toEqual(['noteId']);
 	});
 
-	it('does not promote a mutation on a read-scoped token', async () => {
-		const retriever = new InMemoryToolRetriever();
-		retriever.names = ['create_todo'];
-		const client = await connect('read', { retriever });
-		const result = await client.callTool({
-			name: 'search_tools',
-			arguments: { query: 'create a todo' }
-		});
-		expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual([]);
+	it('lists no mutation or proposal tool on a read-scoped token', async () => {
+		const { tools } = await (await connect('read')).listTools();
+		expect(
+			tools.filter((tool) => tool.annotations?.readOnlyHint !== true).map((tool) => tool.name)
+		).toEqual([]);
 	});
 
 	it('offers no tool that creates an access token', async () => {
@@ -123,7 +141,6 @@ describe('MCP tool surface', () => {
 		const retriever = new InMemoryToolRetriever();
 		retriever.names = ['create_todo'];
 		const client = await connect('full', { retriever });
-		await client.callTool({ name: 'search_tools', arguments: { query: 'create a todo' } });
 		const result = await client.callTool({
 			name: 'create_todo',
 			arguments: {}
@@ -180,15 +197,24 @@ describe('Deselected tools over MCP', () => {
 		expect(tools.map((tool) => tool.name)).not.toContain('get_note');
 	});
 
-	it('does not promote a deselected tool', async () => {
+	it('neither lists, finds nor runs a deselected long-tail tool', async () => {
 		const retriever = new InMemoryToolRetriever();
 		retriever.names = ['archive_project'];
 		const client = await connect('full', { disabled: ['archive_project'], retriever });
-		const result = await client.callTool({
+		const { tools } = await client.listTools();
+		const found = await client.callTool({
 			name: 'search_tools',
 			arguments: { query: 'archive project' }
 		});
-		expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual([]);
+		const called = await client.callTool({
+			name: 'archive_project',
+			arguments: { projectId: testProjectId() }
+		});
+		expect({
+			listed: tools.some((tool) => tool.name === 'archive_project'),
+			found: JSON.parse((found.content as { text: string }[])[0].text),
+			called: readFailure(called).code
+		}).toEqual({ listed: false, found: [], called: 'TOOL_NOT_AVAILABLE' });
 	});
 });
 
@@ -341,18 +367,4 @@ it('retains the fifteen-tool discovery ceiling for MCP', async () => {
 			await client.callTool({ name: 'search_tools', arguments: { query: 'notes', limit: 16 } })
 		).code
 	).toBe('VALIDATION');
-});
-
-it('keeps discovered tools inside the MCP connection that found them', async () => {
-	const retriever = new InMemoryToolRetriever();
-	retriever.names = ['create_todo'];
-	const first = await connect('full', { retriever });
-	const second = await connect('full', { retriever });
-	await first.callTool({ name: 'search_tools', arguments: { query: 'create a todo' } });
-	const firstTools = await first.listTools();
-	const secondTools = await second.listTools();
-	expect({
-		first: firstTools.tools.some((tool) => tool.name === 'create_todo'),
-		second: secondTools.tools.some((tool) => tool.name === 'create_todo')
-	}).toEqual({ first: true, second: false });
 });
