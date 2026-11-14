@@ -32,7 +32,7 @@ const connect = async (
 		{ isEnabled: (name) => !(options.disabled ?? []).includes(name) },
 		options.retriever ?? new InMemoryToolRetriever()
 	).open(scope);
-	const server = createMcpToolSurface(session).open();
+	const server = createMcpToolSurface(session).open('https://notes.example.test');
 	const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 	const client = new Client({ name: 'test', version: '1.0.0' });
 	await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
@@ -45,6 +45,22 @@ const toolNames = async (scope: McpScope): Promise<string[]> => {
 };
 
 describe('MCP tool surface', () => {
+	it("names itself with the app's own icons, so a host does not guess one from the domain", async () => {
+		const client = await connect('read');
+		expect(client.getServerVersion()).toMatchObject({
+			title: 'FollowThrough',
+			websiteUrl: 'https://notes.example.test',
+			icons: [
+				{ src: 'https://notes.example.test/icons/followthrough.svg', mimeType: 'image/svg+xml' },
+				{
+					src: 'https://notes.example.test/icons/followthrough-512.png',
+					mimeType: 'image/png',
+					sizes: ['512x512']
+				}
+			]
+		});
+	});
+
 	it('advertises the first-class tools plus the two meta-tools', async () => {
 		expect(await toolNames('full')).toEqual([
 			'edit_note',
