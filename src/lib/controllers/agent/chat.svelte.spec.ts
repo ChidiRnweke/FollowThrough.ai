@@ -332,6 +332,7 @@ describe('chat event projection', () => {
 					recovery: 'Correct the problems below and submit a new tool call.',
 					details: { problems: ['oldText was not found.'] }
 				},
+				source: 'catalog',
 				status: 'reported_failure'
 			}
 		]);
