@@ -5,7 +5,7 @@ import type {
 	ToolClassification,
 	ToolSubject
 } from '$lib/models/agent';
-import type { ConnectorTool, ConnectorToolName } from '$lib/models/connectors';
+import type { ConnectorCallLabel, ConnectorTool, ConnectorToolName } from '$lib/models/connectors';
 import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ToolName } from '$lib/models/agent/tool-catalog';
 import type { ToolFailure } from '$lib/models/agent/tool-failure';
@@ -80,6 +80,8 @@ export type AgentTool =
  */
 export interface ConnectorAgentTool {
 	readonly name: ConnectorToolName;
+	/** Frozen into every event and decision the tool's calls produce (ADR 0049). */
+	readonly connector: ConnectorCallLabel;
 	readonly description: string;
 	readonly checksum: string;
 	readonly inputSchema: AgentPayloadObject;
@@ -99,13 +101,15 @@ export type ConnectorToolBuild =
 	| {
 			readonly kind: 'available';
 			readonly tool: ConnectorTool;
-			readonly connectorTitle: string;
+			readonly connector: ConnectorCallLabel;
 			readonly inputSchema: AgentPayloadObject;
 			readonly approval: 'approval_required' | 'ready';
 	  }
 	| {
 			readonly kind: 'withdrawn';
 			readonly name: ConnectorToolName;
+			/** The label the parked call was made under. */
+			readonly connector: ConnectorCallLabel;
 			readonly checksum: string;
 			readonly reason: string;
 	  };

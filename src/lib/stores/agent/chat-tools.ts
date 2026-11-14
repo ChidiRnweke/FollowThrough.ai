@@ -81,6 +81,8 @@ const journalledToolSchema = z.object({
 	// not becomes an `unreadable` transcript part rather than a row nothing can
 	// label. `tests/unit/corpus.spec.ts` holds that at zero.
 	source: z.string().optional(),
+	// The connector's label, frozen at call time; `toolSubjectSchema` reads it.
+	connector: z.custom<AgentPayload>(() => true).optional(),
 	name: z.string(),
 	input: z.custom<AgentPayload>(() => true).optional(),
 	output: z.custom<AgentPayload>(() => true).optional(),
@@ -108,7 +110,11 @@ export const readJournalledTool = (
 		return failure === undefined
 			? { kind: 'unreadable', reason: 'a failed row carries no failure' }
 			: { kind: 'readable', tool: { ...identity, name: row.name, failure, status: 'failed' } };
-	const subject = toolSubjectSchema.safeParse({ source: row.source, name: row.name });
+	const subject = toolSubjectSchema.safeParse({
+		source: row.source,
+		name: row.name,
+		connector: row.connector
+	});
 	if (!subject.success) return { kind: 'unreadable', reason: z.prettifyError(subject.error) };
 	const base: ChatToolActivityBase & ToolSubject = { ...identity, ...subject.data };
 	if (row.status === 'running') return { kind: 'readable', tool: { ...base, status: 'running' } };

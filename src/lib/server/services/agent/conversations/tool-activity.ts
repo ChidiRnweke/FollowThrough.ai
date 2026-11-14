@@ -4,7 +4,7 @@ import type { AgentEvent, ToolOutcomeEvent, ToolActivity, ToolSubject } from '$l
 const subjectOf = (event: ToolSubject): ToolSubject =>
 	event.source === 'catalog'
 		? { source: 'catalog', name: event.name }
-		: { source: 'connector', name: event.name };
+		: { source: 'connector', name: event.name, connector: event.connector };
 
 /**
  * The outcome an event settles, or nothing when it settles none.

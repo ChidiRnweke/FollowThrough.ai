@@ -273,6 +273,7 @@ describe('The review card for a call into a connected service', () => {
 		callId: '00000000-0000-4000-8000-0000000000cc',
 		source: 'connector',
 		name: 'linear__create_issue' as ConnectorToolName,
+		connector: { kind: 'catalog', catalogId: 'linear', title: 'Linear' },
 		arguments: { title: 'Ship connectors', teamId: 'ENG' },
 		status: 'approval_required'
 	};
@@ -290,5 +291,19 @@ describe('The review card for a call into a connected service', () => {
 		await expect
 			.element(screen.container.querySelector<HTMLImageElement>('[data-slot="connector-logo"] img'))
 			.toHaveAttribute('src', '/connector-logos/linear.svg');
+	});
+
+	it('shows the monogram of a custom server whose slug is a catalog id', async () => {
+		const screen = await renderCard({
+			...createIssue,
+			name: 'stripe__list_charges' as ConnectorToolName,
+			connector: { kind: 'custom', title: 'Billing proxy' }
+		});
+		await expect
+			.element(screen.getByText('Billing proxy · List charges · Ship connectors', { exact: true }))
+			.toBeVisible();
+		await expect
+			.element(screen.container.querySelector<HTMLImageElement>('[data-slot="connector-logo"] img'))
+			.not.toBeInTheDocument();
 	});
 });

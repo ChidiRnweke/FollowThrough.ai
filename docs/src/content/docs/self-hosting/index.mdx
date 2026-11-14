@@ -121,7 +121,18 @@ Connectors let the agent call the remote MCP servers of other services, such as 
 - **The keyring.** `CONNECTOR_SECRET_KEYS` is a comma-separated list of `<keyId>:<key>` entries. A key id is 1 to 16 lowercase letters or digits. A key is 32 random bytes in base64: `openssl rand -base64 32`. FollowThrough encrypts every stored sign-in with AES-256-GCM under the first key and can decrypt with any key in the list. A keyring that does not parse stops the app at startup.
 - **Rotation.** Put the new key first and keep the old one after it: `v2:<new>,v1:<old>`. A sign-in moves to the new key the next time its token is renewed. If you remove a key while sign-ins still use it, those connectors show **Connect again** and stay listed; nothing is deleted, and signing in again stores the sign-in under the current key.
 - **Client registration.** FollowThrough registers itself with each service automatically. When `ORIGIN` is a public HTTPS address and the service supports it, FollowThrough identifies itself with the client ID metadata document at `/oauth/client-metadata.json`, which the service fetches. That path is public by design. Otherwise, for example on `localhost`, it uses dynamic client registration.
-- **GitHub** offers neither, so it needs an OAuth app that you register at GitHub. Set its callback URL to `<ORIGIN>/connectors/callback`, then set `CONNECTOR_GITHUB_CLIENT_ID` and `CONNECTOR_GITHUB_CLIENT_SECRET`. Set both or neither. Without them, the GitHub entry in the catalog shows **Not available on this server**.
+- **Services that need your own client.** Some services offer neither, so each needs an OAuth app that you register with that service. Set the app's callback URL to `<ORIGIN>/connectors/callback`, then set the service's two keys below. Set both or neither: one without the other stops the app at startup. Until both are set, the service does not appear in the catalog at all.
+
+  | Service   | Keys                                                                 |
+  | --------- | -------------------------------------------------------------------- |
+  | Asana     | `CONNECTOR_ASANA_CLIENT_ID`, `CONNECTOR_ASANA_CLIENT_SECRET`         |
+  | Box       | `CONNECTOR_BOX_CLIENT_ID`, `CONNECTOR_BOX_CLIENT_SECRET`             |
+  | GitHub    | `CONNECTOR_GITHUB_CLIENT_ID`, `CONNECTOR_GITHUB_CLIENT_SECRET`       |
+  | HubSpot   | `CONNECTOR_HUBSPOT_CLIENT_ID`, `CONNECTOR_HUBSPOT_CLIENT_SECRET`     |
+  | PagerDuty | `CONNECTOR_PAGERDUTY_CLIENT_ID`, `CONNECTOR_PAGERDUTY_CLIENT_SECRET` |
+  | Render    | `CONNECTOR_RENDER_CLIENT_ID`, `CONNECTOR_RENDER_CLIENT_SECRET`       |
+  | Slack     | `CONNECTOR_SLACK_CLIENT_ID`, `CONNECTOR_SLACK_CLIENT_SECRET`         |
+
 - **Network.** Connector traffic goes out over HTTPS only. FollowThrough refuses any server whose address resolves to a private, loopback, link-local, or metadata network, and it follows a redirect only to the same origin. A custom server must therefore be reachable on the public internet.
 
 ## Day two

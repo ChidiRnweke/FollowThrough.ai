@@ -998,6 +998,7 @@ export class AgentSdkHarness implements AgentHarness {
 											callId: pending.callId,
 											source: 'connector',
 											name: pending.toolName,
+											connector: pending.connector,
 											arguments: pending.arguments
 										};
 							const record = await this.dependencies.records.append(run.id, 1, event);
@@ -1367,7 +1368,7 @@ export class AgentSdkHarness implements AgentHarness {
 				{
 					kind: 'available',
 					tool,
-					connectorTitle: entry.connectorTitle,
+					connector: entry.connector,
 					inputSchema: tool.schema.inputSchema,
 					approval: this.dependencies.toolApproval.connectorRequirement(choice, run.executionMode)
 				}
@@ -1387,6 +1388,7 @@ export class AgentSdkHarness implements AgentHarness {
 				{
 					kind: 'withdrawn',
 					name: decision.toolName,
+					connector: decision.connector,
 					checksum: decision.checksum,
 					reason: current
 						? 'This tool changed after you approved the call, so nothing ran.'
@@ -1396,7 +1398,7 @@ export class AgentSdkHarness implements AgentHarness {
 		});
 		return {
 			builds: [...byName.values(), ...withdrawn],
-			services: [...new Set(entries.map((entry) => entry.connectorTitle))]
+			services: [...new Set(entries.map((entry) => entry.connector.title))]
 		};
 	}
 

@@ -224,6 +224,7 @@ export const createAgentToolset = (
 					source: 'connector',
 					callId: parked.callId,
 					toolName: connector.name,
+					connector: connector.connector,
 					checksum: connector.checksum,
 					arguments: parked.arguments
 				};
@@ -244,7 +245,8 @@ export const createAgentToolset = (
 		},
 		subject(name) {
 			const connector = connectorsByName.get(name);
-			if (connector) return { source: 'connector', name: connector.name };
+			if (connector)
+				return { source: 'connector', name: connector.name, connector: connector.connector };
 			const catalog = agentToolNameSchema.safeParse(name);
 			return catalog.success ? { source: 'catalog', name: catalog.data } : undefined;
 		}

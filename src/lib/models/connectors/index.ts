@@ -7,6 +7,7 @@
  */
 import { z } from 'zod';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
+import { RECORDED_CATALOG } from '$lib/models/connector-catalog';
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 type DateTime = Brand<string, 'DateTime'>;
@@ -43,103 +44,37 @@ export type CatalogAuthentication =
 	| { readonly kind: 'none' }
 	| { readonly kind: 'oauth'; readonly registration: 'discovered' | 'preregistered' };
 
+/** How the catalog groups its services, as `scripts/connector-catalog-sources.ts` assigns them. */
+export type ConnectorCategory =
+	| 'work'
+	| 'documents'
+	| 'engineering'
+	| 'monitoring'
+	| 'customers'
+	| 'finance'
+	| 'automation'
+	| 'research';
+
 export interface CatalogConnector {
 	readonly id: string;
 	readonly title: string;
 	readonly description: string;
+	readonly category: ConnectorCategory;
 	readonly serverUrl: string;
-	/** The mark's name in the SVG Logos collection (Iconify `logos:`), recorded into static files. */
-	readonly logo: string;
 	readonly authentication: CatalogAuthentication;
+	/** The vendor's mark in `static/connector-logos/`, and where the recorder found it. */
+	readonly logo: { readonly file: string; readonly source: string };
+	/** Why the endpoint is the vendor's own: its registry name, or the vendor page that names it. */
+	readonly provenance:
+		| { readonly kind: 'registry'; readonly name: string }
+		| { readonly kind: 'documented'; readonly documentation: string };
 }
 
 /**
- * Hosted servers whose MCP endpoint answered `initialize` with either a result
- * or an OAuth challenge on 2026-11-14. Each entry's registration mode comes from
- * its authorization server metadata (ADR 0049, Evidence).
+ * The hosted servers a user can connect from the catalog, recorded and checked
+ * by `scripts/record-connector-catalog.ts` (ADR 0051).
  */
-export const CONNECTOR_CATALOG = [
-	{
-		id: 'linear',
-		title: 'Linear',
-		description: 'Find and update issues, projects and documents.',
-		serverUrl: 'https://mcp.linear.app/mcp',
-		logo: 'linear-icon',
-		authentication: { kind: 'oauth', registration: 'discovered' }
-	},
-	{
-		id: 'notion',
-		title: 'Notion',
-		description: 'Search, read and edit pages and databases.',
-		serverUrl: 'https://mcp.notion.com/mcp',
-		logo: 'notion-icon',
-		authentication: { kind: 'oauth', registration: 'discovered' }
-	},
-	{
-		id: 'github',
-		title: 'GitHub',
-		description: 'Work with repositories, issues and pull requests.',
-		serverUrl: 'https://api.githubcopilot.com/mcp/',
-		logo: 'github-icon',
-		authentication: { kind: 'oauth', registration: 'preregistered' }
-	},
-	{
-		id: 'sentry',
-		title: 'Sentry',
-		description: 'Look up errors, issues and releases.',
-		serverUrl: 'https://mcp.sentry.dev/mcp',
-		logo: 'sentry-icon',
-		authentication: { kind: 'oauth', registration: 'discovered' }
-	},
-	{
-		id: 'atlassian',
-		title: 'Atlassian',
-		description: 'Search and update Jira issues and Confluence pages.',
-		serverUrl: 'https://mcp.atlassian.com/v1/mcp',
-		logo: 'atlassian',
-		authentication: { kind: 'oauth', registration: 'discovered' }
-	},
-	{
-		id: 'vercel',
-		title: 'Vercel',
-		description: 'Inspect projects, deployments and logs.',
-		serverUrl: 'https://mcp.vercel.com',
-		logo: 'vercel-icon',
-		authentication: { kind: 'oauth', registration: 'discovered' }
-	},
-	{
-		id: 'todoist',
-		title: 'Todoist',
-		description: 'Read and manage tasks and projects.',
-		serverUrl: 'https://ai.todoist.net/mcp',
-		logo: 'todoist-icon',
-		authentication: { kind: 'oauth', registration: 'discovered' }
-	},
-	{
-		id: 'monday',
-		title: 'monday.com',
-		description: 'Work with boards, items and updates.',
-		serverUrl: 'https://mcp.monday.com/mcp',
-		logo: 'monday-icon',
-		authentication: { kind: 'oauth', registration: 'discovered' }
-	},
-	{
-		id: 'supabase',
-		title: 'Supabase',
-		description: 'Query projects, tables and logs.',
-		serverUrl: 'https://mcp.supabase.com/mcp',
-		logo: 'supabase-icon',
-		authentication: { kind: 'oauth', registration: 'discovered' }
-	},
-	{
-		id: 'cloudflare',
-		title: 'Cloudflare Docs',
-		description: 'Search the Cloudflare documentation.',
-		serverUrl: 'https://docs.mcp.cloudflare.com/mcp',
-		logo: 'cloudflare-icon',
-		authentication: { kind: 'none' }
-	}
-] as const satisfies readonly CatalogConnector[];
+export const CONNECTOR_CATALOG = RECORDED_CATALOG satisfies readonly CatalogConnector[];
 
 /** One catalog entry, with its id narrowed to the catalog's own. */
 export type CatalogEntry = (typeof CONNECTOR_CATALOG)[number];
@@ -520,8 +455,6 @@ export interface ConnectorDetail {
 
 export type CatalogAvailability =
 	| { readonly kind: 'available' }
-	/** A preregistered entry whose client credentials this deployment does not configure. */
-	| { readonly kind: 'unconfigured' }
 	| { readonly kind: 'connected'; readonly connectorId: ConnectorId };
 
 export interface CatalogEntryView {
@@ -589,10 +522,36 @@ export type ServerAccess =
 
 // --- Calls ------------------------------------------------------------------
 
+/**
+ * How a call names its connector, frozen when the call is made (ADR 0049). A
+ * transcript keeps naming the service after the connector is renamed or
+ * removed, and a custom server never borrows a vendor's mark because its slug
+ * later became a catalog id (ADR 0051).
+ */
+export type ConnectorCallLabel =
+	| { readonly kind: 'catalog'; readonly catalogId: CatalogConnectorId; readonly title: string }
+	| { readonly kind: 'custom'; readonly title: string };
+
+/**
+ * Reads a stored label. A catalog id the catalog no longer lists has no recorded
+ * mark, so it reads as custom: the title stays, the vendor's logo does not.
+ */
+export const connectorCallLabelSchema: z.ZodType<ConnectorCallLabel> = z.union([
+	z
+		.object({ kind: z.literal('catalog'), catalogId: z.string(), title: z.string().min(1) })
+		.transform((label): ConnectorCallLabel => {
+			const catalogId = catalogConnectorIdSchema.safeParse(label.catalogId);
+			return catalogId.success
+				? { kind: 'catalog', catalogId: catalogId.data, title: label.title }
+				: { kind: 'custom', title: label.title };
+		}),
+	z.object({ kind: z.literal('custom'), title: z.string().min(1) })
+]);
+
 /** A connector tool the agent can be offered this run, with the connector it belongs to. */
 export interface RunConnectorTool {
 	readonly tool: ConnectorTool;
-	readonly connectorTitle: string;
+	readonly connector: ConnectorCallLabel;
 }
 
 /** One block of what a server returned, parsed at the boundary (ADR 0037). */

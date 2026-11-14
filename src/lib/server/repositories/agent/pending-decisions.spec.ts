@@ -25,15 +25,20 @@ describe('Reading the pending decisions off a run row', () => {
 		});
 	});
 
-	it('reads a connector decision with the checksum it was approved against', () => {
-		const connector = {
+	it('reads a connector decision with its checksum and label, and one saved before labels under its slug', () => {
+		const labelled = {
 			source: 'connector',
 			callId: 'call-2',
 			toolName: 'linear__create_issue',
+			connector: { kind: 'catalog', catalogId: 'linear', title: 'Linear' },
 			checksum: 'abc123',
 			arguments: { title: 'Ship it' }
 		};
-		expect(readPendingDecisions([connector]).decisions).toEqual([connector]);
+		const { connector: _label, ...beforeLabels } = { ...labelled, callId: 'call-3' };
+		expect(readPendingDecisions([labelled, beforeLabels]).decisions).toEqual([
+			labelled,
+			{ ...beforeLabels, connector: { kind: 'custom', title: 'linear' } }
+		]);
 	});
 
 	it('drops a decision naming a tool the catalog no longer has', () => {

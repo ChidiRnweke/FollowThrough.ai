@@ -9,7 +9,7 @@ FollowThrough's own server for other hosts; connectors are the other direction.
 
 | Part               | Location                                                                                | Role                                                                                                  |
 | ------------------ | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Models and catalog | `models/connectors/`                                                                    | Branded ids, the catalog of hosted servers, credential and tool unions, request and view types.       |
+| Models and catalog | `models/connectors/`, `models/connector-catalog/`                                       | Branded ids, the recorded catalog of hosted servers, credential and tool unions, request and views.   |
 | Policy rule        | `services/connectors/policy.ts`                                                         | What a tool does when called: allow, ask or off. Shared with the browser.                             |
 | Controller         | `server/controllers/connectors/controller.ts`                                           | Connect, sign in, refresh tools, set a tool's policy, disconnect.                                     |
 | Authorization      | `server/services/connectors/authorization.ts`                                           | OAuth discovery, client registration, PKCE, token exchange and refresh, over the MCP SDK's functions. |
@@ -24,15 +24,41 @@ FollowThrough's own server for other hosts; connectors are the other direction.
 ## Configuration
 
 Connectors are on only when the deployment sets `CONNECTOR_SECRET_KEYS`. Without it,
-`connectors.list` answers `unconfigured`, the catalog marks every entry unavailable, and every
+`connectors.list` answers `unconfigured`, the catalog is empty, and every
 connect operation fails with a message that names the key. A keyring that does not parse fails the
 composition. The keyring lists `<keyId>:<base64 32-byte key>` entries newest first: the first one
 seals, all of them open. A credential sealed under a key that is no longer listed reads as
 `unreadable`, and its connector shows that status; the row is kept.
 
-GitHub's catalog entry needs an OAuth app that the operator registers, configured as
-`CONNECTOR_GITHUB_CLIENT_ID` and `CONNECTOR_GITHUB_CLIENT_SECRET`. Without both, the entry is
-unavailable.
+A catalog entry recorded as `preregistered` needs an OAuth app that the operator registers,
+configured as `CONNECTOR_<ID>_CLIENT_ID` and `CONNECTOR_<ID>_CLIENT_SECRET`. Without both, the
+catalog leaves the entry out. `server/config.ts` lists these entries, because `vite.config.ts`
+loads it before `$lib` resolves; a spec holds that list, `src/env.ts` and the catalog equal.
+
+## The catalog
+
+The catalog is recorded, never written by hand (ADR 0051). To add a vendor:
+
+1. Add a row to `scripts/connector-catalog-sources.ts`: an id that will never change, the title, one
+   description sentence in our voice, a category, and where the endpoint comes from: the vendor's
+   name in the official MCP Registry, or the endpoint and a page of the vendor's documentation that
+   names its host. Name the SVG Logos mark when there is one.
+2. Run `pnpm record:connector-catalog`. It checks every vendor's endpoint, sign-in and logo, and it
+   fails by name when one does not pass. Fix the source or remove it; nothing is skipped.
+3. Review the generated `src/lib/models/connector-catalog/index.ts` and the new files in
+   `static/connector-logos/`. Look at every new logo on the plate in both themes.
+
+`pnpm test:connector-catalog` checks the recording offline, and
+`models/connectors/catalog-logos.spec.ts` checks it in CI. Removing a vendor orphans its
+connectors, whose rows name a catalog id that no longer parses; migrate them to custom connectors
+first.
+
+## Call labels
+
+Every connector call carries the connector's label, frozen at call time: its title and, for a
+catalog connector, its catalog id. Events, journal rows and parked decisions keep it, and chat
+reads the service and its logo from it. A row from before labels reads as a custom connector named
+by its slug.
 
 ## Connecting
 

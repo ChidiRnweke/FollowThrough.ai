@@ -7,9 +7,14 @@ import {
 	SecretsBackendError,
 	SecretsNotFoundError,
 	SecretsReader,
+	OPTIONAL_APPLICATION_KEYS,
+	PREREGISTERED_CONNECTORS,
+	connectorClientKeys,
 	hydrateEnvironment,
 	mergePlatformEnvironment
 } from './config';
+import { variables as environmentVariables } from '../../env';
+import { CONNECTOR_CATALOG } from '$lib/models/connectors';
 
 class FakeSecretsClient implements InfisicalLikeClient {
 	calls = 0;
@@ -300,6 +305,38 @@ describe('platform environment merging', () => {
 			OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317',
 			BODY_SIZE_LIMIT: '52428800',
 			LOG_LEVEL: 'debug'
+		});
+	});
+});
+
+describe('connector client keys', () => {
+	test('declares a client id and secret for exactly the catalog vendors that need an operator app', () => {
+		const declared = Object.keys(environmentVariables).filter((key) =>
+			/^CONNECTOR_[A-Z0-9]+_CLIENT_(ID|SECRET)$/.test(key)
+		);
+		const loaded = OPTIONAL_APPLICATION_KEYS.filter((key) => key !== 'CONNECTOR_SECRET_KEYS');
+		const pairs = PREREGISTERED_CONNECTORS.flatMap((id) => {
+			const keys = connectorClientKeys(id);
+			return [keys.clientId, keys.clientSecret];
+		});
+		const catalog = CONNECTOR_CATALOG.filter(
+			(entry) =>
+				entry.authentication.kind === 'oauth' &&
+				entry.authentication.registration === 'preregistered'
+		).map((entry) => entry.id);
+		expect({
+			vendors: [...PREREGISTERED_CONNECTORS].toSorted(),
+			declared: declared.toSorted(),
+			loaded: [...loaded].toSorted(),
+			slack: connectorClientKeys('slack')
+		}).toEqual({
+			vendors: catalog.toSorted(),
+			declared: pairs.toSorted(),
+			loaded: pairs.toSorted(),
+			slack: {
+				clientId: 'CONNECTOR_SLACK_CLIENT_ID',
+				clientSecret: 'CONNECTOR_SLACK_CLIENT_SECRET'
+			}
 		});
 	});
 });

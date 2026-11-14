@@ -166,6 +166,41 @@ describe('Reading a journalled tool row back into the transcript', () => {
 		});
 	});
 
+	it('restores a connector call under the label it was made with, and one from before labels under its slug', () => {
+		const parked = {
+			type: 'tool_activity',
+			callId: 'call-2',
+			source: 'connector',
+			name: 'linear__create_issue',
+			input: { title: 'Ship connectors' },
+			output: null,
+			failure: null,
+			status: 'approval_required'
+		};
+		const restored = (connector: AgentPayload) => ({
+			kind: 'readable',
+			tool: {
+				callId: 'call-2',
+				source: 'connector',
+				name: 'linear__create_issue',
+				connector,
+				arguments: { title: 'Ship connectors' },
+				runId: 'run-1',
+				status: 'approval_required'
+			}
+		});
+		expect({
+			labelled: row({
+				...parked,
+				connector: { kind: 'catalog', catalogId: 'linear', title: 'Linear' }
+			}),
+			beforeLabels: row(parked)
+		}).toEqual({
+			labelled: restored({ kind: 'catalog', catalogId: 'linear', title: 'Linear' }),
+			beforeLabels: restored({ kind: 'custom', title: 'linear' })
+		});
+	});
+
 	it('restores a reported failure with both the message and its detail', () => {
 		expect(
 			row({

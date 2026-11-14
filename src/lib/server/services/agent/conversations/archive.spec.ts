@@ -1,3 +1,4 @@
+import type { ConnectorToolName } from '$lib/models/connectors';
 import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
@@ -180,6 +181,33 @@ describe('journaling tool outcomes', () => {
 		});
 		const [message] = await journal.listMessages(conversation.id);
 		expect(contentOf(message).output).toEqual({ noteId: 'note-1' });
+	});
+});
+
+describe('Journalled connector calls', () => {
+	it('keeps the label the call was made under, so the transcript names the service later', async () => {
+		const journal = new ConversationArchive(
+			testActor(),
+			new InMemoryConversationRepository(testActor()),
+			testClock
+		);
+		const conversation = await journal.getOrCreate({ prompt: 'File the bug in Linear' });
+		await journal.recordToolActivity(conversation.id, {
+			callId: 'call-1',
+			source: 'connector',
+			name: 'linear__create_issue' as ConnectorToolName,
+			connector: { kind: 'catalog', catalogId: 'linear', title: 'Linear' },
+			input: { title: 'Ship connectors' },
+			status: 'approval_required'
+		});
+		const [message] = await journal.listMessages(conversation.id);
+		expect({
+			source: contentOf(message).source,
+			connector: contentOf(message).connector
+		}).toEqual({
+			source: 'connector',
+			connector: { kind: 'catalog', catalogId: 'linear', title: 'Linear' }
+		});
 	});
 });
 

@@ -347,14 +347,19 @@ not icons: they never enter app chrome, never take `currentColor`, and never ani
 - **The plate.** Every logo sits on `--logo-plate`, a near-white tile in both themes with a
   `--logo-plate-ring` hairline. Vendor marks are drawn for a light ground, and a plate keeps
   them legible in dark mode without recolouring anyone's brand.
-- **Sources, in order.** A catalog entry uses the vendor's full-colour mark, recorded from SVG
-  Logos (CC0) into `static/connector-logos/` by `scripts/record-connector-logos.ts`; the browser
-  never fetches a third-party origin. A custom server uses the icon it publishes, after the
-  server checks its bytes, served from our origin under a sandboxing CSP. Anything else is a
-  monogram: the title's first letter in `--logo-plate-foreground` on the same plate.
-- **Chat reads the name.** A journalled call keeps only `<slug>__<tool>`, so the chat derives
-  the logo from the slug: a catalog slug shows its mark, a custom slug its monogram. A custom
-  slug can never equal a catalog id, so a custom server never borrows a vendor's mark.
+- **Sources, in order.** A catalog entry uses the vendor's full-colour mark from SVG Logos
+  (CC0) when it fits a square tile, else an icon the vendor publishes: in the MCP Registry or
+  linked from its site, at least 96 px. `scripts/record-connector-catalog.ts` records each one
+  into `static/connector-logos/` (ADR 0051); the browser never fetches a third-party origin. A
+  custom server uses the icon it publishes, after the server checks its bytes, served from our
+  origin under a sandboxing CSP. Anything else is a monogram: the title's first letter in
+  `--logo-plate-foreground` on the same plate.
+- **Chat reads the call's label.** Every call keeps its connector's label from when it was made.
+  A catalog label shows the vendor's mark; a custom label shows its monogram, even when its
+  slug matches a catalog id.
+- **Review every new mark.** Look at each recorded logo on the plate in both themes before it
+  ships. A vendor's raster can be a different brand (an engineering team's avatar), or read as
+  a monogram; replace it with a mark the vendor publishes for the product.
 
 ## Voice & tone
 

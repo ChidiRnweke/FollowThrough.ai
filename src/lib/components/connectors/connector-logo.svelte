@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as Avatar from '$lib/components/ui/avatar';
-	import type { ConnectorLogo } from '$lib/models/connectors';
+	import { CONNECTOR_CATALOG, type ConnectorLogo } from '$lib/models/connectors';
 	import { cn } from '$lib/utils';
 
 	/**
@@ -22,13 +22,14 @@
 		class?: string;
 	} = $props();
 
-	const src = $derived(
-		logo.kind === 'catalog'
-			? `/connector-logos/${logo.catalogId}.svg`
-			: logo.kind === 'server_icon'
-				? `/connectors/${logo.connectorId}/icon?v=${logo.checksum}`
-				: undefined
-	);
+	/** A catalog mark is the file the recorder kept for that entry: SVG, or a vendor's raster icon. */
+	const src = $derived.by(() => {
+		if (logo.kind === 'server_icon')
+			return `/connectors/${logo.connectorId}/icon?v=${logo.checksum}`;
+		if (logo.kind === 'monogram') return undefined;
+		const entry = CONNECTOR_CATALOG.find((candidate) => candidate.id === logo.catalogId);
+		return entry ? `/connector-logos/${entry.logo.file}` : undefined;
+	});
 	const initial = $derived(title.trim().charAt(0).toUpperCase() || '?');
 </script>
 

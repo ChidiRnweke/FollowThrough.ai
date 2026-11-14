@@ -1,5 +1,6 @@
 import type {
 	Connector,
+	ConnectorCallLabel,
 	ConnectorCredential,
 	ConnectorCredentialRead,
 	ConnectorIcon,
@@ -70,9 +71,20 @@ export class InMemoryConnectorRecords implements ConnectorRepository, SnapshotPa
 	}
 
 	async insert(connector: NewConnector, refreshedAt: Date): Promise<Connector> {
-		if ([...this.connectors.values()].some((stored) => stored.connector.slug === connector.slug))
+		const others = [...this.connectors.values()].map((stored) => stored.connector);
+		if (others.some((other) => other.slug === connector.slug))
 			throw new Error(
 				'duplicate key value violates unique constraint "connectors_user_slug_unique"'
+			);
+		const source = connector.source;
+		if (
+			source.kind === 'catalog' &&
+			others.some(
+				(other) => other.source.kind === 'catalog' && other.source.catalogId === source.catalogId
+			)
+		)
+			throw new Error(
+				'duplicate key value violates unique constraint "connectors_user_catalog_unique"'
 			);
 		const created: Connector = {
 			id: connector.id,
@@ -209,8 +221,12 @@ export class InMemoryConnectorRecords implements ConnectorRepository, SnapshotPa
 
 	async runTools(): Promise<readonly RunConnectorTool[]> {
 		return [...this.toolRows].flatMap(([id, tools]) => {
-			const title = this.require(id).connector.title;
-			return tools.map((tool) => ({ tool, connectorTitle: title }));
+			const { title, source } = this.require(id).connector;
+			const connector: ConnectorCallLabel =
+				source.kind === 'catalog'
+					? { kind: 'catalog', catalogId: source.catalogId, title }
+					: { kind: 'custom', title };
+			return tools.map((tool) => ({ tool, connector }));
 		});
 	}
 
