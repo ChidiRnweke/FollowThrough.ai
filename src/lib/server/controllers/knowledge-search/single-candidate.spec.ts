@@ -18,7 +18,7 @@ describe('reranking by candidate count', () => {
 		const { controller, provider } = setup(1);
 		const results = await controller.search({ query: 'query', limit: 8 });
 		expect({
-			contents: results.map((match) => match.content),
+			contents: results.map((match) => match.passage.content),
 			rerankRequests: provider.rerankRequests.length
 		}).toEqual({ contents: ['candidate 0'], rerankRequests: 0 });
 	});

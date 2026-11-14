@@ -1,4 +1,4 @@
-import type { AgentFile } from '$lib/models/agent-files';
+import type { AgentFileWindow } from '$lib/models/agent-files';
 import type { NoteMarkdown } from '$lib/models/note-markdown';
 import type { WithProjectChoice } from '$lib/models/projects';
 import { noteEtag } from '$lib/models/notes';
@@ -159,7 +159,7 @@ export interface NotesController {
 	 * @throws ValidationError if more notes are requested than one batch allows.
 	 */
 	listDocuments(input: ListNoteDocumentsInput): Promise<readonly NoteDocument[]>;
-	/** The note as a document file: its read model with the Markdown body as file metadata. */
+	/** The note as a document file: its read model with its Markdown body, whole or first page. */
 	readDocument(input: GetNoteViewInput): Promise<NoteDocumentFile>;
 	/**
 	 * Create a new, empty note.
@@ -607,7 +607,7 @@ export class Notes implements NotesController {
 	async readDocument(input: GetNoteViewInput): Promise<NoteDocumentFile> {
 		const view = await this.get(input);
 		const markdown = this.dependencies.markdown.write(view.note.document);
-		return { view, file: this.dependencies.agentFiles.noteMetadata(view.note, markdown) };
+		return { view, body: this.dependencies.agentFiles.noteBody(view.note, markdown) };
 	}
 	async create(input: WithProjectChoice<CreateNoteInput>): Promise<CreateNoteOutput> {
 		const projectId =
@@ -1025,5 +1025,5 @@ type ResolvedNoteView = NoteView<BacklinkView, ReferenceView, Diagram, TodoView,
 /** A note's read model and the virtual file that carries its Markdown body. */
 export interface NoteDocumentFile {
 	readonly view: ResolvedNoteView;
-	readonly file: AgentFile['metadata'];
+	readonly body: AgentFileWindow;
 }

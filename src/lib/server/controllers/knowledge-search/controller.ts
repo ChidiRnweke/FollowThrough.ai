@@ -1,9 +1,11 @@
 import type { ConversationId } from '$lib/models/agent';
+import type { AgentPassage } from '$lib/models/agent-files';
 import type { KnowledgeSearchSource } from '$lib/models/knowledge-search';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { DateTime } from '$lib/models/workspace';
 import type { ConversationMessages } from '$lib/server/services/agent/conversations/archive';
+import type { AgentPassageLocator } from '$lib/server/services/agent-files/virtual-files';
 import type { KnowledgeSearch } from '$lib/server/services/knowledge-search/retrieval';
 
 export interface SearchKnowledgeInput {
@@ -21,7 +23,8 @@ export interface SearchKnowledgeInput {
 export interface KnowledgeSearchResult {
 	readonly source: KnowledgeSearchSource;
 	readonly noteId?: NoteId;
-	readonly content: string;
+	/** The matched text, placed in the file it came from so a reader can continue with `sed`. */
+	readonly passage: AgentPassage;
 	readonly score: number;
 	readonly sourceCreatedAt?: DateTime;
 }
@@ -37,6 +40,7 @@ export interface RetrievalController {
 export interface RetrievalDependencies {
 	knowledge: KnowledgeSearch;
 	conversations: Pick<ConversationMessages, 'listMessages'>;
+	passages: AgentPassageLocator;
 }
 
 const DEFAULT_SEARCH_LIMIT = 8;
@@ -61,12 +65,17 @@ export class Retrieval implements RetrievalController {
 				noteId: input.noteId
 			}
 		});
-		return matches.map((match) => ({
-			source: this.dependencies.knowledge.source(match.document),
-			noteId: match.document.noteId,
-			content: match.document.content,
-			score: match.score,
-			sourceCreatedAt: match.document.sourceCreatedAt
-		}));
+		return Promise.all(
+			matches.map(async (match) => {
+				const source = this.dependencies.knowledge.source(match.document);
+				return {
+					source,
+					noteId: match.document.noteId,
+					passage: await this.dependencies.passages.passage(source, match.document.content),
+					score: match.score,
+					sourceCreatedAt: match.document.sourceCreatedAt
+				};
+			})
+		);
 	}
 }

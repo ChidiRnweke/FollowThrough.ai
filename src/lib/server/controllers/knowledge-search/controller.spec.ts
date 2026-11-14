@@ -12,7 +12,7 @@ describe('knowledge search content and scope', () => {
 			{ userId: actor.userId, document: searchDocumentBuilder({ content: 'x'.repeat(2000) }) }
 		];
 		const result = await fixture.controller.search({ query: 'q' });
-		expect(result[0]?.content.length).toBe(2000);
+		expect(result[0]?.passage.content.length).toBe(2000);
 	});
 	it('limits search to the requested note', async () => {
 		const fixture = setup();
@@ -28,7 +28,7 @@ describe('knowledge search content and scope', () => {
 		];
 		expect(
 			(await fixture.controller.search({ query: 'q', noteId: testNoteId(9) })).map(
-				(match) => match.content
+				(match) => match.passage.content
 			)
 		).toEqual(['Scoped note']);
 	});

@@ -58,6 +58,50 @@ export interface AgentFileNextAction {
 	readonly arguments: AgentFileToolArguments;
 }
 
+/**
+ * A file read up to a token budget, cut on whole lines. `inline` is the whole file; `paged` is a
+ * leading window with the `sed` call that continues it; `file` is the descriptor alone, because
+ * not even the first line fits the budget.
+ */
+export type AgentFileWindow =
+	| { readonly kind: 'inline'; readonly file: AgentFileMetadata; readonly content: string }
+	| {
+			readonly kind: 'paged';
+			readonly file: AgentFileMetadata;
+			readonly startLine: 1;
+			readonly endLine: number;
+			readonly content: string;
+			readonly nextActions: readonly AgentFileNextAction[];
+	  }
+	| {
+			readonly kind: 'file';
+			readonly file: AgentFileMetadata;
+			readonly nextActions: readonly AgentFileNextAction[];
+	  };
+
+/**
+ * Where a retrieved passage lives in the virtual filesystem, and its text up to a token budget.
+ * `lines` names the inclusive line range the passage was found at; `file` names a readable file
+ * the passage could not be matched to line by line; `detached` has no file (a remembered fact, a
+ * widget), so its text is carried whole. `nextActions` is empty unless `content` was cut.
+ */
+export type AgentPassage =
+	| {
+			readonly kind: 'lines';
+			readonly path: string;
+			readonly startLine: number;
+			readonly endLine: number;
+			readonly content: string;
+			readonly nextActions: readonly AgentFileNextAction[];
+	  }
+	| {
+			readonly kind: 'file';
+			readonly path: string;
+			readonly content: string;
+			readonly nextActions: readonly AgentFileNextAction[];
+	  }
+	| { readonly kind: 'detached'; readonly content: string };
+
 export type AgentFileError =
 	| {
 			readonly kind: 'error';

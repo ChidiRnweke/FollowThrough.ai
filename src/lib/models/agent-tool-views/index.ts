@@ -5,7 +5,7 @@ import type { TodoView } from '$lib/models/todos';
 import type { SuggestionView } from '$lib/models/suggestions';
 import type { NoteView } from '$lib/models/notes';
 import type { Suggestion } from '$lib/models/suggestions';
-import type { AgentFileMetadata } from '$lib/models/agent-files';
+import type { AgentFileWindow } from '$lib/models/agent-files';
 
 export interface MemoryProjection {
 	readonly id: string;
@@ -18,6 +18,34 @@ export interface ProjectProjection {
 	readonly id: string;
 	readonly name: string;
 	readonly createdAt: string;
+}
+
+/**
+ * One entry of a project's note tree, siblings in their visible order. A folder always carries
+ * its children, an empty list included, so "no children" never reads as "not a folder".
+ */
+export type NoteTreeNodeProjection =
+	| {
+			readonly kind: 'folder';
+			readonly id: string;
+			readonly title: string;
+			readonly isPinned?: true;
+			readonly createdAt: string;
+			readonly children: readonly NoteTreeNodeProjection[];
+	  }
+	| {
+			readonly kind: 'note';
+			readonly id: string;
+			readonly title: string;
+			readonly isPinned?: true;
+			readonly createdAt: string;
+	  };
+
+/** A project as the workspace context lists it: its notes nested, and its memory size. */
+export interface WorkspaceProjectProjection extends ProjectProjection {
+	/** Zero means `list_project_memory` would return nothing for this project. */
+	readonly memoryCount: number;
+	readonly notes: readonly NoteTreeNodeProjection[];
 }
 
 export interface NoteSummaryProjection {
@@ -113,8 +141,11 @@ export interface SuggestionProjection {
 export interface NoteViewProjection {
 	readonly noteId: string;
 	readonly title: string;
-	/** The authoritative Markdown is a file, not an unbounded tool-result field. */
-	readonly body: { readonly kind: 'file'; readonly file: AgentFileMetadata };
+	/**
+	 * The authoritative Markdown file: inline when it fits the body budget, otherwise its first
+	 * page with the `sed` call that continues it, so the result stays bounded.
+	 */
+	readonly body: AgentFileWindow;
 	/** Kept because publish_note requires the base ETag. */
 	readonly etag: string;
 	backlinks: ResolvedNoteView['backlinks'];

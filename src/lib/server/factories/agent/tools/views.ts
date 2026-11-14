@@ -8,7 +8,8 @@ import type { SkillView } from '$lib/models/skills';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { Todo } from '$lib/models/todos';
 import type { User } from '$lib/models/identity';
-import type { AgentFileMetadata } from '$lib/models/agent-files';
+import type { AgentFileWindow } from '$lib/models/agent-files';
+import type { WorkspaceMemoryCounts } from '$lib/server/controllers/workspace/controller';
 
 /**
  * Agent-facing projections of domain models.
@@ -40,6 +41,8 @@ import type {
 	UserProjection,
 	SuggestionProjection,
 	NoteViewProjection,
+	NoteTreeNodeProjection,
+	WorkspaceProjectProjection,
 	SkillViewProjection,
 	ResolvedNoteView
 } from '$lib/models/agent-tool-views';
@@ -155,12 +158,12 @@ export const projectSuggestion = (suggestion: Suggestion): SuggestionProjection 
 
 export const projectNoteView = (
 	view: ResolvedNoteView,
-	file: AgentFileMetadata
+	body: AgentFileWindow
 ): NoteViewProjection => {
 	return {
 		noteId: view.note.id,
 		title: view.note.title,
-		body: { kind: 'file', file },
+		body,
 		etag: view.etag,
 		backlinks: view.backlinks,
 		references: view.references,
@@ -189,23 +192,67 @@ export const projectSkillView = (
 	};
 };
 
-/** The workspace at a glance: structure only, because the agent calls get_note for content. */
+/**
+ * A project's notes as a tree, siblings in their visible order (`position`), so a reader never
+ * rebuilds the hierarchy from `parentId` links. An entry whose parent is not in the list (never
+ * expected: the reader returns whole active projects) stays visible at the root rather than
+ * disappearing with its missing parent.
+ */
+const noteTree = (notes: readonly NoteSummary[]): readonly NoteTreeNodeProjection[] => {
+	const present = new Set(notes.map((note) => note.id));
+	const children = new Map<NoteId | undefined, NoteSummary[]>();
+	for (const note of [...notes].sort((left, right) => left.position - right.position)) {
+		const parent =
+			note.parentId !== undefined && present.has(note.parentId) ? note.parentId : undefined;
+		children.set(parent, [...(children.get(parent) ?? []), note]);
+	}
+	const level = (parent: NoteId | undefined): readonly NoteTreeNodeProjection[] =>
+		(children.get(parent) ?? []).map((note) => {
+			const node = {
+				id: note.id,
+				title: note.title,
+				...(note.isPinned ? { isPinned: true as const } : {}),
+				createdAt: note.createdAt
+			};
+			return note.kind === 'folder'
+				? { kind: 'folder', ...node, children: level(note.id) }
+				: { kind: 'note', ...node };
+		});
+	return level(undefined);
+};
+
+/** The controller counts every project it lists, so a missing count is a defect, not zero. */
+const memoryCountOf = (memory: WorkspaceMemoryCounts, projectId: ProjectId): number => {
+	const count = memory.projects.get(projectId);
+	if (count === undefined) throw new Error(`No memory count for project ${projectId}`);
+	return count;
+};
+
+/**
+ * The workspace at a glance: structure only, because the agent calls get_note for content.
+ * Memory counts say up front which `list_*_memory` calls would come back empty.
+ */
 export const workspaceContext = <Skills>(shell: {
 	readonly user: User;
 	readonly projects: readonly Project[];
 	readonly noteTree: readonly NoteSummary[];
 	readonly skills: Skills;
 	readonly pendingSuggestionCount: number;
+	readonly memory: WorkspaceMemoryCounts;
 }) => ({
 	user: projectUser(shell.user),
-	projects: shell.projects.map(projectProject),
-	noteTree: shell.noteTree.map(projectNoteSummary),
+	userMemoryCount: shell.memory.user,
+	projects: shell.projects.map((project): WorkspaceProjectProjection => ({
+		...projectProject(project),
+		memoryCount: memoryCountOf(shell.memory, project.id),
+		notes: noteTree(shell.noteTree.filter((note) => note.projectId === project.id))
+	})),
 	skills: shell.skills,
 	pendingSuggestionCount: shell.pendingSuggestionCount
 });
 
 export const noteView = (read: NoteDocumentFile): NoteViewProjection =>
-	projectNoteView(read.view, read.file);
+	projectNoteView(read.view, read.body);
 
 /**
  * A written note with its ETag. The ETag survives the projection: publish_note takes it as an

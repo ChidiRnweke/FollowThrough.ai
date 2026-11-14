@@ -323,11 +323,13 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 					createdBefore: cutoff
 				});
 
-			const recentExcludesOld = !recent.some((match) => match.content.includes('GitHub Actions'));
-			const oldIncludesOld = old.some((match) => match.content.includes('GitHub Actions'));
+			const recentExcludesOld = !recent.some((match) =>
+				match.passage.content.includes('GitHub Actions')
+			);
+			const oldIncludesOld = old.some((match) => match.passage.content.includes('GitHub Actions'));
 			px.logOutput({
-				recentResults: recent.map((match) => match.content.slice(0, 120)),
-				oldResults: old.map((match) => match.content.slice(0, 120))
+				recentResults: recent.map((match) => match.passage.content.slice(0, 120)),
+				oldResults: old.map((match) => match.passage.content.slice(0, 120))
 			});
 			px.logAnnotation({
 				name: ARCHETYPES.timeAwareness,
