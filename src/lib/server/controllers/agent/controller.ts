@@ -96,7 +96,7 @@ import type { ConnectorToolPolicyRule } from '$lib/services/connectors/policy';
 import type { AgentToolContext, McpToolContext } from '$lib/models/agent-tool-context';
 import type { AgentPayload } from '$lib/models/agent/payload';
 import { FIRST_CLASS_TOOL_NAMES, type ToolName } from '$lib/models/agent/tool-catalog';
-import type { ApiTokenScope } from '$lib/models/identity';
+import type { McpScope } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { AgentPromptPreparation } from '$lib/server/services/agent/runs/instructions';
@@ -149,7 +149,7 @@ export interface AgentHarness {
 	 * The tools an MCP request may call: the user's tool selection applies, and a read-scoped
 	 * token reaches only read tools.
 	 */
-	openMcpTools(scope: ApiTokenScope, provenanceId: ProvenanceId): Promise<McpToolSession>;
+	openMcpTools(scope: McpScope, provenanceId: ProvenanceId): Promise<McpToolSession>;
 	finishCancellation(runId: AgentRunId): Promise<AgentRun | undefined>;
 	failRun(runId: AgentRunId, error: Error): Promise<void>;
 	/** Settle a run the previous process left running or cancelling. */
@@ -1041,7 +1041,7 @@ export class AgentSdkHarness implements AgentHarness {
 		}
 	}
 
-	async openMcpTools(scope: ApiTokenScope, provenanceId: ProvenanceId): Promise<McpToolSession> {
+	async openMcpTools(scope: McpScope, provenanceId: ProvenanceId): Promise<McpToolSession> {
 		const tools = this.dependencies.mcpTools({ provenanceId });
 		const disabled = await this.disabledTools();
 		const permitted = this.permittedTools(tools, disabled, scope === 'read' ? ['read'] : undefined);

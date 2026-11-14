@@ -117,6 +117,18 @@ describe('summarize', () => {
 		expect(summary).toContain('<base64 elided');
 	});
 
+	test('redacts MCP authorization codes and tokens', () => {
+		const summary = summarize({
+			location: 'http://localhost:53122/callback?code=ftc_abc-DEF_123&state=xyz',
+			accessToken: 'fta_Q2xhdWRl',
+			refreshToken: 'ftr_Q29kZQ'
+		});
+
+		expect(summary).toBe(
+			'{"location":"http://localhost:53122/callback?code=ftc_<redacted>&state=xyz","accessToken":"fta_<redacted>","refreshToken":"ftr_<redacted>"}'
+		);
+	});
+
 	test('caps the rendering at maxChars', () => {
 		const summary = summarize({ text: 'x'.repeat(1000) }, 100);
 

@@ -171,7 +171,7 @@ export const controllerSurfaces = {
 		getPreferences: true,
 		updatePreferences: true
 	},
-	apiTokens: {
+	mcpConnections: {
 		list: true,
 		revoke: true
 	},
@@ -281,7 +281,15 @@ export const authenticationSurface = {
 } satisfies ControllerSurface<
 	import('../controllers/identity/authentication').AuthenticationController
 >;
+export const mcpAuthorizationSurface = {
+	registerClient: true,
+	review: true,
+	deny: true,
+	exchangeToken: true
+} satisfies ControllerSurface<
+	import('../controllers/identity/mcp-authorization').McpAuthorizationController
+>;
 export const accessSurface = {
-	issueApiToken: true,
+	approveMcpClient: true,
 	attributeMcp: true
 } satisfies ControllerSurface<import('../controllers/identity/access').AccessController>;

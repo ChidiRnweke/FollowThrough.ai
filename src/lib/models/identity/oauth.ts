@@ -23,3 +23,12 @@ export interface PKCEChallenge {
 	readonly codeVerifier: string;
 	readonly state: string;
 }
+
+/**
+ * Where the browser goes after sign-in. Only a path on this origin: `//host` and `/\\host`
+ * are protocol-relative and would leave it. Anything else returns to the workspace.
+ */
+export const returnPathSchema = z
+	.string()
+	.regex(/^\/(?![/\\])/)
+	.catch('/today');

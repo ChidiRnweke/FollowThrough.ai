@@ -234,9 +234,12 @@ export const diagramFile = <Labels>(diagram: {
 	path: `/projects/${diagram.projectId}/diagrams/${diagram.id}.${diagram.kind === 'mermaid' ? 'mmd' : 'drawio'}`
 });
 
-export const revokedToken = (token: { readonly id: string; readonly name: string }) => ({
-	tokenId: token.id,
-	name: token.name,
+export const revokedConnection = (connection: {
+	readonly id: string;
+	readonly clientName: string;
+}) => ({
+	connectionId: connection.id,
+	clientName: connection.clientName,
 	revoked: true as const
 });
 

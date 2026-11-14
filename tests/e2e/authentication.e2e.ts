@@ -12,7 +12,7 @@ const accounts = ['USER', 'WAITING', 'ADMIN'].map((role) => ({
 }));
 const credentials = (['read', 'full'] as const).map((scope) => ({
 	scope,
-	plaintext: `ftm_${randomBytes(32).toString('hex')}`
+	plaintext: `fta_${randomBytes(32).toString('base64url')}`
 }));
 
 const database = () => {
@@ -29,11 +29,6 @@ test.beforeAll(async () => {
 				values (${account.id}, ${`${account.id}@example.test`}, 'Authentication test', ${account.role})`;
 			await sql`insert into sessions (id, user_id, expires_at)
 				values (${account.session}, ${account.id}, now() + interval '1 day')`;
-		}
-		for (const credential of credentials) {
-			const hash = createHash('sha256').update(credential.plaintext).digest('hex');
-			await sql`insert into api_tokens (user_id, name, token_hash, scope)
-				values (${accounts[0].id}, 'Authentication test', ${hash}, ${credential.scope})`;
 		}
 	} finally {
 		await sql.end();
@@ -89,11 +84,28 @@ test('a valid session opens the workspace in the browser', async ({ page, contex
 	await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
 });
 
-for (const authorization of ['', 'Bearer ftm_invalid']) {
+/** A connection as the token endpoint leaves it, for this server's MCP resource. */
+const seedConnection = async (credential: (typeof credentials)[number], baseURL: string) => {
+	const sql = database();
+	try {
+		await sql`insert into mcp_connections (user_id, client_id, client_name, scope, resource,
+				access_token_hash, access_expires_at, refresh_token_hash)
+			values (${accounts[0].id}, 'https://client.example/metadata', 'Authentication test',
+				${credential.scope}, ${new URL('/mcp', baseURL).href},
+				${createHash('sha256').update(credential.plaintext).digest('hex')},
+				now() + interval '1 hour', ${randomBytes(32).toString('hex')})`;
+	} finally {
+		await sql.end();
+	}
+};
+
+for (const authorization of ['', 'Bearer fta_invalid']) {
 	test(`MCP rejects an unverified credential (${authorization || 'no header'})`, async ({
-		request
+		request,
+		baseURL
 	}) => {
-		// A valid browser session cannot substitute for an API token.
+		if (!baseURL) throw new Error('A base URL is required');
+		// A valid browser session cannot substitute for an access token.
 		const response = await request.post('/mcp', {
 			headers: { authorization, cookie: `session=${accounts[0].session}` },
 			data: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }
@@ -103,13 +115,18 @@ for (const authorization of ['', 'Bearer ftm_invalid']) {
 			challenge: response.headers()['www-authenticate']
 		}).toEqual({
 			status: 401,
-			challenge: 'Bearer realm="followthrough"'
+			challenge: `Bearer resource_metadata="${new URL('/.well-known/oauth-protected-resource/mcp', baseURL).href}"`
 		});
 	});
 }
 
 for (const credential of credentials) {
-	test(`MCP preserves the verified token's ${credential.scope} scope`, async ({ request }) => {
+	test(`MCP preserves the verified token's ${credential.scope} scope`, async ({
+		request,
+		baseURL
+	}) => {
+		if (!baseURL) throw new Error('A base URL is required');
+		await seedConnection(credential, baseURL);
 		const response = await request.post('/mcp', {
 			headers: {
 				authorization: `Bearer ${credential.plaintext}`,

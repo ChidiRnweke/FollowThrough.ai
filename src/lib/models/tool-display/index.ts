@@ -52,6 +52,8 @@ export interface ToolResultFields {
 	readonly id?: string;
 	readonly title?: string;
 	readonly name?: string;
+	/** MCP connections are named after their client. */
+	readonly clientName?: string;
 	readonly content?: string;
 	/** `edit_note` and `save_note` answer with the revision they wrote. */
 	readonly currentRevision?: number;
@@ -97,6 +99,7 @@ export const toolResultFieldsSchema = z.object({
 	id: label,
 	title: label,
 	name: label,
+	clientName: label,
 	content: label,
 	currentRevision: revision
 });

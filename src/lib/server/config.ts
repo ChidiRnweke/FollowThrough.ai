@@ -532,13 +532,13 @@ export const deleteSessionCookie = (cookies: Pick<CookieJar, 'delete'>): void =>
 };
 
 const pkceCookieSchema = z
-	.object({ codeVerifier: z.string().min(1), state: z.string().min(1) })
+	.object({ codeVerifier: z.string().min(1), state: z.string().min(1), returnTo: z.string() })
 	.strict();
 
 export const getPkceCookie = (
 	cookies: Pick<CookieJar, 'get'>,
 	state: string
-): { codeVerifier: string; state: string } | null => {
+): { codeVerifier: string; state: string; returnTo: string } | null => {
 	const data = cookies.get(`oauth_${state}`);
 	if (!data) return null;
 	try {
@@ -548,15 +548,15 @@ export const getPkceCookie = (
 	}
 };
 
+/** `returnTo` is where the browser goes after sign-in: a path on this origin. */
 export const setPkceCookie = (
 	cookies: Pick<CookieJar, 'set'>,
-	state: string,
-	codeVerifier: string,
+	sign: { state: string; codeVerifier: string; returnTo: string },
 	secure: boolean
 ): void =>
 	cookies.set(
-		`oauth_${state}`,
-		JSON.stringify({ codeVerifier, state }),
+		`oauth_${sign.state}`,
+		JSON.stringify({ codeVerifier: sign.codeVerifier, state: sign.state, returnTo: sign.returnTo }),
 		cookieOptions(secure, 600)
 	);
 

@@ -1,6 +1,8 @@
 import { expect, it } from 'vitest';
 import { deletePkceCookie, getPkceCookie, setPkceCookie } from './config';
 
+const sign = (state: string, codeVerifier: string) => ({ state, codeVerifier, returnTo: '/today' });
+
 const cookieStore = () => {
 	const values = new Map<string, string>();
 	const set: Parameters<typeof setPkceCookie>[0]['set'] = (name, value) => {
@@ -13,26 +15,26 @@ const cookieStore = () => {
 };
 it('keeps simultaneous sign-in verifiers associated with their own state', () => {
 	const { cookies } = cookieStore();
-	setPkceCookie(cookies, 'first-state', 'first-verifier', true);
-	setPkceCookie(cookies, 'second-state', 'second-verifier', true);
+	setPkceCookie(cookies, sign('first-state', 'first-verifier'), true);
+	setPkceCookie(cookies, sign('second-state', 'second-verifier'), true);
 	expect([getPkceCookie(cookies, 'first-state'), getPkceCookie(cookies, 'second-state')]).toEqual([
-		{ state: 'first-state', codeVerifier: 'first-verifier' },
-		{ state: 'second-state', codeVerifier: 'second-verifier' }
+		sign('first-state', 'first-verifier'),
+		sign('second-state', 'second-verifier')
 	]);
 });
 it('does not supply another sign-in verifier for an unknown state', () => {
 	const { cookies } = cookieStore();
-	setPkceCookie(cookies, 'first-state', 'first-verifier', true);
+	setPkceCookie(cookies, sign('first-state', 'first-verifier'), true);
 	expect(getPkceCookie(cookies, 'unknown-state')).toBeNull();
 });
 it('consumes only the completed sign-in state', () => {
 	const { cookies } = cookieStore();
-	setPkceCookie(cookies, 'first-state', 'first-verifier', true);
-	setPkceCookie(cookies, 'second-state', 'second-verifier', true);
+	setPkceCookie(cookies, sign('first-state', 'first-verifier'), true);
+	setPkceCookie(cookies, sign('second-state', 'second-verifier'), true);
 	deletePkceCookie(cookies, 'first-state');
 	expect([getPkceCookie(cookies, 'first-state'), getPkceCookie(cookies, 'second-state')]).toEqual([
 		null,
-		{ state: 'second-state', codeVerifier: 'second-verifier' }
+		sign('second-state', 'second-verifier')
 	]);
 });
 it.each(['{', '{}', '{"state":"state","codeVerifier":""}', '{"state":"state","codeVerifier":17}'])(
@@ -45,12 +47,21 @@ it.each(['{', '{}', '{"state":"state","codeVerifier":""}', '{"state":"state","co
 		);
 	}
 );
+it('carries the path to return to after sign-in', () => {
+	const { cookies } = cookieStore();
+	setPkceCookie(
+		cookies,
+		{ ...sign('state', 'verifier'), returnTo: '/oauth/authorize?client_id=a' },
+		true
+	);
+	expect(getPkceCookie(cookies, 'state')?.returnTo).toBe('/oauth/authorize?client_id=a');
+});
 it('keeps the verifier private and short-lived on HTTPS', () => {
 	const options: Parameters<Parameters<typeof setPkceCookie>[0]['set']>[2][] = [];
 	const set: Parameters<typeof setPkceCookie>[0]['set'] = (_name, _value, value) => {
 		options.push(value);
 	};
-	setPkceCookie({ set }, 'state', 'verifier', true);
+	setPkceCookie({ set }, sign('state', 'verifier'), true);
 	expect(options).toEqual([
 		{ httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: 600 }
 	]);

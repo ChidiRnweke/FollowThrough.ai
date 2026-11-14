@@ -90,8 +90,8 @@ const labels: Record<AgentToolName, string> = {
 	update_agent_preferences: 'Change agent settings',
 	list_trust_policies: 'Read trust policies',
 	update_trust_policy: 'Change trust policy',
-	list_api_tokens: 'List access tokens',
-	revoke_api_token: 'Revoke access token'
+	list_mcp_connections: 'List connected apps',
+	revoke_mcp_connection: 'Disconnect app'
 };
 
 const completedLabels: Record<AgentToolName, string> = {
@@ -185,8 +185,8 @@ const completedLabels: Record<AgentToolName, string> = {
 	update_agent_preferences: 'Changed agent settings',
 	list_trust_policies: 'Read trust policies',
 	update_trust_policy: 'Changed trust policy',
-	list_api_tokens: 'Listed access tokens',
-	revoke_api_token: 'Revoked access token'
+	list_mcp_connections: 'Listed connected apps',
+	revoke_mcp_connection: 'Disconnected app'
 };
 
 export const isCatalogTool = (name: string): name is AgentToolName => name in labels;

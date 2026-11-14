@@ -477,6 +477,20 @@
       "when": 1794673888332,
       "tag": "0067_connectors",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1794679683393,
+      "tag": "0068_mcp_oauth",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1794679690710,
+      "tag": "0069_drop_api_tokens",
+      "breakpoints": true
     }
   ]
 }

@@ -74,7 +74,7 @@ flowchart TB
 	worker --> pg
 	app --> s3[("S3-compatible object storage: RustFS")]
 	app --> oidc["OIDC provider: sign-in (PKCE)"]
-	app --> apitokens["Bearer API tokens: MCP auth"]
+	app --> mcpauth["OAuth authorization server: MCP access tokens"]
 	infisical["Infisical: secrets hydration"] --> app
 	infisical --> worker
 	app --> openrouter["OpenRouter: chat models & embeddings"]
@@ -87,6 +87,6 @@ flowchart TB
 
 One Docker image runs both processes: the web app and the worker sidecar, which composes the same application graph and runs background tasks (search-index maintenance, attachment retention) on a self-rescheduling interval. Tasks rediscover work from the database each tick, so a missed tick costs latency, not correctness.
 
-Two separate authentication paths reach the same app, and neither substitutes for the other: a browser signs in through the OIDC provider (OAuth2, PKCE), while an MCP client authenticates with a Bearer API token minted in Settings. See [the agent](/FollowThrough.ai/subsystems/agent/) for how the same tool catalog serves both, and [Connect an MCP client](/FollowThrough.ai/guides/connect-mcp-client/) to set one up.
+Two separate authentication paths reach the same app, and neither substitutes for the other: a browser signs in through the OIDC provider (OAuth2, PKCE), while an MCP client authenticates with an OAuth access token that FollowThrough issues after the signed-in user approves the client. See [the agent](/FollowThrough.ai/subsystems/agent/) for how the same tool catalog serves both, and [Connect an MCP client](/FollowThrough.ai/guides/connect-mcp-client/) to set one up.
 
 Configuration is hydrated from Infisical before the SvelteKit server starts; telemetry keys are the deliberate exception, supplied directly by the platform. Agent runs are instrumented end-to-end: every model call, tool call, and retrieval is one inspectable Phoenix trace. Deployment is Komodo-managed Docker Compose behind Caddy; see [Self-hosting](/FollowThrough.ai/self-hosting/) for running it yourself.

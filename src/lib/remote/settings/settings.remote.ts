@@ -2,28 +2,15 @@ import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
-import type { ApiTokenId } from '$lib/models/identity';
+import type { McpConnectionId } from '$lib/models/identity';
 
-export const listApiTokens = query(async () =>
-	AppFactory.forActor(requestActor()).apiTokens().list()
+export const listMcpConnections = query(async () =>
+	AppFactory.forActor(requestActor()).mcpConnections().list()
 );
 
-/**
- * Returns the plaintext credential — the only time it exists outside the
- * client's config. The caller must show it immediately; it is not recoverable.
- */
-export const createApiToken = command(
-	z.object({ name: z.string().min(1), scope: z.enum(['read', 'full']) }),
-	async (input) => {
-		const minted = await AppFactory.access(requestActor()).issueApiToken(input);
-		await listApiTokens().refresh();
-		return { token: minted.token, plaintext: minted.plaintext };
-	}
-);
-
-export const revokeApiToken = command(z.string().uuid(), async (id) => {
+export const revokeMcpConnection = command(z.string().uuid(), async (id) => {
 	await AppFactory.forActor(requestActor())
-		.apiTokens()
-		.revoke(id as ApiTokenId);
-	await listApiTokens().refresh();
+		.mcpConnections()
+		.revoke(id as McpConnectionId);
+	await listMcpConnections().refresh();
 });

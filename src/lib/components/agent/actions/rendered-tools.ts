@@ -34,8 +34,8 @@ export const mechanismToolNames = [
 	'update_agent_preferences',
 	'list_trust_policies',
 	'update_trust_policy',
-	'list_api_tokens',
-	'revoke_api_token'
+	'list_mcp_connections',
+	'revoke_mcp_connection'
 ] as const;
 
 /**

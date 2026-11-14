@@ -43,6 +43,6 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		throw error(500, 'Failed to complete authentication. Please try again.');
 	}
 
-	// Redirect to home
-	throw redirect(302, '/today');
+	// Return to where sign-in started: the workspace, or an MCP client's consent request
+	throw redirect(302, pkceData.returnTo);
 };

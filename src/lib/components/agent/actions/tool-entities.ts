@@ -51,6 +51,7 @@ const identify = (fields: ToolResultFields, kind: EntityKind): string | undefine
 const nameIn = (fields: ToolResultFields): string | undefined =>
 	fields.title ??
 	fields.name ??
+	fields.clientName ??
 	fields.fileName ??
 	fields.filename ??
 	fields.label ??
@@ -154,7 +155,7 @@ export function toolEntity(tool: ChatToolActivity, shell?: ShellContext): Entity
 	);
 	if (
 		tool.status === 'succeeded' &&
-		['delete_note_forever', 'delete_artifact', 'revoke_api_token'].includes(tool.name)
+		['delete_note_forever', 'delete_artifact', 'revoke_mcp_connection'].includes(tool.name)
 	)
 		return { kind: entity.kind, title: entity.title, named: entity.named };
 	const settings: Readonly<Record<string, readonly [string, string]>> = {

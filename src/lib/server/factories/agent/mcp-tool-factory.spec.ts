@@ -7,7 +7,7 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 import { z } from 'zod';
 const noteMarkdown = new NoteMarkdownCodec();
 
-import type { ApiTokenScope } from '$lib/models/identity';
+import type { McpScope } from '$lib/models/identity';
 import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
@@ -18,7 +18,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
 
 const connect = async (
-	scope: ApiTokenScope,
+	scope: McpScope,
 	options: {
 		factory?: ControllerFactory;
 		retriever?: InMemoryToolRetriever;
@@ -39,7 +39,7 @@ const connect = async (
 	return client;
 };
 
-const toolNames = async (scope: ApiTokenScope): Promise<string[]> => {
+const toolNames = async (scope: McpScope): Promise<string[]> => {
 	const { tools } = await (await connect(scope)).listTools();
 	return tools.map((tool) => tool.name).sort();
 };

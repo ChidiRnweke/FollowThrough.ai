@@ -4,7 +4,7 @@ export type UserId = Brand<string, 'UserId'>;
 
 export type SessionId = Brand<string, 'SessionId'>;
 
-export type ApiTokenId = Brand<string, 'ApiTokenId'>;
+export type McpConnectionId = Brand<string, 'McpConnectionId'>;
 
 type DateTime = Brand<string, 'DateTime'>;
 
@@ -30,7 +30,8 @@ export interface ActorContext {
 	readonly userId: UserId;
 }
 
-export type ApiTokenScope = 'read' | 'full';
+/** What an MCP client may do: `read` reaches read tools only; `full` reaches every enabled tool. */
+export type McpScope = 'read' | 'full';
 
 /** An account. `role` gates admin surfaces and `WAITING` blocks sign-in for users pending approval. */
 export interface User {
@@ -45,7 +46,7 @@ export interface User {
 	readonly updatedAt: DateTime;
 }
 
-/** A signed-in browser session, created after the OAuth2/OIDC callback completes. Unrelated to `ApiToken`, which authenticates MCP instead. */
+/** A signed-in browser session, created after the OAuth2/OIDC callback completes. Unrelated to `McpConnection`, which authenticates MCP instead. */
 export interface Session {
 	readonly id: SessionId;
 	readonly userId: UserId;
@@ -54,16 +55,16 @@ export interface Session {
 }
 
 /**
- * A bearer credential for the MCP endpoint. Never carries the plaintext token —
- * that exists only in the return value of `AccessTokens.mint`.
+ * An MCP client the user authorized through OAuth. Never carries a credential — only hashes
+ * of its tokens are stored. `clientId` is the client's metadata document URL or the id it
+ * received at registration.
  */
-export interface ApiToken {
-	readonly id: ApiTokenId;
+export interface McpConnection {
+	readonly id: McpConnectionId;
 	readonly userId: UserId;
-	readonly name: string;
-	readonly scope: ApiTokenScope;
+	readonly clientId: string;
+	readonly clientName: string;
+	readonly scope: McpScope;
 	readonly lastUsedAt?: DateTime;
-	readonly expiresAt?: DateTime;
-	readonly revokedAt?: DateTime;
 	readonly createdAt: DateTime;
 }

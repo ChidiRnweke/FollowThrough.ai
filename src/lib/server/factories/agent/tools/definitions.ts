@@ -36,7 +36,7 @@ import {
 	exportSettings,
 	foundArtifact,
 	noteView,
-	revokedToken,
+	revokedConnection,
 	skillView,
 	workspaceContext,
 	writtenWithEtag,
@@ -525,17 +525,18 @@ const sharedToolDefinitions = (controllers: ControllerFactory, provenanceId: Pro
 		)
 	});
 	const account = () => ({
-		list_api_tokens: defineTool(
-			'list_api_tokens',
+		list_mcp_connections: defineTool(
+			'list_mcp_connections',
 			'read',
-			agentToolInputSchemas.list_api_tokens,
-			async () => controllers.apiTokens().list()
+			agentToolInputSchemas.list_mcp_connections,
+			async () => controllers.mcpConnections().list()
 		),
-		revoke_api_token: defineTool(
-			'revoke_api_token',
+		revoke_mcp_connection: defineTool(
+			'revoke_mcp_connection',
 			'mutation',
-			agentToolInputSchemas.revoke_api_token,
-			async (input) => revokedToken(await controllers.apiTokens().revoke(input.tokenId))
+			agentToolInputSchemas.revoke_mcp_connection,
+			async (input) =>
+				revokedConnection(await controllers.mcpConnections().revoke(input.connectionId))
 		),
 		list_attachments: defineTool(
 			'list_attachments',

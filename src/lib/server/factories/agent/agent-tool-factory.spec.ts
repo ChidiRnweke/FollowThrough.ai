@@ -5,7 +5,7 @@ import { createWidgetRules } from '$lib/factories/widgets/rules';
 import type { TextSelection } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
-import { ApiTokens } from '$lib/server/controllers/api-tokens/controller';
+import { McpConnections } from '$lib/server/controllers/mcp-connections/controller';
 import {
 	DiagramStudio,
 	type DiagramStudioDependencies
@@ -15,7 +15,7 @@ import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widge
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
-import { AccessTokens, TokenVerification } from '$lib/server/services/identity/api-tokens';
+import { McpCredentials, McpGrants } from '$lib/server/services/identity/mcp-grants';
 import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
@@ -32,9 +32,13 @@ import {
 	drawioBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import {
-	InMemoryApiTokenRepository,
-	testTokenUser
-} from '$lib/testing/identity/fakes/in-memory-api-tokens';
+	InMemoryMcpAuthorizationRepository,
+	testMcpUser
+} from '$lib/testing/identity/fakes/in-memory-mcp-authorization';
+import {
+	connectMcpClient,
+	TEST_MCP_RESOURCE
+} from '$lib/testing/identity/fixtures/mcp-connections';
 import { searchControllerFixture } from '$lib/testing/knowledge-search/fixtures/controller';
 import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
 import {
@@ -1395,25 +1399,29 @@ describe('Explicit mutation receipts', () => {
 		});
 	});
 
-	it('reports the revoked token id', async () => {
-		const credentials = new InMemoryApiTokenRepository(testActor(), [
-			testTokenUser(testActor().userId)
+	it('reports the revoked connection id', async () => {
+		const repository = new InMemoryMcpAuthorizationRepository(testActor(), [
+			testMcpUser(testActor().userId)
 		]);
-		const tokens = new AccessTokens(credentials);
-		const minted = await tokens.mint({ name: 'Local integration', scope: 'read' });
-		const apiTokens = new ApiTokens({ ...agentToolResultsFixture(), tokens });
-		const factory = capabilityDependencies<ControllerFactory>({ apiTokens: () => apiTokens });
+		const grants = new McpGrants(repository);
+		const credentials = new McpCredentials(repository);
+		const issued = await connectMcpClient(grants, credentials, 'read');
+		const [connection] = await grants.list();
+		const mcpConnections = new McpConnections({ connections: grants });
+		const factory = capabilityDependencies<ControllerFactory>({
+			mcpConnections: () => mcpConnections
+		});
 		const tool = registry('auto_accept', { factory })
 			.definitions()
-			.find((tool) => tool.name === 'revoke_api_token');
+			.find((tool) => tool.name === 'revoke_mcp_connection');
 		const receipt = await directTool(tool)
-			.prepare({ tokenId: minted.token.id })
+			.prepare({ connectionId: connection.id })
 			.execute(new AbortController().signal);
 		expect({
 			receipt,
-			verified: await new TokenVerification(credentials).verify(`Bearer ${minted.plaintext}`)
+			verified: await credentials.verify(`Bearer ${issued.accessToken}`, TEST_MCP_RESOURCE)
 		}).toEqual({
-			receipt: { tokenId: minted.token.id, name: 'Local integration', revoked: true },
+			receipt: { connectionId: connection.id, clientName: 'Claude Code', revoked: true },
 			verified: null
 		});
 	});

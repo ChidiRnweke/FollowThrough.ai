@@ -5,7 +5,7 @@ import type { AgentHarness } from '$lib/server/controllers/agent/controller';
 import type { AgentSettingsController } from '$lib/server/controllers/agent/settings/controller';
 import type { ToolPreferencesController } from '$lib/server/controllers/agent/tool-preferences/controller';
 import type { TrustPoliciesController } from '$lib/server/controllers/agent/trust-policies/controller';
-import type { ApiTokensController } from '$lib/server/controllers/api-tokens/controller';
+import type { McpConnectionsController } from '$lib/server/controllers/mcp-connections/controller';
 import type { AttachmentsController } from '$lib/server/controllers/attachments/controller';
 import type { ConnectorsController } from '$lib/server/controllers/connectors/controller';
 import type { ContextUsageController } from '$lib/server/controllers/context-usage/controller';
@@ -39,7 +39,7 @@ interface CoveredAgentControllers {
 	readonly trustPolicies: TrustPoliciesController;
 	readonly toolPreferences: ToolPreferencesController;
 	readonly agentSettings: AgentSettingsController;
-	readonly apiTokens: ApiTokensController;
+	readonly mcpConnections: McpConnectionsController;
 	readonly attachments: AttachmentsController;
 	readonly deliverables: DeliverablesController;
 	readonly memory: MemoryController;
@@ -568,9 +568,9 @@ export const agentToolCoverage = {
 		},
 		changePreferences: { kind: 'mutation', tools: ['update_agent_preferences'] }
 	},
-	apiTokens: {
-		list: { kind: 'read', tools: ['list_api_tokens'] },
-		revoke: { kind: 'mutation', tools: ['revoke_api_token'] }
+	mcpConnections: {
+		list: { kind: 'read', tools: ['list_mcp_connections'] },
+		revoke: { kind: 'mutation', tools: ['revoke_mcp_connection'] }
 	},
 	retrieval: {
 		search: { kind: 'read', tools: ['search', 'search_note'] }
