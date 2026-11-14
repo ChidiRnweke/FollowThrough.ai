@@ -5,7 +5,7 @@ description: Keep submission, resolved runs, in-app tools, MCP tools, and catalo
 
 ## Status
 
-Accepted.
+Accepted. ADR 0052 adds one execution path: a scheduled run, started from a schedule id.
 
 ## Context
 
