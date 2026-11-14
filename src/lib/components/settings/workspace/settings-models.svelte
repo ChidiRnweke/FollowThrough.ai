@@ -3,35 +3,44 @@
 	import { onMount } from 'svelte';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
+	import { createSettingsForm } from '$lib/factories/settings/settings-form';
+	import type { SettingsForm } from '$lib/stores/settings/settings-form.svelte';
 
 	import { Form } from '$lib/components/ui/form';
 	import type { AgentModel } from '$lib/models/agent';
 	import { ModelPicker } from '$lib/components/agent';
-	import { Button } from '$lib/components/ui/button';
 	import * as Field from '$lib/components/ui/field';
 	import { Switch } from '$lib/components/ui/switch';
 	import { toast } from 'svelte-sonner';
+	import SettingsSaveBar from '../settings-save-bar.svelte';
+
+	type ModelSettings = {
+		readonly defaultModel: string | null;
+		readonly defaultVisionModel: string | null;
+		readonly inlineModel: string | null;
+		readonly attachmentVisionModel: string | null;
+		readonly inlineSuggestionsEnabled: boolean;
+	};
 
 	let { models }: { models: readonly AgentModel[] } = $props();
-	let model = $state<string | null>(null);
-	let visionModel = $state<string | null>(null);
-	let inlineModel = $state<string | null>(null);
-	let attachmentVisionModel = $state<string | null>(null);
 	const visionModels = $derived(models.filter((candidate) => candidate.supportsVision));
-	let inlineSuggestionsEnabled = $state(true);
 
 	// A chat model that reads images itself never consults the vision model, so
 	// the picker below is disabled rather than left to imply otherwise. Falls back
 	// to the recommended entry because that is what an unset default resolves to.
-	const effectiveChatModel = $derived(
-		models.find((candidate) => candidate.id === model) ??
+	const seesImages = (model: string | null): boolean =>
+		(
+			models.find((candidate) => candidate.id === model) ??
 			models.find((candidate) => candidate.recommended)
-	);
-	const chatModelSeesImages = $derived(effectiveChatModel?.supportsVision ?? false);
+		)?.supportsVision ?? false;
 
 	let form = $state<
 		| { kind: 'loading' }
-		| { kind: 'ready'; draft: WorkspaceDraftController<'agent_preferences'> }
+		| {
+				kind: 'ready';
+				draft: WorkspaceDraftController<'agent_preferences'>;
+				settings: SettingsForm<ModelSettings>;
+		  }
 		| { kind: 'failure'; message: string }
 	>({ kind: 'loading' });
 	const editorSession = createEditorSession(() => form.kind === 'ready' && form.draft.active);
@@ -42,12 +51,14 @@
 			.openPreferences('agent_preferences')
 			.then(({ draft, value }) => {
 				if (cancelled) return;
-				model = value.defaultModel ?? null;
-				visionModel = value.defaultVisionModel ?? null;
-				inlineModel = value.inlineModel ?? null;
-				attachmentVisionModel = value.attachmentVisionModel ?? null;
-				inlineSuggestionsEnabled = value.inlineSuggestionsEnabled;
-				form = { kind: 'ready', draft };
+				const settings = createSettingsForm<ModelSettings>({
+					defaultModel: value.defaultModel ?? null,
+					defaultVisionModel: value.defaultVisionModel ?? null,
+					inlineModel: value.inlineModel ?? null,
+					attachmentVisionModel: value.attachmentVisionModel ?? null,
+					inlineSuggestionsEnabled: value.inlineSuggestionsEnabled
+				});
+				form = { kind: 'ready', draft, settings };
 			})
 			.catch((error) => {
 				const message = error instanceof Error ? error.message : 'Preferences could not be opened';
@@ -61,28 +72,19 @@
 	});
 	async function save(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		if (form.kind !== 'ready' || busy) return;
+		if (form.kind !== 'ready' || busy || !form.settings.dirty) return;
 		const value = form.draft.value;
 		if (!value) {
 			toast.error('Reopen these preferences before editing');
 			return;
 		}
-		const draft = form.draft;
-		if (!editorSession.dirty) return;
+		const { draft, settings } = form;
+		const patch = settings.values;
+		// The session persists what was submitted; the form keeps any later edit as unsaved.
+		editorSession.changed();
 		await editorSession.save(
-			() =>
-				draft.stage({
-					kind: 'updateAgentPreferences',
-					userId: value.userId,
-					patch: {
-						defaultModel: model,
-						defaultVisionModel: visionModel,
-						inlineModel,
-						attachmentVisionModel,
-						inlineSuggestionsEnabled
-					}
-				}),
-			() => undefined
+			() => draft.stage({ kind: 'updateAgentPreferences', userId: value.userId, patch }),
+			() => settings.commit(patch)
 		);
 		if (editorSession.failure) toast.error(editorSession.failure);
 		else toast.success('Model defaults saved on this device');
@@ -94,16 +96,14 @@
 {:else if form.kind === 'loading'}
 	<p role="status" class="text-sm text-muted-foreground">Loading preferences…</p>
 {:else}
+	{@const settings = form.settings}
+	{@const chatModelSeesImages = seesImages(settings.values.defaultModel)}
 	<Form onsubmit={save} class="flex max-w-3xl flex-col gap-group">
-		<!-- The preamble carries the submit action on its row, like the scope row on the
-	     tools panel, and the pb-2 steps the row out past the gap to the fields below. -->
-		<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-2">
-			<p class="text-sm text-muted-foreground">
-				Choose the models the agent chats, sees, and completes with. Every setting left unset
-				follows this deployment's default.
-			</p>
-			<Button type="submit" disabled={busy}>Save model defaults</Button>
-		</div>
+		<!-- The pb-2 steps the preamble out to 32px so it does not read as a caption of the fields. -->
+		<p class="pb-2 text-sm text-muted-foreground">
+			Choose the models the agent chats, sees, and completes with. Every setting left unset follows
+			this deployment's default.
+		</p>
 
 		<Field.Group>
 			<Field.Field orientation="responsive">
@@ -114,11 +114,7 @@
 				<ModelPicker
 					{models}
 					bind:value={
-						() => model,
-						(next) => {
-							model = next;
-							editorSession.changed();
-						}
+						() => settings.values.defaultModel, (next) => settings.set('defaultModel', next)
 					}
 					allowDefault
 					defaultLabel="App default"
@@ -138,11 +134,8 @@
 				<ModelPicker
 					models={visionModels}
 					bind:value={
-						() => visionModel,
-						(next) => {
-							visionModel = next;
-							editorSession.changed();
-						}
+						() => settings.values.defaultVisionModel,
+						(next) => settings.set('defaultVisionModel', next)
 					}
 					allowDefault
 					defaultLabel="App default"
@@ -161,11 +154,8 @@
 				<ModelPicker
 					models={visionModels}
 					bind:value={
-						() => attachmentVisionModel,
-						(next) => {
-							attachmentVisionModel = next;
-							editorSession.changed();
-						}
+						() => settings.values.attachmentVisionModel,
+						(next) => settings.set('attachmentVisionModel', next)
 					}
 					allowDefault
 					defaultLabel="App default"
@@ -181,11 +171,8 @@
 				<Switch
 					aria-label="Inline writing suggestions"
 					bind:checked={
-						() => inlineSuggestionsEnabled,
-						(next) => {
-							inlineSuggestionsEnabled = next;
-							editorSession.changed();
-						}
+						() => settings.values.inlineSuggestionsEnabled,
+						(next) => settings.set('inlineSuggestionsEnabled', next)
 					}
 				/>
 			</Field.Field>
@@ -200,18 +187,15 @@
 				<ModelPicker
 					{models}
 					bind:value={
-						() => inlineModel,
-						(next) => {
-							inlineModel = next;
-							editorSession.changed();
-						}
+						() => settings.values.inlineModel, (next) => settings.set('inlineModel', next)
 					}
 					allowDefault
 					defaultLabel="App default"
 					requireTools={false}
-					disabled={!inlineSuggestionsEnabled}
+					disabled={!settings.values.inlineSuggestionsEnabled}
 				/>
 			</Field.Field>
 		</Field.Group>
+		<SettingsSaveBar dirty={settings.dirty} saving={busy} onundo={() => settings.undo()} />
 	</Form>
 {/if}

@@ -523,7 +523,7 @@ test('retains offline document preferences through reload and acknowledgement', 
 	await context.setOffline(true);
 	await toggle.click();
 	const selected = await toggle.getAttribute('aria-checked');
-	await page.getByRole('button', { name: 'Save document defaults', exact: true }).click();
+	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await page.getByText('Document defaults saved on this device', { exact: true }).waitFor();
 	await page.reload();
 	await toggle.waitFor();
@@ -550,12 +550,12 @@ test('keeps model and agent settings queued across offline tab navigation', asyn
 	await context.setOffline(true);
 	await suggestions.click();
 	const selected = await suggestions.getAttribute('aria-checked');
-	await page.getByRole('button', { name: 'Save model defaults', exact: true }).click();
+	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await page.getByText('Model defaults saved on this device', { exact: true }).waitFor();
 	await page.goto('/settings?tab=agents');
 	await page.getByLabel('Web search engine', { exact: true }).click();
 	await page.getByRole('option', { name: 'auto', exact: true }).click();
-	await page.getByRole('button', { name: 'Save agent defaults', exact: true }).click();
+	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await page.getByText('Agent defaults saved on this device', { exact: true }).waitFor();
 	await page.goto('/settings?tab=models');
 	await suggestions.waitFor();

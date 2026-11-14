@@ -3,6 +3,8 @@
 	import { onMount } from 'svelte';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
+	import { createSettingsForm } from '$lib/factories/settings/settings-form';
+	import type { SettingsForm } from '$lib/stores/settings/settings-form.svelte';
 
 	import { Form } from '$lib/components/ui/form';
 	import type { AgentExecutionMode, WebSearchEngine } from '$lib/models/agent';
@@ -13,6 +15,7 @@
 	import * as Field from '$lib/components/ui/field';
 	import * as Select from '$lib/components/ui/select';
 	import { toast } from 'svelte-sonner';
+	import SettingsSaveBar from '../settings-save-bar.svelte';
 
 	interface AgentNumericDefaults {
 		readonly webSearchMaxResults: number;
@@ -20,16 +23,23 @@
 		readonly agentMaxTurns: number;
 	}
 
+	type AgentSettings = {
+		readonly webSearchEngine: WebSearchEngine | null;
+		readonly webSearchMaxResults: number | null;
+		readonly webSearchMaxTotalResults: number | null;
+		readonly agentMaxTurns: number | null;
+		readonly executionMode: AgentExecutionMode;
+	};
+
 	let { defaults }: { defaults: AgentNumericDefaults } = $props();
-	let searchEngine = $state<WebSearchEngine | ''>('');
-	let searchMaxResults = $state<number | null>(null);
-	let searchMaxTotalResults = $state<number | null>(null);
-	let maxTurns = $state<number | null>(null);
-	let mode = $state<AgentExecutionMode>('approval_required');
 
 	let form = $state<
 		| { kind: 'loading' }
-		| { kind: 'ready'; draft: WorkspaceDraftController<'agent_preferences'> }
+		| {
+				kind: 'ready';
+				draft: WorkspaceDraftController<'agent_preferences'>;
+				settings: SettingsForm<AgentSettings>;
+		  }
 		| { kind: 'failure'; message: string }
 	>({ kind: 'loading' });
 	const editorSession = createEditorSession(() => form.kind === 'ready' && form.draft.active);
@@ -40,12 +50,14 @@
 			.openPreferences('agent_preferences')
 			.then(({ draft, value }) => {
 				if (cancelled) return;
-				searchEngine = value.webSearchEngine ?? '';
-				searchMaxResults = value.webSearchMaxResults ?? null;
-				searchMaxTotalResults = value.webSearchMaxTotalResults ?? null;
-				maxTurns = value.agentMaxTurns ?? null;
-				mode = value.executionMode;
-				form = { kind: 'ready', draft };
+				const settings = createSettingsForm<AgentSettings>({
+					webSearchEngine: value.webSearchEngine ?? null,
+					webSearchMaxResults: value.webSearchMaxResults ?? null,
+					webSearchMaxTotalResults: value.webSearchMaxTotalResults ?? null,
+					agentMaxTurns: value.agentMaxTurns ?? null,
+					executionMode: value.executionMode
+				});
+				form = { kind: 'ready', draft, settings };
 			})
 			.catch((error) => {
 				const message = error instanceof Error ? error.message : 'Preferences could not be opened';
@@ -59,28 +71,19 @@
 	});
 	async function save(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
-		if (form.kind !== 'ready' || busy) return;
+		if (form.kind !== 'ready' || busy || !form.settings.dirty) return;
 		const value = form.draft.value;
 		if (!value) {
 			toast.error('Reopen these preferences before editing');
 			return;
 		}
-		const draft = form.draft;
-		if (!editorSession.dirty) return;
+		const { draft, settings } = form;
+		const patch = settings.values;
+		// The session persists what was submitted; the form keeps any later edit as unsaved.
+		editorSession.changed();
 		await editorSession.save(
-			() =>
-				draft.stage({
-					kind: 'updateAgentPreferences',
-					userId: value.userId,
-					patch: {
-						webSearchEngine: searchEngine || null,
-						webSearchMaxResults: searchMaxResults,
-						webSearchMaxTotalResults: searchMaxTotalResults,
-						agentMaxTurns: maxTurns,
-						executionMode: mode
-					}
-				}),
-			() => undefined
+			() => draft.stage({ kind: 'updateAgentPreferences', userId: value.userId, patch }),
+			() => settings.commit(patch)
 		);
 		if (editorSession.failure) toast.error(editorSession.failure);
 		else toast.success('Agent defaults saved on this device');
@@ -115,16 +118,14 @@
 {:else if form.kind === 'loading'}
 	<p role="status" class="text-sm text-muted-foreground">Loading preferences…</p>
 {:else}
+	{@const settings = form.settings}
+	{@const values = settings.values}
 	<Form onsubmit={save} class="flex max-w-3xl flex-col gap-group">
-		<!-- The preamble carries the submit action on its row, like the scope row on the
-	     tools panel, and the pb-2 steps the row out past the gap to the fields below. -->
-		<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-2">
-			<p class="text-sm text-muted-foreground">
-				Choose what the agent may do without asking and how far it may go. Every setting left unset
-				follows this deployment's default.
-			</p>
-			<Button type="submit" disabled={busy}>Save agent defaults</Button>
-		</div>
+		<!-- The pb-2 steps the preamble out to 32px so it does not read as a caption of the fields. -->
+		<p class="pb-2 text-sm text-muted-foreground">
+			Choose what the agent may do without asking and how far it may go. Every setting left unset
+			follows this deployment's default.
+		</p>
 
 		<div class="flex flex-col">
 			<div class={rowClass}>
@@ -137,19 +138,18 @@
 				<div class={controlClass}>
 					<Select.Root
 						type="single"
-						value={searchEngine}
+						value={values.webSearchEngine ?? ''}
 						onValueChange={(next) => {
-							editorSession.changed();
-							if (next === '') searchEngine = '';
+							if (next === '') settings.set('webSearchEngine', null);
 							else {
 								const engine = webSearchEngines.find((engine) => engine === next);
 								if (!engine) throw new Error('Unknown search engine');
-								searchEngine = engine;
+								settings.set('webSearchEngine', engine);
 							}
 						}}
 					>
 						<Select.Trigger class="w-48" aria-label="Web search engine"
-							>{searchEngine || 'App default'}</Select.Trigger
+							>{values.webSearchEngine ?? 'App default'}</Select.Trigger
 						>
 						<Select.Content>
 							<Select.Group>
@@ -174,7 +174,7 @@
 					<ExportSlider
 						label="Results per search"
 						showLabel={false}
-						value={searchMaxResults ?? defaults.webSearchMaxResults}
+						value={values.webSearchMaxResults ?? defaults.webSearchMaxResults}
 						min={1}
 						max={50}
 						step={1}
@@ -186,22 +186,16 @@
 						]}
 						describe={describeResultsPerSearch}
 						format={(current) =>
-							searchMaxResults === null ? `Default (${current})` : String(current)}
-						onchange={(next) => {
-							searchMaxResults = next;
-							editorSession.changed();
-						}}
+							values.webSearchMaxResults === null ? `Default (${current})` : String(current)}
+						onchange={(next) => settings.set('webSearchMaxResults', next)}
 					/>
-					{#if searchMaxResults !== null}
+					{#if values.webSearchMaxResults !== null}
 						<Button
 							type="button"
 							variant="link"
 							size="sm"
 							class="h-auto self-end px-0 text-xs"
-							onclick={() => {
-								searchMaxResults = null;
-								editorSession.changed();
-							}}>Reset to default</Button
+							onclick={() => settings.set('webSearchMaxResults', null)}>Reset to default</Button
 						>
 					{/if}
 				</div>
@@ -215,7 +209,7 @@
 					<ExportSlider
 						label="Total results per run"
 						showLabel={false}
-						value={searchMaxTotalResults ?? defaults.webSearchMaxTotalResults}
+						value={values.webSearchMaxTotalResults ?? defaults.webSearchMaxTotalResults}
 						min={1}
 						max={100}
 						step={1}
@@ -227,22 +221,17 @@
 						]}
 						describe={describeTotalResults}
 						format={(current) =>
-							searchMaxTotalResults === null ? `Default (${current})` : String(current)}
-						onchange={(next) => {
-							searchMaxTotalResults = next;
-							editorSession.changed();
-						}}
+							values.webSearchMaxTotalResults === null ? `Default (${current})` : String(current)}
+						onchange={(next) => settings.set('webSearchMaxTotalResults', next)}
 					/>
-					{#if searchMaxTotalResults !== null}
+					{#if values.webSearchMaxTotalResults !== null}
 						<Button
 							type="button"
 							variant="link"
 							size="sm"
 							class="h-auto self-end px-0 text-xs"
-							onclick={() => {
-								searchMaxTotalResults = null;
-								editorSession.changed();
-							}}>Reset to default</Button
+							onclick={() => settings.set('webSearchMaxTotalResults', null)}
+							>Reset to default</Button
 						>
 					{/if}
 				</div>
@@ -259,7 +248,7 @@
 					<ExportSlider
 						label="Turn limit"
 						showLabel={false}
-						value={maxTurns ?? defaults.agentMaxTurns}
+						value={values.agentMaxTurns ?? defaults.agentMaxTurns}
 						min={1}
 						max={50}
 						step={1}
@@ -270,22 +259,17 @@
 							{ value: 50, label: 'Deep research' }
 						]}
 						describe={describeTurnLimit}
-						format={(current) => (maxTurns === null ? `Default (${current})` : String(current))}
-						onchange={(next) => {
-							maxTurns = next;
-							editorSession.changed();
-						}}
+						format={(current) =>
+							values.agentMaxTurns === null ? `Default (${current})` : String(current)}
+						onchange={(next) => settings.set('agentMaxTurns', next)}
 					/>
-					{#if maxTurns !== null}
+					{#if values.agentMaxTurns !== null}
 						<Button
 							type="button"
 							variant="link"
 							size="sm"
 							class="h-auto self-end px-0 text-xs"
-							onclick={() => {
-								maxTurns = null;
-								editorSession.changed();
-							}}>Reset to default</Button
+							onclick={() => settings.set('agentMaxTurns', null)}>Reset to default</Button
 						>
 					{/if}
 				</div>
@@ -301,16 +285,11 @@
 				</Field.Content>
 				<div class={controlClass}>
 					<ExecutionModeControl
-						bind:value={
-							() => mode,
-							(next) => {
-								mode = next;
-								editorSession.changed();
-							}
-						}
+						bind:value={() => values.executionMode, (next) => settings.set('executionMode', next)}
 					/>
 				</div>
 			</div>
 		</div>
+		<SettingsSaveBar dirty={settings.dirty} saving={busy} onundo={() => settings.undo()} />
 	</Form>
 {/if}
