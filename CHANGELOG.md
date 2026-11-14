@@ -1,5 +1,17 @@
 # Changelog
 
+## [6.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.0.0...v6.1.0) (2026-11-14)
+
+
+### Features
+
+* **telemetry:** log controller outcomes and refusals at info ([#487](https://github.com/ChidiRnweke/FollowThrough.ai/issues/487)) ([cba795d](https://github.com/ChidiRnweke/FollowThrough.ai/commit/cba795d017444b3e6cf991678cc42ddabe9d1a80))
+
+
+### Bug Fixes
+
+* **mcp:** accept token requests from clients that send no origin ([#486](https://github.com/ChidiRnweke/FollowThrough.ai/issues/486)) ([ea1172d](https://github.com/ChidiRnweke/FollowThrough.ai/commit/ea1172d4263942027d6e8c248de221dfd9525c60))
+
 ## [6.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v5.8.1...v6.0.0) (2026-11-14)
 
 
