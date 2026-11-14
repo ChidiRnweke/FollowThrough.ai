@@ -1,5 +1,18 @@
 # Changelog
 
+## [6.4.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.3.0...v6.4.0) (2026-11-14)
+
+
+### Features
+
+* **agent:** inline note bodies, nest the note tree and place search hits ([#494](https://github.com/ChidiRnweke/FollowThrough.ai/issues/494)) ([471ca87](https://github.com/ChidiRnweke/FollowThrough.ai/commit/471ca87832c07758dea75ef5c583250f796a1115))
+
+
+### Bug Fixes
+
+* **mcp:** list every permitted tool so found tools are callable ([#495](https://github.com/ChidiRnweke/FollowThrough.ai/issues/495)) ([b004f84](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b004f845ebcfcd9e6f06aaf38f050e61e6678e87))
+* **mcp:** serve the app icon to MCP hosts ([#493](https://github.com/ChidiRnweke/FollowThrough.ai/issues/493)) ([3e1257a](https://github.com/ChidiRnweke/FollowThrough.ai/commit/3e1257ae38aa9bb6e26599029cb914ffe9e58433))
+
 ## [6.3.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.2.0...v6.3.0) (2026-11-14)
 
 
