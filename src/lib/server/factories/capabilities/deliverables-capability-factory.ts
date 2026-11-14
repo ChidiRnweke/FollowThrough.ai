@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import {
@@ -82,7 +83,7 @@ export const createDeliverablesCapability = (
 	artifactFiles: new ArtifactFileService(),
 	templates: createTemplateServices(actor, new TemplateRecords(actor, input.db), input.now),
 	templateStorage: input.storage,
-	templateStyles: new DocxTemplateStyleReader(),
+	templateStyles: tracedService('DocxTemplateStyleReader', new DocxTemplateStyleReader()),
 	artifacts: createArtifactServices(
 		new ArtifactRecords(actor, input.db),
 		new ExportSettingsRecords(actor, input.db)
@@ -90,13 +91,13 @@ export const createDeliverablesCapability = (
 	artifactStorage: input.storage,
 	fetchImage: fetchRemoteDataUrl,
 	prepareExport: new ExportPreparationService(),
-	diagramRenderer: new DiagramRenderingService(),
+	diagramRenderer: tracedService('DiagramRenderingService', new DiagramRenderingService()),
 	mermaidThemes: new MermaidThemeService(),
 	widgetExports: new WidgetExportService(),
 	widgetSources: new WidgetSourceService(),
 	widgetEvaluation: new WidgetEvaluationService(),
-	docxGenerator: new DocxDocumentService(),
-	pdfGenerator: new PdfDocumentService(),
-	zipPacker: new DocumentBundleService(),
+	docxGenerator: tracedService('DocxDocumentService', new DocxDocumentService()),
+	pdfGenerator: tracedService('PdfDocumentService', new PdfDocumentService()),
+	zipPacker: tracedService('DocumentBundleService', new DocumentBundleService()),
 	markdownToContent: new NoteMarkdownCodec()
 });

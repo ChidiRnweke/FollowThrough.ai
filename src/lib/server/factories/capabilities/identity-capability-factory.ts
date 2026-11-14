@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import type { Database } from '$lib/server/db';
 import { McpGrantRecords } from '$lib/server/repositories/identity/postgres/mcp-authorization';
@@ -25,7 +26,10 @@ export const createIdentityCapability = (
 	actor: ActorContext,
 	input: IdentityCapabilityInput
 ): IdentityCapability => ({
-	userReader: new UserDirectory(new UserRecords(actor, input.db)),
-	mcpConnections: new McpGrants(new McpGrantRecords(actor, input.db)),
-	userPreferences: new UserPreferenceStore(new UserPreferencesRecords(actor, input.db))
+	userReader: tracedService('UserDirectory', new UserDirectory(new UserRecords(actor, input.db))),
+	mcpConnections: tracedService('McpGrants', new McpGrants(new McpGrantRecords(actor, input.db))),
+	userPreferences: tracedService(
+		'UserPreferenceStore',
+		new UserPreferenceStore(new UserPreferencesRecords(actor, input.db))
+	)
 });

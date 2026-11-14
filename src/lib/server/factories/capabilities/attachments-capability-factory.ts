@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import { AttachmentExtraction } from '$lib/server/services/attachments/extraction';
@@ -85,35 +86,44 @@ export const createAttachmentsCapability = (
 ): AttachmentsCapability => {
 	const repository = new AttachmentRecords(actor, input.db);
 	const storage = createAttachmentStorage(input);
-	const extraction = new AttachmentExtraction({
-		ocr: {
-			url: `${input.mistralBaseURL ?? DEFAULT_MISTRAL_BASE_URL}/ocr`,
-			model: input.ocrModel ?? DEFAULT_OCR_MODEL,
-			headers: { authorization: `Bearer ${input.mistralApiKey}` },
-			fetch: globalThis.fetch
-		},
-		vision: {
-			url: `${input.openRouterBaseURL}/chat/completions`,
-			headers: { authorization: `Bearer ${input.openRouterApiKey}` },
-			fetch: globalThis.fetch
-		},
-		observer: operationObserver,
-		logger: console
-	});
+	const extraction = tracedService(
+		'AttachmentExtraction',
+		new AttachmentExtraction({
+			ocr: {
+				url: `${input.mistralBaseURL ?? DEFAULT_MISTRAL_BASE_URL}/ocr`,
+				model: input.ocrModel ?? DEFAULT_OCR_MODEL,
+				headers: { authorization: `Bearer ${input.mistralApiKey}` },
+				fetch: globalThis.fetch
+			},
+			vision: {
+				url: `${input.openRouterBaseURL}/chat/completions`,
+				headers: { authorization: `Bearer ${input.openRouterApiKey}` },
+				fetch: globalThis.fetch
+			},
+			observer: operationObserver,
+			logger: console
+		})
+	);
 	return {
 		repository,
 		storage,
-		uploads: new AttachmentUploadService(actor, repository, input.notes, input.now),
-		reader: new AttachmentReadingService(repository),
-		lifecycle: new AttachmentLifecycleService(repository, input.notes),
+		uploads: tracedService(
+			'AttachmentUploadService',
+			new AttachmentUploadService(actor, repository, input.notes, input.now)
+		),
+		reader: tracedService('AttachmentReadingService', new AttachmentReadingService(repository)),
+		lifecycle: tracedService(
+			'AttachmentLifecycleService',
+			new AttachmentLifecycleService(repository, input.notes)
+		),
 		processing: new AttachmentProcessing({
 			modelSelection: new AgentModelSelectionService(),
-			records: new AttachmentVersionService(repository),
-			claims: new AttachmentClaimService(input.claims),
+			records: tracedService('AttachmentVersionService', new AttachmentVersionService(repository)),
+			claims: tracedService('AttachmentClaimService', new AttachmentClaimService(input.claims)),
 			extraction,
 			storage,
-			processing: new AttachmentProcessingService(),
-			formats: new AttachmentFormatService(),
+			processing: tracedService('AttachmentProcessingService', new AttachmentProcessingService()),
+			formats: tracedService('AttachmentFormatService', new AttachmentFormatService()),
 			preferences: input.preferences,
 			indexer: input.indexer,
 			transactionRunner: input.transactionRunner,
@@ -128,22 +138,28 @@ export const createAttachmentStorage = (
 	input: Pick<AttachmentsCapabilityInput, 's3' | 'storage'>
 ): IAttachmentStorage =>
 	input.storage ??
-	new AttachmentStorage(
-		input.s3 ?? {
-			endpoint: 'http://localhost:9000',
-			region: 'us-east-1',
-			accessKeyId: 'followthrough',
-			secretAccessKey: 'followthrough-local-secret',
-			bucket: 'followthrough-attachments',
-			forcePathStyle: true
-		}
+	tracedService(
+		'AttachmentStorage',
+		new AttachmentStorage(
+			input.s3 ?? {
+				endpoint: 'http://localhost:9000',
+				region: 'us-east-1',
+				accessKeyId: 'followthrough',
+				secretAccessKey: 'followthrough-local-secret',
+				bucket: 'followthrough-attachments',
+				forcePathStyle: true
+			}
+		)
 	);
 
 /** Attachment upkeep that acts for no user: expired upload reservations and orphaned objects. */
 export const createAttachmentMaintenance = (
 	input: Pick<AttachmentsCapabilityInput, 'db' | 's3' | 'storage'>
 ): { readonly backlog: AttachmentBacklog; readonly tasks: readonly ScheduledTask[] } => {
-	const backlog = new AttachmentBacklogService(new AttachmentBacklogRecords(input.db));
+	const backlog = tracedService(
+		'AttachmentBacklogService',
+		new AttachmentBacklogService(new AttachmentBacklogRecords(input.db))
+	);
 	const storage = createAttachmentStorage(input);
 	return {
 		backlog,
@@ -152,7 +168,10 @@ export const createAttachmentMaintenance = (
 			new UploadRetention(
 				backlog,
 				storage,
-				new MaintenanceProgressService(new MaintenanceCursorRecords(input.db)),
+				tracedService(
+					'MaintenanceProgressService',
+					new MaintenanceProgressService(new MaintenanceCursorRecords(input.db))
+				),
 				{
 					...optionalProperty(
 						'intervalMs',

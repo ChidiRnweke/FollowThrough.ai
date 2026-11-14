@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
@@ -94,9 +95,15 @@ export const createNotesCapability = (
 	const lifecycleRules = new SharedNoteLifecycleService();
 	const services = createNoteServices(actor, repository, anchors, input.projects, input.now);
 	return {
-		archiveImport: new NoteArchiveImportService(),
-		patchPreparation: new NotePatchPreparationService(),
-		revisionComparison: new NoteRevisionComparisonService(),
+		archiveImport: tracedService('NoteArchiveImportService', new NoteArchiveImportService()),
+		patchPreparation: tracedService(
+			'NotePatchPreparationService',
+			new NotePatchPreparationService()
+		),
+		revisionComparison: tracedService(
+			'NoteRevisionComparisonService',
+			new NoteRevisionComparisonService()
+		),
 		presentation: new NotePresentationService(),
 		references: new NoteReferenceService(),
 		textSearch: new NoteTextSearchService(),
@@ -109,8 +116,14 @@ export const createNotesCapability = (
 		repository,
 		anchors,
 		services,
-		selectionOrigins: new SelectionOrigins(actor, repository, anchors, provenanceRepository),
-		provenance: new NoteProvenance(actor, provenanceRepository, anchors, input.now),
+		selectionOrigins: tracedService(
+			'SelectionOrigins',
+			new SelectionOrigins(actor, repository, anchors, provenanceRepository)
+		),
+		provenance: tracedService(
+			'NoteProvenance',
+			new NoteProvenance(actor, provenanceRepository, anchors, input.now)
+		),
 		provenanceRepository
 	};
 };
@@ -129,13 +142,16 @@ export const createNoteServices = (
 	projects: ProjectRepository,
 	now: () => DateTime
 ): NoteServices => {
-	const catalog = new NoteCatalog(notes, projects);
-	const writing = new NoteWriting(actor, notes, projects, anchors, now);
+	const catalog = tracedService('NoteCatalog', new NoteCatalog(notes, projects));
+	const writing = tracedService(
+		'NoteWriting',
+		new NoteWriting(actor, notes, projects, anchors, now)
+	);
 	return {
 		library: catalog,
 		trashReader: catalog,
 		authoring: writing,
 		creator: writing,
-		lifecycle: new NoteLifecycleService(notes, projects)
+		lifecycle: tracedService('NoteLifecycleService', new NoteLifecycleService(notes, projects))
 	};
 };

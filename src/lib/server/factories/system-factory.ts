@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import {
 	AttachmentBacklogReader,
@@ -44,7 +45,12 @@ export const createSystemApplication = (config: ApplicationConfig): SystemApplic
 	return {
 		controllers: {
 			runRecovery: () =>
-				new RunRecovery(new RunBacklogService(new AgentRunBacklogRecords(config.db))),
+				new RunRecovery(
+					tracedService(
+						'RunBacklogService',
+						new RunBacklogService(new AgentRunBacklogRecords(config.db))
+					)
+				),
 			embeddingBacklog: () => createEmbeddingBacklog(config.db),
 			attachmentBacklog: () => new AttachmentBacklogReader(attachments.backlog),
 			toolDiscovery: () =>

@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import type { Database } from '$lib/server/db';
@@ -48,14 +49,17 @@ export const createRelationshipsCapability = (
 	actor: ActorContext,
 	input: RelationshipsCapabilityInput
 ): RelationshipsCapability => ({
-	classifier: new RelationshipDiscovery(
-		new RelationshipLanguageModel(input.openRouterApiKey, {
-			baseURL: input.openRouterBaseURL,
-			appURL: input.appURL,
-			observer: operationObserver
-		})
+	classifier: tracedService(
+		'RelationshipDiscovery',
+		new RelationshipDiscovery(
+			new RelationshipLanguageModel(input.openRouterApiKey, {
+				baseURL: input.openRouterBaseURL,
+				appURL: input.appURL,
+				observer: operationObserver
+			})
+		)
 	),
-	rules: new RelationshipRules(),
+	rules: tracedService('RelationshipRules', new RelationshipRules()),
 	generation: input.openRouterApiKey
 		? { kind: 'model', model: input.defaultModel }
 		: { kind: 'rules' },
@@ -82,6 +86,9 @@ export const createRelationshipServices = (
 	provenance: ProvenanceRepository,
 	now: () => DateTime
 ): RelationshipServices => {
-	const graph = new RelationshipGraph(actor, relationships, notes, anchors, provenance, now);
+	const graph = tracedService(
+		'RelationshipGraph',
+		new RelationshipGraph(actor, relationships, notes, anchors, provenance, now)
+	);
 	return { creator: graph, reader: graph, reconciler: graph };
 };

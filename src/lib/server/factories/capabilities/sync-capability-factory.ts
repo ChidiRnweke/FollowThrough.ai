@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import {
 	WorkspaceSyncReads,
@@ -39,13 +40,19 @@ export const createSyncCapability = (
 ): SyncCapability => {
 	const objects = new WorkspaceSyncObjects(actor, db);
 	return {
-		reads: new WorkspaceSyncReads(new WorkspaceSyncChanges(actor, db), objects),
+		reads: tracedService(
+			'WorkspaceSyncReads',
+			new WorkspaceSyncReads(new WorkspaceSyncChanges(actor, db), objects)
+		),
 		resourceKeys: new WorkspaceCommandRulesService(),
 		objects,
 		mutationRetry: deferEmbedding ? ('database-only' as const) : ('never' as const),
-		mutations: new WorkspaceMutationReceipts({
-			syncObjects: objects,
-			mutationReceipts: new WorkspaceSyncReceipts(actor, db)
-		})
+		mutations: tracedService(
+			'WorkspaceMutationReceipts',
+			new WorkspaceMutationReceipts({
+				syncObjects: objects,
+				mutationReceipts: new WorkspaceSyncReceipts(actor, db)
+			})
+		)
 	};
 };

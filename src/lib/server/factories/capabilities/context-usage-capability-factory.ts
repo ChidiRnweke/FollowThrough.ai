@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { Database } from '$lib/server/db';
@@ -26,10 +27,13 @@ export const createContextUsageCapability = (
 	actor: ActorContext,
 	input: ContextUsageCapabilityInput
 ): ContextUsageCapability => ({
-	usage: new ProjectContextUsageService(
-		new ToolContextLogRecords(actor, input.db),
-		new ProjectLinkRecords(actor, input.db),
-		input.now
+	usage: tracedService(
+		'ProjectContextUsageService',
+		new ProjectContextUsageService(
+			new ToolContextLogRecords(actor, input.db),
+			new ProjectLinkRecords(actor, input.db),
+			input.now
+		)
 	),
 	connections: new ConnectionAnalysisService()
 });

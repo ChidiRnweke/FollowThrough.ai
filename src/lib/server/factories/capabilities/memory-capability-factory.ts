@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import { MemoryEditingService, type IMemoryEditingService } from '$lib/services/memory/edits';
@@ -34,8 +35,14 @@ export const createMemoryServices = (
 	return {
 		editing: new MemoryEditingService(),
 		presentation: new MemoryPresentationService(),
-		library: new MemoryLibraryService(actor, entries, projects, now),
-		changes: new MemoryProposalService(actor, entries, projects, provenance, now)
+		library: tracedService(
+			'MemoryLibraryService',
+			new MemoryLibraryService(actor, entries, projects, now)
+		),
+		changes: tracedService(
+			'MemoryProposalService',
+			new MemoryProposalService(actor, entries, projects, provenance, now)
+		)
 	};
 };
 export const createMemoryCapability = (

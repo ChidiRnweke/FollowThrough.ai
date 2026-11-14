@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { CatalogConnectorId } from '$lib/models/connectors';
 import type { ActorContext } from '$lib/models/identity';
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
@@ -55,11 +56,14 @@ export const createConnectorsCapability = (
 	const configuration = input.configuration;
 	if (configuration.kind === 'unconfigured')
 		return { controller: { policy, setup: { kind: 'unconfigured' } }, harness: { kind: 'off' } };
-	const directory = new ConnectorDirectory({
-		connectors: new ConnectorRecords(actor, input.db, configuration.secrets),
-		authorizations: new ConnectorAuthorizationRecords(actor, input.db, configuration.secrets),
-		now: input.now
-	});
+	const directory = tracedService(
+		'ConnectorDirectory',
+		new ConnectorDirectory({
+			connectors: new ConnectorRecords(actor, input.db, configuration.secrets),
+			authorizations: new ConnectorAuthorizationRecords(actor, input.db, configuration.secrets),
+			now: input.now
+		})
+	);
 	return {
 		controller: {
 			policy,
@@ -67,13 +71,16 @@ export const createConnectorsCapability = (
 				kind: 'configured',
 				registry: directory,
 				attempts: directory,
-				authorizer: new ConnectorAuthorization({
-					fetch: configuration.fetch,
-					origin: configuration.origin,
-					preregistered: configuration.preregistered,
-					now: input.now
-				}),
-				servers: new ConnectorServers(configuration.fetch),
+				authorizer: tracedService(
+					'ConnectorAuthorization',
+					new ConnectorAuthorization({
+						fetch: configuration.fetch,
+						origin: configuration.origin,
+						preregistered: configuration.preregistered,
+						now: input.now
+					})
+				),
+				servers: tracedService('ConnectorServers', new ConnectorServers(configuration.fetch)),
 				embeddings: input.embeddings,
 				preregistered: new Set(configuration.preregistered.keys()),
 				transactionRunner: input.transactionRunner,

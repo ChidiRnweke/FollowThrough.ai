@@ -397,3 +397,44 @@ export async function* traceAgentTurn<T>(
 		span.end();
 	}
 }
+
+/**
+ * One span around a service call, recorded under the operation or workflow that made it. Outside
+ * a trace the call runs untouched, so background helpers open no detached roots. A synchronous
+ * call stays synchronous; a promise ends its span when it settles. No arguments or results are
+ * recorded: the controller boundary logs those, and a span only adds timing and failure.
+ *
+ * The span is a leaf: the body runs in the caller's context, not the span's. The collector drops
+ * spans without an OpenInference kind before Phoenix, so a service span that parented LLM or
+ * tool spans would split one Phoenix trace into orphans. Spans the service starts stay children
+ * of the operation, and Tempo shows the service span beside them.
+ */
+export function traceServiceCall<T>(name: string, body: () => T): T {
+	const active = context.active();
+	if (!active.getValue(WORKFLOW_CONTEXT_KEY)) return body();
+	const span = trace.getTracer(TRACER_NAME).startSpan(name, {}, active);
+	const settle = (): void => {
+		span.setStatus({ code: SpanStatusCode.OK });
+		span.end();
+	};
+	const fail = (error: unknown): never => {
+		recordError(span, error);
+		span.end();
+		throw error;
+	};
+	let result: T;
+	try {
+		result = body();
+	} catch (error) {
+		recordError(span, error);
+		span.end();
+		throw error;
+	}
+	if (result instanceof Promise)
+		return result.then((value) => {
+			settle();
+			return value;
+		}, fail) as T;
+	settle();
+	return result;
+}
