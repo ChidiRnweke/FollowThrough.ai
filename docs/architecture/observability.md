@@ -23,6 +23,19 @@ One line per operation, written at the end, is the line an operator reads first:
 was asked, what happened and how long it took. A start line at info doubles the volume and says
 nothing about the outcome.
 
+## Service spans
+
+Every server service constructed in a factory is wrapped by `tracedService`
+(`src/lib/server/infrastructure/telemetry/service-boundary.ts`). Each public method call records
+a `Service.method` span under the active controller or workflow span: timing and failure only,
+no arguments, no results and no log line. Outside a trace the call runs untouched, so background
+work opens no detached roots.
+
+Service spans are leaves. The collector drops spans without an OpenInference kind before
+Phoenix, so a service span that parented LLM or tool spans would split one Phoenix trace into
+orphans. Spans a service starts stay children of the operation; Tempo shows the service span
+beside them, with its duration.
+
 ## Returned failures are warnings
 
 Expected refusals are returned as `{ kind: 'failure', … }` values rather than thrown (Chisel's

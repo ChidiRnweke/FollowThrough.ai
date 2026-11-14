@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import { instrumentedController } from './controller-instrumentation';
 import {
 	accessSurface,
@@ -47,15 +48,21 @@ class DeferredValue<T> {
 }
 
 const composition = new DeferredValue(createProductionComposition);
-const sessions = new DeferredValue(() => new SessionRegistry(new SessionRecords(db)));
-const mcpClients = new DeferredValue(
-	() =>
+const sessions = new DeferredValue(() =>
+	tracedService('SessionRegistry', new SessionRegistry(new SessionRecords(db)))
+);
+const mcpClients = new DeferredValue(() =>
+	tracedService(
+		'McpClientDirectory',
 		new McpClientDirectory({
 			clients: new McpClientRecords(db),
 			documents: new ClientMetadataDocuments()
 		})
+	)
 );
-const mcpCredentials = new DeferredValue(() => new McpCredentials(new McpCredentialRecords(db)));
+const mcpCredentials = new DeferredValue(() =>
+	tracedService('McpCredentials', new McpCredentials(new McpCredentialRecords(db)))
+);
 const authentication = new DeferredValue(() =>
 	instrumentedController(
 		'authentication',
@@ -75,8 +82,11 @@ const mcpAuthorization = new DeferredValue(() =>
 const signIn = new DeferredValue(() => {
 	const config = authentikConfiguration();
 	return new SignIn({
-		authorization: new OAuthAuthorization(new AuthentikClient(config), config),
-		accounts: new ProviderAccounts(new UserAccountRecords(db)),
+		authorization: tracedService(
+			'OAuthAuthorization',
+			new OAuthAuthorization(new AuthentikClient(config), config)
+		),
+		accounts: tracedService('ProviderAccounts', new ProviderAccounts(new UserAccountRecords(db))),
 		sessions: sessions.get()
 	});
 });
@@ -115,7 +125,7 @@ export class AppFactory {
 			'access',
 			new Access(actor, {
 				clients: mcpClients.get(),
-				grants: new McpGrants(new McpGrantRecords(actor, db)),
+				grants: tracedService('McpGrants', new McpGrants(new McpGrantRecords(actor, db))),
 				provenance: composition.get().forActor(actor).provenance
 			}),
 			accessSurface,

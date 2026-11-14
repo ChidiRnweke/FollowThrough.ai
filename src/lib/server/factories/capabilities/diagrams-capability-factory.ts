@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import { AgentStreamPresentationService } from '$lib/server/services/agent/runs/stream-presentation';
 import {
@@ -102,22 +103,28 @@ export const createDiagramsCapability = (
 	input: DiagramsCapabilityInput
 ): DiagramsCapability => {
 	return {
-		diagrams: new DiagramLibraryService(
-			actor,
-			new DiagramRecords(actor, input.db),
-			input.notes,
-			input.anchors,
-			input.provenanceRepository,
-			input.projects,
-			input.now
+		diagrams: tracedService(
+			'DiagramLibraryService',
+			new DiagramLibraryService(
+				actor,
+				new DiagramRecords(actor, input.db),
+				input.notes,
+				input.anchors,
+				input.provenanceRepository,
+				input.projects,
+				input.now
+			)
 		),
 		rules: new DiagramRuleService(),
-		mermaid: new MermaidDocumentService(),
-		drawio: new DrawioDocumentService(),
-		iconSearch: new IconifyIconSearch(globalThis.fetch),
-		canvasSource: new PresentedCanvasSource(input.sessions),
+		mermaid: tracedService('MermaidDocumentService', new MermaidDocumentService()),
+		drawio: tracedService('DrawioDocumentService', new DrawioDocumentService()),
+		iconSearch: tracedService('IconifyIconSearch', new IconifyIconSearch(globalThis.fetch)),
+		canvasSource: tracedService('PresentedCanvasSource', new PresentedCanvasSource(input.sessions)),
 		labelPresentation: new DiagramLabelPresentationService(),
-		generationRules: new DiagramGenerationRuleService(),
+		generationRules: tracedService(
+			'DiagramGenerationRuleService',
+			new DiagramGenerationRuleService()
+		),
 		generation: {
 			contextFormatter: input.context,
 			contextNotes: input.contextNotes,
@@ -125,17 +132,23 @@ export const createDiagramsCapability = (
 			contextMemory: input.contextMemory,
 			conversations: input.conversations,
 			conversationMessages: input.conversationMessages,
-			toolActivity: new ToolActivityProjection(),
+			toolActivity: tracedService('ToolActivityProjection', new ToolActivityProjection()),
 			preferences: input.preferences,
 			models: input.models,
 			runs: input.runs,
-			runContext: new DiagramRunContext(new AgentRunRecords(actor, input.db)),
+			runContext: tracedService(
+				'DiagramRunContext',
+				new DiagramRunContext(new AgentRunRecords(actor, input.db))
+			),
 			provenance: input.provenance,
 			builtInSkills: input.builtInSkills,
 			defaultModel: input.defaultModel,
 			defaultVisionModel: input.defaultVisionModel,
 			modelSelection: new AgentModelSelectionService(),
-			streamPresentation: new AgentStreamPresentationService(),
+			streamPresentation: tracedService(
+				'AgentStreamPresentationService',
+				new AgentStreamPresentationService()
+			),
 			observeWorkflow: traceWorkflow,
 			generator: createDiagramGeneration(input)
 		}

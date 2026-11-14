@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import type { OperationObserver, WorkflowObserver } from '$lib/models/telemetry';
 import type { InlineCompletionService } from '$lib/server/services/inline-suggestions/completion';
@@ -110,28 +111,34 @@ export const createKnowledgeSearchCapability = (
 			baseURL: input.openRouterBaseURL,
 			appURL: input.appURL
 		});
-	const knowledge = new KnowledgeRetrieval({
-		repository: new KnowledgeIndexRecords(actor, input.db),
-		provider: provider.client,
-		rerank: provider.rerank,
-		models: { embedding: DEFAULT_EMBEDDING_MODEL, query: DEFAULT_SEARCH_QUERY_MODEL },
-		encoding: tokenizer,
-		chunking: {
-			targetTokens: Number(process.env.RETRIEVAL_CHUNK_TOKENS ?? 2400),
-			overlapTokens: Number(process.env.RETRIEVAL_CHUNK_OVERLAP_TOKENS ?? 480)
-		},
-		defer: input.deferEmbedding,
-		observer: operationObserver
-	});
+	const knowledge = tracedService(
+		'KnowledgeRetrieval',
+		new KnowledgeRetrieval({
+			repository: new KnowledgeIndexRecords(actor, input.db),
+			provider: provider.client,
+			rerank: provider.rerank,
+			models: { embedding: DEFAULT_EMBEDDING_MODEL, query: DEFAULT_SEARCH_QUERY_MODEL },
+			encoding: tokenizer,
+			chunking: {
+				targetTokens: Number(process.env.RETRIEVAL_CHUNK_TOKENS ?? 2400),
+				overlapTokens: Number(process.env.RETRIEVAL_CHUNK_OVERLAP_TOKENS ?? 480)
+			},
+			defer: input.deferEmbedding,
+			observer: operationObserver
+		})
+	);
 	const toolSearch =
 		input.toolSearch ??
-		new ToolSearch({
-			repository: new ToolEmbeddingRecords(input.db),
-			provider: provider.client,
-			model: DEFAULT_EMBEDDING_MODEL,
-			tokens: tokenizer,
-			observer: operationObserver
-		});
+		tracedService(
+			'ToolSearch',
+			new ToolSearch({
+				repository: new ToolEmbeddingRecords(input.db),
+				provider: provider.client,
+				model: DEFAULT_EMBEDDING_MODEL,
+				tokens: tokenizer,
+				observer: operationObserver
+			})
+		);
 
 	return {
 		tokenizer,
@@ -139,7 +146,7 @@ export const createKnowledgeSearchCapability = (
 		toolDiscovery: toolSearch,
 		connectorToolEmbedding: toolSearch,
 		finalize: ({ preferences }) => ({
-			inlineContext: new InlineContextService(tokenizer),
+			inlineContext: tracedService('InlineContextService', new InlineContextService(tokenizer)),
 			preferences,
 			defaultCompletionModel: normalizeLanguageModelId(
 				process.env.OPENROUTER_INLINE_COMPLETION_MODEL ??
@@ -156,8 +163,14 @@ export const createKnowledgeSearchCapability = (
 			),
 			observer: operationObserver,
 			workflow: workflowObserver,
-			admission: new InlineAdmissionService(new InlineAttemptRecords(input.db)),
-			grounding: new InlineGroundingService(new InlineGroundingRecords(actor, input.db))
+			admission: tracedService(
+				'InlineAdmissionService',
+				new InlineAdmissionService(new InlineAttemptRecords(input.db))
+			),
+			grounding: tracedService(
+				'InlineGroundingService',
+				new InlineGroundingService(new InlineGroundingRecords(actor, input.db))
+			)
 		}),
 		indexing: new KnowledgeIndexing(knowledge, input.transactionRunner)
 	};
@@ -166,8 +179,11 @@ export const createKnowledgeSearchCapability = (
 /** The embedding backlog across every user, which the worker drains as each source's owner. */
 export const createEmbeddingBacklog = (db: Database): EmbeddingBacklogController =>
 	new EmbeddingBacklog(
-		new IndexBacklogService(new KnowledgeBacklogRecords(db)),
-		new MaintenanceProgressService(new MaintenanceCursorRecords(db))
+		tracedService('IndexBacklogService', new IndexBacklogService(new KnowledgeBacklogRecords(db))),
+		tracedService(
+			'MaintenanceProgressService',
+			new MaintenanceProgressService(new MaintenanceCursorRecords(db))
+		)
 	);
 
 /** Tool discovery over the catalog's stored embeddings, which belong to no user. */
@@ -182,17 +198,20 @@ export const createToolDiscovery = (input: {
 }): ToolDiscoveryController =>
 	new ToolDiscovery(
 		input.toolSearch ??
-			new ToolSearch({
-				repository: new ToolEmbeddingRecords(input.db),
-				provider: createRetrievalProvider({
-					apiKey: input.openRouterApiKey,
-					baseURL: input.openRouterBaseURL,
-					appURL: input.appURL
-				}).client,
-				model: DEFAULT_EMBEDDING_MODEL,
-				tokens: input.tokenizer,
-				observer: operationObserver
-			}),
+			tracedService(
+				'ToolSearch',
+				new ToolSearch({
+					repository: new ToolEmbeddingRecords(input.db),
+					provider: createRetrievalProvider({
+						apiKey: input.openRouterApiKey,
+						baseURL: input.openRouterBaseURL,
+						appURL: input.appURL
+					}).client,
+					model: DEFAULT_EMBEDDING_MODEL,
+					tokens: input.tokenizer,
+					observer: operationObserver
+				})
+			),
 		input.transactionRunner,
 		new AgentToolCatalogService()
 	);

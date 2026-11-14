@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import {
 	AgentRunHarnessRecords,
@@ -173,48 +174,65 @@ export const createAgentCapability = (
 	input: AgentCapabilityInput
 ): AgentCapability => {
 	const conversationRepository = new ConversationRecords(actor, input.db);
-	const conversations = new ConversationArchive(actor, conversationRepository, input.now);
-	const preferences = new AgentPreferenceCatalog(
-		actor,
-		new AgentPreferenceRecords(actor, input.db),
-		input.now
+	const conversations = tracedService(
+		'ConversationArchive',
+		new ConversationArchive(actor, conversationRepository, input.now)
+	);
+	const preferences = tracedService(
+		'AgentPreferenceCatalog',
+		new AgentPreferenceCatalog(actor, new AgentPreferenceRecords(actor, input.db), input.now)
 	);
 	const models =
 		input.modelCatalog ??
-		new AgentModels(
-			new OpenRouter({
-				apiKey: input.openRouterApiKey,
-				httpReferer: input.appURL,
-				xTitle: 'FollowThrough'
-			}).models,
-			new Set(input.recommendedModels.map(normalizeLanguageModelId))
+		tracedService(
+			'AgentModels',
+			new AgentModels(
+				new OpenRouter({
+					apiKey: input.openRouterApiKey,
+					httpReferer: input.appURL,
+					xTitle: 'FollowThrough'
+				}).models,
+				new Set(input.recommendedModels.map(normalizeLanguageModelId))
+			)
 		);
 	const tokens = input.tokens;
 	const runs = new AgentRunRecords(actor, input.db);
-	const runLedger = new AgentRunLedger(actor, runs);
+	const runLedger = tracedService('AgentRunLedger', new AgentRunLedger(actor, runs));
 	const runEvents = new AgentRunEventRecords(actor, input.db);
-	const settlements = new RunSettlements(runs, runEvents);
+	const settlements = tracedService('RunSettlements', new RunSettlements(runs, runEvents));
 	const runDecisions = new AgentRunDecisionRecords(actor, input.db);
 	const sessions = new AgentSessionRecords(actor, input.db);
-	const runSignals = new RunSignalService(
-		new AgentRunNotificationRecords(input.notifications),
-		runs
+	const runSignals = tracedService(
+		'RunSignalService',
+		new RunSignalService(new AgentRunNotificationRecords(input.notifications), runs)
 	);
 	const context = createAgentContext(tokens);
-	const toolPreferences = new ToolAccess(new ToolPreferenceRecords(actor, input.db));
+	const toolPreferences = tracedService(
+		'ToolAccess',
+		new ToolAccess(new ToolPreferenceRecords(actor, input.db))
+	);
 	return {
 		mcpSurface: createMcpToolSurface,
-		imagePreparation: new AgentImagePreparationService(),
+		imagePreparation: tracedService(
+			'AgentImagePreparationService',
+			new AgentImagePreparationService()
+		),
 		runStatus: new AgentRunStatusService(),
-		streamPresentation: new AgentStreamPresentationService(),
+		streamPresentation: tracedService(
+			'AgentStreamPresentationService',
+			new AgentStreamPresentationService()
+		),
 		runSettings: new AgentRunSettingsService(),
 		webSearchOverrides: webSearchOptionsFromEnvironment(process.env),
 		agentAvailable: Boolean(input.openRouterApiKey.trim()),
 		conversations,
 		conversationMessages: conversations,
-		toolActivity: new ToolActivityProjection(),
+		toolActivity: tracedService('ToolActivityProjection', new ToolActivityProjection()),
 		traceContext: traceContextReader,
-		conversationHistory: new ConversationHistoryService(sessions, input.files, tokens),
+		conversationHistory: tracedService(
+			'ConversationHistoryService',
+			new ConversationHistoryService(sessions, input.files, tokens)
+		),
 		preferences,
 		models,
 		preferenceEditing: new AgentPreferenceEditingService(),
@@ -222,26 +240,38 @@ export const createAgentCapability = (
 		modelChoices: new AgentModelChoiceService(),
 		toolPreferences,
 		toolCatalog: new AgentToolCatalogService(),
-		trust: new ToolTrust(actor, new TrustPolicyRecords(actor, input.db), input.now),
-		transitions: new RunTransitions(runs),
+		trust: tracedService(
+			'ToolTrust',
+			new ToolTrust(actor, new TrustPolicyRecords(actor, input.db), input.now)
+		),
+		transitions: tracedService('RunTransitions', new RunTransitions(runs)),
 		runLedger,
 		sessions,
-		harnessRecords: new AgentRunHarnessRecords(runs, runEvents, runDecisions, sessions),
-		context,
-		turns: new AgentTurnService(
-			createAgentProviders({
-				apiKey: input.openRouterApiKey,
-				baseURL: input.openRouterBaseURL,
-				appURL: input.appURL
-			})
+		harnessRecords: tracedService(
+			'AgentRunHarnessRecords',
+			new AgentRunHarnessRecords(runs, runEvents, runDecisions, sessions)
 		),
-		prompts: new AgentPromptService(),
-		toolRecovery: new AgentToolRecoveryService(),
+		context,
+		turns: tracedService(
+			'AgentTurnService',
+			new AgentTurnService(
+				createAgentProviders({
+					apiKey: input.openRouterApiKey,
+					baseURL: input.openRouterBaseURL,
+					appURL: input.appURL
+				})
+			)
+		),
+		prompts: tracedService('AgentPromptService', new AgentPromptService()),
+		toolRecovery: tracedService('AgentToolRecoveryService', new AgentToolRecoveryService()),
 		toolApproval: new AgentToolApprovalRules(),
 		toolConstruction: createAgentToolConstruction(input.controllers),
 		observeTurn: traceAgentTurn,
 		settlements,
-		noteActionRequests: new NoteActionRequests(actor, runs, runEvents, conversationRepository),
+		noteActionRequests: tracedService(
+			'NoteActionRequests',
+			new NoteActionRequests(actor, runs, runEvents, conversationRepository)
+		),
 		runSignals
 	};
 };

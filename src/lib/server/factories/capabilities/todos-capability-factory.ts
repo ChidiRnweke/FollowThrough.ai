@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import { TodoBoardExportService, type TodoBoardExport } from '$lib/services/todos/board-export';
 import {
@@ -64,7 +65,10 @@ export const createTodosCapability = (
 	creationRules: new TodoEditingRulesService(),
 	editingRules: new TodoEditingRulesService(),
 	presentation: new TodoPresentationService(),
-	batchReceipts: new TodoBatchReceipts(new TodoBatchReceiptRecords(actor, input.db)),
+	batchReceipts: tracedService(
+		'TodoBatchReceipts',
+		new TodoBatchReceipts(new TodoBatchReceiptRecords(actor, input.db))
+	),
 	catalog: createTodoCatalog(
 		actor,
 		new TodoRecords(actor, input.db),
@@ -74,16 +78,19 @@ export const createTodosCapability = (
 		input.provenance,
 		input.now
 	),
-	promiseRules: new DeterministicPromiseExtractor(),
+	promiseRules: tracedService('DeterministicPromiseExtractor', new DeterministicPromiseExtractor()),
 	promiseGeneration: process.env.OPENROUTER_API_KEY
 		? { kind: 'model', model: DEFAULT_PROMISE_MODEL }
 		: { kind: 'rules' },
-	promiseExtractor: new PromiseDiscovery(
-		new PromiseClassification(process.env.OPENROUTER_API_KEY, {
-			baseURL: process.env.OPENROUTER_BASE_URL,
-			appURL: process.env.ORIGIN,
-			observer: operationObserver
-		})
+	promiseExtractor: tracedService(
+		'PromiseDiscovery',
+		new PromiseDiscovery(
+			new PromiseClassification(process.env.OPENROUTER_API_KEY, {
+				baseURL: process.env.OPENROUTER_BASE_URL,
+				appURL: process.env.ORIGIN,
+				observer: operationObserver
+			})
+		)
 	)
 });
 
@@ -95,4 +102,8 @@ export const createTodoCatalog = (
 	notes: NoteRepository,
 	provenance: ProvenanceRepository,
 	now: () => DateTime
-): TodoLibrary => new TodoCatalog(actor, todos, projects, anchors, notes, provenance, now);
+): TodoLibrary =>
+	tracedService(
+		'TodoCatalog',
+		new TodoCatalog(actor, todos, projects, anchors, notes, provenance, now)
+	);

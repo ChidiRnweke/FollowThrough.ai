@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
@@ -63,13 +64,16 @@ export const createReferencesCapability = (
 	),
 	client:
 		input.client ??
-		new ReferenceResearch(input.openRouterApiKey, {
-			baseURL: input.openRouterBaseURL,
-			appURL: input.appURL,
-			defaultModel: normalizeLanguageModelId(input.defaultModel),
-			observer: operationObserver
-		}),
-	candidates: new ReferenceDiscovery(),
+		tracedService(
+			'ReferenceResearch',
+			new ReferenceResearch(input.openRouterApiKey, {
+				baseURL: input.openRouterBaseURL,
+				appURL: input.appURL,
+				defaultModel: normalizeLanguageModelId(input.defaultModel),
+				observer: operationObserver
+			})
+		),
+	candidates: tracedService('ReferenceDiscovery', new ReferenceDiscovery()),
 	settings: new AgentRunSettingsService(),
 	overrides: webSearchOptionsFromEnvironment(process.env)
 });
@@ -86,6 +90,9 @@ export const createReferenceServices = (
 	provenance: ProvenanceRepository,
 	now: () => DateTime
 ): ReferenceServices => {
-	const library = new ReferenceLibrary(actor, references, notes, anchors, provenance, now);
+	const library = tracedService(
+		'ReferenceLibrary',
+		new ReferenceLibrary(actor, references, notes, anchors, provenance, now)
+	);
 	return { creator: library, reader: library };
 };

@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import { SkillPortabilityService, type SkillPortability } from '$lib/services/skills/manifest';
@@ -51,23 +52,26 @@ export const createSkillsCapability = (
 ): SkillsCapability => {
 	const repository = new SkillRecords(actor, input.db);
 	const services = createSkillServices(actor, repository, input.notes, input.provenance, input.now);
-	const builtIns = new BuiltInSkills(
-		actor,
-		input.projects,
-		input.notes,
-		repository,
-		{
-			active: BUILT_INS,
-			retired: RETIRED_BUILT_INS
-		},
-		input.now
+	const builtIns = tracedService(
+		'BuiltInSkills',
+		new BuiltInSkills(
+			actor,
+			input.projects,
+			input.notes,
+			repository,
+			{
+				active: BUILT_INS,
+				retired: RETIRED_BUILT_INS
+			},
+			input.now
+		)
 	);
 	return {
 		portability: new SkillPortabilityService(),
 		metadataEditing: new SkillMetadataEditingService(),
 		services,
 		builtIns,
-		pins: new SkillPins(input.projects, input.notes, repository)
+		pins: tracedService('SkillPins', new SkillPins(input.projects, input.notes, repository))
 	};
 };
 
@@ -85,11 +89,17 @@ export function createSkillServices(
 	provenance: ProvenanceRepository,
 	now: () => DateTime
 ): SkillServices {
-	const usage = new SkillUsageService(skills, notes, provenance, now);
-	const authoring = new SkillAuthoringService(skills, notes);
+	const usage = tracedService(
+		'SkillUsageService',
+		new SkillUsageService(skills, notes, provenance, now)
+	);
+	const authoring = tracedService(
+		'SkillAuthoringService',
+		new SkillAuthoringService(skills, notes)
+	);
 	return {
 		creator: authoring,
-		finder: new SkillReadingService(skills),
+		finder: tracedService('SkillReadingService', new SkillReadingService(skills)),
 		editor: authoring,
 		usageRecorder: usage,
 		usageLister: usage

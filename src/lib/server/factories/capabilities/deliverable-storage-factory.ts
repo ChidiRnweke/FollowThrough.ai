@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	ArtifactRepository,
@@ -21,11 +22,11 @@ export const createArtifactServices = (
 	artifacts: ArtifactRepository,
 	settings: ExportSettingsRepository
 ): ArtifactServices => ({
-	artifactStore: new ArtifactLibrary(artifacts),
-	exportSettings: new ArtifactSettingsService(settings)
+	artifactStore: tracedService('ArtifactLibrary', new ArtifactLibrary(artifacts)),
+	exportSettings: tracedService('ArtifactSettingsService', new ArtifactSettingsService(settings))
 });
 export const createTemplateServices = (
 	actor: ActorContext,
 	repository: TemplateRepository,
 	now: () => DateTime
-): TemplateStore => new TemplateLibrary(actor, repository, now);
+): TemplateStore => tracedService('TemplateLibrary', new TemplateLibrary(actor, repository, now));

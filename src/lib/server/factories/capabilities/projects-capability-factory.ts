@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import {
 	ProjectTreePresentationService,
@@ -27,7 +28,7 @@ export const createProjectServices = (
 ): ProjectServices => {
 	const rules = new ProjectRules();
 	return {
-		catalog: new ProjectCatalog(repository, tree),
+		catalog: tracedService('ProjectCatalog', new ProjectCatalog(repository, tree)),
 		choice: rules,
 		details: rules,
 		presentation: new ProjectTreePresentationService(),

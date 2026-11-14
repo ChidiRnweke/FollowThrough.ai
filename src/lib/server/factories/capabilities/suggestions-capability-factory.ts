@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import {
@@ -60,10 +61,19 @@ export const createSuggestionServices = (
 	anchors: SourceAnchorRepository,
 	clock: Clock
 ): SuggestionServices => {
-	const inbox = new SuggestionInbox(records, notes, provenance, anchors);
-	const lifecycle = new SuggestionLifecycleService(records, clock);
+	const inbox = tracedService(
+		'SuggestionInbox',
+		new SuggestionInbox(records, notes, provenance, anchors)
+	);
+	const lifecycle = tracedService(
+		'SuggestionLifecycleService',
+		new SuggestionLifecycleService(records, clock)
+	);
 	return {
-		creator: new SuggestionCreationService(actor, records, notes, provenance, anchors, clock),
+		creator: tracedService(
+			'SuggestionCreationService',
+			new SuggestionCreationService(actor, records, notes, provenance, anchors, clock)
+		),
 		finder: inbox,
 		reader: inbox,
 		accepter: lifecycle,
@@ -85,7 +95,10 @@ export const createSuggestionsCapability = (
 		{ now: input.now }
 	),
 	presentation: new SuggestionPresentationService(),
-	effects: new SuggestionEffects(
-		new SuggestionEffectRecords(actor, input.db, new WorkspaceSyncObjects(actor, input.db))
+	effects: tracedService(
+		'SuggestionEffects',
+		new SuggestionEffects(
+			new SuggestionEffectRecords(actor, input.db, new WorkspaceSyncObjects(actor, input.db))
+		)
 	)
 });

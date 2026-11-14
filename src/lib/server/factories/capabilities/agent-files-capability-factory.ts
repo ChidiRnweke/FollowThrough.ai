@@ -1,3 +1,4 @@
+import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 import { NoteMarkdownCodec } from '$lib/infrastructure/notes/markdown';
@@ -36,15 +37,18 @@ export const createAgentFilesCapability = (
 	const repository = new AgentFileRecords(actor, input.db, tokens);
 	return {
 		repository,
-		references: new AgentFileReferenceService(tokens),
-		reader: new AgentVirtualFiles({
-			tokens,
-			projects: input.projects,
-			notes: input.notes,
-			attachments: new AttachmentRecords(actor, input.db),
-			diagrams: new DiagramRecords(actor, input.db),
-			stored: repository,
-			noteMarkdown: new NoteMarkdownCodec()
-		})
+		references: tracedService('AgentFileReferenceService', new AgentFileReferenceService(tokens)),
+		reader: tracedService(
+			'AgentVirtualFiles',
+			new AgentVirtualFiles({
+				tokens,
+				projects: input.projects,
+				notes: input.notes,
+				attachments: new AttachmentRecords(actor, input.db),
+				diagrams: new DiagramRecords(actor, input.db),
+				stored: repository,
+				noteMarkdown: new NoteMarkdownCodec()
+			})
+		)
 	};
 };
