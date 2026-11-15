@@ -7,12 +7,39 @@ export const MCP_WIRE_SCOPES = { read: 'mcp:read', full: 'mcp:full' } as const s
 	string
 >;
 
+/**
+ * The largest values the OAuth endpoints accept. The request-body limits of `/oauth/register`
+ * and `/oauth/token` in `config.ts` are derived from these, so a change here must move them too;
+ * `config.spec.ts` checks that their defaults still admit the largest request.
+ */
+export const OAUTH_REQUEST_LIMITS = {
+	/**
+	 * RFC 9110 §4.1 asks every HTTP sender and recipient to support URIs of at least 8,000
+	 * octets. A longer redirect URI is not reliably reachable, and the code is sent to it.
+	 */
+	uri: 8000,
+	/** Starting value; no measurement yet of how many redirect URIs MCP clients register. */
+	redirectUris: 10,
+	clientName: 200,
+	/**
+	 * `mcp-grants.ts` issues codes and refresh tokens as a 4-character prefix (`ftc_`, `ftr_`)
+	 * and 32 random bytes in unpadded base64url, which is 43 characters.
+	 */
+	credential: 47
+} as const;
+
+/** A registration id is a 36-character UUID; a metadata document's client_id is a URI. */
+const clientId = z.string().min(1).max(OAUTH_REQUEST_LIMITS.uri);
+const redirectUri = z.string().min(1).max(OAUTH_REQUEST_LIMITS.uri);
+const credential = z.string().min(1).max(OAUTH_REQUEST_LIMITS.credential);
+
 /** RFC 7636: 43 to 128 unreserved characters, for both the verifier and its S256 challenge. */
 const pkceValue = z.string().regex(/^[A-Za-z0-9._~-]{43,128}$/);
 
 /** RFC 8707 resource indicator, normalized so that it compares equal to the server's own URL. */
 const resourceIndicator = z
 	.string()
+	.max(OAUTH_REQUEST_LIMITS.uri)
 	.url()
 	.transform((value) => new URL(value).href);
 
@@ -25,7 +52,9 @@ export interface McpClient {
 
 /**
  * A Client ID Metadata Document. Only public clients are accepted, so a document that names
- * another authentication method is refused rather than downgraded.
+ * another authentication method is refused rather than downgraded. Its fields need no maxima
+ * of their own: the fetch reads at most the 5 KiB that CIMD §6.6 recommends, which bounds
+ * every array and string in it.
  */
 export const clientMetadataDocumentSchema = z.object({
 	client_id: z.string().url(),
@@ -38,11 +67,18 @@ export type ClientMetadataDocument = z.infer<typeof clientMetadataDocumentSchema
 /** An RFC 7591 registration request from a public client. */
 export const clientRegistrationRequestSchema = z
 	.object({
-		redirect_uris: z.array(z.string().url()).min(1),
-		client_name: z.string().trim().min(1).max(200).optional(),
+		redirect_uris: z
+			.array(z.string().max(OAUTH_REQUEST_LIMITS.uri).url())
+			.min(1)
+			.max(OAUTH_REQUEST_LIMITS.redirectUris),
+		client_name: z.string().trim().min(1).max(OAUTH_REQUEST_LIMITS.clientName).optional(),
 		token_endpoint_auth_method: z.literal('none').optional(),
-		grant_types: z.array(z.enum(['authorization_code', 'refresh_token'])).optional(),
-		response_types: z.array(z.literal('code')).optional()
+		// Bounded by how many distinct values each list can name; a repeat is accepted and ignored.
+		grant_types: z
+			.array(z.enum(['authorization_code', 'refresh_token']))
+			.max(2)
+			.optional(),
+		response_types: z.array(z.literal('code')).max(1).optional()
 	})
 	.transform((request) => ({
 		redirectUris: request.redirect_uris,
@@ -101,16 +137,16 @@ export const tokenRequestSchema = z
 	.discriminatedUnion('grant_type', [
 		z.object({
 			grant_type: z.literal('authorization_code'),
-			code: z.string().min(1),
-			redirect_uri: z.string().min(1),
+			code: credential,
+			redirect_uri: redirectUri,
 			code_verifier: pkceValue,
-			client_id: z.string().min(1),
+			client_id: clientId,
 			resource: resourceIndicator.optional()
 		}),
 		z.object({
 			grant_type: z.literal('refresh_token'),
-			refresh_token: z.string().min(1),
-			client_id: z.string().min(1),
+			refresh_token: credential,
+			client_id: clientId,
 			resource: resourceIndicator.optional()
 		})
 	])

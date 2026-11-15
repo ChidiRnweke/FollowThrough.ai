@@ -90,9 +90,42 @@ export const REQUIRED_APPLICATION_KEYS = [
 	'AUTHENTIK_CALLBACK_URL'
 ] as const;
 
+/*
+ * Request admission defaults. Each body limit admits the largest request its endpoint's schema
+ * accepts, written in the longest encoding the format allows: JSON can write any character as a
+ * 6-byte `\uXXXX` escape, and a form can write one as 9 bytes (three percent-encoded UTF-8
+ * bytes). A body the schema accepts is therefore never refused for its size.
+ */
+const REQUEST_ADMISSION_DEFAULTS = {
+	/* `CLIENT_ERROR_LIMITS`: a 2,000-character message, an 8,000-character stack and a route and
+	   pathname of 500 each are 11,000 characters, 66,000 bytes escaped. The keys, escaped too,
+	   the status and the punctuation add under 300 bytes. Rounded up to 65 KiB. */
+	clientErrorBodyBytes: 65 * 1024,
+	/* `OAUTH_REQUEST_LIMITS`: 10 redirect URIs of 8,000 characters and a 200-character name are
+	   80,200 characters, 481,200 bytes escaped. The keys, the fixed grant, response and auth
+	   method values, escaped too, and the punctuation add under 1 KiB. Rounded up to 480 KiB. */
+	oauthRegistrationBodyBytes: 480 * 1024,
+	/* `OAUTH_REQUEST_LIMITS` for an authorization-code grant, the larger kind: a 47-character
+	   code, a 128-character PKCE verifier, an 8,000-character redirect URI, client_id and
+	   resource, an 18-character grant type and 56 characters of keys are 24,249 characters,
+	   218,241 bytes percent-encoded. The separators add 11. Rounded up to 216 KiB. */
+	oauthTokenBodyBytes: 216 * 1024,
+	/* One page's own cap (`MAX_REPORTS_PER_PAGE` in report-error.ts), so a page that sends every
+	   report it may still fits in one window. */
+	clientErrorReportsPerWindow: 20,
+	/* The rolling minute the inline completion budget uses. Starting value; no measurement of
+	   client error volume yet. */
+	clientErrorWindowSeconds: 60
+} as const;
+
 export const APPLICATION_DEFAULTS = Object.freeze({
 	ARCHIVE_MAX_EXPANDED_BYTES: '26214400',
 	ARCHIVE_MAX_ENTRIES: '2000',
+	CLIENT_ERROR_MAX_BODY_BYTES: String(REQUEST_ADMISSION_DEFAULTS.clientErrorBodyBytes),
+	CLIENT_ERROR_REPORTS_PER_WINDOW: String(REQUEST_ADMISSION_DEFAULTS.clientErrorReportsPerWindow),
+	CLIENT_ERROR_WINDOW_SECONDS: String(REQUEST_ADMISSION_DEFAULTS.clientErrorWindowSeconds),
+	OAUTH_REGISTRATION_MAX_BODY_BYTES: String(REQUEST_ADMISSION_DEFAULTS.oauthRegistrationBodyBytes),
+	OAUTH_TOKEN_MAX_BODY_BYTES: String(REQUEST_ADMISSION_DEFAULTS.oauthTokenBodyBytes),
 	DB_NAME: 'followthrough',
 	DB_USER: 'followthrough',
 	ORIGIN: 'http://localhost:5173',
@@ -586,16 +619,44 @@ export const setPkceCookie = (
 export const deletePkceCookie = (cookies: Pick<CookieJar, 'delete'>, state: string): void =>
 	cookies.delete(`oauth_${state}`, { path: '/' });
 
-/** Deployment admission for decompression, not a per-document product limit. */
-export const archiveAdmissionLimits = () => {
-	const positiveInteger = (name: string, fallback: number): number => {
-		const value = process.env[name] === undefined ? fallback : Number(process.env[name]);
-		if (!Number.isSafeInteger(value) || value < 1)
-			throw new Error(`${name} must be a positive safe integer`);
-		return value;
-	};
-	return {
-		maxTotalBytes: positiveInteger('ARCHIVE_MAX_EXPANDED_BYTES', 25 * 1024 * 1024),
-		maxEntries: positiveInteger('ARCHIVE_MAX_ENTRIES', 2000)
-	};
+const positiveInteger = (name: string, fallback: number): number => {
+	const value = process.env[name] === undefined ? fallback : Number(process.env[name]);
+	if (!Number.isSafeInteger(value) || value < 1)
+		throw new Error(`${name} must be a positive safe integer`);
+	return value;
 };
+
+/** Deployment admission for decompression, not a per-document product limit. */
+export const archiveAdmissionLimits = () => ({
+	maxTotalBytes: positiveInteger('ARCHIVE_MAX_EXPANDED_BYTES', 25 * 1024 * 1024),
+	maxEntries: positiveInteger('ARCHIVE_MAX_ENTRIES', 2000)
+});
+
+/** The most bytes each small JSON or form endpoint reads from a request body. */
+export const requestBodyLimits = () => ({
+	clientErrorReport: positiveInteger(
+		'CLIENT_ERROR_MAX_BODY_BYTES',
+		REQUEST_ADMISSION_DEFAULTS.clientErrorBodyBytes
+	),
+	oauthRegistration: positiveInteger(
+		'OAUTH_REGISTRATION_MAX_BODY_BYTES',
+		REQUEST_ADMISSION_DEFAULTS.oauthRegistrationBodyBytes
+	),
+	oauthToken: positiveInteger(
+		'OAUTH_TOKEN_MAX_BODY_BYTES',
+		REQUEST_ADMISSION_DEFAULTS.oauthTokenBodyBytes
+	)
+});
+
+/** How many browser error reports one user may send in one rolling window. */
+export const clientErrorBudgetLimits = () => ({
+	reportsPerWindow: positiveInteger(
+		'CLIENT_ERROR_REPORTS_PER_WINDOW',
+		REQUEST_ADMISSION_DEFAULTS.clientErrorReportsPerWindow
+	),
+	windowMs:
+		positiveInteger(
+			'CLIENT_ERROR_WINDOW_SECONDS',
+			REQUEST_ADMISSION_DEFAULTS.clientErrorWindowSeconds
+		) * 1000
+});

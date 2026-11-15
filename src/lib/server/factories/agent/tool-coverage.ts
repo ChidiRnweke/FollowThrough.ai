@@ -21,6 +21,7 @@ import type { ReferencesController } from '$lib/server/controllers/references/co
 import type { RelationshipsController } from '$lib/server/controllers/relationships/controller';
 import type { SkillsController } from '$lib/server/controllers/skills/controller';
 import type { SuggestionsController } from '$lib/server/controllers/suggestions/controller';
+import type { TelemetryController } from '$lib/server/controllers/telemetry/controller';
 import type { TodosController } from '$lib/server/controllers/todos/controller';
 import type { WidgetsController } from '$lib/server/controllers/widgets/controller';
 import type { WorkspaceController } from '$lib/server/controllers/workspace/controller';
@@ -49,6 +50,7 @@ interface CoveredAgentControllers {
 	readonly contextUsage: ContextUsageController;
 	readonly connectors: ConnectorsController;
 	readonly schedules: SchedulesController;
+	readonly telemetry: TelemetryController;
 }
 
 export type AgentToolCoverage = AgentToolContractMap<CoveredAgentControllers>;
@@ -626,6 +628,12 @@ export const agentToolCoverage = {
 		markRunOpened: {
 			kind: 'excluded',
 			reason: "Opening a run's chat is the user's own gesture; the agent reading one is not."
+		}
+	},
+	telemetry: {
+		reportClientError: {
+			kind: 'excluded',
+			reason: "The browser reports its own failures; the agent's failures are already its feedback."
 		}
 	}
 } as const satisfies AgentToolCoverage;

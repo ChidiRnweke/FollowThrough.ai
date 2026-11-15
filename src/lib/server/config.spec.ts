@@ -11,10 +11,13 @@ import {
 	PREREGISTERED_CONNECTORS,
 	connectorClientKeys,
 	hydrateEnvironment,
-	mergePlatformEnvironment
+	mergePlatformEnvironment,
+	requestBodyLimits
 } from './config';
 import { variables as environmentVariables } from '../../env';
 import { CONNECTOR_CATALOG } from '$lib/models/connectors';
+import { clientRegistrationRequestSchema, tokenRequestSchema } from '$lib/models/mcp-authorization';
+import { clientErrorReportSchema } from '$lib/models/telemetry/client-error';
 
 class FakeSecretsClient implements InfisicalLikeClient {
 	calls = 0;
@@ -337,6 +340,78 @@ describe('connector client keys', () => {
 				clientId: 'CONNECTOR_SLACK_CLIENT_ID',
 				clientSecret: 'CONNECTOR_SLACK_CLIENT_SECRET'
 			}
+		});
+	});
+});
+
+describe('request body limits', () => {
+	type Json = string | number | readonly Json[] | { readonly [key: string]: Json };
+	/** JSON with every character of every string and key written as a six-byte escape. */
+	const escapedJson = (value: Json): string => {
+		if (typeof value === 'number') return String(value);
+		if (typeof value === 'string')
+			return `"${[...value].map((character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`).join('')}"`;
+		if (Array.isArray(value)) return `[${value.map(escapedJson).join(',')}]`;
+		return `{${Object.entries(value)
+			.map(([key, entry]) => `${escapedJson(key)}:${escapedJson(entry)}`)
+			.join(',')}}`;
+	};
+	/** A form with every byte of every name and value percent-encoded. */
+	const encodedForm = (fields: Record<string, string>): string => {
+		const encode = (text: string) =>
+			[...new TextEncoder().encode(text)]
+				.map((byte) => `%${byte.toString(16).toUpperCase().padStart(2, '0')}`)
+				.join('');
+		return Object.entries(fields)
+			.map(([key, value]) => `${encode(key)}=${encode(value)}`)
+			.join('&');
+	};
+	const size = (body: string) => new TextEncoder().encode(body).byteLength;
+	/** A URI of exactly `length` characters whose path is three-byte UTF-8 characters. */
+	const uri = (length: number) => `https://a.example/${'€'.repeat(length - 18)}`;
+
+	test('admit the largest body each schema accepts, in its longest encoding', () => {
+		const limits = requestBodyLimits();
+		const report = escapedJson({
+			message: 'x'.repeat(2000),
+			stack: 'x'.repeat(8000),
+			route: 'x'.repeat(500),
+			pathname: 'x'.repeat(500),
+			status: 599
+		});
+		const registration = escapedJson({
+			redirect_uris: Array.from({ length: 10 }, () => uri(8000)),
+			client_name: '€'.repeat(200),
+			token_endpoint_auth_method: 'none',
+			grant_types: ['authorization_code', 'authorization_code'],
+			response_types: ['code']
+		});
+		const token = encodedForm({
+			grant_type: 'authorization_code',
+			code: `ftc_${'A'.repeat(43)}`,
+			redirect_uri: uri(8000),
+			code_verifier: 'v'.repeat(128),
+			client_id: uri(8000),
+			resource: uri(8000)
+		});
+		expect({
+			report: {
+				parses: clientErrorReportSchema.safeParse(JSON.parse(report)).success,
+				fits: size(report) <= limits.clientErrorReport
+			},
+			registration: {
+				parses: clientRegistrationRequestSchema.safeParse(JSON.parse(registration)).success,
+				fits: size(registration) <= limits.oauthRegistration
+			},
+			token: {
+				parses: tokenRequestSchema.safeParse(Object.fromEntries(new URLSearchParams(token)))
+					.success,
+				fits: size(token) <= limits.oauthToken
+			}
+		}).toEqual({
+			report: { parses: true, fits: true },
+			registration: { parses: true, fits: true },
+			token: { parses: true, fits: true }
 		});
 	});
 });

@@ -27,6 +27,7 @@ import { createAttachmentsCapability } from './factories/capabilities/attachment
 import { createDeliverablesCapability } from './factories/capabilities/deliverables-capability-factory';
 import { createDiagramsCapability } from './factories/capabilities/diagrams-capability-factory';
 import { createFeedbackCapability } from './factories/capabilities/feedback-capability-factory';
+import { createTelemetryCapability } from './factories/capabilities/telemetry-capability-factory';
 import { createContextUsageCapability } from './factories/capabilities/context-usage-capability-factory';
 import {
 	createConnectorsCapability,
@@ -271,6 +272,7 @@ export function createApplication(
 	} = agentCapability;
 	const finalizedKnowledgeSearch = knowledgeSearch.finalize({ preferences });
 	const feedback = createFeedbackCapability(actor, { db });
+	const telemetry = createTelemetryCapability(actor, { db, now });
 	const contextUsage = createContextUsageCapability(actor, { db, now });
 	const attachmentCapability = createAttachmentsCapability(actor, {
 		now,
@@ -720,6 +722,7 @@ export function createApplication(
 			now: Date.now
 		},
 		feedback,
+		telemetry,
 		contextUsage: {
 			usage: contextUsage.usage,
 			connections: contextUsage.connections,

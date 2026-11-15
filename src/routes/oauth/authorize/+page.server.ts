@@ -7,6 +7,7 @@ import {
 	type OAuthFailure
 } from '$lib/models/mcp-authorization';
 import { AppFactory } from '$lib/server/factories/app-factory';
+import { logRefusal } from '$lib/server/infrastructure/http/refusal-log';
 import type { Actions, PageServerLoad } from './$types';
 
 const scopeSchema = z.enum(['read', 'full']);
@@ -40,8 +41,7 @@ const mcpResource = (url: URL): string => new URL('/mcp', url.origin).href;
 export const load: PageServerLoad = async ({ url }) => {
 	const request = parseRequest(url.searchParams);
 	if ('kind' in request) {
-		// Refused before any controller runs, so the boundary never logs it.
-		console.warn('[oauth] authorization request refused', { description: request.description });
+		logRefusal(url.pathname, request.description);
 		return { outcome: request };
 	}
 	const reviewed = await AppFactory.mcpAuthorization().review(request, mcpResource(url));

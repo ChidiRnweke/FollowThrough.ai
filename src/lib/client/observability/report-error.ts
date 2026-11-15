@@ -32,9 +32,10 @@ export function describeClientError(error: unknown): string {
 }
 
 /**
- * Fire-and-forget. The server side of this is a `console.error`, which the OTel
- * console bridge in `scripts/otel-instrumentation.js` already ships to the
- * collector — so nothing here needs an exporter of its own.
+ * Fire-and-forget. The server writes an admitted report as a `console.error`, which
+ * the OTel console bridge in `scripts/otel-instrumentation.js` already ships to the
+ * collector — so nothing here needs an exporter of its own. The answer is never
+ * read: a report the server refuses (413, 429) is not retried.
  *
  * Never throws and never awaits: it is called from `handleError`, which must not
  * fail, and from render paths that are already in trouble.

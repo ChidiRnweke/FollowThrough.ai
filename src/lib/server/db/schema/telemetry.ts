@@ -1,0 +1,1 @@
+export { clientErrorReports } from './registry';
