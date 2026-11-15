@@ -30,13 +30,15 @@
 </script>
 
 {#snippet list(heading: string, items: readonly ScheduleRow[])}
-	<!-- The eyebrow stands a group step off its rows: more than the step from one row to the next. -->
-	<section class="flex flex-col gap-group">
+	<!-- The eyebrow sits a `row` step above its list, as on the project overview. -->
+	<section class="flex flex-col gap-row">
 		<h2 class="eyebrow">{heading}</h2>
-		<ul class="divide-y divide-border border-y border-border">
+		<!-- Bled 12px past the measure: the switch keeps the page's left edge, and the hover wash
+		     and the hairlines have room around the row. -->
+		<ul class="-mx-3 divide-y divide-border border-y border-border">
 			{#each items as row (row.schedule.id)}
 				{@const schedule = row.schedule}
-				<li class="flex items-center gap-3">
+				<li class="flex items-center pl-3">
 					<Switch
 						checked={schedule.status === 'active'}
 						disabled={changing.has(schedule.id)}
@@ -47,7 +49,7 @@
 					/>
 					<a
 						href="/scheduled/{schedule.id}"
-						class="row-interactive flex min-w-0 flex-1 items-center gap-3 py-3"
+						class="row-interactive flex min-w-0 flex-1 items-center gap-3 px-3 py-3"
 					>
 						<span class="flex min-w-0 flex-1 flex-col gap-bind">
 							<span
@@ -100,6 +102,8 @@
 			{/snippet}
 		</EmptyState>
 	{:else}
+		<!-- Two lists with hairlines need a `section` step between them: at a `group` step the
+		     second eyebrow sits in a band the height of a row and reads as one more row. -->
 		<div class="flex max-w-3xl flex-col gap-section">
 			{#if active.length > 0}{@render list('Active', active)}{/if}
 			{#if resting.length > 0}{@render list('Not running', resting)}{/if}

@@ -21,8 +21,11 @@
 	const visible = $derived(runs.slice(start, start + PAGE_SIZE));
 </script>
 
-<!-- The heading stands a group step off its rows, as the eyebrows of the list page do. -->
-<section class="flex flex-col gap-group" aria-labelledby="schedule-runs-heading">
+<!--
+	The heading sits a `row` step above its list, as on the project overview. The page puts a
+	`section` step above the heading, so the heading belongs to the rows under it.
+-->
+<section class="flex flex-col gap-row" aria-labelledby="schedule-runs-heading">
 	<h2 id="schedule-runs-heading" class="section-title flex items-baseline gap-2">
 		Runs
 		<span class="text-sm font-normal text-muted-foreground tabular-nums">{runs.length}</span>
@@ -30,7 +33,9 @@
 	{#if runs.length === 0}
 		<p class="text-sm text-muted-foreground">No runs yet. The first one lands here.</p>
 	{:else}
-		<ul class="divide-y divide-border border-y border-border">
+		<!-- Bled 12px past the measure: the row text keeps the page's left edge, and the hover
+		     wash and the hairlines have room around it. -->
+		<ul class="-mx-3 divide-y divide-border border-y border-border">
 			{#each visible as run (run.occurrence.id)}
 				{@const fresh = run.state.kind === 'finished' && !run.state.opened}
 				{@const failed = run.state.kind === 'finished' && run.state.outcome === 'failed'}
@@ -38,7 +43,7 @@
 					<!-- A link, so the chat also opens in a new tab; a plain click shows it beside this page. -->
 					<a
 						href="/chats/{run.occurrence.conversationId}"
-						class="row-interactive flex items-center gap-3 py-3"
+						class="row-interactive flex items-center gap-3 px-3 py-3"
 						onclick={(event) => {
 							if (event.metaKey || event.ctrlKey || event.shiftKey) return;
 							event.preventDefault();
@@ -75,7 +80,7 @@
 			{/each}
 		</ul>
 		{#if runs.length > PAGE_SIZE}
-			<div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+			<div class="flex flex-wrap items-center justify-between gap-3">
 				<p class="provenance-caption">{start + 1}–{start + visible.length} of {runs.length}</p>
 				<!-- Pagination.Root centres itself by default; pulled right of the range. -->
 				<Pagination.Root class="mx-0 w-auto" count={runs.length} perPage={PAGE_SIZE} bind:page>

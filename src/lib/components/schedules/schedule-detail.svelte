@@ -109,7 +109,7 @@
 	<div class="flex max-w-3xl flex-col gap-section">
 		<!-- The sentence keeps a narrower measure than the runs under it: it is read, not scanned. -->
 		<div
-			class="flex max-w-2xl flex-col gap-item"
+			class="max-w-2xl"
 			onfocusout={(event) => {
 				if (event.target instanceof HTMLTextAreaElement) void savePrompt();
 			}}
@@ -119,13 +119,13 @@
 				timeZone={schedule.timeZone}
 				prompt={promptDraft ?? schedule.prompt}
 				executionMode={schedule.executionMode}
+				standing={detail.standing}
 				disabled={busy}
 				onrecurrence={(recurrence) => void change({ recurrence })}
 				ontimezone={(timeZone) => void change({ timeZone })}
 				onprompt={(prompt) => (promptDraft = prompt)}
 				onmode={(executionMode) => void setMode(executionMode)}
 			/>
-			<p class="provenance-caption">{detail.standing}</p>
 		</div>
 		<ScheduleRuns runs={detail.runs} onopen={onopenrun} />
 	</div>

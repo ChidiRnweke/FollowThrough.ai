@@ -52,27 +52,28 @@
 		/>
 	{/snippet}
 
-	<!-- The sentence keeps a narrower measure than a list: it is read, not scanned. -->
+	<!--
+		The sentence keeps a narrower measure than a list: it is read, not scanned. The action
+		stands a `group` step under it: it acts on the whole schedule, not on its last row.
+	-->
 	<div class="flex max-w-2xl flex-col gap-group">
 		<ScheduleSentence
 			{recurrence}
 			{timeZone}
 			{prompt}
 			{executionMode}
+			standing={preview}
 			disabled={creating}
 			onrecurrence={(next) => (recurrence = next)}
 			ontimezone={(next) => (timeZone = next)}
 			onprompt={(next) => (prompt = next)}
 			onmode={(next) => (executionMode = next)}
 		/>
-		<div class="flex flex-wrap items-center justify-between gap-3">
-			<p class="provenance-caption">{preview}</p>
-			<div class="flex items-center gap-2">
-				<Button variant="ghost" href="/scheduled" disabled={creating}>Cancel</Button>
-				<Button disabled={creating || !prompt.trim()} onclick={() => void create()}>
-					Create schedule
-				</Button>
-			</div>
+		<div class="flex items-center justify-end gap-2">
+			<Button variant="ghost" href="/scheduled" disabled={creating}>Cancel</Button>
+			<Button disabled={creating || !prompt.trim()} onclick={() => void create()}>
+				Create schedule
+			</Button>
 		</div>
 	</div>
 </PageShell>
