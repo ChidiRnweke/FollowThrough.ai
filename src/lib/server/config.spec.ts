@@ -319,7 +319,7 @@ describe('connector client keys', () => {
 			/^CONNECTOR_[A-Z0-9]+_CLIENT_(ID|SECRET)$/.test(key)
 		);
 		const loaded = OPTIONAL_APPLICATION_KEYS.filter(
-			(key) => key !== 'CONNECTOR_SECRET_KEYS' && key !== 'ATTACHMENT_MAX_BYTES'
+			(key) => key !== 'CONNECTOR_SECRET_KEYS' && key !== 'ATTACHMENT_RESERVATION_MAX_BYTES'
 		);
 		const pairs = PREREGISTERED_CONNECTORS.flatMap((id) => {
 			const keys = connectorClientKeys(id);

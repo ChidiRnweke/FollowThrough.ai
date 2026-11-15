@@ -107,15 +107,15 @@ describe('upload admission', () => {
 			checksumSha256: 'a'.repeat(64)
 		});
 
-	it('refuses a reservation larger than the configured ATTACHMENT_MAX_BYTES', async () => {
+	it('refuses a reservation larger than the configured ATTACHMENT_RESERVATION_MAX_BYTES', async () => {
 		await expect(reserve({ maxBytes: 1_000_000 }, 1_000_001)).rejects.toThrow(
 			new ValidationError(
-				'The attachment is 1000001 bytes, over the 1000000 byte ATTACHMENT_MAX_BYTES setting.'
+				'The attachment is 1000001 bytes, over the 1000000 byte ATTACHMENT_RESERVATION_MAX_BYTES setting.'
 			)
 		);
 	});
 
-	it('admits a reservation of exactly the configured ATTACHMENT_MAX_BYTES', async () => {
+	it('admits a reservation of exactly the configured ATTACHMENT_RESERVATION_MAX_BYTES', async () => {
 		expect((await reserve({ maxBytes: 1_000_000 }, 1_000_000)).byteSize).toBe(1_000_000);
 	});
 

@@ -239,7 +239,7 @@ export const PREREGISTERED_CONNECTORS = [
 ] as const;
 
 export const OPTIONAL_APPLICATION_KEYS: readonly string[] = [
-	'ATTACHMENT_MAX_BYTES',
+	'ATTACHMENT_RESERVATION_MAX_BYTES',
 	'CONNECTOR_SECRET_KEYS',
 	...PREREGISTERED_CONNECTORS.flatMap((id) => {
 		const keys = connectorClientKeys(id);
@@ -674,14 +674,14 @@ const positiveInteger = (name: string, fallback: number): number => {
 /**
  * Deployment admission for direct attachment uploads. Unset by default, so any size is
  * admitted: the product carries no attachment size ceiling (self-hosting docs, "Request and
- * archive admission"), and a deployment that wants one sets ATTACHMENT_MAX_BYTES.
+ * archive admission"), and a deployment that wants one sets ATTACHMENT_RESERVATION_MAX_BYTES.
  */
 export const attachmentAdmissionLimits = (): { readonly maxBytes?: number } => {
-	const raw = process.env.ATTACHMENT_MAX_BYTES;
+	const raw = process.env.ATTACHMENT_RESERVATION_MAX_BYTES;
 	if (raw === undefined) return {};
 	const maxBytes = Number(raw);
 	if (!Number.isSafeInteger(maxBytes) || maxBytes < 1)
-		throw new Error('ATTACHMENT_MAX_BYTES must be a positive safe integer');
+		throw new Error('ATTACHMENT_RESERVATION_MAX_BYTES must be a positive safe integer');
 	return { maxBytes };
 };
 

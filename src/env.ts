@@ -108,7 +108,7 @@ export const variables = defineEnvVars({
 			'can never be hydrated from the secrets backend.',
 		schema: optionalString
 	},
-	ATTACHMENT_MAX_BYTES: {
+	ATTACHMENT_RESERVATION_MAX_BYTES: {
 		description: 'Largest attachment upload admitted, in bytes. Unset admits any size.',
 		schema: optionalString
 	},

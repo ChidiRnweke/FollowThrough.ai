@@ -98,7 +98,7 @@ export class AttachmentUploadService implements AttachmentUploads {
 		const { maxBytes } = this.admission;
 		if (maxBytes !== undefined && input.byteSize > maxBytes)
 			throw new ValidationError(
-				`The attachment is ${input.byteSize} bytes, over the ${maxBytes} byte ATTACHMENT_MAX_BYTES setting.`
+				`The attachment is ${input.byteSize} bytes, over the ${maxBytes} byte ATTACHMENT_RESERVATION_MAX_BYTES setting.`
 			);
 		if (!/^[a-f0-9]{64}$/i.test(input.checksumSha256))
 			throw new ValidationError('Attachment checksum must be a SHA-256 hex digest');
