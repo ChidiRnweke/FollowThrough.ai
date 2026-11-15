@@ -32,6 +32,7 @@ import {
 	createConnectorsCapability,
 	type ConnectorConfiguration
 } from './factories/capabilities/connectors-capability-factory';
+import { createSchedulesCapability } from './factories/capabilities/schedules-capability-factory';
 import { createIdentityCapability } from './factories/capabilities/identity-capability-factory';
 import { createKnowledgeSearchCapability } from './factories/capabilities/knowledge-search-capability-factory';
 import { createMemoryCapability } from './factories/capabilities/memory-capability-factory';
@@ -214,6 +215,7 @@ export function createApplication(
 		configuration: config.connectors,
 		embeddings: knowledgeSearch.connectorToolEmbedding
 	});
+	const schedules = createSchedulesCapability(actor, { db, transactionRunner, now });
 	const noteIndexer = knowledge;
 	const diagramIndexer = knowledge;
 	const memoryIndexer = knowledge;
@@ -722,7 +724,8 @@ export function createApplication(
 		},
 		attachmentProcessing: attachmentCapability.processing,
 		knowledgeIndexing: knowledgeSearch.indexing,
-		connectors: connectorCapability.controller
+		connectors: connectorCapability.controller,
+		schedules: schedules.controller
 	};
 	const controllerFactory = new ProductionControllerFactory(actor, dependencies);
 	return {

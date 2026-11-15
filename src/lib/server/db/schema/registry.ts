@@ -28,6 +28,7 @@ import type { Provenance } from '$lib/models/provenance';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
 import type { WidgetData, WidgetLayout } from '$lib/models/widgets';
 import type { ConnectorToolHints } from '$lib/models/connectors';
+import type { Recurrence } from '$lib/models/schedules';
 
 export const workspaceSyncVersionSequence = pgSequence('workspace_sync_version_sequence');
 
@@ -1563,5 +1564,39 @@ export const connectorIcons = pgTable(
 			'connector_icons_media_type_check',
 			sql`${table.mediaType} in ('image/png', 'image/jpeg', 'image/webp', 'image/svg+xml')`
 		)
+	]
+);
+
+/**
+ * A prompt the worker runs for its owner on a recurrence (ADR 0052). `next_run_at` is the one
+ * fact the worker polls: an active schedule always has it, and no other schedule does.
+ */
+export const schedules = pgTable(
+	'schedules',
+	{
+		id: uuid('id').primaryKey(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		title: text('title').notNull(),
+		prompt: text('prompt').notNull(),
+		recurrence: jsonb('recurrence').$type<Recurrence>().notNull(),
+		timeZone: text('time_zone').notNull(),
+		executionMode: agentExecutionMode('execution_mode').notNull(),
+		status: text('status').notNull(),
+		nextRunAt: timestamp('next_run_at', { withTimezone: true }),
+		...timestamps
+	},
+	(table) => [
+		index('schedules_due_idx')
+			.on(table.nextRunAt)
+			.where(sql`${table.status} = 'active'`),
+		index('schedules_user_idx').on(table.userId, table.createdAt),
+		check('schedules_status_check', sql`${table.status} in ('active', 'paused', 'finished')`),
+		check(
+			'schedules_next_run_check',
+			sql`(${table.status} = 'active') = (${table.nextRunAt} is not null)`
+		),
+		check('schedules_recurrence_check', sql`jsonb_typeof(${table.recurrence}) = 'object'`)
 	]
 );

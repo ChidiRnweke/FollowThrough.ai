@@ -267,6 +267,16 @@ export const controllerSurfaces = {
 		disconnect: true,
 		callTool: 'redacted',
 		icon: 'redacted'
+	},
+	schedules: {
+		list: true,
+		get: true,
+		create: true,
+		update: true,
+		pause: true,
+		resume: true,
+		setExecutionMode: true,
+		remove: true
 	}
 } satisfies {
 	[K in keyof ControllerFactory]: ControllerSurface<ReturnType<ControllerFactory[K]>>;

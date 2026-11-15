@@ -9,6 +9,7 @@ import { pendingAgentDecisionSchema, webSearchEngines } from '$lib/models/agent'
 import { projectTemplateStylesSchema } from '$lib/models/projects';
 import { exportSettingsOverlaySchema } from '$lib/models/deliverables';
 import { widgetDataSchema, widgetLayoutSchema, type Widget } from '$lib/models/widgets';
+import { ianaTimeZoneSchema, recurrenceSchema, type Schedule } from '$lib/models/schedules';
 
 const id = <Name extends string>() =>
 	z
@@ -129,6 +130,25 @@ export const widgetRecordSchema = z.object({
 	archivedAt: instant.optional(),
 	...timestamps
 }) satisfies z.ZodType<Widget>;
+
+export const scheduleRecordFields = {
+	id: id<'ScheduleId'>(),
+	...owned,
+	title: z.string(),
+	prompt: z.string(),
+	recurrence: recurrenceSchema,
+	timeZone: ianaTimeZoneSchema,
+	executionMode,
+	status: z.enum(['active', 'paused', 'finished']),
+	nextRunAt: instant.optional(),
+	...timestamps
+};
+const notScheduled = { nextRunAt: z.undefined().optional() };
+export const scheduleRecordSchema: z.ZodType<Schedule> = z.discriminatedUnion('status', [
+	z.object({ ...scheduleRecordFields, status: z.literal('active'), nextRunAt: instant }),
+	z.object({ ...scheduleRecordFields, status: z.literal('paused'), ...notScheduled }),
+	z.object({ ...scheduleRecordFields, status: z.literal('finished'), ...notScheduled })
+]);
 
 const messageFields = {
 	id: id<'MessageId'>(),
@@ -356,7 +376,8 @@ export const resourceDataSchemas = {
 		runId: id<'AgentRunId'>().optional(),
 		createdAt: instant
 	}),
-	widgets: widgetRecordSchema
+	widgets: widgetRecordSchema,
+	schedules: scheduleRecordSchema
 };
 
 export const workspaceRecordSchema = z.discriminatedUnion('type', [
@@ -400,7 +421,8 @@ export const workspaceRecordSchema = z.discriminatedUnion('type', [
 	z.object({ type: z.literal('project_templates'), value: resourceDataSchemas.project_templates }),
 	z.object({ type: z.literal('export_settings'), value: resourceDataSchemas.export_settings }),
 	z.object({ type: z.literal('artifacts'), value: resourceDataSchemas.artifacts }),
-	z.object({ type: z.literal('widgets'), value: resourceDataSchemas.widgets })
+	z.object({ type: z.literal('widgets'), value: resourceDataSchemas.widgets }),
+	z.object({ type: z.literal('schedules'), value: resourceDataSchemas.schedules })
 ]);
 export type WorkspaceRecord = z.infer<typeof workspaceRecordSchema>;
 

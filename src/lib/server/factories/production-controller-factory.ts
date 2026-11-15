@@ -64,6 +64,7 @@ import {
 } from '../controllers/user-settings/controller';
 import { Workspace, type WorkspaceDependencies } from '../controllers/workspace/controller';
 import { Connectors, type ConnectorsDependencies } from '../controllers/connectors/controller';
+import { Schedules, type SchedulesDependencies } from '../controllers/schedules/controller';
 import type { ControllerFactory } from './controller-factory';
 import { instrumentedController } from './controller-instrumentation';
 import type { ControllerSurface } from '$lib/models/controller-boundary';
@@ -97,6 +98,7 @@ export interface ProductionControllerDependencies {
 	attachmentProcessing: AttachmentProcessingController;
 	knowledgeIndexing: KnowledgeIndexingController;
 	connectors: ConnectorsDependencies;
+	schedules: SchedulesDependencies;
 }
 
 export class ProductionControllerFactory implements ControllerFactory {
@@ -349,6 +351,13 @@ export class ProductionControllerFactory implements ControllerFactory {
 			'connectors',
 			new Connectors(this.dependencies.connectors),
 			controllerSurfaces.connectors
+		);
+	}
+	schedules(): ReturnType<ControllerFactory['schedules']> {
+		return this.instrument(
+			'schedules',
+			new Schedules(this.actor, this.dependencies.schedules),
+			controllerSurfaces.schedules
 		);
 	}
 }
