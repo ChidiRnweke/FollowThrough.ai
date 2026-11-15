@@ -243,14 +243,21 @@ export const sessions = pgTable('sessions', {
 
 /**
  * MCP clients that registered anonymously (RFC 7591). Clients that identify with a
- * metadata document URL are fetched per authorization and never stored.
+ * metadata document URL are fetched per authorization and never stored. `last_used_at` starts
+ * at registration and moves each time a code is issued to the client; the worker deletes a
+ * registration that stays unused past its retention and that no connection or code names.
  */
-export const mcpClients = pgTable('mcp_clients', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	clientName: text('client_name').notNull(),
-	redirectUris: text('redirect_uris').array().notNull(),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+export const mcpClients = pgTable(
+	'mcp_clients',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		clientName: text('client_name').notNull(),
+		redirectUris: text('redirect_uris').array().notNull(),
+		lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [index('mcp_clients_last_used_idx').on(table.lastUsedAt)]
+);
 
 /**
  * Single-use authorization codes. Only the sha256 of the code is stored, beside everything

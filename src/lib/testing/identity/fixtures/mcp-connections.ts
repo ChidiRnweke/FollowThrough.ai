@@ -9,37 +9,38 @@ const REDIRECT = 'http://localhost:53122/callback';
 const VERIFIER = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
 const CHALLENGE = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
 
-/** A request for `TEST_MCP_CLIENT` that has passed review. */
-export const reviewedMcpAuthorization: ReviewedAuthorization = {
+/** A request from `clientId` that has passed review. */
+export const reviewedMcpAuthorizationFor = (clientId: string): ReviewedAuthorization => ({
 	kind: 'reviewed',
 	client: {
-		clientId: TEST_MCP_CLIENT,
+		clientId,
 		name: 'Claude Code',
 		redirectUris: ['http://localhost/callback']
 	},
 	request: {
-		target: { clientId: TEST_MCP_CLIENT, redirectUri: REDIRECT, state: undefined },
+		target: { clientId, redirectUri: REDIRECT, state: undefined },
 		codeChallenge: CHALLENGE,
 		resource: TEST_MCP_RESOURCE,
 		requestedScopes: []
 	},
 	requestedScope: 'read'
-};
+});
 
-/** Approves `TEST_MCP_CLIENT` as the issuer's user and exchanges the code, as the client would. */
+/** Approves the client as the issuer's user and exchanges the code, as the client would. */
 export const connectMcpClient = async (
 	grants: McpCodeIssuer,
 	credentials: McpTokenExchange,
-	scope: McpScope
+	scope: McpScope,
+	clientId = TEST_MCP_CLIENT
 ): Promise<IssuedTokens> => {
-	const code = await grants.issueCode(reviewedMcpAuthorization, scope);
+	const code = await grants.issueCode(reviewedMcpAuthorizationFor(clientId), scope);
 	const issued = await credentials.exchange(
 		{
 			grant: 'authorization_code',
 			code,
 			redirectUri: REDIRECT,
 			codeVerifier: VERIFIER,
-			clientId: TEST_MCP_CLIENT,
+			clientId,
 			resource: TEST_MCP_RESOURCE
 		},
 		TEST_MCP_RESOURCE

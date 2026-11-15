@@ -1,8 +1,19 @@
+import { z } from 'zod';
+
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 export type UserId = Brand<string, 'UserId'>;
 
 export type SessionId = Brand<string, 'SessionId'>;
+
+/** A session id is this many random bytes, hex-encoded: 256 bits, so an id cannot be guessed. */
+export const SESSION_ID_BYTES = 32;
+
+/** Admits only lowercase hex of `SESSION_ID_BYTES`, so a malformed cookie is refused unread. */
+export const sessionIdSchema = z
+	.string()
+	.regex(new RegExp(`^[0-9a-f]{${SESSION_ID_BYTES * 2}}$`))
+	.transform((value) => value as SessionId);
 
 export type McpConnectionId = Brand<string, 'McpConnectionId'>;
 

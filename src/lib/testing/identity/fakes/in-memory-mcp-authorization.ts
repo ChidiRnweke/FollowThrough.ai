@@ -23,8 +23,13 @@ interface StoredConnection extends TokenPairHashes {
 	readonly revoked: boolean;
 }
 
+interface StoredClient {
+	readonly client: McpClient;
+	readonly lastUsedAt: Date;
+}
+
 interface Tables {
-	readonly clients: McpClient[];
+	readonly clients: StoredClient[];
 	readonly codes: Map<string, StoredAuthorizationCode>;
 	readonly connections: StoredConnection[];
 	readonly sequence: { next: number };
@@ -55,17 +60,38 @@ export class InMemoryMcpAuthorizationRepository
 
 	async create(client: { name: string; redirectUris: readonly string[] }): Promise<McpClient> {
 		const created = { clientId: id(++this.tables.sequence.next), ...client };
-		this.tables.clients.push(created);
+		this.tables.clients.push({ client: created, lastUsedAt: new Date() });
 		return created;
 	}
 
 	async find(clientId: string): Promise<McpClient | null> {
-		return this.tables.clients.find((client) => client.clientId === clientId) ?? null;
+		return this.tables.clients.find((row) => row.client.clientId === clientId)?.client ?? null;
 	}
 
-	async createCode(code: NewAuthorizationCode): Promise<void> {
+	async deleteUnused(lastUsedBefore: Date): Promise<number> {
+		const now = Date.now();
+		const named = (clientId: string): boolean =>
+			this.tables.connections.some((row) => row.connection.clientId === clientId && !row.revoked) ||
+			[...this.tables.codes.values()].some(
+				(code) => code.clientId === clientId && code.expiresAt.getTime() > now
+			);
+		const kept = this.tables.clients.filter(
+			(row) => row.lastUsedAt >= lastUsedBefore || named(row.client.clientId)
+		);
+		const deleted = this.tables.clients.length - kept.length;
+		this.tables.clients.splice(0, this.tables.clients.length, ...kept);
+		return deleted;
+	}
+
+	async createCode(code: NewAuthorizationCode): Promise<'created' | 'unregistered'> {
 		const { codeHash, ...stored } = code;
+		const index = this.tables.clients.findIndex((row) => row.client.clientId === code.clientId);
+		// A metadata document URL names no registration; any other client id must still be one.
+		if (index < 0 && !URL.canParse(code.clientId)) return 'unregistered';
+		if (index >= 0)
+			this.tables.clients[index] = { ...this.tables.clients[index], lastUsedAt: new Date() };
 		this.tables.codes.set(codeHash, { ...stored, userId: this.actor.userId });
+		return 'created';
 	}
 
 	async listConnections(): Promise<readonly McpConnection[]> {

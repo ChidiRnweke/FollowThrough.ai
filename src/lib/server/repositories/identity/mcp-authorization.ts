@@ -10,6 +10,11 @@ export interface McpClientRepository {
 	create(client: { name: string; redirectUris: readonly string[] }): Promise<McpClient>;
 	/** Null for an id that was never issued, including one that is not a registration id. */
 	find(clientId: string): Promise<McpClient | null>;
+	/**
+	 * Deletes registrations last used before `lastUsedBefore` that no unrevoked connection and
+	 * no unexpired code names, in one statement. Returns how many were deleted.
+	 */
+	deleteUnused(lastUsedBefore: Date): Promise<number>;
 }
 
 export type ClientMetadataFetch =
@@ -28,7 +33,11 @@ export type NewAuthorizationCode = Omit<StoredAuthorizationCode, 'userId'> & {
 
 /** The bound user's codes and connections. */
 export interface McpGrantRepository {
-	createCode(code: NewAuthorizationCode): Promise<void>;
+	/**
+	 * Stores the code and marks its client's registration, if it has one, as used now. A
+	 * registration that is gone (swept after the client was reviewed) stores nothing.
+	 */
+	createCode(code: NewAuthorizationCode): Promise<'created' | 'unregistered'>;
 	/** Connections that are not revoked, newest first. */
 	listConnections(): Promise<readonly McpConnection[]>;
 	revokeConnection(id: McpConnectionId): Promise<McpConnection | undefined>;

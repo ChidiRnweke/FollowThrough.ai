@@ -5,8 +5,18 @@ const config = {
 	domain: 'identity.test',
 	clientId: 'test-client',
 	clientSecret: 'test-secret',
-	callbackUrl: 'https://app.test/auth/callback'
+	callbackUrl: 'https://app.test/auth/callback',
+	requestTimeoutMs: 10_000
 };
+
+/** An endpoint that never answers: like `fetch`, it settles only when the request is aborted. */
+const hungEndpoint: typeof globalThis.fetch = (_url, init) =>
+	new Promise((_resolve, reject) => {
+		init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+	});
+
+/** A failed response whose body is far larger than any useful error message. */
+const hugeErrorBody = () => new Response('x'.repeat(5 * 1024 * 1024), { status: 502 });
 describe('Authentik response boundary', () => {
 	it('reads the default Authentik email and profile claims', async () => {
 		// Producer mapping: https://github.com/goauthentik/authentik/blob/main/blueprints/system/providers-oauth2.yaml
@@ -88,4 +98,38 @@ it('uses the exchanged access token only as the profile request bearer credentia
 			authorization: 'Bearer exchanged-access-token'
 		}
 	]);
+});
+
+describe('Authentik request bounds', () => {
+	it('fails a token exchange that gets no answer at the request deadline', async () => {
+		const client = new AuthentikClient({ ...config, requestTimeoutMs: 20 }, hungEndpoint);
+		await expect(client.exchangeCode('code', 'verifier')).rejects.toMatchObject({
+			name: 'TimeoutError'
+		});
+	});
+	it('fails a profile read that gets no answer at the request deadline', async () => {
+		const client = new AuthentikClient({ ...config, requestTimeoutMs: 20 }, hungEndpoint);
+		await expect(client.getUserInfo('test-token')).rejects.toMatchObject({
+			name: 'TimeoutError'
+		});
+	});
+	it('quotes only the first 500 bytes of a huge token error body', async () => {
+		const client = new AuthentikClient(config, async () => hugeErrorBody());
+		await expect(client.exchangeCode('code', 'verifier')).rejects.toThrow(
+			new Error(`Token exchange failed with status 502: ${'x'.repeat(500)}… (first 500 bytes)`)
+		);
+	});
+	it('quotes only the first 500 bytes of a huge profile error body', async () => {
+		const client = new AuthentikClient(config, async () => hugeErrorBody());
+		await expect(client.getUserInfo('test-token')).rejects.toThrow(
+			new Error(`Failed to fetch user info with status 502: ${'x'.repeat(500)}… (first 500 bytes)`)
+		);
+	});
+	it('quotes a short error body whole', async () => {
+		const body = JSON.stringify({ error: 'invalid_grant' });
+		const client = new AuthentikClient(config, async () => new Response(body, { status: 400 }));
+		await expect(client.exchangeCode('code', 'verifier')).rejects.toThrow(
+			new Error(`Token exchange failed with status 400: ${body}`)
+		);
+	});
 });

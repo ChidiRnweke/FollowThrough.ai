@@ -12,7 +12,8 @@ const config = {
 	domain: 'identity.test',
 	clientId: 'test-client',
 	clientSecret: 'test-secret',
-	callbackUrl: 'https://app.test/auth/callback'
+	callbackUrl: 'https://app.test/auth/callback',
+	requestTimeoutMs: 10_000
 };
 const profile = {
 	sub: 'provider-account-1',

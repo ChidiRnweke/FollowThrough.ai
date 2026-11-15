@@ -31,6 +31,15 @@ export interface McpClientRegistrar {
 	register(request: ClientRegistrationRequest): Promise<McpClient | OAuthFailure>;
 }
 
+/** Anonymous registrations that no client came back to. */
+export interface McpClientRetention {
+	/**
+	 * Deletes registrations last used before `lastUsedBefore`. A registration that an unrevoked
+	 * connection or an unexpired code names is kept. Returns how many were deleted.
+	 */
+	removeUnused(lastUsedBefore: Date): Promise<number>;
+}
+
 export interface McpClientDirectoryDependencies {
 	readonly clients: McpClientRepository;
 	readonly documents: ClientMetadataDocumentRepository;
@@ -81,7 +90,7 @@ const redirectProblem = (value: string): string | null => {
 	return null;
 };
 
-export class McpClientDirectory implements McpClientReview, McpClientRegistrar {
+export class McpClientDirectory implements McpClientReview, McpClientRegistrar, McpClientRetention {
 	constructor(private readonly dependencies: McpClientDirectoryDependencies) {}
 
 	async review(
@@ -123,6 +132,10 @@ export class McpClientDirectory implements McpClientReview, McpClientRegistrar {
 			name: request.name ?? new URL(request.redirectUris[0]).host,
 			redirectUris: request.redirectUris
 		});
+	}
+
+	removeUnused(lastUsedBefore: Date): Promise<number> {
+		return this.dependencies.clients.deleteUnused(lastUsedBefore);
 	}
 
 	/** An https `client_id` is a metadata document URL; any other is a registration id. */

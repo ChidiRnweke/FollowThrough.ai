@@ -16,6 +16,7 @@ import { AgentRunBacklogRecords } from '$lib/server/repositories/agent/postgres/
 import { RunBacklogService } from '$lib/server/services/agent/runs/backlog';
 import type { ApplicationConfig } from '$lib/server/application';
 import { createAttachmentMaintenance } from './capabilities/attachments-capability-factory';
+import { createIdentityMaintenance } from './capabilities/identity-capability-factory';
 import {
 	createEmbeddingBacklog,
 	createToolDiscovery
@@ -79,6 +80,6 @@ export const createSystemApplication = (config: ApplicationConfig): SystemApplic
 					...(config.overrides?.toolSearch ? { toolSearch: config.overrides.toolSearch } : {})
 				})
 		},
-		tasks: attachments.tasks
+		tasks: [...attachments.tasks, ...createIdentityMaintenance({ db: config.db }).tasks]
 	};
 };

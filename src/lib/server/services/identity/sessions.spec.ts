@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { InMemorySessionRepository } from '$lib/testing/identity/fakes/in-memory-sessions';
 import { InMemoryUserRepository } from '$lib/testing/identity/fakes/in-memory-users';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { sessionIdSchema } from '$lib/models/identity';
 import { SessionRegistry } from './sessions';
 
 const day = 24 * 60 * 60 * 1000;
@@ -36,7 +37,7 @@ describe('authenticated session lifetime', () => {
 	});
 	it('returns no identity for a missing session', async () => {
 		const { registry } = await setup();
-		expect(await registry.validateSession('missing')).toBeNull();
+		expect(await registry.validateSession(sessionIdSchema.parse('0'.repeat(64)))).toBeNull();
 	});
 	it('keeps an unexpired session unchanged before the renewal boundary', async () => {
 		const { registry, repository, clock, session } = await setup();
@@ -95,5 +96,26 @@ describe('authenticated session lifetime', () => {
 		await expect(registry.createSession(testActor().userId)).rejects.toThrow(
 			'Session storage unavailable'
 		);
+	});
+});
+
+describe('session id shape', () => {
+	it('admits every id a new session receives', async () => {
+		const { registry } = await setup();
+		const issued = await Promise.all(
+			Array.from({ length: 20 }, () => registry.createSession(testActor().userId))
+		);
+		expect(issued.filter(({ id }) => !sessionIdSchema.safeParse(id).success)).toEqual([]);
+	});
+	it.each([
+		['an empty value', ''],
+		['one hex digit short', 'a'.repeat(63)],
+		['one hex digit long', 'a'.repeat(65)],
+		['upper-case hex', 'A'.repeat(64)],
+		['a non-hex character', `${'a'.repeat(63)}g`],
+		['surrounding whitespace', ` ${'a'.repeat(64)}`],
+		['an oversized value', 'a'.repeat(64 * 1024)]
+	])('refuses %s', (_case, value) => {
+		expect(sessionIdSchema.safeParse(value).success).toBe(false);
 	});
 });

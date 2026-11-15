@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, lt, notExists, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ActorContext, McpConnection, McpConnectionId } from '$lib/models/identity';
 import type { McpClient, StoredAuthorizationCode } from '$lib/models/mcp-authorization';
@@ -57,6 +57,43 @@ export class McpClientRecords implements McpClientRepository {
 			.where(eq(schema.mcpClients.id, clientId));
 		return row ? toMcpClient(row) : null;
 	}
+
+	async deleteUnused(lastUsedBefore: Date): Promise<number> {
+		// Codes and connections name a client by text, since a metadata document URL is also a
+		// client id; a registration is named by its uuid's text form.
+		const clientIdText = sql`${schema.mcpClients.id}::text`;
+		const rows = await this.database
+			.delete(schema.mcpClients)
+			.where(
+				and(
+					lt(schema.mcpClients.lastUsedAt, lastUsedBefore),
+					notExists(
+						this.database
+							.select({ one: sql`1` })
+							.from(schema.mcpConnections)
+							.where(
+								and(
+									eq(schema.mcpConnections.clientId, clientIdText),
+									isNull(schema.mcpConnections.revokedAt)
+								)
+							)
+					),
+					notExists(
+						this.database
+							.select({ one: sql`1` })
+							.from(schema.mcpAuthorizationCodes)
+							.where(
+								and(
+									eq(schema.mcpAuthorizationCodes.clientId, clientIdText),
+									gt(schema.mcpAuthorizationCodes.expiresAt, sql`now()`)
+								)
+							)
+					)
+				)
+			)
+			.returning({ id: schema.mcpClients.id });
+		return rows.length;
+	}
 }
 
 export class McpGrantRecords implements McpGrantRepository {
@@ -65,21 +102,33 @@ export class McpGrantRecords implements McpGrantRepository {
 		private readonly database: Database
 	) {}
 
-	async createCode(code: NewAuthorizationCode): Promise<void> {
-		// Codes that were never exchanged expire unused; remove them as new ones arrive.
-		await this.database
-			.delete(schema.mcpAuthorizationCodes)
-			.where(lt(schema.mcpAuthorizationCodes.expiresAt, new Date()));
-		await this.database.insert(schema.mcpAuthorizationCodes).values({
-			codeHash: code.codeHash,
-			userId: this.actor.userId,
-			clientId: code.clientId,
-			clientName: code.clientName,
-			redirectUri: code.redirectUri,
-			codeChallenge: code.codeChallenge,
-			scope: code.scope,
-			resource: code.resource,
-			expiresAt: code.expiresAt
+	async createCode(code: NewAuthorizationCode): Promise<'created' | 'unregistered'> {
+		return this.database.transaction(async (tx) => {
+			// Codes that were never exchanged expire unused; remove them as new ones arrive.
+			await tx
+				.delete(schema.mcpAuthorizationCodes)
+				.where(lt(schema.mcpAuthorizationCodes.expiresAt, new Date()));
+			// A metadata document URL names no registration, and Postgres would refuse it as a uuid.
+			if (registrationId.safeParse(code.clientId).success) {
+				const used = await tx
+					.update(schema.mcpClients)
+					.set({ lastUsedAt: new Date() })
+					.where(eq(schema.mcpClients.id, code.clientId))
+					.returning({ id: schema.mcpClients.id });
+				if (used.length === 0) return 'unregistered';
+			}
+			await tx.insert(schema.mcpAuthorizationCodes).values({
+				codeHash: code.codeHash,
+				userId: this.actor.userId,
+				clientId: code.clientId,
+				clientName: code.clientName,
+				redirectUri: code.redirectUri,
+				codeChallenge: code.codeChallenge,
+				scope: code.scope,
+				resource: code.resource,
+				expiresAt: code.expiresAt
+			});
+			return 'created';
 		});
 	}
 

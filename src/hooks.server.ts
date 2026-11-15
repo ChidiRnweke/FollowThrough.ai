@@ -2,7 +2,9 @@ import type { HandleServerError, ServerInit } from '@sveltejs/kit';
 import { building } from '$app/env';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import type { OwnedRun } from '$lib/models/agent';
+import { sessionIdSchema } from '$lib/models/identity';
 import {
+	deleteSessionCookie,
 	getSessionCookie,
 	setSessionCookie,
 	hydrateEnvironment,
@@ -103,19 +105,24 @@ export const handle: Handle = async ({ event, resolve }) => {
 	)
 		return resolve(event);
 
-	const sessionId = getSessionCookie(event.cookies);
+	const sessionCookie = getSessionCookie(event.cookies);
 
-	if (sessionId) {
-		const result = await AppFactory.authentication().resumeSession(sessionId);
-		if (result) {
-			// Session validation may extend the stored deadline. Keep the browser in sync.
-			setSessionCookie(
-				event.cookies,
-				result.session.id,
-				event.url.protocol === 'https:',
-				result.session.expiresAt
-			);
-			event.locals.user = result.user;
+	if (sessionCookie !== null) {
+		const sessionId = sessionIdSchema.safeParse(sessionCookie);
+		// A value no session id can have names no session: drop the cookie without a lookup.
+		if (!sessionId.success) deleteSessionCookie(event.cookies);
+		else {
+			const result = await AppFactory.authentication().resumeSession(sessionId.data);
+			if (result) {
+				// Session validation may extend the stored deadline. Keep the browser in sync.
+				setSessionCookie(
+					event.cookies,
+					result.session.id,
+					event.url.protocol === 'https:',
+					result.session.expiresAt
+				);
+				event.locals.user = result.user;
+			}
 		}
 	}
 
