@@ -363,7 +363,7 @@ describe('Postgres durable agent run repository invariants', () => {
 			sql`update agent_run_events set event = '{"type":"future_completion"}'::jsonb where cursor = ${terminal.cursor}`
 		);
 		const runs = new AgentRunRecords(owner, context.db);
-		await new RunTransitions(runs).claim(run.id, now);
+		await new RunTransitions(runs, 'web').claim(run.id, now);
 		await new RunSettlements(runs, events).claim(run.id, {
 			kind: 'completed',
 			conversationId: run.conversationId,
@@ -405,7 +405,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		const run = await seedQueuedRun('17901');
 		const other = await seedQueuedRun('17902');
 		const runs = new AgentRunRecords(actor('17901'), context.db);
-		await new RunTransitions(runs).claim(run.id, now);
+		await new RunTransitions(runs, 'web').claim(run.id, now);
 		const events = new AgentRunEventRecords(actor('17901'), context.db);
 		const first = await events.append(run.id, 1, { type: 'text_delta', text: 'Before.' });
 		await events.append(run.id, 2, { type: 'text_delta', text: 'Another attempt.' });
@@ -467,8 +467,8 @@ describe('Postgres durable agent run repository invariants', () => {
 			review
 		};
 		const runs = new AgentRunRecords(owner, context.db);
-		await new RunTransitions(runs).claim(run.id, now);
-		const checkpoints = new RunTransitions(runs);
+		await new RunTransitions(runs, 'web').claim(run.id, now);
+		const checkpoints = new RunTransitions(runs, 'web');
 		await checkpoints.persistCheckpoint(
 			run.id,
 			checkpoints.prepareCheckpoint(
@@ -560,8 +560,8 @@ describe('Postgres durable agent run repository invariants', () => {
 			toolName: 'archive_note' as const,
 			arguments: { noteId: '40000000-0000-4000-8000-000000000103' }
 		};
-		await new RunTransitions(runs).claim(run.id, now);
-		const checkpoints = new RunTransitions(runs);
+		await new RunTransitions(runs, 'web').claim(run.id, now);
+		const checkpoints = new RunTransitions(runs, 'web');
 		await checkpoints.persistCheckpoint(
 			run.id,
 			checkpoints.prepareCheckpoint(

@@ -9,7 +9,12 @@ import { pendingAgentDecisionSchema, webSearchEngines } from '$lib/models/agent'
 import { projectTemplateStylesSchema } from '$lib/models/projects';
 import { exportSettingsOverlaySchema } from '$lib/models/deliverables';
 import { widgetDataSchema, widgetLayoutSchema, type Widget } from '$lib/models/widgets';
-import { ianaTimeZoneSchema, recurrenceSchema, type Schedule } from '$lib/models/schedules';
+import {
+	ianaTimeZoneSchema,
+	recurrenceSchema,
+	type Schedule,
+	type ScheduleOccurrence
+} from '$lib/models/schedules';
 
 const id = <Name extends string>() =>
 	z
@@ -149,6 +154,18 @@ export const scheduleRecordSchema: z.ZodType<Schedule> = z.discriminatedUnion('s
 	z.object({ ...scheduleRecordFields, status: z.literal('paused'), ...notScheduled }),
 	z.object({ ...scheduleRecordFields, status: z.literal('finished'), ...notScheduled })
 ]);
+
+export const scheduleOccurrenceRecordSchema = z.object({
+	id: id<'ScheduleOccurrenceId'>(),
+	...owned,
+	scheduleId: id<'ScheduleId'>().optional(),
+	trigger: z.enum(['recurrence', 'manual']),
+	scheduledFor: instant,
+	conversationId: id<'ConversationId'>(),
+	runId: id<'AgentRunId'>(),
+	openedAt: instant.optional(),
+	createdAt: instant
+}) satisfies z.ZodType<ScheduleOccurrence>;
 
 const messageFields = {
 	id: id<'MessageId'>(),
@@ -377,7 +394,8 @@ export const resourceDataSchemas = {
 		createdAt: instant
 	}),
 	widgets: widgetRecordSchema,
-	schedules: scheduleRecordSchema
+	schedules: scheduleRecordSchema,
+	schedule_occurrences: scheduleOccurrenceRecordSchema
 };
 
 export const workspaceRecordSchema = z.discriminatedUnion('type', [
@@ -422,7 +440,11 @@ export const workspaceRecordSchema = z.discriminatedUnion('type', [
 	z.object({ type: z.literal('export_settings'), value: resourceDataSchemas.export_settings }),
 	z.object({ type: z.literal('artifacts'), value: resourceDataSchemas.artifacts }),
 	z.object({ type: z.literal('widgets'), value: resourceDataSchemas.widgets }),
-	z.object({ type: z.literal('schedules'), value: resourceDataSchemas.schedules })
+	z.object({ type: z.literal('schedules'), value: resourceDataSchemas.schedules }),
+	z.object({
+		type: z.literal('schedule_occurrences'),
+		value: resourceDataSchemas.schedule_occurrences
+	})
 ]);
 export type WorkspaceRecord = z.infer<typeof workspaceRecordSchema>;
 

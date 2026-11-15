@@ -78,7 +78,7 @@ export const referenceSearchFixture = () => {
 			now: testClock,
 			...agentRulesFixture(),
 			records: new AgentRunHarnessRecords(runs, runs, runs, new InMemoryAgentSessionRepository()),
-			transitions: new RunTransitions(runs),
+			transitions: new RunTransitions(runs, 'web'),
 			settlements,
 			transactionRunner: transactions,
 			runSignals: new RunSignalService(runs, runs)

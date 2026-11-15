@@ -89,7 +89,7 @@ const approvalController = (actor: ActorContext, db: typeof context.db) => {
 				new AgentRunDecisionRecords(actor, database),
 				new AgentSessionRecords(actor, database)
 			),
-			transitions: new RunTransitions(runs),
+			transitions: new RunTransitions(runs, 'web'),
 			...harnessTurnDependencies(
 				runner,
 				new ConversationHistoryService(

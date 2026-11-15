@@ -76,7 +76,7 @@ const setup = async (suffix: string) => {
 			now: testClock,
 			...agentRulesFixture(),
 			records: new AgentRunHarnessRecords(runs, events, decisions, sessions),
-			transitions: new RunTransitions(runs),
+			transitions: new RunTransitions(runs, 'web'),
 			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			transactionRunner: transaction.transactionRunner,
 			settlements: new RunSettlements(runs, events),
@@ -136,7 +136,7 @@ describe('atomic execution settlement', () => {
 		};
 		await controller.execute(run.id, new AbortController().signal);
 		await transactionRunner.run(async () => {
-			const approvals = new RunTransitions(runs);
+			const approvals = new RunTransitions(runs, 'web');
 			const current = await approvals.getForWrite(run.id);
 			const change = approvals.planApproval(current, ['create-1'], now);
 			if (!change) throw new Error('Expected a reviewed checkpoint');
@@ -299,7 +299,7 @@ describe('atomic execution settlement', () => {
 		const execution = controller.execute(run.id, new AbortController().signal);
 		await runner.started.promise;
 		await transactionRunner.run(async () => {
-			const cancellations = new RunTransitions(runs);
+			const cancellations = new RunTransitions(runs, 'web');
 			const current = await cancellations.getForWrite(run.id);
 			const change = cancellations.planCancellation(current.status, now);
 			if (!change) throw new Error('Expected an active run');

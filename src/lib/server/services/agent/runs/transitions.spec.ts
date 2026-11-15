@@ -15,7 +15,7 @@ import {
 import { RunTransitions } from './transitions';
 import { RunPreparationCancelled } from '$lib/errors';
 
-const fresh = () => new RunTransitions(new InMemoryAgentRunPersistence(testActor()));
+const fresh = () => new RunTransitions(new InMemoryAgentRunPersistence(testActor()), 'web');
 
 const context = { contextNotes: [], contextResources: [], skills: { items: [] } };
 const setup = async (status: 'queued' | 'running' | 'cancelling' | 'cancelled' = 'running') => {
@@ -38,7 +38,7 @@ const setup = async (status: 'queued' | 'running' | 'cancelling' | 'cancelled' =
 		updatedAt: testNow
 	};
 	await runs.insert(run);
-	return { runs, run, preparation: new RunTransitions(runs) };
+	return { runs, run, preparation: new RunTransitions(runs, 'web') };
 };
 
 it('claims a queued chat run at the supplied start time', async () => {

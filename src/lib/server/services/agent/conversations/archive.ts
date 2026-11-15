@@ -146,7 +146,8 @@ export class ConversationArchive implements ConversationSessions, ConversationMe
 			kind: 'chat',
 			contextProjectId: input.projectId,
 			contextNoteId: input.noteId,
-			title: input.prompt.trim().slice(0, 80) || 'New conversation',
+			// A scheduled run's chat is named for its schedule; any other chat for its first words.
+			title: input.schedule?.title ?? (input.prompt.trim().slice(0, 80) || 'New conversation'),
 			...(input.modelOverride ? { modelOverride: input.modelOverride } : {}),
 			...(input.visionModelOverride ? { visionModelOverride: input.visionModelOverride } : {}),
 			...(input.executionModeOverride

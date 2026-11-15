@@ -59,7 +59,7 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 	const transactions = new InMemoryTransactionRunner([runs, sessions, conversations]);
 	const dependencies = {
 		records: new AgentRunHarnessRecords(runs, runs, runs, sessions),
-		transitions: new RunTransitions(runs),
+		transitions: new RunTransitions(runs, 'web'),
 		webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 		transactionRunner: transactions,
 		settlements: new RunSettlements(runs, runs),

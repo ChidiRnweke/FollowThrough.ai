@@ -18,6 +18,7 @@ it('initializes a fresh evaluation account before opening its provisioned shell'
 				transactionRunner: db.transactionRunner,
 				tokenizer: testTokenizer,
 				now: testClock,
+				executor: 'web',
 				attachmentClaims: new InMemoryAttachmentClaims(),
 				openRouterApiKey: 'unused-local-test',
 				mistralApiKey: 'unused-local-test',

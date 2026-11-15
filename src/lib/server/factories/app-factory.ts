@@ -47,7 +47,7 @@ class DeferredValue<T> {
 	}
 }
 
-const composition = new DeferredValue(createProductionComposition);
+const composition = new DeferredValue(() => createProductionComposition('web'));
 const sessions = new DeferredValue(() =>
 	tracedService('SessionRegistry', new SessionRegistry(new SessionRecords(db)))
 );

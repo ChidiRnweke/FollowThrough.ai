@@ -1,0 +1,2 @@
+ALTER TABLE "agent_runs" ADD COLUMN "executor" text DEFAULT 'web' NOT NULL;--> statement-breakpoint
+ALTER TABLE "agent_runs" ADD CONSTRAINT "agent_runs_executor_check" CHECK ("agent_runs"."executor" in ('web', 'worker'));

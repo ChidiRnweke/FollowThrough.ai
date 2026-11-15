@@ -74,7 +74,7 @@ const cancellationController = (actor: ActorContext, db: typeof context.db) => {
 				new AgentRunDecisionRecords(actor, database),
 				new AgentSessionRecords(actor, database)
 			),
-			transitions: new RunTransitions(runs),
+			transitions: new RunTransitions(runs, 'web'),
 			conversationMessages: new ConversationArchive(
 				actor,
 				new ConversationRecords(actor, database),
@@ -161,8 +161,8 @@ it.each(['awaiting_approval', 'queued'] as const)(
 	async (status) => {
 		const { owner, run } = await seed(status === 'queued' ? '17602' : '17601');
 		const records = new AgentRunRecords(owner, context.db);
-		await new RunTransitions(records).claim(run.id, now);
-		const checkpoints = new RunTransitions(records);
+		await new RunTransitions(records, 'web').claim(run.id, now);
+		const checkpoints = new RunTransitions(records, 'web');
 		await checkpoints.persistCheckpoint(
 			run.id,
 			checkpoints.prepareCheckpoint(
@@ -187,7 +187,7 @@ it.each(['awaiting_approval', 'queued'] as const)(
 				callId: 'call-cleared',
 				decision: 'approve'
 			});
-			const approvals = new RunTransitions(records);
+			const approvals = new RunTransitions(records, 'web');
 			const current = await approvals.getForWrite(run.id);
 			const change = approvals.planApproval(current, ['call-cleared'], now);
 			if (!change) throw new Error('Expected approval to queue the checkpoint');

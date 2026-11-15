@@ -6,6 +6,12 @@ import {
 } from '$lib/server/controllers/attachments/backlog';
 import type { EmbeddingBacklogController } from '$lib/server/controllers/knowledge-indexing/controller';
 import { RunRecovery, type RunRecoveryController } from '$lib/server/controllers/agent/recovery';
+import {
+	ScheduleBacklogReader,
+	type ScheduleBacklogController
+} from '$lib/server/controllers/schedules/backlog';
+import { ScheduleBacklogRecords } from '$lib/server/repositories/schedules/postgres/schedules';
+import { ScheduleBacklogService } from '$lib/server/services/schedules/runs';
 import { AgentRunBacklogRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { RunBacklogService } from '$lib/server/services/agent/runs/backlog';
 import type { ApplicationConfig } from '$lib/server/application';
@@ -22,6 +28,8 @@ export interface SystemControllers {
 	runRecovery(): RunRecoveryController;
 	embeddingBacklog(): EmbeddingBacklogController;
 	attachmentBacklog(): AttachmentBacklogController;
+	/** The schedules whose time has come; the worker runs each as its owner. */
+	scheduleBacklog(): ScheduleBacklogController;
 	/** Seeds and ranks the tool catalog's embeddings. */
 	toolDiscovery(): ToolDiscoveryController;
 }
@@ -48,11 +56,18 @@ export const createSystemApplication = (config: ApplicationConfig): SystemApplic
 				new RunRecovery(
 					tracedService(
 						'RunBacklogService',
-						new RunBacklogService(new AgentRunBacklogRecords(config.db))
+						new RunBacklogService(new AgentRunBacklogRecords(config.db), config.executor)
 					)
 				),
 			embeddingBacklog: () => createEmbeddingBacklog(config.db),
 			attachmentBacklog: () => new AttachmentBacklogReader(attachments.backlog),
+			scheduleBacklog: () =>
+				new ScheduleBacklogReader(
+					tracedService(
+						'ScheduleBacklogService',
+						new ScheduleBacklogService(new ScheduleBacklogRecords(config.db), config.now)
+					)
+				),
 			toolDiscovery: () =>
 				createToolDiscovery({
 					db: config.db,

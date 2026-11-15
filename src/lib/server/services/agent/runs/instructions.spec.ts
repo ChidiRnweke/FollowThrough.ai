@@ -21,6 +21,22 @@ describe('Agent prompt preparation', () => {
 		);
 		expect(instructions).toContain('14:30:00');
 	});
+	it('tells a scheduled run the time in its schedule\u2019s zone, and that nobody is present', () => {
+		const instructions = prompts.instructions(
+			{ schedule: { title: 'Morning brief', timeZone: 'Europe/Brussels' } },
+			{ items: [] },
+			new Date('2026-11-17T07:00:20.000Z')
+		);
+		expect({
+			localTime: instructions.includes('Tuesday, November 17, 2026 at 08:00:20'),
+			zone: instructions.includes('(Europe/Brussels)'),
+			unattended: instructions.includes('nobody can answer a question'),
+			title: instructions.includes('{"title":"Morning brief"}')
+		}).toEqual({ localTime: true, zone: true, unattended: true, title: true });
+	});
+	it('says nothing about a schedule to a run a person started', () => {
+		expect(prompts.instructions({}).includes('<scheduled_run>')).toBe(false);
+	});
 	it('does not fabricate UTC for an impossible resolved timezone', () => {
 		expect(() =>
 			prompts.instructions(

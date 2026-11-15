@@ -55,7 +55,7 @@ it('selects queued chat runs without selecting running chats or queued note acti
 	try {
 		const queued = await queuedChat();
 		const running = await queuedChat();
-		await new RunTransitions(runs).claim(running.id, now);
+		await new RunTransitions(runs, 'web').claim(running.id, now);
 		await transactionRunner.run(() =>
 			new NoteActionRequests(owner, runs, events, conversations).prepare({
 				requestId: crypto.randomUUID(),

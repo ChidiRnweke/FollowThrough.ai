@@ -130,7 +130,7 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 				new AgentRunDecisionRecords(seeded.owner, database),
 				new AgentSessionRecords(seeded.owner, database)
 			),
-			transitions: new RunTransitions(runs),
+			transitions: new RunTransitions(runs, 'web'),
 			settlements,
 			transactionRunner,
 			runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)

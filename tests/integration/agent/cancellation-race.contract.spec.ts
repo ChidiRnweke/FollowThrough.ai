@@ -20,7 +20,7 @@ it('preserves cancellation committed while prepared context waits for the run ro
 	});
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const runs = new AgentRunRecords(owner, database);
-	const preparation = new RunTransitions(runs);
+	const preparation = new RunTransitions(runs, 'web');
 	const run = await runs.insert({
 		kind: 'agent',
 		id: crypto.randomUUID() as AgentRunId,

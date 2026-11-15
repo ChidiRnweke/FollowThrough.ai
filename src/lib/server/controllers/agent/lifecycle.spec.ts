@@ -143,7 +143,7 @@ const setup = <T extends InMemoryAgentTurns | AgentTurnService>(
 		capabilityDependencies<AgentHarnessDependencies>({
 			...agentRulesFixture(),
 			records: new AgentRunHarnessRecords(runs, runs, runs, sessions),
-			transitions: new RunTransitions(runs),
+			transitions: new RunTransitions(runs, 'web'),
 			now: testClock,
 			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			transactionRunner: transactions,
@@ -205,7 +205,7 @@ const stopMidStream = async () => {
 
 /** Drives a run to `cancelling` the way the controller does before aborting. */
 const requestCancellation = async (runs: InMemoryAgentRunPersistence) => {
-	const cancellations = new RunTransitions(runs);
+	const cancellations = new RunTransitions(runs, 'web');
 	const current = await cancellations.getForWrite(testRunId);
 	const change = cancellations.planCancellation(current.status, testTime);
 	if (change) await cancellations.persistCancellation(testRunId, change);
@@ -333,7 +333,7 @@ describe('a cancellation that races the end of a run', () => {
 describe('finishing a cancellation out of band', () => {
 	it('settles a run parked in cancelling', async () => {
 		const { lifecycle, runs } = setup(abortingRunner());
-		await new RunTransitions(runs).claim(testRunId, testTime);
+		await new RunTransitions(runs, 'web').claim(testRunId, testTime);
 		await requestCancellation(runs);
 		await lifecycle.finishCancellation(testRunId);
 		expect(currentRun(runs).status).toBe('cancelled');
@@ -341,7 +341,7 @@ describe('finishing a cancellation out of band', () => {
 
 	it('leaves a completed run and its event journal untouched', async () => {
 		const { lifecycle, runs } = setup(abortingRunner());
-		await new RunTransitions(runs).claim(testRunId, testTime);
+		await new RunTransitions(runs, 'web').claim(testRunId, testTime);
 		await new RunSettlements(runs, runs).claim(testRunId, {
 			kind: 'completed',
 			conversationId: testConversationId,
@@ -356,7 +356,7 @@ describe('finishing a cancellation out of band', () => {
 
 	it('appends exactly one cancelled event when two settlers race', async () => {
 		const { lifecycle, runs } = setup(abortingRunner());
-		await new RunTransitions(runs).claim(testRunId, testTime);
+		await new RunTransitions(runs, 'web').claim(testRunId, testTime);
 		await requestCancellation(runs);
 		await Promise.all([
 			lifecycle.finishCancellation(testRunId),
@@ -448,7 +448,7 @@ describe('settling a run whose execution threw', () => {
 	it('cancels rather than fails a run the user asked to stop', async () => {
 		const error = new Error('Stream ended oddly');
 		const { lifecycle, runs } = setup(throwingRunner(error));
-		await new RunTransitions(runs).claim(testRunId, testTime);
+		await new RunTransitions(runs, 'web').claim(testRunId, testTime);
 		await requestCancellation(runs);
 		await lifecycle.failRun(testRunId, error);
 		expect(currentRun(runs).status).toBe('cancelled');
@@ -457,7 +457,7 @@ describe('settling a run whose execution threw', () => {
 	it('leaves a run that already completed alone', async () => {
 		const error = new Error('Late failure');
 		const { lifecycle, runs } = setup(throwingRunner(error));
-		await new RunTransitions(runs).claim(testRunId, testTime);
+		await new RunTransitions(runs, 'web').claim(testRunId, testTime);
 		await new RunSettlements(runs, runs).claim(testRunId, {
 			kind: 'completed',
 			conversationId: testConversationId,
@@ -485,7 +485,7 @@ describe('settling a run whose execution threw', () => {
 				}
 			]
 		});
-		await new RunTransitions(context.runs).claim(testRunId, testTime);
+		await new RunTransitions(context.runs, 'web').claim(testRunId, testTime);
 		await context.lifecycle.failRun(
 			testRunId,
 			error instanceof Error ? error : new Error(String(error))

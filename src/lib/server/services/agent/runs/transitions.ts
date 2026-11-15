@@ -11,7 +11,8 @@ import type {
 	PreparedAgentRun,
 	ResolvedAgentRun,
 	RunApprovalWrite,
-	RunCancellationWrite
+	RunCancellationWrite,
+	RunExecutor
 } from '$lib/models/agent';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { DateTime } from '$lib/models/workspace';
@@ -75,7 +76,11 @@ export interface RunTransitionStore
 	extends RunApprovalDecisions, RunCancellationDecisions, RunCheckpointWriter, ChatRunPreparation {}
 
 export class RunTransitions implements RunTransitionStore {
-	constructor(private readonly runs: AgentRunRepository) {}
+	constructor(
+		private readonly runs: AgentRunRepository,
+		/** The kind of process this graph was built in; every claim it makes is that process's. */
+		private readonly executor: RunExecutor
+	) {}
 
 	async getForWrite(runId: AgentRunId): Promise<AgentRun> {
 		return this.found(await this.runs.findForWrite(runId));
@@ -157,7 +162,8 @@ export class RunTransitions implements RunTransitionStore {
 			expected: 'queued',
 			status: 'running',
 			startedAt: timestamp,
-			updatedAt: timestamp
+			updatedAt: timestamp,
+			executor: this.executor
 		});
 	}
 

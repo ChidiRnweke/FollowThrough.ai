@@ -76,7 +76,7 @@ const setup = async (
 				new AgentRunDecisionRecords(owner, database),
 				new AgentSessionRecords(owner, database)
 			),
-			transitions: new RunTransitions(runs),
+			transitions: new RunTransitions(runs, 'web'),
 			transactionRunner,
 			contextMemory: memory,
 			settlements: new RunSettlements(runs, events),

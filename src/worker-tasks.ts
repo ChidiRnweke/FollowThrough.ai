@@ -6,6 +6,8 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { IndexSource } from '$lib/models/knowledge-search';
 import type { ScheduledTask } from '$lib/models/maintenance';
+import type { AgentHarness } from '$lib/server/controllers/agent/controller';
+import type { ScheduleBacklogController } from '$lib/server/controllers/schedules/backlog';
 import type { AttachmentProcessingController } from '$lib/server/controllers/attachment-processing/controller';
 import type { AttachmentBacklogController } from '$lib/server/controllers/attachments/backlog';
 import type {
@@ -76,6 +78,33 @@ export const attachmentProcessing = (
 				.processingFor({ userId: item.userId })
 				.process(item.versionId);
 			if (result.kind === 'failure') logger.error('Attachment processing failed', result.message);
+		}
+	}
+});
+
+/**
+ * Starts the run of every schedule whose time has come, each as the user it belongs to
+ * (ADR 0052). Times have a resolution of one minute, so a 30-second tick starts a run inside its
+ * minute. A schedule that fails to start keeps its time and is tried again on the next tick; it
+ * must not hold back another user's schedule.
+ */
+export const dueSchedules = (
+	controllers: {
+		backlog(): ScheduleBacklogController;
+		harnessFor(actor: ActorContext): Pick<AgentHarness, 'runDueSchedule'>;
+	},
+	logger: TaskLogger = console
+): ScheduledTask => ({
+	name: 'due-schedules',
+	intervalMs: 30_000,
+	async run() {
+		for (const due of await controllers.backlog().due()) {
+			try {
+				await controllers.harnessFor(due.owner).runDueSchedule(due.scheduleId);
+				// chisel-ignore fail-loudly:silent-catch -- the tick reports this schedule and leaves it due for the next tick.
+			} catch (error) {
+				logger.error(`[due-schedules] schedule ${due.scheduleId} did not start:`, error);
+			}
 		}
 	}
 });
