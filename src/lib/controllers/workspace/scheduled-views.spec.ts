@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
+import type { ProjectId } from '$lib/models/projects';
 import type { ScheduleOccurrenceId } from '$lib/models/schedules';
 import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
 import type { DateTime } from '$lib/models/workspace';
@@ -11,7 +12,14 @@ import {
 	testScheduleId,
 	tuesdayRun
 } from '$lib/testing/schedules/fixtures/schedules';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import {
+	noteBuilder,
+	projectBuilder,
+	testActor,
+	testNoteId,
+	testNow,
+	testProjectId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const { workspaceRecordIdentity, workspaceResourceKey } = new WorkspaceCommandRulesService();
 
@@ -99,6 +107,39 @@ const run = (
 	];
 };
 
+/** A skill as the server leaves it: its note, and the record that says whether it is turned on. */
+const skill = (
+	suffix: number,
+	title: string,
+	state: { projectId: ProjectId; isEnabled?: boolean; archivedAt?: DateTime }
+): WorkspaceRecord[] => [
+	{
+		type: 'notes',
+		value: noteBuilder({
+			id: testNoteId(suffix),
+			projectId: state.projectId,
+			kind: 'skill',
+			title,
+			...(state.archivedAt ? { archivedAt: state.archivedAt } : {})
+		})
+	},
+	{
+		type: 'skills',
+		value: resourceDataSchemas.skills.parse({
+			noteId: testNoteId(suffix),
+			name: title,
+			slug: title.toLowerCase().replaceAll(' ', '-'),
+			description: `What ${title} is for`,
+			triggerHints: [],
+			metadata: {},
+			allowImplicitInvocation: false,
+			isEnabled: state.isEnabled ?? true,
+			createdAt: testNow,
+			updatedAt: testNow
+		})
+	}
+];
+
 const viewsOf = (records: readonly WorkspaceRecord[]) =>
 	createWorkspaceViews(
 		new Map(
@@ -158,6 +199,64 @@ describe('the schedules a workspace shows', () => {
 					'Two things first.'
 				]
 			]
+		});
+	});
+
+	it('resolves the project and the skills a schedule names to what this device knows of them', () => {
+		const views = viewsOf([
+			{ type: 'projects', value: projectBuilder({ id: testProjectId(7), name: 'Docs relaunch' }) },
+			{
+				type: 'projects',
+				value: projectBuilder({ id: testProjectId(8), name: 'Old site', archivedAt: testNow })
+			},
+			...skill(41, 'Daily planning', { projectId: testProjectId(7) }),
+			...skill(42, 'Release notes', { projectId: testProjectId(7), isEnabled: false }),
+			...skill(43, 'Old habits', { projectId: testProjectId(7), archivedAt: testNow }),
+			...skill(44, 'Site audit', { projectId: testProjectId(8) })
+		]);
+
+		expect([
+			views.scheduleStart({ skillNoteIds: [] }),
+			views.scheduleStart({
+				projectId: testProjectId(7),
+				skillNoteIds: [testNoteId(41), testNoteId(42), testNoteId(43), testNoteId(44)]
+			}),
+			views.scheduleStart({ projectId: testProjectId(8), skillNoteIds: [testNoteId(99)] }),
+			views.scheduleStart({ projectId: testProjectId(9), skillNoteIds: [] })
+		]).toEqual([
+			{ skills: [] },
+			{
+				project: { kind: 'active', id: testProjectId(7), name: 'Docs relaunch' },
+				skills: [
+					{ kind: 'ready', noteId: testNoteId(41), name: 'Daily planning' },
+					// Turned off, in the trash, and in an archived project: none can be loaded.
+					{ kind: 'unavailable', noteId: testNoteId(42), name: 'Release notes' },
+					{ kind: 'unavailable', noteId: testNoteId(43), name: 'Old habits' },
+					{ kind: 'unavailable', noteId: testNoteId(44), name: 'Site audit' }
+				]
+			},
+			{
+				project: { kind: 'archived', id: testProjectId(8), name: 'Old site' },
+				skills: [{ kind: 'deleted', noteId: testNoteId(99) }]
+			},
+			{ project: { kind: 'deleted', id: testProjectId(9) }, skills: [] }
+		]);
+	});
+
+	it('shows what a saved schedule names on its page', () => {
+		const named = scheduleBuilder({
+			projectId: testProjectId(7),
+			skillNoteIds: [testNoteId(41)]
+		});
+		const views = viewsOf([
+			{ type: 'schedules', value: named },
+			{ type: 'projects', value: projectBuilder({ id: testProjectId(7), name: 'Docs relaunch' }) },
+			...skill(41, 'Daily planning', { projectId: testProjectId(7) })
+		]);
+
+		expect(views.schedule(testScheduleId(), viewer)?.start).toEqual({
+			project: { kind: 'active', id: testProjectId(7), name: 'Docs relaunch' },
+			skills: [{ kind: 'ready', noteId: testNoteId(41), name: 'Daily planning' }]
 		});
 	});
 

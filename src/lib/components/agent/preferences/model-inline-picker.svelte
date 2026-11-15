@@ -14,27 +14,75 @@
 	import * as Icon from '$lib/components/icons';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 
+	/**
+	 * What the picker chooses a model for. Every word that names it comes from here, and so does
+	 * the side its list opens on: the composer sits at the foot of its panel, and a schedule's
+	 * prompt sits under the page title.
+	 */
+	type Owner = 'chat' | 'schedule';
+	const WORDS: Record<
+		Owner,
+		{
+			readonly side: 'top' | 'bottom';
+			readonly heading: string;
+			readonly label: string;
+			readonly title: string;
+			readonly description: string;
+			readonly own: (id: string) => string;
+			readonly inherited: (id: string) => string;
+		}
+	> = {
+		chat: {
+			side: 'top',
+			heading: 'This chat',
+			label: 'Model for this chat',
+			title: 'Models for this chat',
+			description: 'Choose the model that answers and, separately, the one that reads images.',
+			own: (id) => `This chat runs on ${id}`,
+			inherited: (id) =>
+				`This chat has no model of its own, so it runs on the workspace default, ${id}`
+		},
+		schedule: {
+			side: 'bottom',
+			heading: 'This schedule',
+			label: 'Model for this schedule',
+			title: 'Model for this schedule',
+			description: 'Choose the model each run of this schedule uses.',
+			own: (id) => `Each run of this schedule uses ${id}`,
+			inherited: (id) =>
+				`This schedule has no model of its own, so each run uses the workspace default, ${id}`
+		}
+	};
+
 	let {
+		owner,
 		models,
 		value,
 		defaultModelId,
-		visionValue,
-		defaultVisionModelId,
+		vision,
 		disabled = false,
-		onchange,
-		onvisionchange
+		onchange
 	}: {
+		owner: Owner;
 		models: readonly AgentModel[];
-		/** This conversation's own choice, or null to inherit the workspace default. */
+		/** The owner's own choice, or null to inherit the workspace default. */
 		value: string | null;
 		/** What inheriting resolves to. Server-resolved, so always a real model id. */
 		defaultModelId: string;
-		visionValue: string | null;
-		defaultVisionModelId: string;
+		/**
+		 * The model that describes images to a chat model that cannot see them. Absent where no
+		 * image can arrive, as in a scheduled run: the picker is then one list with no tabs.
+		 */
+		vision?: {
+			readonly value: string | null;
+			readonly defaultModelId: string;
+			readonly onchange: (value: string | null) => void;
+		};
 		disabled?: boolean;
 		onchange: (value: string | null) => void;
-		onvisionchange: (value: string | null) => void;
 	} = $props();
+
+	const words = $derived(WORDS[owner]);
 
 	let open = $state(false);
 	let requestedTab = $state('chat');
@@ -71,10 +119,10 @@
 		onchange(next);
 	}
 
-	function chooseVision(next: string | null): void {
+	function chooseVision(pick: (value: string | null) => void, next: string | null): void {
 		open = false;
 		visionQuery = '';
-		onvisionchange(next);
+		pick(next);
 	}
 </script>
 
@@ -130,7 +178,7 @@
 		<Command.Empty>No matching models.</Command.Empty>
 		{#if query.trim().length === 0}
 			{@const recommended = catalogue.filter((model) => model.recommended)}
-			<Command.Group heading="This chat">
+			<Command.Group heading={words.heading}>
 				<Command.Item value="workspace default" onSelect={() => pick(null)}>
 					<Icon.Check class={selected === null ? 'opacity-100' : 'opacity-0'} />
 					<div class="min-w-0 flex-1">
@@ -178,8 +226,8 @@
 		{#snippet child({ props: triggerProps })}
 			<Tip
 				text={effective.source === 'conversation'
-					? `This chat runs on ${effective.id}`
-					: `This chat has no model of its own, so it runs on the workspace default, ${effective.id}`}
+					? words.own(effective.id)
+					: words.inherited(effective.id)}
 			>
 				{#snippet children({ props: tipProps })}
 					<!--
@@ -197,7 +245,7 @@
 						size="xs"
 						{disabled}
 						class="min-w-0 shrink text-muted-foreground group-has-[[data-slot=input-group-control]:focus-visible]/input-group:text-brand-muted-foreground"
-						aria-label="Model for this chat: {effective.label}"
+						aria-label="{words.label}: {effective.label}"
 					>
 						<span class="min-w-0 truncate text-foreground">{effective.label}</span>
 						<!--
@@ -227,69 +275,74 @@
 		`w-96`, not the default `w-72`: model names run long, and this is the control
 		whose whole job is letting someone read one.
 	-->
-	<Popover.Content class="w-96 gap-0 p-0" side="top" align="end">
+	<Popover.Content class="w-96 gap-0 p-0" side={words.side} align="end">
 		<Popover.Header class="sr-only">
-			<Popover.Title>Models for this chat</Popover.Title>
-			<Popover.Description>
-				Choose the model that answers and, separately, the one that reads images.
-			</Popover.Description>
+			<Popover.Title>{words.title}</Popover.Title>
+			<Popover.Description>{words.description}</Popover.Description>
 		</Popover.Header>
-		<Tabs.Root value={tab} onValueChange={(next) => (requestedTab = next)} class="gap-0">
-			<div class="flex items-center gap-1 p-1 pb-0">
-				<Tabs.List variant="line" class="justify-start gap-2">
-					<Tabs.Trigger value="chat" class="flex-none">Chat model</Tabs.Trigger>
-					<!--
+		{#if vision}
+			<Tabs.Root value={tab} onValueChange={(next) => (requestedTab = next)} class="gap-0">
+				<div class="flex items-center gap-1 p-1 pb-0">
+					<Tabs.List variant="line" class="justify-start gap-2">
+						<Tabs.Trigger value="chat" class="flex-none">Chat model</Tabs.Trigger>
+						<!--
 						Nothing to choose when the chat model reads images itself: the server
 						ignores a describer in that case, so offering the list would be offering
 						a setting with no effect.
 					-->
-					<Tabs.Trigger value="vision" class="flex-none" disabled={nativeVision}>
-						Vision model
-					</Tabs.Trigger>
-				</Tabs.List>
-				<!--
+						<Tabs.Trigger value="vision" class="flex-none" disabled={nativeVision}>
+							Vision model
+						</Tabs.Trigger>
+					</Tabs.List>
+					<!--
 					Beside the tab rather than inside it. A disabled trigger emits no pointer
 					events, so a tooltip hung on it would go quiet exactly when it has the most
 					to explain — which is the moment the tab greys out.
 				-->
-				<Tip text={visionExplanation}>
-					{#snippet children({ props })}
-						<Button
-							{...props}
-							variant="ghost"
-							size="icon-xs"
-							class="text-muted-foreground"
-							aria-label={visionExplanation}
-						>
-							<Icon.Info />
-						</Button>
-					{/snippet}
-				</Tip>
-			</div>
-			<Tabs.Content value="chat">
-				<Command.Root>
-					<Command.Input placeholder="Search {models.length} models…" bind:value={chatQuery} />
-					{@render modelList(models, value, defaultModelId, chatQuery, choose, true, 'models')}
-				</Command.Root>
-			</Tabs.Content>
-			<Tabs.Content value="vision">
-				<Command.Root>
-					<Command.Input
-						placeholder="Search {visionModels.length} vision models…"
-						bind:value={visionQuery}
-					/>
-					{@render modelList(
-						visionModels,
-						visionValue,
-						defaultVisionModelId,
-						visionQuery,
-						chooseVision,
-						false,
-						'vision models'
-					)}
-				</Command.Root>
-			</Tabs.Content>
-		</Tabs.Root>
+					<Tip text={visionExplanation}>
+						{#snippet children({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="icon-xs"
+								class="text-muted-foreground"
+								aria-label={visionExplanation}
+							>
+								<Icon.Info />
+							</Button>
+						{/snippet}
+					</Tip>
+				</div>
+				<Tabs.Content value="chat">
+					<Command.Root>
+						<Command.Input placeholder="Search {models.length} models…" bind:value={chatQuery} />
+						{@render modelList(models, value, defaultModelId, chatQuery, choose, true, 'models')}
+					</Command.Root>
+				</Tabs.Content>
+				<Tabs.Content value="vision">
+					<Command.Root>
+						<Command.Input
+							placeholder="Search {visionModels.length} vision models…"
+							bind:value={visionQuery}
+						/>
+						{@render modelList(
+							visionModels,
+							vision.value,
+							vision.defaultModelId,
+							visionQuery,
+							(next) => chooseVision(vision.onchange, next),
+							false,
+							'vision models'
+						)}
+					</Command.Root>
+				</Tabs.Content>
+			</Tabs.Root>
+		{:else}
+			<Command.Root>
+				<Command.Input placeholder="Search {models.length} models…" bind:value={chatQuery} />
+				{@render modelList(models, value, defaultModelId, chatQuery, choose, true, 'models')}
+			</Command.Root>
+		{/if}
 		<Separator />
 		<!--
 			A way out, not this popover's main action, so it sits at row weight and row

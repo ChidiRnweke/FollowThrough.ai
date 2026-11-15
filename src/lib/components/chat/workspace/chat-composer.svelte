@@ -404,14 +404,17 @@
 						/>
 					{/if}
 					<ModelInlinePicker
+						owner="chat"
 						{models}
 						value={modelOverride}
 						{defaultModelId}
-						visionValue={visionModelOverride}
-						{defaultVisionModelId}
+						vision={{
+							value: visionModelOverride,
+							defaultModelId: defaultVisionModelId,
+							onchange: onvisionmodelchange
+						}}
 						disabled={!agentAvailable}
 						onchange={onmodelchange}
-						onvisionchange={onvisionmodelchange}
 					/>
 					<Button
 						size="icon-sm"

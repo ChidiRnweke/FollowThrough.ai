@@ -1,12 +1,12 @@
 <script lang="ts">
-	import type { AgentExecutionMode, ConversationId } from '$lib/models/agent';
+	import type { AgentExecutionMode, AgentModel, ConversationId } from '$lib/models/agent';
 	import type { ScheduleChanges, ScheduleDetail } from '$lib/models/schedules';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Switch } from '$lib/components/ui/switch';
 	import * as Icon from '$lib/components/icons';
-	import { workspaceSession } from '$lib/factories/workspace/session';
+	import { workspaceSession, workspaceViews } from '$lib/factories/workspace/session';
 	import {
 		deleteSchedule,
 		pauseSchedule,
@@ -25,9 +25,14 @@
 	// Every change saves at once, as a todo's fields do; the prompt saves when the field is left.
 	let {
 		detail,
+		models,
+		defaultModelId,
 		onopenrun
 	}: {
 		detail: ScheduleDetail;
+		/** The models a schedule can use, and the one its owner's default resolves to. */
+		models: readonly AgentModel[];
+		defaultModelId: string;
 		onopenrun: (conversationId: ConversationId) => void;
 	} = $props();
 
@@ -119,12 +124,21 @@
 				timeZone={schedule.timeZone}
 				prompt={promptDraft ?? schedule.prompt}
 				executionMode={schedule.executionMode}
+				start={detail.start}
+				model={schedule.model ?? null}
+				projects={workspaceViews.projects}
+				skills={workspaceViews.skills().filter((skill) => skill.isEnabled)}
+				{models}
+				{defaultModelId}
 				standing={detail.standing}
 				disabled={busy}
 				onrecurrence={(recurrence) => void change({ recurrence })}
 				ontimezone={(timeZone) => void change({ timeZone })}
 				onprompt={(prompt) => (promptDraft = prompt)}
 				onmode={(executionMode) => void setMode(executionMode)}
+				onproject={(projectId) => void change({ projectId })}
+				onskills={(skillNoteIds) => void change({ skillNoteIds })}
+				onmodel={(model) => void change({ model })}
 			/>
 		</div>
 		<ScheduleRuns runs={detail.runs} onopen={onopenrun} />

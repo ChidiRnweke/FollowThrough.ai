@@ -447,6 +447,14 @@ the section's mark: `Scene.ReadAlone` (read with), `Scene.Unlinked` (linked), `S
   stand a `section` step away. A heading sits a `row` step above its divided list and a `section`
   step under what precedes it, so it belongs to its rows; a `group` step under a heading makes it
   float between the two. The lists bleed 12px past the measure, as the project overview's does.
+  What each run starts with is not in the sentence. It sits in a toolbar inside the prompt field,
+  as the chat composer's does: a `+` that adds a project or skills, a chip for each one that is
+  set (the project as `Badge variant="brand"`, a skill as `secondary` with the skill glyph), and
+  the model at the right as its name plus a muted `· default` when the schedule has none of its
+  own. No chip is drawn for a value that is not set. A project that is archived or a skill that is
+  turned off keeps its chip with a muted mark (`· archived`, `· turned off`), and one caption says
+  that a run fails until it is changed. The model list of a schedule has no vision tab and opens
+  downward.
   One muted line under the sentence states the next run, and one more appears only for "do not
   ask me". An existing schedule saves each change at once and the prompt on blur. The list is divided rows at the reading measure: a `Switch` that pauses, the title, one
   caption (recurrence, whether it asks, the next run), and at most one brand badge, "Waiting for

@@ -18,6 +18,18 @@ Choose **New schedule**. The page is one sentence, and each highlighted word is 
 
 The line under the sentence shows the next run. Choose **Create schedule**. A schedule you do not name takes the first words of its prompt.
 
+## Give a run a project, a model and skills
+
+The row at the bottom of the prompt field sets what each run starts with. All three are optional.
+
+- **A project.** Choose **+**, then a project. The run's chat belongs to that project, the project's tool settings apply, and the agent works in that project unless the prompt names another. Without a project, a run uses your whole workspace.
+- **Skills.** Choose **+**, then one or more [skills](/FollowThrough.ai/using/the-agent/). The run loads each skill before it acts. In a chat you mention a skill; nobody is there to mention one in a scheduled run, so the schedule does it.
+- **A model.** The model reads at the right of the row. A schedule with no model of its own shows your default with **· default**, and each run uses your default at the time it starts. Choose the name to give the schedule its own model.
+
+Remove a project or a skill with the **×** on its chip. On a saved schedule, each change saves at once.
+
+A project can be archived, a skill can be turned off, and a provider can withdraw a model. The schedule keeps what you chose, and its page marks a project or skill that a run can no longer use. A run does not go on without it: the run fails, and its line says what to change. Change the schedule, then choose **Run now**.
+
 ## Change, pause or delete a schedule
 
 Open a schedule from the list. The same sentence is there, and each change saves at once. The prompt saves when you leave its field.

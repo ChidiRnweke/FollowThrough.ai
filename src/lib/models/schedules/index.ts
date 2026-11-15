@@ -152,9 +152,31 @@ export interface ScheduleRow {
 	readonly unopened: number;
 }
 
+/** The project a schedule names, as this device knows it. */
+export type ScheduleProjectView =
+	| { readonly kind: 'active'; readonly id: ProjectId; readonly name: string }
+	/** A run of the schedule fails until another project is chosen. */
+	| { readonly kind: 'archived'; readonly id: ProjectId; readonly name: string }
+	/** This device no longer holds the project. */
+	| { readonly kind: 'deleted'; readonly id: ProjectId };
+
+/** A skill a schedule names, as this device knows it. */
+export type ScheduleSkillView =
+	| { readonly kind: 'ready'; readonly noteId: NoteId; readonly name: string }
+	/** Turned off, or in the trash. A run of the schedule fails until it is removed. */
+	| { readonly kind: 'unavailable'; readonly noteId: NoteId; readonly name: string }
+	| { readonly kind: 'deleted'; readonly noteId: NoteId };
+
+/** What a schedule names for its runs, resolved to what its page can show. */
+export interface ScheduleStartView {
+	readonly project?: ScheduleProjectView;
+	readonly skills: readonly ScheduleSkillView[];
+}
+
 export interface ScheduleDetail extends ScheduleRow {
 	/** What happens next, such as "Next: tomorrow, 08:00." The sentence above it says the rest. */
 	readonly standing: string;
+	readonly start: ScheduleStartView;
 	/** Every run it started, newest first. */
 	readonly runs: readonly ScheduledRunView[];
 }

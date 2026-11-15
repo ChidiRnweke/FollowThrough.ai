@@ -1,6 +1,9 @@
 <script lang="ts">
-	import type { AgentExecutionMode } from '$lib/models/agent';
-	import type { IanaTimeZone, Recurrence } from '$lib/models/schedules';
+	import type { AgentExecutionMode, AgentModel } from '$lib/models/agent';
+	import type { NoteId } from '$lib/models/notes';
+	import type { Project, ProjectId } from '$lib/models/projects';
+	import type { IanaTimeZone, Recurrence, ScheduleStartView } from '$lib/models/schedules';
+	import type { SkillSummary } from '$lib/models/skills';
 	import type { LocalDate } from '$lib/models/workspace';
 	import { parseDate } from '@internationalized/date';
 	import { Button } from '$lib/components/ui/button';
@@ -8,9 +11,9 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Popover from '$lib/components/ui/popover';
 	import * as Select from '$lib/components/ui/select';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Icon from '$lib/components/icons';
 	import { formatDate } from '$lib/components/shared/labels';
+	import SchedulePromptField from './schedule-prompt-field.svelte';
 	import TimeZoneField from './time-zone-field.svelte';
 	import {
 		MONTH_DAYS,
@@ -31,17 +34,35 @@
 		timeZone,
 		prompt,
 		executionMode,
+		start,
+		model,
+		projects,
+		skills,
+		models,
+		defaultModelId,
 		standing,
 		disabled = false,
 		onrecurrence,
 		ontimezone,
 		onprompt,
-		onmode
+		onmode,
+		onproject,
+		onskills,
+		onmodel
 	}: {
 		recurrence: Recurrence;
 		timeZone: IanaTimeZone;
 		prompt: string;
 		executionMode: AgentExecutionMode;
+		/** The project and the skills each run starts with, as this device knows them. */
+		start: ScheduleStartView;
+		/** The schedule's own model, or null for its owner's default. */
+		model: string | null;
+		/** What can be chosen for a run to start with. */
+		projects: readonly Project[];
+		skills: readonly SkillSummary[];
+		models: readonly AgentModel[];
+		defaultModelId: string;
 		/** The one line under the sentence: when it runs next, or why it does not. */
 		standing: string;
 		disabled?: boolean;
@@ -50,7 +71,16 @@
 		/** The prompt as typed, on every keystroke. */
 		onprompt: (prompt: string) => void;
 		onmode: (executionMode: AgentExecutionMode) => void;
+		onproject: (projectId: ProjectId | null) => void;
+		onskills: (skillNoteIds: readonly NoteId[]) => void;
+		onmodel: (model: string | null) => void;
 	} = $props();
+
+	/** A run fails while its schedule names a project or a skill that is gone. */
+	const stale = $derived(
+		(start.project !== undefined && start.project.kind !== 'active') ||
+			start.skills.some((skill) => skill.kind !== 'ready')
+	);
 
 	let dateOpen = $state(false);
 
@@ -174,14 +204,19 @@
 				<span class="-ml-1.5">,</span>
 			{/if}
 		</p>
-		<Textarea
-			value={prompt}
-			rows={4}
-			class="min-h-24 resize-none text-sm leading-relaxed"
-			placeholder="read my overdue todos and write a brief as a note in Inbox"
-			aria-label="What the agent does"
+		<SchedulePromptField
+			{prompt}
+			{start}
+			{model}
+			{projects}
+			{skills}
+			{models}
+			{defaultModelId}
 			{disabled}
-			oninput={(event) => onprompt(event.currentTarget.value)}
+			{onprompt}
+			{onproject}
+			{onskills}
+			{onmodel}
 		/>
 		<p class="flex flex-wrap items-center gap-2">
 			<span>and</span>
@@ -208,6 +243,9 @@
 		</p>
 	</div>
 	<div class="flex flex-col gap-bind">
+		{#if stale}
+			<p class="provenance-caption">A run fails until what is marked is changed.</p>
+		{/if}
 		{#if executionMode === 'auto_accept'}
 			<p class="provenance-caption">What it does in a connected service cannot be undone.</p>
 		{/if}

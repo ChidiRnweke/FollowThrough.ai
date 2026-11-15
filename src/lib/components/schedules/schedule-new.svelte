@@ -1,5 +1,7 @@
 <script lang="ts">
-	import type { AgentExecutionMode } from '$lib/models/agent';
+	import type { AgentExecutionMode, AgentModel } from '$lib/models/agent';
+	import type { NoteId } from '$lib/models/notes';
+	import type { ProjectId } from '$lib/models/projects';
 	import type { IanaTimeZone, Recurrence, ScheduleId } from '$lib/models/schedules';
 	import type { DateTime } from '$lib/models/workspace';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
@@ -12,7 +14,18 @@
 	import ScheduleSentence from './schedule-sentence.svelte';
 
 	// A schedule before it is saved: the same sentence, and one button.
-	let { now, timeZone: browserZone }: { now: DateTime; timeZone: IanaTimeZone } = $props();
+	let {
+		now,
+		timeZone: browserZone,
+		models,
+		defaultModelId
+	}: {
+		now: DateTime;
+		timeZone: IanaTimeZone;
+		/** The models a schedule can use, and the one its owner's default resolves to. */
+		models: readonly AgentModel[];
+		defaultModelId: string;
+	} = $props();
 
 	let title = $state('');
 	let prompt = $state('');
@@ -21,11 +34,18 @@
 	// svelte-ignore state_referenced_locally
 	let timeZone = $state(browserZone);
 	let executionMode = $state<AgentExecutionMode>('approval_required');
+	// What each run starts with. None is set until its owner adds one.
+	let projectId = $state<ProjectId | null>(null);
+	let model = $state<string | null>(null);
+	let skillNoteIds = $state<readonly NoteId[]>([]);
 	let creating = $state(false);
 
 	/** A schedule nobody named is named for the first words of its prompt, as a chat is. */
 	const name = $derived(title.trim() || prompt.trim().split('\n')[0]!.slice(0, 60));
 	const preview = $derived(workspaceViews.schedulePreview(recurrence, timeZone, now));
+	const start = $derived(
+		workspaceViews.scheduleStart({ ...(projectId ? { projectId } : {}), skillNoteIds })
+	);
 
 	async function create(): Promise<void> {
 		creating = true;
@@ -38,7 +58,9 @@
 					prompt: prompt.trim(),
 					recurrence,
 					timeZone,
-					skillNoteIds: [],
+					...(projectId ? { projectId } : {}),
+					...(model ? { model } : {}),
+					skillNoteIds,
 					executionMode
 				}
 			})
@@ -69,12 +91,21 @@
 			{timeZone}
 			{prompt}
 			{executionMode}
+			{start}
+			{model}
+			projects={workspaceViews.projects}
+			skills={workspaceViews.skills().filter((skill) => skill.isEnabled)}
+			{models}
+			{defaultModelId}
 			standing={preview}
 			disabled={creating}
 			onrecurrence={(next) => (recurrence = next)}
 			ontimezone={(next) => (timeZone = next)}
 			onprompt={(next) => (prompt = next)}
 			onmode={(next) => (executionMode = next)}
+			onproject={(next) => (projectId = next)}
+			onskills={(next) => (skillNoteIds = next)}
+			onmodel={(next) => (model = next)}
 		/>
 		<div class="flex items-center justify-end gap-2">
 			<Button variant="ghost" href="/scheduled" disabled={creating}>Cancel</Button>
