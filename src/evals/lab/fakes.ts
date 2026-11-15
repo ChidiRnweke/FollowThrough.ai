@@ -1,7 +1,8 @@
 import type { AgentModel } from '$lib/models/agent';
 import type { AgentModelCatalog } from '$lib/server/services/agent/runs/preferences';
 import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
-import type { StoredObjectInfo } from '$lib/models/attachments';
+import type { SignedObjectUpload, StoredObjectInfo } from '$lib/models/attachments';
+import { createHash } from 'node:crypto';
 
 /**
  * The real catalog lists every OpenRouter model over the network on submit.
@@ -17,8 +18,14 @@ export class StubModelCatalog implements AgentModelCatalog {
 export class InMemoryAttachmentStorage implements IAttachmentStorage {
 	private readonly objects = new Map<string, { data: Uint8Array; mediaType: string }>();
 
-	async createUploadUrl(input: { objectKey: string }): Promise<string> {
-		return `memory://upload/${input.objectKey}`;
+	async createUploadUrl(input: {
+		objectKey: string;
+		mediaType: string;
+	}): Promise<SignedObjectUpload> {
+		return {
+			url: `memory://upload/${input.objectKey}`,
+			requiredHeaders: { 'content-type': input.mediaType }
+		};
 	}
 
 	async createDownloadUrl(objectKey: string): Promise<string> {
@@ -31,16 +38,21 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage {
 
 	async stat(objectKey: string): Promise<StoredObjectInfo> {
 		const object = this.require(objectKey);
-		return { byteSize: object.data.byteLength, mediaType: object.mediaType };
+		// Written by `put`, which carries no checksum, so storage holds none to report.
+		return {
+			byteSize: object.data.byteLength,
+			mediaType: object.mediaType,
+			etag: `"${createHash('md5').update(object.data).digest('hex')}"`
+		};
 	}
 
 	async read(objectKey: string, maximumBytes: number): Promise<Uint8Array> {
 		return this.require(objectKey).data.slice(0, maximumBytes);
 	}
 
-	async promote(sourceKey: string, destinationKey: string): Promise<void> {
-		this.objects.set(destinationKey, this.require(sourceKey));
-		this.objects.delete(sourceKey);
+	async promote(input: { sourceKey: string; destinationKey: string }): Promise<void> {
+		this.objects.set(input.destinationKey, this.require(input.sourceKey));
+		this.objects.delete(input.sourceKey);
 	}
 
 	async remove(objectKey: string): Promise<void> {

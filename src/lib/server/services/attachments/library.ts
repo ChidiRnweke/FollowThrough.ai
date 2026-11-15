@@ -53,23 +53,29 @@ export interface AttachmentUploads {
 		mediaType: string;
 		byteSize: number;
 		checksumSha256: string;
-	}): Promise<{ upload: AttachmentUpload; requiredHeaders: Record<string, string> }>;
+	}): Promise<AttachmentUpload>;
 	/** @throws NotFoundError if the upload is unknown or has expired. */
 	pending(uploadId: AttachmentUpload['id']): Promise<AttachmentUpload>;
 	/**
 	 * The version a verified upload becomes, stored under its own key.
 	 *
-	 * @throws ValidationError if the stored object does not match the declared size and checksum.
+	 * @throws ValidationError if storage did not verify the object's checksum, or the stored
+	 * size or checksum differs from the reservation.
 	 */
 	planVersion(upload: AttachmentUpload, stored: StoredObjectInfo): AttachmentVersion;
 	finalize(upload: AttachmentUpload, version: AttachmentVersion): Promise<AttachmentView>;
+}
+/** The deployment's upload admission. Without `maxBytes`, any positive size is admitted. */
+export interface AttachmentAdmission {
+	readonly maxBytes?: number;
 }
 export class AttachmentUploadService implements AttachmentUploads {
 	constructor(
 		private readonly actor: ActorContext,
 		private readonly attachments: AttachmentRepository,
 		private readonly notes: NoteRepository,
-		private readonly now: () => DateTime
+		private readonly now: () => DateTime,
+		private readonly admission: AttachmentAdmission
 	) {}
 
 	async initiate(input: {
@@ -89,12 +95,17 @@ export class AttachmentUploadService implements AttachmentUploads {
 		const path = validateAttachmentPath(input.path);
 		if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 1)
 			throw new ValidationError('Attachment size must be a positive safe integer');
+		const { maxBytes } = this.admission;
+		if (maxBytes !== undefined && input.byteSize > maxBytes)
+			throw new ValidationError(
+				`The attachment is ${input.byteSize} bytes, over the ${maxBytes} byte ATTACHMENT_MAX_BYTES setting.`
+			);
 		if (!/^[a-f0-9]{64}$/i.test(input.checksumSha256))
 			throw new ValidationError('Attachment checksum must be a SHA-256 hex digest');
 		const timestamp = this.now();
 		const uploadId = crypto.randomUUID() as AttachmentUploadId;
 		const objectKey = `staging/${this.actor.userId}/${projectId}/${uploadId}`;
-		const upload = await this.attachments.createUpload({
+		return this.attachments.createUpload({
 			id: uploadId,
 			projectId,
 			...(input.noteId ? { noteId: input.noteId } : {}),
@@ -106,13 +117,6 @@ export class AttachmentUploadService implements AttachmentUploads {
 			expiresAt: new Date(Date.parse(timestamp) + 10 * 60 * 1000).toISOString() as DateTime,
 			createdAt: timestamp
 		});
-		return {
-			upload,
-			requiredHeaders: {
-				'content-type': upload.mediaType,
-				'x-amz-meta-sha256': upload.checksumSha256
-			}
-		};
 	}
 
 	async pending(uploadId: AttachmentUpload['id']): Promise<AttachmentUpload> {
@@ -123,10 +127,11 @@ export class AttachmentUploadService implements AttachmentUploads {
 	}
 
 	planVersion(upload: AttachmentUpload, stored: StoredObjectInfo): AttachmentVersion {
-		if (
-			stored.byteSize !== upload.byteSize ||
-			stored.checksumSha256?.toLowerCase() !== upload.checksumSha256
-		)
+		if (stored.checksumSha256 === undefined)
+			throw new ValidationError(
+				'Storage holds no verified checksum for the uploaded attachment. Upload it again.'
+			);
+		if (stored.byteSize !== upload.byteSize || stored.checksumSha256 !== upload.checksumSha256)
 			throw new ValidationError(
 				'Uploaded attachment does not match its declared size and checksum'
 			);

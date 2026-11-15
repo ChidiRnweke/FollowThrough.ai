@@ -239,6 +239,7 @@ export const PREREGISTERED_CONNECTORS = [
 ] as const;
 
 export const OPTIONAL_APPLICATION_KEYS: readonly string[] = [
+	'ATTACHMENT_MAX_BYTES',
 	'CONNECTOR_SECRET_KEYS',
 	...PREREGISTERED_CONNECTORS.flatMap((id) => {
 		const keys = connectorClientKeys(id);
@@ -668,6 +669,20 @@ const positiveInteger = (name: string, fallback: number): number => {
 	if (!Number.isSafeInteger(value) || value < 1)
 		throw new Error(`${name} must be a positive safe integer`);
 	return value;
+};
+
+/**
+ * Deployment admission for direct attachment uploads. Unset by default, so any size is
+ * admitted: the product carries no attachment size ceiling (self-hosting docs, "Request and
+ * archive admission"), and a deployment that wants one sets ATTACHMENT_MAX_BYTES.
+ */
+export const attachmentAdmissionLimits = (): { readonly maxBytes?: number } => {
+	const raw = process.env.ATTACHMENT_MAX_BYTES;
+	if (raw === undefined) return {};
+	const maxBytes = Number(raw);
+	if (!Number.isSafeInteger(maxBytes) || maxBytes < 1)
+		throw new Error('ATTACHMENT_MAX_BYTES must be a positive safe integer');
+	return { maxBytes };
 };
 
 /** When an anonymous MCP client registration counts as unused, and how often the worker looks. */

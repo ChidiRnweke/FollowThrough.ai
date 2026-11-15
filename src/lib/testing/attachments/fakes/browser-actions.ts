@@ -41,7 +41,14 @@ export class InMemoryAttachmentRemote implements AttachmentRemotePort {
 				createdAt: testNow
 			},
 			uploadUrl: 'https://storage.test/put',
-			requiredHeaders: { 'content-type': input.mediaType }
+			requiredHeaders: {
+				'content-type': input.mediaType,
+				'x-amz-checksum-sha256': btoa(
+					String.fromCharCode(
+						...(input.checksumSha256.match(/../g) ?? []).map((pair) => parseInt(pair, 16))
+					)
+				)
+			}
 		};
 	}
 	async complete(uploadId: string): Promise<AttachmentView> {

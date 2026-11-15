@@ -76,7 +76,7 @@ export class InMemoryAttachments
 		};
 	}
 
-	initiate(): Promise<{ upload: AttachmentUpload; requiredHeaders: Record<string, string> }> {
+	initiate(): Promise<AttachmentUpload> {
 		throw new Error('not used');
 	}
 	async pending(uploadId: AttachmentUpload['id']): Promise<AttachmentUpload> {

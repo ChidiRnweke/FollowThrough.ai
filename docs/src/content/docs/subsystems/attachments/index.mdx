@@ -5,7 +5,7 @@ description: Presigned two-phase uploads land in S3, then an off-request pipelin
 
 import Mermaid from '../../../../components/mermaid.astro';
 
-An attachment is a binary file the agent can read. Upload is two-phase: `initiate` validates the declaration (path, size, SHA-256) and returns a presigned PUT URL; the client writes bytes straight to S3-compatible storage; `complete` re-verifies size and checksum, promotes the object, and commits the records in a transaction. Processing then runs off the request path: plain text is decoded in-process, everything else goes to Mistral Document AI OCR over a presigned URL, embedded images get vision descriptions through OpenRouter, and the text is indexed into knowledge search. A version ends `ready`, `partial` (an image description failed and OCR text was retained), `unsupported`, or `failed` (retryable). The application does not impose a file-size ceiling. For the user-facing view, see [Attachments](/FollowThrough.ai/using/attachments/).
+An attachment is a binary file the agent can read. Upload is two-phase: `initiate` validates the declaration (path, size, SHA-256) and returns a presigned PUT URL; the client writes bytes straight to S3-compatible storage; `complete` re-verifies size and the checksum storage computed, promotes exactly that object version, and commits the records in a transaction. Processing then runs off the request path: plain text is decoded in-process, everything else goes to Mistral Document AI OCR over a presigned URL, embedded images get vision descriptions through OpenRouter, and the text is indexed into knowledge search. A version ends `ready`, `partial` (an image description failed and OCR text was retained), `unsupported`, or `failed` (retryable). The application does not impose a file-size ceiling unless a deployment sets `ATTACHMENT_MAX_BYTES`. For the user-facing view, see [Attachments](/FollowThrough.ai/using/attachments/).
 
 ## Why it exists
 
@@ -22,9 +22,9 @@ Composition lives in `src/lib/server/factories/capabilities/attachments-capabili
 
 ## The upload lifecycle
 
-1. `initiate` (`library.ts:123`) requires exactly one owner (note or project), validates the path (relative, no empty/`.`/`..` segments), the size (a positive safe integer), and the checksum (SHA-256 hex). It writes an `AttachmentUpload` row with a ten-minute expiry and returns a presigned PUT URL (600 s) for `staging/<user>/<project>/<uploadId>` plus the headers the client must send (`content-type`, `x-amz-meta-sha256`). Nothing is visible to other readers at this point.
-2. The client PUTs the bytes straight to storage.
-3. `complete` (`library.ts:185`) stats the staged object and rejects the upload if size or checksum drift from the declaration, promotes it to `objects/<user>/<project>/<versionId>`, and finalizes the attachment and first version as `queued`. The controller (`controller.ts:91`) runs `complete` inside the transaction runner and starts background processing only after the commit, so a half-persisted attachment is never observable and a crash never leaves an attachment the client believes is ready with nothing processing it.
+1. `initiate` (`library.ts:123`) requires exactly one owner (note or project), validates the path (relative, no empty/`.`/`..` segments), the size (a positive safe integer, at most `ATTACHMENT_MAX_BYTES` when that is set), and the checksum (SHA-256 hex). It writes an `AttachmentUpload` row with a ten-minute expiry and returns a presigned PUT URL (600 s) for `staging/<user>/<project>/<uploadId>` plus the headers the client must send (`content-type`, `x-amz-checksum-sha256`). The URL signs `content-length` and the checksum, so storage admits only the reserved byte count and digest. Nothing is visible to other readers at this point.
+2. The client PUTs the bytes straight to storage. The browser sets `content-length` from the file.
+3. `complete` (`library.ts:185`) stats the staged object with checksum mode enabled. It rejects the upload if storage reports no SHA-256, or if the size or that SHA-256 differs from the reservation. It copies the object to `objects/<user>/<project>/<versionId>` only while the staged object still has the entity tag it verified; a later write fails the copy, and the client must upload again. It then finalizes the attachment and first version as `queued`. The controller (`controller.ts:91`) runs `complete` inside the transaction runner and starts background processing only after the commit, so a half-persisted attachment is never observable and a crash never leaves an attachment the client believes is ready with nothing processing it.
 
 `downloadById`/`download` return 300-second presigned GET URLs. `read` pages through `extractedText` by offset in slices capped at 20,000 characters (`library.ts:89`) and requires a `parserKind`: a client can read a large document without downloading it, but only once processing produced text. `retry` is valid only from `failed` (`library.ts:232`); it re-queues the version and kicks processing again.
 
@@ -36,7 +36,7 @@ Composition lives in `src/lib/server/factories/capabilities/attachments-capabili
 	source={`
 flowchart LR
 	initiate["initiate: validate, presigned PUT (10 min reservation)"] --> staging["client PUTs bytes to staging/…"]
-	staging --> complete["complete: verify size + SHA-256, promote to objects/…, commit in transaction"]
+	staging --> complete["complete: verify size + storage SHA-256, copy if unchanged to objects/…, commit in transaction"]
 	complete --> queued
 	queued --> processing
 	processing --> text["in-process UTF-8 text decode"]
@@ -69,7 +69,7 @@ Two recovery paths keep the state machine honest. On boot, `recoverInterruptedRu
 ## What never happens
 
 - Nothing is visible before `complete`, and `complete` commits before processing starts: readers never see a half-uploaded or half-persisted attachment.
-- Stored bytes always match the declared size and SHA-256; drift rejects the upload.
+- Stored bytes always match the declared size and the SHA-256 that storage computed; drift, a missing checksum, or a write after verification rejects the upload.
 - `processingStatus` only moves `queued → processing → ready | partial | unsupported | failed`, plus `failed → queued` on retry and `processing → failed` on boot recovery.
 - Completing an upload deliberately leaves the owning note's `currentRevision` alone (`library.ts:178`). That counter is the editor's optimistic-concurrency token; bumping it for a pasted image made the editor's next autosave look stale and raised spurious conflicts. Attachments live beside the document, not in it.
 - A version stuck in `processing` across a restart becomes `failed`, never silently `ready`.
@@ -85,4 +85,4 @@ Defaults live in `APPLICATION_DEFAULTS` (`src/lib/server/config.ts:95`) and are 
 - [Notes](/FollowThrough.ai/subsystems/notes/): an attachment's optional owning note supplies its project and its note-relative path; archived notes cannot receive attachments.
 - [Projects](/FollowThrough.ai/subsystems/projects/): every attachment is project-scoped; `listForProject` backs the project overview's attachment count.
 
-`ATTACHMENT_MAX_BYTES`, `ATTACHMENT_PARSE_MAX_BYTES`, and `ATTACHMENT_OCR_MAX_PAGES` are retired. Every OCR response page and every parsed character is retained. Storage and provider failures remain explicit; no replacement size or page ceiling is imposed. Existing ready attachments are not automatically reprocessed by this change.
+`ATTACHMENT_PARSE_MAX_BYTES` and `ATTACHMENT_OCR_MAX_PAGES` are retired. Every OCR response page and every parsed character is retained. Storage and provider failures remain explicit; no replacement page ceiling is imposed. `ATTACHMENT_MAX_BYTES` no longer has a default: unset, no upload size ceiling applies. Existing ready attachments are not automatically reprocessed by this change.

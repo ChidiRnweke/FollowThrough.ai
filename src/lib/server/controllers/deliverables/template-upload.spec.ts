@@ -92,13 +92,16 @@ describe('template upload completion', () => {
 		expect(await controller.listTemplates(testProjectId())).toEqual([]);
 	});
 	it('stores the expected checksum with the upload contract', async () => {
-		const { repository, result, input } = await setup();
+		const { repository, result, input, bytes } = await setup();
 		expect({
 			checksum: repository.uploads[0]?.checksumSha256,
 			headers: result.requiredHeaders
 		}).toEqual({
 			checksum: input.checksumSha256,
-			headers: { 'content-type': input.mediaType, 'x-amz-meta-sha256': input.checksumSha256 }
+			headers: {
+				'content-type': input.mediaType,
+				'x-amz-checksum-sha256': createHash('sha256').update(bytes).digest('base64')
+			}
 		});
 	});
 	it('publishes verified bytes and extracted styles before removing staging', async () => {

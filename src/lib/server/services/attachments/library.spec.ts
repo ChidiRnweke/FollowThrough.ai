@@ -6,9 +6,21 @@ import {
 	view,
 	uploadFor,
 	UPLOAD_ID,
-	ATTACHMENT_ID
+	ATTACHMENT_ID,
+	InMemoryAttachmentRepository
 } from '$lib/testing/attachments/fakes/processing';
-import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import {
+	noteBuilder,
+	testActor,
+	testClock,
+	testProjectId
+} from '$lib/testing/workspace/fixtures/domain-builders';
+import { ValidationError } from '$lib/errors';
+import {
+	AttachmentUploadService,
+	type AttachmentAdmission
+} from '$lib/server/services/attachments/library';
+import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 afterEach(() => vi.unstubAllEnvs());
 describe('attachments and the note document revision', () => {
 	// `currentRevision` is the document's optimistic-concurrency token. The editor
@@ -25,7 +37,8 @@ describe('attachments and the note document revision', () => {
 			upload,
 			uploads.planVersion(upload, {
 				byteSize: upload.byteSize,
-				checksumSha256: upload.checksumSha256
+				checksumSha256: upload.checksumSha256,
+				etag: '"stored"'
 			})
 		);
 
@@ -41,6 +54,73 @@ describe('attachments and the note document revision', () => {
 		await lifecycle.remove(note.id, 'pasted-diagram.png');
 
 		expect((await notes.findById(note.id))?.currentRevision).toBe(7);
+	});
+});
+
+describe('verifying an uploaded object against its reservation', () => {
+	const reserved = () => {
+		const { uploads, repository, notes } = setup();
+		const note = noteBuilder();
+		notes.notes.push(note);
+		repository.upload = uploadFor(note.id);
+		return { uploads, upload: repository.upload };
+	};
+
+	it('refuses an object whose storage-computed checksum differs from the reserved digest', () => {
+		const { uploads, upload } = reserved();
+		expect(() =>
+			uploads.planVersion(upload, {
+				byteSize: upload.byteSize,
+				checksumSha256: 'b'.repeat(64),
+				etag: '"stored"'
+			})
+		).toThrow(
+			new ValidationError('Uploaded attachment does not match its declared size and checksum')
+		);
+	});
+
+	it('refuses an object storage holds no checksum for, even when its size matches', () => {
+		const { uploads, upload } = reserved();
+		expect(() =>
+			uploads.planVersion(upload, { byteSize: upload.byteSize, etag: '"stored"' })
+		).toThrow(
+			new ValidationError(
+				'Storage holds no verified checksum for the uploaded attachment. Upload it again.'
+			)
+		);
+	});
+});
+
+describe('upload admission', () => {
+	const reserve = (admission: AttachmentAdmission, byteSize: number) =>
+		new AttachmentUploadService(
+			testActor(),
+			new InMemoryAttachmentRepository(),
+			new InMemoryNoteRepository(testActor()),
+			testClock,
+			admission
+		).initiate({
+			projectId: testProjectId(),
+			path: 'quarterly-report.pdf',
+			mediaType: 'application/pdf',
+			byteSize,
+			checksumSha256: 'a'.repeat(64)
+		});
+
+	it('refuses a reservation larger than the configured ATTACHMENT_MAX_BYTES', async () => {
+		await expect(reserve({ maxBytes: 1_000_000 }, 1_000_001)).rejects.toThrow(
+			new ValidationError(
+				'The attachment is 1000001 bytes, over the 1000000 byte ATTACHMENT_MAX_BYTES setting.'
+			)
+		);
+	});
+
+	it('admits a reservation of exactly the configured ATTACHMENT_MAX_BYTES', async () => {
+		expect((await reserve({ maxBytes: 1_000_000 }, 1_000_000)).byteSize).toBe(1_000_000);
+	});
+
+	it('admits any positive size when no ceiling is configured', async () => {
+		expect((await reserve({}, 64 * 1024 ** 3)).byteSize).toBe(68_719_476_736);
 	});
 });
 

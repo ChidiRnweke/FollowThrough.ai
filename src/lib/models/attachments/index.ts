@@ -136,5 +136,17 @@ export type AttachmentObjectWrite =
 export interface StoredObjectInfo {
 	readonly byteSize: number;
 	readonly mediaType?: string;
+	/**
+	 * The SHA-256 hex digest storage computed over the received bytes. Absent when the object
+	 * was written without a checksum, so storage never verified its content.
+	 */
 	readonly checksumSha256?: string;
+	/** The entity tag of this exact object version; a later write changes it. */
+	readonly etag: string;
+}
+
+/** A signed upload: the URL and the headers the client must send for its signature to hold. */
+export interface SignedObjectUpload {
+	readonly url: string;
+	readonly requiredHeaders: Readonly<Record<string, string>>;
 }
