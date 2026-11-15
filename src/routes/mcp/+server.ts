@@ -1,7 +1,8 @@
 // chisel-ignore-file error-flow:raw-http-status -- MCP bearer authentication and JSON-RPC method negotiation require protocol-level 401 and 405 responses.
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { RequestHandler } from './$types';
 import { AppFactory } from '$lib/server/factories/app-factory';
+import { canonicalOrigin } from '$lib/server/config';
+import { mcpTransport } from '$lib/server/infrastructure/http/mcp-transport';
 
 /**
  * RFC 9728 §5.1: the challenge names the protected resource metadata, which is how a client
@@ -42,12 +43,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		.openMcpTools(authenticated.scope, authenticated.provenanceId);
 	const server = AppFactory.mcpSurface(session).open(url.origin);
 
-	// Stateless: no session to keep alive between requests, so this survives
-	// process restarts and multiple instances without sticky routing.
-	const transport = new WebStandardStreamableHTTPServerTransport({
-		sessionIdGenerator: undefined,
-		enableJsonResponse: true
-	});
+	const transport = mcpTransport(canonicalOrigin());
 
 	try {
 		await server.connect(transport);

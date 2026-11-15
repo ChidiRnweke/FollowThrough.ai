@@ -13,8 +13,10 @@ import {
 } from '$lib/server/config';
 
 import { redirect, type Handle } from '@sveltejs/kit';
+import { sequence } from '@sveltejs/kit/hooks';
 import { isForbiddenCrossSiteForm } from '$lib/server/infrastructure/http/request-origin';
 import { logRefusal } from '$lib/server/infrastructure/http/refusal-log';
+import { withResponseHeaders } from '$lib/server/infrastructure/http/response-headers';
 import { DOMAIN_ERROR_STATUS, DomainError } from '$lib/errors';
 
 export const init: ServerInit = async () => {
@@ -77,7 +79,15 @@ export const handleError: HandleServerError = ({ error, message }) => {
 	return { message };
 };
 
-export const handle: Handle = async ({ event, resolve }) => {
+/**
+ * Outermost, so the headers reach every response a route or the request policy below returns.
+ * A redirect the policy throws is answered by Kit after this hook and carries none; it has no
+ * body to sniff or frame, and the page it leads to carries its own.
+ */
+const responseHeaders: Handle = async ({ event, resolve }) =>
+	withResponseHeaders(await resolve(event));
+
+const requestPolicy: Handle = async ({ event, resolve }) => {
 	// Prerendering and the generated browser shell have no request session.
 	// The public offline page contains no account data at runtime either.
 	if (building || event.url.pathname === '/offline') return resolve(event);
@@ -169,3 +179,5 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	return resolve(event);
 };
+
+export const handle = sequence(responseHeaders, requestPolicy);

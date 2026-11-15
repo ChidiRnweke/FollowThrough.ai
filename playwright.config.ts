@@ -7,6 +7,8 @@ export const testEnv = {
 	AUTHENTIK_CLIENT_SECRET: 'playwright-not-used',
 	AUTHENTIK_DOMAIN: 'http://127.0.0.1:9',
 	AUTHENTIK_CALLBACK_URL: 'http://127.0.0.1:5173/auth/callback',
+	// The MCP endpoint answers only requests whose Host is this origin's host.
+	ORIGIN: 'http://127.0.0.1:5173',
 	MISTRAL_API_KEY: 'playwright-not-used',
 	OPENROUTER_API_KEY: 'playwright-not-used',
 	OPENROUTER_BASE_URL: 'http://127.0.0.1:9'
