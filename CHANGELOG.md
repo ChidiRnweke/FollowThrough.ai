@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.5.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.5.0...v6.5.1) (2026-11-15)
+
+
+### Bug Fixes
+
+* **telemetry:** export startup failures before the process exits ([#501](https://github.com/ChidiRnweke/FollowThrough.ai/issues/501)) ([71329cc](https://github.com/ChidiRnweke/FollowThrough.ai/commit/71329cc69239d7530fcb80b6634eeb9214866d13))
+
 ## [6.5.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.4.0...v6.5.0) (2026-11-14)
 
 
