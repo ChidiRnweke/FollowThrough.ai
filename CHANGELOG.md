@@ -1,5 +1,14 @@
 # Changelog
 
+## [6.7.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.6.0...v6.7.0) (2026-11-15)
+
+
+### Features
+
+* **agent:** let the schedule tools set a project, a model and skills ([#510](https://github.com/ChidiRnweke/FollowThrough.ai/issues/510)) ([894125f](https://github.com/ChidiRnweke/FollowThrough.ai/commit/894125fbc97f35e6e5476f7990ef285324d827a2))
+* **schedules:** choose a schedule's project, model and skills in the prompt field ([#509](https://github.com/ChidiRnweke/FollowThrough.ai/issues/509)) ([425d4c4](https://github.com/ChidiRnweke/FollowThrough.ai/commit/425d4c48f8e4166b6fb49b9e4d1a513120509db5))
+* **schedules:** start each run with the schedule's project, model and skills ([#508](https://github.com/ChidiRnweke/FollowThrough.ai/issues/508)) ([2554fb9](https://github.com/ChidiRnweke/FollowThrough.ai/commit/2554fb9674fc5c43f66581e8360aa4c31d97a08d))
+
 ## [6.6.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.5.1...v6.6.0) (2026-11-15)
 
 
