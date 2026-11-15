@@ -3,7 +3,11 @@ import { pathToFileURL } from 'node:url';
 import postgres from 'postgres';
 
 /** The base installer, then each later resource's triggers, in migration order. */
-const installers = ['0051_workspace_sync_changes.sql', '0060_widgets_workspace_sync.sql'] as const;
+const installers = [
+	'0051_workspace_sync_changes.sql',
+	'0060_widgets_workspace_sync.sql',
+	'0072_schedules_workspace_sync.sql'
+] as const;
 
 /** Install SQL objects that schema push cannot represent, without editing migration history. */
 export async function installWorkspaceSync(client: postgres.Sql): Promise<void> {

@@ -1,0 +1,1 @@
+export { schedules } from './registry';

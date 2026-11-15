@@ -8,6 +8,7 @@ import type { SyncEtag, SyncObjectRead } from '$lib/models/sync';
 import type { WorkspaceResourceIdentity, WorkspaceResourceType } from '$lib/models/workspace-sync';
 import {
 	resourceDataSchemas,
+	scheduleRecordFields,
 	todoRecordFields,
 	workspaceObjectReadSchema,
 	type WorkspaceRecord
@@ -69,7 +70,8 @@ const fields: Record<WorkspaceResourceType, readonly string[]> = {
 	project_templates: Object.keys(resourceDataSchemas.project_templates.shape),
 	export_settings: Object.keys(resourceDataSchemas.export_settings.shape),
 	artifacts: Object.keys(resourceDataSchemas.artifacts.shape),
-	widgets: Object.keys(resourceDataSchemas.widgets.shape)
+	widgets: Object.keys(resourceDataSchemas.widgets.shape),
+	schedules: Object.keys(scheduleRecordFields)
 };
 
 const columnValue = (field: string): SQL => {

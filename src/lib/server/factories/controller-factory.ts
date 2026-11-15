@@ -12,6 +12,7 @@ import type { DiagramsController } from '../controllers/diagrams/controller';
 import type { DiagramStudioController } from '../controllers/diagram-studio/controller';
 import type { FeedbackController } from '../controllers/feedback/controller';
 import type { ConnectorsController } from '../controllers/connectors/controller';
+import type { SchedulesController } from '../controllers/schedules/controller';
 import type { ContextUsageController } from '../controllers/context-usage/controller';
 import type { InlineSuggestionsController } from '../controllers/inline-suggestions/controller';
 import type { RetrievalController } from '../controllers/knowledge-search/controller';
@@ -56,4 +57,5 @@ export interface ControllerFactory {
 	attachmentProcessing(): AttachmentProcessingController;
 	knowledgeIndexing(): KnowledgeIndexingController;
 	connectors(): ConnectorsController;
+	schedules(): SchedulesController;
 }
