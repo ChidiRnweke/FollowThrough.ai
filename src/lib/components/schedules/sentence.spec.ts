@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { IanaTimeZone, Recurrence } from '$lib/models/schedules';
 import type { LocalDate } from '$lib/models/workspace';
-import { clockValue, ordinal, rhythmLabel, rhythmOf, timeOfClock, withRhythm } from './sentence';
+import {
+	clockValue,
+	ordinal,
+	rhythmLabel,
+	rhythmOf,
+	rhythmWord,
+	timeOfClock,
+	withRhythm
+} from './sentence';
 
 const brussels = 'Europe/Brussels' as IanaTimeZone;
 const half = { hour: 16, minute: 30 };
@@ -15,11 +23,15 @@ describe('the first choice of the schedule sentence', () => {
 		];
 
 		expect(
-			recurrences.map((recurrence) => [rhythmOf(recurrence), rhythmLabel(recurrence)])
+			recurrences.map((recurrence) => [
+				rhythmOf(recurrence),
+				rhythmLabel(recurrence),
+				rhythmWord(recurrence)
+			])
 		).toEqual([
-			['fri', 'Every Friday'],
-			['weekdays', 'Every weekday'],
-			['once', 'Once']
+			['fri', 'Every Friday', 'Friday'],
+			['weekdays', 'Every weekday', 'weekday'],
+			['once', 'Once', 'Once']
 		]);
 	});
 

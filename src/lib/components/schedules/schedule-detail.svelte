@@ -107,8 +107,9 @@
 	{/snippet}
 
 	<div class="flex max-w-3xl flex-col gap-section">
+		<!-- The sentence keeps a narrower measure than the runs under it: it is read, not scanned. -->
 		<div
-			class="flex flex-col gap-item"
+			class="flex max-w-2xl flex-col gap-item"
 			onfocusout={(event) => {
 				if (event.target instanceof HTMLTextAreaElement) void savePrompt();
 			}}

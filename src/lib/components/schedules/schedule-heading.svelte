@@ -54,9 +54,7 @@
 					oncancel={() => (editing = false)}
 				/>
 			{:else}
-				<h1 class={['page-title min-w-0 truncate', !title && 'text-muted-foreground']}>
-					{title || placeholder}
-				</h1>
+				<h1 class="page-title min-w-0 truncate">{title || placeholder}</h1>
 				<Tip text="Rename">
 					{#snippet children({ props })}
 						<Button

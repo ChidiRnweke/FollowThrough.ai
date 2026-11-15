@@ -52,7 +52,8 @@
 		/>
 	{/snippet}
 
-	<div class="flex max-w-3xl flex-col gap-group">
+	<!-- The sentence keeps a narrower measure than a list: it is read, not scanned. -->
+	<div class="flex max-w-2xl flex-col gap-group">
 		<ScheduleSentence
 			{recurrence}
 			{timeZone}

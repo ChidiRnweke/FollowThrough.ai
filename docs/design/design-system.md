@@ -436,7 +436,12 @@ the section's mark: `Scene.ReadAlone` (read with), `Scene.Unlinked` (linked), `S
   weekday at 08:00 Brussels time, <the prompt> and ask me first before it changes something."
   The page of a schedule is that sentence at base size with its runs under it; a new schedule is
   the same page with one button. No dialog, no labelled form, no helper text beside a control:
-  the sentence is the label. One muted line under it states the next run, and one more appears
+  the sentence is the label. Its hierarchy is ink and weight, with no icon: a word that is a
+  control is `text-brand font-medium`, and the words between them ("Every", "at", "and", "before
+  it changes something.") stay plain foreground at regular weight, outside any control. The
+  prompt is the one field at `text-sm`, at least three lines tall. The sentence keeps `max-w-2xl`,
+  narrower than the runs under it: it is read, the runs are scanned. The page title is always
+  full ink, also while a new schedule has no name. One muted line under it states the next run, and one more appears
   only for "do not ask me". An existing schedule saves each change at once and the prompt on
   blur. The list is divided rows at the reading measure: a `Switch` that pauses, the title, one
   caption (recurrence, whether it asks, the next run), and at most one brand badge, "Waiting for

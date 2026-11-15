@@ -10,10 +10,13 @@
 	let {
 		value,
 		disabled = false,
+		class: className,
 		onchange
 	}: {
 		value: IanaTimeZone;
 		disabled?: boolean;
+		/** How the trigger reads beside its neighbours; the sentence sets it. */
+		class: string;
 		onchange: (timeZone: IanaTimeZone) => void;
 	} = $props();
 
@@ -34,7 +37,7 @@
 				{...props}
 				variant="outline"
 				{disabled}
-				class="text-base font-medium"
+				class={className}
 				aria-label="Time zone: {value}"
 			>
 				{workspaceViews.scheduleZoneName(value)}

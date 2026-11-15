@@ -17,8 +17,8 @@
 		RHYTHMS,
 		clockValue,
 		ordinal,
-		rhythmLabel,
 		rhythmOf,
+		rhythmWord,
 		timeOfClock,
 		withRhythm,
 		type Rhythm
@@ -51,6 +51,10 @@
 
 	let dateOpen = $state(false);
 
+	// A word that is a control reads as a value: brand ink at medium weight. The words between
+	// them stay plain, so the eye lands on what can change and the sentence still reads through.
+	const WORD = 'text-base font-medium text-brand';
+
 	const MODES: Record<AgentExecutionMode, string> = {
 		approval_required: 'ask me first',
 		auto_accept: 'do not ask me'
@@ -75,9 +79,10 @@
 
 <div class="flex flex-col gap-row text-base">
 	<p class="flex flex-wrap items-center gap-2">
+		{#if recurrence.kind !== 'once'}<span>Every</span>{/if}
 		<Select.Root type="single" value={rhythmOf(recurrence)} onValueChange={chooseRhythm} {disabled}>
-			<Select.Trigger class="text-base font-medium" aria-label="How often">
-				{rhythmLabel(recurrence)}
+			<Select.Trigger class={WORD} aria-label="How often">
+				{rhythmWord(recurrence)}
 			</Select.Trigger>
 			<Select.Content>
 				{#each RHYTHMS as rhythm (rhythm.value)}
@@ -91,13 +96,13 @@
 				type="number"
 				min="0"
 				max="59"
-				class="w-20 text-base font-medium tabular-nums md:text-base"
+				class={[WORD, 'w-20 tabular-nums md:text-base']}
 				aria-label="Minutes past the hour"
 				value={recurrence.minute}
 				{disabled}
 				onchange={(event) => chooseMinute(event.currentTarget.value)}
 			/>
-			<span>minutes past the hour</span>
+			<span>minutes past the hour,</span>
 		{:else}
 			{#if recurrence.kind === 'monthly'}
 				<span>on the</span>
@@ -107,7 +112,7 @@
 					{disabled}
 					onValueChange={(value) => onrecurrence({ ...recurrence, day: Number(value) })}
 				>
-					<Select.Trigger class="text-base font-medium tabular-nums" aria-label="Day of the month">
+					<Select.Trigger class={[WORD, 'tabular-nums']} aria-label="Day of the month">
 						{ordinal(recurrence.day)}
 					</Select.Trigger>
 					<Select.Content class="max-h-72">
@@ -121,7 +126,7 @@
 				<Popover.Root bind:open={dateOpen}>
 					<Popover.Trigger>
 						{#snippet child({ props })}
-							<Button {...props} variant="outline" {disabled} class="text-base font-medium">
+							<Button {...props} variant="outline" {disabled} class={WORD}>
 								<Icon.Calendar data-icon="inline-start" />{formatDate(recurrence.date)}
 							</Button>
 						{/snippet}
@@ -140,19 +145,25 @@
 			<span>at</span>
 			<Input
 				type="time"
-				class="w-auto text-base font-medium tabular-nums md:text-base"
+				class={[
+					WORD,
+					// The browser's own clock glyph, lowered to the weight of the chevrons beside it.
+					'w-auto tabular-nums md:text-base [&::-webkit-calendar-picker-indicator]:opacity-60'
+				]}
 				aria-label="Time of day"
 				value={clockValue(recurrence.time)}
 				{disabled}
 				onchange={(event) => chooseTime(event.currentTarget.value)}
 			/>
-			<TimeZoneField value={timeZone} {disabled} onchange={ontimezone} />
+			<TimeZoneField value={timeZone} {disabled} class={WORD} onchange={ontimezone} />
+			<!-- The comma closes the clause; pulled in so it sits against the word before it. -->
+			<span class="-ml-1.5">,</span>
 		{/if}
 	</p>
 	<Textarea
 		value={prompt}
 		rows={4}
-		class="resize-none text-sm"
+		class="min-h-24 resize-none text-sm leading-relaxed"
 		placeholder="read my overdue todos and write a brief as a note in Inbox"
 		aria-label="What the agent does"
 		{disabled}
@@ -167,7 +178,7 @@
 			onValueChange={(value) =>
 				onmode(value === 'auto_accept' ? 'auto_accept' : 'approval_required')}
 		>
-			<Select.Trigger class="text-base font-medium" aria-label="Whether a run asks before a change">
+			<Select.Trigger class={WORD} aria-label="Whether a run asks before a change">
 				{MODES[executionMode]}
 			</Select.Trigger>
 			<Select.Content>

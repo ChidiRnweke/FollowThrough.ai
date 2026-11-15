@@ -5,30 +5,48 @@ import type { LocalDate } from '$lib/models/workspace';
 /** The first choice in the sentence: how often. A weekly recurrence is chosen by its day. */
 export type Rhythm = Exclude<Recurrence['kind'], 'weekly'> | Weekday;
 
-export const RHYTHMS: readonly { readonly value: Rhythm; readonly label: string }[] = [
-	{ value: 'hourly', label: 'Every hour' },
-	{ value: 'daily', label: 'Every day' },
-	{ value: 'weekdays', label: 'Every weekday' },
-	{ value: 'mon', label: 'Every Monday' },
-	{ value: 'tue', label: 'Every Tuesday' },
-	{ value: 'wed', label: 'Every Wednesday' },
-	{ value: 'thu', label: 'Every Thursday' },
-	{ value: 'fri', label: 'Every Friday' },
-	{ value: 'sat', label: 'Every Saturday' },
-	{ value: 'sun', label: 'Every Sunday' },
-	{ value: 'monthly', label: 'Every month' },
-	{ value: 'once', label: 'Once' }
+/** What a schedule that repeats repeats on: the word the sentence shows after "Every". */
+const REPEATING: readonly { readonly value: Exclude<Rhythm, 'once'>; readonly word: string }[] = [
+	{ value: 'hourly', word: 'hour' },
+	{ value: 'daily', word: 'day' },
+	{ value: 'weekdays', word: 'weekday' },
+	{ value: 'mon', word: 'Monday' },
+	{ value: 'tue', word: 'Tuesday' },
+	{ value: 'wed', word: 'Wednesday' },
+	{ value: 'thu', word: 'Thursday' },
+	{ value: 'fri', word: 'Friday' },
+	{ value: 'sat', word: 'Saturday' },
+	{ value: 'sun', word: 'Sunday' },
+	{ value: 'monthly', word: 'month' }
+];
+
+/**
+ * Every rhythm, with its two readings. `label` stands alone in the list of choices. `word` is
+ * what the control shows inside the sentence, where "Every" is already written before it.
+ */
+export const RHYTHMS: readonly {
+	readonly value: Rhythm;
+	readonly label: string;
+	readonly word: string;
+}[] = [
+	...REPEATING.map(({ value, word }) => ({ value, word, label: `Every ${word}` })),
+	{ value: 'once', word: 'Once', label: 'Once' }
 ];
 
 export const rhythmOf = (recurrence: Recurrence): Rhythm =>
 	recurrence.kind === 'weekly' ? recurrence.weekday : recurrence.kind;
 
-export const rhythmLabel = (recurrence: Recurrence): string => {
+const chosenRhythm = (recurrence: Recurrence) => {
 	const rhythm = rhythmOf(recurrence);
 	const chosen = RHYTHMS.find((candidate) => candidate.value === rhythm);
 	if (!chosen) throw new Error(`No label for the rhythm ${rhythm}`);
-	return chosen.label;
+	return chosen;
 };
+
+export const rhythmLabel = (recurrence: Recurrence): string => chosenRhythm(recurrence).label;
+
+/** The rhythm as the sentence shows it: "weekday" after "Every", or "Once" on its own. */
+export const rhythmWord = (recurrence: Recurrence): string => chosenRhythm(recurrence).word;
 
 /** Eight in the morning: the time a recurrence that has none yet starts from. */
 const MORNING: TimeOfDay = { hour: 8, minute: 0 };
