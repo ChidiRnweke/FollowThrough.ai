@@ -25,12 +25,18 @@ export type ServerAuthorization =
 			readonly scopes: readonly string[];
 	  };
 
+/** How the server pages `tools/list`. */
+export type ToolPaging =
+	| { readonly kind: 'sized'; readonly size: number }
+	/** Every page holds the tools again under a fresh cursor, so the listing never ends. */
+	| { readonly kind: 'endless' };
+
 export interface FakeConnectorServerOptions {
 	readonly path: string;
 	readonly authorization: ServerAuthorization;
 	readonly tools: readonly Tool[];
-	/** Tools per `tools/list` page; every tool on one page when absent. */
-	readonly pageSize?: number;
+	/** Every tool on one page when absent. */
+	readonly paging?: ToolPaging;
 	readonly call?: (name: string, args: AgentPayloadObject) => CallToolResult;
 	/** Icons the server lists in its `serverInfo`. */
 	readonly icons?: readonly { readonly src: string }[];
@@ -93,8 +99,14 @@ export class FakeConnectorServer {
 			{ capabilities: { tools: {} } }
 		);
 		server.setRequestHandler(ListToolsRequestSchema, async (list) => {
-			const size = this.options.pageSize ?? this.tools.length;
 			const start = Number(list.params?.cursor ?? 0);
+			const paging = this.options.paging;
+			if (paging?.kind === 'endless') {
+				// A real round trip yields to the event loop; without it no timer could ever fire.
+				await new Promise((resolve) => setImmediate(resolve));
+				return { tools: [...this.tools], nextCursor: String(start + 1) };
+			}
+			const size = paging?.size ?? this.tools.length;
 			const end = start + size;
 			return {
 				tools: [...this.tools.slice(start, end)],

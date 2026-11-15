@@ -17,7 +17,7 @@ import {
 import { toolSearchFixture } from '$lib/testing/agent/fixtures/tool-discovery';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { FakeAuthorizationServer } from '../fakes/fake-authorization-server';
-import { FakeConnectorNetwork } from '../fakes/fake-connector-network';
+import { FakeConnectorNetwork, OPERATION_TIMEOUT_MS } from '../fakes/fake-connector-network';
 import { FakeConnectorServer } from '../fakes/fake-connector-server';
 import {
 	InMemoryConnectorAuthorizations,
@@ -110,10 +110,11 @@ export const connectorsFixture = (
 						{ clientId: `${id}-client`, clientSecret: `${id}-secret` }
 					])
 				),
-				now: clock.now
+				now: clock.now,
+				operationTimeoutMs: OPERATION_TIMEOUT_MS
 			}),
-			servers: new ConnectorServers(network.fetch),
-			icons: new ConnectorIcons(network.fetch),
+			servers: new ConnectorServers(network.fetch, OPERATION_TIMEOUT_MS),
+			icons: new ConnectorIcons(network.fetch, OPERATION_TIMEOUT_MS),
 			embeddings: toolSearchFixture(new InMemoryToolEmbeddingRepository(), embeddings),
 			preregistered: new Set(preregistered),
 			transactionRunner: new InMemoryTransactionRunner([records]),

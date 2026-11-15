@@ -38,6 +38,30 @@ describe('OutboundGuard', () => {
 		expect(sent).toEqual([]);
 	});
 
+	it.each([
+		['a decimal loopback', 'https://2130706433/mcp'],
+		['a hex loopback', 'https://0x7f.1/mcp'],
+		['an IPv4-mapped loopback', 'https://[::ffff:127.0.0.1]/mcp'],
+		['the IPv6 loopback', 'https://[::1]/mcp'],
+		['the link-local metadata address', 'https://169.254.169.254/latest/meta-data'],
+		['a private address', 'https://10.0.0.1/mcp']
+	])('refuses %s literal before any request leaves', async (_, url) => {
+		const { transport, sent } = scriptedTransport(() => new Response('{}'));
+		await expect(new OutboundGuard(transport).fetch(url)).rejects.toThrow(
+			'is an address FollowThrough does not connect to'
+		);
+		expect(sent).toEqual([]);
+	});
+
+	it('sends a request to a public address literal', async () => {
+		const { transport, sent } = scriptedTransport(() => new Response('found'));
+		const response = await new OutboundGuard(transport).fetch('https://93.184.215.14/mcp');
+		expect({ body: await response.text(), urls: sent.map((request) => request.url) }).toEqual({
+			body: 'found',
+			urls: ['https://93.184.215.14/mcp']
+		});
+	});
+
 	it('follows a same-origin redirect for a GET', async () => {
 		const { transport, sent } = scriptedTransport((url) =>
 			url.pathname === '/old' ? redirect('/new') : new Response('found')

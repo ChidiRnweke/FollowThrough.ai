@@ -161,6 +161,8 @@ Three small endpoints read at most a fixed number of body bytes and answer `413`
 
 Each signed-in user may send `CLIENT_ERROR_REPORTS_PER_WINDOW` browser error reports (default 20, one page's own cap) per `CLIENT_ERROR_WINDOW_SECONDS` (default 60). A repeat of a report already logged in the window is dropped; the next logged report says how many were dropped. A report past the budget is answered `429` with `Retry-After`. All five settings must be positive safe integers.
 
+Each connector operation has one total deadline: listing a server's tools across every page, discovering and completing OAuth sign-in, refreshing a token, or fetching a server's icon. `CONNECTOR_OPERATION_TIMEOUT_MS` defaults to 60,000, the MCP SDK's default timeout for a single request, and must be a positive safe integer. An operation that passes it fails with the setting named and keeps no partial tool list; an icon that passes it leaves the connector with its monogram. Connector requests never go to a special-use address, whether a host name resolves to one or the URL names one as an address literal.
+
 ## Sign-in and MCP client limits
 
 Sign-in waits at most `AUTHENTIK_REQUEST_TIMEOUT_MS` (default 10,000) for each Authentik token or profile request. This is a starting value, not a measurement. A request that gets no answer in time fails the sign-in instead of holding the callback open. When Authentik answers with an error, the error message quotes at most the first 500 bytes of its body.

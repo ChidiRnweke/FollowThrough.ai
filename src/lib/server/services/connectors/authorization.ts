@@ -34,6 +34,7 @@ import {
 	type PendingAuthorization
 } from '$lib/models/connectors';
 import type { DateTime } from '$lib/models/workspace';
+import { fetchUntil, OperationDeadline } from '$lib/server/infrastructure/network/deadline';
 import type { FetchLike } from '$lib/server/infrastructure/network/outbound';
 
 /** How a client is registered with the server's authorization server. */
@@ -81,6 +82,8 @@ export interface ConnectorAuthorizationDependencies {
 	/** Client credentials the operator configured, by catalog entry. */
 	readonly preregistered: ReadonlyMap<CatalogConnectorId, ClientCredentials>;
 	readonly now: () => DateTime;
+	/** The total time each of begin, exchange and refresh may take (CONNECTOR_OPERATION_TIMEOUT_MS). */
+	readonly operationTimeoutMs: number;
 }
 
 const LOCAL_HOST = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$/i;
@@ -89,7 +92,8 @@ const LOCAL_HOST = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$/i;
  * OAuth for connectors, over the MCP SDK's discovery, registration and token
  * functions (ADR 0049). It owns the authorization server as a provider, so it
  * maps every response into connector models and every provider failure into
- * one domain error.
+ * one domain error. Each operation runs within its own deadline, which every
+ * request it makes carries.
  */
 export class ConnectorAuthorization implements ConnectorAuthorizer {
 	constructor(private readonly dependencies: ConnectorAuthorizationDependencies) {}
@@ -100,9 +104,10 @@ export class ConnectorAuthorization implements ConnectorAuthorizer {
 		readonly challenge: AuthorizationChallenge | undefined;
 	}): Promise<AuthorizationStart> {
 		const host = new URL(input.serverUrl).host;
-		const info = await this.provider(host, () =>
+		const deadline = new OperationDeadline(this.dependencies.operationTimeoutMs);
+		const info = await this.provider(host, deadline, (fetchFn) =>
 			discoverOAuthServerInfo(input.serverUrl, {
-				fetchFn: this.dependencies.fetch,
+				fetchFn,
 				...(input.challenge?.resourceMetadataUrl
 					? { resourceMetadataUrl: new URL(input.challenge.resourceMetadataUrl) }
 					: {})
@@ -132,6 +137,7 @@ export class ConnectorAuthorization implements ConnectorAuthorizer {
 			.filter((scope) => scope.length > 0);
 		const client = await this.client(
 			host,
+			deadline,
 			metadata,
 			info.authorizationServerUrl,
 			input.registration,
@@ -139,7 +145,7 @@ export class ConnectorAuthorization implements ConnectorAuthorizer {
 		);
 		const redirectUri = new URL(connectorCallbackPath, this.dependencies.origin).href;
 		const state = randomBytes(32).toString('base64url');
-		const started = await this.provider(host, () =>
+		const started = await this.provider(host, deadline, () =>
 			startAuthorization(info.authorizationServerUrl, {
 				metadata,
 				clientInformation: this.clientInformation(client),
@@ -180,7 +186,8 @@ export class ConnectorAuthorization implements ConnectorAuthorizer {
 		// RFC 9207: a server that sends `iss` names itself; a mismatch is a mix-up attack.
 		if (issuer !== undefined ? issuer !== server.issuer : server.issuerInResponse)
 			throw new ValidationError('The sign-in answer came from a different authorization server.');
-		const tokens = await this.provider(new URL(server.tokenEndpoint).host, () =>
+		const deadline = new OperationDeadline(this.dependencies.operationTimeoutMs);
+		const tokens = await this.provider(new URL(server.tokenEndpoint).host, deadline, (fetchFn) =>
 			exchangeAuthorization(server.issuer, {
 				metadata: this.metadata(pending.grant),
 				clientInformation: this.clientInformation(pending.grant.client),
@@ -188,7 +195,7 @@ export class ConnectorAuthorization implements ConnectorAuthorizer {
 				codeVerifier: pending.codeVerifier,
 				redirectUri: pending.redirectUri,
 				resource: new URL(pending.grant.resource),
-				fetchFn: this.dependencies.fetch
+				fetchFn
 			})
 		);
 		return this.tokens(tokens, undefined);
@@ -196,16 +203,18 @@ export class ConnectorAuthorization implements ConnectorAuthorizer {
 
 	async refresh(grant: OAuthGrant, refreshToken: string): Promise<TokenRenewal> {
 		const server = grant.authorizationServer;
+		const deadline = new OperationDeadline(this.dependencies.operationTimeoutMs);
 		try {
 			const tokens = await refreshAuthorization(server.issuer, {
 				metadata: this.metadata(grant),
 				clientInformation: this.clientInformation(grant.client),
 				refreshToken,
 				resource: new URL(grant.resource),
-				fetchFn: this.dependencies.fetch
+				fetchFn: fetchUntil(this.dependencies.fetch, deadline.signal)
 			});
 			return { kind: 'renewed', tokens: this.tokens(tokens, refreshToken) };
 		} catch (error) {
+			if (deadline.passed) throw deadline.failure(new URL(server.tokenEndpoint).host);
 			if (
 				error instanceof InvalidGrantError ||
 				error instanceof InvalidClientError ||
@@ -232,6 +241,7 @@ export class ConnectorAuthorization implements ConnectorAuthorizer {
 
 	private async client(
 		host: string,
+		deadline: OperationDeadline,
 		metadata: AuthorizationServerMetadata,
 		authorizationServerUrl: string,
 		registration: Registration,
@@ -257,14 +267,14 @@ export class ConnectorAuthorization implements ConnectorAuthorizer {
 			throw new ExternalServiceError(
 				`${host} needs a client registered in advance, which FollowThrough cannot do for this server.`
 			);
-		const registered = await this.provider(host, () =>
+		const registered = await this.provider(host, deadline, (fetchFn) =>
 			registerClient(authorizationServerUrl, {
 				metadata,
 				clientMetadata: connectorClientRegistration(
 					new URL('/', this.dependencies.origin).href,
 					new URL(connectorCallbackPath, this.dependencies.origin).href
 				),
-				fetchFn: this.dependencies.fetch,
+				fetchFn,
 				...(scopes.length > 0 ? { scope: scopes.join(' ') } : {})
 			})
 		);
@@ -333,10 +343,16 @@ export class ConnectorAuthorization implements ConnectorAuthorizer {
 		};
 	}
 
-	private async provider<T>(host: string, call: () => Promise<T>): Promise<T> {
+	/** Calls the provider with a fetch bound to the operation's deadline. */
+	private async provider<T>(
+		host: string,
+		deadline: OperationDeadline,
+		call: (fetch: FetchLike) => Promise<T>
+	): Promise<T> {
 		try {
-			return await call();
+			return await call(fetchUntil(this.dependencies.fetch, deadline.signal));
 		} catch (error) {
+			if (deadline.passed) throw deadline.failure(host);
 			if (error instanceof ExternalServiceError || error instanceof ValidationError) throw error;
 			throw notCompleted(host, error instanceof Error ? error.message : String(error));
 		}

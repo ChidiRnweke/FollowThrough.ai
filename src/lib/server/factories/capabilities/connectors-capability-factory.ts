@@ -33,6 +33,8 @@ export type ConnectorConfiguration =
 			readonly preregistered: ReadonlyMap<CatalogConnectorId, ClientCredentials>;
 			/** The guarded way out; every connector request uses it. */
 			readonly fetch: FetchLike;
+			/** CONNECTOR_OPERATION_TIMEOUT_MS: the total time one connector operation may take. */
+			readonly operationTimeoutMs: number;
 	  };
 
 export interface ConnectorsCapabilityInput {
@@ -78,11 +80,18 @@ export const createConnectorsCapability = (
 						fetch: configuration.fetch,
 						origin: configuration.origin,
 						preregistered: configuration.preregistered,
-						now: input.now
+						now: input.now,
+						operationTimeoutMs: configuration.operationTimeoutMs
 					})
 				),
-				servers: tracedService('ConnectorServers', new ConnectorServers(configuration.fetch)),
-				icons: tracedService('ConnectorIcons', new ConnectorIcons(configuration.fetch)),
+				servers: tracedService(
+					'ConnectorServers',
+					new ConnectorServers(configuration.fetch, configuration.operationTimeoutMs)
+				),
+				icons: tracedService(
+					'ConnectorIcons',
+					new ConnectorIcons(configuration.fetch, configuration.operationTimeoutMs)
+				),
 				embeddings: input.embeddings,
 				preregistered: new Set(configuration.preregistered.keys()),
 				transactionRunner: input.transactionRunner,

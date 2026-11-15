@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { ConnectorIcon, ServerIcon } from '$lib/models/connectors';
+import { OperationDeadline } from '$lib/server/infrastructure/network/deadline';
 import type { FetchLike } from '$lib/server/infrastructure/network/outbound';
 
 /**
@@ -12,10 +13,15 @@ const MAX_ICON_BYTES = 256 * 1024;
 export type IconFetch =
 	| { readonly kind: 'icon'; readonly icon: ConnectorIcon }
 	/** The server published no icon this app accepts; the connector shows a monogram. */
-	| { readonly kind: 'none'; readonly reason: string };
+	| { readonly kind: 'none'; readonly reason: string }
+	/** The operation deadline passed before an acceptable icon arrived. */
+	| { readonly kind: 'failure'; readonly reason: string };
 
 export interface ConnectorIconFetching {
-	/** The first acceptable icon the server published, fetched and identified by its bytes. */
+	/**
+	 * The first acceptable icon the server published, fetched and identified by its bytes,
+	 * within one operation deadline for every request and body read.
+	 */
 	fetch(serverUrl: string, icons: readonly ServerIcon[]): Promise<IconFetch>;
 }
 
@@ -43,16 +49,22 @@ const sniff = (bytes: Uint8Array): ConnectorIcon['mediaType'] | undefined => {
  * served back from this origin with a sandboxing policy, so an SVG cannot run.
  */
 export class ConnectorIcons implements ConnectorIconFetching {
-	constructor(private readonly outbound: FetchLike) {}
+	constructor(
+		private readonly outbound: FetchLike,
+		private readonly operationTimeoutMs: number
+	) {}
 
 	async fetch(serverUrl: string, icons: readonly ServerIcon[]): Promise<IconFetch> {
 		const origin = new URL(serverUrl).origin;
+		const deadline = new OperationDeadline(this.operationTimeoutMs);
 		// The connector tile is light in both themes, so an icon drawn for a light background wins.
 		const ordered = [...icons].sort(
 			(left, right) => Number(left.theme === 'dark') - Number(right.theme === 'dark')
 		);
 		for (const icon of ordered) {
-			const bytes = await this.bytes(icon.src, origin);
+			const bytes = await this.bytes(icon.src, origin, deadline.signal);
+			if (deadline.passed)
+				return { kind: 'failure', reason: deadline.failure(new URL(serverUrl).host).message };
 			if (bytes.kind === 'failure') continue;
 			const mediaType = sniff(bytes.value);
 			if (!mediaType) continue;
@@ -76,7 +88,8 @@ export class ConnectorIcons implements ConnectorIconFetching {
 
 	private async bytes(
 		src: string,
-		origin: string
+		origin: string,
+		signal: AbortSignal
 	): Promise<
 		{ readonly kind: 'bytes'; readonly value: Uint8Array } | { readonly kind: 'failure' }
 	> {
@@ -91,9 +104,9 @@ export class ConnectorIcons implements ConnectorIconFetching {
 		const url = URL.canParse(src) ? new URL(src) : undefined;
 		if (!url || url.protocol !== 'https:' || url.origin !== origin) return { kind: 'failure' };
 		try {
-			const response = await this.outbound(url, { credentials: 'omit' });
+			const response = await this.outbound(url, { credentials: 'omit', signal });
 			if (!response.ok || !response.body) return { kind: 'failure' };
-			return await bounded(response.body);
+			return await bounded(response.body, signal);
 			// An icon is the connector's face, not its function: one that cannot be fetched is skipped for the next.
 		} catch {
 			return { kind: 'failure' };
@@ -101,24 +114,36 @@ export class ConnectorIcons implements ConnectorIconFetching {
 	}
 }
 
-/** Reads at most MAX_ICON_BYTES and stops the stream at the first byte over. */
+/**
+ * Reads at most MAX_ICON_BYTES and stops the stream at the first byte over, or when
+ * `signal` aborts: cancelling ends the pending read, and the abort then throws.
+ */
 const bounded = async (
-	body: ReadableStream<Uint8Array>
+	body: ReadableStream<Uint8Array>,
+	signal: AbortSignal
 ): Promise<
 	{ readonly kind: 'bytes'; readonly value: Uint8Array } | { readonly kind: 'failure' }
 > => {
 	const reader = body.getReader();
+	const stop = () => void reader.cancel(signal.reason);
+	signal.addEventListener('abort', stop, { once: true });
 	const chunks: Uint8Array[] = [];
 	let size = 0;
-	for (;;) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		size += value.byteLength;
-		if (size > MAX_ICON_BYTES) {
-			await reader.cancel();
-			return { kind: 'failure' };
+	try {
+		for (;;) {
+			signal.throwIfAborted();
+			const { done, value } = await reader.read();
+			signal.throwIfAborted();
+			if (done) break;
+			size += value.byteLength;
+			if (size > MAX_ICON_BYTES) {
+				await reader.cancel();
+				return { kind: 'failure' };
+			}
+			chunks.push(value);
 		}
-		chunks.push(value);
+	} finally {
+		signal.removeEventListener('abort', stop);
 	}
 	const value = new Uint8Array(size);
 	let offset = 0;

@@ -25,6 +25,7 @@ import type {
 	StructuredContent
 } from '$lib/models/connectors';
 import { compileJsonSchema } from '$lib/server/infrastructure/json-schema/compile';
+import { fetchUntil, OperationDeadline } from '$lib/server/infrastructure/network/deadline';
 import type { FetchLike } from '$lib/server/infrastructure/network/outbound';
 
 export type ToolListing =
@@ -47,7 +48,10 @@ export interface ServerToolCall {
 }
 
 export interface ConnectorToolListing {
-	/** Initializes a session, lists every tool across pages and closes the session. */
+	/**
+	 * Initializes a session, lists every tool across pages and closes the session, all
+	 * within the operation deadline; past it the listing fails rather than return a part.
+	 */
 	listTools(serverUrl: string, access: ServerAccess): Promise<ToolListing>;
 }
 
@@ -76,18 +80,27 @@ const CALL_ID_META = 'followthrough/call-id';
  * or roots.
  */
 export class ConnectorServers implements ConnectorToolListing, ConnectorToolCalling {
-	constructor(private readonly fetch: FetchLike) {}
+	constructor(
+		private readonly fetch: FetchLike,
+		private readonly operationTimeoutMs: number
+	) {}
 
 	async listTools(serverUrl: string, access: ServerAccess): Promise<ToolListing> {
-		const session = await this.session(serverUrl, access, async (client) => ({
-			tools: await this.everyTool(client, serverUrl),
-			icons: (client.getServerVersion()?.icons ?? []).map((icon): ServerIcon => ({
-				src: icon.src,
-				mimeType: icon.mimeType,
-				theme: icon.theme
-			}))
-		}));
-		return session.kind === 'done' ? { kind: 'listed', ...session.value } : session;
+		const deadline = new OperationDeadline(this.operationTimeoutMs);
+		try {
+			const session = await this.session(serverUrl, access, deadline.signal, async (client) => ({
+				tools: await this.everyTool(client, serverUrl, deadline.signal),
+				icons: (client.getServerVersion()?.icons ?? []).map((icon): ServerIcon => ({
+					src: icon.src,
+					mimeType: icon.mimeType,
+					theme: icon.theme
+				}))
+			}));
+			return session.kind === 'done' ? { kind: 'listed', ...session.value } : session;
+		} catch (error) {
+			if (deadline.passed) throw deadline.failure(new URL(serverUrl).host);
+			throw error;
+		}
 	}
 
 	async callTool(
@@ -96,37 +109,35 @@ export class ConnectorServers implements ConnectorToolListing, ConnectorToolCall
 		call: ServerToolCall,
 		signal: AbortSignal
 	): Promise<ToolCalling> {
-		const session = await this.session(
-			serverUrl,
-			access,
-			async (client) =>
-				client.callTool(
-					{
-						name: call.serverName,
-						arguments: { ...call.arguments },
-						...(call.callId === undefined ? {} : { _meta: { [CALL_ID_META]: call.callId } })
-					},
-					undefined,
-					{ signal }
-				),
-			signal
+		const session = await this.session(serverUrl, access, signal, async (client) =>
+			client.callTool(
+				{
+					name: call.serverName,
+					arguments: { ...call.arguments },
+					...(call.callId === undefined ? {} : { _meta: { [CALL_ID_META]: call.callId } })
+				},
+				undefined,
+				{ signal }
+			)
 		);
 		if (session.kind === 'unauthorized') return { kind: 'unauthorized' };
 		return { kind: 'returned', result: resultOf(CallToolResultSchema.parse(session.value)) };
 	}
 
+	/** Runs `work` in one session; `signal` stops every request in it, and its abort escapes. */
 	private async session<T>(
 		serverUrl: string,
 		access: ServerAccess,
-		work: (client: Client) => Promise<T>,
-		signal?: AbortSignal
+		signal: AbortSignal,
+		work: (client: Client) => Promise<T>
 	): Promise<Session<T>> {
 		// Every response passes through this operation's fetch, so a 401 below has been seen here.
 		let challenge: AuthorizationChallenge | undefined;
 		const client = new Client({ name: 'followthrough', title: 'FollowThrough', version: '1.0.0' });
+		const fetch = fetchUntil(this.fetch, signal);
 		const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
 			fetch: async (url, init) => {
-				const response = await this.fetch(url, init);
+				const response = await fetch(url, init);
 				if (response.status === 401) {
 					const params = extractWWWAuthenticateParams(response);
 					challenge = {
@@ -140,10 +151,10 @@ export class ConnectorServers implements ConnectorToolListing, ConnectorToolCall
 				access.kind === 'bearer' ? { headers: { Authorization: `Bearer ${access.token}` } } : {}
 		});
 		try {
-			await client.connect(transport, signal ? { signal } : undefined);
+			await client.connect(transport, { signal });
 			return { kind: 'done', value: await work(client) };
 		} catch (error) {
-			signal?.throwIfAborted();
+			signal.throwIfAborted();
 			if (error instanceof StreamableHTTPError && error.code === 401 && challenge)
 				return { kind: 'unauthorized', challenge };
 			if (error instanceof ExternalServiceError) throw error;
@@ -158,12 +169,16 @@ export class ConnectorServers implements ConnectorToolListing, ConnectorToolCall
 		}
 	}
 
-	private async everyTool(client: Client, serverUrl: string): Promise<ListedConnectorTool[]> {
+	private async everyTool(
+		client: Client,
+		serverUrl: string,
+		signal: AbortSignal
+	): Promise<ListedConnectorTool[]> {
 		const tools: ListedConnectorTool[] = [];
 		const cursors = new Set<string>();
 		let cursor: string | undefined;
 		do {
-			const page = await client.listTools(cursor === undefined ? {} : { cursor });
+			const page = await client.listTools(cursor === undefined ? {} : { cursor }, { signal });
 			tools.push(...page.tools.map(listed));
 			cursor = page.nextCursor;
 			if (cursor !== undefined && cursors.has(cursor))

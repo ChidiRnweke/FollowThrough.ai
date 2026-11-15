@@ -1,5 +1,8 @@
 import type { FetchLike } from '$lib/server/infrastructure/network/outbound';
 
+/** The deployment's default CONNECTOR_OPERATION_TIMEOUT_MS; a test about the deadline sets its own. */
+export const OPERATION_TIMEOUT_MS = 60_000;
+
 export type HostHandler = (request: Request) => Promise<Response>;
 
 export interface SentRequest {
@@ -29,6 +32,8 @@ export class FakeConnectorNetwork {
 			method: request.method,
 			authorization: request.headers.get('authorization')
 		});
+		// A platform fetch refuses to start a request whose signal has already aborted.
+		request.signal.throwIfAborted();
 		const handle = this.origins.get(new URL(request.url).origin);
 		if (!handle) throw new TypeError('fetch failed', { cause: new Error('ENOTFOUND') });
 		return handle(request);
