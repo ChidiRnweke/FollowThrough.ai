@@ -824,6 +824,11 @@ const scheduleView = (schedule: Schedule) => ({
 	prompt: schedule.prompt,
 	recurrence: schedule.recurrence,
 	timeZone: schedule.timeZone,
+	// What each run starts with. An absent project is the whole workspace, and an absent model
+	// is the user's default.
+	...(schedule.projectId ? { projectId: schedule.projectId } : {}),
+	...(schedule.model ? { model: schedule.model } : {}),
+	skillNoteIds: schedule.skillNoteIds,
 	asksBeforeChanges: schedule.executionMode === 'approval_required',
 	status: schedule.status,
 	...(schedule.status === 'active' ? { nextRunAt: schedule.nextRunAt } : {}),
@@ -854,7 +859,11 @@ const scheduleChangeDefinitions = (controllers: ControllerFactory) => ({
 				(
 					await controllers.schedules().create({
 						id: crypto.randomUUID() as ScheduleId,
-						definition: { ...input, skillNoteIds: [], executionMode: 'approval_required' }
+						definition: {
+							...input,
+							skillNoteIds: input.skillNoteIds ?? [],
+							executionMode: 'approval_required'
+						}
 					})
 				).schedule
 			)
@@ -868,7 +877,10 @@ const scheduleChangeDefinitions = (controllers: ControllerFactory) => ({
 				...(input.title !== undefined ? { title: input.title } : {}),
 				...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
 				...(input.recurrence !== undefined ? { recurrence: input.recurrence } : {}),
-				...(input.timeZone !== undefined ? { timeZone: input.timeZone } : {})
+				...(input.timeZone !== undefined ? { timeZone: input.timeZone } : {}),
+				...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
+				...(input.model !== undefined ? { model: input.model } : {}),
+				...(input.skillNoteIds !== undefined ? { skillNoteIds: input.skillNoteIds } : {})
 			};
 			return scheduleView(
 				(await controllers.schedules().update({ scheduleId: input.scheduleId, changes })).schedule
