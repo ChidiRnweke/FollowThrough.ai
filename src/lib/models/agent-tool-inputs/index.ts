@@ -100,6 +100,22 @@ const scheduleRecurrence = recurrenceSchema.describe(
 const scheduleTimeZone = ianaTimeZoneSchema.describe(
 	"IANA time zone name for the schedule's wall-clock times, such as Europe/Brussels."
 );
+const scheduleProject = projectId.describe(
+	'The project each run starts in, as an exact project UUID. Omit it for the whole workspace.'
+);
+const scheduleModel = z
+	.string()
+	.trim()
+	.min(1)
+	.describe(
+		"The model each run uses, as an exact id from list_agent_models. Omit it for the user's default model."
+	);
+const scheduleSkills = z
+	.array(noteId)
+	.refine((ids) => new Set(ids).size === ids.length, { message: 'A skill can be named once' })
+	.describe(
+		'The skills each run loads before it acts, as exact skill note UUIDs from list_skills. A skill must be turned on.'
+	);
 const widgetPatchText = z
 	.string()
 	.min(2)
@@ -414,14 +430,22 @@ export const agentToolInputSchemas = {
 		title: z.string().trim().min(1).describe('A short name the user will recognise.'),
 		prompt: z.string().trim().min(1),
 		recurrence: scheduleRecurrence,
-		timeZone: scheduleTimeZone
+		timeZone: scheduleTimeZone,
+		projectId: scheduleProject.optional(),
+		model: scheduleModel.optional(),
+		skillNoteIds: scheduleSkills.optional()
 	}),
 	update_schedule: z.object({
 		scheduleId,
 		title: z.string().trim().min(1).optional(),
 		prompt: z.string().trim().min(1).optional(),
 		recurrence: scheduleRecurrence.optional(),
-		timeZone: scheduleTimeZone.optional()
+		timeZone: scheduleTimeZone.optional(),
+		// An explicit null removes the project or the model, as it clears a default in
+		// update_agent_preferences. The whole list of skills is replaced; [] removes them all.
+		projectId: scheduleProject.nullable().optional(),
+		model: scheduleModel.nullable().optional(),
+		skillNoteIds: scheduleSkills.optional()
 	}),
 	pause_schedule: z.object({ scheduleId }),
 	resume_schedule: z.object({ scheduleId }),

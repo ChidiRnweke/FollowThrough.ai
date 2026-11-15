@@ -1,7 +1,7 @@
 import type { FunctionTool } from '@openai/agents';
 import { describe, expect, it } from 'vitest';
 import type { AgentRunId, AgentRunReceipt, ConversationId } from '$lib/models/agent';
-import type { AgentPayloadObject } from '$lib/models/agent/payload';
+import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ScheduleId } from '$lib/models/schedules';
 import type { AgentHarness } from '$lib/server/controllers/agent/controller';
 import { Schedules } from '$lib/server/controllers/schedules/controller';
@@ -25,7 +25,12 @@ import {
 	testScheduleId,
 	tuesdayRun
 } from '$lib/testing/schedules/fixtures/schedules';
-import { scheduleStartFixture } from '$lib/testing/schedules/fixtures/start';
+import {
+	scheduleModel,
+	scheduleProject,
+	scheduleSkill,
+	scheduleStartFixture
+} from '$lib/testing/schedules/fixtures/start';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
@@ -116,6 +121,20 @@ const setup = (
 	return { table, surface, run, runsStarted };
 };
 
+const isPayloadObject = (value: AgentPayload): value is AgentPayloadObject =>
+	typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** The part of a tool's answer that says what a schedule's runs start with. */
+const startOf = (result: AgentPayload) => {
+	if (!isPayloadObject(result)) throw new Error('The tool did not answer with a schedule');
+	const { projectId, model, skillNoteIds } = result;
+	return {
+		...(projectId !== undefined ? { projectId } : {}),
+		...(model !== undefined ? { model } : {}),
+		skillNoteIds
+	};
+};
+
 describe('the agent’s schedule tools', () => {
 	it('save a schedule that asks before each change', async () => {
 		const { table, run } = setup();
@@ -136,6 +155,71 @@ describe('the agent’s schedule tools', () => {
 				executionMode: 'approval_required',
 				state: tuesdayRun
 			}
+		]);
+	});
+
+	it('save and show the project, the model and the skills a schedule names', async () => {
+		const { table, run } = setup();
+
+		const created = await run('create_schedule', {
+			...brief,
+			projectId: scheduleProject.id,
+			model: scheduleModel,
+			skillNoteIds: [scheduleSkill().note.id]
+		});
+		const read = await run('get_schedule', { scheduleId: table.rows[0]!.id });
+
+		const named = {
+			projectId: scheduleProject.id,
+			model: scheduleModel,
+			skillNoteIds: [scheduleSkill().note.id]
+		};
+		expect([
+			table.rows.map(({ projectId, model, skillNoteIds }) => ({ projectId, model, skillNoteIds })),
+			startOf(created),
+			startOf(read)
+		]).toEqual([[named], named, named]);
+	});
+
+	it('remove the project and the model with null, and replace the skills', async () => {
+		const { table, run } = setup();
+		table.rows = [
+			scheduleBuilder({
+				projectId: scheduleProject.id,
+				model: scheduleModel,
+				skillNoteIds: [scheduleSkill().note.id]
+			})
+		];
+
+		const renamed = await run('update_schedule', { scheduleId: testScheduleId(), title: 'Brief' });
+		const cleared = await run('update_schedule', {
+			scheduleId: testScheduleId(),
+			projectId: null,
+			model: null,
+			skillNoteIds: []
+		});
+
+		expect([startOf(renamed), startOf(cleared), table.rows]).toEqual([
+			{
+				projectId: scheduleProject.id,
+				model: scheduleModel,
+				skillNoteIds: [scheduleSkill().note.id]
+			},
+			{ skillNoteIds: [] },
+			[scheduleBuilder({ title: 'Brief' })]
+		]);
+	});
+
+	it('refuse a model that is not offered, and save nothing', async () => {
+		const { table, run } = setup();
+
+		const refusal = await run('create_schedule', { ...brief, model: 'vendor/withdrawn' }).catch(
+			(error: Error) => error.message
+		);
+
+		expect([refusal, table.rows]).toEqual([
+			'The selected model is unavailable or does not support tools',
+			[]
 		]);
 	});
 
