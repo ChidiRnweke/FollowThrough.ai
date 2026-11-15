@@ -31,6 +31,7 @@ import type {
 	ListArtifactsParams,
 	PreviewDocumentInput,
 	PreviewDocumentOutput,
+	TemplateAdmissionLimits,
 	TemplateId
 } from '$lib/models/deliverables';
 import { type ExportInput, type PreparedExport } from '$lib/models/deliverables';
@@ -154,6 +155,8 @@ export interface DeliverablesDependencies {
 	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	templateStore: TemplateStore;
+	/** Staged template bytes are read up to `maxBytes`, whatever size the reservation recorded. */
+	readonly templateLimits: TemplateAdmissionLimits;
 	templateStorage: ExportObjectStorage;
 	templateStyles: TemplateStyleReader;
 	noteReader: { get(id: NoteId): Promise<Note> };
@@ -260,7 +263,7 @@ export class Deliverables implements DeliverablesController {
 		let bytes: Uint8Array;
 		try {
 			upload = await templateStore.upload(templateId);
-			bytes = await storage.read(upload.objectKey, upload.byteSize);
+			bytes = await storage.read(upload.objectKey, this.dependencies.templateLimits.maxBytes);
 		} catch (error) {
 			// Another completion may remove the reservation or staging after our initial read.
 			if (await templateStore.find(templateId)) {

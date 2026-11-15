@@ -1,6 +1,10 @@
 import AdmZip from 'adm-zip';
 import { parse as parseYaml } from 'yaml';
 import type { ParsedMarkdownNote } from '$lib/models/projects';
+import {
+	BoundedZipReader,
+	type ZipEntryFailure
+} from '$lib/server/infrastructure/zip/bounded-entries';
 
 /**
  * Parse uploaded archive bytes at the transport boundary before invoking the controller.
@@ -10,9 +14,9 @@ import type { ParsedMarkdownNote } from '$lib/models/projects';
  * — are testable without a workspace.
  *
  * `adm-zip` offers no protection of its own. It will hand back an entry whose path escapes
- * the archive root and will happily decompress a small archive into gigabytes, so every
- * limit here is enforced against the *declared* uncompressed size before any entry is
- * read.
+ * the archive root and will happily decompress a small archive into gigabytes. The declared
+ * uncompressed sizes are checked before any entry is read, and every entry is then inflated
+ * against what remains of the same budget, because a header can declare less than it holds.
  */
 
 export interface ArchiveEntry {
@@ -32,9 +36,18 @@ const DEFAULT_ARCHIVE_LIMITS: ArchiveLimits = {
 	maxEntries: 2000
 };
 
+/**
+ * What was measured against the expanded-bytes limit: the uploaded file itself, the sizes
+ * the archive declares, or the bytes an entry actually inflated to, which stop at the limit.
+ */
+export type ArchiveSize =
+	| { readonly kind: 'upload'; readonly bytes: number }
+	| { readonly kind: 'declared'; readonly bytes: number }
+	| { readonly kind: 'inflated' };
+
 export type ArchiveRejection =
 	| { readonly reason: 'not_a_zip' }
-	| { readonly reason: 'too_large'; readonly bytes: number; readonly limit: number }
+	| { readonly reason: 'too_large'; readonly size: ArchiveSize; readonly limit: number }
 	| { readonly reason: 'too_many_entries'; readonly entries: number; readonly limit: number }
 	| { readonly reason: 'unsafe_path'; readonly path: string };
 
@@ -79,6 +92,20 @@ const isIgnored = (path: string): boolean => {
 	return path.split('/').some((segment) => segment.startsWith('.'));
 };
 
+/** Why one entry is skipped while the rest of the archive still imports (ADR 0014). */
+const entrySkipReason = (reason: Exclude<ZipEntryFailure, 'over_budget'>): string => {
+	switch (reason) {
+		case 'unsupported_method':
+			return 'Uses a compression method other than stored or deflate';
+		case 'corrupt_data':
+			return 'Could not be read';
+		case 'size_mismatch':
+			return 'Its size differs from the size the archive declares for it';
+		case 'crc_mismatch':
+			return 'Its checksum differs from the checksum the archive declares for it';
+	}
+};
+
 export const readMarkdownArchive = (
 	archive: Uint8Array,
 	limits: ArchiveLimits = DEFAULT_ARCHIVE_LIMITS
@@ -106,15 +133,20 @@ export const readMarkdownArchive = (
 
 	// Declared sizes, checked before decompressing anything: a zip bomb is small on disk
 	// and enormous once expanded, so reading first and measuring after is the trap.
-	const declaredTotal = files.reduce((total, entry) => total + (entry.header?.size ?? 0), 0);
+	const declaredTotal = files.reduce((total, entry) => total + entry.header.size, 0);
 	if (declaredTotal > limits.maxTotalBytes)
 		return {
 			ok: false,
-			rejection: { reason: 'too_large', bytes: declaredTotal, limit: limits.maxTotalBytes }
+			rejection: {
+				reason: 'too_large',
+				size: { kind: 'declared', bytes: declaredTotal },
+				limit: limits.maxTotalBytes
+			}
 		};
 
 	const entries: ArchiveEntry[] = [];
 	const skipped: ArchiveSkip[] = [];
+	const reader = new BoundedZipReader(limits.maxTotalBytes);
 
 	for (const entry of files) {
 		const path = archiveEntryPath(entry.entryName);
@@ -124,16 +156,21 @@ export const readMarkdownArchive = (
 			skipped.push({ path, reason: 'Not a Markdown file' });
 			continue;
 		}
-		const segments = path.split('/');
-		let text: string;
-		try {
-			text = zip.readAsText(entry);
-			// chisel-ignore fail-loudly:silent-catch -- unreadable entries are returned explicitly in ArchiveResult.skipped with their path and reason.
-		} catch {
-			skipped.push({ path, reason: 'Could not be read' });
+		const read = reader.read(entry);
+		if (read.kind === 'failure') {
+			if (read.reason === 'over_budget')
+				return {
+					ok: false,
+					rejection: {
+						reason: 'too_large',
+						size: { kind: 'inflated' },
+						limit: limits.maxTotalBytes
+					}
+				};
+			skipped.push({ path, reason: entrySkipReason(read.reason) });
 			continue;
 		}
-		entries.push({ path, segments, text });
+		entries.push({ path, segments: path.split('/'), text: read.bytes.toString('utf8') });
 	}
 
 	return { ok: true, result: { entries, skipped } };
@@ -206,12 +243,25 @@ export const parseMarkdownNote = (entry: ArchiveEntry): ParsedMarkdownNote => {
 	};
 };
 
+const megabytes = (bytes: number): number => Math.round(bytes / 1024 / 1024);
+
+const describeArchiveSize = (size: ArchiveSize): string => {
+	switch (size.kind) {
+		case 'upload':
+			return `The archive file is ${megabytes(size.bytes)} MB, over`;
+		case 'declared':
+			return `The archive expands to ${megabytes(size.bytes)} MB, over`;
+		case 'inflated':
+			return 'The archive expands past';
+	}
+};
+
 export const describeArchiveRejection = (rejection: ArchiveRejection): string => {
 	switch (rejection.reason) {
 		case 'not_a_zip':
 			return 'That file is not a readable zip archive.';
 		case 'too_large':
-			return `The archive expands to ${Math.round(rejection.bytes / 1024 / 1024)} MB, over the ${Math.round(rejection.limit / 1024 / 1024)} MB ARCHIVE_MAX_EXPANDED_BYTES setting.`;
+			return `${describeArchiveSize(rejection.size)} the ${megabytes(rejection.limit)} MB ARCHIVE_MAX_EXPANDED_BYTES setting.`;
 		case 'too_many_entries':
 			return `The archive holds ${rejection.entries} files, over the ${rejection.limit} ARCHIVE_MAX_ENTRIES setting.`;
 		case 'unsafe_path':

@@ -542,6 +542,7 @@ export function createApplication(
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			templateStore: templates,
+			templateLimits: deliverables.templateLimits,
 			templateStorage: deliverables.templateStorage,
 			templateStyles: deliverables.templateStyles,
 			noteReader: notes.library,

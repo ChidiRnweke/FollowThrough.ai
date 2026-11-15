@@ -154,6 +154,11 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	/* How often the worker deletes unused registrations. Starting value; no measurement yet.
 	   Matches the upload reservation sweep, and is short beside the one-day retention. */
 	MCP_CLIENT_SWEEP_INTERVAL_MS: '900000',
+	/* A DOCX template is a ZIP package like an import archive, so its limits start from the
+	   archive admission values above; no template-specific measurement exists yet. */
+	TEMPLATE_MAX_BYTES: '26214400',
+	TEMPLATE_MAX_EXPANDED_BYTES: '26214400',
+	TEMPLATE_MAX_ENTRIES: '2000',
 	DB_NAME: 'followthrough',
 	DB_USER: 'followthrough',
 	ORIGIN: 'http://localhost:5173',
@@ -693,4 +698,15 @@ export const clientErrorBudgetLimits = () => ({
 			'CLIENT_ERROR_WINDOW_SECONDS',
 			REQUEST_ADMISSION_DEFAULTS.clientErrorWindowSeconds
 		) * 1000
+});
+
+/**
+ * Deployment admission for an uploaded DOCX template: the stored file, the bytes its entries
+ * inflate to, and its entry count. The defaults are the archive admission values, because a
+ * template is the same kind of ZIP package.
+ */
+export const templateAdmissionLimits = () => ({
+	maxBytes: positiveInteger('TEMPLATE_MAX_BYTES', 25 * 1024 * 1024),
+	maxExpandedBytes: positiveInteger('TEMPLATE_MAX_EXPANDED_BYTES', 25 * 1024 * 1024),
+	maxEntries: positiveInteger('TEMPLATE_MAX_ENTRIES', 2000)
 });

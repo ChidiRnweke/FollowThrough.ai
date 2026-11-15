@@ -8,6 +8,7 @@ import {
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
+import { templateLimitsFixture } from '$lib/testing/deliverables/fixtures/template-limits';
 import { TemplateRecords } from '$lib/server/repositories/deliverables/postgres/templates';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -41,10 +42,12 @@ const setup = async (suffix: string) => {
 				templateStore: createTemplateServices(
 					actor,
 					new TemplateRecords(actor, transaction.database),
-					() => now
+					() => now,
+					templateLimitsFixture()
 				),
+				templateLimits: templateLimitsFixture(),
 				templateStorage: storage,
-				templateStyles: new DocxTemplateStyleReader(),
+				templateStyles: new DocxTemplateStyleReader(templateLimitsFixture()),
 				transactionRunner: transaction.transactionRunner
 			})
 		);

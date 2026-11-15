@@ -6,6 +6,7 @@ import type {
 	TemplateRepository
 } from '$lib/server/repositories/deliverables';
 import type { DateTime } from '$lib/models/workspace';
+import type { TemplateAdmissionLimits } from '$lib/models/deliverables';
 import {
 	ArtifactLibrary,
 	ArtifactSettingsService,
@@ -28,5 +29,7 @@ export const createArtifactServices = (
 export const createTemplateServices = (
 	actor: ActorContext,
 	repository: TemplateRepository,
-	now: () => DateTime
-): TemplateStore => tracedService('TemplateLibrary', new TemplateLibrary(actor, repository, now));
+	now: () => DateTime,
+	limits: TemplateAdmissionLimits
+): TemplateStore =>
+	tracedService('TemplateLibrary', new TemplateLibrary(actor, repository, now, limits));

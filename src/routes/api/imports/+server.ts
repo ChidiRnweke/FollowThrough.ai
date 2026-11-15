@@ -40,10 +40,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return json({ message: 'Choose a project to import into.' }, { status: 400 });
 
 	try {
-		const archive = readMarkdownArchive(
-			new Uint8Array(await file.arrayBuffer()),
-			archiveAdmissionLimits()
-		);
+		const limits = archiveAdmissionLimits();
+		// Deflate never makes content meaningfully larger, but every entry adds its ZIP headers: 30
+		// local plus 46 central bytes and its name twice. Allowing that for every admitted entry,
+		// with names up to 1024 bytes, a larger file cannot hold an archive that expands within
+		// the limit. Refuse it before copying it.
+		const headerAllowance = limits.maxEntries * (30 + 46 + 2 * 1024) + 22;
+		if (file.size > limits.maxTotalBytes + headerAllowance)
+			throw new ValidationError(
+				describeArchiveRejection({
+					reason: 'too_large',
+					size: { kind: 'upload', bytes: file.size },
+					limit: limits.maxTotalBytes
+				})
+			);
+		const archive = readMarkdownArchive(new Uint8Array(await file.arrayBuffer()), limits);
 		if (!archive.ok) throw new ValidationError(describeArchiveRejection(archive.rejection));
 		const report = await AppFactory.forActor(AppFactory.actor(locals))
 			.notes()

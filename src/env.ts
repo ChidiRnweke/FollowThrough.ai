@@ -151,6 +151,18 @@ export const variables = defineEnvVars({
 			'How often the worker deletes unused MCP client registrations (defaults to 900000).',
 		schema: optionalString
 	},
+	TEMPLATE_MAX_BYTES: {
+		description: 'Uploaded DOCX template size admission in bytes (defaults to 26214400).',
+		schema: optionalString
+	},
+	TEMPLATE_MAX_EXPANDED_BYTES: {
+		description: 'DOCX template decompression admission in bytes (defaults to 26214400).',
+		schema: optionalString
+	},
+	TEMPLATE_MAX_ENTRIES: {
+		description: 'DOCX template entry admission (defaults to 2000).',
+		schema: optionalString
+	},
 	OPENROUTER_API_KEY: {
 		description: 'OpenRouter API key used by workbench chat.',
 		schema: optionalString
