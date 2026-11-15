@@ -14,7 +14,9 @@ export interface AgentProviderConfig {
 const timeout = () => Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000);
 
 /** OpenRouter as the agents SDK model provider, and as the vision client that describes images. */
-export const createAgentProviders = (config: AgentProviderConfig): AgentTurnDependencies => ({
+export const createAgentProviders = (
+	config: AgentProviderConfig
+): Pick<AgentTurnDependencies, 'models' | 'images'> => ({
 	models: (webSearch: WebResearchSettings) =>
 		new OpenAIProvider({
 			openAIClient: new OpenAI({

@@ -88,6 +88,11 @@ export interface AgentTurnDependencies {
 	/** The agents SDK model provider for one turn, configured for the run's web research. */
 	readonly models: (settings: WebResearchSettings) => Pick<OpenAIProvider, 'getModel' | 'close'>;
 	readonly images: Pick<OpenAI, 'chat'>;
+	/**
+	 * Whether the SDK's model and tool spans carry prompts, messages and tool payloads
+	 * (`AGENT_TRACE_CONTENT`). Without it they carry timing, names and token use only.
+	 */
+	readonly traceContent: boolean;
 }
 
 /** Runs agent turns through the OpenAI agents SDK against the injected model provider. */
@@ -166,7 +171,10 @@ export class AgentTurnService implements AgentTurns {
 			instructions: input.instructions,
 			tools: input.tools
 		});
-		const runner = new Runner({ modelProvider: provider, traceIncludeSensitiveData: true });
+		const runner = new Runner({
+			modelProvider: provider,
+			traceIncludeSensitiveData: this.dependencies.traceContent
+		});
 		const session = new ReplaySession(input.conversationId, input.history);
 		let state: RunState<unknown, typeof agent> | undefined;
 		if (input.decisions.length > 0 && input.serializedState) {

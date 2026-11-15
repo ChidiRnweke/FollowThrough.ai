@@ -1,8 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { context, ROOT_CONTEXT, type Context, type ContextManager } from '@opentelemetry/api';
+import {
+	context,
+	ROOT_CONTEXT,
+	trace,
+	type Attributes,
+	type Context,
+	type ContextManager
+} from '@opentelemetry/api';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import {
 	activeTraceparent,
+	agentTurnTracer,
 	logLevelEnabled,
 	resolveLogLevel,
 	summarize,
@@ -139,5 +149,69 @@ describe('summarize', () => {
 describe('activeTraceparent', () => {
 	test('is undefined outside any span', () => {
 		expect(activeTraceparent()).toBeUndefined();
+	});
+});
+
+describe('agent turn content', () => {
+	let exporter: InMemorySpanExporter;
+	let provider: NodeSDK;
+
+	beforeAll(() => {
+		exporter = new InMemorySpanExporter();
+		provider = new NodeSDK({
+			autoDetectResources: false,
+			spanProcessors: [new SimpleSpanProcessor(exporter)],
+			logRecordProcessors: [],
+			instrumentations: []
+		});
+		provider.start();
+	});
+
+	afterAll(async () => {
+		await provider.shutdown();
+		trace.disable();
+		context.disable();
+	});
+
+	/** Runs one turn under the content policy and returns its root span's attributes. */
+	const turnRoot = async (recordContent: boolean): Promise<Attributes | undefined> => {
+		exporter.reset();
+		const turn = agentTurnTracer(recordContent)(
+			{ input: 'Draft the launch memo', sessionId: 'conversation-1', model: 'test/model' },
+			async function* () {
+				yield 'delta';
+			},
+			() => 'The memo is drafted.'
+		);
+		for await (const _event of turn) void _event;
+		return exporter.getFinishedSpans().find((span) => span.name === 'agent.turn')?.attributes;
+	};
+
+	const content = (attributes: Attributes | undefined) => ({
+		input: attributes?.['input.value'],
+		output: attributes?.['output.value'],
+		inputLength: attributes?.['followthrough.input.length'],
+		outputLength: attributes?.['followthrough.output.length'],
+		session: attributes?.['session.id']
+	});
+
+	test('records the prompt and the answer on the turn root when trace content is on', async () => {
+		expect(content(await turnRoot(true))).toEqual({
+			input: 'Draft the launch memo',
+			output: 'The memo is drafted.',
+			inputLength: 21,
+			outputLength: 20,
+			session: 'conversation-1'
+		});
+	});
+
+	test('records their lengths, not the prompt or the answer, when trace content is off', async () => {
+		expect(content(await turnRoot(false))).toEqual({
+			input: undefined,
+			output: undefined,
+			inputLength: 21,
+			outputLength: 20,
+			session: 'conversation-1'
+		});
 	});
 });

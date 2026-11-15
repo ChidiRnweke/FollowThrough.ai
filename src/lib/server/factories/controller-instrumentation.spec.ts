@@ -67,6 +67,19 @@ class FakeController implements FakeControllerContract {
 		throw new ValidationError('sync domain failure');
 	}
 
+	async save(input: {
+		readonly noteId: string;
+		readonly status: 'draft' | 'published';
+		readonly title: string;
+		readonly body: string;
+		readonly tags: readonly string[];
+		readonly pinned: boolean;
+		readonly position: number;
+	}): Promise<{ readonly kind: 'saved' }> {
+		void input;
+		return { kind: 'saved' };
+	}
+
 	async exchange(code: string): Promise<{ readonly kind: 'issued'; readonly accessToken: string }> {
 		return { kind: 'issued', accessToken: `token-for-${code}` };
 	}
@@ -89,6 +102,7 @@ const fakeSurface = {
 	syncThrower: false,
 	nested: true,
 	declaredAsyncFailure: true,
+	save: true,
 	exchange: 'redacted',
 	refuse: 'redacted'
 } satisfies ControllerSurface<FakeController>;
@@ -142,10 +156,10 @@ describe('instrumentedController', () => {
 		else process.env.LOG_LEVEL = savedLogLevel;
 	});
 
-	test('writes one info line on completion with the user, every argument, the outcome and the duration', async () => {
+	test('writes one info line on completion with the user, the arguments, the outcome and the duration', async () => {
 		const { wrapped, entries } = wrap();
 
-		await wrapped.get('n1');
+		await wrapped.get('7d1f3a2b-4c5e-4f60-8a9b-0c1d2e3f4a5b');
 
 		const [line] = lines(entries, 'info');
 		expect({
@@ -155,8 +169,92 @@ describe('instrumentedController', () => {
 		}).toEqual({
 			count: 1,
 			message: expect.stringMatching(/^\[fake\] get completed in \d+ms$/),
-			context: { userId: 'user-1', args: ['n1'], outcome: 'value' }
+			context: {
+				userId: 'user-1',
+				args: ['7d1f3a2b-4c5e-4f60-8a9b-0c1d2e3f4a5b'],
+				outcome: 'value'
+			}
 		});
+	});
+
+	test('logs a one-word title or query by its length, never as text', async () => {
+		const { wrapped, entries } = wrap();
+
+		await wrapped.save({
+			noteId: '0b5c3f1e-8d2a-4f6b-9c7e-1a2b3c4d5e6f',
+			status: 'draft',
+			title: 'divorce',
+			body: 'job-search',
+			tags: [],
+			pinned: false,
+			position: 0
+		});
+
+		const logged = lines(entries, 'info').join('\n');
+		expect({
+			keepsEnum: logged.includes('"status":"draft"'),
+			leaksTitle: logged.includes('divorce'),
+			leaksBody: logged.includes('job-search')
+		}).toEqual({ keepsEnum: true, leaksTitle: false, leaksBody: false });
+	});
+
+	test('logs the length of a note body and a title at info, never their text', async () => {
+		const { wrapped, entries } = wrap();
+
+		await wrapped.save({
+			noteId: '0b5c3f1e-8d2a-4f6b-9c7e-1a2b3c4d5e6f',
+			status: 'draft',
+			title: 'Salary review notes',
+			body: 'Ask for a raise before the March planning cycle.',
+			tags: ['career', 'private'],
+			pinned: true,
+			position: 3
+		});
+
+		const [line] = lines(entries, 'info');
+		expect({
+			context: JSON.parse(line.slice(line.indexOf('{'))),
+			leaksContent: line.includes('raise') || line.includes('Salary') || line.includes('career')
+		}).toEqual({
+			context: {
+				userId: 'user-1',
+				args: [
+					{
+						noteId: '0b5c3f1e-8d2a-4f6b-9c7e-1a2b3c4d5e6f',
+						status: 'draft',
+						title: { length: 19 },
+						body: { length: 48 },
+						tags: { items: 2 },
+						pinned: true,
+						position: 3
+					}
+				],
+				outcome: 'saved'
+			},
+			leaksContent: false
+		});
+	});
+
+	test('logs a prompt passed as an argument by its length at info', async () => {
+		const { wrapped, entries } = wrap();
+
+		await wrapped.submitLike('Summarize what my doctor said about the test results.');
+
+		expect(lines(entries, 'info')).toEqual([
+			expect.stringMatching(
+				/completed in \d+ms \{"userId":"user-1","args":\[\{"length":53\}\],"outcome":"string"\}$/
+			)
+		]);
+	});
+
+	test('keeps the argument content in the debug start line', async () => {
+		const { wrapped, entries } = wrap();
+
+		await wrapped.submitLike('Summarize what my doctor said about the test results.');
+
+		expect(lines(entries, 'debug')).toContain(
+			'[fake] submitLike started {"userId":"user-1","args":["Summarize what my doctor said about the test results."]}'
+		);
 	});
 
 	test('names no user for a controller that acts for nobody', async () => {

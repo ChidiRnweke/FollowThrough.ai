@@ -9,15 +9,23 @@ Each log record carries the active span's trace id, so a log line and its trace 
 The controller boundary (`src/lib/server/infrastructure/telemetry/controller-boundary.ts`) wraps
 every public controller method. Each call writes one line when it completes:
 
-| Outcome                           | Level | Content                                                                              |
-| --------------------------------- | ----- | ------------------------------------------------------------------------------------ |
-| The method returned               | info  | user, arguments, outcome (`kind`, item count or `value`), duration                   |
-| It returned `{ kind: 'failure' }` | warn  | user, arguments, the failure's `error`, `code`, `reason`, `description` or `message` |
-| It threw a `DomainError`          | warn  | the error, user, arguments                                                           |
-| It threw anything else            | error | the error, user, arguments                                                           |
+| Outcome                           | Level | Content                                                                                   |
+| --------------------------------- | ----- | ----------------------------------------------------------------------------------------- |
+| The method returned               | info  | user, argument shape, outcome (`kind`, item count or `value`), duration                   |
+| It returned `{ kind: 'failure' }` | warn  | user, argument shape, the failure's `error`, `code`, `reason`, `description` or `message` |
+| It threw a `DomainError`          | warn  | the error, user, argument shape                                                           |
+| It threw anything else            | error | the error, user, argument shape                                                           |
 
-The start of a call and its full result are logged at debug. A per-user composition names its
-user in every line; authentication, OAuth and system work name none.
+These lines carry metadata, never content. The argument shape keeps uuids, short lowercase
+tokens (enum values, slugs, codes: at most 32 characters of `a-z 0-9 _ . -`), numbers, booleans
+and `null` as they are. Any other string becomes `{ "length": n }`, an array, map or set
+`{ "items": n }`, binary data `{ "bytes": n }`, and an object the shape of its fields. The walk
+stops after 32 fields or three levels, so a large argument costs no more than a small one. A note
+body, a chat prompt or a todo title therefore reaches the info line as its length.
+
+The start of a call, with its full arguments, and its full result are logged at debug, which is
+off in production. A per-user composition names its user in every line; authentication, OAuth
+and system work name none.
 
 One line per operation, written at the end, is the line an operator reads first: it states what
 was asked, what happened and how long it took. A start line at info doubles the volume and says
@@ -52,6 +60,23 @@ production, where debug records are dropped.
 - MCP authorization codes and tokens anywhere in a summary: `summarize` replaces `ftc_`, `fta_` and
   `ftr_` values with `<redacted>`.
 - Base64 data URLs, which `summarize` elides. Every summary is capped at 500 characters.
+- Argument content at info, warn or error: those lines carry the argument shape only.
+
+The masking happens before `console.*` is called, so the stdout line and the OTLP log record
+carry the same masked text. The trace exporter (`scripts/span-masking.js`) applies the same
+credential redaction to every string span attribute, and elides inline base64 images longer
+than 1024 characters.
+
+## Content in agent traces
+
+Phoenix exists to inspect agent runs (ADR 0030), so agent traces carry content by default: the
+prompt and the answer on the `agent.turn` root, and the messages and tool payloads on the SDK's
+model and tool spans. `AGENT_TRACE_CONTENT=false` removes that text. The turn root then carries
+`followthrough.input.length` and `followthrough.output.length` beside the session, user, run and
+model; the SDK spans keep their names, timing and token use (`traceIncludeSensitiveData: false`).
+The setting is an application key, default `true`, read once at composition. It covers agent
+turns only: the inline-suggestion, promise-extraction and retrieval spans still record the text
+they were given.
 
 ## Entry points
 

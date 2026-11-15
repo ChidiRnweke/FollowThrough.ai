@@ -163,6 +163,9 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	   SDK's default timeout for a single request (DEFAULT_REQUEST_TIMEOUT_MSEC, 60000 in
 	   @modelcontextprotocol/sdk 1.29.0); without a total, paging resets it on every page. */
 	CONNECTOR_OPERATION_TIMEOUT_MS: '60000',
+	/* 'true' keeps agent turns readable in Phoenix (ADR 0030): prompts, answers and tool
+	   payloads. 'false' keeps the trace shape, timing, ids and lengths without the text. */
+	AGENT_TRACE_CONTENT: 'true',
 	DB_NAME: 'followthrough',
 	DB_USER: 'followthrough',
 	ORIGIN: 'http://localhost:5173',
@@ -668,6 +671,14 @@ export const mcpClientRetention = () => ({
 	unusedRetentionMs: positiveIntegerSetting('MCP_CLIENT_UNUSED_RETENTION_MS'),
 	sweepIntervalMs: positiveIntegerSetting('MCP_CLIENT_SWEEP_INTERVAL_MS')
 });
+
+/** Whether agent traces carry content: `AGENT_TRACE_CONTENT`, exactly `true` or `false`. */
+export const agentTraceContent = (): boolean => {
+	const value = process.env.AGENT_TRACE_CONTENT ?? APPLICATION_DEFAULTS.AGENT_TRACE_CONTENT;
+	if (value === 'true') return true;
+	if (value === 'false') return false;
+	throw new Error('AGENT_TRACE_CONTENT must be "true" or "false"');
+};
 
 /** Deployment admission for decompression, not a per-document product limit. */
 export const archiveAdmissionLimits = () => ({

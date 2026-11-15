@@ -192,9 +192,11 @@ A new controller method needs all of these, or `svelte-check` / the audits fail:
 
 Boundary logging and tracing are automatic (`instrumentedController` wraps every controller):
 one `domain.method` span and one canonical log line per call, carrying the span's trace id. The
-line is written on completion — info with the user, the arguments, the outcome and the duration;
-warn for a returned `{ kind: 'failure' }` value (with its reason fields) or a `DomainError`; error
-otherwise. The start is logged at debug. Mark a method `'redacted'` in `controller-surfaces.ts`
+line is written on completion — info with the user, the shape of the arguments (ids, numbers,
+enum fields such as `kind` and `status`; other strings as lengths), the outcome and the duration; warn for a returned
+`{ kind: 'failure' }` value (with its reason fields) or a `DomainError`; error otherwise. Argument
+content appears only in the debug start line. Agent traces carry content unless
+`AGENT_TRACE_CONTENT=false`. Mark a method `'redacted'` in `controller-surfaces.ts`
 when its arguments or result carry a credential; its failure reason is still logged. Do not add
 boundary logs at call sites. An entry point logs a request it refuses before any controller runs
 at debug, with the path and the reason only (`logRefusal`). Services get spans, not log lines: wrap a new server service in `tracedService` where its factory constructs it. Log at `debug` inside services for detail. `LOG_LEVEL` (platform key, never a

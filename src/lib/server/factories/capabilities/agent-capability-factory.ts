@@ -91,7 +91,7 @@ import {
 	ToolAccess,
 	type ToolPreferenceCapability
 } from '$lib/server/services/agent/tools/preferences';
-import { traceAgentTurn, traceContextReader } from '$lib/server/infrastructure/telemetry/tracing';
+import { agentTurnTracer, traceContextReader } from '$lib/server/infrastructure/telemetry/tracing';
 import { RunSignalService, type RunSignals } from '$lib/server/services/agent/runs/signals';
 import { AgentRunNotificationRecords } from '$lib/server/repositories/agent/postgres/run-notifications';
 import type { NotificationChannel } from '$lib/server/db';
@@ -130,6 +130,8 @@ export interface AgentCapabilityInput {
 	readonly defaultModel: string;
 	readonly defaultVisionModel: string;
 	readonly recommendedModels: readonly string[];
+	/** Whether agent traces carry prompts, answers and tool payloads (`AGENT_TRACE_CONTENT`). */
+	readonly agentTraceContent: boolean;
 	readonly modelCatalog?: AgentModelCatalog;
 	readonly now: () => DateTime;
 }
@@ -257,19 +259,20 @@ export const createAgentCapability = (
 		context,
 		turns: tracedService(
 			'AgentTurnService',
-			new AgentTurnService(
-				createAgentProviders({
+			new AgentTurnService({
+				...createAgentProviders({
 					apiKey: input.openRouterApiKey,
 					baseURL: input.openRouterBaseURL,
 					appURL: input.appURL
-				})
-			)
+				}),
+				traceContent: input.agentTraceContent
+			})
 		),
 		prompts: tracedService('AgentPromptService', new AgentPromptService()),
 		toolRecovery: tracedService('AgentToolRecoveryService', new AgentToolRecoveryService()),
 		toolApproval: new AgentToolApprovalRules(),
 		toolConstruction: createAgentToolConstruction(input.controllers),
-		observeTurn: traceAgentTurn,
+		observeTurn: agentTurnTracer(input.agentTraceContent),
 		settlements,
 		noteActionRequests: tracedService(
 			'NoteActionRequests',

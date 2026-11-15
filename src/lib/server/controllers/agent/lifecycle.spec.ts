@@ -681,7 +681,8 @@ const productionRun = async (
 						}),
 						useResponses: false
 					}),
-		images: capabilityDependencies<Pick<OpenAI, 'chat'>>({})
+		images: capabilityDependencies<Pick<OpenAI, 'chat'>>({}),
+		traceContent: true
 	});
 	const tools = createAgentTools(notes.factory, {
 		provenanceId: testProvenanceId(),

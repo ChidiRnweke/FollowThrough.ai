@@ -54,7 +54,8 @@ const scenario = async (calls: readonly Call[]) => {
 	const context = agentContextFixture({
 		turns: new AgentTurnService({
 			models: () => new InMemoryModelProvider(model),
-			images: capabilityDependencies<Pick<OpenAI, 'chat'>>({})
+			images: capabilityDependencies<Pick<OpenAI, 'chat'>>({}),
+			traceContent: true
 		}),
 		// Queries embed with the model the connector snapshot was embedded with.
 		toolSearch: new InMemoryToolRetriever(connectors.embeddings.model),

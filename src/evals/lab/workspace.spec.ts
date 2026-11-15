@@ -23,6 +23,7 @@ it('initializes a fresh evaluation account before opening its provisioned shell'
 				openRouterApiKey: 'unused-local-test',
 				mistralApiKey: 'unused-local-test',
 				connectors: { kind: 'unconfigured' },
+				agentTraceContent: true,
 				overrides: {
 					attachmentStorage: new InMemoryAttachmentStorage(),
 					modelCatalog: new StubModelCatalog()

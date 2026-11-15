@@ -49,7 +49,8 @@ const setup = (transport: typeof globalThis.fetch) => {
 				apiKey: 'test-key',
 				baseURL: 'https://provider.test/v1',
 				fetch: transport
-			})
+			}),
+			traceContent: true
 		})
 	});
 	const run = (input = request(), signal = new AbortController().signal) =>
