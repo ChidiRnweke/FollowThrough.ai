@@ -196,8 +196,8 @@ line is written on completion — info with the user, the arguments, the outcome
 warn for a returned `{ kind: 'failure' }` value (with its reason fields) or a `DomainError`; error
 otherwise. The start is logged at debug. Mark a method `'redacted'` in `controller-surfaces.ts`
 when its arguments or result carry a credential; its failure reason is still logged. Do not add
-boundary logs at call sites. An entry point logs a warning only for a request it refuses before
-any controller runs. Services get spans, not log lines: wrap a new server service in `tracedService` where its factory constructs it. Log at `debug` inside services for detail. `LOG_LEVEL` (platform key, never a
+boundary logs at call sites. An entry point logs a request it refuses before any controller runs
+at debug, with the path and the reason only (`logRefusal`). Services get spans, not log lines: wrap a new server service in `tracedService` where its factory constructs it. Log at `debug` inside services for detail. `LOG_LEVEL` (platform key, never a
 secret) gates debug records — debug in dev, info in prod. `docs/architecture/observability.md`
 has the full policy.
 

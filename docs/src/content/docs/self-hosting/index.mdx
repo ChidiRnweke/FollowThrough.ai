@@ -148,3 +148,13 @@ Connectors let the agent call the remote MCP servers of other services, such as 
 `BODY_SIZE_LIMIT` remains the adapter-node HTTP request limit (52,428,800 bytes in the reference deployment). Direct object-storage uploads do not pass through that HTTP body. Application-level attachment, chat-image, screenshot, diagram, and export-image size ceilings are removed; upstream failures are reported explicitly.
 
 Archive import checks the expanded total before decompression. `ARCHIVE_MAX_EXPANDED_BYTES` defaults to 26,214,400 and `ARCHIVE_MAX_ENTRIES` to 2,000. Both must be positive safe integers. An archive exceeding either setting is rejected with the setting named. There is no separate per-note size, folder-depth, or compressed-file ceiling below the HTTP transport limit.
+
+Three small endpoints read at most a fixed number of body bytes and answer `413` past it, whatever `Content-Length` says. Each default admits the largest request the endpoint's schema accepts, with every character in its longest encoding:
+
+| Setting                             | Default | Endpoint                                          |
+| ----------------------------------- | ------- | ------------------------------------------------- |
+| `CLIENT_ERROR_MAX_BODY_BYTES`       | 66,560  | `/api/client-errors`, browser error reports       |
+| `OAUTH_REGISTRATION_MAX_BODY_BYTES` | 491,520 | `/oauth/register`, MCP client registration        |
+| `OAUTH_TOKEN_MAX_BODY_BYTES`        | 221,184 | `/oauth/token`, MCP code and refresh token grants |
+
+Each signed-in user may send `CLIENT_ERROR_REPORTS_PER_WINDOW` browser error reports (default 20, one page's own cap) per `CLIENT_ERROR_WINDOW_SECONDS` (default 60). A repeat of a report already logged in the window is dropped; the next logged report says how many were dropped. A report past the budget is answered `429` with `Retry-After`. All five settings must be positive safe integers.

@@ -116,6 +116,27 @@ export const variables = defineEnvVars({
 		description: 'Archive entry admission (defaults to 2000).',
 		schema: optionalString
 	},
+	CLIENT_ERROR_MAX_BODY_BYTES: {
+		description: 'Largest browser error report body in bytes (defaults to 66560).',
+		schema: optionalString
+	},
+	CLIENT_ERROR_REPORTS_PER_WINDOW: {
+		description: 'Browser error reports one user may send per window (defaults to 20).',
+		schema: optionalString
+	},
+	CLIENT_ERROR_WINDOW_SECONDS: {
+		description:
+			'Window in seconds for the browser error report budget and repeat suppression (defaults to 60).',
+		schema: optionalString
+	},
+	OAUTH_REGISTRATION_MAX_BODY_BYTES: {
+		description: 'Largest OAuth client registration body in bytes (defaults to 491520).',
+		schema: optionalString
+	},
+	OAUTH_TOKEN_MAX_BODY_BYTES: {
+		description: 'Largest OAuth token request body in bytes (defaults to 221184).',
+		schema: optionalString
+	},
 	OPENROUTER_API_KEY: {
 		description: 'OpenRouter API key used by workbench chat.',
 		schema: optionalString

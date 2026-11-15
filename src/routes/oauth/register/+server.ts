@@ -1,11 +1,14 @@
-// chisel-ignore-file error-flow:raw-http-status -- RFC 7591 answers registration with 201 and its errors with 400 bodies.
+// chisel-ignore-file error-flow:raw-http-status -- RFC 7591 answers registration with 201 and its errors with 400 bodies; an oversized body is 413.
 import { json } from '@sveltejs/kit';
 import {
 	clientRegistrationRequestSchema,
 	type ClientRegistrationRequest,
 	type OAuthFailure
 } from '$lib/models/mcp-authorization';
+import { requestBodyLimits } from '$lib/server/config';
 import { AppFactory } from '$lib/server/factories/app-factory';
+import { readBoundedText } from '$lib/server/infrastructure/http/bounded-body';
+import { logRefusal } from '$lib/server/infrastructure/http/refusal-log';
 import type { RequestHandler } from './$types';
 
 const cors = { 'access-control-allow-origin': '*' };
@@ -21,9 +24,19 @@ const issues = (error: { issues: readonly { path: PropertyKey[]; message: string
 
 const readRegistration = async (
 	request: Request
-): Promise<{ kind: 'request'; request: ClientRegistrationRequest } | OAuthFailure> => {
+): Promise<
+	{ kind: 'request'; request: ClientRegistrationRequest } | { kind: 'too_large' } | OAuthFailure
+> => {
 	try {
-		const parsed = clientRegistrationRequestSchema.safeParse(await request.json());
+		const body = await readBoundedText(request, requestBodyLimits().oauthRegistration);
+		if (body.kind === 'failure' && body.reason === 'interrupted')
+			return {
+				kind: 'failure',
+				error: 'invalid_client_metadata',
+				description: 'The request body could not be read.'
+			};
+		if (body.kind === 'failure') return { kind: 'too_large' };
+		const parsed = clientRegistrationRequestSchema.safeParse(JSON.parse(body.text));
 		return parsed.success
 			? { kind: 'request', request: parsed.data }
 			: { kind: 'failure', error: 'invalid_client_metadata', description: issues(parsed.error) };
@@ -37,14 +50,20 @@ const readRegistration = async (
 };
 
 /** RFC 7591 registration, anonymous and for public clients only. */
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, url }) => {
 	const read = await readRegistration(request);
+	if (read.kind === 'too_large') {
+		logRefusal(url.pathname, 'too_large');
+		return json(
+			{
+				error: 'invalid_client_metadata',
+				error_description: `The registration request is larger than ${requestBodyLimits().oauthRegistration} bytes.`
+			},
+			{ status: 413, headers: cors }
+		);
+	}
 	if (read.kind === 'failure') {
-		// Refused before any controller runs, so the boundary never logs it.
-		console.warn('[oauth] registration refused', {
-			error: read.error,
-			description: read.description
-		});
+		logRefusal(url.pathname, read.error);
 		return refuse(read);
 	}
 

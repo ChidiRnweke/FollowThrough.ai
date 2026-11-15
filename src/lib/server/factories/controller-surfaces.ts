@@ -247,6 +247,11 @@ export const controllerSurfaces = {
 	feedback: {
 		submit: true
 	},
+	telemetry: {
+		// Not traced or logged by the boundary: an admitted report writes its own error line, and
+		// a boundary line per call would log every repeat the budget exists to drop.
+		reportClientError: false
+	},
 	contextUsage: {
 		forProject: true,
 		connectionsFor: true

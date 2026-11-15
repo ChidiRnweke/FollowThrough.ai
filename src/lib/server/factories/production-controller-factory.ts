@@ -37,6 +37,7 @@ import {
 	type DiagramStudioDependencies
 } from '../controllers/diagram-studio/controller';
 import { Feedback, type FeedbackDependencies } from '../controllers/feedback/controller';
+import { Telemetry, type TelemetryDependencies } from '../controllers/telemetry/controller';
 import {
 	ContextUsage,
 	type ContextUsageDependencies
@@ -94,6 +95,7 @@ export interface ProductionControllerDependencies {
 	retrieval: RetrievalDependencies;
 	inlineSuggestions: InlineSuggestionsDependencies;
 	feedback: FeedbackDependencies;
+	telemetry: TelemetryDependencies;
 	contextUsage: ContextUsageDependencies;
 	attachmentProcessing: AttachmentProcessingController;
 	knowledgeIndexing: KnowledgeIndexingController;
@@ -323,6 +325,13 @@ export class ProductionControllerFactory implements ControllerFactory {
 			'feedback',
 			new Feedback(this.dependencies.feedback),
 			controllerSurfaces.feedback
+		);
+	}
+	telemetry(): ReturnType<ControllerFactory['telemetry']> {
+		return this.instrument(
+			'telemetry',
+			new Telemetry(this.actor, this.dependencies.telemetry),
+			controllerSurfaces.telemetry
 		);
 	}
 	contextUsage(): ReturnType<ControllerFactory['contextUsage']> {

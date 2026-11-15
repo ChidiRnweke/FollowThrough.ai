@@ -55,9 +55,24 @@ production, where debug records are dropped.
 
 ## Entry points
 
-An entry point logs only a request it refuses before any controller runs, once, at warn: an
-unparseable OAuth registration, token or authorization request, and a cross-site form post that
-`hooks.server.ts` refuses. Everything that reaches a controller is logged by the boundary.
+An entry point logs a request it refuses before any controller runs once, at debug, through
+`logRefusal` (`src/lib/server/infrastructure/http/refusal-log.ts`): an oversized or unparseable
+OAuth registration, token, authorization or browser error request, and a cross-site form post
+that `hooks.server.ts` refuses. The line carries the path and the reason only, never request
+content. Anyone can send most of these requests, so their volume must not decide log volume in
+production; the deployment's edge rate limits count them instead. Everything that reaches a
+controller is logged by the boundary.
+
+## Browser error reports
+
+`/api/client-errors` writes each admitted browser report as one error line, with the user and,
+when repeats were dropped since the user's previous line, `suppressed=n`. The `telemetry`
+controller admits a report against a per-user budget kept in Postgres
+(`CLIENT_ERROR_REPORTS_PER_WINDOW` per `CLIENT_ERROR_WINDOW_SECONDS`). A report whose message
+and stack match one admitted inside the window is dropped with a 204 and not logged. A report past
+the budget is answered 429 with `Retry-After`. The browser reads no answer and retries nothing.
+`reportClientError` is outside the boundary (`false` in `controller-surfaces.ts`): a boundary
+line per call would log every repeat the budget drops.
 
 ## Levels
 

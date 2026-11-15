@@ -1407,6 +1407,26 @@ export const inlineCompletionAttempts = pgTable(
 );
 
 /**
+ * One row per browser error report the budget admitted. `fingerprint` is the sha256 of the
+ * report's message and stack; `suppressed` counts its repeats dropped inside the window, until the
+ * user's next admitted report carries the total and resets it. Rows older than the window are
+ * pruned when the next report is admitted.
+ */
+export const clientErrorReports = pgTable(
+	'client_error_reports',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		fingerprint: text('fingerprint').notNull(),
+		reportedAt: timestamp('reported_at', { withTimezone: true }).notNull(),
+		suppressed: integer('suppressed').notNull().default(0)
+	},
+	(table) => [index('client_error_reports_user_time_idx').on(table.userId, table.reportedAt)]
+);
+
+/**
  * The grounding one caret rest retrieved for a section of a note, kept so the
  * next rest in that section can skip retrieval. Stamped with fingerprints of
  * the corpus it came from; a rest whose corpus has moved on rebuilds the row.
