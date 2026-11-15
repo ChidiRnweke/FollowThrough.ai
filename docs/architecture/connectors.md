@@ -18,6 +18,7 @@ FollowThrough's own server for other hosts; connectors are the other direction.
 | Repository         | `server/repositories/connectors/`                                                       | Rows in `connectors`, `connector_tools` and `connector_authorizations`. Seals and opens credentials.  |
 | Secret box         | `server/infrastructure/crypto/secret-box.ts`                                            | AES-256-GCM over the `CONNECTOR_SECRET_KEYS` keyring.                                                 |
 | Outbound guard     | `server/infrastructure/network/outbound.ts`                                             | The one way out: HTTPS only, public addresses only, same-origin redirects only, no trace context.     |
+| Special-use ranges | `server/infrastructure/network/special-use.ts`                                          | The one address classifier, for resolved addresses and address-literal hosts alike.                   |
 | Schema compiler    | `server/infrastructure/json-schema/compile.ts`                                          | Compiles a tool's input schema (2020-12 or draft-07) with RE2 patterns.                               |
 | Entry points       | `remote/connectors/`, `routes/connectors/callback`, `routes/oauth/client-metadata.json` | Remote functions, the OAuth redirect target, and the public client metadata document.                 |
 
@@ -34,6 +35,14 @@ A catalog entry recorded as `preregistered` needs an OAuth app that the operator
 configured as `CONNECTOR_<ID>_CLIENT_ID` and `CONNECTOR_<ID>_CLIENT_SECRET`. Without both, the
 catalog leaves the entry out. `server/config.ts` lists these entries, because `vite.config.ts`
 loads it before `$lib` resolves; a spec holds that list, `src/env.ts` and the catalog equal.
+
+`CONNECTOR_OPERATION_TIMEOUT_MS` (default 60,000, the MCP SDK's default per-request timeout) bounds
+each connector operation in total: a tool listing across all its pages, an OAuth `begin`,
+`exchange` or `refresh`, and an icon fetch with its body. Each operation starts one
+`OperationDeadline` (`server/infrastructure/network/deadline.ts`) and every request it makes
+carries the signal. Past it, a listing or sign-in fails with an `ExternalServiceError` that names
+the setting, never with a partial tool list; an icon fetch returns a `failure` and the connector
+keeps its monogram. A tool call keeps the run's own signal.
 
 ## The catalog
 

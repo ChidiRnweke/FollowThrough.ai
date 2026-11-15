@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ExternalServiceError } from '$lib/errors';
-import { FakeConnectorNetwork } from '$lib/testing/connectors/fakes/fake-connector-network';
+import {
+	FakeConnectorNetwork,
+	OPERATION_TIMEOUT_MS
+} from '$lib/testing/connectors/fakes/fake-connector-network';
 import { FakeConnectorServer } from '$lib/testing/connectors/fakes/fake-connector-server';
 import { ConnectorServers } from './servers';
 
@@ -12,9 +15,9 @@ const tool = (name: string, extra: Partial<Tool> = {}): Tool => ({
 	...extra
 });
 
-const serve = (server: FakeConnectorServer) => {
+const serve = (server: FakeConnectorServer, operationTimeoutMs = OPERATION_TIMEOUT_MS) => {
 	const network = new FakeConnectorNetwork().route(server.origin, server.handle);
-	return { network, servers: new ConnectorServers(network.fetch) };
+	return { network, servers: new ConnectorServers(network.fetch, operationTimeoutMs) };
 };
 
 describe('ConnectorServers.listTools', () => {
@@ -22,7 +25,7 @@ describe('ConnectorServers.listTools', () => {
 		const server = new FakeConnectorServer('https://mcp.example.com', {
 			path: '/mcp',
 			authorization: { kind: 'none' },
-			pageSize: 1,
+			paging: { kind: 'sized', size: 1 },
 			tools: [
 				tool('list_issues', { title: 'List issues', annotations: { readOnlyHint: true } }),
 				tool('create_issue')
@@ -101,8 +104,20 @@ describe('ConnectorServers.listTools', () => {
 		});
 	});
 
+	it('fails at the operation deadline when every page names a fresh cursor', async () => {
+		const server = new FakeConnectorServer('https://mcp.example.com', {
+			path: '/mcp',
+			authorization: { kind: 'none' },
+			paging: { kind: 'endless' },
+			tools: [tool('list_issues')]
+		});
+		await expect(
+			serve(server, 50).servers.listTools(server.url, { kind: 'anonymous' })
+		).rejects.toThrow('mcp.example.com did not finish answering within 50 ms');
+	});
+
 	it('reports an unreachable server as an external failure', async () => {
-		const servers = new ConnectorServers(new FakeConnectorNetwork().fetch);
+		const servers = new ConnectorServers(new FakeConnectorNetwork().fetch, OPERATION_TIMEOUT_MS);
 		await expect(
 			servers.listTools('https://gone.example.com/mcp', { kind: 'anonymous' })
 		).rejects.toBeInstanceOf(ExternalServiceError);

@@ -14,6 +14,7 @@ import {
 	DEFAULT_MISTRAL_BASE_URL,
 	DEFAULT_OCR_MODEL,
 	connectorClientKeys,
+	connectorOperationTimeoutMs,
 	requiredEnvironmentValue
 } from '../config';
 import type { ActorContext } from '$lib/models/identity';
@@ -123,6 +124,7 @@ function connectorConfiguration(): ConnectorConfiguration {
 		secrets: SecretBox.fromKeyring(keyring),
 		origin: requiredEnvironmentValue('ORIGIN'),
 		preregistered,
-		fetch: new OutboundGuard(publicAddressFetch()).fetch
+		fetch: new OutboundGuard(publicAddressFetch()).fetch,
+		operationTimeoutMs: connectorOperationTimeoutMs()
 	};
 }

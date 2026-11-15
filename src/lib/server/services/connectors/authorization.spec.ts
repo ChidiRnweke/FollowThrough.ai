@@ -6,7 +6,10 @@ import {
 	FakeAuthorizationServer,
 	type FakeAuthorizationServerOptions
 } from '$lib/testing/connectors/fakes/fake-authorization-server';
-import { FakeConnectorNetwork } from '$lib/testing/connectors/fakes/fake-connector-network';
+import {
+	FakeConnectorNetwork,
+	OPERATION_TIMEOUT_MS
+} from '$lib/testing/connectors/fakes/fake-connector-network';
 import { FakeConnectorServer } from '$lib/testing/connectors/fakes/fake-connector-server';
 import { ConnectorAuthorization, type ClientCredentials } from './authorization';
 
@@ -44,7 +47,8 @@ const setup = (
 		fetch: network.fetch,
 		origin,
 		preregistered,
-		now: clock
+		now: clock,
+		operationTimeoutMs: OPERATION_TIMEOUT_MS
 	});
 	return { authorizationServer, server, network, authorization };
 };

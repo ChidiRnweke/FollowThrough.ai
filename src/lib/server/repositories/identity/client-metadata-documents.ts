@@ -1,7 +1,11 @@
 import { request } from 'node:https';
 import { lookup, type LookupAddress } from 'node:dns';
-import { BlockList, isIP, type LookupFunction } from 'node:net';
+import type { LookupFunction } from 'node:net';
 import { clientMetadataDocumentSchema } from '$lib/models/mcp-authorization';
+import {
+	hasSpecialUseLiteralHost,
+	isSpecialUseAddress
+} from '$lib/server/infrastructure/network/special-use';
 import type {
 	ClientMetadataDocumentRepository,
 	ClientMetadataFetch
@@ -13,53 +17,13 @@ const MAX_DOCUMENT_BYTES = 5 * 1024;
 const FETCH_TIMEOUT_MS = 5_000;
 
 /**
- * Special-use ranges (CIMD §6.5). A document URL that resolves into one of these could make
- * the server read its own network on a client's behalf.
- */
-const specialUse = new BlockList();
-for (const [network, prefix] of [
-	['0.0.0.0', 8],
-	['10.0.0.0', 8],
-	['100.64.0.0', 10],
-	['127.0.0.0', 8],
-	['169.254.0.0', 16],
-	['172.16.0.0', 12],
-	['192.0.0.0', 24],
-	['192.0.2.0', 24],
-	['192.168.0.0', 16],
-	['198.18.0.0', 15],
-	['198.51.100.0', 24],
-	['203.0.113.0', 24],
-	['224.0.0.0', 4],
-	['240.0.0.0', 4]
-] as const)
-	specialUse.addSubnet(network, prefix, 'ipv4');
-// No `::ffff:0:0/96` rule: BlockList applies the IPv4 rules to IPv4-mapped addresses itself,
-// and that rule would match every IPv4 address.
-for (const [network, prefix] of [
-	['::', 127],
-	['64:ff9b::', 96],
-	['100::', 64],
-	['2001:db8::', 32],
-	['fc00::', 7],
-	['fe80::', 10],
-	['ff00::', 8]
-] as const)
-	specialUse.addSubnet(network, prefix, 'ipv6');
-
-const isSpecialUse = (address: string): boolean => {
-	const family = isIP(address);
-	return family === 0 || specialUse.check(address, family === 4 ? 'ipv4' : 'ipv6');
-};
-
-/**
  * Resolves the host, then refuses the connection if any address is special-use. The check
  * runs in the socket's own lookup, so the address that is checked is the address that is used.
  */
 const publicOnlyLookup: LookupFunction = (hostname, options, callback) =>
 	lookup(hostname, { ...options, all: true }, (error, addresses: LookupAddress[]) => {
 		if (error) return callback(error, '', 0);
-		const refused = addresses.find((entry) => isSpecialUse(entry.address));
+		const refused = addresses.find((entry) => isSpecialUseAddress(entry.address));
 		if (refused || addresses.length === 0)
 			return callback(new Error(`${hostname} resolves to a special-use address`), '', 0);
 		if (options.all) return callback(null, addresses);
@@ -74,10 +38,8 @@ const urlProblem = (url: URL): string | null => {
 	if (url.username !== '' || url.password !== '') return 'the client_id must not carry credentials';
 	if (url.pathname.split('/').some((segment) => segment === '.' || segment === '..'))
 		return 'the client_id must not have dot segments';
-	// A socket skips the lookup for an address literal, so a literal is checked here instead.
-	const literal = url.hostname.replace(/^\[(.*)\]$/, '$1');
-	if (isIP(literal) !== 0 && isSpecialUse(literal))
-		return 'the client_id host is a special-use address';
+	// CIMD §6.5: a socket skips the lookup for an address literal, so a literal is checked here.
+	if (hasSpecialUseLiteralHost(url)) return 'the client_id host is a special-use address';
 	return null;
 };
 

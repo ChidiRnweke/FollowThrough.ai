@@ -159,6 +159,10 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	TEMPLATE_MAX_BYTES: '26214400',
 	TEMPLATE_MAX_EXPANDED_BYTES: '26214400',
 	TEMPLATE_MAX_ENTRIES: '2000',
+	/* One connector operation (listing tools, signing in, fetching an icon) in total. The MCP
+	   SDK's default timeout for a single request (DEFAULT_REQUEST_TIMEOUT_MSEC, 60000 in
+	   @modelcontextprotocol/sdk 1.29.0); without a total, paging resets it on every page. */
+	CONNECTOR_OPERATION_TIMEOUT_MS: '60000',
 	DB_NAME: 'followthrough',
 	DB_USER: 'followthrough',
 	ORIGIN: 'http://localhost:5173',
@@ -710,3 +714,13 @@ export const templateAdmissionLimits = () => ({
 	maxExpandedBytes: positiveInteger('TEMPLATE_MAX_EXPANDED_BYTES', 25 * 1024 * 1024),
 	maxEntries: positiveInteger('TEMPLATE_MAX_ENTRIES', 2000)
 });
+
+/** The total time one connector operation may take before it fails (see APPLICATION_DEFAULTS). */
+export const connectorOperationTimeoutMs = (): number => {
+	const raw = process.env.CONNECTOR_OPERATION_TIMEOUT_MS;
+	const value =
+		raw === undefined ? Number(APPLICATION_DEFAULTS.CONNECTOR_OPERATION_TIMEOUT_MS) : Number(raw);
+	if (!Number.isSafeInteger(value) || value < 1)
+		throw new Error('CONNECTOR_OPERATION_TIMEOUT_MS must be a positive safe integer');
+	return value;
+};

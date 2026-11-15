@@ -163,6 +163,12 @@ export const variables = defineEnvVars({
 		description: 'DOCX template entry admission (defaults to 2000).',
 		schema: optionalString
 	},
+	CONNECTOR_OPERATION_TIMEOUT_MS: {
+		description:
+			'Total milliseconds one connector operation may take: listing tools, signing in or ' +
+			'fetching an icon (defaults to 60000).',
+		schema: optionalString
+	},
 	OPENROUTER_API_KEY: {
 		description: 'OpenRouter API key used by workbench chat.',
 		schema: optionalString
