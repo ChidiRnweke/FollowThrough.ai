@@ -219,6 +219,8 @@ export type DueDecision =
 
 export type ScheduleRunStart =
 	| { readonly kind: 'started'; readonly receipt: AgentRunReceipt }
+	/** Too many runs executed at once, so the occurrence was saved as a failed run (ADR 0053). */
+	| { readonly kind: 'refused'; readonly receipt: AgentRunReceipt }
 	| { readonly kind: 'skipped' }
 	| { readonly kind: 'not_due' };
 

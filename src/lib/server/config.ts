@@ -166,6 +166,10 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	/* 'true' keeps agent turns readable in Phoenix (ADR 0030): prompts, answers and tool
 	   payloads. 'false' keeps the trace shape, timing, ids and lengths without the text. */
 	AGENT_TRACE_CONTENT: 'true',
+	/* Agent run admission (ADR 0053). Starting values with no measurement yet, for an operator
+	   to tune: five chat runs executing at once per account, fifty for the deployment. */
+	AGENT_MAX_ACTIVE_RUNS_PER_USER: '5',
+	AGENT_MAX_ACTIVE_RUNS: '50',
 	DB_NAME: 'followthrough',
 	DB_USER: 'followthrough',
 	ORIGIN: 'http://localhost:5173',
@@ -735,3 +739,18 @@ export const connectorOperationTimeoutMs = (): number => {
 		throw new Error('CONNECTOR_OPERATION_TIMEOUT_MS must be a positive safe integer');
 	return value;
 };
+
+/**
+ * How many chat runs may execute at once, per account and for the deployment (ADR 0053). The
+ * fallbacks are the defaults above, for a process that reads the environment before hydration.
+ */
+export const agentRunAdmissionLimits = () => ({
+	perAccount: positiveInteger(
+		'AGENT_MAX_ACTIVE_RUNS_PER_USER',
+		Number(APPLICATION_DEFAULTS.AGENT_MAX_ACTIVE_RUNS_PER_USER)
+	),
+	total: positiveInteger(
+		'AGENT_MAX_ACTIVE_RUNS',
+		Number(APPLICATION_DEFAULTS.AGENT_MAX_ACTIVE_RUNS)
+	)
+});

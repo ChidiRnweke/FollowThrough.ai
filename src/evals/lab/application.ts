@@ -11,7 +11,11 @@ import {
 	type ProductionApplication
 } from '$lib/server/application';
 import { systemClock } from '$lib/server/factories/system-clock';
-import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
+import {
+	DEFAULT_GENERATION_MODEL,
+	DEFAULT_LANGUAGE_MODEL_BASE_URL,
+	agentRunAdmissionLimits
+} from '$lib/server/config';
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
 import { cachedRetrievalFetch } from './cache/cached-clients';
@@ -128,6 +132,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		agentTraceContent: true,
 		// The lab plays the web process: it submits runs and executes them itself.
 		executor: 'web',
+		runAdmission: agentRunAdmissionLimits(),
 		// No eval case connects a service yet, so the lab runs the configuration without keys.
 		connectors: { kind: 'unconfigured' },
 		overrides: {

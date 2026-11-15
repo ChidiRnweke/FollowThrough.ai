@@ -1058,7 +1058,13 @@ export const agentRuns = pgTable(
 			.on(table.conversationId)
 			.where(sql`${table.status} in ('queued', 'running', 'awaiting_approval', 'cancelling')`),
 		index('agent_runs_user_updated_idx').on(table.userId, table.updatedAt),
-		index('agent_runs_conversation_status_idx').on(table.conversationId, table.status)
+		index('agent_runs_conversation_status_idx').on(table.conversationId, table.status),
+		// Admission counts the chat runs that execute now, for one account and in total (ADR 0053).
+		index('agent_runs_executing_user_idx')
+			.on(table.userId)
+			.where(
+				sql`${table.kind} = 'agent' and ${table.status} in ('queued', 'running', 'cancelling')`
+			)
 	]
 );
 

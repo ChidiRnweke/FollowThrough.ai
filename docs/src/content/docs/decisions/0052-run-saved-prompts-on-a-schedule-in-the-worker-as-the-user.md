@@ -12,6 +12,8 @@ execution path to ADR 0034.
 Amended on 2026-11-15: a schedule can name a project, a model and skills. See "What a run starts
 with".
 
+ADR 0053 amends the consequence on concurrent runs: runs are admitted per account and in total.
+
 ## Context
 
 The agent works only while a user has a chat open. ADR 0049 let it reach other services, but a

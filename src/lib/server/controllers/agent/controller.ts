@@ -5,6 +5,7 @@ import {
 	type WebResearchOptions,
 	type RunToolName
 } from '$lib/models/agent';
+import type { RunAdmissionRule } from '$lib/server/services/agent/runs/admission';
 import type { AgentImagePreparation } from '$lib/server/services/agent/runs/images';
 import type { RunTransitionStore } from '$lib/server/services/agent/runs/transitions';
 import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
@@ -16,7 +17,7 @@ import type { AgentRunSettings } from '$lib/services/agent/run-settings';
 import type { AgentRunStatusRules } from '$lib/services/agent/run-status';
 import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { ConflictError, NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	AgentEvent,
 	AgentPreferences,
@@ -131,6 +132,15 @@ import type { ScheduleDue } from '$lib/services/schedules/rules';
 const CANCELLATION_GRACE_MS = 10_000;
 
 class DuplicateSubmission extends Error {}
+
+/** What an occurrence of a schedule records before its run is saved. */
+type OccurrenceStart = Pick<ScheduleOccurrence, 'id' | 'trigger' | 'scheduledFor' | 'createdAt'>;
+
+/** A run built for saving, with the input its first message is recorded from. */
+interface StagedRun {
+	readonly run: ResolvedAgentRun;
+	readonly runInput: StagedAgentRunInput;
+}
 
 interface AgentTurnContext {
 	readonly input: string;
@@ -326,6 +336,8 @@ export interface AgentHarnessDependencies {
 	transitions: RunTransitionStore;
 	/** Executes run mutations atomically so a run is all-or-nothing. */
 	transactionRunner: TransactionRunner;
+	/** Whether one more chat run may start beside the runs that execute now (ADR 0053). */
+	readonly runAdmission: RunAdmissionRule;
 	/** Deployment fallback chat model when the user has not chosen one. */
 	defaultModel: string;
 	/** Deployment fallback vision model when the user has not chosen one. */
@@ -479,7 +491,9 @@ export class AgentSdkHarness implements AgentHarness {
 				const conversation = await this.dependencies.conversationSessions.getOrCreate(runInput);
 				if (input.retryUserOrdinal !== undefined)
 					await this.rewind(conversation.id, input.retryUserOrdinal);
-				return this.enqueue(conversation, runInput, input.requestId, preferences);
+				const staged = await this.stage(conversation, runInput, input.requestId, preferences);
+				await this.admitRequested(input.requestId);
+				return this.saveQueued(staged);
 			});
 			this.executeInBackground(receipt.runId);
 			return receipt;
@@ -506,13 +520,28 @@ export class AgentSdkHarness implements AgentHarness {
 				if (decision.kind === 'not_due') return decision;
 				await this.dependencies.schedules.save(decision.schedule);
 				if (decision.kind === 'skipped') return { kind: 'skipped' };
-				const receipt = await this.enqueueScheduled(schedule, {
+				const occurrence: OccurrenceStart = {
 					id: crypto.randomUUID() as ScheduleOccurrenceId,
 					trigger: 'recurrence',
 					scheduledFor: decision.scheduledFor,
 					createdAt: now
-				});
-				return { kind: 'started', receipt };
+				};
+				const staged = await this.stageScheduled(schedule, occurrence);
+				const admission = this.dependencies.runAdmission.admit(
+					await this.dependencies.records.lockExecutingCounts()
+				);
+				// Nobody is present to be told no. A refused occurrence is saved as a failed run, so
+				// its owner reads why on the schedule's page and in its chat. The schedule has already
+				// moved on, so the next occurrence is admitted on its own.
+				const receipt =
+					admission.kind === 'admitted'
+						? await this.saveQueued(staged)
+						: await this.saveRefused(
+								staged,
+								this.dependencies.runAdmission.refusal(admission, 'scheduled')
+							);
+				await this.recordOccurrence(schedule, occurrence, receipt);
+				return { kind: admission.kind === 'admitted' ? 'started' : 'refused', receipt };
 			}
 		);
 		if (start.kind === 'started') this.executeInBackground(start.receipt.runId);
@@ -525,33 +554,50 @@ export class AgentSdkHarness implements AgentHarness {
 	}): Promise<AgentRunReceipt> {
 		const existing = await this.dependencies.records.findByRequestId(input.requestId);
 		if (existing) return this.receipt(existing);
-		const receipt = await this.dependencies.transactionRunner.run(async () => {
-			const schedule = await this.dependencies.schedules.getForChange(input.scheduleId);
-			const now = this.dependencies.now();
-			return this.enqueueScheduled(schedule, {
-				id: input.requestId as ScheduleOccurrenceId,
-				trigger: 'manual',
-				scheduledFor: now,
-				createdAt: now
+		const run = async () =>
+			this.dependencies.transactionRunner.run(async () => {
+				const schedule = await this.dependencies.schedules.getForChange(input.scheduleId);
+				const now = this.dependencies.now();
+				const occurrence: OccurrenceStart = {
+					id: input.requestId as ScheduleOccurrenceId,
+					trigger: 'manual',
+					scheduledFor: now,
+					createdAt: now
+				};
+				const staged = await this.stageScheduled(schedule, occurrence);
+				// Its owner asked just now, so a refusal is told to them and nothing is saved.
+				await this.admitRequested(occurrence.id);
+				const receipt = await this.saveQueued(staged);
+				await this.recordOccurrence(schedule, occurrence, receipt);
+				return receipt;
 			});
-		});
+		let receipt: AgentRunReceipt;
+		try {
+			receipt = await run();
+		} catch (error) {
+			// A repeated "Run now" with the same request key answers with the run it started.
+			if (!(error instanceof DuplicateSubmission)) throw error;
+			const duplicate = await this.dependencies.records.findByRequestId(input.requestId);
+			if (!duplicate) throw error;
+			return this.receipt(duplicate);
+		}
 		this.executeInBackground(receipt.runId);
 		return receipt;
 	}
 
 	/**
-	 * Saves the chat, the queued run and the occurrence of one run of a schedule, inside the
-	 * caller's transaction. The occurrence's id is the run's request key.
+	 * Saves the chat of one run of a schedule and builds its run, inside the caller's
+	 * transaction. The occurrence's id is the run's request key.
 	 *
 	 * The schedule's project, model and skills are passed on as they are stored and are not
 	 * checked here. A check that failed in this transaction would roll back the move to the
 	 * next occurrence, and the worker would find the schedule due again on every tick. The run
 	 * checks them when it starts, and fails where its owner can read why.
 	 */
-	private async enqueueScheduled(
+	private async stageScheduled(
 		schedule: Schedule,
-		occurrence: Pick<ScheduleOccurrence, 'id' | 'trigger' | 'scheduledFor' | 'createdAt'>
-	): Promise<AgentRunReceipt> {
+		occurrence: Pick<ScheduleOccurrence, 'id' | 'scheduledFor'>
+	): Promise<StagedRun> {
 		const preferences = await this.dependencies.preferences.get();
 		const runInput: StagedAgentRunInput = {
 			...this.freezeInput(
@@ -575,7 +621,14 @@ export class AgentSdkHarness implements AgentHarness {
 			}
 		};
 		const conversation = await this.dependencies.conversationSessions.getOrCreate(runInput);
-		const receipt = await this.enqueue(conversation, runInput, occurrence.id, preferences);
+		return this.stage(conversation, runInput, occurrence.id, preferences);
+	}
+
+	private async recordOccurrence(
+		schedule: Schedule,
+		occurrence: OccurrenceStart,
+		receipt: AgentRunReceipt
+	): Promise<void> {
 		await this.dependencies.scheduleRuns.record({
 			...occurrence,
 			userId: this.actor.userId,
@@ -583,19 +636,19 @@ export class AgentSdkHarness implements AgentHarness {
 			conversationId: receipt.conversationId,
 			runId: receipt.runId
 		});
-		return receipt;
 	}
 
 	/**
-	 * Saves a queued run with its prompt and first event, inside the caller's transaction. The
-	 * caller starts execution after that transaction commits (ADR 0025).
+	 * Builds the queued run for a conversation's next prompt. Nothing is saved: the caller decides
+	 * on admission first, because building it may read the model catalog, and the admission lock
+	 * should not wait on that.
 	 */
-	private async enqueue(
+	private async stage(
 		conversation: Conversation,
 		runInput: StagedAgentRunInput,
 		requestId: string,
 		preferences: AgentPreferences
-	): Promise<AgentRunReceipt> {
+	): Promise<StagedRun> {
 		const submittedAt = this.dependencies.now();
 		const model = this.dependencies.modelSelection.resolveAgentModel(
 			conversation,
@@ -617,7 +670,7 @@ export class AgentSdkHarness implements AgentHarness {
 		// turn joins this request's trace even though execution starts
 		// after this transaction commits. Approval parks refresh it.
 		const submittedTraceparent = this.dependencies.traceContext.activeTraceparent();
-		const run: AgentRun = {
+		const run: ResolvedAgentRun = {
 			kind: 'agent',
 			id: crypto.randomUUID() as AgentRunId,
 			userId: this.actor.userId,
@@ -633,23 +686,78 @@ export class AgentSdkHarness implements AgentHarness {
 			createdAt: submittedAt,
 			updatedAt: submittedAt
 		};
+		return { run, runInput };
+	}
+
+	/**
+	 * Refuses a run its owner asked for while the runs that execute now are at a limit (ADR 0053).
+	 * The admission lock is held until the caller's transaction ends, so the run it saves is
+	 * counted by the next admission.
+	 */
+	private async admitRequested(requestId: string): Promise<void> {
+		const admission = this.dependencies.runAdmission.admit(
+			await this.dependencies.records.lockExecutingCounts()
+		);
+		if (admission.kind === 'admitted') return;
+		// The run that took the last place may be this request's own earlier send, still in flight
+		// when the client sent it again. The answer to that request is the run it started.
+		if (await this.dependencies.records.findByRequestId(requestId)) throw new DuplicateSubmission();
+		throw new ConflictError(this.dependencies.runAdmission.refusal(admission, 'requested'));
+	}
+
+	/**
+	 * Saves an admitted run, queued, with its prompt and first event, inside the caller's
+	 * transaction. The caller starts execution after that transaction commits (ADR 0025).
+	 */
+	private saveQueued(staged: StagedRun): Promise<AgentRunReceipt> {
+		return this.save(staged, {
+			type: 'run_queued',
+			runId: staged.run.id,
+			attempt: 1,
+			reason: 'submitted'
+		});
+	}
+
+	/**
+	 * Saves a run that was not admitted as failed, with its prompt and the reason, inside the
+	 * caller's transaction. It never executes; its owner can retry it from the chat.
+	 */
+	private saveRefused(staged: StagedRun, failure: string): Promise<AgentRunReceipt> {
+		const refusedAt = this.dependencies.now();
+		return this.save(
+			{
+				...staged,
+				run: {
+					...staged.run,
+					status: 'failed',
+					failure,
+					finishedAt: refusedAt,
+					updatedAt: refusedAt
+				}
+			},
+			{
+				type: 'failed',
+				runId: staged.run.id,
+				code: 'NOT_ADMITTED',
+				message: failure,
+				retryable: false
+			}
+		);
+	}
+
+	private async save({ run, runInput }: StagedRun, first: AgentEvent): Promise<AgentRunReceipt> {
 		const inserted = await this.dependencies.records.insertIdempotent(run);
 		if (!inserted) throw new DuplicateSubmission();
 		await this.dependencies.conversationMessages.recordUserPrompt(
-			conversation.id,
+			run.conversationId,
 			runInput.prompt,
 			run.id,
 			runInput.images
 		);
-		const event = await this.dependencies.records.append(run.id, 0, {
-			type: 'run_queued',
-			runId: run.id,
-			attempt: 1,
-			reason: 'submitted'
-		});
+		const event = await this.dependencies.records.append(run.id, 0, first);
 		return {
 			runId: run.id,
-			conversationId: conversation.id,
+			conversationId: run.conversationId,
 			status: run.status,
 			latestCursor: event.cursor
 		};
@@ -794,6 +902,11 @@ export class AgentSdkHarness implements AgentHarness {
 					original.status === 'completed'
 				)
 					throw new ValidationError('Only failed or cancelled runs can be retried');
+				// Locks are taken in one order, the conversation and then admission, as in submit. A
+				// retry holding admission while its insert waits on a submit's conversation lock
+				// would deadlock with that submit.
+				await this.dependencies.conversationSessions.getForWrite(original.conversationId);
+				await this.admitRequested(requestId);
 				const submittedAt = this.dependencies.now();
 				// Joins the retry request's trace, same as a fresh submit.
 				const retryTraceparent = this.dependencies.traceContext.activeTraceparent();

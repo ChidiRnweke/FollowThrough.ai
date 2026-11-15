@@ -52,9 +52,10 @@ transaction:
 2. Ask `ScheduleRules.due(schedule, now, waiting)`. `waiting` says that an earlier run of this
    schedule is parked for approval.
 3. Save the schedule with its next instant moved forward.
-4. On `due`: create a conversation in the schedule's execution mode, save a queued run with the
-   prompt as its first message, and record the occurrence. The occurrence id is the run's request
-   id.
+4. On `due`: create a conversation in the schedule's execution mode, build the run, and admit
+   it (ADR 0053). An admitted run is saved queued with the prompt as its first message. A run
+   over a limit is saved failed with the reason, and never executes. Either way the occurrence
+   is recorded. The occurrence id is the run's request id.
 
 The run executes after the transaction commits. A failure before the commit leaves the schedule
 due, and the next tick tries again. A second worker waits on the row lock and then reads a
@@ -70,6 +71,10 @@ Three results need a statement:
   says so.
 - **Run now.** `runScheduleNow` starts a run with the trigger `manual`. It does not move the next
   instant. Its caller's `requestId` makes a repeated request start one run.
+- **Too many runs.** When the owner's account or the deployment is at its limit of executing
+  runs, a due occurrence is `refused`: its run is saved failed, with a failure that says how many
+  runs were in progress, and the schedule moves on. A "Run now" over a limit is refused at once
+  and saves nothing.
 
 A scheduled run carries a `ScheduledRunOrigin` on its frozen input (ADR 0034). The instructions
 then state the local time in the schedule's zone and that nobody is present. The run is offered
@@ -96,7 +101,8 @@ The values are checked in two places, and not in a third:
 - **When a run begins.** `requireScheduleStart` in the harness runs once, after the run is
   claimed and before its context is built. A model that is no longer offered, an archived
   project, or a skill that is turned off fails the run with a message that names the part to
-  change. The run is `running` at that point, which is the only state a run can fail from.
+  change. The run is `running` at that point. The only run that fails without running is one
+  that was not admitted.
 - **Not in the transaction that starts the run.** A failure there would roll back the move to
   the next occurrence, and the worker would find the schedule due again at each tick.
 

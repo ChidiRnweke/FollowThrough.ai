@@ -22,6 +22,7 @@ import type {
 	AgentCheckpointWrite,
 	PreparedAgentRun,
 	ConversationId,
+	ExecutingRunCounts,
 	ResolvedAgentRun,
 	StoredAgentRunEventRecord
 } from '$lib/models/agent';
@@ -110,6 +111,17 @@ export class InMemoryAgentRunPersistence
 				run.conversationId === conversationId &&
 				['queued', 'running', 'awaiting_approval', 'cancelling'].includes(run.status)
 		);
+	}
+
+	/** The total counts every account's runs in this store, as the deployment's does. */
+	async lockExecutingCounts(): Promise<ExecutingRunCounts> {
+		const executing = this.runs.filter(
+			(run) => run.kind === 'agent' && ['queued', 'running', 'cancelling'].includes(run.status)
+		);
+		return {
+			account: executing.filter((run) => run.userId === this.actor.userId).length,
+			total: executing.length
+		};
 	}
 
 	async insert(run: AgentRun): Promise<AgentRun> {

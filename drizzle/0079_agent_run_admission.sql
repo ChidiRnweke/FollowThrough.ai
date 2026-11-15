@@ -1,0 +1,1 @@
+CREATE INDEX "agent_runs_executing_user_idx" ON "agent_runs" USING btree ("user_id") WHERE "agent_runs"."kind" = 'agent' and "agent_runs"."status" in ('queued', 'running', 'cancelling');

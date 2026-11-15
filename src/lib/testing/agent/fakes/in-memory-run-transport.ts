@@ -25,7 +25,7 @@ export class InMemoryRunTransport implements AgentRunTransport {
 	async cancel(): Promise<AgentRunSnapshot> {
 		throw new Error('Cancellation unavailable');
 	}
-	async retry(): Promise<AgentRunReceipt> {
+	async retry(): Promise<AgentRunSubmission> {
 		throw new Error('Retry unavailable');
 	}
 	openEvents(input: Parameters<AgentRunTransport['openEvents']>[0]) {

@@ -1,10 +1,14 @@
-import type { RunExecutor } from '$lib/models/agent';
+import type { RunAdmissionLimits, RunExecutor } from '$lib/models/agent';
 import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import {
 	AgentRunHarnessRecords,
 	type AgentHarnessRecords
 } from '$lib/server/services/agent/runs/records';
+import {
+	RunAdmissionRules,
+	type RunAdmissionRule
+} from '$lib/server/services/agent/runs/admission';
 
 import type { WebResearchOptions } from '$lib/models/agent';
 import { normalizeLanguageModelId } from '$lib/models/agent';
@@ -118,6 +122,7 @@ import { OpenRouter } from '@openrouter/sdk';
 export interface AgentCapabilityInput {
 	/** The kind of process this graph runs in; chat runs are claimed as that kind. */
 	readonly executor: RunExecutor;
+	readonly runAdmission: RunAdmissionLimits;
 	readonly tokens: TokenCounter;
 	readonly db: Database;
 	readonly notifications: NotificationChannel;
@@ -162,6 +167,7 @@ export interface AgentCapability {
 	readonly sessions: AgentSessionRepository;
 	/** The run records the agent harness reads and writes, through their services. */
 	readonly harnessRecords: AgentHarnessRecords;
+	readonly runAdmission: RunAdmissionRule;
 	readonly context: IAgentContext;
 	readonly turns: AgentTurns;
 	readonly prompts: AgentPromptPreparation;
@@ -256,6 +262,7 @@ export const createAgentCapability = (
 			'AgentRunHarnessRecords',
 			new AgentRunHarnessRecords(runs, runEvents, runDecisions, sessions)
 		),
+		runAdmission: tracedService('RunAdmissionRules', new RunAdmissionRules(input.runAdmission)),
 		context,
 		turns: tracedService(
 			'AgentTurnService',

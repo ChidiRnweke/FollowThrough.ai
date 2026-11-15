@@ -64,7 +64,7 @@ Logs at info, warn and error carry metadata only: ids, enum values, counts, leng
 Configuration is layered, and the two example files map exactly onto the layers:
 
 - **Bootstrap** (`.env.example`): five values telling the app where its secrets live: `CONFIG_SOURCE` plus the `INFISICAL_CLIENT_ID` / `CLIENT_SECRET` / `PROJECT_ID` / `ENVIRONMENT` / `URL`. This file stays on the host; nothing application-specific goes in it.
-- **Application** (`.env.infiscal.example`): everything else, imported into the root of the Infisical project. Seven keys are required with no runtime default: `DATABASE_URL`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, `AUTHENTIK_DOMAIN`, `AUTHENTIK_CLIENT_ID`, `AUTHENTIK_CLIENT_SECRET`, and `AUTHENTIK_CALLBACK_URL`. The rest (model choices, S3 credentials, retrieval chunking, archive admission) have defaults in `APPLICATION_DEFAULTS` (`src/lib/server/config.ts`) and can be omitted.
+- **Application** (`.env.infiscal.example`): everything else, imported into the root of the Infisical project. Seven keys are required with no runtime default: `DATABASE_URL`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, `AUTHENTIK_DOMAIN`, `AUTHENTIK_CLIENT_ID`, `AUTHENTIK_CLIENT_SECRET`, and `AUTHENTIK_CALLBACK_URL`. The rest (model choices, S3 credentials, retrieval chunking, archive and agent run admission) have defaults in `APPLICATION_DEFAULTS` (`src/lib/server/config.ts`) and can be omitted.
 
 `CONFIG_SOURCE=env` collapses the two layers: application keys are read straight from the process environment and no Infisical client is created. That is the simple path for a small deployment; Infisical earns its keep when you want secrets rotated outside the deployment or shared between the app and the provisioning script.
 
@@ -145,7 +145,7 @@ Connectors let the agent call the remote MCP servers of other services, such as 
 - **Provisioning is idempotent**: `provision-db.js` fails closed: a listing failure against Infisical is never read as "no secret", so re-running it cannot rotate the password of a database it cannot see.
 - **Authentication is mandatory**: deployments that previously used anonymous single-user access must configure Authentik before upgrading. `LOCAL_USER_ID` no longer selects a runtime account. Existing account data is retained, but this change does not link or transfer it to a new Authentik account. MCP clients always require a FollowThrough API token.
 
-## Request and archive admission
+## Request, archive and agent run admission
 
 `BODY_SIZE_LIMIT` remains the adapter-node HTTP request limit (52,428,800 bytes in the reference deployment). Direct object-storage uploads do not pass through that HTTP body. Application-level attachment, chat-image, screenshot, diagram, and export-image size ceilings are removed; upstream failures are reported explicitly.
 
@@ -164,6 +164,8 @@ Three small endpoints read at most a fixed number of body bytes and answer `413`
 Each signed-in user may send `CLIENT_ERROR_REPORTS_PER_WINDOW` browser error reports (default 20, one page's own cap) per `CLIENT_ERROR_WINDOW_SECONDS` (default 60). A repeat of a report already logged in the window is dropped; the next logged report says how many were dropped. A report past the budget is answered `429` with `Retry-After`. All five settings must be positive safe integers.
 
 Each connector operation has one total deadline: listing a server's tools across every page, discovering and completing OAuth sign-in, refreshing a token, or fetching a server's icon. `CONNECTOR_OPERATION_TIMEOUT_MS` defaults to 60,000, the MCP SDK's default timeout for a single request, and must be a positive safe integer. An operation that passes it fails with the setting named and keeps no partial tool list; an icon that passes it leaves the connector with its monogram. Connector requests never go to a special-use address, whether a host name resolves to one or the URL names one as an address literal.
+
+Agent runs are admitted per account and in total (ADR 0053). `AGENT_MAX_ACTIVE_RUNS_PER_USER` defaults to 5 and `AGENT_MAX_ACTIVE_RUNS` to 50. Both must be positive safe integers. They count the chat runs that are queued, running or stopping; a run that waits for its owner's approval is not counted. These are starting values, not measured ones: raise or lower them to what your provider quota, worker memory and database allow. A chat message, a retry or a "Run now" over either setting is refused with a message that says how many runs are in progress. A scheduled run over either setting is saved as a failed run with that reason, and the schedule's next run is admitted on its own.
 
 ## Sign-in and MCP client limits
 

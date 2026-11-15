@@ -6,6 +6,7 @@ import type {
 	AgentRunId,
 	AgentSessionItem,
 	ConversationId,
+	ExecutingRunCounts,
 	PersistedSessionItem,
 	ResolvedAgentRun,
 	StoredAgentRunEventRecord
@@ -24,6 +25,11 @@ export interface AgentRuns {
 	/** A repeated request id finds the run it already created, so submission is idempotent. */
 	findByRequestId(requestId: string): Promise<AgentRun | undefined>;
 	findActiveByConversation(conversationId: ConversationId): Promise<AgentRun | undefined>;
+	/**
+	 * Takes the run-admission lock until the caller's transaction ends, then counts the chat runs
+	 * that execute now (ADR 0053).
+	 */
+	lockExecutingCounts(): Promise<ExecutingRunCounts>;
 	/** Inserts the run unless its request id exists; answers undefined when it already does. */
 	insertIdempotent(run: AgentRun): Promise<AgentRun | undefined>;
 }
@@ -78,6 +84,9 @@ export class AgentRunHarnessRecords implements AgentHarnessRecords {
 	}
 	findActiveByConversation(conversationId: ConversationId) {
 		return this.runs.findActiveByConversation(conversationId);
+	}
+	lockExecutingCounts() {
+		return this.runs.lockExecutingCounts();
 	}
 	insertIdempotent(run: AgentRun) {
 		return this.runs.insertIdempotent(run);

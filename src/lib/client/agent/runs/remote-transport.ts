@@ -1,4 +1,8 @@
-import { submitAgentRunInputSchema, type AgentRunId } from '$lib/models/agent';
+import {
+	submitAgentRunInputSchema,
+	type AgentRunId,
+	type AgentRunReceipt
+} from '$lib/models/agent';
 import { RunEventSubscription } from './subscription';
 import type { AgentRunSubmission, AgentRunTransport } from '$lib/controllers/agent/chat.svelte';
 import { isHttpError } from '@sveltejs/kit';
@@ -11,12 +15,13 @@ import {
 } from '$lib/remote/agent/chat.remote';
 
 export class RemoteAgentRunTransport implements AgentRunTransport {
-	async submit(input: Parameters<AgentRunTransport['submit']>[0]): Promise<AgentRunSubmission> {
+	submit(input: Parameters<AgentRunTransport['submit']>[0]): Promise<AgentRunSubmission> {
+		return this.decided(() => submitAgentRun(submitAgentRunInputSchema.parse(input)));
+	}
+
+	private async decided(request: () => Promise<AgentRunReceipt>): Promise<AgentRunSubmission> {
 		try {
-			return {
-				kind: 'accepted',
-				receipt: await submitAgentRun(submitAgentRunInputSchema.parse(input))
-			};
+			return { kind: 'accepted', receipt: await request() };
 		} catch (error) {
 			const message = this.rejection(error);
 			if (message === undefined) throw error;
@@ -45,8 +50,8 @@ export class RemoteAgentRunTransport implements AgentRunTransport {
 		return cancelAgentRun({ runId });
 	}
 
-	async retry(runId: AgentRunId, requestId: string) {
-		return retryAgentRun({ runId, requestId });
+	retry(runId: AgentRunId, requestId: string): Promise<AgentRunSubmission> {
+		return this.decided(() => retryAgentRun({ runId, requestId }));
 	}
 
 	openEvents(input: Parameters<AgentRunTransport['openEvents']>[0]) {
