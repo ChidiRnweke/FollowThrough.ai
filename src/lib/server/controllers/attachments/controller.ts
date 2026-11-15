@@ -93,15 +93,15 @@ export class Attachments implements AttachmentsController {
 	async initiate(
 		input: Parameters<AttachmentUploads['initiate']>[0]
 	): Promise<AttachmentUploadStart> {
-		const { upload, requiredHeaders } = await this.dependencies.uploads.initiate(input);
-		const uploadUrl = await this.dependencies.storage.createUploadUrl({
+		const upload = await this.dependencies.uploads.initiate(input);
+		const signed = await this.dependencies.storage.createUploadUrl({
 			objectKey: upload.objectKey,
 			mediaType: upload.mediaType,
 			byteSize: upload.byteSize,
 			checksumSha256: upload.checksumSha256,
 			expiresInSeconds: 600
 		});
-		return { upload, uploadUrl, requiredHeaders };
+		return { upload, uploadUrl: signed.url, requiredHeaders: signed.requiredHeaders };
 	}
 	complete(uploadId: AttachmentUploadId) {
 		return this.dependencies.transactionRunner.run(() => this.completeUpload(uploadId));
@@ -114,12 +114,20 @@ export class Attachments implements AttachmentsController {
 			return completed;
 		});
 	}
-	/** Verifies the stored bytes, moves them under the new version's key and records the version. */
+	/**
+	 * Verifies the stored bytes, moves exactly the verified object version under the new
+	 * version's key and records the version.
+	 */
 	private async completeUpload(uploadId: AttachmentUploadId): Promise<AttachmentView> {
 		const { uploads, storage } = this.dependencies;
 		const upload = await uploads.pending(uploadId);
-		const version = uploads.planVersion(upload, await storage.stat(upload.objectKey));
-		await storage.promote(upload.objectKey, version.objectKey);
+		const stored = await storage.stat(upload.objectKey);
+		const version = uploads.planVersion(upload, stored);
+		await storage.promote({
+			sourceKey: upload.objectKey,
+			sourceEtag: stored.etag,
+			destinationKey: version.objectKey
+		});
 		return uploads.finalize(upload, version);
 	}
 	list(noteId: NoteId) {

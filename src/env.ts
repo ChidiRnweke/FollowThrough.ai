@@ -108,6 +108,10 @@ export const variables = defineEnvVars({
 			'can never be hydrated from the secrets backend.',
 		schema: optionalString
 	},
+	ATTACHMENT_RESERVATION_MAX_BYTES: {
+		description: 'Largest attachment upload admitted, in bytes. Unset admits any size.',
+		schema: optionalString
+	},
 	ARCHIVE_MAX_EXPANDED_BYTES: {
 		description: 'Archive decompression admission in bytes (defaults to 26214400).',
 		schema: optionalString

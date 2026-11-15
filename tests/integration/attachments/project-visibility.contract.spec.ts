@@ -60,7 +60,8 @@ const setup = async (suffix: string, noteOwned = true) => {
 		seed.owner,
 		records,
 		new NoteRecords(seed.owner, context.db),
-		testClock
+		testClock,
+		{}
 	);
 	return { ...seed, records, reader, uploads, attachment, pendingUpload, archive };
 };

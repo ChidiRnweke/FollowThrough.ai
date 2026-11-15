@@ -29,7 +29,7 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 	const claims = new InMemoryAttachmentClaims();
 	const extraction = new InMemoryAttachmentExtraction();
 	const storage = new InMemoryStorage();
-	const uploads = new AttachmentUploadService(testActor(), repository, notes, testClock);
+	const uploads = new AttachmentUploadService(testActor(), repository, notes, testClock, {});
 	const reader = new AttachmentReadingService(repository);
 	const lifecycle = new AttachmentLifecycleService(repository, notes);
 	const worker = new AttachmentProcessing({

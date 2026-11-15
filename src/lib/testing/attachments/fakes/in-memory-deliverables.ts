@@ -1,5 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { ConflictError, ExternalServiceError, NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	Artifact,
 	ArtifactId,
@@ -10,7 +10,8 @@ import type {
 import type { ProjectId, ProjectTemplate, TemplateUpload } from '$lib/models/projects';
 import type { ArtifactRepository, TemplateRepository } from '$lib/server/repositories/deliverables';
 import type { IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
-import type { StoredObjectInfo } from '$lib/models/attachments';
+import type { SignedObjectUpload, StoredObjectInfo } from '$lib/models/attachments';
+import { createHash } from 'node:crypto';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant
@@ -133,11 +134,29 @@ export class InMemoryTemplateRepository implements TemplateRepository, SnapshotP
 	}
 }
 
+/** What storage holds for one key: the bytes, and what it computed while receiving them. */
+interface StoredObject {
+	readonly data: Uint8Array;
+	readonly mediaType: string;
+	readonly etag: string;
+	/** Present only for a write that carried a checksum, which storage verified. */
+	readonly checksumSha256?: string;
+}
+
+const digest = (algorithm: 'md5' | 'sha256', data: Uint8Array) =>
+	createHash(algorithm).update(data).digest('hex');
+
+/**
+ * Object storage in memory. As in S3, every write gets a new entity tag; only a signed upload,
+ * which carries a checksum, leaves a verified SHA-256 behind. Server-side `put` carries none.
+ */
 export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotParticipant {
-	objects = new Map<string, { data: Uint8Array; mediaType: string; checksumSha256?: string }>();
+	objects = new Map<string, StoredObject>();
 	putFailure?: Error;
 	removeFailure?: Error;
 	downloadFailure?: Error;
+	/** Runs as promotion starts, before the copy: a write here lands after the caller's stat. */
+	beforePromote: () => Promise<void> = async () => {};
 
 	async createUploadUrl(input: {
 		objectKey: string;
@@ -145,8 +164,24 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotPa
 		byteSize: number;
 		checksumSha256: string;
 		expiresInSeconds: number;
-	}): Promise<string> {
-		return `https://storage.test/upload/${input.objectKey}`;
+	}): Promise<SignedObjectUpload> {
+		return {
+			url: `https://storage.test/upload/${input.objectKey}`,
+			requiredHeaders: {
+				'content-type': input.mediaType,
+				'x-amz-checksum-sha256': Buffer.from(input.checksumSha256, 'hex').toString('base64')
+			}
+		};
+	}
+
+	/** The bytes a client sent to a signed upload URL; storage records their checksum. */
+	async upload(objectKey: string, data: Uint8Array, mediaType: string): Promise<void> {
+		this.objects.set(objectKey, {
+			data: new Uint8Array(data),
+			mediaType,
+			etag: `"${digest('md5', data)}"`,
+			checksumSha256: digest('sha256', data)
+		});
 	}
 
 	async createDownloadUrl(
@@ -161,15 +196,21 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotPa
 
 	async put(objectKey: string, data: Uint8Array, mediaType: string): Promise<void> {
 		if (this.putFailure) throw this.putFailure;
-		this.objects.set(objectKey, { data: new Uint8Array(data), mediaType });
+		this.objects.set(objectKey, {
+			data: new Uint8Array(data),
+			mediaType,
+			etag: `"${digest('md5', data)}"`
+		});
 	}
 
 	async stat(objectKey: string): Promise<StoredObjectInfo> {
 		const object = this.objects.get(objectKey);
+		if (!object) throw new ExternalServiceError('Attachment object could not be verified');
 		return {
-			byteSize: object?.data.byteLength ?? 0,
-			...(object?.mediaType ? { mediaType: object.mediaType } : {}),
-			...(object?.checksumSha256 ? { checksumSha256: object.checksumSha256 } : {})
+			byteSize: object.data.byteLength,
+			etag: object.etag,
+			mediaType: object.mediaType,
+			...(object.checksumSha256 ? { checksumSha256: object.checksumSha256 } : {})
 		};
 	}
 
@@ -181,10 +222,20 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotPa
 		return new Uint8Array(object.data);
 	}
 
-	async promote(sourceKey: string, destinationKey: string): Promise<void> {
-		const object = this.objects.get(sourceKey);
-		if (object) this.objects.set(destinationKey, object);
-		this.objects.delete(sourceKey);
+	async promote(input: {
+		sourceKey: string;
+		sourceEtag: string;
+		destinationKey: string;
+	}): Promise<void> {
+		await this.beforePromote();
+		const object = this.objects.get(input.sourceKey);
+		if (!object) throw new ExternalServiceError('Attachment object could not be committed');
+		if (object.etag !== input.sourceEtag)
+			throw new ConflictError(
+				'The uploaded file changed after it was verified, so it was not saved. Upload it again.'
+			);
+		this.objects.set(input.destinationKey, object);
+		this.objects.delete(input.sourceKey);
 	}
 
 	async remove(objectKey: string): Promise<void> {

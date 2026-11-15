@@ -13,7 +13,7 @@ import type {
 	OwnedAttachmentUpload
 } from '$lib/server/repositories/attachments/attachments';
 import { type IAttachmentStorage } from '$lib/server/services/attachments/object-storage';
-import type { StoredObjectInfo } from '$lib/models/attachments';
+import type { SignedObjectUpload, StoredObjectInfo } from '$lib/models/attachments';
 import { testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { RecognizedContent as OcrContentPart } from '$lib/models/attachments/ocr';
 import { z } from 'zod';
@@ -71,8 +71,9 @@ export class InMemoryAttachmentRepository implements AttachmentRepository {
 		return { attachment: view('application/pdf').attachment, version };
 	}
 
-	createUpload(): Promise<AttachmentUpload> {
-		throw new Error('not used');
+	async createUpload(upload: AttachmentUpload): Promise<AttachmentUpload> {
+		this.upload = upload;
+		return upload;
 	}
 	async findUpload(): Promise<AttachmentUpload | undefined> {
 		if (!this.upload) throw new Error('not used');
@@ -145,7 +146,7 @@ export class InMemoryAttachmentRepository implements AttachmentRepository {
 export class InMemoryStorage implements IAttachmentStorage {
 	readonly objects = new Set(['objects/doc']);
 	readonly removalFailures = new Set<string>();
-	createUploadUrl(): Promise<string> {
+	createUploadUrl(): Promise<SignedObjectUpload> {
 		throw new Error('not used');
 	}
 	async createDownloadUrl(): Promise<string> {
@@ -155,7 +156,7 @@ export class InMemoryStorage implements IAttachmentStorage {
 		throw new Error('not used');
 	}
 	async stat(): Promise<StoredObjectInfo> {
-		return { byteSize: UPLOAD_BYTES, checksumSha256: UPLOAD_CHECKSUM };
+		return { byteSize: UPLOAD_BYTES, checksumSha256: UPLOAD_CHECKSUM, etag: '"stored"' };
 	}
 	/** The stored text a text attachment decodes to. */
 	text = 'decoded text';

@@ -43,6 +43,9 @@ const setup = async (identity: number) => {
 		...view,
 		attachment: { ...view.attachment, projectId: seeded.project.id }
 	});
+	// The screenshot bytes as the signed upload URL stores them, beside the reservation.
+	const storage = new InMemoryAttachmentStorage();
+	await storage.upload(`staging/${UPLOAD_ID}`, new TextEncoder().encode('screenshot'), 'image/png');
 	const controllerFor = (actor: ActorContext) => {
 		const catalog = createTodoCatalog(
 			actor,
@@ -59,7 +62,7 @@ const setup = async (identity: number) => {
 				uploads: attachments,
 				reader: attachments,
 				lifecycle: attachments,
-				storage: new InMemoryAttachmentStorage(),
+				storage,
 				todoReader: catalog,
 				transactionRunner
 			})

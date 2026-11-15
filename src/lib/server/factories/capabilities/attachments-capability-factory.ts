@@ -46,6 +46,7 @@ import {
 } from '$lib/server/services/attachments/object-storage';
 import { operationObserver } from '$lib/server/infrastructure/telemetry/tracing';
 import {
+	attachmentAdmissionLimits,
 	DEFAULT_MISTRAL_BASE_URL,
 	DEFAULT_OCR_MODEL,
 	optionalProperty,
@@ -109,7 +110,13 @@ export const createAttachmentsCapability = (
 		storage,
 		uploads: tracedService(
 			'AttachmentUploadService',
-			new AttachmentUploadService(actor, repository, input.notes, input.now)
+			new AttachmentUploadService(
+				actor,
+				repository,
+				input.notes,
+				input.now,
+				attachmentAdmissionLimits()
+			)
 		),
 		reader: tracedService('AttachmentReadingService', new AttachmentReadingService(repository)),
 		lifecycle: tracedService(

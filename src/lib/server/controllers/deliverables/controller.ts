@@ -15,7 +15,7 @@ import type { Todo, TodoListFilter } from '$lib/models/todos';
 import type { Widget, WidgetExport, WidgetId, WidgetSourceRows } from '$lib/models/widgets';
 
 import { NotFoundError, ValidationError } from '$lib/errors';
-import type { AttachmentId } from '$lib/models/attachments';
+import type { AttachmentId, SignedObjectUpload } from '$lib/models/attachments';
 import type {
 	Artifact,
 	ArtifactId,
@@ -68,7 +68,7 @@ export interface ExportObjectStorage {
 		byteSize: number;
 		checksumSha256: string;
 		expiresInSeconds: number;
-	}): Promise<string>;
+	}): Promise<SignedObjectUpload>;
 	createDownloadUrl(
 		objectKey: string,
 		expiresInSeconds: number,
@@ -230,7 +230,7 @@ export class Deliverables implements DeliverablesController {
 		checksumSha256: string;
 	}) {
 		const upload = await this.dependencies.templateStore.reserveUpload(input);
-		const uploadUrl = await this.dependencies.templateStorage.createUploadUrl({
+		const signed = await this.dependencies.templateStorage.createUploadUrl({
 			objectKey: upload.objectKey,
 			mediaType: upload.mediaType,
 			byteSize: upload.byteSize,
@@ -239,11 +239,8 @@ export class Deliverables implements DeliverablesController {
 		});
 		return {
 			templateId: upload.id,
-			uploadUrl,
-			requiredHeaders: {
-				'content-type': upload.mediaType,
-				'x-amz-meta-sha256': upload.checksumSha256
-			}
+			uploadUrl: signed.url,
+			requiredHeaders: signed.requiredHeaders
 		};
 	}
 
