@@ -1,5 +1,15 @@
 # Changelog
 
+## [6.6.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.5.1...v6.6.0) (2026-11-15)
+
+
+### Features
+
+* **agent:** let the agent read and manage schedules ([#504](https://github.com/ChidiRnweke/FollowThrough.ai/issues/504)) ([65be8d7](https://github.com/ChidiRnweke/FollowThrough.ai/commit/65be8d70b346486d135b1ff39c3c82b259b37918))
+* **agent:** run due schedules in the worker and recover runs per process ([#503](https://github.com/ChidiRnweke/FollowThrough.ai/issues/503)) ([730d35d](https://github.com/ChidiRnweke/FollowThrough.ai/commit/730d35db76e1c8f8aa97db4d04268b6505adff09))
+* **schedules:** add the scheduled page, the shared bell and docs ([#505](https://github.com/ChidiRnweke/FollowThrough.ai/issues/505)) ([44b1f66](https://github.com/ChidiRnweke/FollowThrough.ai/commit/44b1f66ccaa31bded701bbb130797a80008ffa84))
+* **schedules:** add the schedules domain and its recurrence rule ([#500](https://github.com/ChidiRnweke/FollowThrough.ai/issues/500)) ([412962f](https://github.com/ChidiRnweke/FollowThrough.ai/commit/412962f8e8d40003a0650d1376e895546579396b))
+
 ## [6.5.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.5.0...v6.5.1) (2026-11-15)
 
 
