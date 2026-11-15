@@ -612,3 +612,35 @@ describe('the context a send carries', () => {
 		expect(sent.contextNoteIds).toEqual([noteId]);
 	});
 });
+
+/** Refuses every retry, as the server does while too many of the account's runs execute. */
+class RefusedRetryTransport extends FakeAgentRunTransport {
+	override async retry(): Promise<Awaited<ReturnType<AgentRunTransport['retry']>>> {
+		return {
+			kind: 'refused',
+			message: 'You have 5 agent runs in progress. Wait for one to finish.'
+		};
+	}
+}
+
+describe('retrying a failed run', () => {
+	it('shows why the server refused the retry on the failed reply', async () => {
+		const store = testChat(
+			'test-session',
+			new RefusedRetryTransport([
+				{ type: 'failed', runId, code: 'INTERNAL', message: 'Provider down', retryable: false }
+			]),
+			new MemoryStorage()
+		);
+		await store.send({ prompt: 'look this up' });
+		await Promise.resolve();
+		const reply = store.entries.at(-1)!;
+
+		await store.retry(reply);
+
+		expect({ status: reply.status, error: reply.error }).toEqual({
+			status: 'failed',
+			error: 'You have 5 agent runs in progress. Wait for one to finish.'
+		});
+	});
+});

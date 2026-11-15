@@ -14,6 +14,7 @@ import {
 	DEFAULT_MISTRAL_BASE_URL,
 	DEFAULT_OCR_MODEL,
 	agentTraceContent,
+	agentRunAdmissionLimits,
 	connectorClientKeys,
 	connectorOperationTimeoutMs,
 	requiredEnvironmentValue
@@ -64,6 +65,7 @@ function productionConfig(executor: RunExecutor): ApplicationConfig {
 	return {
 		now: systemClock,
 		executor,
+		runAdmission: agentRunAdmissionLimits(),
 		attachmentClaims: new PostgresAttachmentClaims(
 			postgresSessionConnections,
 			postgresConnectionScope

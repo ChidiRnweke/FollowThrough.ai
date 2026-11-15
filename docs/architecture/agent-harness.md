@@ -55,7 +55,8 @@ A run is a database row. The harness reads and writes it through services; no ru
 process memory between operations.
 
 1. **Submit.** `submit` freezes the request: model, research settings, context and execution mode.
-   It stores the run as `queued` and starts execution in the background.
+   It admits the run against the account's and the deployment's executing runs (ADR 0053), stores
+   it as `queued` and starts execution in the background.
 2. **Prepare tools.** `execute` builds the run's tools, then removes the tools that the user
    switched off for the workspace or the project. It plans which tools the model sees at once and
    which it must find with `search_tools`. Tools that an earlier turn of the conversation found

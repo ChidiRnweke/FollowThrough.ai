@@ -19,6 +19,7 @@ it('initializes a fresh evaluation account before opening its provisioned shell'
 				tokenizer: testTokenizer,
 				now: testClock,
 				executor: 'web',
+				runAdmission: { perAccount: 5, total: 50 },
 				attachmentClaims: new InMemoryAttachmentClaims(),
 				openRouterApiKey: 'unused-local-test',
 				mistralApiKey: 'unused-local-test',

@@ -65,7 +65,8 @@ export interface AgentRunTransport {
 		message?: string;
 	}): Promise<AgentRunSnapshot>;
 	cancel(runId: AgentRunId): Promise<AgentRunSnapshot>;
-	retry(runId: AgentRunId, requestId: string): Promise<AgentRunReceipt>;
+	/** Like {@link submit}: a refusal the server decided is a value. */
+	retry(runId: AgentRunId, requestId: string): Promise<AgentRunSubmission>;
 	openEvents(input: {
 		runId: AgentRunId;
 		after: string;
@@ -739,8 +740,14 @@ export class Chat implements ChatSession {
 	async retry(reply: ChatEntry): Promise<void> {
 		if (!this.canExecute || this.isStreaming || !reply.runId) return;
 		const generation = this.generation;
-		const receipt = await this.transport.retry(reply.runId, crypto.randomUUID());
+		const retried = await this.transport.retry(reply.runId, crypto.randomUUID());
 		if (generation !== this.generation) return;
+		if (retried.kind === 'refused') {
+			// The failed run stays as it was, with the reason the retry did not start.
+			reply.error = retried.message;
+			return;
+		}
+		const receipt = retried.receipt;
 		reply.status = 'queued';
 		reply.error = undefined;
 		reply.retryable = false;

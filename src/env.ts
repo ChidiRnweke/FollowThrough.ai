@@ -174,6 +174,16 @@ export const variables = defineEnvVars({
 			'Whether agent traces carry prompts, answers and tool payloads: true (default) or false.',
 		schema: optionalString
 	},
+	AGENT_MAX_ACTIVE_RUNS_PER_USER: {
+		description:
+			'Chat runs one account may have executing at once (defaults to 5, a starting value to tune).',
+		schema: optionalString
+	},
+	AGENT_MAX_ACTIVE_RUNS: {
+		description:
+			'Chat runs the deployment may have executing at once (defaults to 50, a starting value to tune).',
+		schema: optionalString
+	},
 	OPENROUTER_API_KEY: {
 		description: 'OpenRouter API key used by workbench chat.',
 		schema: optionalString

@@ -54,7 +54,7 @@ import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { AttachmentClaims } from './repositories/attachments/claims';
 import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { NotificationChannel } from './db';
-import type { RunExecutor } from '$lib/models/agent';
+import type { RunAdmissionLimits, RunExecutor } from '$lib/models/agent';
 
 /**
  * Collaborators that reach outside the process and are therefore worth
@@ -76,6 +76,8 @@ export interface ApplicationConfig {
 	readonly now: () => DateTime;
 	/** The kind of process this graph runs in: it claims runs as that kind and recovers only those. */
 	readonly executor: RunExecutor;
+	/** How many chat runs may execute at once, per account and in total (ADR 0053). */
+	readonly runAdmission: RunAdmissionLimits;
 	readonly db: Database;
 	/** Postgres LISTEN, through which run changes reach every process. */
 	readonly notifications: NotificationChannel;
@@ -245,6 +247,7 @@ export function createApplication(
 	const agentCapability = createAgentCapability(actor, {
 		now,
 		executor: config.executor,
+		runAdmission: config.runAdmission,
 		tokens: knowledgeSearch.tokenizer,
 		db,
 		notifications: config.notifications,
@@ -464,6 +467,7 @@ export function createApplication(
 			preferences,
 			models: modelCatalog,
 			records: agentCapability.harnessRecords,
+			runAdmission: agentCapability.runAdmission,
 			transitions: agentCapability.transitions,
 			transactionRunner,
 			defaultModel: defaultAgentModel,

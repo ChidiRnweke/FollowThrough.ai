@@ -1,5 +1,6 @@
 import { testClock } from '$lib/testing/workspace/fixtures/domain-builders';
 import { AgentRunHarnessRecords } from '$lib/server/services/agent/runs/records';
+import { RunAdmissionRules } from '$lib/server/services/agent/runs/admission';
 import { RunTransitions } from '$lib/server/services/agent/runs/transitions';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
@@ -59,6 +60,8 @@ export const agentContextFixture = (overrides: Partial<AgentHarnessDependencies>
 	const transactions = new InMemoryTransactionRunner([runs, sessions, conversations]);
 	const dependencies = {
 		records: new AgentRunHarnessRecords(runs, runs, runs, sessions),
+		// The deployment's defaults; a spec about admission passes its own.
+		runAdmission: new RunAdmissionRules({ perAccount: 5, total: 50 }),
 		transitions: new RunTransitions(runs, 'web'),
 		webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 		transactionRunner: transactions,

@@ -20,6 +20,7 @@ import type {
 	PreparedAgentRun,
 	AgentSessionItem,
 	ConversationId,
+	ExecutingRunCounts,
 	PersistedSessionItem,
 	ResolvedAgentRun,
 	WorkflowAgentRun
@@ -293,6 +294,30 @@ export class AgentRunRecords implements AgentRunRepository {
 			)
 			.limit(1);
 		return row ? toRun(row) : undefined;
+	}
+
+	async lockExecutingCounts(): Promise<ExecutingRunCounts> {
+		// One lock for the deployment, because the total limit spans every account. The count is
+		// a second statement: under read committed its snapshot is taken after the lock is
+		// granted, so it sees the run the previous holder committed.
+		await this.database.execute(
+			sql`select pg_advisory_xact_lock(hashtext('agent-runs'), hashtext('admission'))`
+		);
+		const [row] = await this.database
+			.select({
+				account: sql<number>`(count(*) filter (where ${schema.agentRuns.userId} = ${this.actor.userId}))::int`,
+				total: sql<number>`count(*)::int`
+			})
+			.from(schema.agentRuns)
+			.where(
+				and(
+					eq(schema.agentRuns.kind, 'agent'),
+					inArray(schema.agentRuns.status, ['queued', 'running', 'cancelling'])
+				)
+			);
+		// An aggregate without a grouping always answers one row.
+		if (!row) throw new Error('The executing run count returned no row');
+		return { account: row.account, total: row.total };
 	}
 
 	async insert(run: AgentRun): Promise<AgentRun> {

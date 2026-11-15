@@ -260,6 +260,32 @@ export type AgentExecutionMode = 'approval_required' | 'auto_accept';
 export type AgentRunStatus =
 	'queued' | 'running' | 'awaiting_approval' | 'cancelling' | 'completed' | 'failed' | 'cancelled';
 
+/**
+ * The chat runs that execute now: queued, running or cancelling (ADR 0053). A run parked for
+ * approval executes nothing until its owner decides, so it is not counted.
+ */
+export interface ExecutingRunCounts {
+	/** The acting account's runs. */
+	readonly account: number;
+	/** Every account's runs on this deployment. */
+	readonly total: number;
+}
+
+/** How many chat runs may execute at once, for one account and in total (ADR 0053). */
+export interface RunAdmissionLimits {
+	readonly perAccount: number;
+	readonly total: number;
+}
+
+/** Whether one more run may start. A refusal names the limit it met and the count that met it. */
+export type RunAdmission =
+	| { readonly kind: 'admitted' }
+	| {
+			readonly kind: 'refused';
+			readonly limit: 'account' | 'total';
+			readonly executing: number;
+	  };
+
 /** A run that startup recovery acts on, with the account it acts for. */
 export interface OwnedRun {
 	readonly owner: { readonly userId: UserId };

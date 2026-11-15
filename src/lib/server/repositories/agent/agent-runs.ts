@@ -17,6 +17,7 @@ import type {
 	AgentCheckpointWrite,
 	PreparedAgentRun,
 	ConversationId,
+	ExecutingRunCounts,
 	StoredAgentRunEventRecord
 } from '$lib/models/agent';
 import type { AgentRunStatus, ResolvedAgentRun } from '$lib/models/agent';
@@ -48,6 +49,12 @@ export interface AgentRunRepository {
 	findAwaitingByConversation(conversationId: ConversationId): Promise<AgentRun | undefined>;
 	findLatestByConversation(conversationId: ConversationId): Promise<AgentRun | undefined>;
 	findActiveByConversation(conversationId: ConversationId): Promise<AgentRun | undefined>;
+	/**
+	 * Takes the deployment's run-admission lock, then counts the chat runs that execute now. Call
+	 * it inside the transaction that saves the run: the lock is held until that transaction ends,
+	 * so the next admission counts the run this one saves.
+	 */
+	lockExecutingCounts(): Promise<ExecutingRunCounts>;
 	insert(run: AgentRun): Promise<AgentRun>;
 	insertIdempotent(run: AgentRun): Promise<AgentRun | undefined>;
 	settle(runId: AgentRunId, change: RunSettlementWrite): Promise<AgentRun | undefined>;
