@@ -14,6 +14,8 @@ import type {
 	AgentProvenanceWrite,
 	AgentContextWrite,
 	RunClaimWrite,
+	AgentRunClaimWrite,
+	RunExecutor,
 	AgentCheckpointWrite,
 	PreparedAgentRun,
 	AgentSessionItem,
@@ -473,9 +475,9 @@ export class AgentRunRecords implements AgentRunRepository {
 
 	async claimAgent(
 		runId: AgentRunId,
-		change: RunClaimWrite
+		change: AgentRunClaimWrite
 	): Promise<ResolvedAgentRun | undefined> {
-		const row = await this.claimRow(runId, change, 'agent');
+		const row = await this.claimRow(runId, change, 'agent', { executor: change.executor });
 		return row ? toResolvedRun(row) : undefined;
 	}
 
@@ -483,17 +485,24 @@ export class AgentRunRecords implements AgentRunRepository {
 		runId: AgentRunId,
 		change: RunClaimWrite
 	): Promise<WorkflowAgentRun | undefined> {
-		const row = await this.claimRow(runId, change, 'workflow');
+		// A note-action workflow starts from a browser gesture, so the web process executes it.
+		const row = await this.claimRow(runId, change, 'workflow', { executor: 'web' });
 		return row ? toWorkflowRun(row) : undefined;
 	}
 
-	private async claimRow(runId: AgentRunId, change: RunClaimWrite, kind: AgentRun['kind']) {
+	private async claimRow(
+		runId: AgentRunId,
+		change: RunClaimWrite,
+		kind: AgentRun['kind'],
+		claimant: { readonly executor: RunExecutor }
+	) {
 		const [row] = await this.database
 			.update(schema.agentRuns)
 			.set({
 				status: change.status,
 				startedAt: new Date(change.startedAt),
-				updatedAt: new Date(change.updatedAt)
+				updatedAt: new Date(change.updatedAt),
+				executor: claimant.executor
 			})
 			.where(
 				and(
@@ -554,11 +563,16 @@ export class AgentRunBacklogRecords implements AgentRunBacklogRepository {
 		return rows.map(toWorkflowRun);
 	}
 
-	async listInterrupted(): Promise<readonly AgentRun[]> {
+	async listInterrupted(executor: RunExecutor): Promise<readonly AgentRun[]> {
 		const rows = await this.database
 			.select()
 			.from(schema.agentRuns)
-			.where(inArray(schema.agentRuns.status, ['running', 'cancelling']));
+			.where(
+				and(
+					inArray(schema.agentRuns.status, ['running', 'cancelling']),
+					eq(schema.agentRuns.executor, executor)
+				)
+			);
 		return rows.map(toRun);
 	}
 }

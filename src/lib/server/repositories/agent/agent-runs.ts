@@ -12,6 +12,8 @@ import type {
 	AgentProvenanceWrite,
 	AgentContextWrite,
 	RunClaimWrite,
+	AgentRunClaimWrite,
+	RunExecutor,
 	AgentCheckpointWrite,
 	PreparedAgentRun,
 	ConversationId,
@@ -49,7 +51,7 @@ export interface AgentRunRepository {
 	insert(run: AgentRun): Promise<AgentRun>;
 	insertIdempotent(run: AgentRun): Promise<AgentRun | undefined>;
 	settle(runId: AgentRunId, change: RunSettlementWrite): Promise<AgentRun | undefined>;
-	claimAgent(runId: AgentRunId, change: RunClaimWrite): Promise<ResolvedAgentRun | undefined>;
+	claimAgent(runId: AgentRunId, change: AgentRunClaimWrite): Promise<ResolvedAgentRun | undefined>;
 	claimWorkflow(runId: AgentRunId, change: RunClaimWrite): Promise<WorkflowAgentRun | undefined>;
 	checkpointAgent(
 		runId: AgentRunId,
@@ -68,7 +70,8 @@ export interface AgentRunRepository {
 
 /** Runs across every user: the work startup recovery settles or resumes. */
 export interface AgentRunBacklogRepository {
-	listInterrupted(): Promise<readonly AgentRun[]>;
+	/** The running and cancelling runs that one kind of process last claimed. */
+	listInterrupted(executor: RunExecutor): Promise<readonly AgentRun[]>;
 	listQueuedAgents(): Promise<readonly ResolvedAgentRun[]>;
 	listQueuedWorkflows(): Promise<readonly WorkflowAgentRun[]>;
 }

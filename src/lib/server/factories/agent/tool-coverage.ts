@@ -88,6 +88,10 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Chat run control belongs to the user and application lifecycle.'
 		},
+		runDueSchedule: {
+			kind: 'excluded',
+			reason: 'Only the worker starts the run of a schedule whose time has come.'
+		},
 		recoverInterrupted: {
 			kind: 'excluded',
 			reason: 'Chat run control belongs to the user and application lifecycle.'

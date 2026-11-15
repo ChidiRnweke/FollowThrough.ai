@@ -13,7 +13,7 @@ import {
 	positiveNumberFromEnvironment
 } from '$lib/server/config';
 import { createScheduler } from '$lib/server/factories/scheduler';
-import { attachmentProcessing, embeddingBackfill } from './worker-tasks';
+import { attachmentProcessing, dueSchedules, embeddingBackfill } from './worker-tasks';
 import {
 	drainBeforeTelemetryShutdown,
 	shutdownTelemetry
@@ -33,7 +33,7 @@ const embeddingSettings = () => ({
 
 const main = async (): Promise<void> => {
 	await hydrateEnvironment();
-	const composition = createProductionComposition();
+	const composition = createProductionComposition('worker');
 	const tasks = [
 		...composition.system().tasks,
 		embeddingBackfill(
@@ -46,8 +46,27 @@ const main = async (): Promise<void> => {
 		attachmentProcessing({
 			backlog: () => composition.system().controllers.attachmentBacklog(),
 			processingFor: (actor) => composition.forActor(actor).controllers.attachmentProcessing()
+		}),
+		dueSchedules({
+			backlog: () => composition.system().controllers.scheduleBacklog(),
+			harnessFor: (actor) => composition.forActor(actor).controllers.agentHarness()
 		})
 	];
+
+	// The worker settles the runs it was executing when it stopped, as the web process does for
+	// its own (ADR 0052). A queued run has no executor yet, so whichever process claims it first
+	// runs it.
+	const recovery = composition.system().controllers.runRecovery();
+	const interrupted = await recovery.interrupted();
+	for (const run of interrupted)
+		await composition.forActor(run.owner).controllers.agentHarness().recoverInterrupted(run.runId);
+	const queued = await recovery.queuedAgentRuns();
+	for (const run of queued)
+		await composition.forActor(run.owner).controllers.agentHarness().resumeQueued(run.runId);
+	if (interrupted.length + queued.length > 0)
+		console.log(
+			`[worker] recovered ${interrupted.length} interrupted and ${queued.length} queued run(s) on startup`
+		);
 
 	const scheduler = createScheduler(tasks, { runOnStart: true });
 	scheduler.start();

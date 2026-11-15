@@ -45,7 +45,8 @@ it('names each queued workflow of one kind with the account that submitted it', 
 	const backlog = new RunBacklogService(
 		capabilityDependencies<AgentRunBacklogRepository>({
 			listQueuedWorkflows: async () => [promises, foreignPromises, references]
-		})
+		}),
+		'web'
 	);
 	expect(await backlog.queuedWorkflowRuns('promise_extraction')).toEqual([
 		{ owner: testActor(), runId: promises.id },

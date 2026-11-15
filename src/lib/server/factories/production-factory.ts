@@ -1,3 +1,4 @@
+import type { RunExecutor } from '$lib/models/agent';
 import { Cl100kTokenizer } from '$lib/server/infrastructure/tokenization/cl100k';
 import { PostgresAttachmentClaims } from '$lib/server/repositories/attachments/postgres/claims';
 import {
@@ -49,17 +50,18 @@ export interface ProductionComposition {
 	system(): SystemApplication;
 }
 
-export function createProductionComposition(): ProductionComposition {
-	const config = productionConfig();
+export function createProductionComposition(executor: RunExecutor): ProductionComposition {
+	const config = productionConfig(executor);
 	return {
 		forActor: (actor) => createApplication(actor, config),
 		system: () => createSystemApplication(config)
 	};
 }
 
-function productionConfig(): ApplicationConfig {
+function productionConfig(executor: RunExecutor): ApplicationConfig {
 	return {
 		now: systemClock,
+		executor,
 		attachmentClaims: new PostgresAttachmentClaims(
 			postgresSessionConnections,
 			postgresConnectionScope

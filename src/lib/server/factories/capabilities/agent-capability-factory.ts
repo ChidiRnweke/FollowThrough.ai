@@ -1,3 +1,4 @@
+import type { RunExecutor } from '$lib/models/agent';
 import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { ActorContext } from '$lib/models/identity';
 import {
@@ -115,6 +116,8 @@ import type { TraceContextReader } from '$lib/models/telemetry';
 import { OpenRouter } from '@openrouter/sdk';
 
 export interface AgentCapabilityInput {
+	/** The kind of process this graph runs in; chat runs are claimed as that kind. */
+	readonly executor: RunExecutor;
 	readonly tokens: TokenCounter;
 	readonly db: Database;
 	readonly notifications: NotificationChannel;
@@ -244,7 +247,7 @@ export const createAgentCapability = (
 			'ToolTrust',
 			new ToolTrust(actor, new TrustPolicyRecords(actor, input.db), input.now)
 		),
-		transitions: tracedService('RunTransitions', new RunTransitions(runs)),
+		transitions: tracedService('RunTransitions', new RunTransitions(runs, input.executor)),
 		runLedger,
 		sessions,
 		harnessRecords: tracedService(

@@ -73,7 +73,7 @@ export const durableDiagramFixture = () => {
 				state.persistence,
 				new InMemoryAgentSessionRepository()
 			),
-			transitions: new RunTransitions(state.persistence),
+			transitions: new RunTransitions(state.persistence, 'web'),
 			settlements,
 			transactionRunner: transactions,
 			runSignals: new RunSignalService(state.persistence, state.persistence)

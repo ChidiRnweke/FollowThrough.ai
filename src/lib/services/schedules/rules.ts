@@ -12,6 +12,7 @@ import type { AgentExecutionMode } from '$lib/models/agent';
 import type { UserId } from '$lib/models/identity';
 import {
 	WEEKDAYS,
+	type DueDecision,
 	type IanaTimeZone,
 	type NextOccurrence,
 	type Recurrence,
@@ -43,6 +44,15 @@ export interface ScheduleEdits {
 	withExecutionMode(schedule: Schedule, executionMode: AgentExecutionMode, now: DateTime): Schedule;
 }
 
+export interface ScheduleDue {
+	/**
+	 * What to do with a schedule now. A schedule that was missed while the worker was down runs
+	 * once, for the latest occurrence that passed. `waiting` says a run of it still waits for
+	 * approval; that occurrence is skipped.
+	 */
+	due(schedule: Schedule, now: DateTime, waiting: boolean): DueDecision;
+}
+
 type Repeating = Exclude<Recurrence, { kind: 'once' }>;
 type Unscheduled = Omit<Schedule, 'status' | 'nextRunAt'>;
 
@@ -54,7 +64,7 @@ type Unscheduled = Omit<Schedule, 'status' | 'nextRunAt'>;
  * forward, a time that does not exist runs at the later instant. On a day when they go back, a
  * time that occurs twice runs once, at the earlier instant.
  */
-export class ScheduleRules implements ScheduleRecurrence, ScheduleEdits {
+export class ScheduleRules implements ScheduleRecurrence, ScheduleEdits, ScheduleDue {
 	next(recurrence: Recurrence, timeZone: IanaTimeZone, after: DateTime): NextOccurrence {
 		const afterMs = Date.parse(after);
 		if (recurrence.kind === 'once') {
@@ -106,6 +116,34 @@ export class ScheduleRules implements ScheduleRecurrence, ScheduleEdits {
 		now: DateTime
 	): Schedule {
 		return { ...schedule, executionMode, updatedAt: now };
+	}
+
+	due(schedule: Schedule, now: DateTime, waiting: boolean): DueDecision {
+		if (schedule.status !== 'active' || Date.parse(schedule.nextRunAt) > Date.parse(now))
+			return { kind: 'not_due' };
+		const next = this.next(schedule.recurrence, schedule.timeZone, now);
+		const rest = { ...this.unscheduled(schedule), updatedAt: now };
+		const moved: Schedule =
+			next.kind === 'at'
+				? { ...rest, status: 'active', nextRunAt: next.at }
+				: { ...rest, status: 'finished' };
+		if (waiting) return { kind: 'skipped', schedule: moved };
+		return {
+			kind: 'due',
+			scheduledFor: this.latest(schedule, schedule.nextRunAt, now),
+			schedule: moved
+		};
+	}
+
+	/** The last occurrence at or before `now`, counted on from one that has already passed. */
+	private latest(
+		schedule: Pick<Schedule, 'recurrence' | 'timeZone'>,
+		passed: DateTime,
+		now: DateTime
+	): DateTime {
+		const next = this.next(schedule.recurrence, schedule.timeZone, passed);
+		if (next.kind === 'none' || Date.parse(next.at) > Date.parse(now)) return passed;
+		return this.latest(schedule, next.at, now);
 	}
 
 	private activate(schedule: Unscheduled, now: DateTime): ScheduleDecision {

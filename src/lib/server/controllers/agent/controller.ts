@@ -116,6 +116,10 @@ import type {
 } from '$lib/server/services/skills/built-ins';
 import type { SkillFinder } from '$lib/server/services/skills/library';
 import type { RunSignals } from '$lib/server/services/agent/runs/signals';
+import type { ScheduleId, ScheduleOccurrenceId, ScheduleRunStart } from '$lib/models/schedules';
+import type { ScheduleWriter } from '$lib/server/services/schedules/library';
+import type { ScheduleRunLog } from '$lib/server/services/schedules/runs';
+import type { ScheduleDue } from '$lib/services/schedules/rules';
 /** Grace period the executor gets to settle a cancelled run before the backstop does it. */
 const CANCELLATION_GRACE_MS = 10_000;
 
@@ -153,6 +157,12 @@ export interface AgentHarness {
 	finishCancellation(runId: AgentRunId): Promise<AgentRun | undefined>;
 	failRun(runId: AgentRunId, error: Error): Promise<void>;
 	/** Settle a run the previous process left running or cancelling. */
+	/**
+	 * Starts the run of a schedule whose time has come, as its owner (ADR 0052). The worker calls
+	 * this for each due schedule; a schedule that is not due, or whose earlier run still waits
+	 * for approval, starts nothing.
+	 */
+	runDueSchedule(scheduleId: ScheduleId): Promise<ScheduleRunStart>;
 	recoverInterrupted(runId: AgentRunId): Promise<void>;
 	/** Start a run the previous process queued but never started. */
 	resumeQueued(runId: AgentRunId): Promise<void>;
@@ -368,6 +378,11 @@ export interface AgentHarnessDependencies {
 
 	/** Run changes are published by the database on commit; this listens for them. */
 	readonly runSignals: RunSignals;
+
+	/** The schedule a due run is started for: locked, decided and moved on in one transaction. */
+	readonly schedules: Pick<ScheduleWriter, 'getForChange' | 'save'>;
+	readonly scheduleRules: ScheduleDue;
+	readonly scheduleRuns: ScheduleRunLog;
 }
 
 /**
@@ -449,7 +464,6 @@ export class AgentSdkHarness implements AgentHarness {
 		}
 		try {
 			const receipt = await this.dependencies.transactionRunner.run(async () => {
-				const submittedAt = this.dependencies.now();
 				// Limits are frozen onto the input alongside the prompt: a run replayed
 				// later should run under the settings it was submitted with, not
 				// whatever they have since become.
@@ -458,62 +472,7 @@ export class AgentSdkHarness implements AgentHarness {
 				const conversation = await this.dependencies.conversationSessions.getOrCreate(runInput);
 				if (input.retryUserOrdinal !== undefined)
 					await this.rewind(conversation.id, input.retryUserOrdinal);
-				const model = this.dependencies.modelSelection.resolveAgentModel(
-					conversation,
-					preferences,
-					this.dependencies.defaultModel
-				);
-				// Settled only now, because it depends on the chat model, which is not
-				// known until the conversation has been resolved.
-				const finalInput = await this.withImageReader(
-					// The snapshot names the conversation the run belongs to, not merely the
-					// one the client knew about: on a chat's first message the client has no
-					// id yet, and a run's own record of itself should not have that gap.
-					{ ...runInput, conversationId: conversation.id },
-					model,
-					conversation,
-					preferences
-				);
-				// Seeds the run with the requesting operation's span, so the first
-				// turn joins this request's trace even though execution starts
-				// after this transaction commits. Approval parks refresh it.
-				const submittedTraceparent = this.dependencies.traceContext.activeTraceparent();
-				const run: AgentRun = {
-					kind: 'agent',
-					id: crypto.randomUUID() as AgentRunId,
-					userId: this.actor.userId,
-					conversationId: conversation.id,
-					model,
-					executionMode: this.dependencies.runSettings.executionMode(conversation, preferences),
-					status: 'queued',
-					requestId: input.requestId,
-					pendingDecisions: [],
-					inputSnapshot: finalInput,
-					...(submittedTraceparent ? { traceparent: submittedTraceparent } : {}),
-					definitionVersion: 2,
-					createdAt: submittedAt,
-					updatedAt: submittedAt
-				};
-				const inserted = await this.dependencies.records.insertIdempotent(run);
-				if (!inserted) throw new DuplicateSubmission();
-				await this.dependencies.conversationMessages.recordUserPrompt(
-					conversation.id,
-					runInput.prompt,
-					run.id,
-					runInput.images
-				);
-				const event = await this.dependencies.records.append(run.id, 0, {
-					type: 'run_queued',
-					runId: run.id,
-					attempt: 1,
-					reason: 'submitted'
-				});
-				return {
-					runId: run.id,
-					conversationId: conversation.id,
-					status: run.status,
-					latestCursor: event.cursor
-				};
+				return this.enqueue(conversation, runInput, input.requestId, preferences);
 			});
 			this.executeInBackground(receipt.runId);
 			return receipt;
@@ -523,6 +482,123 @@ export class AgentSdkHarness implements AgentHarness {
 			if (!duplicate) throw error;
 			return this.receipt(duplicate);
 		}
+	}
+
+	async runDueSchedule(scheduleId: ScheduleId): Promise<ScheduleRunStart> {
+		const start = await this.dependencies.transactionRunner.run(
+			async (): Promise<ScheduleRunStart> => {
+				// The lock makes the decision single: a second worker waits here, then reads a
+				// schedule whose next run has already moved on.
+				const schedule = await this.dependencies.schedules.getForChange(scheduleId);
+				const now = this.dependencies.now();
+				const decision = this.dependencies.scheduleRules.due(
+					schedule,
+					now,
+					await this.dependencies.scheduleRuns.hasWaitingRun(scheduleId)
+				);
+				if (decision.kind === 'not_due') return decision;
+				await this.dependencies.schedules.save(decision.schedule);
+				if (decision.kind === 'skipped') return { kind: 'skipped' };
+				const occurrenceId = crypto.randomUUID() as ScheduleOccurrenceId;
+				const preferences = await this.dependencies.preferences.get();
+				const runInput: StagedAgentRunInput = {
+					...this.freezeInput(
+						{ requestId: occurrenceId, input: schedule.prompt, mode: schedule.executionMode },
+						preferences
+					),
+					schedule: {
+						scheduleId,
+						title: schedule.title,
+						scheduledFor: decision.scheduledFor,
+						timeZone: schedule.timeZone
+					}
+				};
+				const conversation = await this.dependencies.conversationSessions.getOrCreate(runInput);
+				const receipt = await this.enqueue(conversation, runInput, occurrenceId, preferences);
+				await this.dependencies.scheduleRuns.record({
+					id: occurrenceId,
+					userId: this.actor.userId,
+					scheduleId,
+					trigger: 'recurrence',
+					scheduledFor: decision.scheduledFor,
+					conversationId: receipt.conversationId,
+					runId: receipt.runId,
+					createdAt: now
+				});
+				return { kind: 'started', receipt };
+			}
+		);
+		if (start.kind === 'started') this.executeInBackground(start.receipt.runId);
+		return start;
+	}
+
+	/**
+	 * Saves a queued run with its prompt and first event, inside the caller's transaction. The
+	 * caller starts execution after that transaction commits (ADR 0025).
+	 */
+	private async enqueue(
+		conversation: Conversation,
+		runInput: StagedAgentRunInput,
+		requestId: string,
+		preferences: AgentPreferences
+	): Promise<AgentRunReceipt> {
+		const submittedAt = this.dependencies.now();
+		const model = this.dependencies.modelSelection.resolveAgentModel(
+			conversation,
+			preferences,
+			this.dependencies.defaultModel
+		);
+		// Settled only now, because it depends on the chat model, which is not
+		// known until the conversation has been resolved.
+		const finalInput = await this.withImageReader(
+			// The snapshot names the conversation the run belongs to, not merely the
+			// one the client knew about: on a chat's first message the client has no
+			// id yet, and a run's own record of itself should not have that gap.
+			{ ...runInput, conversationId: conversation.id },
+			model,
+			conversation,
+			preferences
+		);
+		// Seeds the run with the requesting operation's span, so the first
+		// turn joins this request's trace even though execution starts
+		// after this transaction commits. Approval parks refresh it.
+		const submittedTraceparent = this.dependencies.traceContext.activeTraceparent();
+		const run: AgentRun = {
+			kind: 'agent',
+			id: crypto.randomUUID() as AgentRunId,
+			userId: this.actor.userId,
+			conversationId: conversation.id,
+			model,
+			executionMode: this.dependencies.runSettings.executionMode(conversation, preferences),
+			status: 'queued',
+			requestId,
+			pendingDecisions: [],
+			inputSnapshot: finalInput,
+			...(submittedTraceparent ? { traceparent: submittedTraceparent } : {}),
+			definitionVersion: 2,
+			createdAt: submittedAt,
+			updatedAt: submittedAt
+		};
+		const inserted = await this.dependencies.records.insertIdempotent(run);
+		if (!inserted) throw new DuplicateSubmission();
+		await this.dependencies.conversationMessages.recordUserPrompt(
+			conversation.id,
+			runInput.prompt,
+			run.id,
+			runInput.images
+		);
+		const event = await this.dependencies.records.append(run.id, 0, {
+			type: 'run_queued',
+			runId: run.id,
+			attempt: 1,
+			reason: 'submitted'
+		});
+		return {
+			runId: run.id,
+			conversationId: conversation.id,
+			status: run.status,
+			latestCursor: event.cursor
+		};
 	}
 
 	async getRun(runId: AgentRunId): Promise<AgentRunSnapshot> {
@@ -1155,7 +1231,9 @@ export class AgentSdkHarness implements AgentHarness {
 			let traceparent = run.traceparent;
 			const { skills: instructionSkills, ...instructionContext } = context;
 			const instructions = this.dependencies.prompts.instructions(
-				instructionContext,
+				request.schedule
+					? { ...instructionContext, schedule: request.schedule }
+					: instructionContext,
 				instructionSkills,
 				undefined,
 				connectorBuilds.services

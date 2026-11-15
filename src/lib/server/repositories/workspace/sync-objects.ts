@@ -71,7 +71,8 @@ const fields: Record<WorkspaceResourceType, readonly string[]> = {
 	export_settings: Object.keys(resourceDataSchemas.export_settings.shape),
 	artifacts: Object.keys(resourceDataSchemas.artifacts.shape),
 	widgets: Object.keys(resourceDataSchemas.widgets.shape),
-	schedules: Object.keys(scheduleRecordFields)
+	schedules: Object.keys(scheduleRecordFields),
+	schedule_occurrences: Object.keys(resourceDataSchemas.schedule_occurrences.shape)
 };
 
 const columnValue = (field: string): SQL => {

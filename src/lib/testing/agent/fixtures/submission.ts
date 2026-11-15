@@ -23,7 +23,9 @@ export const agentSubmissionFixture = (
 		readonly defaultModel?: string;
 		readonly defaultVisionModel?: string;
 		readonly webSearchOverrides?: WebResearchSettings;
-	} = {}
+	} = {},
+	/** Collaborators a spec adds to the harness, such as the schedule a due run is started for. */
+	collaborators: Partial<AgentHarnessDependencies> = {}
 ) => {
 	const { dependencies, runs, sessions, turns } = agentContextFixture();
 	let claim = Promise.withResolvers<void>();
@@ -66,7 +68,8 @@ export const agentSubmissionFixture = (
 			webSearchOverrides: configuration.webSearchOverrides ?? dependencies.webSearchOverrides,
 			models,
 			defaultModel: configuration.defaultModel ?? 'openai/test-model',
-			defaultVisionModel: configuration.defaultVisionModel ?? 'openai/test-vision-model'
+			defaultVisionModel: configuration.defaultVisionModel ?? 'openai/test-vision-model',
+			...collaborators
 		})
 	);
 	return {

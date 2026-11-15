@@ -141,6 +141,7 @@ export const controllerSurfaces = {
 		openMcpTools: true,
 		finishCancellation: true,
 		failRun: true,
+		runDueSchedule: true,
 		recoverInterrupted: true,
 		resumeQueued: true,
 		synchronize: true,

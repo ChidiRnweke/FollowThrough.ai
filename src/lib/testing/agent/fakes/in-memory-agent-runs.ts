@@ -17,6 +17,8 @@ import type {
 	AgentProvenanceWrite,
 	AgentContextWrite,
 	RunClaimWrite,
+	AgentRunClaimWrite,
+	RunExecutor,
 	AgentCheckpointWrite,
 	PreparedAgentRun,
 	ConversationId,
@@ -45,6 +47,8 @@ export class InMemoryAgentRunPersistence
 {
 	constructor(private readonly actor: ActorContext) {}
 	runs: AgentRun[] = [];
+	/** The process kind that last claimed each chat run, as the `executor` column records it. */
+	private readonly executors = new Map<AgentRunId, RunExecutor>();
 	/** Allows a cancellation to commit while the execution claim is waiting on storage. */
 	executionClaim: Promise<void> = Promise.resolve();
 	events: AgentRunEventRecord[] = [];
@@ -154,7 +158,7 @@ export class InMemoryAgentRunPersistence
 
 	async claimAgent(
 		runId: AgentRunId,
-		change: RunClaimWrite
+		change: AgentRunClaimWrite
 	): Promise<ResolvedAgentRun | undefined> {
 		await this.executionClaim;
 		const run = this.runs.find(
@@ -162,9 +166,13 @@ export class InMemoryAgentRunPersistence
 				candidate.kind === 'agent' && candidate.id === runId && candidate.status === change.expected
 		);
 		if (!run) return undefined;
-		const { expected: _expected, ...values } = change;
-		void _expected;
-		const updated = { ...run, ...values };
+		this.executors.set(runId, change.executor);
+		const updated = {
+			...run,
+			status: change.status,
+			startedAt: change.startedAt,
+			updatedAt: change.updatedAt
+		};
 		this.replace(updated);
 		return updated;
 	}
@@ -297,8 +305,13 @@ export class InMemoryAgentRunPersistence
 		return this.append(runId, 1, noteActionEvent(result));
 	}
 
-	async listInterrupted(): Promise<readonly AgentRun[]> {
-		return this.runs.filter((run) => run.status === 'running' || run.status === 'cancelling');
+	async listInterrupted(executor: RunExecutor): Promise<readonly AgentRun[]> {
+		// The web process executes every run a chat claim has not marked as the worker's.
+		return this.runs.filter(
+			(run) =>
+				(run.status === 'running' || run.status === 'cancelling') &&
+				(this.executors.get(run.id) ?? 'web') === executor
+		);
 	}
 
 	async append(

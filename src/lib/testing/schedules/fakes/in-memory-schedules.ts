@@ -1,7 +1,11 @@
 import { NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
-import type { Schedule, ScheduleId } from '$lib/models/schedules';
-import type { ScheduleRepository } from '$lib/server/repositories/schedules';
+import type { AgentRunId, AgentRunStatus } from '$lib/models/agent';
+import type { Schedule, ScheduleId, ScheduleOccurrence } from '$lib/models/schedules';
+import type {
+	ScheduleOccurrenceRepository,
+	ScheduleRepository
+} from '$lib/server/repositories/schedules';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant
@@ -53,5 +57,37 @@ export class InMemoryScheduleRepository implements ScheduleRepository {
 		if (!(await this.findById(id)))
 			throw new NotFoundError('Schedule was not found', { scheduleId: id });
 		this.table.rows = this.table.rows.filter((row) => row.id !== id);
+	}
+}
+
+/**
+ * A user's schedule runs. Postgres answers "is a run waiting?" by joining the run's row, so the
+ * fake reads the run's status from the store that holds the runs.
+ */
+export class InMemoryScheduleOccurrenceRepository
+	implements ScheduleOccurrenceRepository, SnapshotParticipant
+{
+	occurrences: readonly ScheduleOccurrence[] = [];
+
+	constructor(private readonly runStatus: (runId: AgentRunId) => AgentRunStatus | undefined) {}
+
+	async insert(occurrence: ScheduleOccurrence): Promise<ScheduleOccurrence> {
+		this.occurrences = [...this.occurrences, occurrence];
+		return occurrence;
+	}
+
+	async hasRunAwaitingApproval(scheduleId: ScheduleId): Promise<boolean> {
+		return this.occurrences.some(
+			(occurrence) =>
+				occurrence.scheduleId === scheduleId &&
+				this.runStatus(occurrence.runId) === 'awaiting_approval'
+		);
+	}
+
+	snapshot(): RestoreSnapshot {
+		const occurrences = this.occurrences;
+		return () => {
+			this.occurrences = occurrences;
+		};
 	}
 }

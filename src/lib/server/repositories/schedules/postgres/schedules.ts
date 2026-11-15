@@ -1,17 +1,25 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, lte } from 'drizzle-orm';
 import { NotFoundError } from '$lib/errors';
+import type { AgentRunId, ConversationId } from '$lib/models/agent';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import {
 	ianaTimeZoneSchema,
 	recurrenceSchema,
+	type DueSchedule,
 	type Schedule,
 	type ScheduleId,
+	type ScheduleOccurrence,
+	type ScheduleOccurrenceId,
 	type ScheduleState
 } from '$lib/models/schedules';
 import type { DateTime } from '$lib/models/workspace';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/schedules';
-import type { ScheduleRepository } from '$lib/server/repositories/schedules';
+import type {
+	ScheduleBacklogRepository,
+	ScheduleOccurrenceRepository,
+	ScheduleRepository
+} from '$lib/server/repositories/schedules';
 
 type ScheduleRow = typeof schema.schedules.$inferSelect;
 
@@ -121,5 +129,83 @@ export class ScheduleRecords implements ScheduleRepository {
 			.where(this.owned(id))
 			.returning({ id: schema.schedules.id });
 		if (deleted.length === 0) throw new NotFoundError('Schedule was not found', { scheduleId: id });
+	}
+}
+
+type OccurrenceRow = typeof schema.scheduleOccurrences.$inferSelect;
+
+const toOccurrence = (row: OccurrenceRow): ScheduleOccurrence => {
+	if (row.trigger !== 'recurrence' && row.trigger !== 'manual')
+		throw new Error(`Schedule occurrence ${row.id} has the unknown trigger "${row.trigger}"`);
+	return {
+		id: row.id as ScheduleOccurrenceId,
+		userId: row.userId as UserId,
+		...(row.scheduleId ? { scheduleId: row.scheduleId as ScheduleId } : {}),
+		trigger: row.trigger,
+		scheduledFor: instant(row.scheduledFor),
+		conversationId: row.conversationId as ConversationId,
+		runId: row.runId as AgentRunId,
+		...(row.openedAt ? { openedAt: instant(row.openedAt) } : {}),
+		createdAt: instant(row.createdAt)
+	};
+};
+
+export class ScheduleOccurrenceRecords implements ScheduleOccurrenceRepository {
+	constructor(
+		private readonly actor: ActorContext,
+		private readonly database: Database
+	) {}
+
+	async insert(occurrence: ScheduleOccurrence): Promise<ScheduleOccurrence> {
+		const [row] = await this.database
+			.insert(schema.scheduleOccurrences)
+			.values({
+				id: occurrence.id,
+				userId: this.actor.userId,
+				scheduleId: occurrence.scheduleId,
+				trigger: occurrence.trigger,
+				scheduledFor: new Date(occurrence.scheduledFor),
+				conversationId: occurrence.conversationId,
+				runId: occurrence.runId,
+				openedAt: occurrence.openedAt ? new Date(occurrence.openedAt) : null,
+				createdAt: new Date(occurrence.createdAt)
+			})
+			.returning();
+		return toOccurrence(row!);
+	}
+
+	async hasRunAwaitingApproval(scheduleId: ScheduleId): Promise<boolean> {
+		const [waiting] = await this.database
+			.select({ id: schema.scheduleOccurrences.id })
+			.from(schema.scheduleOccurrences)
+			.innerJoin(schema.agentRuns, eq(schema.agentRuns.id, schema.scheduleOccurrences.runId))
+			.where(
+				and(
+					eq(schema.scheduleOccurrences.userId, this.actor.userId),
+					eq(schema.scheduleOccurrences.scheduleId, scheduleId),
+					eq(schema.agentRuns.status, 'awaiting_approval')
+				)
+			)
+			.limit(1);
+		return waiting !== undefined;
+	}
+}
+
+/** Rows carry their owner, which the worker uses to run each schedule as that user. */
+export class ScheduleBacklogRecords implements ScheduleBacklogRepository {
+	constructor(private readonly database: Database) {}
+
+	async listDue(now: DateTime): Promise<readonly DueSchedule[]> {
+		const rows = await this.database
+			.select({ id: schema.schedules.id, userId: schema.schedules.userId })
+			.from(schema.schedules)
+			.where(
+				and(eq(schema.schedules.status, 'active'), lte(schema.schedules.nextRunAt, new Date(now)))
+			)
+			.orderBy(asc(schema.schedules.nextRunAt));
+		return rows.map((row) => ({
+			owner: { userId: row.userId as UserId },
+			scheduleId: row.id as ScheduleId
+		}));
 	}
 }

@@ -53,6 +53,7 @@ import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { AttachmentClaims } from './repositories/attachments/claims';
 import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { NotificationChannel } from './db';
+import type { RunExecutor } from '$lib/models/agent';
 
 /**
  * Collaborators that reach outside the process and are therefore worth
@@ -72,6 +73,8 @@ export interface ApplicationConfig {
 	readonly attachmentClaims: AttachmentClaims;
 	/** The one wall clock; every capability that stamps time receives it from here. */
 	readonly now: () => DateTime;
+	/** The kind of process this graph runs in: it claims runs as that kind and recovers only those. */
+	readonly executor: RunExecutor;
 	readonly db: Database;
 	/** Postgres LISTEN, through which run changes reach every process. */
 	readonly notifications: NotificationChannel;
@@ -238,6 +241,7 @@ export function createApplication(
 	});
 	const agentCapability = createAgentCapability(actor, {
 		now,
+		executor: config.executor,
 		tokens: knowledgeSearch.tokenizer,
 		db,
 		notifications: config.notifications,
@@ -469,6 +473,7 @@ export function createApplication(
 			toolApproval: agentCapability.toolApproval,
 			toolSearch: knowledgeSearch.toolDiscovery,
 			connectors: connectorCapability.harness,
+			...schedules.harness,
 			observeTurn: agentCapability.observeTurn,
 			settlements: runSettlements,
 			runSignals,

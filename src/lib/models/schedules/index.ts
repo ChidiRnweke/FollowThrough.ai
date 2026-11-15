@@ -5,13 +5,19 @@
  * the worker's maintenance ticks, and the user's todos.
  */
 import { z } from 'zod';
-import type { AgentExecutionMode } from '$lib/models/agent';
+import type {
+	AgentExecutionMode,
+	AgentRunId,
+	AgentRunReceipt,
+	ConversationId
+} from '$lib/models/agent';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 export type ScheduleId = Brand<string, 'ScheduleId'>;
+export type ScheduleOccurrenceId = Brand<string, 'ScheduleOccurrenceId'>;
 /** A name the platform's time zone database knows, such as `Europe/Brussels`. */
 export type IanaTimeZone = Brand<string, 'IanaTimeZone'>;
 
@@ -69,6 +75,44 @@ export type NextOccurrence =
 	| { readonly kind: 'at'; readonly at: DateTime }
 	/** Only a one-off recurrence whose time has passed has no next occurrence. */
 	| { readonly kind: 'none' };
+
+/**
+ * One run of a schedule. Its id is also the request key of the agent run, so an occurrence
+ * starts one run however often it is asked for.
+ */
+export interface ScheduleOccurrence {
+	readonly id: ScheduleOccurrenceId;
+	readonly userId: UserId;
+	/** Absent once its schedule is deleted; the run and its chat stay. */
+	readonly scheduleId?: ScheduleId;
+	/** `recurrence`: the schedule's time came. `manual`: its owner asked for a run now. */
+	readonly trigger: 'recurrence' | 'manual';
+	/** The occurrence this run answers. */
+	readonly scheduledFor: DateTime;
+	readonly conversationId: ConversationId;
+	readonly runId: AgentRunId;
+	/** When its owner first opened the run's chat. */
+	readonly openedAt?: DateTime;
+	readonly createdAt: DateTime;
+}
+
+/** A schedule whose time has come, and the user it runs as. */
+export interface DueSchedule {
+	readonly owner: { readonly userId: UserId };
+	readonly scheduleId: ScheduleId;
+}
+
+/** What the worker does with a schedule it found due. Each arm but `not_due` moves the schedule on. */
+export type DueDecision =
+	| { readonly kind: 'not_due' }
+	/** An earlier run still waits for its owner's approval, so this occurrence does not run. */
+	| { readonly kind: 'skipped'; readonly schedule: Schedule }
+	| { readonly kind: 'due'; readonly scheduledFor: DateTime; readonly schedule: Schedule };
+
+export type ScheduleRunStart =
+	| { readonly kind: 'started'; readonly receipt: AgentRunReceipt }
+	| { readonly kind: 'skipped' }
+	| { readonly kind: 'not_due' };
 
 /** What a change to a schedule comes to. */
 export type ScheduleDecision =

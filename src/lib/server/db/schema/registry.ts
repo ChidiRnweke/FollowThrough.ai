@@ -20,7 +20,12 @@ import {
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { ProjectTemplateStyles } from '$lib/models/projects';
 import type { Suggestion as DomainSuggestion } from '$lib/models/suggestions';
-import type { AgentEvent, InlineCompletionPassage, PendingAgentDecision } from '$lib/models/agent';
+import type {
+	AgentEvent,
+	InlineCompletionPassage,
+	PendingAgentDecision,
+	RunExecutor
+} from '$lib/models/agent';
 import type { StoredSessionItem } from '$lib/models/agent';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ProseMirrorDocument } from '$lib/models/notes';
@@ -1033,9 +1038,14 @@ export const agentRuns = pgTable(
 			onDelete: 'set null'
 		}),
 		definitionVersion: integer('definition_version').notNull().default(1),
+		// The process that last claimed the run (ADR 0052). Every run was executed by the web
+		// process before the worker ran the agent, and note-action workflows still are, so that is
+		// the default; a chat run's claim always writes it.
+		executor: text('executor').$type<RunExecutor>().notNull().default('web'),
 		...timestamps
 	},
 	(table) => [
+		check('agent_runs_executor_check', sql`${table.executor} in ('web', 'worker')`),
 		uniqueIndex('agent_runs_user_request_unique').on(table.userId, table.requestId),
 		uniqueIndex('agent_runs_active_conversation_unique')
 			.on(table.conversationId)
@@ -1598,5 +1608,41 @@ export const schedules = pgTable(
 			sql`(${table.status} = 'active') = (${table.nextRunAt} is not null)`
 		),
 		check('schedules_recurrence_check', sql`jsonb_typeof(${table.recurrence}) = 'object'`)
+	]
+);
+
+/**
+ * One run of a schedule (ADR 0052). The row is written in the transaction that saves the run, so
+ * an occurrence always has its conversation and its run. A deleted schedule leaves its
+ * occurrences, because their chats stay in the history.
+ */
+export const scheduleOccurrences = pgTable(
+	'schedule_occurrences',
+	{
+		id: uuid('id').primaryKey(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		scheduleId: uuid('schedule_id').references(() => schedules.id, { onDelete: 'set null' }),
+		trigger: text('trigger').notNull(),
+		scheduledFor: timestamp('scheduled_for', { withTimezone: true }).notNull(),
+		conversationId: uuid('conversation_id')
+			.notNull()
+			.references(() => conversations.id, { onDelete: 'cascade' }),
+		runId: uuid('run_id')
+			.notNull()
+			.references(() => agentRuns.id, { onDelete: 'cascade' }),
+		openedAt: timestamp('opened_at', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		check('schedule_occurrences_trigger_check', sql`${table.trigger} in ('recurrence', 'manual')`),
+		uniqueIndex('schedule_occurrences_conversation_unique').on(table.conversationId),
+		uniqueIndex('schedule_occurrences_run_unique').on(table.runId),
+		// The second guard on "an occurrence runs once"; the first is the lock on the schedule row.
+		uniqueIndex('schedule_occurrences_recurrence_unique')
+			.on(table.scheduleId, table.scheduledFor)
+			.where(sql`${table.trigger} = 'recurrence'`),
+		index('schedule_occurrences_schedule_idx').on(table.scheduleId, table.scheduledFor)
 	]
 );

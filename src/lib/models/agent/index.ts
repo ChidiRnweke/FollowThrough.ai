@@ -593,6 +593,17 @@ export interface RunClaimWrite {
 	readonly updatedAt: DateTime;
 }
 
+/**
+ * The kind of process that executes a run (ADR 0052). A process settles only its own kind's
+ * interrupted runs when it starts, so a restart of one never fails a run the other is executing.
+ */
+export type RunExecutor = 'web' | 'worker';
+
+/** A chat run's claim also names the process that claimed it. */
+export interface AgentRunClaimWrite extends RunClaimWrite {
+	readonly executor: RunExecutor;
+}
+
 export interface AgentCheckpointWrite {
 	readonly expected: 'running';
 	readonly status: 'awaiting_approval';
@@ -769,8 +780,22 @@ export type AgentRunImages =
 			readonly model: string;
 	  };
 
+/**
+ * The schedule a run was started for (ADR 0052). Nobody is present at such a run, and its time
+ * zone is the only clock it has: no browser reported one.
+ */
+export interface ScheduledRunOrigin {
+	readonly scheduleId: Brand<string, 'ScheduleId'>;
+	readonly title: string;
+	/** The occurrence this run answers. */
+	readonly scheduledFor: DateTime;
+	readonly timeZone: string;
+}
+
 export interface StagedAgentRunInput {
 	readonly requestId?: string;
+	/** Present when a schedule started the run, absent when a person sent the message. */
+	readonly schedule?: ScheduledRunOrigin;
 	readonly conversationId?: ConversationId;
 	readonly projectId?: ProjectId;
 	readonly noteId?: NoteId;
@@ -2150,9 +2175,19 @@ export const submitAgentRunInputSchema = z
 		message: 'A message or image is required.'
 	}) satisfies z.ZodType<SubmitAgentRunInput>;
 
+const scheduledRunOriginSchema = z
+	.object({
+		scheduleId: brandedUuid<ScheduledRunOrigin['scheduleId']>(),
+		title: z.string(),
+		scheduledFor: z.iso.datetime().transform((value) => value as DateTime),
+		timeZone: z.string()
+	})
+	.strict();
+
 export const stagedAgentRunInputSchema = z
 	.object({
 		requestId: z.string().optional(),
+		schedule: scheduledRunOriginSchema.optional(),
 		conversationId: conversationIdSchema.optional(),
 		projectId: projectIdSchema.optional(),
 		noteId: noteIdSchema.optional(),

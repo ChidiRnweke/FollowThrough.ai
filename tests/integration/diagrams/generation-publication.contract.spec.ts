@@ -283,7 +283,7 @@ it('does not publish a direct result after cancellation settles its run', async 
 					new AgentRunDecisionRecords(state.owner, database),
 					new AgentSessionRecords(state.owner, database)
 				),
-				transitions: new RunTransitions(runs),
+				transitions: new RunTransitions(runs, 'web'),
 				transactionRunner,
 				settlements: new RunSettlements(runs, events),
 				runSignals: new RunSignalService(new AgentRunNotificationRecords(notifications), runs)

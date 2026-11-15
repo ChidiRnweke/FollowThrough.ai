@@ -196,3 +196,71 @@ describe('a change to a schedule', () => {
 		);
 	});
 });
+
+describe('a schedule the worker finds', () => {
+	const afterTuesdayRun = instant('2026-11-17T07:00:20.000Z');
+
+	it('is not due before its next run, or when it is not active', () => {
+		expect([
+			rules.due(scheduleBuilder(), mondayMorning, false),
+			rules.due(scheduleBuilder({ status: 'paused' }), afterTuesdayRun, false)
+		]).toEqual([{ kind: 'not_due' }, { kind: 'not_due' }]);
+	});
+
+	it('runs for the occurrence that came due and moves on to the next', () => {
+		expect(rules.due(scheduleBuilder(), afterTuesdayRun, false)).toEqual({
+			kind: 'due',
+			scheduledFor: tuesdayRun,
+			schedule: scheduleBuilder({
+				status: 'active',
+				nextRunAt: instant('2026-11-18T07:00:00.000Z'),
+				updatedAt: afterTuesdayRun
+			})
+		});
+	});
+
+	it('runs once, for the latest occurrence, after several were missed', () => {
+		// The worker was down from Tuesday to Friday morning: Tuesday, Wednesday, Thursday and
+		// Friday at 08:00 all passed.
+		const fridayMidday = instant('2026-11-20T11:00:00.000Z');
+
+		expect(rules.due(scheduleBuilder(), fridayMidday, false)).toEqual({
+			kind: 'due',
+			scheduledFor: '2026-11-20T07:00:00.000Z',
+			schedule: scheduleBuilder({
+				status: 'active',
+				nextRunAt: instant('2026-11-23T07:00:00.000Z'),
+				updatedAt: fridayMidday
+			})
+		});
+	});
+
+	it('skips the occurrence while an earlier run waits for approval, and still moves on', () => {
+		expect(rules.due(scheduleBuilder(), afterTuesdayRun, true)).toEqual({
+			kind: 'skipped',
+			schedule: scheduleBuilder({
+				status: 'active',
+				nextRunAt: instant('2026-11-18T07:00:00.000Z'),
+				updatedAt: afterTuesdayRun
+			})
+		});
+	});
+
+	it('finishes a one-off schedule with its run', () => {
+		const once: Recurrence = {
+			kind: 'once',
+			date: '2026-11-17' as LocalDate,
+			time: { hour: 8, minute: 0 }
+		};
+
+		expect(rules.due(scheduleBuilder({ recurrence: once }), afterTuesdayRun, false)).toEqual({
+			kind: 'due',
+			scheduledFor: tuesdayRun,
+			schedule: scheduleBuilder({
+				recurrence: once,
+				status: 'finished',
+				updatedAt: afterTuesdayRun
+			})
+		});
+	});
+});
