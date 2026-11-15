@@ -15,6 +15,7 @@ import {
 import { createScheduler } from '$lib/server/factories/scheduler';
 import { attachmentProcessing, embeddingBackfill } from './worker-tasks';
 import {
+	abandonTelemetry,
 	drainBeforeTelemetryShutdown,
 	shutdownTelemetry
 } from '../scripts/otel-instrumentation.js';
@@ -83,7 +84,8 @@ const main = async (): Promise<void> => {
 };
 
 // chisel-ignore fail-loudly:silent-catch -- this process boundary reports startup failure and exits non-zero.
-main().catch((error) => {
+main().catch(async (error) => {
 	console.error('[worker] failed to start:', error);
+	await abandonTelemetry();
 	process.exit(1);
 });
