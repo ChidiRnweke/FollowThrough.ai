@@ -27,7 +27,9 @@ const setup = (suffix: string) => {
 						name: 'Sign-in contract'
 					}
 		);
-	const sessions = new SessionRegistry(new SessionRecords(context.db));
+	const sessions = new SessionRegistry(new SessionRecords(context.db), {
+		maxLifetimeMs: 90 * 24 * 60 * 60 * 1000
+	});
 	return {
 		sessions,
 		controller: new SignIn({
@@ -37,14 +39,52 @@ const setup = (suffix: string) => {
 		})
 	};
 };
+const signIn = async (controller: SignIn) => {
+	const outcome = await controller.completeOAuthFlow('returned-code', 'original-verifier');
+	if (outcome.kind === 'failure') throw new Error(`Sign-in was refused: ${outcome.reason}`);
+	return outcome;
+};
 it('persists a completed provider sign-in that normal request authentication can validate', async () => {
 	const { controller, sessions } = setup('24001');
-	const signedIn = await controller.completeOAuthFlow('returned-code', 'original-verifier');
-	expect(await sessions.validateSession(signedIn.session.id)).toEqual(signedIn);
+	const signedIn = await signIn(controller);
+	expect(await sessions.validateSession(signedIn.token)).toEqual({
+		user: signedIn.user,
+		session: signedIn.session
+	});
 });
 it('invalidates the persisted sign-in session when logout completes', async () => {
 	const { controller, sessions } = setup('24002');
-	const signedIn = await controller.completeOAuthFlow('returned-code', 'original-verifier');
-	await sessions.logout(signedIn.session.id);
-	expect(await sessions.validateSession(signedIn.session.id)).toBeNull();
+	const signedIn = await signIn(controller);
+	await sessions.logout(signedIn.token);
+	expect(await sessions.validateSession(signedIn.token)).toBeNull();
+});
+it('does not take over an account already bound to another provider identity', async () => {
+	const { controller } = setup('24003');
+	const bound = await new UserAccountRecords(context.db).create({
+		email: 'sign-in-24003@example.test',
+		displayName: 'Bound account',
+		role: 'ADMIN',
+		authProvider: 'authentik',
+		authProviderId: 'sign-in-other-24003'
+	});
+	expect({
+		outcome: await controller.completeOAuthFlow('returned-code', 'original-verifier'),
+		stored: (await new UserAccountRecords(context.db).findByEmail(bound.email))?.authProviderId
+	}).toEqual({
+		outcome: { kind: 'failure', reason: 'bound-elsewhere' },
+		stored: 'sign-in-other-24003'
+	});
+});
+it('links a verified sign-in to the unbound account that holds its email', async () => {
+	const { controller } = setup('24004');
+	const unbound = await new UserAccountRecords(context.db).create({
+		email: 'sign-in-24004@example.test',
+		displayName: 'Unbound account',
+		role: 'USER'
+	});
+	const signedIn = await signIn(controller);
+	expect({ id: signedIn.user.id, providerId: signedIn.user.authProviderId }).toEqual({
+		id: unbound.id,
+		providerId: 'sign-in-24004'
+	});
 });

@@ -4,15 +4,31 @@ type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 export type UserId = Brand<string, 'UserId'>;
 
+/**
+ * The secret a browser holds in its session cookie. It is never stored: the session row is keyed
+ * by its digest, `SessionId`, so a copy of the table signs nobody in.
+ */
+export type SessionToken = Brand<string, 'SessionToken'>;
+
+/** A session token is this many random bytes, hex-encoded: 256 bits, so it cannot be guessed. */
+export const SESSION_TOKEN_BYTES = 32;
+
+/** Admits only lowercase hex of `SESSION_TOKEN_BYTES`, so a malformed cookie is refused unread. */
+export const sessionTokenSchema = z
+	.string()
+	.regex(new RegExp(`^[0-9a-f]{${SESSION_TOKEN_BYTES * 2}}$`))
+	.transform((value) => value as SessionToken);
+
+/**
+ * A session's stored key: the lowercase hex SHA-256 digest of its token. It is an opaque id, safe
+ * to show the browser, because it cannot be turned back into the token.
+ */
 export type SessionId = Brand<string, 'SessionId'>;
 
-/** A session id is this many random bytes, hex-encoded: 256 bits, so an id cannot be guessed. */
-export const SESSION_ID_BYTES = 32;
-
-/** Admits only lowercase hex of `SESSION_ID_BYTES`, so a malformed cookie is refused unread. */
+/** A SHA-256 digest is 32 bytes, so its hex form is 64 lowercase hex digits. */
 export const sessionIdSchema = z
 	.string()
-	.regex(new RegExp(`^[0-9a-f]{${SESSION_ID_BYTES * 2}}$`))
+	.regex(/^[0-9a-f]{64}$/)
 	.transform((value) => value as SessionId);
 
 export type McpConnectionId = Brand<string, 'McpConnectionId'>;
@@ -63,6 +79,18 @@ export interface Session {
 	readonly userId: UserId;
 	readonly expiresAt: Date;
 	readonly createdAt: DateTime;
+	/** Absent until the session is first renewed. */
+	readonly lastRenewedAt?: DateTime;
+}
+
+/** A session the user holds, as Settings lists it. `current` marks the browser that asks. */
+export interface SignedInBrowser {
+	readonly id: SessionId;
+	readonly createdAt: DateTime;
+	readonly lastRenewedAt?: DateTime;
+	/** The earlier of the renewable deadline and the absolute lifetime cap. */
+	readonly expiresAt: Date;
+	readonly current: boolean;
 }
 
 /**

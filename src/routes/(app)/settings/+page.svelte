@@ -6,6 +6,7 @@
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import {
 		ConnectorDetail,
+		SettingsBrowsers,
 		SettingsAgents,
 		SettingsConnectors,
 		SettingsDocuments,
@@ -44,7 +45,7 @@
 
 <PageShell
 	title="Settings"
-	description="Agent defaults, connected services, document defaults, the tools it may use, MCP access, and per-pipeline trust policies."
+	description="Agent defaults, connected services, document defaults, the tools it may use, MCP access, per-pipeline trust policies, and the browsers you are signed in with."
 >
 	{#snippet actions()}
 		<AgentAction action={agentActions.settings} />
@@ -58,6 +59,7 @@
 			<Tabs.Trigger value="tools">Tools</Tabs.Trigger>
 			<Tabs.Trigger value="mcp">MCP access</Tabs.Trigger>
 			<Tabs.Trigger value="policies">Trust policies</Tabs.Trigger>
+			<Tabs.Trigger value="browsers">Browsers</Tabs.Trigger>
 		</Tabs.List>
 		<!-- Tabs.Content renders every panel and hides the inactive ones, so each
 		     body is gated on the active tab: switching tabs is a `goto` that
@@ -107,6 +109,11 @@
 		<Tabs.Content value="policies" class="pt-6">
 			{#if data.tab === 'policies'}
 				<SettingsPolicies />
+			{/if}
+		</Tabs.Content>
+		<Tabs.Content value="browsers" class="pt-6">
+			{#if data.tab === 'browsers'}
+				<SettingsBrowsers />
 			{/if}
 		</Tabs.Content>
 	</Tabs.Root>

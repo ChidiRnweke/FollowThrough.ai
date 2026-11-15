@@ -1,6 +1,12 @@
-import type { Session, SessionId, User } from '$lib/models/identity';
-import type { CreateSessionData, SessionRepository } from '$lib/server/repositories/identity';
-import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { ActorContext, Session, SessionId, User } from '$lib/models/identity';
+import type {
+	CreateSessionData,
+	SessionRepository,
+	UserSessionRepository
+} from '$lib/server/repositories/identity';
+import type { DateTime } from '$lib/models/workspace';
+
+const instant = (value: Date): DateTime => value.toISOString() as DateTime;
 
 export class InMemorySessionRepository implements SessionRepository {
 	readonly sessions = new Map<SessionId, Session>();
@@ -10,7 +16,12 @@ export class InMemorySessionRepository implements SessionRepository {
 		if (this.failure === 'write') throw new Error('Session storage unavailable');
 		if (!this.users.some((user) => user.id === data.userId))
 			throw new Error('Session user is missing');
-		const session = { ...data, createdAt: testNow };
+		const session: Session = {
+			id: data.id,
+			userId: data.userId,
+			expiresAt: data.expiresAt,
+			createdAt: instant(data.createdAt)
+		};
 		this.sessions.set(session.id, structuredClone(session));
 		return structuredClone(session);
 	}
@@ -26,10 +37,34 @@ export class InMemorySessionRepository implements SessionRepository {
 		if (this.failure === 'delete') throw new Error('Session storage unavailable');
 		this.sessions.delete(id);
 	}
-	async updateExpiresAt(id: SessionId, expiresAt: Date): Promise<void> {
+	async renew(id: SessionId, expiresAt: Date, renewedAt: Date): Promise<void> {
 		if (this.failure === 'write') throw new Error('Session storage unavailable');
 		const session = this.sessions.get(id);
 		if (!session) throw new Error('Session is missing');
-		this.sessions.set(id, { ...session, expiresAt });
+		this.sessions.set(id, { ...session, expiresAt, lastRenewedAt: instant(renewedAt) });
+	}
+
+	/** The same rows, seen as `actor`'s own sessions. */
+	forUser(actor: ActorContext): UserSessionRepository {
+		const own = () => [...this.sessions.values()].filter(({ userId }) => userId === actor.userId);
+		return {
+			list: async () => {
+				if (this.failure === 'read') throw new Error('Session storage unavailable');
+				return structuredClone(
+					own().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+				);
+			},
+			delete: async (id) => {
+				if (this.failure === 'delete') throw new Error('Session storage unavailable');
+				if (!own().some((session) => session.id === id)) return false;
+				return this.sessions.delete(id);
+			},
+			deleteAllExcept: async (kept) => {
+				if (this.failure === 'delete') throw new Error('Session storage unavailable');
+				const removed = own().filter(({ id }) => id !== kept);
+				for (const { id } of removed) this.sessions.delete(id);
+				return removed.length;
+			}
+		};
 	}
 }

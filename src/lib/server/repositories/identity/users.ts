@@ -20,6 +20,10 @@ export interface UserRepository {
 export interface UserAccountRepository {
 	findByEmail(email: string): Promise<User | undefined>;
 	findByAuthProviderId(providerId: string): Promise<User | undefined>;
-	updateAuthProvider(userId: UserId, provider: string, providerId: string): Promise<void>;
+	/**
+	 * Binds an account that has no provider id yet to `providerId`. Answers the linked account, or
+	 * undefined when the account is already bound, so an existing binding is never replaced.
+	 */
+	linkAuthProvider(userId: UserId, provider: string, providerId: string): Promise<User | undefined>;
 	create(data: CreateUserData): Promise<User>;
 }

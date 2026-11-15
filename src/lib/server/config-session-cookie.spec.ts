@@ -13,11 +13,11 @@ const setup = async () => {
 	const repository = new InMemorySessionRepository();
 	repository.users = users.users;
 	const clock = { now: startedAt };
-	const registry = new SessionRegistry(repository, () => clock.now);
-	const session = await registry.createSession(testActor().userId);
-	return { registry, session, clock };
+	const registry = new SessionRegistry(repository, { maxLifetimeMs: 90 * day }, () => clock.now);
+	const { token } = await registry.createSession(testActor().userId);
+	return { registry, token, clock };
 };
-const browserCookie = (session: { id: string; expiresAt: Date }, now: number) => {
+const browserCookie = (token: string, session: { expiresAt: Date }, now: number) => {
 	const stored = new Map<
 		string,
 		{
@@ -39,16 +39,16 @@ const browserCookie = (session: { id: string; expiresAt: Date }, now: number) =>
 			path: options.path
 		});
 	};
-	setSessionCookie({ set }, session.id, true, session.expiresAt, now);
+	setSessionCookie({ set }, token, true, session.expiresAt, now);
 	return stored.get('session');
 };
 it('keeps a reissued cookie at the stored deadline before session renewal', async () => {
-	const { registry, session, clock } = await setup();
+	const { registry, token, clock } = await setup();
 	clock.now += 14 * day;
-	const validated = await registry.validateSession(session.id);
+	const validated = await registry.validateSession(token);
 	if (!validated) throw new Error('Session did not validate');
-	expect(browserCookie(validated.session, clock.now)).toEqual({
-		value: session.id,
+	expect(browserCookie(token, validated.session, clock.now)).toEqual({
+		value: token,
 		expiresAt: startedAt + 30 * day,
 		httpOnly: true,
 		secure: true,
@@ -57,15 +57,15 @@ it('keeps a reissued cookie at the stored deadline before session renewal', asyn
 	});
 });
 it('keeps the browser signed in beyond the original deadline after renewal', async () => {
-	const { registry, session, clock } = await setup();
+	const { registry, token, clock } = await setup();
 	clock.now += 15 * day;
-	const renewed = await registry.validateSession(session.id);
+	const renewed = await registry.validateSession(token);
 	if (!renewed) throw new Error('Session did not renew');
 	clock.now += day;
-	expect(browserCookie(renewed.session, clock.now)?.expiresAt).toBe(startedAt + 45 * day);
+	expect(browserCookie(token, renewed.session, clock.now)?.expiresAt).toBe(startedAt + 45 * day);
 });
 it('expires a cookie immediately if its saved session deadline already passed', () => {
 	expect(
-		browserCookie({ id: 'expired', expiresAt: new Date(startedAt) }, startedAt + day)?.expiresAt
+		browserCookie('expired', { expiresAt: new Date(startedAt) }, startedAt + day)?.expiresAt
 	).toBe(startedAt + day);
 });

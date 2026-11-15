@@ -4,7 +4,16 @@ import { projectRecordSchema } from '$lib/models/workspace-records';
 import { connectorIdSchema, type ConnectorId } from '$lib/models/connectors';
 import { error } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
-const tabs = ['models', 'agents', 'connectors', 'documents', 'tools', 'mcp', 'policies'] as const;
+const tabs = [
+	'models',
+	'agents',
+	'connectors',
+	'documents',
+	'tools',
+	'mcp',
+	'policies',
+	'browsers'
+] as const;
 
 /**
  * The Connectors tab shows one connector, or the list with the outcome of the

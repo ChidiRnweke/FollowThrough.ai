@@ -35,7 +35,7 @@ import { AuthentikClient } from '$lib/server/repositories/identity/authentik';
 import { SessionRecords } from '../repositories/identity/postgres/sessions';
 import { UserAccountRecords } from '../repositories/identity/postgres/users';
 import { db } from '../db';
-import { authentikConfiguration, requestActor } from '../config';
+import { authentikConfiguration, requestActor, sessionLifetime } from '../config';
 
 class DeferredValue<T> {
 	private value: T | undefined;
@@ -49,7 +49,7 @@ class DeferredValue<T> {
 
 const composition = new DeferredValue(() => createProductionComposition('web'));
 const sessions = new DeferredValue(() =>
-	tracedService('SessionRegistry', new SessionRegistry(new SessionRecords(db)))
+	tracedService('SessionRegistry', new SessionRegistry(new SessionRecords(db), sessionLifetime()))
 );
 const mcpClients = new DeferredValue(() =>
 	tracedService(

@@ -188,6 +188,11 @@ export const variables = defineEnvVars({
 			'Chat runs the deployment may have executing at once (defaults to 50, a starting value to tune).',
 		schema: optionalString
 	},
+	SESSION_MAX_LIFETIME_DAYS: {
+		description:
+			'How many days a browser session may last from sign-in, however often it is renewed (defaults to 90).',
+		schema: optionalString
+	},
 	OPENROUTER_API_KEY: {
 		description: 'OpenRouter API key used by workbench chat.',
 		schema: optionalString

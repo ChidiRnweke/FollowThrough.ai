@@ -38,12 +38,17 @@ export class InMemoryUserRepository implements UserRepository, UserAccountReposi
 		return this.users.find((user) => user.authProviderId === providerId);
 	}
 
-	async updateAuthProvider(userId: UserId, provider: string, providerId: string): Promise<void> {
-		const user = this.users.find((u) => u.id === userId);
-		if (user) {
-			const idx = this.users.indexOf(user);
-			this.users[idx] = { ...user, authProvider: provider, authProviderId: providerId };
-		}
+	async linkAuthProvider(
+		userId: UserId,
+		provider: string,
+		providerId: string
+	): Promise<User | undefined> {
+		const index = this.users.findIndex((user) => user.id === userId);
+		const user = this.users[index];
+		if (!user || user.authProviderId !== undefined) return undefined;
+		const linked = { ...user, authProvider: provider, authProviderId: providerId };
+		this.users[index] = linked;
+		return linked;
 	}
 
 	async create(data: CreateUserData): Promise<User> {

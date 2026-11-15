@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,18 +9,21 @@ const E2E_USER_FALLBACK = '00000000-0000-4000-8000-000000000001';
 const SESSION_TTL_DAYS = 30;
 const stateFile = fileURLToPath(new URL('.auth/state.json', import.meta.url));
 
-const generateSessionId = () => randomBytes(32).toString('hex');
+const generateSessionToken = () => randomBytes(32).toString('hex');
+
+/** A session row is keyed by the hex SHA-256 digest of its cookie token, as the app stores it. */
+const sessionIdOf = (token: string) => createHash('sha256').update(token).digest('hex');
 
 /**
  * Insert a session row for an existing user and answer its token, as a completed login would.
- * The capture script for product screenshots signs its own showcase user in the same way.
+ * The capture scripts for product screenshots and videos sign their showcase user in the same way.
  */
 export const mintSession = async (sql: Sql, userId: string): Promise<string> => {
-	const token = generateSessionId();
+	const token = generateSessionToken();
 	const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
 	await sql`
 		insert into sessions (id, user_id, expires_at)
-		values (${token}, ${userId}, ${expiresAt})
+		values (${sessionIdOf(token)}, ${userId}, ${expiresAt})
 	`;
 	return token;
 };
@@ -81,7 +84,7 @@ export default async function globalSetup() {
 		if (cached) {
 			const valid = await sql`
 				select 1 from sessions
-				where id = ${cached} and user_id = ${userId} and expires_at > now()
+				where id = ${sessionIdOf(cached)} and user_id = ${userId} and expires_at > now()
 			`;
 			if (valid.length > 0) {
 				console.log('[e2e auth] Reused cached session token');

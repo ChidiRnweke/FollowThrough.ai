@@ -6,6 +6,7 @@ import type { AgentSettingsController } from '../controllers/agent/settings/cont
 import type { ToolPreferencesController } from '../controllers/agent/tool-preferences/controller';
 import type { TrustPoliciesController } from '../controllers/agent/trust-policies/controller';
 import type { McpConnectionsController } from '../controllers/mcp-connections/controller';
+import type { SignedInBrowsersController } from '../controllers/signed-in-browsers/controller';
 import type { AttachmentsController } from '../controllers/attachments/controller';
 import type { DeliverablesController } from '../controllers/deliverables/controller';
 import type { DiagramsController } from '../controllers/diagrams/controller';
@@ -45,6 +46,7 @@ export interface ControllerFactory {
 	agentSettings(): AgentSettingsController;
 	userSettings(): UserSettingsController;
 	mcpConnections(): McpConnectionsController;
+	signedInBrowsers(): SignedInBrowsersController;
 	toolPreferences(): ToolPreferencesController;
 	attachments(): AttachmentsController;
 	deliverables(): DeliverablesController;

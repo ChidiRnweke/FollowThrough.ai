@@ -28,7 +28,7 @@ test.beforeAll(async () => {
 			await sql`insert into users (id, email, display_name, role)
 				values (${account.id}, ${`${account.id}@example.test`}, 'Authentication test', ${account.role})`;
 			await sql`insert into sessions (id, user_id, expires_at)
-				values (${account.session}, ${account.id}, now() + interval '1 day')`;
+				values (${createHash('sha256').update(account.session).digest('hex')}, ${account.id}, now() + interval '1 day')`;
 		}
 	} finally {
 		await sql.end();

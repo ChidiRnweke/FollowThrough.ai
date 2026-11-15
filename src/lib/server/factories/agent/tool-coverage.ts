@@ -6,6 +6,7 @@ import type { AgentSettingsController } from '$lib/server/controllers/agent/sett
 import type { ToolPreferencesController } from '$lib/server/controllers/agent/tool-preferences/controller';
 import type { TrustPoliciesController } from '$lib/server/controllers/agent/trust-policies/controller';
 import type { McpConnectionsController } from '$lib/server/controllers/mcp-connections/controller';
+import type { SignedInBrowsersController } from '$lib/server/controllers/signed-in-browsers/controller';
 import type { AttachmentsController } from '$lib/server/controllers/attachments/controller';
 import type { ConnectorsController } from '$lib/server/controllers/connectors/controller';
 import type { SchedulesController } from '$lib/server/controllers/schedules/controller';
@@ -42,6 +43,7 @@ interface CoveredAgentControllers {
 	readonly toolPreferences: ToolPreferencesController;
 	readonly agentSettings: AgentSettingsController;
 	readonly mcpConnections: McpConnectionsController;
+	readonly signedInBrowsers: SignedInBrowsersController;
 	readonly attachments: AttachmentsController;
 	readonly deliverables: DeliverablesController;
 	readonly memory: MemoryController;
@@ -69,6 +71,13 @@ const STUDIO_GESTURE =
  */
 const CONNECTOR_GESTURE =
 	"Connecting a service, signing in to it and choosing what its tools may do are the user's decisions in Settings.";
+
+/**
+ * Why browser sessions are not an agent tool: they are the user's sign-ins, and an agent session,
+ * including one that runs through MCP, does not end or survey them.
+ */
+const SIGN_IN_GESTURE =
+	"Which browsers stay signed in is the user's decision in Settings, made from a signed-in browser.";
 
 /** Why a widget's trash is not an agent tool: removing one is the user saying what the project keeps. */
 const WIDGET_GESTURE =
@@ -580,6 +589,11 @@ export const agentToolCoverage = {
 	mcpConnections: {
 		list: { kind: 'read', tools: ['list_mcp_connections'] },
 		revoke: { kind: 'mutation', tools: ['revoke_mcp_connection'] }
+	},
+	signedInBrowsers: {
+		list: { kind: 'excluded', reason: SIGN_IN_GESTURE },
+		signOut: { kind: 'excluded', reason: SIGN_IN_GESTURE },
+		signOutOthers: { kind: 'excluded', reason: SIGN_IN_GESTURE }
 	},
 	retrieval: {
 		search: { kind: 'read', tools: ['search', 'search_note'] }

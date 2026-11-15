@@ -177,6 +177,13 @@ export const controllerSurfaces = {
 		list: true,
 		revoke: true
 	},
+	// `list` and `signOutOthers` take the asking browser's session token, a credential. A session
+	// id is only a digest, but `signOut` stays redacted so no session key reaches the log.
+	signedInBrowsers: {
+		list: 'redacted',
+		signOut: 'redacted',
+		signOutOthers: 'redacted'
+	},
 	toolPreferences: {
 		synchronize: true,
 		list: true,
@@ -294,7 +301,7 @@ export const controllerSurfaces = {
 export const localIdentitySurface = { initializeLocal: true } satisfies ControllerSurface<
 	import('../controllers/identity/local').LocalIdentityController
 >;
-// Session ids and the bearer header are credentials; only the outcome is logged.
+// Session tokens and the bearer header are credentials; only the outcome is logged.
 export const authenticationSurface = {
 	resumeSession: 'redacted',
 	endSession: 'redacted',

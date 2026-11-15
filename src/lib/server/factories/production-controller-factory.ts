@@ -26,6 +26,10 @@ import {
 	McpConnections,
 	type McpConnectionsDependencies
 } from '../controllers/mcp-connections/controller';
+import {
+	SignedInBrowsers,
+	type SignedInBrowsersDependencies
+} from '../controllers/signed-in-browsers/controller';
 import { Attachments, type AttachmentsDependencies } from '../controllers/attachments/controller';
 import {
 	Deliverables,
@@ -86,6 +90,7 @@ export interface ProductionControllerDependencies {
 	agentSettings: AgentSettingsDependencies;
 	userSettings: UserSettingsDependencies;
 	mcpConnections: McpConnectionsDependencies;
+	signedInBrowsers: SignedInBrowsersDependencies;
 	toolPreferences: ToolPreferencesDependencies;
 	attachments: AttachmentsDependencies;
 	deliverables: DeliverablesDependencies;
@@ -250,6 +255,13 @@ export class ProductionControllerFactory implements ControllerFactory {
 			'mcpConnections',
 			new McpConnections(this.dependencies.mcpConnections),
 			controllerSurfaces.mcpConnections
+		);
+	}
+	signedInBrowsers(): ReturnType<ControllerFactory['signedInBrowsers']> {
+		return this.instrument(
+			'signedInBrowsers',
+			new SignedInBrowsers(this.dependencies.signedInBrowsers),
+			controllerSurfaces.signedInBrowsers
 		);
 	}
 	toolPreferences(): ReturnType<ControllerFactory['toolPreferences']> {

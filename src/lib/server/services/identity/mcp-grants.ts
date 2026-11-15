@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { NotFoundError } from '$lib/errors';
+import { sha256Hex } from '$lib/server/infrastructure/crypto/digest';
 import type { McpConnection, McpConnectionId, McpScope, User } from '$lib/models/identity';
 import type {
 	IssuedTokens,
@@ -22,12 +23,6 @@ const PREFIX = { code: 'ftc_', access: 'fta_', refresh: 'ftr_' } as const;
 
 const secret = (prefix: string): string => `${prefix}${randomBytes(32).toString('base64url')}`;
 
-/**
- * Codes and tokens are high-entropy random strings, not passwords, so a single sha256 is the
- * right primitive: the stored value is not reversible and the lookup stays an index read.
- */
-const hash = (value: string): string => createHash('sha256').update(value).digest('hex');
-
 /** RFC 7636 §4.6: BASE64URL(SHA256(code_verifier)). */
 const s256 = (verifier: string): string =>
 	createHash('sha256').update(verifier).digest('base64url');
@@ -46,9 +41,9 @@ const newTokenPair = (
 	return {
 		tokens: { kind: 'issued', accessToken, refreshToken, expiresIn: ACCESS_LIFETIME_SECONDS },
 		hashes: {
-			accessTokenHash: hash(accessToken),
+			accessTokenHash: sha256Hex(accessToken),
 			accessExpiresAt: new Date(now + ACCESS_LIFETIME_SECONDS * 1_000),
-			refreshTokenHash: hash(refreshToken)
+			refreshTokenHash: sha256Hex(refreshToken)
 		}
 	};
 };
@@ -78,7 +73,7 @@ export class McpGrants implements McpCodeIssuer, McpConnectionLedger {
 	async issueCode(reviewed: ReviewedAuthorization, scope: McpScope): Promise<string> {
 		const code = secret(PREFIX.code);
 		const stored = await this.grants.createCode({
-			codeHash: hash(code),
+			codeHash: sha256Hex(code),
 			clientId: reviewed.client.clientId,
 			clientName: reviewed.client.name,
 			redirectUri: reviewed.request.target.redirectUri,
@@ -147,7 +142,7 @@ export class McpCredentials implements McpTokenExchange, McpBearerVerifier {
 	): Promise<VerifiedMcpCredential | null> {
 		const token = bearerToken(authorizationHeader);
 		if (!token) return null;
-		const found = await this.credentials.findByAccessHash(hash(token));
+		const found = await this.credentials.findByAccessHash(sha256Hex(token));
 		if (!found) return null;
 		if (Date.now() >= found.accessExpiresAt.getTime()) return null;
 		// RFC 8707: a token is only good for the resource it was issued for.
@@ -169,7 +164,7 @@ export class McpCredentials implements McpTokenExchange, McpBearerVerifier {
 		request: Extract<TokenRequest, { grant: 'authorization_code' }>
 	): Promise<IssuedTokens | OAuthFailure> {
 		// Consuming deletes the code, so a replayed code finds nothing.
-		const code = await this.credentials.consumeCode(hash(request.code));
+		const code = await this.credentials.consumeCode(sha256Hex(request.code));
 		if (!code) return invalidGrant('The code is unknown or was already used.');
 		const now = Date.now();
 		if (now >= code.expiresAt.getTime()) return invalidGrant('The code has expired.');
@@ -188,7 +183,7 @@ export class McpCredentials implements McpTokenExchange, McpBearerVerifier {
 	private async refresh(
 		request: Extract<TokenRequest, { grant: 'refresh_token' }>
 	): Promise<IssuedTokens | OAuthFailure> {
-		const presented = hash(request.refreshToken);
+		const presented = sha256Hex(request.refreshToken);
 		const found = await this.credentials.findByRefreshHash(presented);
 		if (!found) {
 			// OAuth 2.1 §4.3.1: a rotated-out refresh token coming back means it leaked, so the
