@@ -1,5 +1,25 @@
 # Changelog
 
+## [6.8.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.7.0...v6.8.0) (2026-11-15)
+
+
+### Features
+
+* **agent:** admit active runs per account and in total ([#519](https://github.com/ChidiRnweke/FollowThrough.ai/issues/519)) ([0697aed](https://github.com/ChidiRnweke/FollowThrough.ai/commit/0697aed7045eb0093782751468a3de5db34853a6))
+
+
+### Bug Fixes
+
+* **agent:** release run event subscriptions on every setup failure ([#515](https://github.com/ChidiRnweke/FollowThrough.ai/issues/515)) ([5f326f4](https://github.com/ChidiRnweke/FollowThrough.ai/commit/5f326f4257dda3d2868ca24bc2927f676f83c5cb))
+* **attachments:** let storage verify upload size and checksum ([#520](https://github.com/ChidiRnweke/FollowThrough.ai/issues/520)) ([c6afa58](https://github.com/ChidiRnweke/FollowThrough.ai/commit/c6afa58d777100f25d2a7625d313476c58099693))
+* **auth:** expire unused client registrations and limit public endpoints ([#514](https://github.com/ChidiRnweke/FollowThrough.ai/issues/514)) ([51b5de7](https://github.com/ChidiRnweke/FollowThrough.ai/commit/51b5de704641b0517a26d42482fb258a701cb7ef))
+* **connectors:** refuse special-use address literals and bound connector work ([#517](https://github.com/ChidiRnweke/FollowThrough.ai/issues/517)) ([9ce4597](https://github.com/ChidiRnweke/FollowThrough.ai/commit/9ce4597d6f01578bd2ac5f8f9872bb94d41b44aa))
+* **http:** bound small request bodies and client error reports ([#513](https://github.com/ChidiRnweke/FollowThrough.ai/issues/513)) ([7ae3010](https://github.com/ChidiRnweke/FollowThrough.ai/commit/7ae30103dab83225b3d4d49909a04e8450ce5158))
+* **identity:** require verified email to link accounts and store session digests ([#521](https://github.com/ChidiRnweke/FollowThrough.ai/issues/521)) ([9655c54](https://github.com/ChidiRnweke/FollowThrough.ai/commit/9655c5457718c42f19aa3ba253d8708377bdb4ba))
+* **imports:** count inflated bytes while reading archives and templates ([#516](https://github.com/ChidiRnweke/FollowThrough.ai/issues/516)) ([f8b7d47](https://github.com/ChidiRnweke/FollowThrough.ai/commit/f8b7d47cf1f25f281415c470bcab735abc0dc0ff))
+* **telemetry:** log call metadata instead of content ([#518](https://github.com/ChidiRnweke/FollowThrough.ai/issues/518)) ([1686ec6](https://github.com/ChidiRnweke/FollowThrough.ai/commit/1686ec6c8c401c7007f08394f002034493ac1d28))
+* **web:** load remote images on request and send security headers ([#522](https://github.com/ChidiRnweke/FollowThrough.ai/issues/522)) ([cbc18d7](https://github.com/ChidiRnweke/FollowThrough.ai/commit/cbc18d71b7f2c84a33f9b39fcaa181a37541ee2b))
+
 ## [6.7.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.6.0...v6.7.0) (2026-11-15)
 
 
