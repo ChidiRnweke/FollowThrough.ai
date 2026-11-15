@@ -158,3 +158,9 @@ Three small endpoints read at most a fixed number of body bytes and answer `413`
 | `OAUTH_TOKEN_MAX_BODY_BYTES`        | 221,184 | `/oauth/token`, MCP code and refresh token grants |
 
 Each signed-in user may send `CLIENT_ERROR_REPORTS_PER_WINDOW` browser error reports (default 20, one page's own cap) per `CLIENT_ERROR_WINDOW_SECONDS` (default 60). A repeat of a report already logged in the window is dropped; the next logged report says how many were dropped. A report past the budget is answered `429` with `Retry-After`. All five settings must be positive safe integers.
+
+## Sign-in and MCP client limits
+
+Sign-in waits at most `AUTHENTIK_REQUEST_TIMEOUT_MS` (default 10,000) for each Authentik token or profile request. This is a starting value, not a measurement. A request that gets no answer in time fails the sign-in instead of holding the callback open. When Authentik answers with an error, the error message quotes at most the first 500 bytes of its body.
+
+MCP clients without a metadata document register anonymously through `/oauth/register` (ADR 0050). A registration is used each time the user approves the client and a code is issued to it. The worker deletes a registration that has not been used for `MCP_CLIENT_UNUSED_RETENTION_MS` (default 86,400,000, one day) and that no live connection or pending code names. This is a starting value: a client normally uses its registration within the 60-second code lifetime of the flow that created it, and one day leaves room for a user who abandons the consent screen and comes back later. A client whose registration was deleted is refused as unregistered and registers again. `MCP_CLIENT_SWEEP_INTERVAL_MS` (default 900,000, fifteen minutes) sets how often the worker looks; this is also a starting value. All three settings must be positive safe integers.

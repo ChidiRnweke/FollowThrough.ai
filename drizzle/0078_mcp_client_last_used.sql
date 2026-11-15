@@ -1,0 +1,2 @@
+ALTER TABLE "mcp_clients" ADD COLUMN "last_used_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
+CREATE INDEX "mcp_clients_last_used_idx" ON "mcp_clients" USING btree ("last_used_at");

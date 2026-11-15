@@ -17,8 +17,17 @@ services:
       PHOENIX_API_KEY: ${PHOENIX_API_KEY:-}
       # Platform key: debug records stay out of Loki unless the deployer opts in.
       LOG_LEVEL: ${LOG_LEVEL:-info}
+    # About 2x the 30-day peak working set (463 MiB). Node sizes its heap from this limit.
+    mem_limit: 1g
+    # The snippets are defined in the proxy's base Caddyfile. Sign-in and OAuth endpoints get
+    # the tighter per-address limit; every request also counts against the site-wide limit.
     labels:
       caddy: notes.chidinweke.be
+      caddy.import: header-policy
+      caddy.@limited_auth.path: /oauth/register /oauth/token /oauth/authorize /auth/*
+      caddy.route_0: '@limited_auth'
+      caddy.route_0.import: rate-limit-auth
+      caddy.route_1.import: rate-limit-public
       caddy.reverse_proxy: '{{upstreams 3000}}'
     networks:
       - reverse-proxy
@@ -34,6 +43,8 @@ services:
     command: ['node', '--import', './scripts/otel-instrumentation.js', 'build-worker/worker.js']
     deploy:
       replicas: 1
+    # About 2x the 30-day peak working set (424 MiB).
+    mem_limit: 1g
     environment:
       CONFIG_SOURCE: ${CONFIG_SOURCE:-infisical}
       INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID}

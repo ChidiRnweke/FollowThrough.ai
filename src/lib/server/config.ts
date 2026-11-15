@@ -19,6 +19,22 @@ export const positiveNumberFromEnvironment = (name: string): number | undefined 
 	return value;
 };
 
+/**
+ * A positive integer setting that has an application default. Hydration publishes the default
+ * when the secrets backend has no value; a process that never hydrated reads it here.
+ */
+const positiveIntegerSetting = (
+	name:
+		| 'AUTHENTIK_REQUEST_TIMEOUT_MS'
+		| 'MCP_CLIENT_UNUSED_RETENTION_MS'
+		| 'MCP_CLIENT_SWEEP_INTERVAL_MS'
+): number => {
+	const value = Number(process.env[name] ?? APPLICATION_DEFAULTS[name]);
+	if (!Number.isSafeInteger(value) || value < 1)
+		throw new Error(`${name} must be a positive safe integer`);
+	return value;
+};
+
 export const optionalProperty = <K extends string, V>(key: K, value: V | undefined) =>
 	(value === undefined ? {} : { [key]: value }) as { [P in K]?: V };
 
@@ -28,6 +44,7 @@ export const requestActor = (user?: { readonly id: UserId }) => {
 };
 
 export const authentikConfiguration = () => {
+	const requestTimeoutMs = positiveIntegerSetting('AUTHENTIK_REQUEST_TIMEOUT_MS');
 	const domain = process.env.AUTHENTIK_DOMAIN?.trim();
 	const clientId = process.env.AUTHENTIK_CLIENT_ID?.trim();
 	const clientSecret = process.env.AUTHENTIK_CLIENT_SECRET?.trim();
@@ -36,7 +53,7 @@ export const authentikConfiguration = () => {
 		throw new Error(
 			'Authentik OAuth not configured. Set AUTHENTIK_DOMAIN, AUTHENTIK_CLIENT_ID, AUTHENTIK_CLIENT_SECRET, AUTHENTIK_CALLBACK_URL.'
 		);
-	return { domain, clientId, clientSecret, callbackUrl };
+	return { domain, clientId, clientSecret, callbackUrl, requestTimeoutMs };
 };
 
 export const requiredEnvironmentValue = (name: string): string => {
@@ -126,6 +143,17 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	CLIENT_ERROR_WINDOW_SECONDS: String(REQUEST_ADMISSION_DEFAULTS.clientErrorWindowSeconds),
 	OAUTH_REGISTRATION_MAX_BODY_BYTES: String(REQUEST_ADMISSION_DEFAULTS.oauthRegistrationBodyBytes),
 	OAUTH_TOKEN_MAX_BODY_BYTES: String(REQUEST_ADMISSION_DEFAULTS.oauthTokenBodyBytes),
+	/* How long sign-in waits for each Authentik token or profile request. Starting value; no
+	   measurement yet. The user waits on the callback page for the whole exchange. */
+	AUTHENTIK_REQUEST_TIMEOUT_MS: '10000',
+	/* How long an anonymous MCP client registration may go without a code before it is
+	   deleted. Starting value; no measurement yet. A client normally uses its registration
+	   within the 60-second code lifetime of the flow that created it; one day leaves room for a
+	   user who abandons the consent screen and resumes later. */
+	MCP_CLIENT_UNUSED_RETENTION_MS: '86400000',
+	/* How often the worker deletes unused registrations. Starting value; no measurement yet.
+	   Matches the upload reservation sweep, and is short beside the one-day retention. */
+	MCP_CLIENT_SWEEP_INTERVAL_MS: '900000',
 	DB_NAME: 'followthrough',
 	DB_USER: 'followthrough',
 	ORIGIN: 'http://localhost:5173',
@@ -625,6 +653,12 @@ const positiveInteger = (name: string, fallback: number): number => {
 		throw new Error(`${name} must be a positive safe integer`);
 	return value;
 };
+
+/** When an anonymous MCP client registration counts as unused, and how often the worker looks. */
+export const mcpClientRetention = () => ({
+	unusedRetentionMs: positiveIntegerSetting('MCP_CLIENT_UNUSED_RETENTION_MS'),
+	sweepIntervalMs: positiveIntegerSetting('MCP_CLIENT_SWEEP_INTERVAL_MS')
+});
 
 /** Deployment admission for decompression, not a per-document product limit. */
 export const archiveAdmissionLimits = () => ({

@@ -1,4 +1,4 @@
-import type { ActorContext, McpScope, Session, User } from '$lib/models/identity';
+import type { ActorContext, McpScope, Session, SessionId, User } from '$lib/models/identity';
 import type { McpBearerVerifier } from '$lib/server/services/identity/mcp-grants';
 import type { ISessionRegistry } from '$lib/server/services/identity/sessions';
 
@@ -13,9 +13,9 @@ export interface VerifiedCredential {
  * everything after it runs in that user's composition.
  */
 export interface AuthenticationController {
-	/** Resume a browser session; an expired session is removed. Returns null for an unusable id. */
-	resumeSession(sessionId: string): Promise<{ user: User; session: Session } | null>;
-	endSession(sessionId: string): Promise<void>;
+	/** Resume a browser session; an expired session is removed. Returns null for an unknown id. */
+	resumeSession(sessionId: SessionId): Promise<{ user: User; session: Session } | null>;
+	endSession(sessionId: SessionId): Promise<void>;
 	/** Verify an MCP access token issued for `resource`. Returns null for anything unusable. */
 	verifyBearer(
 		authorizationHeader: string | null,
@@ -28,10 +28,10 @@ export interface AuthenticationDependencies {
 }
 export class Authentication implements AuthenticationController {
 	constructor(private readonly dependencies: AuthenticationDependencies) {}
-	resumeSession(sessionId: string): Promise<{ user: User; session: Session } | null> {
+	resumeSession(sessionId: SessionId): Promise<{ user: User; session: Session } | null> {
 		return this.dependencies.sessions.validateSession(sessionId);
 	}
-	endSession(sessionId: string): Promise<void> {
+	endSession(sessionId: SessionId): Promise<void> {
 		return this.dependencies.sessions.logout(sessionId);
 	}
 	async verifyBearer(

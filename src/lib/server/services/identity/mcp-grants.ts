@@ -77,7 +77,7 @@ export class McpGrants implements McpCodeIssuer, McpConnectionLedger {
 
 	async issueCode(reviewed: ReviewedAuthorization, scope: McpScope): Promise<string> {
 		const code = secret(PREFIX.code);
-		await this.grants.createCode({
+		const stored = await this.grants.createCode({
 			codeHash: hash(code),
 			clientId: reviewed.client.clientId,
 			clientName: reviewed.client.name,
@@ -87,6 +87,10 @@ export class McpGrants implements McpCodeIssuer, McpConnectionLedger {
 			resource: reviewed.request.resource,
 			expiresAt: new Date(Date.now() + CODE_LIFETIME_MS)
 		});
+		if (stored === 'unregistered')
+			throw new NotFoundError(
+				'This MCP client registration has expired. Connect the client again to register it.'
+			);
 		return code;
 	}
 

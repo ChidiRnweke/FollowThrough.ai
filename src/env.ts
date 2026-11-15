@@ -137,6 +137,20 @@ export const variables = defineEnvVars({
 		description: 'Largest OAuth token request body in bytes (defaults to 221184).',
 		schema: optionalString
 	},
+	AUTHENTIK_REQUEST_TIMEOUT_MS: {
+		description: 'Deadline for each Authentik token or profile request (defaults to 10000).',
+		schema: optionalString
+	},
+	MCP_CLIENT_UNUSED_RETENTION_MS: {
+		description:
+			'How long an anonymous MCP client registration may go without a code before the worker deletes it (defaults to 86400000).',
+		schema: optionalString
+	},
+	MCP_CLIENT_SWEEP_INTERVAL_MS: {
+		description:
+			'How often the worker deletes unused MCP client registrations (defaults to 900000).',
+		schema: optionalString
+	},
 	OPENROUTER_API_KEY: {
 		description: 'OpenRouter API key used by workbench chat.',
 		schema: optionalString

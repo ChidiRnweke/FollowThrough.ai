@@ -13,7 +13,8 @@ const setup = (suffix: string) => {
 		domain: 'identity.test',
 		clientId: 'test-client',
 		clientSecret: 'test-secret',
-		callbackUrl: 'https://app.test/auth/callback'
+		callbackUrl: 'https://app.test/auth/callback',
+		requestTimeoutMs: 10_000
 	};
 	const fetch: typeof globalThis.fetch = async (url) =>
 		Response.json(
