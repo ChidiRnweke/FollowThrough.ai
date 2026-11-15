@@ -35,6 +35,7 @@
 		activeNoteId,
 		activeProjectId,
 		showHistory,
+		promptOrigin,
 		entries,
 		loading,
 		isStreaming,
@@ -69,6 +70,8 @@
 		activeNoteId?: NoteId;
 		activeProjectId?: ProjectId;
 		showHistory: boolean;
+		/** Who sent the first message when it was not the reader, as a schedule does (ADR 0052). */
+		promptOrigin?: string;
 		entries: readonly ChatEntry[];
 		loading: boolean;
 		isStreaming: boolean;
@@ -138,6 +141,7 @@
 		}, 2000);
 	}
 	const latestQuestionId = $derived(entries.findLast((entry) => entry.role === 'user')?.id);
+	const firstQuestionId = $derived(entries.find((entry) => entry.role === 'user')?.id);
 
 	/**
 	 * Only the newest question is worth a reference, and it moves as the thread grows, so
@@ -243,6 +247,7 @@
 			<div bind:this={stack} class="flex flex-col gap-group">
 				{#each entries as entry (entry.id)}
 					{@const isUser = entry.role === 'user'}
+					{@const sentForReader = isUser && promptOrigin && entry.id === firstQuestionId}
 					<ErrorBoundary label="this turn" class="my-0">
 						<div
 							class="group/turn flex flex-col"
@@ -262,7 +267,13 @@
 							none of this — position and fill are not announced — so the turn states
 							its speaker for one.
 						-->
-							<span class="sr-only">{isUser ? 'You said' : 'The agent replied'}</span>
+							<span class="sr-only"
+								>{sentForReader ? promptOrigin : isUser ? 'You said' : 'The agent replied'}</span
+							>
+							{#if sentForReader}
+								<!-- The wash says "your turn"; this one was sent while the reader was away. -->
+								<p class="provenance-caption self-end pb-1" aria-hidden="true">{promptOrigin}</p>
+							{/if}
 							<!-- gap-3 rather than gap-2: the activity block below now spaces the things it
 							     touched 20px apart, and 8px from the prose above it would make the join
 							     to the answer the tightest gap on screen. Same step as one pass to the

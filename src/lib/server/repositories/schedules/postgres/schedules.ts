@@ -190,6 +190,20 @@ export class ScheduleOccurrenceRecords implements ScheduleOccurrenceRepository {
 		return rows.map((row) => ({ ...toOccurrence(row.occurrence), status: row.status }));
 	}
 
+	async markOpened(id: ScheduleOccurrenceId, at: DateTime): Promise<void> {
+		const marked = await this.database
+			.update(schema.scheduleOccurrences)
+			.set({ openedAt: new Date(at) })
+			.where(
+				and(
+					eq(schema.scheduleOccurrences.id, id),
+					eq(schema.scheduleOccurrences.userId, this.actor.userId)
+				)
+			)
+			.returning({ id: schema.scheduleOccurrences.id });
+		if (marked.length === 0) throw new NotFoundError('Scheduled run was not found');
+	}
+
 	async hasRunAwaitingApproval(scheduleId: ScheduleId): Promise<boolean> {
 		const [waiting] = await this.database
 			.select({ id: schema.scheduleOccurrences.id })

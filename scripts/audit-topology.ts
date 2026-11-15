@@ -23,6 +23,7 @@ const componentCapabilities = new Set([
 	'memory',
 	'notes',
 	'projects',
+	'schedules',
 	'settings',
 	'shell',
 	'skills',

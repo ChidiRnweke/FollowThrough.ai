@@ -308,7 +308,7 @@ including the ones the shadcn-svelte CLI writes into a newly added primitive —
   tree of icons tracing as the pointer sweeps down it is noise.
 - **Moments answer an action, never a load.** A few moments carry their own motion, each played
   once: ticking a box draws its check, completing a todo sweeps a line through its title, a copy
-  button's tick draws in once the text is on the clipboard, a new memory suggestion swings the bell,
+  button's tick draws in once the text is on the clipboard, an arrival in the bell swings it,
   and sending lifts the arrow off while the stop square draws in. Each is keyed on a change the
   user watched (`Increases` in `$lib/hooks`), so a page that loads in that state shows it still.
   No loops besides sync; one motion per moment.
@@ -432,6 +432,22 @@ the section's mark: `Scene.ReadAlone` (read with), `Scene.Unlinked` (linked), `S
   provenance stays separate from the user-selected source. Controls use the flat shadcn Select,
   Popover, Calendar, Command, Input, and Textarea; selection commits immediately, text on
   blur/Enter (Escape restores), and saving/errors are announced without a Save button.
+- **Scheduled runs:** a schedule is one sentence, and its controls are the words of it: "Every
+  weekday at 08:00 Brussels time, <the prompt> and ask me first before it changes something."
+  The page of a schedule is that sentence at base size with its runs under it; a new schedule is
+  the same page with one button. No dialog, no labelled form, no helper text beside a control:
+  the sentence is the label. One muted line under it states the next run, and one more appears
+  only for "do not ask me". An existing schedule saves each change at once and the prompt on
+  blur. The list is divided rows at the reading measure: a `Switch` that pauses, the title, one
+  caption (recurrence, whether it asks, the next run), and at most one brand badge, "Waiting for
+  you" before "N new". A run row shows when it started and one line of what it came to; it is a
+  link that opens the chat in the right panel, or as a page where the panel does not dock. The
+  words are fixed: a schedule, a run, never a task.
+- **One bell:** the sidebar has one bell for everything that needs the user, in the order it
+  needs them: "Waiting for you" (scheduled runs parked for approval), "Finished while you were
+  away" (scheduled runs not opened yet), "Memory to review". A new kind of attention is a group
+  in this menu, never a second bell or a badge on a rail destination. The badge is the sum; an
+  empty bell says "Nothing is waiting for you."
 - **Data surfaces get their own measure:** boards and tables use `PageShell width="wide"` so the
   header keeps the reading measure while content widens; prose keeps default `prose` width.
 - **Quiet at rest, control on hover:** metadata renders as text and reveals its control on hover,

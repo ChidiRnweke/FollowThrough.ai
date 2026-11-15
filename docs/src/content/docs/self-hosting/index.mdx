@@ -47,7 +47,9 @@ flowchart LR
 `}
 />
 
-Both processes run the same application graph and the same configuration; the worker serves no HTTP and instead ticks the periodic background tasks the request path hands off: search-index maintenance and attachment retention (`src/worker.ts`, wired in `src/lib/server/application.ts:482`). Keep it at **one replica**: the tasks discover their work from the database on every tick, so a second replica only duplicates embedding calls.
+Both processes run the same application graph and the same configuration; the worker serves no HTTP and instead ticks the periodic background tasks the request path hands off: search-index maintenance, attachment retention, and [scheduled runs](/FollowThrough.ai/using/scheduled-runs/) (`src/worker.ts`). Keep it at **one replica**: the tasks discover their work from the database on every tick, so a second replica only duplicates embedding calls.
+
+The worker also runs the agent (ADR 0052). Every 30 seconds it starts the schedules that are due, each as its owner, so it calls OpenRouter and the user's connectors with the same configuration as the web process. Without a running worker no schedule starts; when the worker comes back, each schedule that missed its time runs once. A worker restart fails the scheduled runs it was executing, and each shows as a failed run that its owner can retry. A restart of the web process does not touch them.
 
 Telemetry is optional but wired in from the start: both processes boot with `scripts/otel-instrumentation.js` and export OTLP to a collector (`OTEL_EXPORTER_OTLP_ENDPOINT`), which filters down to LLM/tool/agent spans and forwards them to Phoenix (`otel-collector-config.yaml`).
 

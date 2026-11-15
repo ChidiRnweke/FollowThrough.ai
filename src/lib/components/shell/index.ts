@@ -4,6 +4,7 @@ export { default as QuickCapture } from './navigation/quick-capture.svelte';
 export { default as RightPanel } from './workbench/right-panel.svelte';
 export { default as WorkspacePanes } from './workbench/workspace-panes.svelte';
 export { default as WorkspaceTabs } from './workbench/workspace-tabs.svelte';
+export { default as AttentionMenu } from './attention/attention-menu.svelte';
 export { default as SyncStatusMenu } from './sync/sync-status-menu.svelte';
 export { default as WorkspaceStartup } from './sync/workspace-startup.svelte';
 export { default as WorkspaceRouteOutlet } from './sync/workspace-route-outlet.svelte';

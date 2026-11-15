@@ -1,4 +1,5 @@
 import type { ProjectId } from '$lib/models/projects';
+import type { ConversationId } from '$lib/models/agent';
 import type { TodoId } from '$lib/models/todos';
 import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
@@ -11,6 +12,8 @@ export class RightPanelStore {
 	todoId = $state<TodoId | undefined>(undefined);
 	memoryProjectId = $state<ProjectId | undefined>(undefined);
 	chatTrigger: HTMLElement | undefined;
+	/** A chat someone asked the panel to show; the panel's chat takes it and clears it. */
+	requestedConversationId = $state<ConversationId | undefined>(undefined);
 	/**
 	 * The panel's own chat session, held for the app's lifetime rather than per
 	 * mount: `ChatPanel` lives inside the panel's `{#if}`, so acquiring on mount
@@ -39,6 +42,14 @@ export class RightPanelStore {
 	openChat(trigger?: HTMLElement): void {
 		this.chatTrigger = trigger;
 		this.mode = 'chat';
+	}
+	/** Opens the panel on one existing chat, such as the chat of a scheduled run. */
+	openConversation(conversationId: ConversationId): void {
+		this.requestedConversationId = conversationId;
+		this.mode = 'chat';
+	}
+	conversationShown(): void {
+		this.requestedConversationId = undefined;
 	}
 	registerChatComposerFocus(focus: () => void): () => void {
 		this.focusChatComposer = focus;

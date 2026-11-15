@@ -8,7 +8,14 @@
 	import { afterNavigate } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
-	import { AppSidebar, CommandPalette, RightPanel, WorkspaceTabs } from '$lib/components/shell';
+	import {
+		AppSidebar,
+		AttentionMenu,
+		CommandPalette,
+		RightPanel,
+		WorkspaceTabs
+	} from '$lib/components/shell';
+	import { scheduleViewer } from '$lib/client/schedules/viewer';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import { parseTabId, noteIdOf, openResourceOf, type TabId } from '$lib/stores/workbench/tab-ref';
 	import type { ProjectId } from '$lib/models/projects';
@@ -33,7 +40,6 @@
 	import { openChatSurface } from '$lib/client/shell/responsive-surfaces';
 	import * as Icon from '$lib/components/icons';
 	import { SyncStatusMenu } from '$lib/components/shell';
-	import { MemoryNotificationMenu } from '$lib/components/memory';
 
 	let { data, children } = $props();
 	const shell = $derived(
@@ -42,12 +48,35 @@
 			: null
 	);
 
+	// Read against the clock at the moment the records last changed, which is when a run's
+	// "today" or "tomorrow" can change too.
+	const scheduled = $derived(workspaceViews.scheduledAttention(scheduleViewer()));
+	// Sync pulls only when the app is touched (ADR 0040), and a schedule runs with nobody touching
+	// it. So ask for a pull just after the next run is due, and at the worker's 30-second tick
+	// while a scheduled run is still working. A pull that changes nothing sets no further timer.
+	$effect(() => {
+		if (!shell) return;
+		const viewer = scheduleViewer();
+		const nextRun = workspaceViews
+			.schedules(viewer)
+			.flatMap(({ schedule }) => (schedule.status === 'active' ? [schedule.nextRunAt] : []))
+			.toSorted()[0];
+		if (scheduled.working > 0) {
+			const polling = setInterval(() => void workspaceSession.synchronize(), 30_000);
+			return () => clearInterval(polling);
+		}
+		if (!nextRun) return;
+		const due = Math.max(Date.parse(nextRun) - Date.parse(viewer.now), 0);
+		const pull = setTimeout(() => void workspaceSession.synchronize(), due + 35_000);
+		return () => clearTimeout(pull);
+	});
+
 	const inventoryLoading = $derived(data.session.resources.availability !== 'complete');
 	const prerequisitesReady = $derived(data.session.resources.startupReadiness.kind === 'ready');
 	// Workbench detail panes already have record-level loading states. Collection
 	// screens must not turn a partial inventory into empty results or exact counts.
 	const recordRoute = $derived(
-		/^\/(notes|diagrams|skills|todos|widgets)\/[^/]+$/.test(page.url.pathname)
+		/^\/(notes|diagrams|skills|todos|widgets|scheduled)\/[^/]+$/.test(page.url.pathname)
 	);
 	const contentReady = $derived(
 		shell !== null && prerequisitesReady && (!inventoryLoading || recordRoute)
@@ -235,6 +264,7 @@
 >
 	<AppSidebar
 		{shell}
+		{scheduled}
 		{inventoryLoading}
 		activePath={page.url.pathname}
 		activeNoteId={highlightedNoteId}
@@ -264,8 +294,9 @@
 			>
 				<Icon.Search />
 			</Button>
-			{#if shell && !inventoryLoading}<MemoryNotificationMenu
+			{#if shell && !inventoryLoading}<AttentionMenu
 					notifications={shell.pendingMemoryNotifications}
+					{scheduled}
 				/>{/if}
 			<SyncStatusMenu
 				resources={data.session.resources}

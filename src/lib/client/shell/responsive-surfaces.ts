@@ -1,4 +1,5 @@
 import { goto } from '$app/navigation';
+import type { ConversationId } from '$lib/models/agent';
 import type { TodoView } from '$lib/models/todos';
 import { dockedPanelFits } from '$lib/hooks/is-docked-panel.svelte';
 import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
@@ -11,6 +12,15 @@ export function openTodoSurface(view: TodoView, returnTo: string): void {
 		return;
 	}
 	void goto(`/todos/${view.todo.id}?returnTo=${encodeURIComponent(returnTo)}`);
+}
+
+/** Shows one existing chat: in the docked panel when it fits, as its own page when it does not. */
+export function openConversationSurface(conversationId: ConversationId): void {
+	if (dockedPanelFits()) {
+		rightPanel.openConversation(conversationId);
+		return;
+	}
+	void goto(`/chats/${conversationId}`);
 }
 
 export function openChatSurface(trigger?: HTMLElement): void {

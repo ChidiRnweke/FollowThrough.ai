@@ -279,7 +279,8 @@ export const controllerSurfaces = {
 		pause: true,
 		resume: true,
 		setExecutionMode: true,
-		remove: true
+		remove: true,
+		markRunOpened: true
 	}
 } satisfies {
 	[K in keyof ControllerFactory]: ControllerSurface<ReturnType<ControllerFactory[K]>>;

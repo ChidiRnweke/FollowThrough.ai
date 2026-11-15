@@ -2,7 +2,7 @@
 	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import type { WorkspaceDraftController } from '$lib/controllers/workspace/workspace';
-	import { workspaceSession } from '$lib/factories/workspace/session';
+	import { workspaceSession, workspaceViews } from '$lib/factories/workspace/session';
 	import { goto } from '$app/navigation';
 	import type { Conversation } from '$lib/models/agent';
 
@@ -45,6 +45,9 @@
 	let busy = $state(false);
 
 	const origin = (session: Conversation): string => {
+		// A schedule started this chat. Its title already names the schedule, and it has no
+		// project or note to name.
+		if (workspaceViews.scheduledChat(session.id)) return 'Scheduled';
 		const note = shell?.noteTree.find((item) => item.id === session.contextNoteId);
 		const project = shell?.projects.find(
 			(item) => item.id === (session.contextProjectId ?? note?.projectId)

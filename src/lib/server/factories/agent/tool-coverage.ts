@@ -622,6 +622,10 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason:
 				"Letting a schedule act without asking is the user's decision in the application (ADR 0052)."
+		},
+		markRunOpened: {
+			kind: 'excluded',
+			reason: "Opening a run's chat is the user's own gesture; the agent reading one is not."
 		}
 	}
 } as const satisfies AgentToolCoverage;

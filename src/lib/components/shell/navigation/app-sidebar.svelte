@@ -18,7 +18,8 @@
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import BrandMark from '../../shared/brand-mark.svelte';
 	import ProjectTree from '../../projects/project-tree.svelte';
-	import MemoryNotificationMenu from '../../memory/memory-notification-menu.svelte';
+	import AttentionMenu from '../attention/attention-menu.svelte';
+	import type { ScheduledAttention } from '$lib/models/schedules';
 	import SyncStatusMenu from '../sync/sync-status-menu.svelte';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import FeedbackDialog from '../../feedback/feedback-dialog.svelte';
@@ -29,6 +30,7 @@
 
 	let {
 		shell,
+		scheduled,
 		activePath,
 		activeNoteId,
 		loading = false,
@@ -36,6 +38,8 @@
 		inventoryLoading = false
 	}: {
 		shell: ShellContext | null;
+		/** The scheduled runs that need the user, for the bell. */
+		scheduled: ScheduledAttention;
 		inventoryLoading?: boolean;
 		activePath: string;
 		activeNoteId?: NoteId;
@@ -74,7 +78,8 @@
 	const destinations: readonly { href: string; label: string; icon: Component }[] = [
 		{ href: '/today', label: 'Today', icon: Icon.Today },
 		{ href: '/todos', label: 'Todos', icon: Icon.Todos },
-		{ href: '/skills', label: 'Skills', icon: Icon.Skill }
+		{ href: '/skills', label: 'Skills', icon: Icon.Skill },
+		{ href: '/scheduled', label: 'Scheduled', icon: Icon.Scheduled }
 	];
 
 	const railButton = 'size-9 text-muted-foreground hover:text-foreground';
@@ -201,8 +206,9 @@
 							</Button>
 						{/snippet}
 					</Tip>
-					{#if shell && !inventoryLoading}<MemoryNotificationMenu
+					{#if shell && !inventoryLoading}<AttentionMenu
 							notifications={shell.pendingMemoryNotifications}
+							{scheduled}
 							class={railButton}
 							side="right"
 						/>{/if}

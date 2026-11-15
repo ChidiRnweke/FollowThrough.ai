@@ -75,6 +75,18 @@ process memory between operations.
 
 The harness holds no transaction while a tool runs. Each tool's operation commits on its own.
 
+## Which process executes a run
+
+The web process and the worker both execute runs. The web process executes a run that a chat
+submits and a run that a user's decision resumes. The worker executes a run that a
+[schedule](schedules.md) starts (ADR 0052). `runDueSchedule` and `runScheduleNow` save the same
+queued run that `submit` saves, through the same private step, with a `ScheduledRunOrigin` on the
+frozen input.
+
+Each process is composed with its kind, `'web'` or `'worker'`. `RunTransitions` writes that kind
+to the run when it claims it. At startup a process settles only the `running` runs of its own
+kind, so a restart of one process does not fail a run that the other process is executing.
+
 ## Cancellation
 
 `cancel` moves the run to `cancelling` in the database. The executing process listens for run

@@ -1,0 +1,58 @@
+---
+title: Scheduled runs
+description: Save a prompt with a time, and the agent runs it for you while you are away. Each run is a chat, and one bell says what waits for you.
+---
+
+The agent works when you ask it to. A **schedule** asks for you: it is a prompt with a time, and the agent runs it at that time whether or not FollowThrough is open. Each run is a new chat, with the same tools and [connectors](/FollowThrough.ai/using/connectors/) a chat you start has. Find your schedules under **Scheduled** in the sidebar.
+
+## Write a schedule
+
+Choose **New schedule**. The page is one sentence, and each highlighted word is a control:
+
+> **Every weekday** at **08:00** **Brussels time**, _read my overdue todos and write a brief as a note in Inbox_ and **ask me first** before it changes something.
+
+- **How often**: once, every hour, every day, every weekday, every week on a day you choose, or every month on a date you choose. Every hour is the fastest. A monthly schedule on the 31st runs on the last day of a shorter month.
+- **The time and its time zone**: the zone starts as your browser's. A schedule at 08:00 stays at 08:00 in that zone when the clocks change and when you travel.
+- **The prompt**: what you would type in a chat. Nobody is there to answer a question, so say where the result goes: a note, a todo, a message in a connected service.
+- **Ask me first / do not ask me**: whether a run waits for your approval before it changes something. See [below](#decide-whether-it-asks-first).
+
+The line under the sentence shows the next run. Choose **Create schedule**. A schedule you do not name takes the first words of its prompt.
+
+## Change, pause or delete a schedule
+
+Open a schedule from the list. The same sentence is there, and each change saves at once. The prompt saves when you leave its field.
+
+- The **switch**, on the list and on the schedule's page, pauses and resumes it. A paused schedule keeps its runs and starts no new ones.
+- **Run now** starts one run at once. It does not change the next scheduled run.
+- **Delete** stops the schedule. The chats of its past runs stay in your history.
+
+A schedule that runs once shows as **Finished** after its time, under **Not running**.
+
+## Read what a run did
+
+A schedule's page lists its runs, newest first. Each row shows when the run started and one line: the first sentence of the agent's answer, what it waits for, or why it failed. Choose a run to open its chat beside the page. The chat is an ordinary chat: you can read every step, reply, and retry a failed run. In your chat history, these chats are marked **Scheduled**.
+
+A run that started late shows the time it was due. If FollowThrough was not running across several of a schedule's times, the schedule runs once when it is back, not once for each time it missed.
+
+## Decide whether it asks first
+
+Each schedule has its own [execution mode](/FollowThrough.ai/using/the-agent/#choose-an-execution-mode), separate from the one in your chats.
+
+- **Ask me first.** The run does its reading, then stops at its first change and waits. The bell shows it under **Waiting for you**. Open the chat and approve or reject, as in any chat. While a run waits, the schedule's next time is skipped, so approvals do not pile up; the schedule's page says so.
+- **Do not ask me.** The run makes its changes without you. Inside FollowThrough you can undo them: note edits keep their versions and suggestions can be reverted. What a run does in a connected service cannot be undone.
+
+The agent can create and change schedules when you ask it to in a chat. A schedule the agent creates always asks first. Only you can change it to **do not ask me**, on the schedule's page. A scheduled run can read your schedules, and it cannot change them.
+
+## The bell
+
+One bell in the sidebar collects everything that needs you, in three groups:
+
+- **Waiting for you**: scheduled runs that stopped for your approval.
+- **Finished while you were away**: scheduled runs that ended and whose chat you have not opened. Opening the chat clears it; **Mark finished runs as read** clears them all.
+- **Memory to review**: [memory](/FollowThrough.ai/using/memory/) the agent proposed, counted per project.
+
+## Keep reading
+
+- [The agent](/FollowThrough.ai/using/the-agent/) for execution modes, approvals and retries.
+- [Connectors](/FollowThrough.ai/using/connectors/) for what a run can reach outside FollowThrough.
+- [Self-hosting](/FollowThrough.ai/self-hosting/) if you run the server: schedules run in the worker.

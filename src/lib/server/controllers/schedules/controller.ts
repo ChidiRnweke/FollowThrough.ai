@@ -7,11 +7,12 @@ import type {
 	ScheduleDecision,
 	ScheduleDefinition,
 	ScheduleId,
+	ScheduleOccurrenceId,
 	ScheduleRun
 } from '$lib/models/schedules';
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
 import type { ScheduleReader, ScheduleWriter } from '$lib/server/services/schedules/library';
-import type { ScheduleRunReader } from '$lib/server/services/schedules/runs';
+import type { ScheduleRunOpening, ScheduleRunReader } from '$lib/server/services/schedules/runs';
 import type { ScheduleEdits } from '$lib/services/schedules/rules';
 
 /**
@@ -46,6 +47,11 @@ export interface SchedulesController {
 		readonly executionMode: AgentExecutionMode;
 	}): Promise<{ schedule: Schedule }>;
 	remove(input: { readonly scheduleId: ScheduleId }): Promise<void>;
+	/**
+	 * Records that the owner has opened the chat of one run, so it no longer counts as unopened.
+	 * @throws NotFoundError if the actor has no such run.
+	 */
+	markRunOpened(input: { readonly occurrenceId: ScheduleOccurrenceId }): Promise<void>;
 }
 
 export interface SchedulesDependencies {
@@ -54,7 +60,7 @@ export interface SchedulesDependencies {
 	readonly rules: ScheduleEdits;
 	readonly reader: ScheduleReader;
 	readonly writer: ScheduleWriter;
-	readonly runs: ScheduleRunReader;
+	readonly runs: ScheduleRunReader & ScheduleRunOpening;
 	readonly transactionRunner: AtomicOperation;
 }
 
@@ -137,6 +143,10 @@ export class Schedules implements SchedulesController {
 
 	async remove(input: { readonly scheduleId: ScheduleId }): Promise<void> {
 		await this.dependencies.writer.remove(input.scheduleId);
+	}
+
+	async markRunOpened(input: { readonly occurrenceId: ScheduleOccurrenceId }): Promise<void> {
+		await this.dependencies.runs.opened(input.occurrenceId, this.dependencies.now());
 	}
 
 	private change(

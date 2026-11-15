@@ -101,6 +101,18 @@ export const commandRegistry: readonly AppCommand[] = [
 		run: () => void goto('/todos')
 	},
 	{
+		id: 'scheduled',
+		label: 'Go to scheduled',
+		icon: Icon.Scheduled,
+		run: () => void goto('/scheduled')
+	},
+	{
+		id: 'new-schedule',
+		label: 'Create a schedule',
+		icon: Icon.Scheduled,
+		run: () => void goto('/scheduled/new')
+	},
+	{
 		id: 'settings',
 		label: 'Open Settings',
 		shortcut: '⌘,',

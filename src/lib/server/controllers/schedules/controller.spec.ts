@@ -199,6 +199,34 @@ describe('a user’s schedules', () => {
 		]);
 	});
 
+	it('records when its owner opens a run, and refuses a run that is not theirs', async () => {
+		const { controller, other, occurrences, clock } = setup();
+		const occurrence: ScheduleOccurrence = {
+			id: '5d000000-0000-4000-8000-000000000007' as ScheduleOccurrenceId,
+			userId: testActor().userId,
+			scheduleId: testScheduleId(),
+			trigger: 'recurrence',
+			scheduledFor: tuesdayRun,
+			conversationId: '33000000-0000-4000-8000-000000000007' as ConversationId,
+			runId: '32000000-0000-4000-8000-000000000007' as AgentRunId,
+			createdAt: tuesdayRun
+		};
+		await occurrences.insert(occurrence);
+		clock.now = '2026-11-17T09:30:00.000Z' as DateTime;
+
+		await controller.markRunOpened({ occurrenceId: occurrence.id });
+		const foreign = await other
+			.markRunOpened({
+				occurrenceId: '5d000000-0000-4000-8000-000000000099' as ScheduleOccurrenceId
+			})
+			.catch((error: Error) => error);
+
+		expect([occurrences.occurrences, foreign instanceof NotFoundError]).toEqual([
+			[{ ...occurrence, openedAt: '2026-11-17T09:30:00.000Z' }],
+			true
+		]);
+	});
+
 	it('removes a schedule', async () => {
 		const { controller } = setup();
 		await controller.create({ id: testScheduleId(), definition });
