@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { AgentRunId, AgentRunStatus, ConversationId } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
+import type { NoteId } from '$lib/models/notes';
 import type {
 	Recurrence,
 	ScheduleDefinition,
@@ -24,8 +25,19 @@ import {
 	testScheduleId,
 	tuesdayRun
 } from '$lib/testing/schedules/fixtures/schedules';
+import {
+	scheduleModel,
+	scheduleProject,
+	scheduleSkill,
+	scheduleStartFixture
+} from '$lib/testing/schedules/fixtures/start';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import {
+	projectBuilder,
+	testActor,
+	testNoteId,
+	testProjectId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { Schedules } from './controller';
 
 const definition: ScheduleDefinition = {
@@ -33,7 +45,16 @@ const definition: ScheduleDefinition = {
 	prompt: 'Write a brief of what is due today as a note in Inbox.',
 	recurrence: { kind: 'weekdays', time: { hour: 8, minute: 0 } },
 	timeZone: brussels,
+	skillNoteIds: [],
 	executionMode: 'approval_required'
+};
+
+/** The same schedule, naming a project, a model and a skill its owner can use. */
+const named: ScheduleDefinition = {
+	...definition,
+	projectId: scheduleProject.id,
+	model: scheduleModel,
+	skillNoteIds: [scheduleSkill().note.id]
 };
 
 const setup = () => {
@@ -41,7 +62,8 @@ const setup = () => {
 	const runStatus = new Map<AgentRunId, AgentRunStatus>();
 	const occurrences = new InMemoryScheduleOccurrenceRepository((runId) => runStatus.get(runId));
 	const clock = { now: mondayMorning };
-	const controllerFor = (actor: ActorContext) => {
+	const start = scheduleStartFixture(testActor());
+	const controllerFor = (actor: ActorContext, checks = scheduleStartFixture(actor)) => {
 		const library = new ScheduleLibrary(new InMemoryScheduleRepository(actor, table));
 		return new Schedules(actor, {
 			now: () => clock.now,
@@ -49,14 +71,17 @@ const setup = () => {
 			reader: library,
 			writer: library,
 			runs: new ScheduleRuns(occurrences),
-			transactionRunner: new InMemoryTransactionRunner([table])
+			transactionRunner: new InMemoryTransactionRunner([table]),
+			...checks.dependencies
 		});
 	};
 	return {
 		clock,
 		occurrences,
 		runStatus,
-		controller: controllerFor(testActor()),
+		/** What the first user's schedules can name. */
+		start,
+		controller: controllerFor(testActor(), start),
 		other: controllerFor(testActor(2))
 	};
 };
@@ -105,6 +130,110 @@ describe('a user’s schedules', () => {
 				nextRunAt: '2026-11-20T15:00:00.000Z' as DateTime
 			})
 		});
+	});
+
+	it('saves the project, the model and the skills a schedule names', async () => {
+		const { controller } = setup();
+
+		await controller.create({ id: testScheduleId(), definition: named });
+
+		expect(await controller.get({ scheduleId: testScheduleId() })).toEqual({
+			schedule: scheduleBuilder({
+				projectId: scheduleProject.id,
+				model: scheduleModel,
+				skillNoteIds: [scheduleSkill().note.id]
+			})
+		});
+	});
+
+	it('refuses a schedule that names what its owner cannot use, and saves nothing', async () => {
+		const { controller, start } = setup();
+		start.projects.projects = [
+			...start.projects.projects,
+			projectBuilder({ id: testProjectId(8), archivedAt: mondayMorning }),
+			projectBuilder({ id: testProjectId(9), userId: testActor(2).userId })
+		];
+		start.skills.skills = [
+			...start.skills.skills,
+			{ ...scheduleSkill(testNoteId(42), 'Old habits'), isEnabled: false }
+		];
+		const refusal = (attempt: ScheduleDefinition) =>
+			controller
+				.create({ id: testScheduleId(), definition: attempt })
+				.catch((error: Error) => error.message);
+
+		expect([
+			await refusal({ ...named, model: 'vendor/withdrawn' }),
+			await refusal({ ...named, projectId: testProjectId(8) }),
+			await refusal({ ...named, projectId: testProjectId(9) }),
+			await refusal({ ...named, skillNoteIds: [testNoteId(42)] }),
+			await refusal({ ...named, skillNoteIds: [testNoteId(99)] }),
+			await controller.list()
+		]).toEqual([
+			'The selected model is unavailable or does not support tools',
+			'This project is archived or does not exist. Choose another project.',
+			'This project is archived or does not exist. Choose another project.',
+			'A skill is turned off or does not exist. Choose another skill.',
+			'A skill is turned off or does not exist. Choose another skill.',
+			{ schedules: [] }
+		]);
+	});
+
+	it('still renames a schedule whose model is no longer offered, and refuses to name that model again', async () => {
+		const { controller, start } = setup();
+		await controller.create({ id: testScheduleId(), definition: named });
+		start.models.models = [];
+
+		const renamed = await controller.update({
+			scheduleId: testScheduleId(),
+			changes: { title: 'Brief' }
+		});
+		const namedAgain = await controller
+			.update({ scheduleId: testScheduleId(), changes: { model: scheduleModel } })
+			.catch((error: Error) => error.message);
+
+		expect([renamed.schedule.title, renamed.schedule.model, namedAgain]).toEqual([
+			'Brief',
+			scheduleModel,
+			'The selected model is unavailable or does not support tools'
+		]);
+	});
+
+	it('removes the project and the model, and replaces the skills', async () => {
+		const { controller } = setup();
+		await controller.create({ id: testScheduleId(), definition: named });
+
+		await controller.update({
+			scheduleId: testScheduleId(),
+			changes: { projectId: null, model: null, skillNoteIds: [] }
+		});
+
+		expect(await controller.get({ scheduleId: testScheduleId() })).toEqual({
+			schedule: scheduleBuilder()
+		});
+	});
+
+	it('lets a skill that was turned off stay or go, but not be added', async () => {
+		const { controller, start } = setup();
+		const review = scheduleSkill(testNoteId(42), 'Weekly review');
+		start.skills.skills = [scheduleSkill(), review];
+		await controller.create({
+			id: testScheduleId(),
+			definition: { ...named, skillNoteIds: [testNoteId(41), testNoteId(42)] }
+		});
+		start.skills.skills = [{ ...scheduleSkill(), isEnabled: false }, review];
+		const change = (skillNoteIds: readonly NoteId[]) =>
+			controller.update({ scheduleId: testScheduleId(), changes: { skillNoteIds } });
+
+		const kept = await change([testNoteId(41)]);
+		const cleared = await change([]);
+		const added = await change([testNoteId(41)]).catch((error: Error) => error.message);
+
+		expect([kept.schedule.skillNoteIds, cleared.schedule.skillNoteIds, added]).toEqual([
+			[testNoteId(41)],
+			[],
+			'A skill is turned off or does not exist. Choose another skill.'
+		]);
 	});
 
 	it('pauses a schedule, then resumes it from the next occurrence after now', async () => {

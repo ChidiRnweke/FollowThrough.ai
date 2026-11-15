@@ -59,8 +59,12 @@ export class InMemoryProjects
 	}
 
 	async get(projectId: ProjectId): Promise<Project> {
+		// As the repository does: another user's project and an archived one are both not found.
 		const project = this.projects.find(
-			(candidate) => candidate.id === projectId && candidate.userId === this.actor.userId
+			(candidate) =>
+				candidate.id === projectId &&
+				candidate.userId === this.actor.userId &&
+				!candidate.archivedAt
 		);
 		if (!project) throw new NotFoundError('Project was not found');
 		return project;

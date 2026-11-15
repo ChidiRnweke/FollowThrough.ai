@@ -2,6 +2,8 @@ import { and, asc, desc, eq, lte } from 'drizzle-orm';
 import { NotFoundError } from '$lib/errors';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
 import type { ActorContext, UserId } from '$lib/models/identity';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import {
 	ianaTimeZoneSchema,
 	recurrenceSchema,
@@ -42,10 +44,20 @@ const toSchedule = (row: ScheduleRow): Schedule => ({
 	prompt: row.prompt,
 	recurrence: recurrenceSchema.parse(row.recurrence),
 	timeZone: ianaTimeZoneSchema.parse(row.timeZone),
+	...(row.projectId ? { projectId: row.projectId as ProjectId } : {}),
+	...(row.model ? { model: row.model } : {}),
+	skillNoteIds: row.skillNoteIds.map((noteId) => noteId as NoteId),
 	executionMode: row.executionMode,
 	...toState(row),
 	createdAt: instant(row.createdAt),
 	updatedAt: instant(row.updatedAt)
+});
+
+/** What each run starts with. An absent project or model is stored as null, so a change can remove one. */
+const startColumns = (schedule: Schedule) => ({
+	projectId: schedule.projectId ?? null,
+	model: schedule.model ?? null,
+	skillNoteIds: [...schedule.skillNoteIds]
 });
 
 const stateColumns = (schedule: Schedule) => ({
@@ -98,6 +110,7 @@ export class ScheduleRecords implements ScheduleRepository {
 				recurrence: schedule.recurrence,
 				timeZone: schedule.timeZone,
 				executionMode: schedule.executionMode,
+				...startColumns(schedule),
 				...stateColumns(schedule),
 				createdAt: new Date(schedule.createdAt),
 				updatedAt: new Date(schedule.updatedAt)
@@ -115,6 +128,7 @@ export class ScheduleRecords implements ScheduleRepository {
 				recurrence: schedule.recurrence,
 				timeZone: schedule.timeZone,
 				executionMode: schedule.executionMode,
+				...startColumns(schedule),
 				...stateColumns(schedule),
 				updatedAt: new Date(schedule.updatedAt)
 			})

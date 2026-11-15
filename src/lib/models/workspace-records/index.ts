@@ -143,6 +143,12 @@ export const scheduleRecordFields = {
 	prompt: z.string(),
 	recurrence: recurrenceSchema,
 	timeZone: ianaTimeZoneSchema,
+	projectId: id<'ProjectId'>().optional(),
+	model: z.string().optional(),
+	// A record this browser stored before the field existed names no skills, as the column's
+	// default says for the row. The replica reads every stored record when it opens, so a
+	// required field here would stop a browser that already holds a schedule.
+	skillNoteIds: z.array(id<'NoteId'>()).default([]),
 	executionMode,
 	status: z.enum(['active', 'paused', 'finished']),
 	nextRunAt: instant.optional(),

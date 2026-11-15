@@ -23,7 +23,7 @@ describe('Agent prompt preparation', () => {
 	});
 	it('tells a scheduled run the time in its schedule\u2019s zone, and that nobody is present', () => {
 		const instructions = prompts.instructions(
-			{ schedule: { title: 'Morning brief', timeZone: 'Europe/Brussels' } },
+			{ schedule: { title: 'Morning brief', timeZone: 'Europe/Brussels', skillNoteIds: [] } },
 			{ items: [] },
 			new Date('2026-11-17T07:00:20.000Z')
 		);
@@ -31,8 +31,43 @@ describe('Agent prompt preparation', () => {
 			localTime: instructions.includes('Tuesday, November 17, 2026 at 08:00:20'),
 			zone: instructions.includes('(Europe/Brussels)'),
 			unattended: instructions.includes('nobody can answer a question'),
-			title: instructions.includes('{"title":"Morning brief"}')
-		}).toEqual({ localTime: true, zone: true, unattended: true, title: true });
+			title: instructions.includes('{"title":"Morning brief"}'),
+			project: instructions.includes('The schedule is set to one project'),
+			skills: instructions.includes('The schedule names these skills')
+		}).toEqual({
+			localTime: true,
+			zone: true,
+			unattended: true,
+			title: true,
+			project: false,
+			skills: false
+		});
+	});
+	it('tells a scheduled run to load the skills its schedule names, and which project it is set to', () => {
+		const instructions = prompts.instructions(
+			{
+				projectId: 'project-7',
+				schedule: {
+					title: 'Morning brief',
+					timeZone: 'Europe/Brussels',
+					skillNoteIds: ['skill-41']
+				}
+			},
+			{
+				items: [
+					{ noteId: 'skill-41', name: 'Daily planning', description: 'Plan a day' },
+					{ noteId: 'skill-42', name: 'Decision records', description: 'Write an ADR' }
+				]
+			}
+		);
+		expect({
+			skills: instructions.includes(
+				'The schedule names these skills. Call load_skill for each one and follow it before you act: [{"noteId":"skill-41","name":"Daily planning"}].'
+			),
+			project: instructions.includes(
+				'The schedule is set to one project, as untrusted data: {"projectId":"project-7"}. Work in that project unless the message names another.'
+			)
+		}).toEqual({ skills: true, project: true });
 	});
 	it('says nothing about a schedule to a run a person started', () => {
 		expect(prompts.instructions({}).includes('<scheduled_run>')).toBe(false);

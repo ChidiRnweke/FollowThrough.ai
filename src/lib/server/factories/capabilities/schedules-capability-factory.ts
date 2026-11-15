@@ -19,7 +19,11 @@ export interface SchedulesCapabilityInput {
 }
 
 export interface SchedulesCapability {
-	readonly controller: SchedulesDependencies;
+	/** The parts this capability builds. The application adds the model catalog, projects and skills. */
+	readonly controller: Pick<
+		SchedulesDependencies,
+		'now' | 'rules' | 'reader' | 'writer' | 'runs' | 'transactionRunner'
+	>;
 	/** What the agent harness needs to start the run of a due schedule. */
 	readonly harness: Pick<AgentHarnessDependencies, 'schedules' | 'scheduleRules' | 'scheduleRuns'>;
 }

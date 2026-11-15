@@ -75,6 +75,36 @@ A scheduled run carries a `ScheduledRunOrigin` on its frozen input (ADR 0034). T
 then state the local time in the schedule's zone and that nobody is present. The run is offered
 the tools that read schedules and is not offered the tools that change them.
 
+## What a run starts with
+
+A schedule can name a project (`projectId`), a model (`model`) and skills (`skillNoteIds`). The
+columns are `project_id`, `model` and `skill_note_ids uuid[]`. An absent project is the whole
+workspace. An absent model is the owner's default model when the run starts.
+
+`enqueueScheduled` passes the three values to `freezeInput`, the function that a chat's
+submission uses. From there the existing path applies: the conversation gets
+`context_project_id` and `model_override`, `agent_runs.model` is resolved from them, and the
+project's tool switches apply. The instructions tell the run to load each named skill, because
+nobody mentions a skill in a scheduled run.
+
+The values are checked in two places, and not in a third:
+
+- **When a schedule is saved.** `Schedules.create` and `Schedules.update` check what the request
+  states: the model against the provider's catalog, the project through `ProjectReader.get`, and
+  each added skill against the skills that are turned on. A request that states none of them is
+  not checked.
+- **When a run begins.** `requireScheduleStart` in the harness runs once, after the run is
+  claimed and before its context is built. A model that is no longer offered, an archived
+  project, or a skill that is turned off fails the run with a message that names the part to
+  change. The run is `running` at that point, which is the only state a run can fail from.
+- **Not in the transaction that starts the run.** A failure there would roll back the move to
+  the next occurrence, and the worker would find the schedule due again at each tick.
+
+A browser that stored a schedule before these fields existed has a record without
+`skillNoteIds`. The record schema reads the absent field as an empty list, which is what the
+column's default says for that row. The replica reads every stored record when it opens, so a
+required field would stop that browser.
+
 ## Who may set the mode
 
 `setExecutionMode` is excluded from the agent's tools, and the tool that creates a schedule
@@ -126,7 +156,8 @@ and every 30 seconds while a scheduled run in the replica is queued or running.
   02:30 across both 2026 daylight saving changes, the 31st in February, Friday to Monday, several
   missed occurrences, and a waiting run.
 - `server/controllers/agent/scheduled-runs.spec.ts` holds the run start against `InMemory*` fakes:
-  the frozen mode and origin, the second call that is not due, and a `once` schedule that finishes.
+  the frozen mode and origin, the second call that is not due, a `once` schedule that finishes,
+  the project, model and skills of a run, and the one failed run for each value that is gone.
 - `tests/integration/schedules/` and `tests/integration/agent/executor-recovery.contract.spec.ts`
   hold the PostgreSQL behavior: the checks, owner scoping, one occurrence for one instant, and
   recovery by process kind.

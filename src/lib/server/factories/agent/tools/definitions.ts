@@ -854,7 +854,7 @@ const scheduleChangeDefinitions = (controllers: ControllerFactory) => ({
 				(
 					await controllers.schedules().create({
 						id: crypto.randomUUID() as ScheduleId,
-						definition: { ...input, executionMode: 'approval_required' }
+						definition: { ...input, skillNoteIds: [], executionMode: 'approval_required' }
 					})
 				).schedule
 			)
