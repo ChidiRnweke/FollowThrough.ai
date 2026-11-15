@@ -66,6 +66,9 @@ export const requiredEnvironmentValue = (name: string): string => {
 	return value;
 };
 
+/** The public origin the deployment is reached at (`ORIGIN`); requests name its host. */
+export const canonicalOrigin = (): URL => new URL(requiredEnvironmentValue('ORIGIN'));
+
 export interface LanguageModelClientOptions {
 	readonly baseURL?: string;
 	readonly appURL?: string;

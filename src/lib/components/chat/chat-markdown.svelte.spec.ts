@@ -37,6 +37,16 @@ describe('chat markdown', () => {
 		});
 		await expect.element(screen.getByText(/Costs range from/)).toBeVisible();
 	});
+
+	it('loads an image from another server only when the reader asks for it', async () => {
+		// `.invalid` never resolves, so the loaded image starts no real request.
+		const source = 'https://images.example.invalid/chart.png';
+		const screen = await render(ChatMarkdown, { content: `![Quarterly chart](${source})` });
+		await screen.getByRole('button', { name: 'Load image' }).click();
+		await expect
+			.element(screen.getByRole('img', { name: 'Quarterly chart' }))
+			.toHaveAttribute('src', source);
+	});
 });
 
 it('renders multiple Mermaid diagrams in a message', async () => {

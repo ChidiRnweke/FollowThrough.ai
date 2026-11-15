@@ -1684,6 +1684,20 @@
 		--tw-prose-invert-captions: var(--brand-muted-foreground);
 	}
 
+	/* A remote image in rendered Markdown waits for the reader (`client/markdown/rendering.ts`).
+	   The stand-in keeps the image's place in the line: the host it would contact, then an
+	   outline Button. A hairline frame at rest, so it reads as content held back rather than
+	   as a failure; its pill shape is concentric with the pill Button inside it. */
+	.remote-image {
+		@apply inline-flex max-w-full items-center gap-2 rounded-4xl border border-border py-1 pr-1 pl-3 align-middle;
+	}
+	.remote-image-host {
+		@apply min-w-0 truncate text-sm text-muted-foreground;
+	}
+	[data-surface='brand'] .remote-image-host {
+		@apply text-brand-muted-foreground;
+	}
+
 	.prose :where(code):not(:where(pre *)) {
 		@apply rounded-md bg-muted px-1.5 py-0.5 font-mono font-normal;
 	}

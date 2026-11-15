@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import DiffViewer from './diff-viewer.svelte';
 	import ChatMermaid from './chat-mermaid.svelte';
-	import { chatMarkdownSegments, renderMarkdown } from '$lib/client/markdown/rendering';
+	import {
+		chatMarkdownSegments,
+		renderMarkdown,
+		requestedRemoteImage
+	} from '$lib/client/markdown/rendering';
 
 	let { content, surface = 'neutral' }: { content: string; surface?: 'neutral' | 'brand' } =
 		$props();
@@ -14,6 +19,14 @@
 	});
 
 	const segments = $derived(mounted ? chatMarkdownSegments(content) : []);
+	/** Remote images the reader chose to load; each renders as an image from then on. */
+	const approvedImages = new SvelteSet<string>();
+
+	/** Delegated: the placeholder's button is `{@html}` markup with nothing to bind to. */
+	function loadRequestedImage(event: MouseEvent): void {
+		const source = requestedRemoteImage(event);
+		if (source !== null) approvedImages.add(source);
+	}
 </script>
 
 <!--
@@ -23,8 +36,12 @@
 	blockquote — heavier rail, italic, curly quotes bolted on — is decoration on prose that is
 	already set apart by position, and italics cost legibility at this size.
 -->
+<!-- The listener only hears clicks from the placeholder's own <button>, which a keyboard
+     activates as a click; the container itself is not a control. -->
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div
 	data-surface={surface}
+	onclick={loadRequestedImage}
 	class="prose prose-sm max-w-none break-words dark:prose-invert prose-pre:max-w-full prose-pre:overflow-x-auto prose-blockquote:border-l-2 prose-blockquote:border-border prose-blockquote:pl-2 prose-blockquote:font-normal {surface ===
 	'brand'
 		? 'prose-blockquote:text-brand-muted-foreground'
@@ -43,7 +60,7 @@
 			{:else if segment.type === 'mermaid'}
 				<ChatMermaid source={segment.content} />
 			{:else}
-				{@const rendered = renderMarkdown(segment.content)}
+				{@const rendered = renderMarkdown(segment.content, approvedImages)}
 				{#if rendered.kind === 'rendered'}
 					{#if rendered.html}
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -- Marked output is sanitized by DOMPurify above. -->

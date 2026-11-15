@@ -1,3 +1,5 @@
+// First, before any module that defines a schema.
+import '$lib/client/schemas/interpreted-parsing';
 import type { HandleClientError } from '@sveltejs/kit';
 import { DomainError } from '$lib/errors';
 import { describeClientError, reportClientError } from '$lib/client/observability/report-error';

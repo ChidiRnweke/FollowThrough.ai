@@ -3,7 +3,8 @@
 	import { untrack } from 'svelte';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { TodoId } from '$lib/models/todos';
-	import { renderMarkdown } from '$lib/client/markdown/rendering';
+	import { SvelteSet } from 'svelte/reactivity';
+	import { renderMarkdown, requestedRemoteImage } from '$lib/client/markdown/rendering';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import ImageZoom from '$lib/components/shared/image-zoom.svelte';
@@ -35,7 +36,9 @@
 	let zoomed = $state<{ src: string; alt: string } | undefined>(undefined);
 	let textarea = $state<HTMLTextAreaElement | undefined>(undefined);
 
-	const rendered = $derived(renderMarkdown(saved));
+	/** Remote images the reader chose to load; each renders as an image from then on. */
+	const approvedImages = new SvelteSet<string>();
+	const rendered = $derived(renderMarkdown(saved, approvedImages));
 
 	// Focus on entering edit mode: the preview is what the reader clicked, so the
 	// caret has to follow into the textarea that replaces it.
@@ -147,6 +150,11 @@
 	 * `{@html}`, so its images are plain DOM nodes with nothing to mount onto.
 	 */
 	function previewClick(event: MouseEvent): void {
+		const source = requestedRemoteImage(event);
+		if (source !== null) {
+			approvedImages.add(source);
+			return;
+		}
 		const target = event.target;
 		if (target instanceof HTMLImageElement) {
 			zoomed = { src: target.src, alt: target.alt || 'Screenshot' };
@@ -186,7 +194,8 @@
 		aria-label="Todo description"
 		onclick={previewClick}
 		onkeydown={(event) => {
-			if (event.key === 'Enter') {
+			// Enter on a control inside the preview (a link, a placeholder's button) is its own.
+			if (event.key === 'Enter' && event.target === event.currentTarget) {
 				event.preventDefault();
 				edit();
 			}
