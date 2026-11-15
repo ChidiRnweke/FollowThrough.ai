@@ -13,6 +13,8 @@ import type {
 	ConversationId
 } from '$lib/models/agent';
 import type { UserId } from '$lib/models/identity';
+import type { NoteId } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
@@ -42,12 +44,18 @@ export type Recurrence =
 	/** A day past the end of a month runs on that month's last day. */
 	| { readonly kind: 'monthly'; readonly day: number; readonly time: TimeOfDay };
 
-/** What a schedule runs and when. A tool can state this much and no more. */
+/** What a schedule runs, when, and what each run starts with. A tool can state this much and no more. */
 export interface ScheduleContent {
 	readonly title: string;
 	readonly prompt: string;
 	readonly recurrence: Recurrence;
 	readonly timeZone: IanaTimeZone;
+	/** The project each run starts in. Absent: the whole workspace. */
+	readonly projectId?: ProjectId;
+	/** The model each run uses. Absent: its owner's default model when the run starts. */
+	readonly model?: string;
+	/** The skills each run loads before it acts, in the order they were added. */
+	readonly skillNoteIds: readonly NoteId[];
 }
 
 /** A schedule as its owner states it: the content, and whether a run asks before a change. */
@@ -55,8 +63,13 @@ export interface ScheduleDefinition extends ScheduleContent {
 	readonly executionMode: AgentExecutionMode;
 }
 
-/** The parts of the content a caller wants to replace. */
-export type ScheduleChanges = Partial<ScheduleContent>;
+/** The parts of the content a caller wants to replace. `null` removes the project or the model. */
+export type ScheduleChanges = Partial<
+	Pick<ScheduleContent, 'title' | 'prompt' | 'recurrence' | 'timeZone' | 'skillNoteIds'>
+> & {
+	readonly projectId?: ProjectId | null;
+	readonly model?: string | null;
+};
 
 export type ScheduleState =
 	| { readonly status: 'active'; readonly nextRunAt: DateTime }
@@ -232,7 +245,17 @@ export const recurrenceSchema: z.ZodType<Recurrence> = z.discriminatedUnion('kin
 	})
 ]);
 
-const scheduleContentShape = {
+const projectIdSchema = z.uuid().transform((value) => value as ProjectId);
+const modelSchema = z.string().trim().min(1);
+/** A skill is named once: a second mention of it would say nothing more. */
+const skillNoteIdsSchema = z
+	.array(z.uuid().transform((value) => value as NoteId))
+	.refine((ids) => new Set(ids).size === ids.length, {
+		message: 'A skill can be named once'
+	})
+	.readonly();
+
+const scheduleTimingShape = {
 	title: z.string().trim().min(1),
 	prompt: z.string().trim().min(1),
 	recurrence: recurrenceSchema,
@@ -240,11 +263,21 @@ const scheduleContentShape = {
 };
 
 export const scheduleDefinitionSchema = z.strictObject({
-	...scheduleContentShape,
+	...scheduleTimingShape,
+	projectId: projectIdSchema.optional(),
+	model: modelSchema.optional(),
+	skillNoteIds: skillNoteIdsSchema,
 	executionMode: z.enum(['approval_required', 'auto_accept'])
 });
 
-export const scheduleChangesSchema = z.strictObject(scheduleContentShape).partial();
+export const scheduleChangesSchema = z
+	.strictObject({
+		...scheduleTimingShape,
+		projectId: projectIdSchema.nullable(),
+		model: modelSchema.nullable(),
+		skillNoteIds: skillNoteIdsSchema
+	})
+	.partial();
 
 export const scheduleTargetSchema = z.strictObject({ scheduleId: scheduleIdSchema });
 

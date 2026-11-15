@@ -20,6 +20,7 @@ import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	AgentEvent,
 	AgentPreferences,
+	AgentModel,
 	AgentRun,
 	AgentRunEventRecord,
 	AgentRunId,
@@ -461,20 +462,11 @@ export class AgentSdkHarness implements AgentHarness {
 		const existing = await this.dependencies.records.findByRequestId(input.requestId);
 		if (existing) return this.receipt(existing);
 		if (input.model) {
-			const models = this.dependencies.modelChoices.configuredAgentModels(
-				await this.dependencies.models.list(),
-				{
-					chatModelId: this.dependencies.modelSelection.resolveDefaultAgentModel(
-						{},
-						this.dependencies.defaultModel
-					),
-					visionModelId: this.dependencies.modelSelection.resolveDefaultVisionModel(
-						{},
-						this.dependencies.defaultVisionModel
-					)
-				}
+			const issue = this.dependencies.modelChoices.modelChoiceIssue(
+				await this.selectableModels(),
+				input.model,
+				'chat'
 			);
-			const issue = this.dependencies.modelChoices.modelChoiceIssue(models, input.model, 'chat');
 			if (issue) throw new ValidationError(issue);
 		}
 		try {
@@ -550,6 +542,11 @@ export class AgentSdkHarness implements AgentHarness {
 	/**
 	 * Saves the chat, the queued run and the occurrence of one run of a schedule, inside the
 	 * caller's transaction. The occurrence's id is the run's request key.
+	 *
+	 * The schedule's project, model and skills are passed on as they are stored and are not
+	 * checked here. A check that failed in this transaction would roll back the move to the
+	 * next occurrence, and the worker would find the schedule due again on every tick. The run
+	 * checks them when it starts, and fails where its owner can read why.
 	 */
 	private async enqueueScheduled(
 		schedule: Schedule,
@@ -558,7 +555,16 @@ export class AgentSdkHarness implements AgentHarness {
 		const preferences = await this.dependencies.preferences.get();
 		const runInput: StagedAgentRunInput = {
 			...this.freezeInput(
-				{ requestId: occurrence.id, input: schedule.prompt, mode: schedule.executionMode },
+				{
+					requestId: occurrence.id,
+					input: schedule.prompt,
+					mode: schedule.executionMode,
+					...(schedule.projectId ? { projectId: schedule.projectId } : {}),
+					...(schedule.model ? { model: schedule.model } : {}),
+					...(schedule.skillNoteIds.length > 0
+						? { requestedSkillNoteIds: schedule.skillNoteIds }
+						: {})
+				},
 				preferences
 			),
 			schedule: {
@@ -980,19 +986,7 @@ export class AgentSdkHarness implements AgentHarness {
 		// Context images need a model that can see just as much as attachments do;
 		// ignoring them here would silently drop the render on a text-only model.
 		if (this.dependencies.imagePreparation.prepare(runInput).kind === 'none') return runInput;
-		const models = this.dependencies.modelChoices.configuredAgentModels(
-			await this.dependencies.models.list(),
-			{
-				chatModelId: this.dependencies.modelSelection.resolveDefaultAgentModel(
-					{},
-					this.dependencies.defaultModel
-				),
-				visionModelId: this.dependencies.modelSelection.resolveDefaultVisionModel(
-					{},
-					this.dependencies.defaultVisionModel
-				)
-			}
-		);
+		const models = await this.selectableModels();
 		return this.dependencies.imagePreparation.freezeReader(
 			runInput,
 			models,
@@ -1280,7 +1274,13 @@ export class AgentSdkHarness implements AgentHarness {
 			const { skills: instructionSkills, ...instructionContext } = context;
 			const instructions = this.dependencies.prompts.instructions(
 				request.schedule
-					? { ...instructionContext, schedule: request.schedule }
+					? {
+							...instructionContext,
+							schedule: {
+								...request.schedule,
+								skillNoteIds: request.requestedSkillNoteIds ?? []
+							}
+						}
 					: instructionContext,
 				instructionSkills,
 				undefined,
@@ -1614,6 +1614,9 @@ export class AgentSdkHarness implements AgentHarness {
 			});
 		}
 
+		// Once, before the first turn: a run that resumes after an approval has its context.
+		if (!run.contextSnapshot && run.inputSnapshot.schedule)
+			await this.requireScheduleStart(run.inputSnapshot);
 		const context = run.contextSnapshot ?? (await this.buildContext(run.inputSnapshot));
 		const prepared = await this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.transitions.getForPreparation(runId);
@@ -1627,6 +1630,67 @@ export class AgentSdkHarness implements AgentHarness {
 			return saved;
 		});
 		return prepared;
+	}
+
+	/**
+	 * Refuses to start a scheduled run whose schedule names something that is gone. Running
+	 * without it would look like a run that did what the schedule says, so the run fails and its
+	 * owner reads which part to change. The claim has made the run `running`, which is the only
+	 * state a run can fail from.
+	 */
+	private async requireScheduleStart(input: RunAgentInput): Promise<void> {
+		const { modelOverride, projectId, requestedSkillNoteIds = [] } = input;
+		if (
+			modelOverride &&
+			this.dependencies.modelChoices.modelChoiceIssue(
+				await this.selectableModels(),
+				modelOverride,
+				'chat'
+			)
+		)
+			throw new AgentProviderFailure(
+				`This schedule's model, ${modelOverride}, is no longer offered. Choose another model on the schedule's page, then run it again.`,
+				'MODEL_UNAVAILABLE',
+				false
+			);
+		if (projectId) {
+			try {
+				await this.dependencies.contextProjects.get(projectId);
+			} catch (error) {
+				if (!(error instanceof NotFoundError)) throw error;
+				throw new NotFoundError(
+					"This schedule's project is archived or no longer exists. Choose another project on the schedule's page, then run it again.",
+					{ projectId }
+				);
+			}
+		}
+		if (requestedSkillNoteIds.length === 0) return;
+		const enabled = new Set(
+			(await this.dependencies.contextSkills.listEnabled()).map((skill) => skill.noteId)
+		);
+		const noteId = requestedSkillNoteIds.find((requested) => !enabled.has(requested));
+		if (noteId)
+			throw new NotFoundError(
+				"A skill this schedule uses is turned off or no longer exists. Remove it on the schedule's page, then run it again.",
+				{ noteId }
+			);
+	}
+
+	/** Every model a run can use: the provider's catalog, with the deployment's defaults in it. */
+	private async selectableModels(): Promise<readonly AgentModel[]> {
+		return this.dependencies.modelChoices.configuredAgentModels(
+			await this.dependencies.models.list(),
+			{
+				chatModelId: this.dependencies.modelSelection.resolveDefaultAgentModel(
+					{},
+					this.dependencies.defaultModel
+				),
+				visionModelId: this.dependencies.modelSelection.resolveDefaultVisionModel(
+					{},
+					this.dependencies.defaultVisionModel
+				)
+			}
+		);
 	}
 
 	private async buildContext(input: RunAgentInput): Promise<AgentRunContext> {

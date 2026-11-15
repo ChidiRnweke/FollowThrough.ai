@@ -32,6 +32,7 @@ const saveSchedule = (owner: Owner, nextRunAt: DateTime = tuesdayRun): Promise<S
 		prompt: 'Write a brief of what is due today as a note in Inbox.',
 		recurrence: { kind: 'weekdays', time: { hour: 8, minute: 0 } },
 		timeZone: 'Europe/Brussels' as IanaTimeZone,
+		skillNoteIds: [],
 		executionMode: 'approval_required',
 		status: 'active',
 		nextRunAt,

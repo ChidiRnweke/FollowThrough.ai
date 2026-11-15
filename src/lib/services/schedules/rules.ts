@@ -94,7 +94,17 @@ export class ScheduleRules implements ScheduleRecurrence, ScheduleEdits, Schedul
 	}
 
 	change(schedule: Schedule, changes: ScheduleChanges, now: DateTime): ScheduleDecision {
-		const changed = { ...schedule, ...changes, updatedAt: now };
+		const { projectId: _projectId, model: _model, ...kept } = schedule;
+		const { projectId: statedProject, model: statedModel, ...stated } = changes;
+		const projectId = this.settled(schedule.projectId, statedProject);
+		const model = this.settled(schedule.model, statedModel);
+		const changed: Schedule = {
+			...kept,
+			...stated,
+			...(projectId ? { projectId } : {}),
+			...(model ? { model } : {}),
+			updatedAt: now
+		};
 		const retimed = changes.recurrence !== undefined || changes.timeZone !== undefined;
 		if (!retimed || schedule.status === 'paused') return { kind: 'scheduled', schedule: changed };
 		return this.activate(this.unscheduled(changed), now);
@@ -152,18 +162,19 @@ export class ScheduleRules implements ScheduleRecurrence, ScheduleEdits, Schedul
 		return { kind: 'scheduled', schedule: { ...schedule, status: 'active', nextRunAt: next.at } };
 	}
 
+	/** Every part of a schedule but when it runs next, so a new part cannot be left behind. */
 	private unscheduled(schedule: Schedule): Unscheduled {
-		return {
-			id: schedule.id,
-			userId: schedule.userId,
-			title: schedule.title,
-			prompt: schedule.prompt,
-			recurrence: schedule.recurrence,
-			timeZone: schedule.timeZone,
-			executionMode: schedule.executionMode,
-			createdAt: schedule.createdAt,
-			updatedAt: schedule.updatedAt
-		};
+		if (schedule.status === 'active') {
+			const { status: _status, nextRunAt: _nextRunAt, ...rest } = schedule;
+			return rest;
+		}
+		const { status: _status, ...rest } = schedule;
+		return rest;
+	}
+
+	/** A change that does not state a value keeps the stored one; `null` removes it. */
+	private settled<T>(stored: T | undefined, stated: T | null | undefined): T | undefined {
+		return stated === undefined ? stored : (stated ?? undefined);
 	}
 
 	/** The wall-clock times a repeating recurrence names on one local date, earliest first. */

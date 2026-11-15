@@ -8,7 +8,12 @@ import {
 	tuesdayRun
 } from '$lib/testing/schedules/fixtures/schedules';
 import { scheduledRunsFixture } from '$lib/testing/schedules/fixtures/runs';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import {
+	scheduleModel,
+	scheduleProject,
+	scheduleSkill
+} from '$lib/testing/schedules/fixtures/start';
+import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const runStatus = new AgentRunStatusService();
 const afterTuesdayRun = '2026-11-17T07:00:20.000Z' as DateTime;
@@ -160,5 +165,129 @@ describe('the run of a schedule whose time has come', () => {
 			occurrences: 1,
 			nextRunAt: ['2026-11-19T07:00:00.000Z']
 		});
+	});
+});
+
+describe('what a schedule names for its runs', () => {
+	const named = () =>
+		scheduleBuilder({
+			projectId: scheduleProject.id,
+			model: scheduleModel,
+			skillNoteIds: [scheduleSkill().note.id]
+		});
+
+	/** Starts the due run, waits until it has failed, then asks the worker's question again. */
+	const failedStart = async (fixture: ReturnType<typeof setup>) => {
+		const [schedule] = fixture.schedules.rows;
+		const start = await fixture.controller.runDueSchedule(schedule!.id);
+		await vi.waitFor(() => {
+			if (fixture.runs.runs[0]?.status !== 'failed') throw new Error('The run has not failed yet');
+		});
+		const nextTick = await fixture.controller.runDueSchedule(schedule!.id);
+		return {
+			started: [start.kind, nextTick.kind],
+			runs: fixture.runs.runs.length,
+			occurrences: fixture.occurrences.occurrences.length,
+			failure: fixture.runs.runs[0]?.failure,
+			nextRunAt: fixture.schedules.rows.map((saved) => saved.status === 'active' && saved.nextRunAt)
+		};
+	};
+	/** One run and one occurrence, the schedule moved to Wednesday, and nothing more to start. */
+	const failedOnce = (failure: string) => ({
+		started: ['started', 'not_due'],
+		runs: 1,
+		occurrences: 1,
+		failure,
+		nextRunAt: [wednesdayRun]
+	});
+
+	it('starts the run in the schedule\u2019s project, on its model, with its skills', async () => {
+		const schedule = named();
+		const fixture = setup([schedule], afterTuesdayRun);
+
+		await fixture.controller.runDueSchedule(schedule.id);
+
+		const [run] = fixture.runs.runs;
+		const [conversation] = fixture.conversations.conversations;
+		expect({
+			chat: [conversation?.contextProjectId, conversation?.modelOverride],
+			model: run?.model,
+			input: run?.kind === 'agent' && [
+				run.inputSnapshot.projectId,
+				run.inputSnapshot.requestedSkillNoteIds
+			]
+		}).toEqual({
+			chat: [scheduleProject.id, scheduleModel],
+			model: scheduleModel,
+			input: [scheduleProject.id, [scheduleSkill().note.id]]
+		});
+	});
+
+	it('runs a schedule that names no model on its owner\u2019s default model', async () => {
+		const schedule = scheduleBuilder();
+		const fixture = setup([schedule], afterTuesdayRun);
+
+		await fixture.controller.runDueSchedule(schedule.id);
+
+		const [run] = fixture.runs.runs;
+		const [conversation] = fixture.conversations.conversations;
+		expect([run?.model, conversation?.modelOverride, conversation?.contextProjectId]).toEqual([
+			'openai/test-model',
+			undefined,
+			undefined
+		]);
+	});
+
+	it('fails the run, once, when the schedule\u2019s model is no longer offered', async () => {
+		const fixture = setup([named()], afterTuesdayRun, 'running');
+		fixture.models.models = [];
+
+		const outcome = await failedStart(fixture);
+
+		expect([outcome, fixture.runs.runs[0]?.providerErrorCode]).toEqual([
+			failedOnce(
+				`This schedule's model, ${scheduleModel}, is no longer offered. Choose another model on the schedule's page, then run it again.`
+			),
+			'MODEL_UNAVAILABLE'
+		]);
+	});
+
+	it('fails the run, once, when the schedule\u2019s project is archived', async () => {
+		const fixture = setup([named()], afterTuesdayRun, 'running');
+		await fixture.projects.archive(scheduleProject.id);
+
+		expect(await failedStart(fixture)).toEqual(
+			failedOnce(
+				"This schedule's project is archived or no longer exists. Choose another project on the schedule's page, then run it again."
+			)
+		);
+	});
+
+	it('fails the run, once, when a skill the schedule names is turned off', async () => {
+		const fixture = setup([named()], afterTuesdayRun, 'running');
+		fixture.skills.skills = [{ ...scheduleSkill(), isEnabled: false }];
+
+		expect(await failedStart(fixture)).toEqual(
+			failedOnce(
+				"A skill this schedule uses is turned off or no longer exists. Remove it on the schedule's page, then run it again."
+			)
+		);
+	});
+
+	it('still runs a chat that mentions a skill which is gone', async () => {
+		const fixture = setup([], afterTuesdayRun, 'running');
+
+		await fixture.controller.submit({
+			requestId: crypto.randomUUID(),
+			input: 'Plan my day',
+			requestedSkillNoteIds: [testNoteId(99)]
+		});
+		await vi.waitFor(() => {
+			if (fixture.runs.runs[0]?.status === 'queued') throw new Error('The run has not started');
+		});
+
+		expect(fixture.runs.runs.map((run) => [run.status, run.failure])).toEqual([
+			['running', undefined]
+		]);
 	});
 });

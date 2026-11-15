@@ -9,6 +9,7 @@ import {
 	InMemoryScheduleRepository,
 	InMemoryScheduleTable
 } from '$lib/testing/schedules/fakes/in-memory-schedules';
+import { scheduleStartFixture } from '$lib/testing/schedules/fixtures/start';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 /**
@@ -26,15 +27,27 @@ export const scheduledRunsFixture = (
 	const occurrences = new InMemoryScheduleOccurrenceRepository(
 		(runId) => harness.runs.runs.find((run) => run.id === runId)?.status
 	);
+	// What a schedule can name, so a spec can take one away before the run starts.
+	const start = scheduleStartFixture(testActor());
 	const harness = agentSubmissionFixture(
 		phase,
 		{},
 		{
 			now: () => clock.now,
+			contextProjects: start.projects,
+			contextSkills: start.skills,
 			schedules: new ScheduleLibrary(new InMemoryScheduleRepository(testActor(), table)),
 			scheduleRules: new ScheduleRules(),
 			scheduleRuns: new ScheduleRuns(occurrences)
 		}
 	);
-	return { ...harness, clock, schedules: table, occurrences };
+	harness.models.models = start.models.models;
+	return {
+		...harness,
+		clock,
+		schedules: table,
+		occurrences,
+		projects: start.projects,
+		skills: start.skills
+	};
 };

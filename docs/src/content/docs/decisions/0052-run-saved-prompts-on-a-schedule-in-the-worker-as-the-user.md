@@ -9,6 +9,9 @@ Accepted. This decision amends ADR 0025: startup recovery settles only the runs 
 of process was executing. It amends ADR 0032: the worker also runs the agent. It adds one
 execution path to ADR 0034.
 
+Amended on 2026-11-15: a schedule can name a project, a model and skills. See "What a run starts
+with".
+
 ## Context
 
 The agent works only while a user has a chat open. ADR 0049 let it reach other services, but a
@@ -85,6 +88,37 @@ mode: a schedule made through a tool always asks first. Only the user can set au
 application. A scheduled run can read schedules, but it is not offered the tools that change
 them.
 
+### What a run starts with
+
+A schedule can name a project, a model and skills. Each is optional. Without a project, a run
+uses the whole workspace. Without a model, a run uses its owner's default model at the time it
+starts.
+
+The run takes these values through the path that a chat uses. The conversation is created in
+the project, with the model as its model. The skills are requested for the run. Nobody mentions
+a skill in a scheduled run, so the instructions tell the run to load each named skill before it
+acts.
+
+The skills are an array of note ids on the schedule row. A separate table would need its own
+synchronized record type. It would also remove a deleted skill from the schedule without a
+trace.
+
+The application checks a value when a request states it. It refuses a model that is not offered,
+a project that the user cannot use, and a skill that is not turned on. A request that states
+none of these is not checked, so the user can still rename a schedule whose model has left the
+catalog.
+
+A value can stop being valid after the schedule is saved. The provider can withdraw the model,
+the user can archive the project, or the user can turn off the skill. A run never continues
+without the value, because it would look like a run that did what the schedule says. The
+transaction that starts the run does not check the values: a failure there would undo the move
+to the next occurrence, and the worker would start the schedule again at each poll. The run
+checks them when it begins. It then fails, and its message names the part to change. The user
+sees the failed run in the schedule's list and in the menu.
+
+"Pinned" is not used for these values. A pinned skill is a skill that leads the skill list of a
+project.
+
 ### Results
 
 Each run is a new conversation in the chat history. It is marked as scheduled, and the prompt is
@@ -119,8 +153,15 @@ claims it and becomes its executor.
   ones. An hourly schedule adds 8,760 conversations in a year.
 - Many schedules at the same minute start many runs in one worker. The decision sets no limit on
   concurrent runs, because none is measured.
-- A schedule has no project, model or skill of its own. A run uses the whole workspace and the
-  user's default model.
+- A schedule whose model, project or skill is no longer available fails each run until the
+  user changes the schedule. A daily schedule fails daily.
+- A failed run that is retried from its chat fails again. The retry replays the input that was
+  saved with the run. The user must change the schedule and run it again.
+- A schedule has no vision model. A scheduled run has no images.
+- No application operation deletes a project; a project is archived. If a project row is
+  deleted, the database clears the project of each schedule that names it, and later runs use
+  the whole workspace. An operation that deletes projects must decide what happens to those
+  schedules.
 - A schedule sends no email or push notification. The user learns of a run when they open the
   application.
 

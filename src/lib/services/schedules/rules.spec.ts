@@ -8,7 +8,11 @@ import {
 	testScheduleId,
 	tuesdayRun
 } from '$lib/testing/schedules/fixtures/schedules';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import {
+	testActor,
+	testNoteId,
+	testProjectId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { ScheduleRules } from './rules';
 
 const rules = new ScheduleRules();
@@ -98,6 +102,7 @@ describe('a change to a schedule', () => {
 		prompt: 'Write a brief of what is due today as a note in Inbox.',
 		recurrence: { kind: 'weekdays', time: { hour: 8, minute: 0 } },
 		timeZone: brussels,
+		skillNoteIds: [],
 		executionMode: 'approval_required'
 	} as const;
 
@@ -188,6 +193,48 @@ describe('a change to a schedule', () => {
 				nextRunAt: instant('2026-12-01T08:00:00.000Z')
 			})
 		});
+	});
+
+	it('keeps the project, the model and the skills through a pause and a resume', () => {
+		const named = scheduleBuilder({
+			projectId: testProjectId(7),
+			model: 'anthropic/careful-model',
+			skillNoteIds: [testNoteId(41), testNoteId(42)]
+		});
+
+		const resumed = rules.resume(rules.pause(named, mondayMorning), mondayMorning);
+
+		expect(resumed).toEqual({ kind: 'scheduled', schedule: named });
+	});
+
+	it('removes the project and the model with null, and keeps what a change does not state', () => {
+		const named = scheduleBuilder({
+			projectId: testProjectId(7),
+			model: 'anthropic/careful-model',
+			skillNoteIds: [testNoteId(41)]
+		});
+		const later = instant('2026-11-16T10:00:00.000Z');
+
+		expect([
+			rules.change(named, { title: 'Brief' }, later),
+			rules.change(named, { projectId: null, model: null }, later),
+			rules.change(named, { projectId: testProjectId(8), skillNoteIds: [] }, later)
+		]).toEqual([
+			{ kind: 'scheduled', schedule: { ...named, title: 'Brief', updatedAt: later } },
+			{
+				kind: 'scheduled',
+				schedule: scheduleBuilder({ skillNoteIds: [testNoteId(41)], updatedAt: later })
+			},
+			{
+				kind: 'scheduled',
+				schedule: scheduleBuilder({
+					projectId: testProjectId(8),
+					model: 'anthropic/careful-model',
+					skillNoteIds: [],
+					updatedAt: later
+				})
+			}
+		]);
 	});
 
 	it('does not move the next run when the execution mode changes', () => {

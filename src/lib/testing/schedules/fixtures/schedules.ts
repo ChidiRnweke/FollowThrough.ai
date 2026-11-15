@@ -20,6 +20,7 @@ export const scheduleBuilder = (overrides: Partial<Schedule> = {}): Schedule => 
 		prompt: 'Write a brief of what is due today as a note in Inbox.',
 		recurrence: { kind: 'weekdays' as const, time: { hour: 8, minute: 0 } },
 		timeZone: brussels,
+		skillNoteIds: [],
 		executionMode: 'approval_required' as const,
 		createdAt: mondayMorning,
 		updatedAt: mondayMorning,

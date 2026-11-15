@@ -25,6 +25,7 @@ import {
 	testScheduleId,
 	tuesdayRun
 } from '$lib/testing/schedules/fixtures/schedules';
+import { scheduleStartFixture } from '$lib/testing/schedules/fixtures/start';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
@@ -63,7 +64,8 @@ const setup = (
 		reader: library,
 		writer: library,
 		runs: new ScheduleRuns(new InMemoryScheduleOccurrenceRepository(() => undefined)),
-		transactionRunner: new InMemoryTransactionRunner([table])
+		transactionRunner: new InMemoryTransactionRunner([table]),
+		...scheduleStartFixture(testActor()).dependencies
 	});
 	const runsStarted: ScheduleId[] = [];
 	const harness = capabilityDependencies<AgentHarness>({

@@ -1592,6 +1592,16 @@ export const schedules = pgTable(
 		prompt: text('prompt').notNull(),
 		recurrence: jsonb('recurrence').$type<Recurrence>().notNull(),
 		timeZone: text('time_zone').notNull(),
+		// What each run starts with. A null project is the whole workspace, and a null model is
+		// its owner's default model when the run starts.
+		projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+		model: text('model'),
+		// An array on the row, so the choice reaches the browser with the schedule. A skill that
+		// is later deleted stays named here: its run fails and says so (ADR 0052).
+		skillNoteIds: uuid('skill_note_ids')
+			.array()
+			.notNull()
+			.default(sql`'{}'::uuid[]`),
 		executionMode: agentExecutionMode('execution_mode').notNull(),
 		status: text('status').notNull(),
 		nextRunAt: timestamp('next_run_at', { withTimezone: true }),
@@ -1607,7 +1617,8 @@ export const schedules = pgTable(
 			'schedules_next_run_check',
 			sql`(${table.status} = 'active') = (${table.nextRunAt} is not null)`
 		),
-		check('schedules_recurrence_check', sql`jsonb_typeof(${table.recurrence}) = 'object'`)
+		check('schedules_recurrence_check', sql`jsonb_typeof(${table.recurrence}) = 'object'`),
+		check('schedules_model_check', sql`${table.model} is null or length(btrim(${table.model})) > 0`)
 	]
 );
 

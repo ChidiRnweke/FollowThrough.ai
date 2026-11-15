@@ -730,7 +730,16 @@ export function createApplication(
 		attachmentProcessing: attachmentCapability.processing,
 		knowledgeIndexing: knowledgeSearch.indexing,
 		connectors: connectorCapability.controller,
-		schedules: schedules.controller
+		schedules: {
+			...schedules.controller,
+			models: modelCatalog,
+			modelChoices: agentCapability.modelChoices,
+			modelSelection: agentCapability.modelSelection,
+			defaultModel: defaultAgentModel,
+			defaultVisionModel,
+			projects: projects.catalog,
+			skills: skills.finder
+		}
 	};
 	const controllerFactory = new ProductionControllerFactory(actor, dependencies);
 	return {

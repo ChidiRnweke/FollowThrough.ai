@@ -33,7 +33,14 @@
 		const result = await workspaceSession.serverChange(
 			createSchedule({
 				id,
-				definition: { title: name, prompt: prompt.trim(), recurrence, timeZone, executionMode }
+				definition: {
+					title: name,
+					prompt: prompt.trim(),
+					recurrence,
+					timeZone,
+					skillNoteIds: [],
+					executionMode
+				}
 			})
 		);
 		creating = false;
