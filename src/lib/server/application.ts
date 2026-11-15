@@ -92,6 +92,8 @@ export interface ApplicationConfig {
 	readonly mistralBaseURL?: string;
 	readonly ocrModel?: string;
 	readonly recommendedModels?: readonly string[];
+	/** Whether agent traces carry prompts, answers and tool payloads (`AGENT_TRACE_CONTENT`). */
+	readonly agentTraceContent: boolean;
 	readonly s3?: ObjectStorageConfig;
 	/** Whether this deployment can seal connector credentials, and how connectors reach out. */
 	readonly connectors: ConnectorConfiguration;
@@ -255,6 +257,7 @@ export function createApplication(
 		defaultModel: defaultAgentModel,
 		defaultVisionModel,
 		recommendedModels: config.recommendedModels ?? [],
+		agentTraceContent: config.agentTraceContent,
 		modelCatalog: overrides.modelCatalog
 	});
 	const {

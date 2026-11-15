@@ -13,6 +13,7 @@ import {
 	DEFAULT_LANGUAGE_MODEL_BASE_URL,
 	DEFAULT_MISTRAL_BASE_URL,
 	DEFAULT_OCR_MODEL,
+	agentTraceContent,
 	connectorClientKeys,
 	connectorOperationTimeoutMs,
 	requiredEnvironmentValue
@@ -87,6 +88,7 @@ function productionConfig(executor: RunExecutor): ApplicationConfig {
 			.map((model) => model.trim())
 			.filter(Boolean),
 		connectors: connectorConfiguration(),
+		agentTraceContent: agentTraceContent(),
 		s3: {
 			endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:9000',
 			region: process.env.S3_REGION ?? 'us-east-1',

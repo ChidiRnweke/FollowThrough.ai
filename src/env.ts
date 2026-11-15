@@ -169,6 +169,11 @@ export const variables = defineEnvVars({
 			'fetching an icon (defaults to 60000).',
 		schema: optionalString
 	},
+	AGENT_TRACE_CONTENT: {
+		description:
+			'Whether agent traces carry prompts, answers and tool payloads: true (default) or false.',
+		schema: optionalString
+	},
 	OPENROUTER_API_KEY: {
 		description: 'OpenRouter API key used by workbench chat.',
 		schema: optionalString

@@ -8,6 +8,7 @@ import {
 	SecretsNotFoundError,
 	SecretsReader,
 	OPTIONAL_APPLICATION_KEYS,
+	agentTraceContent,
 	PREREGISTERED_CONNECTORS,
 	connectorClientKeys,
 	hydrateEnvironment,
@@ -412,6 +413,30 @@ describe('request body limits', () => {
 			report: { parses: true, fits: true },
 			registration: { parses: true, fits: true },
 			token: { parses: true, fits: true }
+		});
+	});
+});
+
+describe('agentTraceContent', () => {
+	const readWith = (value: string | undefined) => {
+		const saved = process.env.AGENT_TRACE_CONTENT;
+		if (value === undefined) delete process.env.AGENT_TRACE_CONTENT;
+		else process.env.AGENT_TRACE_CONTENT = value;
+		try {
+			return agentTraceContent();
+		} catch (error) {
+			return error instanceof Error ? error.message : 'not an error';
+		} finally {
+			if (saved === undefined) delete process.env.AGENT_TRACE_CONTENT;
+			else process.env.AGENT_TRACE_CONTENT = saved;
+		}
+	};
+
+	test('reads true and false, and refuses anything else instead of guessing', () => {
+		expect({ on: readWith('true'), off: readWith('false'), other: readWith('no') }).toEqual({
+			on: true,
+			off: false,
+			other: 'AGENT_TRACE_CONTENT must be "true" or "false"'
 		});
 	});
 });

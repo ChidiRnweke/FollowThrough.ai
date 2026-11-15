@@ -124,6 +124,8 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		openRouterBaseURL: baseURL,
 		appURL,
 		defaultAgentModel: model,
+		// Eval runs are read in Phoenix, prompt and answer included.
+		agentTraceContent: true,
 		// The lab plays the web process: it submits runs and executes them itself.
 		executor: 'web',
 		// No eval case connects a service yet, so the lab runs the configuration without keys.

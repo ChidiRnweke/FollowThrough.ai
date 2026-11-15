@@ -53,6 +53,8 @@ The worker also runs the agent (ADR 0052). Every 30 seconds it starts the schedu
 
 Telemetry is optional but wired in from the start: both processes boot with `scripts/otel-instrumentation.js` and export OTLP to a collector (`OTEL_EXPORTER_OTLP_ENDPOINT`), which filters down to LLM/tool/agent spans and forwards them to Phoenix (`otel-collector-config.yaml`).
 
+Logs at info, warn and error carry metadata only: ids, enum values, counts, lengths, outcomes and durations, never note text or prompts. Agent traces in Phoenix carry the prompts, answers and tool payloads of each run, so you can read what the agent did. Set `AGENT_TRACE_CONTENT=false` to keep only their shape, timing, ids and lengths. The setting covers agent turns; inline-suggestion, promise-extraction and retrieval spans still record the text they were given. It must be `true` (the default) or `false`.
+
 ## The image
 
 `Dockerfile` is a four-stage node:22-alpine build: `base` (pnpm via corepack) → `prod-deps` (production `node_modules`) → `builder` (`pnpm build`, which builds both the SvelteKit app and the worker entrypoint via `vite.config.worker.ts`) → `runtime`. The runtime stage carries `build/`, `build-worker/`, `drizzle/` (the migration SQL), `scripts/` (migration and provisioning), and `assets/` (embedded fonts for PDF export): everything the app, the worker, and the one-shot migrate job need, in one image. The default command serves the app on `:3000` through `scripts/start-web.js`, which waits for active HTTP requests before shutting down telemetry; the worker is the same image with `command: ['node', '--import', './scripts/otel-instrumentation.js', 'build-worker/worker.js']`.

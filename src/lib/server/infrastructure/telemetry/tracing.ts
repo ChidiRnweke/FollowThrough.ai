@@ -83,8 +83,9 @@ const MAX_SUMMARY_CHARS = 500;
 const MCP_CREDENTIAL = /\b(ftc|fta|ftr)_[A-Za-z0-9_-]+/g;
 
 /**
- * One-line rendering of an argument or result for a log record: JSON, capped,
- * base64 elided, credentials redacted. Summaries, never raw payloads — privacy and record size.
+ * One-line rendering of a log record's context: JSON, capped, base64 elided, credentials
+ * redacted. It renders whatever it is given, content included, so a line that must carry no
+ * content passes it metadata only.
  */
 export const summarize = (value: unknown, maxChars: number = MAX_SUMMARY_CHARS): string => {
 	let rendered: string;
@@ -340,19 +341,38 @@ const fromTraceparent = (traceparent: string): Context => {
 	});
 };
 
+const INPUT_LENGTH = 'followthrough.input.length';
+const OUTPUT_LENGTH = 'followthrough.output.length';
+
+/**
+ * The agent turn observer under a deployment's content policy (`AGENT_TRACE_CONTENT`). When it
+ * records content, the turn root carries the prompt and the answer for Phoenix. When it does not,
+ * the root carries their lengths beside the session, user, run and model that place the turn.
+ */
+export const agentTurnTracer =
+	(recordContent: boolean) =>
+	<T>(
+		params: AgentTurnSpanParams,
+		body: () => AsyncIterable<T>,
+		getOutput: () => string
+	): AsyncGenerator<T> =>
+		traceAgentTurn(params, body, getOutput, recordContent);
+
 /**
  * Drives an async agent stream with the turn root active for every iterator
  * step. The OpenAI Agents SDK processor therefore emits its native
  * AGENT/LLM/TOOL hierarchy beneath this root and inherits the conversation
  * session.
  */
-export async function* traceAgentTurn<T>(
+async function* traceAgentTurn<T>(
 	params: AgentTurnSpanParams,
 	body: () => AsyncIterable<T>,
-	getOutput: () => string
+	getOutput: () => string,
+	recordContent: boolean
 ): AsyncGenerator<T> {
 	const workflowParams: WorkflowTraceContext = {
-		input: params.input,
+		...(recordContent ? { input: params.input } : {}),
+		attributes: { [INPUT_LENGTH]: params.input.length },
 		kind: OpenInferenceSpanKind.CHAIN,
 		sessionId: params.sessionId,
 		...(params.userId ? { userId: params.userId } : {}),
@@ -388,7 +408,8 @@ export async function* traceAgentTurn<T>(
 	} finally {
 		if (!errored) {
 			const output = getOutput();
-			if (output) {
+			span.setAttribute(OUTPUT_LENGTH, output.length);
+			if (output && recordContent) {
 				span.setAttribute(SemanticConventions.OUTPUT_VALUE, output);
 				span.setAttribute(SemanticConventions.OUTPUT_MIME_TYPE, MimeType.TEXT);
 			}

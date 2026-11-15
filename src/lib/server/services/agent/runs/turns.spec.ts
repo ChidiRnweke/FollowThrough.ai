@@ -57,13 +57,14 @@ class ParkingModel implements Model {
 const turnOver = async (
 	history: readonly PersistedSessionItem[],
 	prompt: { text: string; images: ConversationImageInput[] } = { text: 'Next', images: [] },
-	options: { model?: Model; tools?: ReturnType<typeof tool>[] } = {}
+	options: { model?: Model; tools?: ReturnType<typeof tool>[]; traceContent?: boolean } = {}
 ) => {
 	const model = options.model ?? new InMemoryTextModel('Done');
 	const provider = new InMemoryModelProvider(model);
 	const turns = new AgentTurnService({
 		models: () => provider,
-		images: capabilityDependencies<Pick<OpenAI, 'chat'>>({})
+		images: capabilityDependencies<Pick<OpenAI, 'chat'>>({}),
+		traceContent: options.traceContent ?? true
 	});
 	const turn = await turns.turn({
 		model: 'test/model',
@@ -83,7 +84,12 @@ const turnOver = async (
 	const outcome = await turn.outcome();
 	await turn.close();
 	const requests = model instanceof InMemoryTextModel ? model.requests : [];
-	return { seen: JSON.stringify(requests[0]?.input), outcome, provider };
+	return {
+		seen: JSON.stringify(requests[0]?.input),
+		tracing: requests[0]?.tracing,
+		outcome,
+		provider
+	};
 };
 
 describe('What the model sees of a conversation', () => {
@@ -213,5 +219,19 @@ describe('A turn that parks on an approval', () => {
 			setTraceProcessors([]);
 		}
 		expect(ended).toContain('agent');
+	});
+});
+
+describe('What the model trace may carry', () => {
+	// The model owns its generation span and fills in the prompt and the answer only when the
+	// request says tracing is `true`; `enabled_without_data` keeps the span without them.
+	it('asks the model to trace without prompts or answers when trace content is off', async () => {
+		const recorded = await turnOver([], undefined, { traceContent: true });
+		const withheld = await turnOver([], undefined, { traceContent: false });
+
+		expect({ recorded: recorded.tracing, withheld: withheld.tracing }).toEqual({
+			recorded: true,
+			withheld: 'enabled_without_data'
+		});
 	});
 });
