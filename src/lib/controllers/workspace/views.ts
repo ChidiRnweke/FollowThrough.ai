@@ -57,10 +57,14 @@ import type {
 	IanaTimeZone,
 	Recurrence,
 	Schedule,
+	ScheduleContent,
 	ScheduleDetail,
 	ScheduleId,
 	ScheduleOccurrence,
+	ScheduleProjectView,
 	ScheduleRow,
+	ScheduleSkillView,
+	ScheduleStartView,
 	ScheduleViewer,
 	ScheduledAttention,
 	ScheduledChat,
@@ -131,6 +135,11 @@ export interface WorkspaceViewsController {
 	scheduledChat(conversationId: ConversationId): ScheduledChat | null;
 	/** A time zone as a person names it, such as "Brussels time". */
 	scheduleZoneName(timeZone: IanaTimeZone): string;
+	/**
+	 * The project and the skills a schedule names, as this device knows them. A draft that is
+	 * not saved yet is resolved the same way.
+	 */
+	scheduleStart(content: Pick<ScheduleContent, 'projectId' | 'skillNoteIds'>): ScheduleStartView;
 	/** What a recurrence that is not saved yet would do next, as the line under it says. */
 	schedulePreview(
 		recurrence: Recurrence,
@@ -734,8 +743,30 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		return {
 			...row,
 			runs,
-			standing: this.schedulePresentation.standing(schedule, row.waiting > 0, viewer.now)
+			standing: this.schedulePresentation.standing(schedule, row.waiting > 0, viewer.now),
+			start: this.scheduleStart(schedule)
 		};
+	}
+
+	scheduleStart(content: Pick<ScheduleContent, 'projectId' | 'skillNoteIds'>): ScheduleStartView {
+		const project = content.projectId ? this.scheduleProject(content.projectId) : undefined;
+		return {
+			...(project ? { project } : {}),
+			skills: content.skillNoteIds.map((noteId): ScheduleSkillView => {
+				const note = this.get('notes', noteId);
+				if (!note || note.kind !== 'skill') return { kind: 'deleted', noteId };
+				// `skill` is null for a skill in the trash and for one whose project is archived.
+				return this.skill(noteId)?.isEnabled
+					? { kind: 'ready', noteId, name: note.title }
+					: { kind: 'unavailable', noteId, name: note.title };
+			})
+		};
+	}
+
+	private scheduleProject(id: ProjectId): ScheduleProjectView {
+		const project = this.get('projects', id);
+		if (!project) return { kind: 'deleted', id };
+		return { kind: project.archivedAt ? 'archived' : 'active', id, name: project.name };
 	}
 
 	scheduledAttention(viewer: ScheduleViewer): ScheduledAttention {

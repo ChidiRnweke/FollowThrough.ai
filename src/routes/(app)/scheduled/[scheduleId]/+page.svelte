@@ -10,5 +10,12 @@
 </script>
 
 {#if detail}
-	{#key detail.schedule.id}<ScheduleDetail {detail} onopenrun={openConversationSurface} />{/key}
+	{#key detail.schedule.id}
+		<ScheduleDetail
+			{detail}
+			models={data.session.agentModels}
+			defaultModelId={data.session.agentDefaults.chatModelId}
+			onopenrun={openConversationSurface}
+		/>
+	{/key}
 {:else}<p>This schedule is no longer available.</p>{/if}
