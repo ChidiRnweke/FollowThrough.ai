@@ -44,7 +44,8 @@ export const toSession = (row: typeof schema.sessions.$inferSelect): Session =>
 		id: row.id,
 		userId: row.userId,
 		expiresAt: row.expiresAt,
-		createdAt: instant(row.createdAt)
+		createdAt: instant(row.createdAt),
+		lastRenewedAt: row.lastRenewedAt ? instant(row.lastRenewedAt) : undefined
 	});
 
 export const toMcpConnection = (row: typeof schema.mcpConnections.$inferSelect): McpConnection =>

@@ -2,7 +2,7 @@ import type { HandleServerError, ServerInit } from '@sveltejs/kit';
 import { building } from '$app/env';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import type { OwnedRun } from '$lib/models/agent';
-import { sessionIdSchema } from '$lib/models/identity';
+import { sessionTokenSchema } from '$lib/models/identity';
 import {
 	deleteSessionCookie,
 	getSessionCookie,
@@ -108,16 +108,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const sessionCookie = getSessionCookie(event.cookies);
 
 	if (sessionCookie !== null) {
-		const sessionId = sessionIdSchema.safeParse(sessionCookie);
-		// A value no session id can have names no session: drop the cookie without a lookup.
-		if (!sessionId.success) deleteSessionCookie(event.cookies);
+		const token = sessionTokenSchema.safeParse(sessionCookie);
+		// A value no session token can have opens no session: drop the cookie without a lookup.
+		if (!token.success) deleteSessionCookie(event.cookies);
 		else {
-			const result = await AppFactory.authentication().resumeSession(sessionId.data);
+			const result = await AppFactory.authentication().resumeSession(token.data);
 			if (result) {
-				// Session validation may extend the stored deadline. Keep the browser in sync.
+				// Session validation may extend the stored deadline. Keep the browser in sync. The
+				// cookie carries the token; the stored session id is only its digest.
 				setSessionCookie(
 					event.cookies,
-					result.session.id,
+					token.data,
 					event.url.protocol === 'https:',
 					result.session.expiresAt
 				);

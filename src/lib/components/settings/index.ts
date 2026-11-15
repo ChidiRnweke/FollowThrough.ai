@@ -1,3 +1,4 @@
+export { default as SettingsBrowsers } from './workspace/settings-browsers.svelte';
 export { default as ConnectorDetail } from './workspace/connector-detail.svelte';
 export { default as SettingsAgents } from './workspace/settings-agents.svelte';
 export { default as SettingsConnectors } from './workspace/settings-connectors.svelte';

@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { ActorContext, User, UserId } from '$lib/models/identity';
 import type {
 	CreateUserData,
@@ -54,11 +54,17 @@ export class UserAccountRecords implements UserAccountRepository {
 			.where(eq(schema.users.authProviderId, providerId));
 		return row ? toUser(row) : undefined;
 	}
-	async updateAuthProvider(userId: UserId, provider: string, providerId: string): Promise<void> {
-		await this.database
+	async linkAuthProvider(
+		userId: UserId,
+		provider: string,
+		providerId: string
+	): Promise<User | undefined> {
+		const [row] = await this.database
 			.update(schema.users)
 			.set({ authProvider: provider, authProviderId: providerId })
-			.where(eq(schema.users.id, userId));
+			.where(and(eq(schema.users.id, userId), isNull(schema.users.authProviderId)))
+			.returning();
+		return row ? toUser(row) : undefined;
 	}
 	async create(data: CreateUserData): Promise<User> {
 		const [row] = await this.database

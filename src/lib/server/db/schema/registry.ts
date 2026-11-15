@@ -232,13 +232,18 @@ export const users = pgTable(
 	]
 );
 
+/**
+ * Browser sessions. `id` is the hex SHA-256 digest of the token in the session cookie; the token
+ * itself is never stored. `last_renewed_at` stays null until the first renewal.
+ */
 export const sessions = pgTable('sessions', {
 	id: text('id').primaryKey(),
 	userId: uuid('user_id')
 		.notNull()
 		.references(() => users.id, { onDelete: 'cascade' }),
 	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	lastRenewedAt: timestamp('last_renewed_at', { withTimezone: true })
 });
 
 /**

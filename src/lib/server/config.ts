@@ -28,6 +28,7 @@ const positiveIntegerSetting = (
 		| 'AUTHENTIK_REQUEST_TIMEOUT_MS'
 		| 'MCP_CLIENT_UNUSED_RETENTION_MS'
 		| 'MCP_CLIENT_SWEEP_INTERVAL_MS'
+		| 'SESSION_MAX_LIFETIME_DAYS'
 ): number => {
 	const value = Number(process.env[name] ?? APPLICATION_DEFAULTS[name]);
 	if (!Number.isSafeInteger(value) || value < 1)
@@ -170,6 +171,10 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	   to tune: five chat runs executing at once per account, fifty for the deployment. */
 	AGENT_MAX_ACTIVE_RUNS_PER_USER: '5',
 	AGENT_MAX_ACTIVE_RUNS: '50',
+	/* How long a browser session may last from sign-in, however often it is renewed. Starting
+	   value; no measurement yet. Three of the 30-day periods a session is issued and renewed
+	   for; past it the user signs in again. */
+	SESSION_MAX_LIFETIME_DAYS: '90',
 	DB_NAME: 'followthrough',
 	DB_USER: 'followthrough',
 	ORIGIN: 'http://localhost:5173',
@@ -576,16 +581,17 @@ const cookieOptions = (secure: boolean, maxAge: number): CookieOptions => ({
 export const getSessionCookie = (cookies: Pick<CookieJar, 'get'>): string | null =>
 	cookies.get('session') ?? null;
 
+/** `token` is the session token itself, never the stored digest. */
 export const setSessionCookie = (
 	cookies: Pick<CookieJar, 'set'>,
-	sessionId: string,
+	token: string,
 	secure: boolean,
 	expiresAt: Date,
 	now = Date.now()
 ): void =>
 	cookies.set(
 		'session',
-		sessionId,
+		token,
 		cookieOptions(secure, Math.max(0, Math.floor((expiresAt.getTime() - now) / 1000)))
 	);
 
@@ -698,6 +704,11 @@ export const agentTraceContent = (): boolean => {
 	if (value === 'false') return false;
 	throw new Error('AGENT_TRACE_CONTENT must be "true" or "false"');
 };
+
+/** How long a browser session may last in total from sign-in, however often it is renewed. */
+export const sessionLifetime = () => ({
+	maxLifetimeMs: positiveIntegerSetting('SESSION_MAX_LIFETIME_DAYS') * 24 * 60 * 60 * 1000
+});
 
 /** Deployment admission for decompression, not a per-document product limit. */
 export const archiveAdmissionLimits = () => ({

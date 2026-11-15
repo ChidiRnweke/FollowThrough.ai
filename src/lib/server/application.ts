@@ -527,6 +527,9 @@ export function createApplication(
 		mcpConnections: {
 			connections: identity.mcpConnections
 		},
+		signedInBrowsers: {
+			browsers: identity.signedInBrowsers
+		},
 		toolPreferences: {
 			preferences: toolPreferences,
 			catalog: agentCapability.toolCatalog,

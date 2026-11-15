@@ -9,8 +9,13 @@ import {
 	McpGrantRecords
 } from '$lib/server/repositories/identity/postgres/mcp-authorization';
 import { McpClientDirectory } from '$lib/server/services/identity/mcp-clients';
-import { mcpClientRetention } from '$lib/server/config';
+import { mcpClientRetention, sessionLifetime } from '$lib/server/config';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
+import { UserSessionRecords } from '$lib/server/repositories/identity/postgres/sessions';
+import {
+	SignedInBrowserDirectory,
+	type SignedInBrowserLedger
+} from '$lib/server/services/identity/sessions';
 import { UserPreferencesRecords } from '$lib/server/repositories/identity/postgres/user-preferences';
 import { McpGrants, type McpConnectionLedger } from '$lib/server/services/identity/mcp-grants';
 import { UserDirectory, type UserReader } from '$lib/server/services/identity/users';
@@ -27,6 +32,7 @@ export interface IdentityCapabilityInput {
 export interface IdentityCapability {
 	readonly userReader: UserReader;
 	readonly mcpConnections: McpConnectionLedger;
+	readonly signedInBrowsers: SignedInBrowserLedger;
 	readonly userPreferences: UserPreferencesReader & UserPreferencesWriter;
 }
 
@@ -36,6 +42,10 @@ export const createIdentityCapability = (
 ): IdentityCapability => ({
 	userReader: tracedService('UserDirectory', new UserDirectory(new UserRecords(actor, input.db))),
 	mcpConnections: tracedService('McpGrants', new McpGrants(new McpGrantRecords(actor, input.db))),
+	signedInBrowsers: tracedService(
+		'SignedInBrowserDirectory',
+		new SignedInBrowserDirectory(new UserSessionRecords(actor, input.db), sessionLifetime())
+	),
 	userPreferences: tracedService(
 		'UserPreferenceStore',
 		new UserPreferenceStore(new UserPreferencesRecords(actor, input.db))

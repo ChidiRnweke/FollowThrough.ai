@@ -1,13 +1,25 @@
-import type { Session, User } from '$lib/models/identity';
+import type { Session, SessionToken, User } from '$lib/models/identity';
 import type { PKCEChallenge } from '$lib/models/identity/oauth';
 import type { IOAuthAuthorization } from '$lib/server/services/identity/oauth-authorization';
-import type { IProviderAccounts } from '$lib/server/services/identity/provider-accounts';
+import type {
+	AccountLinkRefusal,
+	IProviderAccounts
+} from '$lib/server/services/identity/provider-accounts';
 import type { ISessionRegistry } from '$lib/server/services/identity/sessions';
+
+/** A completed sign-in: the account, its new session, and the token for the session cookie. */
+export interface SignedIn {
+	readonly kind: 'signed-in';
+	readonly user: User;
+	readonly session: Session;
+	readonly token: SessionToken;
+}
 
 export interface ISignIn {
 	generatePKCE(): Promise<PKCEChallenge>;
 	getAuthorizationUrl(state: string, codeChallenge: string): Promise<string>;
-	completeOAuthFlow(code: string, codeVerifier: string): Promise<{ user: User; session: Session }>;
+	/** Creates no session when the provider identity may not take over the account for its email. */
+	completeOAuthFlow(code: string, codeVerifier: string): Promise<SignedIn | AccountLinkRefusal>;
 }
 export interface SignInDependencies {
 	readonly authorization: IOAuthAuthorization;
@@ -26,11 +38,12 @@ export class SignIn implements ISignIn {
 	async completeOAuthFlow(
 		code: string,
 		codeVerifier: string
-	): Promise<{ user: User; session: Session }> {
+	): Promise<SignedIn | AccountLinkRefusal> {
 		const tokens = await this.dependencies.authorization.exchangeCodeForTokens(code, codeVerifier);
 		const userInfo = await this.dependencies.authorization.getUserInfo(tokens.access_token);
-		const user = await this.dependencies.accounts.resolve(userInfo);
-		const session = await this.dependencies.sessions.createSession(user.id);
-		return { user, session };
+		const account = await this.dependencies.accounts.resolve(userInfo);
+		if (account.kind === 'failure') return account;
+		const { token, session } = await this.dependencies.sessions.createSession(account.user.id);
+		return { kind: 'signed-in', user: account.user, session, token };
 	}
 }

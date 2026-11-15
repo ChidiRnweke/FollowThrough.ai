@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import postgres from 'postgres';
 
@@ -40,7 +40,7 @@ test('restores each account’s saved tabs after switching accounts on the same 
 	};
 	try {
 		await sql`insert into users (id,email,display_name,role) values (${secondAccount},${`${secondAccount}@local.invalid`},'Second account','USER')`;
-		await sql`insert into sessions (id,user_id,expires_at) values (${secondToken},${secondAccount},now()+interval '1 day')`;
+		await sql`insert into sessions (id,user_id,expires_at) values (${createHash('sha256').update(secondToken).digest('hex')},${secondAccount},now()+interval '1 day')`;
 		await sql`insert into projects (id,user_id,name,role) values (${firstProject},${firstAccount},'Account A work','workspace'),(${secondProject},${secondAccount},'Inbox','inbox')`;
 		for (const note of [
 			{
