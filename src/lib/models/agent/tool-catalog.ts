@@ -576,6 +576,70 @@ export const TOOL_DESCRIPTIONS = [
 		name: 'regenerate_artifact',
 		classification: 'mutation',
 		description: 'Regenerate an artifact from its source notes and return a fresh download link.'
+	},
+	{
+		name: 'list_schedules',
+		classification: 'read',
+		description:
+			"List the user's schedules: prompts they saved for the agent to run again at set times, with nobody present. Each has its recurrence, its time zone, whether a run asks before a change, its state (active, paused or finished) and its next run.",
+		retrievalText:
+			'what runs on a schedule, recurring or automatic agent runs, when the next scheduled run is'
+	},
+	{
+		name: 'get_schedule',
+		classification: 'read',
+		description:
+			'Read one schedule: its title, prompt, recurrence, time zone, whether a run asks before a change, its state and its next run. Read it before update_schedule.',
+		retrievalText: 'read one scheduled prompt, its recurrence and its next run'
+	},
+	{
+		name: 'list_schedule_runs',
+		classification: 'read',
+		description:
+			'List the runs a schedule has started, newest first. Each has the time it was due, whether the schedule or the user started it, the state of its agent run, and the conversation that holds its result.',
+		retrievalText:
+			'what a schedule did, past scheduled runs and whether one is waiting for approval'
+	},
+	{
+		name: 'create_schedule',
+		classification: 'mutation',
+		description:
+			'Save a prompt for the agent to run again at set times, such as a brief every weekday morning or a check every hour. Nobody is present when it runs, so write `prompt` as a complete request that needs no follow-up question and names where the result goes. `recurrence.kind` is once, hourly, daily, weekdays (Monday to Friday), weekly or monthly, with only the fields of that kind; a monthly day past the end of a month runs on its last day. Times are wall-clock times in `timeZone`, an IANA name such as Europe/Brussels: use the time zone in the application context, and ask the user when you do not know it. Each run is a new conversation. A new schedule asks before each change it makes; only the user can let it act without asking, in the application.',
+		retrievalText:
+			'run this every day, every week, every morning, hourly, on a schedule, recurring, remind me, automate a prompt, do this again later'
+	},
+	{
+		name: 'update_schedule',
+		classification: 'mutation',
+		description:
+			'Change the title, prompt, recurrence or time zone of a schedule. Send only the fields that change. The next run is worked out again when the recurrence or the time zone changes. It cannot change whether a run asks before a change.',
+		retrievalText: 'change when a schedule runs or what its prompt says'
+	},
+	{
+		name: 'pause_schedule',
+		classification: 'mutation',
+		description: 'Stop a schedule from running until it is resumed. Its past runs stay.',
+		retrievalText: 'stop a recurring scheduled run for now'
+	},
+	{
+		name: 'resume_schedule',
+		classification: 'mutation',
+		description:
+			'Make a paused or finished schedule active again, from its next occurrence. A one-off schedule whose time has passed needs a later date first.',
+		retrievalText: 'turn a paused schedule back on'
+	},
+	{
+		name: 'delete_schedule',
+		classification: 'mutation',
+		description: 'Delete a schedule. The conversations of its past runs stay in the chat history.',
+		retrievalText: 'remove a recurring scheduled run for good'
+	},
+	{
+		name: 'run_schedule',
+		classification: 'mutation',
+		description:
+			'Run a schedule once now, without changing when it runs next. The run is a new conversation; its result arrives there, not in this conversation.',
+		retrievalText: 'run a scheduled prompt right now, try a schedule out'
 	}
 ] as const satisfies readonly ToolCatalogEntry[];
 

@@ -96,6 +96,34 @@ describe('the run of a schedule whose time has come', () => {
 		});
 	});
 
+	it('runs a schedule now when its owner asks, without moving its next run', async () => {
+		const paused = scheduleBuilder({ status: 'paused' });
+		const fixture = setup([paused], afterTuesdayRun);
+		const requestId = '5d000000-0000-4000-8000-000000000009';
+
+		const receipt = await fixture.controller.runScheduleNow({ scheduleId: paused.id, requestId });
+		const repeated = await fixture.controller.runScheduleNow({ scheduleId: paused.id, requestId });
+
+		expect({
+			sameRun: repeated.runId === receipt.runId,
+			runs: fixture.runs.runs.map((run) => run.requestId),
+			occurrences: fixture.occurrences.occurrences.map((occurrence) => ({
+				id: occurrence.id,
+				trigger: occurrence.trigger,
+				scheduledFor: occurrence.scheduledFor,
+				runId: occurrence.runId
+			})),
+			schedule: fixture.schedules.rows
+		}).toEqual({
+			sameRun: true,
+			runs: [requestId],
+			occurrences: [
+				{ id: requestId, trigger: 'manual', scheduledFor: afterTuesdayRun, runId: receipt.runId }
+			],
+			schedule: [paused]
+		});
+	});
+
 	it('starts nothing before the schedule is due', async () => {
 		const schedule = scheduleBuilder();
 		const fixture = setup([schedule], '2026-11-16T20:00:00.000Z' as DateTime);

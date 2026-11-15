@@ -9,6 +9,7 @@ import type {
 	AgentExecutionMode,
 	AgentRunId,
 	AgentRunReceipt,
+	AgentRunStatus,
 	ConversationId
 } from '$lib/models/agent';
 import type { UserId } from '$lib/models/identity';
@@ -94,6 +95,11 @@ export interface ScheduleOccurrence {
 	/** When its owner first opened the run's chat. */
 	readonly openedAt?: DateTime;
 	readonly createdAt: DateTime;
+}
+
+/** One run of a schedule with where the agent run has got to. */
+export interface ScheduleRun extends ScheduleOccurrence {
+	readonly status: AgentRunStatus;
 }
 
 /** A schedule whose time has come, and the user it runs as. */
@@ -183,6 +189,12 @@ export const createScheduleSchema = z.strictObject({
 export const updateScheduleSchema = z.strictObject({
 	scheduleId: scheduleIdSchema,
 	changes: scheduleChangesSchema
+});
+
+export const runScheduleNowSchema = z.strictObject({
+	scheduleId: scheduleIdSchema,
+	/** The caller's key for this request: asking twice with one key starts one run. */
+	requestId: z.uuid()
 });
 
 export const setScheduleExecutionModeSchema = z.strictObject({

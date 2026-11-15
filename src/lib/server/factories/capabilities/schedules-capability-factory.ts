@@ -33,21 +33,23 @@ export const createSchedulesCapability = (
 		new ScheduleLibrary(new ScheduleRecords(actor, input.db))
 	);
 	const rules = new ScheduleRules();
+	const runs = tracedService(
+		'ScheduleRuns',
+		new ScheduleRuns(new ScheduleOccurrenceRecords(actor, input.db))
+	);
 	return {
 		controller: {
 			now: input.now,
 			rules,
 			reader: library,
 			writer: library,
+			runs,
 			transactionRunner: input.transactionRunner
 		},
 		harness: {
 			schedules: library,
 			scheduleRules: rules,
-			scheduleRuns: tracedService(
-				'ScheduleRuns',
-				new ScheduleRuns(new ScheduleOccurrenceRecords(actor, input.db))
-			)
+			scheduleRuns: runs
 		}
 	};
 };

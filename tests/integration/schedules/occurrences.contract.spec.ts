@@ -130,6 +130,31 @@ describe('the storage of schedule runs', () => {
 		expect([queued, parked, decided]).toEqual([false, true, false]);
 	});
 
+	it('lists a schedule\u2019s runs newest first, each with the state of its agent run', async () => {
+		const owner = await seedUser('9751');
+		const stranger = await seedUser('9752');
+		const schedule = await saveSchedule(owner);
+		const tuesday = await recordRun(owner, schedule.id);
+		const wednesday = await recordRun(owner, schedule.id, '2026-11-18T07:00:00.000Z' as DateTime);
+		await context.client`
+			update agent_runs set status = 'awaiting_approval' where id = ${wednesday.runId}`;
+
+		const listed = await new ScheduleOccurrenceRecords(owner, context.db).listForSchedule(
+			schedule.id
+		);
+		const foreign = await new ScheduleOccurrenceRecords(stranger, context.db).listForSchedule(
+			schedule.id
+		);
+
+		expect([listed, foreign]).toEqual([
+			[
+				{ ...wednesday, status: 'awaiting_approval' },
+				{ ...tuesday, status: 'queued' }
+			],
+			[]
+		]);
+	});
+
 	it('keeps a run and its chat when its schedule is deleted', async () => {
 		const owner = await seedUser('9731');
 		const schedule = await saveSchedule(owner);

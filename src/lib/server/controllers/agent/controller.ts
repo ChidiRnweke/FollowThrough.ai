@@ -116,7 +116,13 @@ import type {
 } from '$lib/server/services/skills/built-ins';
 import type { SkillFinder } from '$lib/server/services/skills/library';
 import type { RunSignals } from '$lib/server/services/agent/runs/signals';
-import type { ScheduleId, ScheduleOccurrenceId, ScheduleRunStart } from '$lib/models/schedules';
+import type {
+	Schedule,
+	ScheduleId,
+	ScheduleOccurrence,
+	ScheduleOccurrenceId,
+	ScheduleRunStart
+} from '$lib/models/schedules';
 import type { ScheduleWriter } from '$lib/server/services/schedules/library';
 import type { ScheduleRunLog } from '$lib/server/services/schedules/runs';
 import type { ScheduleDue } from '$lib/services/schedules/rules';
@@ -163,6 +169,15 @@ export interface AgentHarness {
 	 * for approval, starts nothing.
 	 */
 	runDueSchedule(scheduleId: ScheduleId): Promise<ScheduleRunStart>;
+	/**
+	 * Starts one run of a schedule now, whatever its state, and leaves its next run where it is.
+	 * A repeated request with the same key returns the run it already started.
+	 * @throws NotFoundError if the actor has no such schedule.
+	 */
+	runScheduleNow(input: {
+		readonly scheduleId: ScheduleId;
+		readonly requestId: string;
+	}): Promise<AgentRunReceipt>;
 	recoverInterrupted(runId: AgentRunId): Promise<void>;
 	/** Start a run the previous process queued but never started. */
 	resumeQueued(runId: AgentRunId): Promise<void>;
@@ -499,30 +514,10 @@ export class AgentSdkHarness implements AgentHarness {
 				if (decision.kind === 'not_due') return decision;
 				await this.dependencies.schedules.save(decision.schedule);
 				if (decision.kind === 'skipped') return { kind: 'skipped' };
-				const occurrenceId = crypto.randomUUID() as ScheduleOccurrenceId;
-				const preferences = await this.dependencies.preferences.get();
-				const runInput: StagedAgentRunInput = {
-					...this.freezeInput(
-						{ requestId: occurrenceId, input: schedule.prompt, mode: schedule.executionMode },
-						preferences
-					),
-					schedule: {
-						scheduleId,
-						title: schedule.title,
-						scheduledFor: decision.scheduledFor,
-						timeZone: schedule.timeZone
-					}
-				};
-				const conversation = await this.dependencies.conversationSessions.getOrCreate(runInput);
-				const receipt = await this.enqueue(conversation, runInput, occurrenceId, preferences);
-				await this.dependencies.scheduleRuns.record({
-					id: occurrenceId,
-					userId: this.actor.userId,
-					scheduleId,
+				const receipt = await this.enqueueScheduled(schedule, {
+					id: crypto.randomUUID() as ScheduleOccurrenceId,
 					trigger: 'recurrence',
 					scheduledFor: decision.scheduledFor,
-					conversationId: receipt.conversationId,
-					runId: receipt.runId,
 					createdAt: now
 				});
 				return { kind: 'started', receipt };
@@ -530,6 +525,59 @@ export class AgentSdkHarness implements AgentHarness {
 		);
 		if (start.kind === 'started') this.executeInBackground(start.receipt.runId);
 		return start;
+	}
+
+	async runScheduleNow(input: {
+		readonly scheduleId: ScheduleId;
+		readonly requestId: string;
+	}): Promise<AgentRunReceipt> {
+		const existing = await this.dependencies.records.findByRequestId(input.requestId);
+		if (existing) return this.receipt(existing);
+		const receipt = await this.dependencies.transactionRunner.run(async () => {
+			const schedule = await this.dependencies.schedules.getForChange(input.scheduleId);
+			const now = this.dependencies.now();
+			return this.enqueueScheduled(schedule, {
+				id: input.requestId as ScheduleOccurrenceId,
+				trigger: 'manual',
+				scheduledFor: now,
+				createdAt: now
+			});
+		});
+		this.executeInBackground(receipt.runId);
+		return receipt;
+	}
+
+	/**
+	 * Saves the chat, the queued run and the occurrence of one run of a schedule, inside the
+	 * caller's transaction. The occurrence's id is the run's request key.
+	 */
+	private async enqueueScheduled(
+		schedule: Schedule,
+		occurrence: Pick<ScheduleOccurrence, 'id' | 'trigger' | 'scheduledFor' | 'createdAt'>
+	): Promise<AgentRunReceipt> {
+		const preferences = await this.dependencies.preferences.get();
+		const runInput: StagedAgentRunInput = {
+			...this.freezeInput(
+				{ requestId: occurrence.id, input: schedule.prompt, mode: schedule.executionMode },
+				preferences
+			),
+			schedule: {
+				scheduleId: schedule.id,
+				title: schedule.title,
+				scheduledFor: occurrence.scheduledFor,
+				timeZone: schedule.timeZone
+			}
+		};
+		const conversation = await this.dependencies.conversationSessions.getOrCreate(runInput);
+		const receipt = await this.enqueue(conversation, runInput, occurrence.id, preferences);
+		await this.dependencies.scheduleRuns.record({
+			...occurrence,
+			userId: this.actor.userId,
+			scheduleId: schedule.id,
+			conversationId: receipt.conversationId,
+			runId: receipt.runId
+		});
+		return receipt;
 	}
 
 	/**

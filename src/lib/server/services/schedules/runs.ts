@@ -1,4 +1,9 @@
-import type { DueSchedule, ScheduleId, ScheduleOccurrence } from '$lib/models/schedules';
+import type {
+	DueSchedule,
+	ScheduleId,
+	ScheduleOccurrence,
+	ScheduleRun
+} from '$lib/models/schedules';
 import type { DateTime } from '$lib/models/workspace';
 import type {
 	ScheduleBacklogRepository,
@@ -12,12 +17,21 @@ export interface ScheduleRunLog {
 	hasWaitingRun(scheduleId: ScheduleId): Promise<boolean>;
 }
 
+export interface ScheduleRunReader {
+	/** Every run of a schedule, newest first. */
+	list(scheduleId: ScheduleId): Promise<readonly ScheduleRun[]>;
+}
+
 /** A user's schedule runs (ADR 0052). */
-export class ScheduleRuns implements ScheduleRunLog {
+export class ScheduleRuns implements ScheduleRunLog, ScheduleRunReader {
 	constructor(private readonly occurrences: ScheduleOccurrenceRepository) {}
 
 	record(occurrence: ScheduleOccurrence): Promise<ScheduleOccurrence> {
 		return this.occurrences.insert(occurrence);
+	}
+
+	list(scheduleId: ScheduleId): Promise<readonly ScheduleRun[]> {
+		return this.occurrences.listForSchedule(scheduleId);
 	}
 
 	hasWaitingRun(scheduleId: ScheduleId): Promise<boolean> {

@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { NotFoundError, ValidationError } from '$lib/errors';
+import type { AgentRunId, AgentRunStatus, ConversationId } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
-import type { Recurrence, ScheduleDefinition } from '$lib/models/schedules';
+import type {
+	Recurrence,
+	ScheduleDefinition,
+	ScheduleOccurrence,
+	ScheduleOccurrenceId
+} from '$lib/models/schedules';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import { ScheduleLibrary } from '$lib/server/services/schedules/library';
+import { ScheduleRuns } from '$lib/server/services/schedules/runs';
 import { ScheduleRules } from '$lib/services/schedules/rules';
 import {
+	InMemoryScheduleOccurrenceRepository,
 	InMemoryScheduleRepository,
 	InMemoryScheduleTable
 } from '$lib/testing/schedules/fakes/in-memory-schedules';
@@ -30,6 +38,8 @@ const definition: ScheduleDefinition = {
 
 const setup = () => {
 	const table = new InMemoryScheduleTable();
+	const runStatus = new Map<AgentRunId, AgentRunStatus>();
+	const occurrences = new InMemoryScheduleOccurrenceRepository((runId) => runStatus.get(runId));
 	const clock = { now: mondayMorning };
 	const controllerFor = (actor: ActorContext) => {
 		const library = new ScheduleLibrary(new InMemoryScheduleRepository(actor, table));
@@ -38,10 +48,17 @@ const setup = () => {
 			rules: new ScheduleRules(),
 			reader: library,
 			writer: library,
+			runs: new ScheduleRuns(occurrences),
 			transactionRunner: new InMemoryTransactionRunner([table])
 		});
 	};
-	return { clock, controller: controllerFor(testActor()), other: controllerFor(testActor(2)) };
+	return {
+		clock,
+		occurrences,
+		runStatus,
+		controller: controllerFor(testActor()),
+		other: controllerFor(testActor(2))
+	};
 };
 
 describe('a user’s schedules', () => {
@@ -144,6 +161,42 @@ describe('a user’s schedules', () => {
 			await other.list(),
 			await controller.list()
 		]).toEqual([[true, true, true], { schedules: [] }, { schedules: [scheduleBuilder()] }]);
+	});
+
+	it('lists the runs a schedule started, newest first, with the state of each', async () => {
+		const { controller, other, occurrences, runStatus } = setup();
+		await controller.create({ id: testScheduleId(), definition });
+		const run = (suffix: number, scheduledFor: string): ScheduleOccurrence => ({
+			id: `5d000000-0000-4000-8000-00000000000${suffix}` as ScheduleOccurrenceId,
+			userId: testActor().userId,
+			scheduleId: testScheduleId(),
+			trigger: 'recurrence',
+			scheduledFor: scheduledFor as DateTime,
+			conversationId: `33000000-0000-4000-8000-00000000000${suffix}` as ConversationId,
+			runId: `32000000-0000-4000-8000-00000000000${suffix}` as AgentRunId,
+			createdAt: scheduledFor as DateTime
+		});
+		const tuesday = run(1, '2026-11-17T07:00:00.000Z');
+		const wednesday = run(2, '2026-11-18T07:00:00.000Z');
+		await occurrences.insert(tuesday);
+		await occurrences.insert(wednesday);
+		runStatus.set(tuesday.runId, 'completed');
+		runStatus.set(wednesday.runId, 'awaiting_approval');
+
+		const listed = await controller.listRuns({ scheduleId: testScheduleId() });
+		const foreign = await other
+			.listRuns({ scheduleId: testScheduleId() })
+			.catch((error: Error) => error);
+
+		expect([listed, foreign instanceof NotFoundError]).toEqual([
+			{
+				runs: [
+					{ ...wednesday, status: 'awaiting_approval' },
+					{ ...tuesday, status: 'completed' }
+				]
+			},
+			true
+		]);
 	});
 
 	it('removes a schedule', async () => {

@@ -6,10 +6,12 @@ import type {
 	ScheduleChanges,
 	ScheduleDecision,
 	ScheduleDefinition,
-	ScheduleId
+	ScheduleId,
+	ScheduleRun
 } from '$lib/models/schedules';
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
 import type { ScheduleReader, ScheduleWriter } from '$lib/server/services/schedules/library';
+import type { ScheduleRunReader } from '$lib/server/services/schedules/runs';
 import type { ScheduleEdits } from '$lib/services/schedules/rules';
 
 /**
@@ -20,6 +22,11 @@ import type { ScheduleEdits } from '$lib/services/schedules/rules';
 export interface SchedulesController {
 	list(): Promise<{ schedules: readonly Schedule[] }>;
 	get(input: { readonly scheduleId: ScheduleId }): Promise<{ schedule: Schedule }>;
+	/**
+	 * The runs a schedule has started, newest first, each with the state of its agent run.
+	 * @throws NotFoundError if the actor has no such schedule.
+	 */
+	listRuns(input: { readonly scheduleId: ScheduleId }): Promise<{ runs: readonly ScheduleRun[] }>;
 	/** @throws ValidationError if the recurrence has no occurrence in the future. */
 	create(input: {
 		readonly id: ScheduleId;
@@ -47,6 +54,7 @@ export interface SchedulesDependencies {
 	readonly rules: ScheduleEdits;
 	readonly reader: ScheduleReader;
 	readonly writer: ScheduleWriter;
+	readonly runs: ScheduleRunReader;
 	readonly transactionRunner: AtomicOperation;
 }
 
@@ -74,6 +82,13 @@ export class Schedules implements SchedulesController {
 
 	async get(input: { readonly scheduleId: ScheduleId }): Promise<{ schedule: Schedule }> {
 		return { schedule: await this.dependencies.reader.get(input.scheduleId) };
+	}
+
+	async listRuns(input: {
+		readonly scheduleId: ScheduleId;
+	}): Promise<{ runs: readonly ScheduleRun[] }> {
+		await this.dependencies.reader.get(input.scheduleId);
+		return { runs: await this.dependencies.runs.list(input.scheduleId) };
 	}
 
 	async create(input: {
