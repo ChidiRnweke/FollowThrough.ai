@@ -348,6 +348,13 @@ export type ExportSettingsLoad =
 	| { readonly kind: 'failure'; readonly message: string }
 	| { readonly kind: 'superseded' };
 
+/** How large an uploaded DOCX template may be on disk, once inflated, and in entries. */
+export interface TemplateAdmissionLimits {
+	readonly maxBytes: number;
+	readonly maxExpandedBytes: number;
+	readonly maxEntries: number;
+}
+
 /** The size and checksum an upload reservation recorded for a template. */
 export interface TemplateUploadProof {
 	readonly byteSize: number;

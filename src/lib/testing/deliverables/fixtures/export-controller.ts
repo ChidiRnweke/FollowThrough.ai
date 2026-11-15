@@ -5,6 +5,7 @@ import { WidgetSourceService } from '$lib/services/widgets/sources';
 import { WidgetEvaluationService } from '$lib/services/widgets/edits';
 import type { PreparedExport } from '$lib/models/deliverables';
 import { InMemoryPdfRendering } from '$lib/testing/deliverables/fakes/pdf-document';
+import { templateLimitsFixture } from '$lib/testing/deliverables/fixtures/template-limits';
 import {
 	Deliverables,
 	type DeliverablesDependencies
@@ -65,7 +66,12 @@ export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 			...agentToolResultsFixture(),
 			exportSettingsRules: new ExportSettingsRuleService(),
 			artifactFiles: new ArtifactFileService(),
-			templateStore: createTemplateServices(testActor(), templates, testClock),
+			templateStore: createTemplateServices(
+				testActor(),
+				templates,
+				testClock,
+				templateLimitsFixture()
+			),
 			artifactStorage: storage,
 			artifactStore: library.artifactStore,
 			exportSettings: library.exportSettings,

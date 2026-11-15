@@ -1,5 +1,6 @@
 import { DocxTemplateStyleReader } from '$lib/server/services/deliverables/template-styles';
 import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
+import { templateLimitsFixture } from '$lib/testing/deliverables/fixtures/template-limits';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
@@ -14,7 +15,8 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { Deliverables, type DeliverablesDependencies } from './controller';
 
-const setup = async () => {
+/** `readLimits` stands for a deployment whose TEMPLATE_MAX_BYTES changed after reservation. */
+const setup = async (readLimits = templateLimitsFixture()) => {
 	const storage = new InMemoryAttachmentStorage();
 	const repository = new InMemoryTemplateRepository(testActor());
 	const controller = new Deliverables(
@@ -22,9 +24,15 @@ const setup = async () => {
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
 			...agentToolResultsFixture(),
-			templateStore: createTemplateServices(testActor(), repository, () => testNow),
+			templateStore: createTemplateServices(
+				testActor(),
+				repository,
+				() => testNow,
+				templateLimitsFixture()
+			),
+			templateLimits: readLimits,
 			templateStorage: storage,
-			templateStyles: new DocxTemplateStyleReader(),
+			templateStyles: new DocxTemplateStyleReader(readLimits),
 			// Object storage does not participate in the database transaction.
 			transactionRunner: new InMemoryTransactionRunner([repository])
 		})
@@ -127,6 +135,18 @@ describe('template upload completion', () => {
 		const { complete, storage, staging, bytes, input } = await setup();
 		await storage.put(staging, Buffer.concat([bytes, Buffer.from('extra')]), input.mediaType);
 		await expect(complete()).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
+	it('refuses staged bytes over the configured limit even when the reservation allowed them', async () => {
+		// The generated template is several kilobytes, so a 1 KiB limit is below its reservation.
+		const { complete, repository } = await setup(templateLimitsFixture({ maxBytes: 1024 }));
+		const failed = await complete().then(
+			() => undefined,
+			(error: Error) => ({ code: 'code' in error ? error.code : undefined })
+		);
+		expect({ failed, templates: repository.templates.length }).toEqual({
+			failed: { code: 'VALIDATION' },
+			templates: 0
+		});
 	});
 	it('rejects changed bytes even when their length matches', async () => {
 		const { complete, storage, staging, bytes, input } = await setup();

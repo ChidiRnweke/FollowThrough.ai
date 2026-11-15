@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import type { ExtractedTemplateStyles, TemplateId } from '$lib/models/deliverables';
+import type {
+	ExtractedTemplateStyles,
+	TemplateAdmissionLimits,
+	TemplateId
+} from '$lib/models/deliverables';
 import type { ProjectId, ProjectTemplate, TemplateUpload } from '$lib/models/projects';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { TemplateRepository } from '$lib/server/repositories/deliverables';
@@ -43,11 +47,16 @@ export class TemplateLibrary implements TemplateStore {
 	constructor(
 		private readonly actor: ActorContext,
 		private readonly repository: TemplateRepository,
-		private readonly now: () => DateTime
+		private readonly now: () => DateTime,
+		private readonly limits: TemplateAdmissionLimits
 	) {}
 	async reserveUpload(input: TemplateUploadRequest): Promise<TemplateUpload> {
 		if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 1)
 			throw new ValidationError('Template must be at least 1 byte');
+		if (input.byteSize > this.limits.maxBytes)
+			throw new ValidationError(
+				`The template is ${input.byteSize} bytes, over the ${this.limits.maxBytes} byte TEMPLATE_MAX_BYTES setting`
+			);
 		if (!/^[a-f0-9]{64}$/i.test(input.checksumSha256))
 			throw new ValidationError('Template checksum must be a SHA-256 hex digest');
 		const id = randomUUID() as TemplateId;

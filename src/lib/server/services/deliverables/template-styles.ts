@@ -1,22 +1,60 @@
 import AdmZip from 'adm-zip';
 import { createHash } from 'node:crypto';
 import { ValidationError } from '$lib/errors';
-import type { ExtractedTemplateStyles, TemplateUploadProof } from '$lib/models/deliverables';
+import type {
+	ExtractedTemplateStyles,
+	TemplateAdmissionLimits,
+	TemplateUploadProof
+} from '$lib/models/deliverables';
+import {
+	BoundedZipReader,
+	type ZipEntryFailure
+} from '$lib/server/infrastructure/zip/bounded-entries';
 
 export interface TemplateStyleReader {
 	read(upload: TemplateUploadProof, bytes: Uint8Array): Promise<ExtractedTemplateStyles>;
 }
 
+type ExpansionLimits = Pick<TemplateAdmissionLimits, 'maxExpandedBytes' | 'maxEntries'>;
+
 async function verifiedTemplateStyles(
 	upload: TemplateUploadProof,
-	bytes: Uint8Array
+	bytes: Uint8Array,
+	limits: ExpansionLimits
 ): Promise<ExtractedTemplateStyles> {
 	if (bytes.byteLength !== upload.byteSize)
 		throw new ValidationError('Uploaded template size does not match the reservation');
 	if (createHash('sha256').update(bytes).digest('hex') !== upload.checksumSha256)
 		throw new ValidationError('Uploaded template checksum does not match the reservation');
-	return extractTemplateStyles(Buffer.from(bytes));
+	return extractTemplateStyles(Buffer.from(bytes), limits);
 }
+
+const entryFailure = (
+	name: string,
+	reason: ZipEntryFailure,
+	limits: ExpansionLimits
+): ValidationError => {
+	switch (reason) {
+		case 'over_budget':
+			return new ValidationError(
+				`The template expands past the ${limits.maxExpandedBytes} byte TEMPLATE_MAX_EXPANDED_BYTES setting`
+			);
+		case 'unsupported_method':
+			return new ValidationError(
+				`The template part ${name} uses a compression method other than stored or deflate`
+			);
+		case 'corrupt_data':
+			return new ValidationError(`The template part ${name} could not be read`);
+		case 'size_mismatch':
+			return new ValidationError(
+				`The template part ${name} differs in size from the size the package declares`
+			);
+		case 'crc_mismatch':
+			return new ValidationError(
+				`The template part ${name} differs in checksum from the checksum the package declares`
+			);
+	}
+};
 
 interface HeadingStyle {
 	name: string;
@@ -137,14 +175,28 @@ function extractPageMargins(documentXml: string): ExtractedTemplateStyles['pageM
 	};
 }
 
-async function extractTemplateStyles(docxBuffer: Buffer): Promise<ExtractedTemplateStyles> {
+async function extractTemplateStyles(
+	docxBuffer: Buffer,
+	limits: ExpansionLimits
+): Promise<ExtractedTemplateStyles> {
 	const zip = new AdmZip(docxBuffer);
+	const entries = zip.getEntries();
+	if (entries.length > limits.maxEntries)
+		throw new ValidationError(
+			`The template holds ${entries.length} parts, over the ${limits.maxEntries} TEMPLATE_MAX_ENTRIES setting`
+		);
+	const reader = new BoundedZipReader(limits.maxExpandedBytes);
+	const contents = (entry: AdmZip.IZipEntry): Buffer => {
+		const read = reader.read(entry);
+		if (read.kind === 'failure') throw entryFailure(entry.entryName, read.reason, limits);
+		return read.bytes;
+	};
 
 	const stylesEntry = zip.getEntry('word/styles.xml');
 	const documentEntry = zip.getEntry('word/document.xml');
 	if (!documentEntry) throw new ValidationError('The template must be a DOCX document');
-	const stylesXml = stylesEntry ? stylesEntry.getData().toString('utf8') : '';
-	const documentXml = documentEntry ? documentEntry.getData().toString('utf8') : '';
+	const stylesXml = stylesEntry ? contents(stylesEntry).toString('utf8') : '';
+	const documentXml = contents(documentEntry).toString('utf8');
 	const headerImages: string[] = [];
 	let footerContent: string | undefined;
 
@@ -152,11 +204,11 @@ async function extractTemplateStyles(docxBuffer: Buffer): Promise<ExtractedTempl
 	const body = extractBodyStyle(stylesXml);
 	const pageMargins = extractPageMargins(documentXml);
 
-	const mediaEntries = zip
-		.getEntries()
-		.filter((e) => e.entryName.startsWith('word/media/') && !e.isDirectory);
+	const mediaEntries = entries.filter(
+		(e) => e.entryName.startsWith('word/media/') && !e.isDirectory
+	);
 	for (const entry of mediaEntries) {
-		const buffer = entry.getData();
+		const buffer = contents(entry);
 		const ext = entry.entryName.split('.').pop()?.toLowerCase();
 		const mimeType =
 			ext === 'png'
@@ -170,9 +222,9 @@ async function extractTemplateStyles(docxBuffer: Buffer): Promise<ExtractedTempl
 	}
 
 	const footerFileRegex = /^word\/footer\d*\.xml$/;
-	const footerEntries = zip.getEntries().filter((e) => footerFileRegex.test(e.entryName));
+	const footerEntries = entries.filter((e) => footerFileRegex.test(e.entryName));
 	if (footerEntries.length > 0) {
-		const footerXml = footerEntries[0].getData().toString('utf-8');
+		const footerXml = contents(footerEntries[0]).toString('utf-8');
 		const textMatches = footerXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
 		if (textMatches) {
 			footerContent = textMatches
@@ -193,9 +245,14 @@ async function extractTemplateStyles(docxBuffer: Buffer): Promise<ExtractedTempl
 	};
 }
 
-/** Verifies an uploaded DOCX package against its reservation and reads its styles. */
+/**
+ * Verifies an uploaded DOCX package against its reservation and reads its styles, inflating
+ * no more of the package than the template admission limits allow.
+ */
 export class DocxTemplateStyleReader implements TemplateStyleReader {
+	constructor(private readonly limits: ExpansionLimits) {}
+
 	read(upload: TemplateUploadProof, bytes: Uint8Array): Promise<ExtractedTemplateStyles> {
-		return verifiedTemplateStyles(upload, bytes);
+		return verifiedTemplateStyles(upload, bytes, this.limits);
 	}
 }

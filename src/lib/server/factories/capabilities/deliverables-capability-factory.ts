@@ -1,6 +1,8 @@
 import { tracedService } from '$lib/server/infrastructure/telemetry/service-boundary';
 import type { DateTime } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
+import type { TemplateAdmissionLimits } from '$lib/models/deliverables';
+import { templateAdmissionLimits } from '$lib/server/config';
 import {
 	WidgetExportService,
 	type IWidgetExportService
@@ -59,6 +61,7 @@ export interface DeliverablesCapability {
 	readonly exportSettingsRules: ExportSettingsRules;
 	readonly artifactFiles: ArtifactFiles;
 	readonly templates: TemplateStore;
+	readonly templateLimits: TemplateAdmissionLimits;
 	readonly templateStorage: IAttachmentStorage;
 	readonly templateStyles: TemplateStyleReader;
 	readonly artifacts: ArtifactServices;
@@ -78,26 +81,38 @@ export interface DeliverablesCapability {
 export const createDeliverablesCapability = (
 	actor: ActorContext,
 	input: DeliverablesCapabilityInput
-): DeliverablesCapability => ({
-	exportSettingsRules: new ExportSettingsRuleService(),
-	artifactFiles: new ArtifactFileService(),
-	templates: createTemplateServices(actor, new TemplateRecords(actor, input.db), input.now),
-	templateStorage: input.storage,
-	templateStyles: tracedService('DocxTemplateStyleReader', new DocxTemplateStyleReader()),
-	artifacts: createArtifactServices(
-		new ArtifactRecords(actor, input.db),
-		new ExportSettingsRecords(actor, input.db)
-	),
-	artifactStorage: input.storage,
-	fetchImage: fetchRemoteDataUrl,
-	prepareExport: new ExportPreparationService(),
-	diagramRenderer: tracedService('DiagramRenderingService', new DiagramRenderingService()),
-	mermaidThemes: new MermaidThemeService(),
-	widgetExports: new WidgetExportService(),
-	widgetSources: new WidgetSourceService(),
-	widgetEvaluation: new WidgetEvaluationService(),
-	docxGenerator: tracedService('DocxDocumentService', new DocxDocumentService()),
-	pdfGenerator: tracedService('PdfDocumentService', new PdfDocumentService()),
-	zipPacker: tracedService('DocumentBundleService', new DocumentBundleService()),
-	markdownToContent: new NoteMarkdownCodec()
-});
+): DeliverablesCapability => {
+	const templateLimits = templateAdmissionLimits();
+	return {
+		exportSettingsRules: new ExportSettingsRuleService(),
+		artifactFiles: new ArtifactFileService(),
+		templates: createTemplateServices(
+			actor,
+			new TemplateRecords(actor, input.db),
+			input.now,
+			templateLimits
+		),
+		templateLimits,
+		templateStorage: input.storage,
+		templateStyles: tracedService(
+			'DocxTemplateStyleReader',
+			new DocxTemplateStyleReader(templateLimits)
+		),
+		artifacts: createArtifactServices(
+			new ArtifactRecords(actor, input.db),
+			new ExportSettingsRecords(actor, input.db)
+		),
+		artifactStorage: input.storage,
+		fetchImage: fetchRemoteDataUrl,
+		prepareExport: new ExportPreparationService(),
+		diagramRenderer: tracedService('DiagramRenderingService', new DiagramRenderingService()),
+		mermaidThemes: new MermaidThemeService(),
+		widgetExports: new WidgetExportService(),
+		widgetSources: new WidgetSourceService(),
+		widgetEvaluation: new WidgetEvaluationService(),
+		docxGenerator: tracedService('DocxDocumentService', new DocxDocumentService()),
+		pdfGenerator: tracedService('PdfDocumentService', new PdfDocumentService()),
+		zipPacker: tracedService('DocumentBundleService', new DocumentBundleService()),
+		markdownToContent: new NoteMarkdownCodec()
+	};
+};

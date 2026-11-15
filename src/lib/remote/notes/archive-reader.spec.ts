@@ -6,6 +6,7 @@ import {
 	type ArchiveEntry,
 	type ArchiveLimits
 } from './archive-reader.server';
+import { declaringSize } from '$lib/testing/zip/fixtures/declared-size';
 
 const limits: ArchiveLimits = { maxTotalBytes: 25 * 1024 * 1024, maxEntries: 2000 };
 
@@ -86,6 +87,89 @@ describe('Refusing a hostile archive', () => {
 	it('imports notes nested beyond eight folders', () => {
 		const outcome = read({ 'a/b/c/d/e/f/g/h/i/one.md': '# One' });
 		expect(outcome.ok && outcome.result.entries).toHaveLength(1);
+	});
+});
+
+/** ZIP compression methods (application note 4.4.5); adm-zip writes deflate by default. */
+const STORED = 0;
+const DEFLATED = 8;
+
+const zipWithMethod = (files: Readonly<Record<string, string>>, method: number): Uint8Array => {
+	const zip = new AdmZip();
+	for (const [path, content] of Object.entries(files)) {
+		zip.addFile(path, Buffer.from(content, 'utf8'));
+		zip.getEntry(path)!.header.method = method;
+	}
+	return new Uint8Array(zip.toBuffer());
+};
+
+describe('Counting the bytes an archive actually inflates to', () => {
+	const budget: ArchiveLimits = { ...limits, maxTotalBytes: 1024 };
+
+	it.each([
+		['deflated', DEFLATED],
+		['stored', STORED]
+	])(
+		'refuses an archive whose %s entry declares no size but expands past the budget',
+		(_label, method) => {
+			const archive = declaringSize(
+				zipWithMethod({ 'big.md': 'x'.repeat(4096) }, method),
+				'big.md',
+				0
+			);
+			const outcome = readMarkdownArchive(archive, budget);
+			expect(outcome.ok === false && outcome.rejection).toEqual({
+				reason: 'too_large',
+				size: { kind: 'inflated' },
+				limit: 1024
+			});
+		}
+	);
+
+	it('refuses entries that each fit the budget but together expand past it', () => {
+		const archive = declaringSize(
+			declaringSize(zipOf({ 'one.md': 'x'.repeat(600), 'two.md': 'y'.repeat(600) }), 'one.md', 0),
+			'two.md',
+			0
+		);
+		const outcome = readMarkdownArchive(archive, budget);
+		expect(outcome.ok === false && outcome.rejection).toEqual({
+			reason: 'too_large',
+			size: { kind: 'inflated' },
+			limit: 1024
+		});
+	});
+
+	it('skips an entry whose content differs from its declared size and imports the rest', () => {
+		const archive = declaringSize(
+			zipOf({ 'short.md': '# Declared as empty', 'kept.md': '# Kept' }),
+			'short.md',
+			0
+		);
+		const outcome = readMarkdownArchive(archive, budget);
+		expect(
+			outcome.ok && {
+				entries: outcome.result.entries.map((file) => file.text),
+				skipped: outcome.result.skipped.map((skip) => skip.path)
+			}
+		).toEqual({ entries: ['# Kept'], skipped: ['short.md'] });
+	});
+
+	it('imports an archive whose entries expand to exactly the budget', () => {
+		const outcome = read({ 'one.md': 'x'.repeat(512), 'two.md': 'y'.repeat(512) }, budget);
+		expect(outcome.ok && outcome.result.entries.map((file) => file.text.length)).toEqual([
+			512, 512
+		]);
+	});
+
+	it('imports a stored entry and an empty entry beside a deflated one', () => {
+		const stored = zipWithMethod({ 'stored.md': '# Stored', 'empty.md': '' }, STORED);
+		const zip = new AdmZip(Buffer.from(stored));
+		zip.addFile('deflated.md', Buffer.from('# Deflated', 'utf8'));
+		const outcome = readMarkdownArchive(new Uint8Array(zip.toBuffer()), budget);
+		expect(
+			outcome.ok && Object.fromEntries(outcome.result.entries.map((file) => [file.path, file.text]))
+		).toEqual({ 'stored.md': '# Stored', 'empty.md': '', 'deflated.md': '# Deflated' });
 	});
 });
 
