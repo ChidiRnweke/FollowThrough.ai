@@ -1,4 +1,6 @@
 import { WidgetSourceService } from '$lib/services/widgets/sources';
+import { SchedulePresentationService } from '$lib/services/schedules/presentation';
+import { ScheduleRules } from '$lib/services/schedules/rules';
 import { SkillPortabilityService } from '$lib/services/skills/manifest';
 import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
 import { ReferencePresentationService } from '$lib/services/references/presentation';
@@ -35,7 +37,9 @@ export const workspaceViewsOver = (
 		new NoteSectionNumberingService(),
 		session,
 		new SkillPortabilityService(),
-		new WidgetSourceService()
+		new WidgetSourceService(),
+		new SchedulePresentationService(),
+		new ScheduleRules()
 	);
 
 /** Views over a fixed set of records, as a server parity check or a scenario supplies them. */

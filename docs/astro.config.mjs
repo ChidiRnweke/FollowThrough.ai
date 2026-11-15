@@ -99,6 +99,7 @@ export default defineConfig({
 						{ label: 'The agent', link: '/using/the-agent/' },
 						{ label: 'Agent activity', link: '/using/agent-activity/' },
 						{ label: 'Connectors', link: '/using/connectors/' },
+						{ label: 'Scheduled runs', link: '/using/scheduled-runs/' },
 						{
 							label: 'Agent context',
 							items: [

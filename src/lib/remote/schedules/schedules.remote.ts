@@ -1,6 +1,8 @@
 import { command } from '$app/server';
 import {
 	createScheduleSchema,
+	runScheduleNowSchema,
+	scheduledRunTargetSchema,
 	scheduleTargetSchema,
 	setScheduleExecutionModeSchema,
 	updateScheduleSchema
@@ -35,4 +37,13 @@ export const setScheduleExecutionMode = command(setScheduleExecutionModeSchema, 
 
 export const deleteSchedule = command(scheduleTargetSchema, async (input) =>
 	schedules().remove(input)
+);
+
+/** Starts one run now. The caller's `requestId` makes a repeated request start one run. */
+export const runScheduleNow = command(runScheduleNowSchema, async (input) =>
+	AppFactory.forActor(requestActor()).agentHarness().runScheduleNow(input)
+);
+
+export const markScheduledRunOpened = command(scheduledRunTargetSchema, async (input) =>
+	schedules().markRunOpened(input)
 );

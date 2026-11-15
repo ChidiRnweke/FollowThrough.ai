@@ -104,6 +104,7 @@ export { default as Refresh } from './refresh.svelte';
 export { default as Repeat } from './repeat.svelte';
 export { default as Retry } from './retry.svelte';
 export { default as Search } from './search.svelte';
+export { default as Scheduled } from './scheduled.svelte';
 export { default as Send } from './send.svelte';
 export { default as Settings } from './settings.svelte';
 export { default as Shapes } from './shapes.svelte';

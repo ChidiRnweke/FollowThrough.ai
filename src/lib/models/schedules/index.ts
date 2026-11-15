@@ -102,6 +102,73 @@ export interface ScheduleRun extends ScheduleOccurrence {
 	readonly status: AgentRunStatus;
 }
 
+/** Who is looking, and when: every date a schedule shows is relative to both. */
+export interface ScheduleViewer {
+	readonly now: DateTime;
+	readonly timeZone: IanaTimeZone;
+}
+
+/** Where one run of a schedule has got to, as its owner needs to know it. */
+export type ScheduledRunState =
+	| { readonly kind: 'working' }
+	/** Parked until its owner decides on the changes it wants to make. */
+	| { readonly kind: 'waiting'; readonly changes: number }
+	| {
+			readonly kind: 'finished';
+			readonly outcome: 'completed' | 'failed' | 'cancelled';
+			/** Whether its owner has opened the chat since the run ended. */
+			readonly opened: boolean;
+	  };
+
+/** One run of a schedule, as a list shows it. */
+export interface ScheduledRunView {
+	readonly occurrence: ScheduleOccurrence;
+	readonly state: ScheduledRunState;
+	/** What the run came to, in one line. */
+	readonly line: string;
+	/** When it started, on the clock of the schedule's time zone. */
+	readonly ranAt: string;
+}
+
+/** A schedule in the list: what it is, and whether a run of it needs its owner. */
+export interface ScheduleRow {
+	readonly schedule: Schedule;
+	/** "Weekdays at 08:00", then whether it asks first, then its next run. */
+	readonly caption: string;
+	readonly waiting: number;
+	readonly unopened: number;
+}
+
+export interface ScheduleDetail extends ScheduleRow {
+	/** What happens next, such as "Next: tomorrow, 08:00." The sentence above it says the rest. */
+	readonly standing: string;
+	/** Every run it started, newest first. */
+	readonly runs: readonly ScheduledRunView[];
+}
+
+/** A run that needs its owner: one that waits for approval, or one that ended unopened. */
+export interface ScheduledRunNotice {
+	readonly occurrenceId: ScheduleOccurrenceId;
+	readonly conversationId: ConversationId;
+	readonly title: string;
+	readonly line: string;
+	readonly ranAt: string;
+}
+
+export interface ScheduledAttention {
+	readonly waiting: readonly ScheduledRunNotice[];
+	readonly finished: readonly ScheduledRunNotice[];
+	/** Runs that are queued or running now; their result is still to come. */
+	readonly working: number;
+}
+
+/** The schedule behind a chat, for a chat that a schedule started. */
+export interface ScheduledChat {
+	readonly occurrence: ScheduleOccurrence;
+	readonly title: string;
+	readonly state: ScheduledRunState;
+}
+
 /** A schedule whose time has come, and the user it runs as. */
 export interface DueSchedule {
 	readonly owner: { readonly userId: UserId };
@@ -189,6 +256,10 @@ export const createScheduleSchema = z.strictObject({
 export const updateScheduleSchema = z.strictObject({
 	scheduleId: scheduleIdSchema,
 	changes: scheduleChangesSchema
+});
+
+export const scheduledRunTargetSchema = z.strictObject({
+	occurrenceId: z.uuid().transform((value) => value as ScheduleOccurrenceId)
 });
 
 export const runScheduleNowSchema = z.strictObject({

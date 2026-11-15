@@ -3,6 +3,7 @@ import type {
 	Schedule,
 	ScheduleId,
 	ScheduleOccurrence,
+	ScheduleOccurrenceId,
 	ScheduleRun
 } from '$lib/models/schedules';
 import type { DateTime } from '$lib/models/workspace';
@@ -23,6 +24,8 @@ export interface ScheduleOccurrenceRepository {
 	insert(occurrence: ScheduleOccurrence): Promise<ScheduleOccurrence>;
 	/** Every run of a schedule with the state of its agent run, newest first. */
 	listForSchedule(scheduleId: ScheduleId): Promise<readonly ScheduleRun[]>;
+	/** Records when its owner last opened the run's chat. */
+	markOpened(id: ScheduleOccurrenceId, at: DateTime): Promise<void>;
 	/** Whether a run of this schedule is parked until its owner decides. */
 	hasRunAwaitingApproval(scheduleId: ScheduleId): Promise<boolean>;
 }

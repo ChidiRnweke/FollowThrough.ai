@@ -1,7 +1,14 @@
 import { NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentRunId, AgentRunStatus } from '$lib/models/agent';
-import type { Schedule, ScheduleId, ScheduleOccurrence, ScheduleRun } from '$lib/models/schedules';
+import type {
+	Schedule,
+	ScheduleId,
+	ScheduleOccurrence,
+	ScheduleOccurrenceId,
+	ScheduleRun
+} from '$lib/models/schedules';
+import type { DateTime } from '$lib/models/workspace';
 import type {
 	ScheduleOccurrenceRepository,
 	ScheduleRepository
@@ -85,6 +92,14 @@ export class InMemoryScheduleOccurrenceRepository
 				return status ? [{ ...occurrence, status }] : [];
 			})
 			.toSorted((left, right) => right.scheduledFor.localeCompare(left.scheduledFor));
+	}
+
+	async markOpened(id: ScheduleOccurrenceId, at: DateTime): Promise<void> {
+		if (!this.occurrences.some((occurrence) => occurrence.id === id))
+			throw new NotFoundError('Scheduled run was not found');
+		this.occurrences = this.occurrences.map((occurrence) =>
+			occurrence.id === id ? { ...occurrence, openedAt: at } : occurrence
+		);
 	}
 
 	async hasRunAwaitingApproval(scheduleId: ScheduleId): Promise<boolean> {

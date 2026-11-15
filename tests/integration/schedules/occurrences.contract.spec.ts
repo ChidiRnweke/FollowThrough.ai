@@ -155,6 +155,31 @@ describe('the storage of schedule runs', () => {
 		]);
 	});
 
+	it('records when the owner opened a run, and nothing for a stranger', async () => {
+		const owner = await seedUser('9761');
+		const stranger = await seedUser('9762');
+		const schedule = await saveSchedule(owner);
+		const occurrence = await recordRun(owner, schedule.id);
+		const openedAt = '2026-11-17T09:30:00.000Z' as DateTime;
+
+		const refusal = await new ScheduleOccurrenceRecords(stranger, context.db)
+			.markOpened(occurrence.id, openedAt)
+			.catch((error: Error) => error.message);
+		const untouched = await context.client<{ opened_at: Date | null }[]>`
+			select opened_at from schedule_occurrences where id = ${occurrence.id}`;
+		await new ScheduleOccurrenceRecords(owner, context.db).markOpened(occurrence.id, openedAt);
+
+		expect([
+			refusal,
+			untouched,
+			await new ScheduleOccurrenceRecords(owner, context.db).listForSchedule(schedule.id)
+		]).toEqual([
+			'Scheduled run was not found',
+			[{ opened_at: null }],
+			[{ ...occurrence, openedAt, status: 'queued' }]
+		]);
+	});
+
 	it('keeps a run and its chat when its schedule is deleted', async () => {
 		const owner = await seedUser('9731');
 		const schedule = await saveSchedule(owner);

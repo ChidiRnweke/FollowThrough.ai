@@ -53,6 +53,22 @@ import type { WorkspaceSkill } from '$lib/models/workspace-views';
 
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import type { WorkspaceSessionStore } from '$lib/stores/workspace/session.svelte';
+import type {
+	IanaTimeZone,
+	Recurrence,
+	Schedule,
+	ScheduleDetail,
+	ScheduleId,
+	ScheduleOccurrence,
+	ScheduleRow,
+	ScheduleViewer,
+	ScheduledAttention,
+	ScheduledChat,
+	ScheduledRunNotice,
+	ScheduledRunView
+} from '$lib/models/schedules';
+import type { SchedulePresentation } from '$lib/services/schedules/presentation';
+import type { ScheduleRecurrence } from '$lib/services/schedules/rules';
 
 /** Coordinates feature views from the normalized records, including local write overlays. */
 export interface WorkspaceViewsController {
@@ -106,6 +122,21 @@ export interface WorkspaceViewsController {
 	readonly currentShell: ShellContext;
 	/** The bound account's chats, most recently updated first. */
 	readonly chatSessions: readonly Conversation[];
+	/** Every schedule, oldest first, each with whether a run of it needs its owner. */
+	schedules(viewer: ScheduleViewer): readonly ScheduleRow[];
+	schedule(scheduleId: ScheduleId, viewer: ScheduleViewer): ScheduleDetail | null;
+	/** The runs that wait for approval and the runs that ended unopened, newest first. */
+	scheduledAttention(viewer: ScheduleViewer): ScheduledAttention;
+	/** The schedule behind a chat; null for a chat that a person started. */
+	scheduledChat(conversationId: ConversationId): ScheduledChat | null;
+	/** A time zone as a person names it, such as "Brussels time". */
+	scheduleZoneName(timeZone: IanaTimeZone): string;
+	/** What a recurrence that is not saved yet would do next, as the line under it says. */
+	schedulePreview(
+		recurrence: Recurrence,
+		timeZone: IanaTimeZone,
+		now: ScheduleViewer['now']
+	): string;
 }
 
 export class WorkspaceViews implements WorkspaceViewsController {
@@ -124,7 +155,9 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		private readonly sections: NoteSectionNumbering,
 		private readonly session: WorkspaceSessionStore,
 		private readonly portability: SkillPortability,
-		private readonly sourceRows: IWidgetSourceService
+		private readonly sourceRows: IWidgetSourceService,
+		private readonly schedulePresentation: SchedulePresentation,
+		private readonly scheduleRecurrence: ScheduleRecurrence
 	) {}
 	get currentShell(): ShellContext {
 		const accountId = this.session.current?.bootstrap.accountId;
@@ -685,5 +718,147 @@ export class WorkspaceViews implements WorkspaceViewsController {
 			notes,
 			pendingSuggestionCount: this.pendingSuggestions.length
 		});
+	}
+
+	schedules(viewer: ScheduleViewer): readonly ScheduleRow[] {
+		return this.all('schedules')
+			.toSorted((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+			.map((schedule) => this.scheduleRow(schedule, this.scheduledRuns(schedule, viewer), viewer));
+	}
+
+	schedule(scheduleId: ScheduleId, viewer: ScheduleViewer): ScheduleDetail | null {
+		const schedule = this.get('schedules', scheduleId);
+		if (!schedule) return null;
+		const runs = this.scheduledRuns(schedule, viewer);
+		const row = this.scheduleRow(schedule, runs, viewer);
+		return {
+			...row,
+			runs,
+			standing: this.schedulePresentation.standing(schedule, row.waiting > 0, viewer.now)
+		};
+	}
+
+	scheduledAttention(viewer: ScheduleViewer): ScheduledAttention {
+		const notices = this.all('schedule_occurrences')
+			.toSorted((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+			.flatMap((occurrence) => {
+				const schedule = occurrence.scheduleId
+					? this.get('schedules', occurrence.scheduleId)
+					: undefined;
+				// A run outlives its schedule; it is then named for its chat and read on this clock.
+				const view = this.scheduledRun(occurrence, schedule?.timeZone ?? viewer.timeZone, viewer);
+				if (!view) return [];
+				const notice: ScheduledRunNotice = {
+					occurrenceId: occurrence.id,
+					conversationId: occurrence.conversationId,
+					title: this.scheduledTitle(occurrence, schedule),
+					line: view.line,
+					ranAt: view.ranAt
+				};
+				return [{ notice, state: view.state }];
+			});
+		return {
+			waiting: notices.flatMap(({ notice, state }) => (state.kind === 'waiting' ? [notice] : [])),
+			finished: notices.flatMap(({ notice, state }) =>
+				state.kind === 'finished' && !state.opened ? [notice] : []
+			),
+			working: notices.filter(({ state }) => state.kind === 'working').length
+		};
+	}
+
+	scheduledChat(conversationId: ConversationId): ScheduledChat | null {
+		const occurrence = this.all('schedule_occurrences').find(
+			(candidate) => candidate.conversationId === conversationId
+		);
+		const run = occurrence ? this.get('agent_runs', occurrence.runId) : undefined;
+		if (!occurrence || !run) return null;
+		const schedule = occurrence.scheduleId
+			? this.get('schedules', occurrence.scheduleId)
+			: undefined;
+		return {
+			occurrence,
+			title: this.scheduledTitle(occurrence, schedule),
+			state: this.schedulePresentation.runState(occurrence, {
+				status: run.status,
+				updatedAt: run.updatedAt,
+				pendingChanges: run.pendingDecisions.length
+			})
+		};
+	}
+
+	scheduleZoneName(timeZone: IanaTimeZone): string {
+		return this.schedulePresentation.zoneName(timeZone);
+	}
+
+	schedulePreview(
+		recurrence: Recurrence,
+		timeZone: IanaTimeZone,
+		now: ScheduleViewer['now']
+	): string {
+		return this.schedulePresentation.preview(
+			this.scheduleRecurrence.next(recurrence, timeZone, now),
+			timeZone,
+			now
+		);
+	}
+
+	private scheduleRow(
+		schedule: Schedule,
+		runs: readonly ScheduledRunView[],
+		viewer: ScheduleViewer
+	): ScheduleRow {
+		return {
+			schedule,
+			caption: this.schedulePresentation.caption(schedule, viewer),
+			waiting: runs.filter((run) => run.state.kind === 'waiting').length,
+			unopened: runs.filter((run) => run.state.kind === 'finished' && !run.state.opened).length
+		};
+	}
+
+	private scheduledRuns(schedule: Schedule, viewer: ScheduleViewer): readonly ScheduledRunView[] {
+		return this.all('schedule_occurrences')
+			.filter((occurrence) => occurrence.scheduleId === schedule.id)
+			.toSorted((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+			.flatMap((occurrence) => this.scheduledRun(occurrence, schedule.timeZone, viewer) ?? []);
+	}
+
+	/** Undefined until the occurrence's agent run has reached this device. */
+	private scheduledRun(
+		occurrence: ScheduleOccurrence,
+		timeZone: IanaTimeZone,
+		viewer: ScheduleViewer
+	): ScheduledRunView | undefined {
+		const run = this.get('agent_runs', occurrence.runId);
+		if (!run) return undefined;
+		const state = this.schedulePresentation.runState(occurrence, {
+			status: run.status,
+			updatedAt: run.updatedAt,
+			pendingChanges: run.pendingDecisions.length
+		});
+		return {
+			occurrence,
+			state,
+			line: this.schedulePresentation.line(state, run.failure, this.finalAnswer(occurrence)),
+			ranAt: this.schedulePresentation.ranAt(occurrence, timeZone, viewer.now)
+		};
+	}
+
+	/** The text of the last thing the agent said in the run, when it said anything. */
+	private finalAnswer(occurrence: ScheduleOccurrence): string | undefined {
+		return this.messages(occurrence.conversationId)
+			.flatMap((message) => {
+				if (message.role !== 'assistant' || message.runId !== occurrence.runId) return [];
+				if (message.kind !== 'readable' || message.content.type !== 'text') return [];
+				return typeof message.content.text === 'string' ? [message.content.text] : [];
+			})
+			.at(-1);
+	}
+
+	private scheduledTitle(occurrence: ScheduleOccurrence, schedule: Schedule | undefined): string {
+		return (
+			schedule?.title ??
+			this.get('conversations', occurrence.conversationId)?.title ??
+			'Scheduled run'
+		);
 	}
 }

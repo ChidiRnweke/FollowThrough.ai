@@ -182,6 +182,8 @@
 								{agentDefaults}
 								{agentAvailable}
 								registerComposerFocus={(focus) => rightPanel.registerChatComposerFocus(focus)}
+								requestedConversationId={rightPanel.requestedConversationId}
+								onconversationshown={() => rightPanel.conversationShown()}
 							/>
 						{/key}
 					{:else if renderedMode === 'todo-detail'}
@@ -284,6 +286,8 @@
 								{agentDefaults}
 								{agentAvailable}
 								registerComposerFocus={(focus) => rightPanel.registerChatComposerFocus(focus)}
+								requestedConversationId={rightPanel.requestedConversationId}
+								onconversationshown={() => rightPanel.conversationShown()}
 							/>
 						{/key}
 					{:else if renderedMode === 'project-memory'}

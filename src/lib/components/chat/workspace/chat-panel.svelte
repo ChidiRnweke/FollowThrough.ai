@@ -5,6 +5,8 @@
 	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { onMount, tick, untrack } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
+	import { markScheduledRunOpened } from '$lib/remote/schedules/schedules.remote';
 	import { z } from 'zod';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import type {
@@ -62,6 +64,8 @@
 		openResource,
 		activeProjectId,
 		initialConversationId,
+		requestedConversationId,
+		onconversationshown,
 		showHistory = true,
 		agentPreferences,
 		agentModels,
@@ -85,6 +89,9 @@
 		openResource?: Extract<ContextResourceRef, { kind: 'widget' | 'diagram' }>;
 		activeProjectId?: ProjectId;
 		initialConversationId?: Conversation['id'] | null;
+		/** A chat this mounted panel is asked to switch to, such as the chat of a scheduled run. */
+		requestedConversationId?: Conversation['id'];
+		onconversationshown?: () => void;
 		showHistory?: boolean;
 		agentPreferences: AgentPreferenceValues;
 		agentModels: readonly AgentModel[];
@@ -154,11 +161,38 @@
 			void chat.hydrate(history);
 		} else if (initialConversationId)
 			void openConversation(chat.switchToConversation(initialConversationId, history));
-		else void openConversation(chat.hydrate(history));
+		// A requested chat is opened by the effect below, which also serves a panel already mounted.
+		else if (!requestedConversationId) void openConversation(chat.hydrate(history));
 		const staged = consumeChatHandoff();
 		if (staged) prefill(staged);
 		else replacePrompt(sessionStorage.getItem(draftKey()) ?? '');
 		return () => releaseComposerFocus?.();
+	});
+
+	$effect(() => {
+		const requested = requestedConversationId;
+		if (!requested) return;
+		onconversationshown?.();
+		void openConversation(chat.switchToConversation(requested, history));
+	});
+
+	const scheduledOrigin = $derived.by(() => {
+		const scheduled = chat.conversationId
+			? workspaceViews.scheduledChat(chat.conversationId)
+			: null;
+		return scheduled ? `Sent by your schedule · ${scheduled.title}` : undefined;
+	});
+	// A scheduled run counts as opened once its chat is on screen after the run ended. One
+	// request per run and mount: a pull that has not caught up yet must not send it again.
+	const openedRuns = new SvelteSet<string>();
+	$effect(() => {
+		const conversationId = chat.conversationId;
+		const scheduled = conversationId ? workspaceViews.scheduledChat(conversationId) : null;
+		if (scheduled?.state.kind !== 'finished' || scheduled.state.opened) return;
+		const occurrenceId = scheduled.occurrence.id;
+		if (untrack(() => openedRuns.has(occurrenceId))) return;
+		openedRuns.add(occurrenceId);
+		void workspaceSession.serverChange(markScheduledRunOpened({ occurrenceId }));
 	});
 
 	// An invocation point elsewhere in the app wrote a prompt while this panel was
@@ -776,6 +810,7 @@
 	<div class="mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col">
 		<ChatThread
 			{shell}
+			promptOrigin={scheduledOrigin}
 			preferences={agentPreferences}
 			{sessions}
 			{activeNoteId}
