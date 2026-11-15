@@ -94,7 +94,16 @@ const labels: Record<AgentToolName, string> = {
 	list_trust_policies: 'Read trust policies',
 	update_trust_policy: 'Change trust policy',
 	list_mcp_connections: 'List connected apps',
-	revoke_mcp_connection: 'Disconnect app'
+	revoke_mcp_connection: 'Disconnect app',
+	list_schedules: 'List schedules',
+	get_schedule: 'Read schedule',
+	list_schedule_runs: 'List schedule runs',
+	create_schedule: 'Create schedule',
+	update_schedule: 'Change schedule',
+	pause_schedule: 'Pause schedule',
+	resume_schedule: 'Resume schedule',
+	delete_schedule: 'Delete schedule',
+	run_schedule: 'Run schedule now'
 };
 
 const completedLabels: Record<AgentToolName, string> = {
@@ -189,7 +198,16 @@ const completedLabels: Record<AgentToolName, string> = {
 	list_trust_policies: 'Read trust policies',
 	update_trust_policy: 'Changed trust policy',
 	list_mcp_connections: 'Listed connected apps',
-	revoke_mcp_connection: 'Disconnected app'
+	revoke_mcp_connection: 'Disconnected app',
+	list_schedules: 'Listed schedules',
+	get_schedule: 'Read schedule',
+	list_schedule_runs: 'Listed schedule runs',
+	create_schedule: 'Created schedule',
+	update_schedule: 'Changed schedule',
+	pause_schedule: 'Paused schedule',
+	resume_schedule: 'Resumed schedule',
+	delete_schedule: 'Deleted schedule',
+	run_schedule: 'Started a schedule run'
 };
 
 export const isCatalogTool = (name: string): name is AgentToolName => name in labels;

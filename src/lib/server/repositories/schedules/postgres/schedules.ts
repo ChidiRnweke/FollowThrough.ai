@@ -1,4 +1,4 @@
-import { and, asc, eq, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, lte } from 'drizzle-orm';
 import { NotFoundError } from '$lib/errors';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
 import type { ActorContext, UserId } from '$lib/models/identity';
@@ -10,6 +10,7 @@ import {
 	type ScheduleId,
 	type ScheduleOccurrence,
 	type ScheduleOccurrenceId,
+	type ScheduleRun,
 	type ScheduleState
 } from '$lib/models/schedules';
 import type { DateTime } from '$lib/models/workspace';
@@ -172,6 +173,21 @@ export class ScheduleOccurrenceRecords implements ScheduleOccurrenceRepository {
 			})
 			.returning();
 		return toOccurrence(row!);
+	}
+
+	async listForSchedule(scheduleId: ScheduleId): Promise<readonly ScheduleRun[]> {
+		const rows = await this.database
+			.select({ occurrence: schema.scheduleOccurrences, status: schema.agentRuns.status })
+			.from(schema.scheduleOccurrences)
+			.innerJoin(schema.agentRuns, eq(schema.agentRuns.id, schema.scheduleOccurrences.runId))
+			.where(
+				and(
+					eq(schema.scheduleOccurrences.userId, this.actor.userId),
+					eq(schema.scheduleOccurrences.scheduleId, scheduleId)
+				)
+			)
+			.orderBy(desc(schema.scheduleOccurrences.scheduledFor), desc(schema.scheduleOccurrences.id));
+		return rows.map((row) => ({ ...toOccurrence(row.occurrence), status: row.status }));
 	}
 
 	async hasRunAwaitingApproval(scheduleId: ScheduleId): Promise<boolean> {

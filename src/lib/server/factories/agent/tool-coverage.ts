@@ -8,6 +8,7 @@ import type { TrustPoliciesController } from '$lib/server/controllers/agent/trus
 import type { McpConnectionsController } from '$lib/server/controllers/mcp-connections/controller';
 import type { AttachmentsController } from '$lib/server/controllers/attachments/controller';
 import type { ConnectorsController } from '$lib/server/controllers/connectors/controller';
+import type { SchedulesController } from '$lib/server/controllers/schedules/controller';
 import type { ContextUsageController } from '$lib/server/controllers/context-usage/controller';
 import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
 import type { DiagramStudioController } from '$lib/server/controllers/diagram-studio/controller';
@@ -47,6 +48,7 @@ interface CoveredAgentControllers {
 	readonly retrieval: RetrievalController;
 	readonly contextUsage: ContextUsageController;
 	readonly connectors: ConnectorsController;
+	readonly schedules: SchedulesController;
 }
 
 export type AgentToolCoverage = AgentToolContractMap<CoveredAgentControllers>;
@@ -92,6 +94,7 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Only the worker starts the run of a schedule whose time has come.'
 		},
+		runScheduleNow: { kind: 'mutation', tools: ['run_schedule'] },
 		recoverInterrupted: {
 			kind: 'excluded',
 			reason: 'Chat run control belongs to the user and application lifecycle.'
@@ -604,6 +607,21 @@ export const agentToolCoverage = {
 		callTool: {
 			kind: 'connector_tools',
 			reason: 'Each connector tool in a run calls this operation with its own server tool name.'
+		}
+	},
+	schedules: {
+		list: { kind: 'read', tools: ['list_schedules'] },
+		get: { kind: 'read', tools: ['get_schedule'] },
+		listRuns: { kind: 'read', tools: ['list_schedule_runs'] },
+		create: { kind: 'mutation', tools: ['create_schedule'] },
+		update: { kind: 'mutation', tools: ['update_schedule'] },
+		pause: { kind: 'mutation', tools: ['pause_schedule'] },
+		resume: { kind: 'mutation', tools: ['resume_schedule'] },
+		remove: { kind: 'mutation', tools: ['delete_schedule'] },
+		setExecutionMode: {
+			kind: 'excluded',
+			reason:
+				"Letting a schedule act without asking is the user's decision in the application (ADR 0052)."
 		}
 	}
 } as const satisfies AgentToolCoverage;

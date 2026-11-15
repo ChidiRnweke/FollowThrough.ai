@@ -1,4 +1,10 @@
-import type { DueSchedule, Schedule, ScheduleId, ScheduleOccurrence } from '$lib/models/schedules';
+import type {
+	DueSchedule,
+	Schedule,
+	ScheduleId,
+	ScheduleOccurrence,
+	ScheduleRun
+} from '$lib/models/schedules';
 import type { DateTime } from '$lib/models/workspace';
 
 /** One user's schedules. Every read and write is scoped to the actor the repository was built for. */
@@ -15,6 +21,8 @@ export interface ScheduleRepository {
 /** One user's schedule runs. */
 export interface ScheduleOccurrenceRepository {
 	insert(occurrence: ScheduleOccurrence): Promise<ScheduleOccurrence>;
+	/** Every run of a schedule with the state of its agent run, newest first. */
+	listForSchedule(scheduleId: ScheduleId): Promise<readonly ScheduleRun[]>;
 	/** Whether a run of this schedule is parked until its owner decides. */
 	hasRunAwaitingApproval(scheduleId: ScheduleId): Promise<boolean>;
 }

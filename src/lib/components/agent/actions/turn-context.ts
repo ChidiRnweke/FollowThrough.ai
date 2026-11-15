@@ -271,7 +271,16 @@ const verbs: Record<Exclude<AgentToolName, MechanismTool>, Verb> = {
 	list_suggestions: 'listed',
 	list_trashed_notes: 'listed',
 	list_user_memory: 'read',
-	list_project_memory: 'read'
+	list_project_memory: 'read',
+	list_schedules: 'read',
+	get_schedule: 'read',
+	list_schedule_runs: 'read history',
+	create_schedule: 'created',
+	update_schedule: 'updated',
+	pause_schedule: 'updated',
+	resume_schedule: 'updated',
+	delete_schedule: 'deleted',
+	run_schedule: 'updated'
 };
 
 const verbOf = (name: string): Verb | undefined =>

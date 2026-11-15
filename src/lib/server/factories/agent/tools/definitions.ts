@@ -17,6 +17,7 @@ import {
 import type { ProjectId } from '$lib/models/projects';
 import type { TemplateId } from '$lib/models/deliverables';
 import type { WidgetId } from '$lib/models/widgets';
+import type { Schedule, ScheduleChanges, ScheduleId, ScheduleRun } from '$lib/models/schedules';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { ApplyReviewedNoteChangeOutput } from '$lib/models/notes';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
@@ -774,6 +775,32 @@ const sharedToolDefinitions = (controllers: ControllerFactory, provenanceId: Pro
 			}
 		)
 	});
+	const schedules = () => ({
+		list_schedules: defineTool(
+			'list_schedules',
+			'read',
+			agentToolInputSchemas.list_schedules,
+			async () => ({
+				schedules: (await controllers.schedules().list()).schedules.map(scheduleView)
+			})
+		),
+		get_schedule: defineTool(
+			'get_schedule',
+			'read',
+			agentToolInputSchemas.get_schedule,
+			async (input) => scheduleView((await controllers.schedules().get(input)).schedule)
+		),
+		list_schedule_runs: defineTool(
+			'list_schedule_runs',
+			'read',
+			agentToolInputSchemas.list_schedule_runs,
+			async (input) => ({
+				runs: (await controllers.schedules().listRuns({ scheduleId: input.scheduleId })).runs.map(
+					scheduleRunView
+				)
+			})
+		)
+	});
 	return {
 		...retrieval(),
 		...projects(),
@@ -785,9 +812,102 @@ const sharedToolDefinitions = (controllers: ControllerFactory, provenanceId: Pro
 		...account(),
 		...memoryAndPreferences(),
 		...deliverables(),
-		...widgets()
+		...widgets(),
+		...schedules()
 	};
 };
+
+/** A schedule as a model reads it: `asksBeforeChanges` says what its execution mode means. */
+const scheduleView = (schedule: Schedule) => ({
+	scheduleId: schedule.id,
+	title: schedule.title,
+	prompt: schedule.prompt,
+	recurrence: schedule.recurrence,
+	timeZone: schedule.timeZone,
+	asksBeforeChanges: schedule.executionMode === 'approval_required',
+	status: schedule.status,
+	...(schedule.status === 'active' ? { nextRunAt: schedule.nextRunAt } : {}),
+	createdAt: schedule.createdAt,
+	updatedAt: schedule.updatedAt
+});
+
+const scheduleRunView = (run: ScheduleRun) => ({
+	scheduledFor: run.scheduledFor,
+	startedBy: run.trigger === 'recurrence' ? 'schedule' : 'user',
+	status: run.status,
+	conversationId: run.conversationId,
+	createdAt: run.createdAt
+});
+
+/**
+ * The tools that change a schedule or start one of its runs. A run that a schedule started is
+ * not offered them: with nobody present it must not reschedule itself or start further runs
+ * (ADR 0052). No tool states an execution mode, so a schedule made here asks before each change.
+ */
+const scheduleChangeDefinitions = (controllers: ControllerFactory) => ({
+	create_schedule: defineTool(
+		'create_schedule',
+		'mutation',
+		agentToolInputSchemas.create_schedule,
+		async (input) =>
+			scheduleView(
+				(
+					await controllers.schedules().create({
+						id: crypto.randomUUID() as ScheduleId,
+						definition: { ...input, executionMode: 'approval_required' }
+					})
+				).schedule
+			)
+	),
+	update_schedule: defineTool(
+		'update_schedule',
+		'mutation',
+		agentToolInputSchemas.update_schedule,
+		async (input) => {
+			const changes: ScheduleChanges = {
+				...(input.title !== undefined ? { title: input.title } : {}),
+				...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
+				...(input.recurrence !== undefined ? { recurrence: input.recurrence } : {}),
+				...(input.timeZone !== undefined ? { timeZone: input.timeZone } : {})
+			};
+			return scheduleView(
+				(await controllers.schedules().update({ scheduleId: input.scheduleId, changes })).schedule
+			);
+		}
+	),
+	pause_schedule: defineTool(
+		'pause_schedule',
+		'mutation',
+		agentToolInputSchemas.pause_schedule,
+		async (input) => scheduleView((await controllers.schedules().pause(input)).schedule)
+	),
+	resume_schedule: defineTool(
+		'resume_schedule',
+		'mutation',
+		agentToolInputSchemas.resume_schedule,
+		async (input) => scheduleView((await controllers.schedules().resume(input)).schedule)
+	),
+	delete_schedule: defineTool(
+		'delete_schedule',
+		'mutation',
+		agentToolInputSchemas.delete_schedule,
+		async (input) => {
+			await controllers.schedules().remove(input);
+			return { deleted: true, scheduleId: input.scheduleId };
+		}
+	),
+	run_schedule: defineTool(
+		'run_schedule',
+		'mutation',
+		agentToolInputSchemas.run_schedule,
+		async (input) => {
+			const receipt = await controllers
+				.agentHarness()
+				.runScheduleNow({ scheduleId: input.scheduleId, requestId: crypto.randomUUID() });
+			return { started: true, conversationId: receipt.conversationId };
+		}
+	)
+});
 const selectionToolDefinitions = (
 	controllers: ControllerFactory,
 	selection: TextSelection,
@@ -889,18 +1009,23 @@ type BuiltToolName =
 	| keyof ReturnType<typeof sharedToolDefinitions>
 	| keyof ReturnType<typeof selectionToolDefinitions>
 	| keyof ReturnType<typeof appToolDefinitions>
-	| keyof ReturnType<typeof mcpOnlyDefinitions>;
+	| keyof ReturnType<typeof mcpOnlyDefinitions>
+	| keyof ReturnType<typeof scheduleChangeDefinitions>;
 type Total<T extends never> = T;
 type _BuildersCoverCatalog = Total<Exclude<ToolName, BuiltToolName>>;
 type _BuildersNameNothingElse = Total<Exclude<BuiltToolName, ToolName>>;
 
-/** Every tool of an in-app agent run: the selection tools exist only for a run with a selection. */
+/**
+ * Every tool of an in-app agent run. The selection tools exist only for a run with a selection,
+ * and the tools that change a schedule only for a run a person started.
+ */
 export const createAgentTools = (
 	controllers: ControllerFactory,
 	context: AgentToolContext
 ): readonly AgentTool[] => [
 	...Object.values(sharedToolDefinitions(controllers, context.provenanceId)),
 	...Object.values(appToolDefinitions(controllers, context)),
+	...(context.input.schedule ? [] : Object.values(scheduleChangeDefinitions(controllers))),
 	...(context.input.selection
 		? Object.values(selectionToolDefinitions(controllers, context.input.selection, context.model))
 		: [])
@@ -912,5 +1037,6 @@ export const createMcpTools = (
 	context: McpToolContext
 ): readonly AgentTool[] => [
 	...Object.values(sharedToolDefinitions(controllers, context.provenanceId)),
+	...Object.values(scheduleChangeDefinitions(controllers)),
 	...Object.values(mcpOnlyDefinitions(controllers, context))
 ];

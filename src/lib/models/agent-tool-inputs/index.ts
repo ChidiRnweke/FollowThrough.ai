@@ -12,6 +12,7 @@ import type { SuggestionId } from '$lib/models/suggestions';
 import { createTodoBatchSchema, type TodoId } from '$lib/models/todos';
 import type { JsonPatch, WidgetDraft } from '$lib/models/widgets';
 import { type WidgetId } from '$lib/models/widgets';
+import { ianaTimeZoneSchema, recurrenceSchema, type ScheduleId } from '$lib/models/schedules';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import { z } from 'zod';
 const none = z.object({});
@@ -88,6 +89,17 @@ const widgetId = z
 	.uuid()
 	.describe('Exact widget UUID, as the widget node in a note records it.')
 	.transform((value) => value as WidgetId);
+const scheduleId = z
+	.string()
+	.uuid()
+	.describe('Exact schedule UUID returned by list_schedules.')
+	.transform((value) => value as ScheduleId);
+const scheduleRecurrence = recurrenceSchema.describe(
+	'When the schedule runs. `time` is { hour: 0-23, minute: 0-59 } on the local clock of `timeZone`; `date` is YYYY-MM-DD; `weekday` is mon to sun; `day` is 1 to 31.'
+);
+const scheduleTimeZone = ianaTimeZoneSchema.describe(
+	"IANA time zone name for the schedule's wall-clock times, such as Europe/Brussels."
+);
 const widgetPatchText = z
 	.string()
 	.min(2)
@@ -394,7 +406,27 @@ export const agentToolInputSchemas = {
 		title: z.string().min(1).optional(),
 		diagramId
 	}),
-	read_canvas_diagram: z.object({})
+	read_canvas_diagram: z.object({}),
+	list_schedules: temporal({}),
+	get_schedule: z.object({ scheduleId }),
+	list_schedule_runs: temporal({ scheduleId }),
+	create_schedule: z.object({
+		title: z.string().trim().min(1).describe('A short name the user will recognise.'),
+		prompt: z.string().trim().min(1),
+		recurrence: scheduleRecurrence,
+		timeZone: scheduleTimeZone
+	}),
+	update_schedule: z.object({
+		scheduleId,
+		title: z.string().trim().min(1).optional(),
+		prompt: z.string().trim().min(1).optional(),
+		recurrence: scheduleRecurrence.optional(),
+		timeZone: scheduleTimeZone.optional()
+	}),
+	pause_schedule: z.object({ scheduleId }),
+	resume_schedule: z.object({ scheduleId }),
+	delete_schedule: z.object({ scheduleId }),
+	run_schedule: z.object({ scheduleId })
 };
 export type AgentToolInput<Name extends keyof typeof agentToolInputSchemas> = z.output<
 	(typeof agentToolInputSchemas)[Name]

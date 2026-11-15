@@ -94,7 +94,16 @@ const catalog: Record<AgentToolName, { readonly family: ToolFamily; readonly kin
 	list_trust_policies: { family: 'collection', kind: 'setting' },
 	update_trust_policy: { family: 'record', kind: 'setting' },
 	list_mcp_connections: { family: 'collection', kind: 'plain' },
-	revoke_mcp_connection: { family: 'lifecycle', kind: 'setting' }
+	revoke_mcp_connection: { family: 'lifecycle', kind: 'setting' },
+	list_schedules: { family: 'collection', kind: 'plain' },
+	get_schedule: { family: 'record', kind: 'plain' },
+	list_schedule_runs: { family: 'collection', kind: 'plain' },
+	create_schedule: { family: 'created', kind: 'plain' },
+	update_schedule: { family: 'record', kind: 'plain' },
+	pause_schedule: { family: 'record', kind: 'plain' },
+	resume_schedule: { family: 'record', kind: 'plain' },
+	delete_schedule: { family: 'record', kind: 'plain' },
+	run_schedule: { family: 'record', kind: 'plain' }
 };
 
 export const toolPresentationKind = (name: string) =>

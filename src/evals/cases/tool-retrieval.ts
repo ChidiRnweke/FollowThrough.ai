@@ -451,7 +451,60 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 	},
 
 	// Time
-	{ id: 'today', goal: 'what is due today', expected: 'get_today_view' }
+	{ id: 'today', goal: 'what is due today', expected: 'get_today_view' },
+
+	// Schedules
+	{
+		id: 'schedule-list',
+		goal: 'see which prompts run on a schedule and when each runs next',
+		expected: 'list_schedules'
+	},
+	{
+		id: 'schedule-read',
+		goal: 'read the prompt and the recurrence of the weekly review schedule',
+		expected: 'get_schedule'
+	},
+	{
+		id: 'schedule-runs',
+		goal: 'check what the morning brief schedule did on its last runs',
+		expected: 'list_schedule_runs'
+	},
+	{
+		id: 'schedule-create',
+		goal: 'set up a schedule that runs a prompt every Friday afternoon',
+		expected: 'create_schedule'
+	},
+	{
+		id: 'schedule-update',
+		goal: 'move the morning brief schedule from eight to nine',
+		expected: 'update_schedule'
+	},
+	{
+		id: 'schedule-pause',
+		goal: 'stop the hourly inbox check schedule for now',
+		expected: 'pause_schedule'
+	},
+	{
+		id: 'schedule-resume',
+		goal: 'turn the paused weekly review schedule back on',
+		expected: 'resume_schedule'
+	},
+	{
+		id: 'schedule-delete',
+		goal: 'remove the morning brief schedule for good',
+		expected: 'delete_schedule'
+	},
+	{
+		id: 'schedule-run-now',
+		goal: 'run the weekly review schedule right now instead of waiting for Friday',
+		expected: 'run_schedule'
+	},
+	// The same capability as a person asks for it: the habit, not the word "schedule".
+	{
+		id: 'schedule-create-implicit',
+		goal: 'brief me on what is due every weekday morning at eight',
+		expected: 'create_schedule'
+	}
 ];
 
 const TOP_K = 5;

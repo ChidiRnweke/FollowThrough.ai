@@ -142,6 +142,7 @@ export const controllerSurfaces = {
 		finishCancellation: true,
 		failRun: true,
 		runDueSchedule: true,
+		runScheduleNow: true,
 		recoverInterrupted: true,
 		resumeQueued: true,
 		synchronize: true,
@@ -272,6 +273,7 @@ export const controllerSurfaces = {
 	schedules: {
 		list: true,
 		get: true,
+		listRuns: true,
 		create: true,
 		update: true,
 		pause: true,

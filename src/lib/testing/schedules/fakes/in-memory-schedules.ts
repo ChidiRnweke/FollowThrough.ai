@@ -1,7 +1,7 @@
 import { NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentRunId, AgentRunStatus } from '$lib/models/agent';
-import type { Schedule, ScheduleId, ScheduleOccurrence } from '$lib/models/schedules';
+import type { Schedule, ScheduleId, ScheduleOccurrence, ScheduleRun } from '$lib/models/schedules';
 import type {
 	ScheduleOccurrenceRepository,
 	ScheduleRepository
@@ -74,6 +74,17 @@ export class InMemoryScheduleOccurrenceRepository
 	async insert(occurrence: ScheduleOccurrence): Promise<ScheduleOccurrence> {
 		this.occurrences = [...this.occurrences, occurrence];
 		return occurrence;
+	}
+
+	async listForSchedule(scheduleId: ScheduleId): Promise<readonly ScheduleRun[]> {
+		return this.occurrences
+			.filter((occurrence) => occurrence.scheduleId === scheduleId)
+			.flatMap((occurrence) => {
+				// The join drops an occurrence whose run is gone, as the foreign key deletes it.
+				const status = this.runStatus(occurrence.runId);
+				return status ? [{ ...occurrence, status }] : [];
+			})
+			.toSorted((left, right) => right.scheduledFor.localeCompare(left.scheduledFor));
 	}
 
 	async hasRunAwaitingApproval(scheduleId: ScheduleId): Promise<boolean> {
