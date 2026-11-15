@@ -5,7 +5,8 @@ description: Make long agent work survive refreshes, lost responses, and process
 
 ## Status
 
-Accepted.
+Accepted. ADR 0052 amends it: startup recovery settles only the runs that its own kind of
+process was executing.
 
 ## Context
 

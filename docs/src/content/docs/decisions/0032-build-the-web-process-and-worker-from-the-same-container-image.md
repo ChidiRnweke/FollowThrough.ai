@@ -5,7 +5,7 @@ description: Keep both processes on the same release while allowing separate exe
 
 ## Status
 
-Accepted.
+Accepted. ADR 0052 amends it: the worker also runs the agent, for scheduled runs.
 
 ## Context
 
