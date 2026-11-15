@@ -1,6 +1,7 @@
 /**
  * One process shutdown: finish application work before closing its exporters.
- * The preload and application signal handlers share the same pending shutdown.
+ * The preload and application signal handlers share the same pending shutdown;
+ * a process whose start failed abandons it instead, since nothing will drain.
  * @param {() => Promise<void>} stopTelemetry
  */
 export function createTelemetryShutdown(stopTelemetry) {
@@ -23,6 +24,11 @@ export function createTelemetryShutdown(stopTelemetry) {
 					await stopTelemetry();
 				}
 			})();
+			return stopping;
+		},
+		/** Stop without draining: the process failed before its work started. */
+		abandon() {
+			stopping ??= stopTelemetry();
 			return stopping;
 		}
 	};

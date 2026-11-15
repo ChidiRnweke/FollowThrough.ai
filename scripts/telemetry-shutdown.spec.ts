@@ -57,3 +57,27 @@ it('still exports completed spans when application draining fails', async () => 
 	);
 	expect({ delivered, outcome }).toEqual({ delivered: ['worker.failed'], outcome: 'Drain failed' });
 });
+it('exports completed spans on abandon while a registered drain never settles', async () => {
+	const { delivered, tracer, shutdown } = setup();
+	shutdown.waitFor(() => new Promise<void>(() => {}));
+	tracer.startSpan('web.failed-to-start').end();
+	await shutdown.abandon();
+	expect(delivered).toEqual(['web.failed-to-start']);
+});
+it('runs no application drain on abandon', async () => {
+	const { shutdown } = setup();
+	let drained = false;
+	shutdown.waitFor(async () => {
+		drained = true;
+	});
+	await shutdown.abandon();
+	expect(drained).toBe(false);
+});
+it('shares one telemetry stop between abandon and a concurrent shutdown', async () => {
+	let stops = 0;
+	const shutdown = createTelemetryShutdown(async () => {
+		stops += 1;
+	});
+	await Promise.all([shutdown.abandon(), shutdown.shutdown()]);
+	expect(stops).toBe(1);
+});

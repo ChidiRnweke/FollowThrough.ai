@@ -214,6 +214,15 @@ export function shutdownTelemetry() {
 	return telemetryShutdown.shutdown();
 }
 
+/**
+ * Flush and close the exporters without waiting for the application drain. For a
+ * process whose start failed: the drain may wait on an event that never comes,
+ * and exiting without a flush drops the record of why it failed.
+ */
+export function abandonTelemetry() {
+	return telemetryShutdown.abandon();
+}
+
 const otelGlobal = /** @type {typeof globalThis & { __otel_initialized__?: boolean }} */ (
 	globalThis
 );
