@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.8.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.8.0...v6.8.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* **mcp:** accept hosted clients that send their own origin ([#525](https://github.com/ChidiRnweke/FollowThrough.ai/issues/525)) ([dad3793](https://github.com/ChidiRnweke/FollowThrough.ai/commit/dad379376ef47aa030452146b6b0bb47bdef8b73))
+
 ## [6.8.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v6.7.0...v6.8.0) (2026-11-15)
 
 
