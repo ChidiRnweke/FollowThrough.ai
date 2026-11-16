@@ -88,6 +88,12 @@ content. Anyone can send most of these requests, so their volume must not decide
 production; the deployment's edge rate limits count them instead. Everything that reaches a
 controller is logged by the boundary.
 
+`/mcp` is the exception. Its transport refuses a request only after the bearer check passes, so
+each refusal comes from an authenticated client and is logged at warn
+(`src/lib/server/infrastructure/http/mcp-transport.ts`). The line carries the transport's reason,
+such as a wrong `Host` header, and never the request body. Without it, a client that is refused on
+every request leaves only 403 spans in production.
+
 ## Browser error reports
 
 `/api/client-errors` writes each admitted browser report as one error line, with the user and,
