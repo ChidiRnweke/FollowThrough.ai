@@ -47,10 +47,10 @@ describe('the MCP transport', () => {
 		);
 	});
 
-	it('refuses a request from a page on another origin', async () => {
-		expect(
-			await initializeStatus({ host: 'notes.example', origin: 'https://elsewhere.example' })
-		).toBe(403);
+	it('answers a hosted client that sends its own Origin', async () => {
+		expect(await initializeStatus({ host: 'notes.example', origin: 'https://claude.ai' })).toBe(
+			200
+		);
 	});
 
 	it('refuses a request addressed to another host', async () => {
